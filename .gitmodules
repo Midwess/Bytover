@@ -1,9 +1,6 @@
 [submodule "libs/devlog-sdk"]
 	path = libs/devlog-sdk
 	url = git@github.com:dev-logs/devlog-sdk.git
-[submodule "libs/core-services"]
-	path = libs/core-services
-	url = git@github.com:dev-logs/core-services.git
 [submodule "libs/schema"]
 	path = libs/schema
 	url = git@github.com:dev-logs/schema.git
