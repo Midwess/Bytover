@@ -1,0 +1,29 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+name = "shared"
+
+[features]
+typegen = ["crux_core/typegen"]
+
+[dependencies]
+crux_core.workspace = true
+serde = { workspace = true, features = ["derive"] }
+lazy_static.workspace = true
+uniffi = "0.28.3"
+wasm-bindgen = "0.2.100"
+surrealdb.workspace = true
+core-services = {path = "../libs/core-services"}
+schema = {path = "../libs/schema/rust"}
+devlog-sdk = {path = "../libs/devlog-sdk"}
+
+[target.uniffi-bindgen.dependencies]
+uniffi = { version = "0.28.3", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.28.3", features = ["build"] }
+
