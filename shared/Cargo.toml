@@ -3,6 +3,9 @@ name = "shared"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+opt-level = 0
+
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "shared"
@@ -20,6 +23,7 @@ surrealdb.workspace = true
 core-services = {path = "../libs/core-services"}
 schema = {path = "../libs/schema/rust"}
 devlog-sdk = {path = "../libs/devlog-sdk"}
+core = {path = "../core"}
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { version = "0.28.3", features = ["cli"] }

@@ -1,6 +1,17 @@
 [workspace]
-members = ["shared", "shared_types", "libs/devlog-sdk", "libs/core-services", "libs/schema/rust"]
+members = [
+    "shared",
+    "shared_types",
+    "libs/devlog-sdk",
+    "libs/core-services",
+    "libs/schema/rust",
+    "core"
+]
+
 resolver = "1"
+
+[profile.dev]
+opt-level = 0
 
 [workspace.package]
 authors = ["Jimmy"]

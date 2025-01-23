@@ -1365,6 +1365,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "once_cell",
+ "serde",
+ "serde_derive",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4656,6 +4669,7 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "core",
  "core-services",
  "crux_core",
  "devlog-sdk",
