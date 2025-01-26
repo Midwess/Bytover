@@ -1,5 +1,7 @@
 namespace shared {
-  bytes process_event([ByRef] bytes msg);
-  bytes handle_response(u32 id, [ByRef] bytes res);
-  bytes view();
+  bytes process_counter_event([ByRef] bytes msg);
+  bytes handle_counter_response(u32 id, [ByRef] bytes res);
+  bytes view_counter();
+
+  bytes process_system_event([ByRef] bytes msg);
 };

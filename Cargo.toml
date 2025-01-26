@@ -5,7 +5,8 @@ members = [
     "libs/devlog-sdk",
     "libs/core-services",
     "libs/schema/rust",
-    "core"
+    "Desktop/src-tauri",
+    "domain"
 ]
 
 resolver = "1"
@@ -32,6 +33,6 @@ once_cell = "1.19.0"
 lazy_static = "1.5.0"
 tonic-middleware = "0.1.4"
 tokio = {version = "1.28.2", features = ["sync"]}
-reqwest = { version = "0.12.9", features = ["json"] }
+reqwest = { version = "0.12.9", default-features = false, features = ["json", "native-tls-vendored"] }
 async-trait = "0.1.13"
 log = "0.4.22"
