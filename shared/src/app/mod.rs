@@ -1,23 +1,26 @@
-use std::{cell::OnceCell, collections};
-
-use crate::app::counter::Counter;
-use counter::CounterEvent;
 use crux_core::{render::Render, App, Command, Core};
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
+use crate::app::modules::AppModule;
+use crate::app::modules::counter::{CounterEvent, CounterModel, CounterModule, CounterViewModel};
 
 pub mod system;
-pub mod counter;
+pub mod modules;
 
 #[derive(Default)]
 pub struct BitBridge {
-    pub counter: OnceCell<Core<Counter>>,
+    pub counter: OnceCell<CounterModule>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AppModel {
+    counter: OnceCell<CounterModel>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AppModel {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AppViewModel {}
+pub struct AppViewModel {
+    counter: Option<CounterViewModel>,
+}
 
 #[cfg_attr(feature = "typegen", derive(crux_core::macros::Export))]
 #[derive(crux_core::macros::Effect)]
@@ -26,13 +29,9 @@ pub struct AppCapabilities {
     render: Render<AppEvent>,
 }
 
-pub enum AppEffect {
-    Counter(Box<counter::Effect>),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AppEvent {
-    Counter(Box<CounterEvent>),
+    Counter {event: CounterEvent},
 }
 
 impl App for BitBridge {
@@ -49,14 +48,17 @@ impl App for BitBridge {
         caps: &Self::Capabilities,
     ) -> Command<Self::Effect, Self::Event> {
         match event {
-            AppEvent::Counter(event) => {
-                let counter = self.counter.get_or_init(|| Core::new());
-                Command::done()
+            AppEvent::Counter {event} => {
+                let counter = self.counter.get().unwrap();
+                let model = model.counter.get_mut().unwrap();
+                counter.update(event, model, caps)
             }
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        AppViewModel {}
+        AppViewModel {
+            counter: self.counter.get().map(|it| it.view(model.counter.get().unwrap()))
+        }
     }
 }

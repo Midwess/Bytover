@@ -4,3 +4,6 @@
 [submodule "libs/schema"]
 	path = libs/schema
 	url = git@github.com:dev-logs/schema.git
+[submodule "libs/core-services"]
+	path = libs/core-services
+	url = git@github.com:dev-logs/core-services.git
