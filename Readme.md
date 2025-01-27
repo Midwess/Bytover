@@ -8,7 +8,7 @@
 ## Installation:
 
 ### 1. Android NDK:
-Install correct Android NDK via `Android Studio > tools < Android Sdk Manager`
+Install correct Android NDK via `Android Studio > tools > Android Sdk Manager`
 
 ### 2. Environments:
 ```bash
@@ -29,7 +29,7 @@ export PATH=$PATH:$TOOLCHAIN/bin
 brew install openssl@3
 ```
 
-### 4. Enabled target build
+### 4. Enable target build
 ```
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 ```
@@ -46,7 +46,7 @@ export RUSTC_WRAPPER=$(which sccache)
 
 ## Build:
 ### 1. Android
-Build the rust binary by selecting the `shared` module, and press build in Android Studio
+Build the rust binary by selecting the `shared` module, and `press build in Android Studio`
 ### 2. Desktop
 ```bash
 cargo build
