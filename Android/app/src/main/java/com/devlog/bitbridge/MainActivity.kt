@@ -11,6 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.devlog.bitbridge.shared.AppModule
+import com.devlog.bitbridge.shared.processEvent
 import com.devlog.bitbridge.ui.theme.BitbridgeTheme
 
 class MainActivity : ComponentActivity() {

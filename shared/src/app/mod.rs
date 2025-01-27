@@ -1,4 +1,4 @@
-use crux_core::{render::Render, App, Command, Core};
+use crux_core::{render::Render, App, Command};
 use serde::{Deserialize, Serialize};
 use tokio::sync::OnceCell;
 use crate::app::modules::AppModule;

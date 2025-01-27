@@ -10,6 +10,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 pub use crux_core::{bridge::Bridge, Core, Request};
 
+uniffi::include_scaffolding!("shared");
+
 lazy_static! {
     pub static ref CORE: Bridge<BitBridge> = Bridge::new(Core::new());
 }
@@ -35,5 +37,3 @@ pub fn handle_response(module: AppModule, id: u32, data: &[u8]) -> Vec<u8> {
 pub fn view(module: AppModule) -> Vec<u8> {
     CORE.view()
 }
-
-uniffi::include_scaffolding!("shared");

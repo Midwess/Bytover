@@ -90,6 +90,12 @@ afterEvaluate {
 
 tasks.register('bindGen', Exec) {
     def outDir = "${projectDir}/../../shared_types/generated/java"
+    println("Configuration phase: outDir = $outDir")
+
+    doFirst {
+        println("Execution phase: outDir = $outDir")
+    }
+
     workingDir "../../"
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         commandLine("cmd", "/c",

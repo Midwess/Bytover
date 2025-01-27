@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     gen.swift("SharedTypes", output_root.join("swift"))?;
 
     gen.java(
-        "com.devlog.bitbridge",
+        "com.devlog.bitbridge.shared_types",
         output_root.join("java"),
     )?;
 
