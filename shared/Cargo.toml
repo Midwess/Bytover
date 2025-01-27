@@ -16,7 +16,7 @@ typegen = ["crux_core/typegen"]
 [dependencies]
 crux_core.workspace = true
 serde = { workspace = true, features = ["derive"] }
-surrealdb = { workspace = true, features = ["kv-mem", "kv-rocksdb"] }
+surrealdb = { workspace = true, features = ["kv-rocksdb"] }
 lazy_static.workspace = true
 uniffi = "0.28.3"
 wasm-bindgen = "0.2.100"
@@ -27,10 +27,11 @@ domain = {path = "../domain"}
 tokio = { workspace = true }
 async-trait.workspace = true
 log.workspace = true
+bincode = "1.3.3"
+erased-serde = "0.4.5"
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { version = "0.28.3", features = ["cli"] }
 
 [build-dependencies]
 uniffi = { version = "0.28.3", features = ["build"] }
-

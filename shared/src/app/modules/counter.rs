@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::app::BitBridge;
 use crate::app::modules::AppModule;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CounterModel {}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CounterViewModel {}
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct CounterViewModel {
+    pub count: i32
+}
 
 #[derive(Default)]
 pub struct CounterModule {}

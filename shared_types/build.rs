@@ -1,5 +1,5 @@
 use crux_core::typegen::TypeGen;
-use shared::app::{modules::counter::CounterEvent, BitBridge};
+use shared::app::{modules::counter::{CounterEvent, CounterViewModel}, BitBridge};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -8,6 +8,7 @@ fn main() -> anyhow::Result<()> {
     let mut gen = TypeGen::new();
 
     gen.register_type::<CounterEvent>()?;
+    gen.register_type::<CounterViewModel>()?;
     gen.register_app::<BitBridge>()?;
 
     let output_root = PathBuf::from("./generated");

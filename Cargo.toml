@@ -36,3 +36,8 @@ tokio = {version = "1.28.2", features = ["sync"]}
 reqwest = { version = "0.12.9", default-features = false, features = ["json", "native-tls-vendored"] }
 async-trait = "0.1.13"
 log = "0.4.22"
+
+[workspace.metadata.bin]
+cargo-xcode = { version = "=1.7.0" }
+cargo-run-bin = { version = "1.7.2", default-features = false }
+cargo-binstall = { version = "1.10.22" }
