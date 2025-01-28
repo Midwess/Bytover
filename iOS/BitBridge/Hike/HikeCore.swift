@@ -1,8 +1,15 @@
+////
+////  HikeCore.swift
+////  BitBridge
+////
+////  Created by Dang Minh Tien on 28/1/25.
+////
+//
 import Foundation
 import SharedTypes
-
+//
 @MainActor
-class Core: ObservableObject {
+class HikeCore: ObservableObject {
     @Published var view: CounterViewModel
     
     init() {

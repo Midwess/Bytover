@@ -8,11 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 80ABCDEC1AE53705DFC3637E /* libshared_static.a */; };
-		8A69A2E8A1731F3B9A366B3B /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = CF7E50DA005338D4F47D9D94 /* shared.udl */; };
 		97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		C7365ADB2D47EC6B005A342A /* core.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7365ADA2D47EC68005A342A /* core.swift */; };
-		C7365ADD2D47EC9E005A342A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7365ADC2D47EC98005A342A /* ContentView.swift */; };
-		C7365ADF2D47F324005A342A /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7365ADE2D47F318005A342A /* App.swift */; };
+		C79443122D49065900866E37 /* HikeContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430F2D49065900866E37 /* HikeContentView.swift */; };
+		C79443132D49065900866E37 /* HikeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430E2D49065900866E37 /* HikeCardView.swift */; };
+		C79443142D49065900866E37 /* HikeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79443102D49065900866E37 /* HikeCore.swift */; };
+		C79443152D49065900866E37 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430D2D49065900866E37 /* App.swift */; };
+		C79443172D4907CB00866E37 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C79443162D4907CB00866E37 /* shared.udl */; };
 		D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */ = {isa = PBXBuildFile; productRef = 5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */; };
 /* End PBXBuildFile section */
 
@@ -33,7 +34,7 @@
 			outputFilesCompilerFlags = (
 			);
 			runOncePerArchitecture = 0;
-			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n  echo \"Not building *.udl files during indexing.\"\n  exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n  echo \"Not building *.udl files during preview builds.\"\n  exit 0\nfi\n\ncd \"${INPUT_FILE_DIR}/..\"\n\"${BUILD_DIR}/debug/uniffi-bindgen\" generate \"src/${INPUT_FILE_NAME}\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
+			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n   echo \"Not building *.udl files during indexing.\"\n   exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n   echo \"Not building *.udl files during preview builds.\"\n   exit 0\nfi\n\ncd \"${INPUT_FILE_DIR}/..\"\n\"${BUILD_DIR}/debug/uniffi-bindgen\" generate \"src/${INPUT_FILE_NAME}\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
 		};
 /* End PBXBuildRule section */
 
@@ -80,10 +81,11 @@
 		4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		58EE16ACA8E76DC26004C5AA /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
-		C7365ADA2D47EC68005A342A /* core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = core.swift; sourceTree = "<group>"; };
-		C7365ADC2D47EC98005A342A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		C7365ADE2D47F318005A342A /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-		CF7E50DA005338D4F47D9D94 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; path = shared.udl; sourceTree = "<group>"; };
+		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		C794430E2D49065900866E37 /* HikeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeCardView.swift; sourceTree = "<group>"; };
+		C794430F2D49065900866E37 /* HikeContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeContentView.swift; sourceTree = "<group>"; };
+		C79443102D49065900866E37 /* HikeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeCore.swift; sourceTree = "<group>"; };
+		C79443162D4907CB00866E37 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../shared/src/shared.udl; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,9 +104,9 @@
 		1C46BF452BA4D4CC56D829CE = {
 			isa = PBXGroup;
 			children = (
+				C79443162D4907CB00866E37 /* shared.udl */,
 				1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */,
 				A47BF5DCC98B22ED079F3B75 /* Packages */,
-				DA281EF3A2D6D5C418F9FD98 /* src */,
 				2593BD6571133D3DF25B08DD /* Products */,
 				935BE9B51B0DC2FC3F86B1E3 /* Projects */,
 			);
@@ -114,6 +116,8 @@
 			isa = PBXGroup;
 			children = (
 				0324C0BA079EF82D60C106A2 /* Info.plist */,
+				C794430D2D49065900866E37 /* App.swift */,
+				C79443112D49065900866E37 /* Hike */,
 			);
 			path = BitBridge;
 			sourceTree = "<group>";
@@ -152,16 +156,14 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
-		DA281EF3A2D6D5C418F9FD98 /* src */ = {
+		C79443112D49065900866E37 /* Hike */ = {
 			isa = PBXGroup;
 			children = (
-				C7365ADE2D47F318005A342A /* App.swift */,
-				C7365ADC2D47EC98005A342A /* ContentView.swift */,
-				C7365ADA2D47EC68005A342A /* core.swift */,
-				CF7E50DA005338D4F47D9D94 /* shared.udl */,
+				C794430E2D49065900866E37 /* HikeCardView.swift */,
+				C794430F2D49065900866E37 /* HikeContentView.swift */,
+				C79443102D49065900866E37 /* HikeCore.swift */,
 			);
-			name = src;
-			path = ../shared/src;
+			path = Hike;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -265,10 +267,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C7365ADB2D47EC6B005A342A /* core.swift in Sources */,
-				C7365ADF2D47F324005A342A /* App.swift in Sources */,
-				8A69A2E8A1731F3B9A366B3B /* shared.udl in Sources */,
-				C7365ADD2D47EC9E005A342A /* ContentView.swift in Sources */,
+				C79443172D4907CB00866E37 /* shared.udl in Sources */,
+				C79443122D49065900866E37 /* HikeContentView.swift in Sources */,
+				C79443132D49065900866E37 /* HikeCardView.swift in Sources */,
+				C79443142D49065900866E37 /* HikeCore.swift in Sources */,
+				C79443152D49065900866E37 /* App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

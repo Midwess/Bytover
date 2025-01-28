@@ -226,7 +226,7 @@
 				SKIP_INSTALL = YES;
 				PRODUCT_NAME = desktop_lib_static;
 				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
-				
+
 			};
 			name = Release;
 		};
@@ -241,7 +241,7 @@
 				SKIP_INSTALL = YES;
 				PRODUCT_NAME = desktop_lib_static;
 				SUPPORTED_PLATFORMS = "macosx iphonesimulator iphoneos appletvsimulator appletvos";
-				
+
 			};
 			name = Debug;
 		};
@@ -250,7 +250,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libdesktop_lib.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libdesktop_lib.dylib;
-				
+
 				PRODUCT_NAME = desktop_lib;
 				SUPPORTED_PLATFORMS = macosx;
 				DYLIB_COMPATIBILITY_VERSION = 0;
@@ -262,7 +262,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libdesktop_lib.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libdesktop_lib.dylib;
-				
+
 				PRODUCT_NAME = desktop_lib;
 				SUPPORTED_PLATFORMS = macosx;
 				DYLIB_COMPATIBILITY_VERSION = 0;
@@ -274,10 +274,10 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = desktop.d;
 				CARGO_XCODE_CARGO_FILE_NAME = desktop;
-				
+
 				PRODUCT_NAME = desktop;
 				SUPPORTED_PLATFORMS = macosx;
-				
+
 			};
 			name = Release;
 		};
@@ -286,10 +286,10 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = desktop.d;
 				CARGO_XCODE_CARGO_FILE_NAME = desktop;
-				
+
 				PRODUCT_NAME = desktop;
 				SUPPORTED_PLATFORMS = macosx;
-				
+
 			};
 			name = Debug;
 		};
@@ -301,6 +301,7 @@
 				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
 				CARGO_XCODE_BUILD_PROFILE = release;
 				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
 				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;
@@ -326,6 +327,7 @@
 				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
 				CARGO_XCODE_BUILD_PROFILE = debug;
 				CARGO_XCODE_FEATURES = "";
+				"CARGO_XCODE_TARGET_ARCH[arch=arm*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=i386]" = i686;
 				"CARGO_XCODE_TARGET_ARCH[arch=x86_64*]" = x86_64;

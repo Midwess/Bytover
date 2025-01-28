@@ -42,6 +42,9 @@ brew install sccache
 Enable sccache for cargo
 ```bash
 export RUSTC_WRAPPER=$(which sccache)
+export SCCACHE_CACHE_SIZE="50G"
+sccache --stop-server
+sccache --start-server
 ```
 
 ## Build:
@@ -49,5 +52,14 @@ export RUSTC_WRAPPER=$(which sccache)
 Build the rust binary by selecting the `shared` module, and `press build in Android Studio`
 ### 2. Desktop
 ```bash
-cargo build
+cd Desktop; cargo build
 ```
+### 3. iOS
+Build the shared module
+```bash
+cd shared; cargo build
+```
+Option xcode and trigger run as normal
+
+#### Output architect:
+It is decided via variable `CARGO_XCODE_TARGET_ARCH`, search in shared project and adjusted it according to your choice
