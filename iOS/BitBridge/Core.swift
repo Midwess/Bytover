@@ -1,24 +1,23 @@
-////
-////  HikeCore.swift
-////  BitBridge
-////
-////  Created by Dang Minh Tien on 28/1/25.
-////
 //
+//  Core.swift
+//  BitBridge
+//
+//  Created by Dang Minh Tien on 12/2/25.
+//
+
 import Foundation
 import SharedTypes
-//
+
 @MainActor
-class HikeCore: ObservableObject {
-    @Published var view: CounterViewModel
+class Core: ObservableObject {
+    @Published var app_view_model: AppViewModel
     
     init() {
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
-        self.view = app.counter!;
+        self.app_view_model = app;
     }
     
-    func update(_ event: CounterEvent) {
-        let event: AppEvent = AppEvent.counter(event);
+    func update(_ event: AppEvent) {
         let effects = [UInt8](processEvent(Data(try! event.bincodeSerialize())))
         
         let requests: [Request] = try! .bincodeDeserialize(input: effects)
@@ -30,7 +29,7 @@ class HikeCore: ObservableObject {
     func processEffect(_ request: Request) {
         switch request.effect {
         case .render:
-            view = try! .bincodeDeserialize(input: [UInt8](BitBridge.view(AppModule.counter)))
+            app_view_model = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
         }
     }
 }

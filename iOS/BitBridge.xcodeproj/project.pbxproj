@@ -3,17 +3,18 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 80ABCDEC1AE53705DFC3637E /* libshared_static.a */; };
 		97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		C79443122D49065900866E37 /* HikeContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430F2D49065900866E37 /* HikeContentView.swift */; };
-		C79443132D49065900866E37 /* HikeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430E2D49065900866E37 /* HikeCardView.swift */; };
-		C79443142D49065900866E37 /* HikeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79443102D49065900866E37 /* HikeCore.swift */; };
 		C79443152D49065900866E37 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430D2D49065900866E37 /* App.swift */; };
 		C79443172D4907CB00866E37 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C79443162D4907CB00866E37 /* shared.udl */; };
+		C794AB252D5C6E30003CD57F /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794AB242D5C6E26003CD57F /* Core.swift */; };
+		C794AB2F2D5C7B5C003CD57F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */; };
+		C7B01BC42D5CEF7C00F9C90A /* SplineRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = C7B01BC32D5CEF7C00F9C90A /* SplineRuntime */; };
+		C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */ = {isa = PBXBuildFile; productRef = C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */; };
 		D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */ = {isa = PBXBuildFile; productRef = 5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */; };
 /* End PBXBuildFile section */
 
@@ -82,11 +83,14 @@
 		58EE16ACA8E76DC26004C5AA /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
 		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-		C794430E2D49065900866E37 /* HikeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeCardView.swift; sourceTree = "<group>"; };
-		C794430F2D49065900866E37 /* HikeContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeContentView.swift; sourceTree = "<group>"; };
-		C79443102D49065900866E37 /* HikeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HikeCore.swift; sourceTree = "<group>"; };
 		C79443162D4907CB00866E37 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../shared/src/shared.udl; sourceTree = "<group>"; };
+		C794AB242D5C6E26003CD57F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
+		C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C794AB262D5C7585003CD57F /* View */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = View; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		9EA9DD61D949E67678EFB40D /* Frameworks */ = {
@@ -94,7 +98,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */,
+				C7B01BC42D5CEF7C00F9C90A /* SplineRuntime in Frameworks */,
 				D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */,
+				C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -115,9 +121,11 @@
 		1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */ = {
 			isa = PBXGroup;
 			children = (
+				C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */,
+				C794AB262D5C7585003CD57F /* View */,
+				C794AB242D5C6E26003CD57F /* Core.swift */,
 				0324C0BA079EF82D60C106A2 /* Info.plist */,
 				C794430D2D49065900866E37 /* App.swift */,
-				C79443112D49065900866E37 /* Hike */,
 			);
 			path = BitBridge;
 			sourceTree = "<group>";
@@ -156,16 +164,6 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
-		C79443112D49065900866E37 /* Hike */ = {
-			isa = PBXGroup;
-			children = (
-				C794430E2D49065900866E37 /* HikeCardView.swift */,
-				C794430F2D49065900866E37 /* HikeContentView.swift */,
-				C79443102D49065900866E37 /* HikeCore.swift */,
-			);
-			path = Hike;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -184,9 +182,14 @@
 				49BE88D7BCB71F91CA44B7D4 /* PBXTargetDependency */,
 				69741DC9E0A2BEFEE16DA40E /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				C794AB262D5C7585003CD57F /* View */,
+			);
 			name = BitBridge;
 			packageProductDependencies = (
 				5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */,
+				C7B01BC32D5CEF7C00F9C90A /* SplineRuntime */,
+				C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */,
 			);
 			productName = BitBridge;
 			productReference = 4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */;
@@ -212,6 +215,8 @@
 			mainGroup = 1C46BF452BA4D4CC56D829CE;
 			packageReferences = (
 				DBDCE38EE48AEA503735ADA5 /* XCLocalSwiftPackageReference "../shared_types/generated/swift/SharedTypes" */,
+				C7B01BC22D5CEF7C00F9C90A /* XCRemoteSwiftPackageReference "spline-ios" */,
+				C7B01BC92D5CF60900F9C90A /* XCRemoteSwiftPackageReference "GLTFSceneKit" */,
 			);
 			projectDirPath = "";
 			projectReferences = (
@@ -256,6 +261,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C794AB2F2D5C7B5C003CD57F /* Assets.xcassets in Resources */,
 				97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -268,9 +274,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C79443172D4907CB00866E37 /* shared.udl in Sources */,
-				C79443122D49065900866E37 /* HikeContentView.swift in Sources */,
-				C79443132D49065900866E37 /* HikeCardView.swift in Sources */,
-				C79443142D49065900866E37 /* HikeCore.swift in Sources */,
+				C794AB252D5C6E30003CD57F /* Core.swift in Sources */,
 				C79443152D49065900866E37 /* App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -361,7 +365,7 @@
 				DEVELOPMENT_TEAM = VG92JZ53Y3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = BitBridge/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -440,7 +444,7 @@
 				DEVELOPMENT_TEAM = VG92JZ53Y3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = BitBridge/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -486,10 +490,39 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		C7B01BC22D5CEF7C00F9C90A /* XCRemoteSwiftPackageReference "spline-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/splinetool/spline-ios";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		C7B01BC92D5CF60900F9C90A /* XCRemoteSwiftPackageReference "GLTFSceneKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/magicien/GLTFSceneKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SharedTypes;
+		};
+		C7B01BC32D5CEF7C00F9C90A /* SplineRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C7B01BC22D5CEF7C00F9C90A /* XCRemoteSwiftPackageReference "spline-ios" */;
+			productName = SplineRuntime;
+		};
+		C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C7B01BC92D5CF60900F9C90A /* XCRemoteSwiftPackageReference "GLTFSceneKit" */;
+			productName = GLTFSceneKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

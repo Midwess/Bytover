@@ -1,10 +1,5 @@
 namespace shared {
   bytes process_event([ByRef] bytes msg);
   bytes handle_response(u32 id, [ByRef] bytes res);
-  bytes view(AppModule module);
-};
-
-enum AppModule {
-    "Counter",
-    "System",
+  bytes view();
 };

@@ -17,13 +17,6 @@ lazy_static! {
     pub static ref CORE: Bridge<BitBridge> = Bridge::new(Core::new());
 }
 
-#[derive(Debug, Clone)]
-#[wasm_bindgen]
-pub enum AppModule {
-    Counter,
-    System
-}
-
 #[wasm_bindgen]
 pub fn process_event(data: &[u8]) -> Vec<u8> {
     CORE.process_event(data)
@@ -35,6 +28,6 @@ pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
 }
 
 #[wasm_bindgen]
-pub fn view(module: AppModule) -> Vec<u8> {
+pub fn view() -> Vec<u8> {
     CORE.view()
 }
