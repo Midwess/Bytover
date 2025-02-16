@@ -19,7 +19,10 @@ impl NativeExecutor {
                 log::info!(target: "Tiendang-debug", "Handling void event");
                 process_event(&crate::serialize(&AppEvent::Void));
                 CoreOperationOutput::Void
-            }
+            },
+            CoreOperation::Database(database) => {
+
+            },
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }
     }
