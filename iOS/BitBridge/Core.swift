@@ -62,6 +62,8 @@ class Core: ObservableObject {
         case .appCapabilities(.void):
             print("Received void");
             return nativeHandle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
+        case .appCapabilities(.database(.saveToken(let token))):
+            return nativeHandle(request.id, Data(try! CoreOperation.database(.saveToken(token)).bincodeSerialize()))
         }
     }
 }

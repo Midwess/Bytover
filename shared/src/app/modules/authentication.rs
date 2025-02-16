@@ -1,8 +1,7 @@
 use crux_core::{App, Command};
-use schema::devlog::auth_gateway::rpc::{auth_service_client::AuthServiceClient, SigninRequest};
 use serde::{Deserialize, Serialize};
 
-use crate::app::{authentication::service::AuthenticationService, operations::{device::DeviceOperation, webview::WebViewOperation, CoreOperation}, BitBridge};
+use crate::app::{authentication::service::AuthenticationService, BitBridge};
 
 use super::AppModule;
 
@@ -32,10 +31,9 @@ impl AppModule<BitBridge> for AuthenticationModule {
     fn update(
         &self, 
         event: Self::Event, 
-        model: &mut Self::Model,
-        caps: &<BitBridge as App>::Capabilities
+        _model: &mut Self::Model,
+        _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
-        let cap_ctx = caps.capabilities.context.clone();
         match event {
             AuthenticationEvent::SignIn => {
                 Command::new(|ctx| async {
@@ -47,9 +45,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }
             AuthenticationEvent::OnRedirected { url } => {
                 Command::new(|ctx| async {
-                    self.auth_service.handle_auth_response(url).await;
+                    self.auth_service.handle_auth_response(url, ctx).await;
                 })
-                .then(Command::done())
             },
             AuthenticationEvent::SignUp => {
                 Command::done()

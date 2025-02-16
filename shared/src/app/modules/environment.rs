@@ -1,5 +1,6 @@
 use core_services::logger;
 use crux_core::{App, Command};
+use devlog_sdk::distributed_id::init_scoped_id_generator;
 use schema::value::platform::Platform;
 use serde::{Deserialize, Serialize};
 use crate::app::operations::local_storage::LocalStorageOperation;
@@ -43,6 +44,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
         match event {
             EnvironmentEvent::AppLaunched => {
                 logger::setup();
+                init_scoped_id_generator("BitBridge".to_string());
                 Command::new(|ctx| async {
                     let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx).await;
                     let di_container = DiContainer::get_instance();

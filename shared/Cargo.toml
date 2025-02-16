@@ -32,6 +32,8 @@ erased-serde = "0.4.5"
 tokio-scoped.workspace = true
 tonic.workspace = true
 thiserror.workspace = true
+surreal_devl.workspace = true
+surreal_derive_plus.workspace = true
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { version = "0.28.3", features = ["cli"] }

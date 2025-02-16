@@ -2,8 +2,10 @@ pub mod local_storage;
 pub mod webview;
 pub mod device;
 pub mod rpc;
+pub mod database;
 
 use crux_core::{capability::{CapabilityContext, Operation}, macros::Capability, Command};
+use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
@@ -16,6 +18,7 @@ pub enum CoreOperation {
     WebView(WebViewOperation),
     Device(DeviceOperation),
     Rpc(RpcOperation),
+    Database(DatabaseOperation),
     Void
 }
 
@@ -25,6 +28,7 @@ pub enum CoreOperationOutput {
     WebView(WebViewOperationOutput),
     Device(DeviceOperationOutput),
     Rpc(RpcOperationOutput),
+    Database(DatabaseOperationOutput),
     Void
 }
 

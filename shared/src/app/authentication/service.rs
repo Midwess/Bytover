@@ -1,7 +1,12 @@
+use devlog_sdk::distributed_id::gen_id;
+
+use crate::app::operations::database::DatabaseOperation;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::{AppCommandContext, AppEvent};
+use crate::entities::token::Token;
+use std::collections::HashMap;
 
 pub struct AuthenticationService {}
 
@@ -12,7 +17,32 @@ impl AuthenticationService {
         WebViewOperation::open_url(url).into_future(ctx).await;
     }
 
-    pub async fn handle_auth_response(&self, redirect_url: String) {
-        // Handle auth response
+    pub async fn handle_auth_response(&self, redirect_url: String, ctx: AppCommandContext) {
+        let query_string = redirect_url.split('?')
+            .nth(1)
+            .unwrap();
+        
+        let params: HashMap<String, String> = query_string
+            .split('&')
+            .filter_map(|pair| {
+                let mut parts = pair.split('=');
+                match (parts.next(), parts.next()) {
+                    (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+                    _ => None
+                }
+            })
+            .collect();
+
+        let token = Token {
+            id: gen_id().await,
+            value: params.get("access_token").unwrap().to_string()
+        };
+
+        if token.value.is_empty() {
+            log::error!(target: "auth", "Failed to get access token from auth response {}", redirect_url);
+            return;
+        }
+
+        DatabaseOperation::save_token(token).into_future(ctx).await;
     }
 }

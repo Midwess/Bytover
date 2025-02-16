@@ -1,6 +1,6 @@
 use crux_core::typegen::TypeGen;
 use schema::value::platform::Platform;
-use shared::app::{modules::{environment::{EnvironmentEvent, EnvironmentModel}, authentication::{AuthenticationEvent, AuthenticationModel}}, BitBridge};
+use shared::{app::{modules::{authentication::{AuthenticationEvent, AuthenticationModel}, environment::{EnvironmentEvent, EnvironmentModel}}, BitBridge}, entities::token::Token};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -8,6 +8,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut gen = TypeGen::new();
 
+    gen.register_type::<Token>()?;
     gen.register_type::<Platform>()?;
     gen.register_type::<EnvironmentEvent>()?;
     gen.register_type::<EnvironmentModel>()?;

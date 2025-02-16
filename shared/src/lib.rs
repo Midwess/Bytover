@@ -5,6 +5,7 @@ pub mod persistence;
 pub mod di_container;
 pub mod config;
 pub mod grpc;
+pub mod entities;
 
 use app::{operations::{CoreOperation, CoreOperationOutput}, AppEffect, AppEvent, BitBridge, BitBridgeEffect};
 use bincode::{DefaultOptions, Options};

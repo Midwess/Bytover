@@ -6681,6 +6681,8 @@ dependencies = [
  "log",
  "schema",
  "serde",
+ "surreal_derive_plus",
+ "surreal_devl",
  "surrealdb",
  "thiserror 1.0.69",
  "tokio",
