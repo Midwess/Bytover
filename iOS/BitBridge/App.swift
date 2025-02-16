@@ -6,12 +6,23 @@
 //
 
 import SwiftUI
+import SharedTypes
 
 @main
 struct Main: App {
+    @StateObject private var core = Core()
+    
+    init() {
+        print("Sending app launched")
+        core.update(AppEvent.environment(.appLaunched))
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onOpenURL(perform: {url in
+                    core.update(.authentication(.onRedirected(url: url.absoluteString)))
+                })
         }
     }
 }

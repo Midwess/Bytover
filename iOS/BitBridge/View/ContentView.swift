@@ -8,8 +8,10 @@
 import Foundation
 import SplineRuntime
 import SwiftUI
+import SharedTypes
 
 struct ContentView: View {
+    @StateObject private var core: Core = Core()
     var body: some View {
         LandingView()
     }

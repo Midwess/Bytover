@@ -11,6 +11,7 @@ import SwiftUI
 struct LandingView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize
+    @StateObject private var core = Core()
 
     var body: some View {
         ZStack {
@@ -29,7 +30,9 @@ struct LandingView: View {
                     .foregroundColor(Theme.LightViolet.color)
                     .modifier(Body2())
 
-                Button(action: {}) {
+                Button(action: {
+                    core.update(.authentication(.signIn))
+                }) {
                     Text("Get started")
                 }
                 .padding(.top, 60)

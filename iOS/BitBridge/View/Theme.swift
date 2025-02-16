@@ -87,7 +87,7 @@ enum ImageAsset: String {
 struct FontTheme {
     static var H1Heading: Font {
         get {
-            .title
+            .largeTitle
                 .weight(.bold)
         }
     }

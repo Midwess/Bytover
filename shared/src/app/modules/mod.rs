@@ -1,4 +1,5 @@
-pub mod counter;
+pub mod environment;
+pub mod authentication;
 
 use crux_core::{App, Command};
 
