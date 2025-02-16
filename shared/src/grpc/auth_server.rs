@@ -1,7 +1,7 @@
 use schema::{devlog::auth_gateway::rpc::{auth_service_client::AuthServiceClient, SigninRequest}, value::{auth_method::AuthMethod, device::RegisteringDevice}};
 use tonic::transport::Channel;
 
-use crate::{app::{modules::environment::DeviceInfo, ports::authentication_service::{AuthenticationServer, AuthenticationServerError}}, config::get_gateway_grpc_url, TOKIO_RT};
+use crate::{app::modules::environment::DeviceInfo, config::get_gateway_grpc_url, errors::AuthenticationError};
 
 pub struct AuthServer {
     client: AuthServiceClient<Channel>
@@ -15,9 +15,8 @@ impl AuthServer {
     }
 }
 
-#[async_trait::async_trait]
-impl AuthenticationServer for AuthServer {
-    async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, AuthenticationServerError> {
+impl AuthServer {
+    pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, AuthenticationError> {
         let request = SigninRequest {
             app_name: "BitBridge".to_string(),
             method: AuthMethod::Google.into(),
@@ -28,9 +27,7 @@ impl AuthenticationServer for AuthServer {
             }
         };
 
-        log::info!(target: "auth_server", "Requesting authorization url");
         let response = self.client.clone().signin(request).await?;
-        log::info!(target: "auth_server", "Received authorization url");
 
         Ok(response.get_ref().signin_url.clone())
     }

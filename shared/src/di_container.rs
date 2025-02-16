@@ -6,14 +6,14 @@ use surrealdb::{engine::local::Db, Surreal};
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
-use crate::{app::{authentication::service::AuthenticationService, modules::{authentication::AuthenticationModule, environment::EnvironmentModule}, ports::authentication_service::AuthenticationServer}, grpc::auth_server::AuthServer, persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo}, TOKIO_RT};
+use crate::{app::{authentication::service::AuthenticationService, modules::{authentication::AuthenticationModule, environment::EnvironmentModule}}, grpc::auth_server::AuthServer, native::{executor::NativeExecutor, rpc::NativeRpc}, persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo}, TOKIO_RT};
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Surreal<Db>>>>,
     auth_service: OnceCell<AuthenticationService>,
-    auth_server: OnceCell<Box<dyn AuthenticationServer>>
+    auth_server: OnceCell<AuthServer>
 }
 
 impl DiContainer {
@@ -47,9 +47,7 @@ impl DiContainer {
         match self.auth_service.get() {
             Some(service) => service,
             None => {
-                let service = AuthenticationService {
-                    auth_server: self.get_authentication_server()
-                };
+                let service = AuthenticationService {};
 
                 let _ = self.auth_service.set(service);
                 self.auth_service.get().unwrap()
@@ -57,7 +55,7 @@ impl DiContainer {
         }
     }
 
-    pub fn get_authentication_server(&'static self) -> &'static Box<dyn AuthenticationServer> {
+    pub fn get_authentication_server(&'static self) -> &'static AuthServer {
         match self.auth_server.get() {
             Some(server) => server,
             None => {
@@ -83,8 +81,14 @@ impl DiContainer {
                 );
 
                 let server = AuthServer::new().await;
-                let _ = self.auth_server.set(Box::new(server));
+                let _ = self.auth_server.set(server);
             });
         });
+    }
+
+    pub async fn get_native_executor(&self) -> NativeExecutor {
+        NativeExecutor {
+            rpc: NativeRpc {}
+        }
     }
 }

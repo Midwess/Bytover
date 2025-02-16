@@ -1,16 +1,19 @@
 use crate::{app::{operations::{rpc::{RpcOperation, RpcOperationOutput}, CoreOperation, CoreOperationOutput}, AppEvent}, di_container::DiContainer, process_event};
 
+use super::rpc::NativeRpc;
+
 // Handle the effect comming from the platform
 // This is the placed where we can put Rust logic to share accross platform
-pub struct NativeExecutor {}
+pub struct NativeExecutor {
+    pub rpc: NativeRpc
+}
 
 impl NativeExecutor {
     pub async fn handle(&self, effect: CoreOperation) -> CoreOperationOutput {
         match effect {
-            CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info)) => {
-                let di_container = DiContainer::get_instance();
-                let response = di_container.get_authentication_server().request_signin_url(device_info).await.unwrap();
-                CoreOperationOutput::Rpc(RpcOperationOutput::SignInUrl(response))
+            CoreOperation::Rpc(rpc_effect) => {
+                let response = self.rpc.handle(rpc_effect).await;
+                CoreOperationOutput::Rpc(response)
             },
             CoreOperation::Void => {
                 log::info!(target: "Tiendang-debug", "Handling void event");

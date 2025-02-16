@@ -1,6 +1,5 @@
 pub mod system;
 pub mod modules;
-pub mod ports;
 pub mod operations;
 pub mod authentication;
 

@@ -2,11 +2,8 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::app::ports::authentication_service::AuthenticationServer;
 
-pub struct AuthenticationService {
-    pub auth_server: &'static Box<dyn AuthenticationServer>
-}
+pub struct AuthenticationService {}
 
 impl AuthenticationService {
     pub async fn signin(&self, ctx: AppCommandContext) {
