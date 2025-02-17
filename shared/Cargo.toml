@@ -5,35 +5,75 @@ edition = "2021"
 
 [profile.dev]
 opt-level = 0
+debug = 1
+strip = false
+split-debuginfo = "unpacked"
+incremental = true
+codegen-units = 256
+lto = false
+panic = "unwind"
+debug-assertions = true
+overflow-checks = true
+rpath = false
 
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
 name = "shared"
+required-features = ["lib"]
 
 [features]
 typegen = ["crux_core/typegen"]
+# Enable both uniffi-bindgen and lib features allowing compiler to check fully code
+default = ["uniffi-bindgen", "lib"]
+# Main mode
+lib = [
+    "crux_core",
+    "serde",
+    "surrealdb",
+    "lazy_static",
+    "uniffi",
+    "wasm-bindgen",
+    "core-services",
+    "schema",
+    "devlog-sdk",
+    "domain",
+    "tokio",
+    "async-trait",
+    "log",
+    "bincode",
+    "erased-serde",
+    "tokio-scoped",
+    "tonic",
+    "thiserror",
+    "surreal_devl",
+    "surreal_derive_plus"
+]
+# Generated mode, we split it out to optimize build time (2x faster)
+uniffi-bindgen = ["uniffi"]
 
+# All of theses deps are required but because optimization in build time
+# we need to mark it as optional, then enable it in the feature ["lib"]
 [dependencies]
-crux_core.workspace = true
-serde = { workspace = true, features = ["derive"] }
-surrealdb = { workspace = true, features = ["kv-surrealkv"] }
-lazy_static.workspace = true
-uniffi = "0.28.3"
-wasm-bindgen = "0.2.100"
-core-services = {path = "../libs/core-services"}
-schema = {path = "../libs/schema/rust"}
-devlog-sdk = {path = "../libs/devlog-sdk"}
-domain = {path = "../domain"}
-tokio = { workspace = true }
-async-trait.workspace = true
-log.workspace = true
-bincode = "1.3.3"
-erased-serde = "0.4.5"
-tokio-scoped.workspace = true
-tonic.workspace = true
-thiserror.workspace = true
-surreal_devl.workspace = true
-surreal_derive_plus.workspace = true
+crux_core = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+surrealdb = { workspace = true, features = ["kv-surrealkv"], optional = true }
+lazy_static = { workspace = true, optional = true }
+uniffi = { version = "0.28.3", optional = true }
+wasm-bindgen = { version = "0.2.100", optional = true }
+core-services = { path = "../libs/core-services", features = ["db"], optional = true }
+schema = { path = "../libs/schema/rust", optional = true }
+devlog-sdk = { path = "../libs/devlog-sdk", features = ["db"], optional = true }
+domain = { path = "../domain", optional = true }
+tokio = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+bincode = { version = "1.3.3", optional = true }
+erased-serde = { version = "0.4.5", optional = true }
+tokio-scoped = { workspace = true, optional = true }
+tonic = { workspace = true, features = ["transport"], optional = true }
+thiserror = { workspace = true, optional = true }
+surreal_devl = { workspace = true, optional = true }
+surreal_derive_plus = { workspace = true, optional = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { version = "0.28.3", features = ["cli"] }

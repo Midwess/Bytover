@@ -1,4 +1,4 @@
-use std::{future::Future, process::Output};
+use std::future::Future;
 
 use crux_core::{capability::{CapabilityContext, Operation}, command, Command, Effect};
 use serde::{Deserialize, Serialize};

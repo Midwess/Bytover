@@ -21,7 +21,7 @@ impl NativeExecutor {
                 CoreOperationOutput::Void
             },
             CoreOperation::Database(database) => {
-
+                todo!()
             },
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }

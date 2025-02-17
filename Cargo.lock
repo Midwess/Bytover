@@ -1761,10 +1761,7 @@ dependencies = [
  "lazy_static",
  "lettre",
  "log",
- "once_cell",
  "pretty_env_logger",
- "prost",
- "prost-types",
  "reqwest",
  "schema",
  "serde",
@@ -1776,9 +1773,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-scoped",
- "tokio-stream",
  "tonic",
- "tonic-build",
  "tonic-middleware",
 ]
 
@@ -2093,14 +2088,10 @@ name = "devlog-sdk"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "aws-sdk-s3",
  "chrono",
  "core-services",
- "jsonwebtoken",
  "lazy_static",
- "lettre",
  "log",
- "once_cell",
  "reqwest",
  "schema",
  "serde",
@@ -2250,7 +2241,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "log",
- "once_cell",
  "serde",
  "serde_derive",
  "thiserror 1.0.69",
@@ -5676,7 +5666,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
- "rand_core 0.9.0",
+ "rand_core 0.9.1",
  "zerocopy 0.8.18",
 ]
 
@@ -5707,7 +5697,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.9.0",
+ "rand_core 0.9.1",
 ]
 
 [[package]]
@@ -5730,9 +5720,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b08f3c9802962f7e1b25113931d94f43ed9725bebc59db9d0c3e9a23b67e15ff"
+checksum = "a88e0da7a2c97baa202165137c158d0a2e824ac465d13d81046727b34cb247d3"
 dependencies = [
  "getrandom 0.3.1",
  "zerocopy 0.8.18",
@@ -6297,7 +6287,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "prost",
- "prost-types",
  "serde",
  "serde_derive",
  "serde_json",
@@ -7582,9 +7571,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.16.0"
+version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38c246215d7d24f48ae091a2902398798e05d978b24315d6efbc00ede9a8bb91"
+checksum = "a40f762a77d2afa88c2d919489e390a12bdd261ed568e60cfa7e48d4e20f0d33"
 dependencies = [
  "cfg-if",
  "fastrand",
