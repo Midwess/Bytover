@@ -1,21 +1,27 @@
-use std::sync::Arc;
+use core_services::{db::repository::abstraction::local_repository::LocalSurrealDbRepository, utils::pool::{allocator::PoolAllocator, request::PoolRequest}};
 
-use core_services::{db::repository::abstraction::repository::LocalSurrealDbRepository, utils::pool::{allocator::PoolAllocator, request::PoolRequest}};
-use surreal_derive_plus::surreal_quote;
-use surrealdb::{engine::local::Db, Surreal};
-
-use crate::{app::operations::database::{DatabaseOperation, DatabaseOperationOutput}, persistence::token::TokenRepository};
+use crate::{app::operations::database::{DatabaseOperation, DatabaseOperationOutput, TokenOperation, TokenOperationOutput}, entities::token::Token, persistence::token::TokenRepository};
 
 pub struct NativeDatabase {
-    token_repository: TokenRepository
+    pub token_repository: TokenRepository
 }
 
 impl NativeDatabase {
     pub async fn handle(&self, effect: DatabaseOperation) -> DatabaseOperationOutput {
         match effect {
-            DatabaseOperation::SaveToken(token) => {
-                self.token_repository.create(token).await;
-                DatabaseOperationOutput::SaveToken()
+            DatabaseOperation::Token(TokenOperation::Write(token)) => {
+                let result = self.token_repository.create(token).await;
+                DatabaseOperationOutput::Token(TokenOperationOutput::Write())
+            },
+            DatabaseOperation::Token(TokenOperation::Latest()) => {
+                match self.token_repository.get_latest_token().await {
+                    Ok(token) => {
+                        DatabaseOperationOutput::Token(TokenOperationOutput::Latest { token: token, error: None })
+                    },
+                    Err(error) => {
+                        DatabaseOperationOutput::Token(TokenOperationOutput::Latest { token: None, error: Some(error.to_string()) })
+                    }
+                }
             }
             _ => panic!("Native database doesn't support this effect {:?}", effect)
         }

@@ -56,13 +56,13 @@ uniffi-bindgen = ["uniffi"]
 [dependencies]
 crux_core = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-surrealdb = { workspace = true, features = ["kv-surrealkv"], optional = true }
+surrealdb = { workspace = true, default-features = false, features = ["kv-surrealkv"], optional = true }
 lazy_static = { workspace = true, optional = true }
 uniffi = { version = "0.28.3", optional = true }
 wasm-bindgen = { version = "0.2.100", optional = true }
-core-services = { path = "../libs/core-services", features = ["db"], optional = true }
+core-services = { path = "../libs/core-services", default-features = false, features = ["db-local"], optional = true }
 schema = { path = "../libs/schema/rust", optional = true }
-devlog-sdk = { path = "../libs/devlog-sdk", features = ["db"], optional = true }
+devlog-sdk = { path = "../libs/devlog-sdk", default-features = false, features = ["db-local"], optional = true }
 domain = { path = "../domain", optional = true }
 tokio = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -80,3 +80,17 @@ uniffi = { version = "0.28.3", features = ["cli"] }
 
 [build-dependencies]
 uniffi = { version = "0.28.3", features = ["build"] }
+
+[package.metadata]
+# Will log the query command at runtime
+surreal_enable_log = true
+# Will log the generated code at build time
+surreal_enable_compile_log = true
+# Change the naming convention of generated statement into camel case
+surreal_use_camel_case = false
+# The log namespace, apply for both build time log and runtime log
+surreal_namespace = "surrealql"
+# The macro name that use for info log
+surreal_info_log_macro = "log::info"
+# The macro name that use for warning log
+surreal_warn_log_macro = "log::info"

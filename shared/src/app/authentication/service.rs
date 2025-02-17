@@ -1,6 +1,6 @@
 use devlog_sdk::distributed_id::gen_id;
 
-use crate::app::operations::database::DatabaseOperation;
+use crate::app::operations::database::{DatabaseOperation, TokenOperation};
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
@@ -34,7 +34,7 @@ impl AuthenticationService {
             .collect();
 
         let token = Token {
-            id: gen_id().await,
+            order_id: gen_id().await,
             value: params.get("access_token").unwrap().to_string()
         };
 
@@ -43,6 +43,6 @@ impl AuthenticationService {
             return;
         }
 
-        DatabaseOperation::save_token(token).into_future(ctx).await;
+        TokenOperation::save(token).into_future(ctx).await;
     }
 }

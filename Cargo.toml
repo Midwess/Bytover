@@ -47,8 +47,23 @@ async-trait = { version = "0.1.13", default-features = false }
 log = { version = "0.4.22", default-features = false }
 tokio-scoped = { version = "0.2.0", default-features = false }
 tonic = { version = "0.11", default-features = false }
+prost = { version = "0.12.6", default-features = false }
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }
 cargo-run-bin = { version = "1.7.2", default-features = false }
 cargo-binstall = { version = "1.10.22" }
+
+[workspace.package.metadata]
+# Will log the query command at runtime
+surreal_enable_log = true
+# Will log the generated code at build time
+surreal_enable_compile_log = true
+# Change the naming convention of generated statement into camel case
+surreal_use_camel_case = false
+# The log namespace, apply for both build time log and runtime log
+surreal_namespace = "surrealql"
+# The macro name that use for info log
+surreal_info_log_macro = "log::info"
+# The macro name that use for warning log
+surreal_warn_log_macro = "log::info"

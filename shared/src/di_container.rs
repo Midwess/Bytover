@@ -1,12 +1,12 @@
 use core::panic;
 use std::{sync::Arc, time::Duration};
 
-use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
+use core_services::utils::pool::{allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider}, request::PoolRequestBuilder};
 use surrealdb::{engine::local::Db, Surreal};
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
-use crate::{app::{authentication::service::AuthenticationService, modules::{authentication::AuthenticationModule, environment::EnvironmentModule}}, grpc::auth_server::AuthServer, native::{executor::NativeExecutor, rpc::NativeRpc}, persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo}, TOKIO_RT};
+use crate::{app::{authentication::service::AuthenticationService, modules::{authentication::AuthenticationModule, environment::EnvironmentModule}}, grpc::auth_server::AuthServer, native::{database::NativeDatabase, executor::NativeExecutor, rpc::NativeRpc}, persistence::{surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo}, token::TokenRepository}, TOKIO_RT};
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -86,9 +86,18 @@ impl DiContainer {
         });
     }
 
+    pub fn get_token_repository(&self) -> TokenRepository {
+        TokenRepository {
+            db: PoolRequestBuilder::new().pool(self.db.get().unwrap().clone()).build()
+        }
+    }
+
     pub async fn get_native_executor(&self) -> NativeExecutor {
         NativeExecutor {
-            rpc: NativeRpc {}
+            rpc: NativeRpc {},
+            database: NativeDatabase {
+                token_repository: self.get_token_repository()
+            }
         }
     }
 }

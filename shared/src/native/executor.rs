@@ -1,11 +1,12 @@
 use crate::{app::{operations::{rpc::{RpcOperation, RpcOperationOutput}, CoreOperation, CoreOperationOutput}, AppEvent}, di_container::DiContainer, process_event};
 
-use super::rpc::NativeRpc;
+use super::{database::NativeDatabase, rpc::NativeRpc};
 
 // Handle the effect comming from the platform
 // This is the placed where we can put Rust logic to share accross platform
 pub struct NativeExecutor {
-    pub rpc: NativeRpc
+    pub rpc: NativeRpc,
+    pub database: NativeDatabase
 }
 
 impl NativeExecutor {
@@ -16,12 +17,12 @@ impl NativeExecutor {
                 CoreOperationOutput::Rpc(response)
             },
             CoreOperation::Void => {
-                log::info!(target: "Tiendang-debug", "Handling void event");
                 process_event(&crate::serialize(&AppEvent::Void));
                 CoreOperationOutput::Void
             },
             CoreOperation::Database(database) => {
-                todo!()
+                let response = self.database.handle(database).await;
+                CoreOperationOutput::Database(response)
             },
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }
