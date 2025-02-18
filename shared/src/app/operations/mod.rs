@@ -19,6 +19,7 @@ pub enum CoreOperation {
     Device(DeviceOperation),
     Rpc(RpcOperation),
     Database(DatabaseOperation),
+    Render,
     Void
 }
 

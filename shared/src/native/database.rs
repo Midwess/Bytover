@@ -1,29 +1,47 @@
 use core_services::{db::repository::abstraction::local_repository::LocalSurrealDbRepository, utils::pool::{allocator::PoolAllocator, request::PoolRequest}};
 
-use crate::{app::operations::database::{DatabaseOperation, DatabaseOperationOutput, TokenOperation, TokenOperationOutput}, entities::token::Token, persistence::token::TokenRepository};
+use crate::{app::operations::database::{DatabaseOperation, DatabaseOperationOutput, SessionOperation, SessionOperationOutput, UserDatabaseOperation}, entities::session::{Session, SessionType}, persistence::session::{SessionId, SessionRepository}};
+use crate::persistence::user::UserRepository;
 
 pub struct NativeDatabase {
-    pub token_repository: TokenRepository
+    pub session_repository: SessionRepository,
 }
 
 impl NativeDatabase {
     pub async fn handle(&self, effect: DatabaseOperation) -> DatabaseOperationOutput {
         match effect {
-            DatabaseOperation::Token(TokenOperation::Write(token)) => {
-                let result = self.token_repository.create(token).await;
-                DatabaseOperationOutput::Token(TokenOperationOutput::Write())
+            DatabaseOperation::Session(SessionOperation::WriteToken(token)) => {
+                let _ = self.session_repository.delete_one(&SessionId { r#type: SessionType::Access }).await;
+                log::info!(target: "db-debug", "Deleted session");
+                self.session_repository.create(Session {
+                    r#type: SessionType::Access,
+                    token: token,
+                    user: None
+                }).await.unwrap();
+                log::info!(target: "db-debug", "Created session");
+                DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())
             },
-            DatabaseOperation::Token(TokenOperation::Latest()) => {
-                match self.token_repository.get_latest_token().await {
-                    Ok(token) => {
-                        DatabaseOperationOutput::Token(TokenOperationOutput::Latest { token: token, error: None })
+            DatabaseOperation::Session(SessionOperation::Get()) => {
+                match self.session_repository.find_one(&SessionId { r#type: SessionType::Access }).await {
+                    Ok(session) => {
+                        DatabaseOperationOutput::Session(SessionOperationOutput::Get(session))
                     },
-                    Err(error) => {
-                        DatabaseOperationOutput::Token(TokenOperationOutput::Latest { token: None, error: Some(error.to_string()) })
+                    Err(_error) => {
+                        DatabaseOperationOutput::Session(SessionOperationOutput::Get(None))
                     }
                 }
             }
+            DatabaseOperation::Session(SessionOperation::WriteUser(user)) => {
+                let session = self.session_repository.find_one(&SessionId { r#type: SessionType::Access }).await;
+                if let Ok(Some(mut session)) = session {
+                    session.user = Some(user);
+                    let _ = self.session_repository.update_one(session).await;
+                }
+
+                DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
+            }
+
             _ => panic!("Native database doesn't support this effect {:?}", effect)
         }
     }
-}   
+}

@@ -3,16 +3,35 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 53;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C757A84B2D64A094005561E9 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = C757A84A2D64A084005561E9 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
 		CA0075449799D346A0A05154 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF972D1F1633EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
 		CA017544979925C0556334E4 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF972D1F1633EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--lib"; }; };
 		CA02754497994296ADE0F606 /* Cargo.toml in Sources */ = {isa = PBXBuildFile; fileRef = CAF972D1F1633EF4668187A5 /* Cargo.toml */; settings = {COMPILER_FLAGS = "--bin 'uniffi-bindgen'"; }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
+		C757A8402D649EEF005561E9 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			filePatterns = "*/shared_types/Cargo.toml";
+			fileType = pattern.proxy;
+			inputFileLists = (
+				"",
+			);
+			inputFiles = (
+			);
+			isEditable = 0;
+			name = "Cargo project build";
+			outputFiles = (
+				"$(OBJECT_FILE_DIR)/$(CARGO_XCODE_TARGET_ARCH)-$(EXECUTABLE_NAME)",
+			);
+			runOncePerArchitecture = 0;
+			script = "# generated with cargo-xcode 1.7.0\nset -xeu;\nexport PATH=\"$HOME/.cargo/bin:$PATH:/usr/local/bin:/opt/homebrew/bin\";\nexport RUSTC_WRAPPER=$(which sccache)\n\nif [ \"$ACTION\" = clean ]; then\n cargo clean --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" ${OTHER_INPUT_FILE_FLAGS} --target=\"${CARGO_XCODE_TARGET_TRIPLE}\";\n rm -f \"$SCRIPT_OUTPUT_FILE_0\"\n exit 0\nfi\n\ncargo build --verbose --manifest-path=\"$SCRIPT_INPUT_FILE\" ||  {\necho >&2 \"error: cargo build failed\"; exit 1; }\n\nexit 0;\n";
+		};
 		CAF472D1F163AC6C1400ACA8 /* PBXBuildRule */ = {
 			isa = PBXBuildRule;
 			compilerSpec = com.apple.compilers.proxy.script;
@@ -32,6 +51,8 @@
 /* End PBXBuildRule section */
 
 /* Begin PBXFileReference section */
+		C757A8442D649EEF005561E9 /* shared */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = shared; sourceTree = BUILT_PRODUCTS_DIR; };
+		C757A84A2D64A084005561E9 /* Cargo.toml */ = {isa = PBXFileReference; lastKnownFileType = text; name = Cargo.toml; path = ../shared_types/Cargo.toml; sourceTree = SOURCE_ROOT; };
 		CA0049BF7D4FFB09138082B7 /* libshared_static.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libshared_static.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA01C51694BE10F7F7FCAC5B /* shared.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = shared.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA02FA85CE9E8109328FB0D5 /* uniffi-bindgen */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "uniffi-bindgen"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -42,6 +63,7 @@
 		CAF072D1F163D65BC3C892A8 = {
 			isa = PBXGroup;
 			children = (
+				C757A84A2D64A084005561E9 /* Cargo.toml */,
 				CAF972D1F1633EF4668187A5 /* Cargo.toml */,
 				CAF172D1F16322869D176AE5 /* Products */,
 				CAF272D1F16398AF0B5890DB /* Frameworks */,
@@ -54,6 +76,7 @@
 				CA0049BF7D4FFB09138082B7 /* libshared_static.a */,
 				CA01C51694BE10F7F7FCAC5B /* shared.dylib */,
 				CA02FA85CE9E8109328FB0D5 /* uniffi-bindgen */,
+				C757A8442D649EEF005561E9 /* shared */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -68,6 +91,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		C757A83C2D649EEF005561E9 /* shared-types-gen */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C757A8412D649EEF005561E9 /* Build configuration list for PBXNativeTarget "shared-types-gen" */;
+			buildPhases = (
+				C757A83D2D649EEF005561E9 /* Sources */,
+				C757A83F2D649EEF005561E9 /* Universal Binary lipo */,
+				C757A8452D649FAD005561E9 /* ShellScript */,
+			);
+			buildRules = (
+				C757A8402D649EEF005561E9 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "shared-types-gen";
+			productName = "uniffi-bindgen";
+			productReference = C757A8442D649EEF005561E9 /* shared */;
+			productType = "com.apple.product-type.tool";
+		};
 		CA0049BF7D4FD346A0A05154 /* shared-staticlib */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CA009BFF234FD346A0A05154 /* Build configuration list for PBXNativeTarget "shared-staticlib" */;
@@ -157,11 +198,49 @@
 				CA0049BF7D4FD346A0A05154 /* shared-staticlib */,
 				CA01C51694BE25C0556334E4 /* shared-cdylib */,
 				CA02FA85CE9E4296ADE0F606 /* uniffi-bindgen-bin */,
+				C757A83C2D649EEF005561E9 /* shared-types-gen */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		C757A83F2D649EEF005561E9 /* Universal Binary lipo */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DERIVED_FILE_DIR)/$(ARCHS)-$(EXECUTABLE_NAME).xcfilelist",
+			);
+			name = "Universal Binary lipo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# generated with cargo-xcode 1.7.0\nset -eux;\ntr '\\n' '\\0' < \"$DERIVED_FILE_DIR/$ARCHS-$EXECUTABLE_NAME.xcfilelist\" | xargs -0 lipo -create -output \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nif [ ${LD_DYLIB_INSTALL_NAME:+1} ]; then\n  install_name_tool -id \"$LD_DYLIB_INSTALL_NAME\" \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\"\nfi\n";
+		};
+		C757A8452D649FAD005561E9 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "";
+		};
 		CAF572D1F163AF6EBB7F357C /* Universal Binary lipo */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -185,6 +264,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		C757A83D2D649EEF005561E9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C757A84B2D64A094005561E9 /* Cargo.toml in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CA002DB2DC98D346A0A05154 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -212,6 +299,24 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		C757A8422D649EEF005561E9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				SUPPORTED_PLATFORMS = "xrsimulator xros watchsimulator watchos macosx iphonesimulator iphoneos driverkit appletvsimulator appletvos";
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Release;
+		};
+		C757A8432D649EEF005561E9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				SUPPORTED_PLATFORMS = "xrsimulator xros watchsimulator watchos macosx iphonesimulator iphoneos driverkit appletvsimulator appletvos";
+				SUPPORTS_MACCATALYST = YES;
+			};
+			name = Debug;
+		};
 		CA00D94DC8EDD346A0A05154 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -377,6 +482,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		C757A8412D649EEF005561E9 /* Build configuration list for PBXNativeTarget "shared-types-gen" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C757A8422D649EEF005561E9 /* Release */,
+				C757A8432D649EEF005561E9 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CA009BFF234FD346A0A05154 /* Build configuration list for PBXNativeTarget "shared-staticlib" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -35,6 +35,14 @@ struct PrimaryButton: View {
     }
 }
 
+struct UpgradePremiumButton: View {
+    var body: some View {
+        Button(action: {}) {
+            Text("Upgrade premium")
+        }
+    }
+}
+
 struct Button_Preview: PreviewProvider {
     static var previews: some View {
         VStack {
@@ -46,4 +54,8 @@ struct Button_Preview: PreviewProvider {
         .frame(width: .infinity, height: .infinity)
         .background(Theme.DarkViolet.color)
     }
+}
+
+#Preview("Premium button") {
+    UpgradePremiumButton()
 }

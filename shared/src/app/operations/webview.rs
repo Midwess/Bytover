@@ -27,7 +27,6 @@ impl WebViewOperation {
             .map(|res| {
                 match res {
                     CoreOperationOutput::WebView(WebViewOperationOutput::OpenUrl) => {
-                        log::info!(target: "tiendang-debug", "Openned url");
                         ()
                     },
                     _ => panic!("Invalid output for WebViewOperation::OpenUrl")

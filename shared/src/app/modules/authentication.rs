@@ -1,26 +1,30 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
-use crate::app::{authentication::service::AuthenticationService, BitBridge};
+use crate::{app::{authentication::service::AuthenticationService, operations::CoreOperation, BitBridge}, di_container::DiContainer, entities::user::User};
 
 use super::AppModule;
 
-pub struct AuthenticationModule {
-    pub auth_service: &'static AuthenticationService
+#[derive(Default)]
+pub struct AuthenticationModule {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct AuthenticationModel {
+    pub user: Option<User>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct AuthenticationModel {}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct AuthenticationViewModel {}
+pub struct AuthenticationViewModel {
+    pub user: Option<User>
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
 pub enum AuthenticationEvent {
     SignIn,
     SignUp,
     SignOut,
-    OnRedirected { url: String }
+    OnRedirected { url: String },
+    OnSignInSuccess { user: User }
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -31,13 +35,14 @@ impl AppModule<BitBridge> for AuthenticationModule {
     fn update(
         &self, 
         event: Self::Event, 
-        _model: &mut Self::Model,
-        _caps: &<BitBridge as App>::Capabilities
+        model: &mut Self::Model,
+        caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             AuthenticationEvent::SignIn => {
                 Command::new(|ctx| async {
-                    self.auth_service.signin(ctx).await;
+                    let auth_service = DiContainer::get_instance().get_authentication_service();
+                    auth_service.signin(ctx).await;
                 })
             }
             AuthenticationEvent::SignOut => {
@@ -45,16 +50,21 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }
             AuthenticationEvent::OnRedirected { url } => {
                 Command::new(|ctx| async {
-                    self.auth_service.handle_auth_response(url, ctx).await;
+                    let auth_service = DiContainer::get_instance().get_authentication_service();
+                    auth_service.handle_auth_response(url, ctx).await;
                 })
             },
             AuthenticationEvent::SignUp => {
+                Command::done()
+            }
+            AuthenticationEvent::OnSignInSuccess { user } => {
+                model.user.replace(user);
                 Command::done()
             }
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        AuthenticationViewModel {}
+        AuthenticationViewModel { user: model.user.clone() }
     }
 }

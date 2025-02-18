@@ -3,12 +3,13 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use schema::value::platform::Platform;
 use serde::{Deserialize, Serialize};
+use uniffi::Record;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::BitBridge;
 use crate::app::modules::AppModule;
 use crate::di_container::DiContainer;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Record)]
 pub struct DeviceInfo {
     pub platform: Platform,
     pub name: String,
@@ -23,6 +24,7 @@ pub struct EnvironmentModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct EnvironmentViewModel {}
 
+#[derive(Default)]
 pub struct EnvironmentModule {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
@@ -38,17 +40,18 @@ impl AppModule<BitBridge> for EnvironmentModule {
     fn update(
         &self,
         event: Self::Event,
-        model: &mut Self::Model,
-        caps: &<BitBridge as App>::Capabilities
+        _model: &mut Self::Model,
+        _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             EnvironmentEvent::AppLaunched => {
                 logger::setup();
                 init_scoped_id_generator("BitBridge".to_string());
                 Command::new(|ctx| async {
-                    let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx).await;
+                    let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
                     let di_container = DiContainer::get_instance();
                     di_container.init(workdir_path).await;
+                    di_container.get_authentication_service().update_signin_session(ctx).await;
                 })
                 .then(Command::done())
             },

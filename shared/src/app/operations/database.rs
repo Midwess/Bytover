@@ -4,45 +4,64 @@ use crux_core::{capability::Operation, Command};
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::{app::AppRequestBuilder, entities::token::Token};
+use crate::{app::AppRequestBuilder, entities::{session::Session, token::Token, user::User}};
 
 use super::{CoreOperation, CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DatabaseOperation {
-    Token(TokenOperation)
+    Session(SessionOperation),
+    User(UserDatabaseOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
-pub enum TokenOperation {
-    Write(Token),
-    Latest()
+pub enum UserDatabaseOperation {
+    Save(User)
+}
+
+impl Operation for UserDatabaseOperation {
+    type Output = UserDatabaseOperationOutput;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
-pub enum TokenOperationOutput {
-    Write(),
-    Latest {
-        token: Option<Token>,
-        error: Option<String>
-    }
+pub enum UserDatabaseOperationOutput {
+    Save()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+pub enum SessionOperation {
+    WriteToken(Token),
+    WriteUser(User),
+    Get()
+}
+
+impl Operation for SessionOperation {
+    type Output = SessionOperationOutput;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+pub enum SessionOperationOutput {
+    WriteToken(),
+    WriteUser(),
+    Get(Option<Session>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DatabaseOperationOutput {
-    Token(TokenOperationOutput)
+    Session(SessionOperationOutput),
+    User(UserDatabaseOperationOutput)
 }
 
 impl Operation for DatabaseOperation {
     type Output = DatabaseOperationOutput;
 }
 
-impl TokenOperation{
-    pub fn save(token: Token) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Token(TokenOperation::Write(token))))
+impl SessionOperation{
+    pub fn save_token(token: Token) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::WriteToken(token))))
         .map(|it| {
             match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Token(TokenOperationOutput::Write())) => {
+                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {
                     ()
                 },
                 _ => panic!("Invalid output")
@@ -50,18 +69,21 @@ impl TokenOperation{
         })
     }
 
-    pub fn latest() -> AppRequestBuilder<impl Future<Output = Result<Option<Token>, String>>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Token(TokenOperation::Latest())))
+    pub fn save_user(user: User) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::WriteUser(user))))
         .map(|it| {
             match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Token(TokenOperationOutput::Latest { token, error })) => {
-                    if let Some(error) = error {
-                        Err(error)
-                    } else {
-                        Ok(token)
-                    }
+                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())) => (),
+                _ => panic!("Invalid output")
+            }
+        })
+    }
 
-                },
+    pub fn get_session() -> AppRequestBuilder<impl Future<Output = Option<Session>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get())))
+        .map(|it| {
+            match it {
+                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(session))) => session,
                 _ => panic!("Invalid output")
             }
         })

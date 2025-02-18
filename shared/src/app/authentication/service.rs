@@ -1,9 +1,11 @@
 use devlog_sdk::distributed_id::gen_id;
 
-use crate::app::operations::database::{DatabaseOperation, TokenOperation};
+use crate::app::modules::authentication::AuthenticationEvent;
+use crate::app::operations::database::{DatabaseOperation, SessionOperation};
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
+use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
 use std::collections::HashMap;
@@ -11,9 +13,37 @@ use std::collections::HashMap;
 pub struct AuthenticationService {}
 
 impl AuthenticationService {
+    pub async fn update_signin_session(&self, ctx: AppCommandContext) {
+        // Call API to update the user info
+        let mut user = RpcOperation::get_me().into_future(ctx.clone()).await.ok();
+        if user.is_none() {
+            let session = SessionOperation::get_session().into_future(ctx.clone()).await;
+            if let Some(Some(user_info)) = session.map(|it| it.user) {
+                user.replace(user_info);
+            }
+
+            // User not signined in
+            return;
+        }
+        else {
+            SessionOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
+        }
+
+        let user = user.unwrap();
+        ctx.send_event(AppEvent::Authentication(AuthenticationEvent::OnSignInSuccess { user }));
+        ctx.request_from_shell(CoreOperation::Render).await;
+    }
+
     pub async fn signin(&self, ctx: AppCommandContext) {
         let device_info = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
-        let url = RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await;
+        let url = match RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!(target: "auth", "Failed to get sign in url: {}", e);
+                return;
+            }
+        };
+
         WebViewOperation::open_url(url).into_future(ctx).await;
     }
 
@@ -43,6 +73,7 @@ impl AuthenticationService {
             return;
         }
 
-        TokenOperation::save(token).into_future(ctx).await;
+        SessionOperation::save_token(token).into_future(ctx.clone()).await;
+        self.update_signin_session(ctx).await;
     }
 }

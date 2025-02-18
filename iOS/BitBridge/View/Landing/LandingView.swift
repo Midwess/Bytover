@@ -18,9 +18,9 @@ struct LandingView: View {
             Theme.darkBgGradient
             Theme.starGradient(x: 0.5, y: 0.3)
             VStack(alignment: .leading) {
-                LogoView(width: 130)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, screenSize.height * 0.1)
+                LogoView(width: 10)
+                    .frame(maxWidth: .infinity, maxHeight: screenSize.height * 0.4)
+                    .padding(.top, screenSize.height * 0.1)
                 Spacer()
                 Text("The most secure and fastest file transfer")
                     .font(FontTheme.H1Heading)

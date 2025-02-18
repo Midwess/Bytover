@@ -7,7 +7,7 @@ pub mod authentication;
 use std::{future::Future, process::Output};
 
 use crux_core::{capability::CapabilityContext, command::{CommandContext, RequestBuilder}, macros::Capability, render::Render, App, Command};
-use modules::{authentication::{AuthenticationEvent, AuthenticationModel}, AppModule};
+use modules::{authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel}, AppModule};
 use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
 use crate::{app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel}, di_container::DiContainer};
@@ -17,7 +17,10 @@ pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBrid
 pub type AppRequestBuilder<T: Future<Output = T>> = RequestBuilder<<BitBridge as App>::Effect, <BitBridge as App>::Event, T>;
 
 #[derive(Default)]
-pub struct BitBridge {}
+pub struct BitBridge {
+    environment: EnvironmentModule,
+    authentication: AuthenticationModule
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
@@ -28,6 +31,7 @@ pub struct AppModel {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppViewModel {
     environment: Option<EnvironmentViewModel>,
+    authentication: Option<AuthenticationViewModel>
 }
 
 // The capability in CRUX has been deprecated by command API
@@ -75,26 +79,23 @@ impl App for BitBridge {
         log::info!(target: "app-update", "Updating app with event {:?}", event);
         match event {
             AppEvent::Environment(event) => {
-                let environment_module = DiContainer::get_instance().get_environment_module();
-
                 let model = &mut model.environment;
-                environment_module.update(event, model, caps)
+                self.environment.update(event, model, caps)
             },
             AppEvent::Authentication(event) => {
-                let authentication_module = DiContainer::get_instance().get_authentication_module();
-
                 let model = &mut model.authentication;
-                authentication_module.update(event, model, caps)
+                self.authentication.update(event, model, caps)
             },
             AppEvent::Void => {
                 Command::done()
-            }
+            },
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         AppViewModel {
-            environment: None
+            environment: Some(self.environment.view(&model.environment)),
+            authentication: Some(self.authentication.view(&model.authentication))
         }
     }
 }

@@ -15,6 +15,8 @@ pub mod config;
 pub mod grpc;
 #[cfg(feature = "lib")]
 pub mod entities;
+#[cfg(feature = "lib")]
+pub mod network;
 
 #[cfg(feature = "lib")]
 use app::{operations::{CoreOperation}, BitBridge};

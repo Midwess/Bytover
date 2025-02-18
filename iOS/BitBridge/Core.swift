@@ -10,15 +10,29 @@ import SharedTypes
 import SwiftUICore
 import UIKit
 import Serde
+import SharedTypes
 
 @MainActor
 class Core: ObservableObject {
-    @Published var app_view_model: AppViewModel
+    @Published var environment: EnvironmentViewModel?
+    @Published var authentication: AuthenticationViewModel?
+    
+    @Published var is_signed_in = false
+
     @Environment(\.openURL) private var openURL
     
     init() {
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
-        self.app_view_model = app;
+        update_view(app)
+    }
+    
+    func update_view(_ model: AppViewModel) {
+        self.authentication = model.authentication
+        self.environment = model.environment
+        
+        if self.authentication?.user != nil {
+            self.is_signed_in = true
+        }
     }
     
     func update(_ event: AppEvent) {
@@ -39,7 +53,6 @@ class Core: ObservableObject {
     func processEffect(_ request: Request) -> Data {
         switch request.effect {
         case .appCapabilities(.webView(.openUrl(let url))):
-            print("Open url \(url)")
             openURL(URL(string: url)!)
             return handleResponse(request.id, Data(try! CoreOperationOutput.webView( WebViewOperationOutput.openUrl).bincodeSerialize()))
         case .appCapabilities(.localStorage(.getWorkDirPath)):
@@ -48,22 +61,24 @@ class Core: ObservableObject {
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
-            let deviceName = device.name // or device.model for generic name like "iPhone"
+            let deviceName = device.name 
             
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(
                 .deviceInfo(DeviceInfo(
-                    platform: Platform.iOs,
+                    platform: Platform.ios,
                     name: deviceName,
                     unique_id: deviceId
                 ))
             ).bincodeSerialize()))
-        case .appCapabilities(.rpc(.getSignInUrl(let deviceInfo))):
-            return nativeHandle(request.id, Data (try! CoreOperation.rpc(.getSignInUrl(deviceInfo)).bincodeSerialize()))
+        case .appCapabilities(.rpc(let rpc)):
+            return nativeHandle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
-            print("Received void");
             return nativeHandle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
-        case .appCapabilities(.database(.saveToken(let token))):
-            return nativeHandle(request.id, Data(try! CoreOperation.database(.saveToken(token)).bincodeSerialize()))
+        case .appCapabilities(.database(let database)):
+            return nativeHandle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
+        case .appCapabilities(.render):
+            self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         }
     }
 }

@@ -10,60 +10,57 @@ use surreal_devl::surreal_qr::{RPath, SurrealQR, SurrealResponseError};
 use surrealdb::sql::Value;
 use surrealdb::{engine::local::Db, Surreal};
 use surrealdb::sql::Thing;
-use uniffi::deps::anyhow;
-use crate::entities::token::Token;
+use crate::entities::user::User;
 
 #[derive(Clone, Default)]
-pub struct TokenId {
-    deleted: bool,
-    id: u64
+pub struct UserId {
+    email: String
 }
 
-impl SurrealSerializer for TokenId {
+impl SurrealSerializer for UserId {
     fn serialize(self) -> Value {
-        vec![self.deleted.serialize(), self.id.serialize()].serialize()
+        vec![self.email.serialize()].serialize()
     }
 }
 
-impl SurrealDeserializer for TokenId {
+impl SurrealDeserializer for UserId {
     fn deserialize(value: &Value) -> Result<Self, SurrealResponseError> {
         match value {
             Value::Array(array) => Ok(Self {
-                deleted: SurrealDeserializer::deserialize(&array[0])?,
-                id: SurrealDeserializer::deserialize(&array[1])?
+                email: SurrealDeserializer::deserialize(&array[0])?
             }),
             _ => Err(SurrealResponseError::ExpectedAnArray)
         }
     }
 }
 
-impl SurrealId for Token {
+impl SurrealId for User {
     fn id(&self) -> Thing {
         Table::id(self).id(Self::get_table())
     }
 }
 
-impl Table<TokenId> for Token {
+impl Table<UserId> for User {
     fn get_table() -> &'static str {
-        "token"
+        "user"
     }
 
-    fn id(&self) -> TokenId {
-        TokenId { deleted: false, id: self.order_id }
+    fn id(&self) -> UserId {
+        UserId { email: self.email.clone() }
     }
 }
 
-impl DbId for TokenId {
+impl DbId for UserId {
     fn soft_deleted(&self) -> bool {
-        self.deleted
+        false
     }
 
     fn soft_delete(&mut self) {
-        self.deleted = true;
+        panic!("User cannot be soft deleted");
     }
 
     fn soft_restore(&mut self) {
-        self.deleted = false;
+        panic!("User cannot be soft deleted");
     }
 }
 
@@ -71,20 +68,13 @@ pub struct TokenRepository {
     pub db: PoolRequest<Surreal<Db>>
 }
 
-#[async_trait::async_trait]
-impl LocalSurrealDbRepository<Token, TokenId> for TokenRepository {
-    async fn get_db(&self) -> PoolResponse<Surreal<Db>> {
-        self.db.retrieve().await.unwrap()
-    }
+pub struct UserRepository {
+    db: PoolRequest<Surreal<Db>>
 }
 
-impl TokenRepository {
-    pub async fn get_latest_token(&self) -> Result<Option<Token>, anyhow::Error> {
-        let db = self.get_db().await;
-        let token_id = TokenId::default();
-        let result: Option<Token> = db
-            .query(surreal_quote!("SELECT * FROM #val(&token_id) ORDER BY order_id DESC LIMIT 1")).await?
-            .take(RPath::from(0))?;
-        Ok(result)
+#[async_trait::async_trait]
+impl LocalSurrealDbRepository<User, UserId> for UserRepository {
+    async fn get_db(&self) -> PoolResponse<Surreal<Db>> {
+        self.db.retrieve().await.unwrap()
     }
 }

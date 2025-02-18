@@ -75,13 +75,40 @@
 			remoteGlobalIDString = CA01C51694BE10F7F7FCAC5B;
 			remoteInfo = "shared-cdylib";
 		};
+		C757A84D2D64A2FD005561E9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
+			proxyType = 2;
+			remoteGlobalIDString = C757A8442D649EEF005561E9;
+			remoteInfo = "shared-types-gen";
+		};
+		C757A8502D64A352005561E9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
+			proxyType = 1;
+			remoteGlobalIDString = C757A83C2D649EEF005561E9;
+			remoteInfo = "shared-types-gen";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C757A82F2D649E26005561E9 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0324C0BA079EF82D60C106A2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		58EE16ACA8E76DC26004C5AA /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
+		C757A8312D649E26005561E9 /* shared-types */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "shared-types"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		C79443162D4907CB00866E37 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../shared/src/shared.udl; sourceTree = "<group>"; };
 		C794AB242D5C6E26003CD57F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
@@ -101,6 +128,13 @@
 				C7B01BC42D5CEF7C00F9C90A /* SplineRuntime in Frameworks */,
 				D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */,
 				C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C757A82E2D649E26005561E9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -134,6 +168,7 @@
 			isa = PBXGroup;
 			children = (
 				4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */,
+				C757A8312D649E26005561E9 /* shared-types */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -144,6 +179,7 @@
 				80ABCDEC1AE53705DFC3637E /* libshared_static.a */,
 				C7365AD82D47AF86005A342A /* shared.dylib */,
 				A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */,
+				C757A84E2D64A2FD005561E9 /* shared */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -195,6 +231,26 @@
 			productReference = 4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C757A8302D649E26005561E9 /* shared-types */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C757A8382D649E26005561E9 /* Build configuration list for PBXNativeTarget "shared-types" */;
+			buildPhases = (
+				C757A82D2D649E26005561E9 /* Sources */,
+				C757A82E2D649E26005561E9 /* Frameworks */,
+				C757A82F2D649E26005561E9 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C757A8512D64A352005561E9 /* PBXTargetDependency */,
+			);
+			name = "shared-types";
+			packageProductDependencies = (
+			);
+			productName = "shared-types";
+			productReference = C757A8312D649E26005561E9 /* shared-types */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -202,7 +258,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					C757A8302D649E26005561E9 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
 			};
 			buildConfigurationList = 43C71F51C1788461F7E11E59 /* Build configuration list for PBXProject "BitBridge" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -228,6 +290,7 @@
 			projectRoot = "";
 			targets = (
 				2F1BC7117D33E2B454F62D95 /* BitBridge */,
+				C757A8302D649E26005561E9 /* shared-types */,
 			);
 		};
 /* End PBXProject section */
@@ -252,6 +315,13 @@
 			fileType = "compiled.mach-o.dylib";
 			path = shared.dylib;
 			remoteRef = C7365AD72D47AF86005A342A /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		C757A84E2D64A2FD005561E9 /* shared */ = {
+			isa = PBXReferenceProxy;
+			fileType = "compiled.mach-o.executable";
+			path = shared;
+			remoteRef = C757A84D2D64A2FD005561E9 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -279,6 +349,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C757A82D2D649E26005561E9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -291,6 +368,11 @@
 			isa = PBXTargetDependency;
 			name = "shared-staticlib";
 			targetProxy = 2C1CE78667D7090A19603167 /* PBXContainerItemProxy */;
+		};
+		C757A8512D64A352005561E9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "shared-types-gen";
+			targetProxy = C757A8502D64A352005561E9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -436,6 +518,47 @@
 			};
 			name = Release;
 		};
+		C757A8392D649E26005561E9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VG92JZ53Y3;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C757A83A2D649E26005561E9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VG92JZ53Y3;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		FB29E847CF5FEF696088924B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -477,6 +600,15 @@
 			buildConfigurations = (
 				6A6F84059AD6729583215500 /* Debug */,
 				FB29E847CF5FEF696088924B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C757A8382D649E26005561E9 /* Build configuration list for PBXNativeTarget "shared-types" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C757A8392D649E26005561E9 /* Debug */,
+				C757A83A2D649E26005561E9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

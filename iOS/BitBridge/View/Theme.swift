@@ -109,6 +109,12 @@ struct FontTheme {
             .body
         }
     }
+    
+    static var Label1: Font {
+        get {
+            .callout
+        }
+    }
 }
 
 enum SpaceTheme {

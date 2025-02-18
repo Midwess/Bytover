@@ -14,6 +14,7 @@ struct ContentView: View {
     @StateObject private var core: Core = Core()
     var body: some View {
         LandingView()
+            .navigate(to: HomeView(), when: $core.is_signed_in)
     }
 }
 struct CounterView_Previews: PreviewProvider {

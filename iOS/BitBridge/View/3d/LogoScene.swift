@@ -12,7 +12,7 @@ import GLTFSceneKit
 import CoreMotion
 
 struct LogoScene: UIViewRepresentable {
-    private let logoScale: Float = 0.7
+    private let logoScale: Float = 0.95
     private let motionManager = CMMotionManager()
     
     class Coordinator: NSObject {
