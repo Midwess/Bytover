@@ -1,9 +1,12 @@
-pub mod environment;
 pub mod authentication;
+pub mod environment;
 
 use crux_core::{App, Command};
 
-pub trait AppModule<T> where T: App {
+pub trait AppModule<T>
+where
+    T: App
+{
     type Model;
     type ViewModel;
     type Event;
@@ -12,7 +15,7 @@ pub trait AppModule<T> where T: App {
         &self,
         event: Self::Event,
         model: &mut Self::Model,
-        caps: &T::Capabilities,
+        caps: &T::Capabilities
     ) -> Command<T::Effect, T::Event>;
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel;

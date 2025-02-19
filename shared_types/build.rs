@@ -1,7 +1,19 @@
 use crux_core::typegen::TypeGen;
-use schema::{value::platform::Platform};
-use shared::{app::{modules::{authentication::{AuthenticationEvent, AuthenticationModel}, environment::{EnvironmentEvent, EnvironmentModel}}, BitBridge}, entities::{session::{Session, SessionType}, token::Token, user::User}, errors::NetworkError};
-use shared::app::operations::{database::{DatabaseOperation, DatabaseOperationOutput}, rpc::{RpcOperation, RpcOperationOutput}, database::{SessionOperation, SessionOperationOutput}};
+use schema::value::platform::Platform;
+use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
+use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
+use shared::app::operations::database::{
+    DatabaseOperation,
+    DatabaseOperationOutput,
+    SessionOperation,
+    SessionOperationOutput
+};
+use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
+use shared::app::BitBridge;
+use shared::entities::session::{Session, SessionType};
+use shared::entities::token::Token;
+use shared::entities::user::User;
+use shared::errors::NetworkError;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
@@ -16,7 +28,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<SessionType>()?;
     gen.register_type::<User>()?;
     gen.register_type::<Platform>()?;
-    
+
     // Register operation enums
     gen.register_type::<DatabaseOperation>()?;
     gen.register_type::<DatabaseOperationOutput>()?;
@@ -30,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<EnvironmentModel>()?;
     gen.register_type::<AuthenticationEvent>()?;
     gen.register_type::<AuthenticationModel>()?;
-    
+
     gen.register_app::<BitBridge>()?;
 
     let output_root = PathBuf::from("./generated");

@@ -14,7 +14,7 @@ pub enum NetworkError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
     #[error("Network issue")]
-    Network(String),
+    Network(String)
 }
 
 impl From<tonic::transport::Error> for NetworkError {
@@ -31,15 +31,15 @@ impl From<tonic::Status> for NetworkError {
             tonic::Code::AlreadyExists => NetworkError::BadRequest(status.message().to_string()),
             tonic::Code::FailedPrecondition => NetworkError::BadRequest(status.message().to_string()),
             tonic::Code::OutOfRange => NetworkError::BadRequest(status.message().to_string()),
-            
+
             tonic::Code::Unknown => NetworkError::InternalServerError(status.message().to_string()),
             tonic::Code::Internal => NetworkError::InternalServerError(status.message().to_string()),
             tonic::Code::Unimplemented => NetworkError::InternalServerError(status.message().to_string()),
             tonic::Code::DataLoss => NetworkError::InternalServerError(status.message().to_string()),
-            
+
             tonic::Code::Unauthenticated => NetworkError::Unauthorized(status.message().to_string()),
             tonic::Code::PermissionDenied => NetworkError::Unauthorized(status.message().to_string()),
-            
+
             _ => NetworkError::Network(status.message().to_string())
         }
     }

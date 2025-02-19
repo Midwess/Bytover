@@ -1,16 +1,15 @@
+use crate::entities::user::User;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use surreal_derive_plus::surreal_quote;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
-use surreal_devl::surreal_qr::{RPath, SurrealQR, SurrealResponseError};
-use surrealdb::sql::Value;
-use surrealdb::{engine::local::Db, Surreal};
-use surrealdb::sql::Thing;
-use crate::entities::user::User;
+use surreal_devl::surreal_qr::SurrealResponseError;
+use surrealdb::engine::local::Db;
+use surrealdb::sql::{Thing, Value};
+use surrealdb::Surreal;
 
 #[derive(Clone, Default)]
 pub struct UserId {
@@ -46,7 +45,9 @@ impl Table<UserId> for User {
     }
 
     fn id(&self) -> UserId {
-        UserId { email: self.email.clone() }
+        UserId {
+            email: self.email.clone()
+        }
     }
 }
 
@@ -68,6 +69,7 @@ pub struct TokenRepository {
     pub db: PoolRequest<Surreal<Db>>
 }
 
+#[warn(dead_code)]
 pub struct UserRepository {
     db: PoolRequest<Surreal<Db>>
 }

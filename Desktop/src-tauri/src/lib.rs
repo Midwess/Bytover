@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use core_services::logger;
-use shared::{Core, app::BitBridge};
 use lazy_static::lazy_static;
+use shared::app::BitBridge;
+use shared::Core;
 
 lazy_static! {
     static ref CORE: Arc<Core<BitBridge>> = Arc::new(Core::new());

@@ -1,10 +1,10 @@
-pub mod local_storage;
-pub mod webview;
-pub mod device;
-pub mod rpc;
 pub mod database;
+pub mod device;
+pub mod local_storage;
+pub mod rpc;
+pub mod webview;
 
-use crux_core::{capability::{CapabilityContext, Operation}, macros::Capability, Command};
+use crux_core::capability::Operation;
 use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};

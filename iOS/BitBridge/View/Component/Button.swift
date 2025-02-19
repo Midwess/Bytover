@@ -39,6 +39,14 @@ struct UpgradePremiumButton: View {
     var body: some View {
         Button(action: {}) {
             Text("Upgrade premium")
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .foregroundStyle(Theme.textGradient)
+                .background {
+                    RoundedRectangle(cornerRadius: .infinity)
+                        .fill(Theme.LightViolet.color.opacity(0.1))
+                        .stroke(Theme.PrimaryViolet.color.opacity(0.15), lineWidth: 1)
+                }
         }
     }
 }
@@ -58,4 +66,7 @@ struct Button_Preview: PreviewProvider {
 
 #Preview("Premium button") {
     UpgradePremiumButton()
+        .previewLayout(.sizeThatFits)
+        .padding()
+        .background(Theme.DarkViolet.color)
 }

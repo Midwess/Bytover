@@ -2,24 +2,24 @@
 #[cfg(feature = "lib")]
 pub mod app;
 #[cfg(feature = "lib")]
-pub mod errors;
-#[cfg(feature = "lib")]
-pub mod native;
-#[cfg(feature = "lib")]
-pub mod persistence;
+pub mod config;
 #[cfg(feature = "lib")]
 pub mod di_container;
 #[cfg(feature = "lib")]
-pub mod config;
+pub mod entities;
+#[cfg(feature = "lib")]
+pub mod errors;
 #[cfg(feature = "lib")]
 pub mod grpc;
 #[cfg(feature = "lib")]
-pub mod entities;
+pub mod native;
 #[cfg(feature = "lib")]
 pub mod network;
+#[cfg(feature = "lib")]
+pub mod persistence;
 
 #[cfg(feature = "lib")]
-use app::{operations::{CoreOperation}, BitBridge};
+use app::{operations::CoreOperation, BitBridge};
 #[cfg(feature = "lib")]
 use bincode::Options;
 #[cfg(feature = "lib")]
@@ -76,8 +76,7 @@ pub fn native_handle(id: u32, data: &[u8]) -> Vec<u8> {
     let mut deser = bincode::Deserializer::from_slice(data, options);
     let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
 
-    let effect: CoreOperation = erased_serde::deserialize(&mut deserializer)
-        .expect("Failed to deserialize effect");
+    let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
     let mut output_buffer = Vec::new();
     scoped(TOKIO_RT.handle()).scope(|scope| {
@@ -105,7 +104,5 @@ pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
 
 #[cfg(feature = "lib")]
 fn bincode_options() -> impl bincode::Options + Copy {
-    bincode::DefaultOptions::new()
-        .with_fixint_encoding()
-        .allow_trailing_bytes()
+    bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }

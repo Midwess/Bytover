@@ -25,9 +25,12 @@ struct HomeView: View {
                     .modifier(Label1())
                     .foregroundStyle(Theme.gradientHeading)
                     .padding(.top, 10)
+                UpgradePremiumButton()
+                Spacer()
+                Text("Add")
                 Spacer()
             }
-            .padding(.top, safeAreaInsets.top)
+            .padding(.top, safeAreaInsets.top + 50)
         }
         .ignoresSafeArea()
     }

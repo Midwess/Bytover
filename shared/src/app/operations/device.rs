@@ -1,9 +1,11 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::{modules::environment::DeviceInfo, AppRequestBuilder};
+use crate::app::modules::environment::DeviceInfo;
+use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -23,10 +25,9 @@ impl Operation for DeviceOperation {
 
 impl DeviceOperation {
     pub fn get_device_info() -> AppRequestBuilder<impl Future<Output = DeviceInfo>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::GetDeviceInfo))
-            .map(|output| match output {
-                CoreOperationOutput::Device(DeviceOperationOutput::DeviceInfo(device_info)) => device_info,
-                _ => panic!("Invalid output for DeviceOperation::GetDeviceInfo")
-            })
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::GetDeviceInfo)).map(|output| match output {
+            CoreOperationOutput::Device(DeviceOperationOutput::DeviceInfo(device_info)) => device_info,
+            _ => panic!("Invalid output for DeviceOperation::GetDeviceInfo")
+        })
     }
 }

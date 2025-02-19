@@ -1,20 +1,28 @@
-pub mod system;
+pub mod authentication;
 pub mod modules;
 pub mod operations;
-pub mod authentication;
+pub mod system;
 
 // pub mod bridge;
-use std::{future::Future, process::Output};
 
-use crux_core::{capability::CapabilityContext, command::{CommandContext, RequestBuilder}, macros::Capability, render::Render, App, Command};
-use modules::{authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel}, AppModule};
+use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel};
+use crux_core::capability::CapabilityContext;
+use crux_core::command::{CommandContext, RequestBuilder};
+use crux_core::macros::Capability;
+use crux_core::{App, Command};
+use modules::authentication::{
+    AuthenticationEvent,
+    AuthenticationModel,
+    AuthenticationModule,
+    AuthenticationViewModel
+};
+use modules::AppModule;
 use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
-use crate::{app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel}, di_container::DiContainer};
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
-pub type AppRequestBuilder<T: Future<Output = T>> = RequestBuilder<<BitBridge as App>::Effect, <BitBridge as App>::Event, T>;
+pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitBridge as App>::Event, T>;
 
 #[derive(Default)]
 pub struct BitBridge {
@@ -38,10 +46,13 @@ pub struct AppViewModel {
 // instead it just be here to be used for generating effect
 #[derive(Capability, Clone)]
 pub struct AppCapabilities<Ev> {
-    context: CapabilityContext<CoreOperation, Ev>,
+    context: CapabilityContext<CoreOperation, Ev>
 }
 
-impl<Ev> AppCapabilities<Ev> where Ev: 'static {
+impl<Ev> AppCapabilities<Ev>
+where
+    Ev: 'static
+{
     pub fn new(context: CapabilityContext<CoreOperation, Ev>) -> Self {
         Self { context }
     }
@@ -51,7 +62,7 @@ impl<Ev> AppCapabilities<Ev> where Ev: 'static {
 #[derive(crux_core::macros::Effect)]
 #[allow(unused)]
 pub struct AppEffect {
-    capabilities: AppCapabilities<AppEvent>,
+    capabilities: AppCapabilities<AppEvent>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,31 +75,29 @@ pub enum AppEvent {
 pub type BitBridgeEffect = Effect;
 
 impl App for BitBridge {
+    type Capabilities = AppEffect;
+    type Effect = Effect;
     type Event = AppEvent;
     type Model = AppModel;
     type ViewModel = AppViewModel;
-    type Capabilities = AppEffect;
-    type Effect = Effect;
 
     fn update(
         &self,
         event: Self::Event,
         model: &mut Self::Model,
-        caps: &Self::Capabilities,
+        caps: &Self::Capabilities
     ) -> Command<Self::Effect, Self::Event> {
         log::info!(target: "app-update", "Updating app with event {:?}", event);
         match event {
             AppEvent::Environment(event) => {
                 let model = &mut model.environment;
                 self.environment.update(event, model, caps)
-            },
+            }
             AppEvent::Authentication(event) => {
                 let model = &mut model.authentication;
                 self.authentication.update(event, model, caps)
-            },
-            AppEvent::Void => {
-                Command::done()
-            },
+            }
+            AppEvent::Void => Command::done()
         }
     }
 

@@ -1,13 +1,13 @@
+use crate::app::modules::AppModule;
+use crate::app::operations::local_storage::LocalStorageOperation;
+use crate::app::BitBridge;
+use crate::di_container::DiContainer;
 use core_services::logger;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use schema::value::platform::Platform;
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
-use crate::app::operations::local_storage::LocalStorageOperation;
-use crate::app::BitBridge;
-use crate::app::modules::AppModule;
-use crate::di_container::DiContainer;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Record)]
 pub struct DeviceInfo {
@@ -29,13 +29,13 @@ pub struct EnvironmentModule {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
 pub enum EnvironmentEvent {
-    AppLaunched,
+    AppLaunched
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
+    type Event = EnvironmentEvent;
     type Model = EnvironmentModel;
     type ViewModel = EnvironmentViewModel;
-    type Event = EnvironmentEvent;
 
     fn update(
         &self,
@@ -54,11 +54,11 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     di_container.get_authentication_service().update_signin_session(ctx).await;
                 })
                 .then(Command::done())
-            },
+            }
         }
     }
 
-    fn view(&self, model: &Self::Model) -> Self::ViewModel {
+    fn view(&self, _model: &Self::Model) -> Self::ViewModel {
         Self::ViewModel {}
     }
 }

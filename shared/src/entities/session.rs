@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
 
-use super::{token::Token, user::User};
+use super::token::Token;
+use super::user::User;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Enum, PartialEq, Eq, SurrealDerive)]
 pub enum SessionType {

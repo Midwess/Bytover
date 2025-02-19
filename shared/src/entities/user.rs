@@ -6,5 +6,5 @@ use uniffi::Record;
 pub struct User {
     pub email: String,
     pub name: String,
-    pub avatar: String,
+    pub avatar: String
 }

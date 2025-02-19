@@ -10,7 +10,7 @@ use super::module::{InternetConnection, NetworkModule};
 pub struct GrpcChannel {
     channel: Mutex<Option<Channel>>,
     endpoint: Endpoint,
-    internet_connection: InternetConnection,
+    internet_connection: InternetConnection
 }
 
 impl GrpcChannel {
@@ -18,7 +18,7 @@ impl GrpcChannel {
         Self {
             channel: Mutex::new(None),
             endpoint,
-            internet_connection: InternetConnection {},
+            internet_connection: InternetConnection {}
         }
     }
 
@@ -43,10 +43,7 @@ impl NetworkModule for GrpcChannel {
             return Ok(());
         }
 
-        let channel = self.endpoint.clone()
-            .connect_timeout(timeout)
-            .connect()
-            .await?;
+        let channel = self.endpoint.clone().connect_timeout(timeout).connect().await?;
 
         self.channel.lock().await.replace(channel);
 

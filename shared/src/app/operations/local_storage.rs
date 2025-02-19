@@ -1,9 +1,10 @@
 use std::future::Future;
 
-use crux_core::{capability::{CapabilityContext, Operation}, command, Command, Effect};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::{AppCommand, AppEvent, AppRequestBuilder};
+use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -24,12 +25,11 @@ impl Operation for LocalStorageOperation {
 
 impl LocalStorageOperation {
     pub fn get_work_dir_path_cmd() -> AppRequestBuilder<impl Future<Output = String>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetWorkDirPath))
-            .map(|it| {
-                match it {
-                    CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::WorkDirPath(path)) => path,
-                    _ => panic!("Mismatch in response type, expected WorkDirPath, got {:?}", it),
-                }
-            })
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetWorkDirPath)).map(|it| {
+            match it {
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::WorkDirPath(path)) => path,
+                _ => panic!("Mismatch in response type, expected WorkDirPath, got {:?}", it)
+            }
+        })
     }
 }

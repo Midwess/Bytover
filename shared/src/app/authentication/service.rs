@@ -1,7 +1,7 @@
 use devlog_sdk::distributed_id::gen_id;
 
 use crate::app::modules::authentication::AuthenticationEvent;
-use crate::app::operations::database::{DatabaseOperation, SessionOperation};
+use crate::app::operations::database::SessionOperation;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
@@ -24,8 +24,7 @@ impl AuthenticationService {
 
             // User not signined in
             return;
-        }
-        else {
+        } else {
             SessionOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
         }
 
@@ -48,10 +47,8 @@ impl AuthenticationService {
     }
 
     pub async fn handle_auth_response(&self, redirect_url: String, ctx: AppCommandContext) {
-        let query_string = redirect_url.split('?')
-            .nth(1)
-            .unwrap();
-        
+        let query_string = redirect_url.split('?').nth(1).unwrap();
+
         let params: HashMap<String, String> = query_string
             .split('&')
             .filter_map(|pair| {

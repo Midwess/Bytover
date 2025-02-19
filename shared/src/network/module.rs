@@ -1,7 +1,7 @@
-use std::time::{Duration, Instant};
 use ping::{ping, Error};
+use std::time::{Duration, Instant};
 
-use crate::{app::AppCommandContext, errors::NetworkError};
+use crate::errors::NetworkError;
 
 #[async_trait::async_trait]
 pub trait NetworkModule {
@@ -30,7 +30,7 @@ impl InternetConnection {
         let timeout = Duration::from_millis(100);
         let packet_size: u32 = 56;
         let addr = "1.1.1.1";
-        
+
         match ping(addr.parse().unwrap(), Some(timeout), Some(packet_size), None, None, None) {
             Ok(_) => {
                 log::debug!("Ping successful to 1.1.1.1");
@@ -42,7 +42,7 @@ impl InternetConnection {
                     Error::InternalError => log::debug!("Internal error"),
                     Error::DecodeV4Error => log::debug!("IPv4 decode error"),
                     Error::DecodeEchoReplyError => log::debug!("Echo reply decode error"),
-                    Error::IoError { error } => log::debug!("IO error: {}", error),
+                    Error::IoError { error } => log::debug!("IO error: {}", error)
                 }
                 false
             }

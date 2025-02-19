@@ -1,9 +1,10 @@
 use std::future::Future;
 
-use crux_core::{capability::{CapabilityContext, Operation}, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::{AppCommand, AppRequestBuilder};
+use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -23,14 +24,9 @@ impl Operation for WebViewOperationOutput {
 
 impl WebViewOperation {
     pub fn open_url(url: String) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::WebView(WebViewOperation::OpenUrl(url)))
-            .map(|res| {
-                match res {
-                    CoreOperationOutput::WebView(WebViewOperationOutput::OpenUrl) => {
-                        ()
-                    },
-                    _ => panic!("Invalid output for WebViewOperation::OpenUrl")
-                }
-            })
+        Command::request_from_shell(CoreOperation::WebView(WebViewOperation::OpenUrl(url))).map(|res| match res {
+            CoreOperationOutput::WebView(WebViewOperationOutput::OpenUrl) => {}
+            _ => panic!("Invalid output for WebViewOperation::OpenUrl")
+        })
     }
 }

@@ -1,4 +1,5 @@
-use crate::{app::operations::rpc::{RpcOperation, RpcOperationOutput}, di_container::DiContainer};
+use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
+use crate::di_container::DiContainer;
 
 pub struct NativeRpc {}
 
@@ -9,13 +10,12 @@ impl NativeRpc {
                 let di_container = DiContainer::get_instance();
                 let response = di_container.get_authentication_server().request_signin_url(device_info).await.unwrap();
                 RpcOperationOutput::SignInUrl(response)
-            },
+            }
             RpcOperation::GetMe() => {
                 let di_container = DiContainer::get_instance();
                 let response = di_container.get_authentication_server().get_me().await.unwrap();
                 RpcOperationOutput::GetMe(response)
             }
-            _ => panic!("Native rpc doesn't support this effect {:?}", effect)
         }
     }
 }

@@ -1,12 +1,22 @@
 use core::panic;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
-use core_services::utils::pool::{allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider}, request::PoolRequestBuilder};
-use surrealdb::{engine::local::Db, Surreal};
+use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
+use core_services::utils::pool::request::PoolRequestBuilder;
+use surrealdb::engine::local::Db;
+use surrealdb::Surreal;
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
-use crate::{app::{authentication::service::AuthenticationService, modules::{authentication::AuthenticationModule, environment::EnvironmentModule}}, grpc::auth_server::AuthServer, native::{database::NativeDatabase, executor::NativeExecutor, rpc::NativeRpc}, persistence::{surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo}, session::SessionRepository}, TOKIO_RT};
+use crate::app::authentication::service::AuthenticationService;
+use crate::grpc::auth_server::AuthServer;
+use crate::native::database::NativeDatabase;
+use crate::native::executor::NativeExecutor;
+use crate::native::rpc::NativeRpc;
+use crate::persistence::session::SessionRepository;
+use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
+use crate::TOKIO_RT;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -59,15 +69,17 @@ impl DiContainer {
             scope.spawn(async move {
                 let local_db: Box<dyn PoolResourceProvider<Surreal<Db>>> = Box::new(SurrealDbConnectionProvider {
                     connection: SurrealDbLocalConnectionInfo {
-                        db_path: work_dir_path.clone(),
-                    },
+                        db_path: work_dir_path.clone()
+                    }
                 });
 
-                let _ = self.db.set(PoolBuilder::new(local_db)
-                    .max_pool_size(1)
-                    .min_pool_size(1)
-                    .resource_idle_timeout(Duration::from_secs(10))
-                    .build().await
+                let _ = self.db.set(
+                    PoolBuilder::new(local_db)
+                        .max_pool_size(1)
+                        .min_pool_size(1)
+                        .resource_idle_timeout(Duration::from_secs(10))
+                        .build()
+                        .await
                 );
 
                 let server = AuthServer::new(self.get_session_repository()).await;
@@ -78,7 +90,10 @@ impl DiContainer {
 
     pub fn get_session_repository(&self) -> SessionRepository {
         SessionRepository {
-            db: PoolRequestBuilder::new().retrieving_timeout(Duration::from_secs(10)).pool(self.db.get().unwrap().clone()).build()
+            db: PoolRequestBuilder::new()
+                .retrieving_timeout(Duration::from_secs(10))
+                .pool(self.db.get().unwrap().clone())
+                .build()
         }
     }
 

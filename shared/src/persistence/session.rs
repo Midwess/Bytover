@@ -1,18 +1,15 @@
+use crate::entities::session::{Session, SessionType};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use surreal_derive_plus::surreal_quote;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
-use surreal_devl::surreal_qr::{RPath, SurrealQR, SurrealResponseError};
-use surrealdb::sql::Value;
-use surrealdb::{engine::local::Db, Surreal};
-use surrealdb::sql::Thing;
-use uniffi::deps::anyhow;
-use crate::entities::session::{Session, SessionType};
-use crate::entities::token::Token;
+use surreal_devl::surreal_qr::SurrealResponseError;
+use surrealdb::engine::local::Db;
+use surrealdb::sql::{Thing, Value};
+use surrealdb::Surreal;
 
 #[derive(Clone)]
 pub struct SessionId {
@@ -48,7 +45,9 @@ impl Table<SessionId> for Session {
     }
 
     fn id(&self) -> SessionId {
-        SessionId { r#type: self.r#type.clone() }
+        SessionId {
+            r#type: self.r#type.clone()
+        }
     }
 }
 

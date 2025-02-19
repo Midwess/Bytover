@@ -1,23 +1,35 @@
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
-use schema::{devlog::auth_gateway::rpc::{auth_service_client::AuthServiceClient, user_service_client::UserServiceClient, MeRequest, SigninRequest}, value::{auth_method::AuthMethod, device::RegisteringDevice}};
-use tokio::sync::Mutex;
-use tonic::{client::GrpcService, transport::{channel, Channel, Endpoint}};
-use std::{str::FromStr, sync::{Arc}, time::Duration};
-use tonic::metadata::{MetadataValue, MetadataMap};
+use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
+use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
+use schema::value::auth_method::AuthMethod;
+use schema::value::device::RegisteringDevice;
+use std::str::FromStr;
+use std::time::Duration;
+use tonic::metadata::MetadataValue;
+use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::{app::modules::environment::DeviceInfo, config::get_gateway_grpc_url, entities::{session::SessionType, user::User}, errors::NetworkError, network::{grpc_channel::GrpcChannel, module::{InternetConnection, NetworkModule}}, persistence::session::{SessionId, SessionRepository}};
+use crate::app::modules::environment::DeviceInfo;
+use crate::config::get_gateway_grpc_url;
+use crate::entities::session::SessionType;
+use crate::entities::user::User;
+use crate::errors::NetworkError;
+use crate::network::grpc_channel::GrpcChannel;
+use crate::persistence::session::{SessionId, SessionRepository};
 
 pub struct AuthServer {
     channel: GrpcChannel,
-    session_repository: SessionRepository,
+    session_repository: SessionRepository
 }
 
 impl AuthServer {
     pub async fn new(session_repository: SessionRepository) -> Self {
-        Self { 
-            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(1200))),
-            session_repository,
+        Self {
+            channel: GrpcChannel::new(
+                Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(1200))
+            ),
+            session_repository
         }
     }
 }
@@ -45,7 +57,7 @@ impl AuthServer {
     pub async fn get_me(&self) -> Result<User, NetworkError> {
         let channel = self.channel.connect().await?;
 
-        let request =  MeRequest {};
+        let request = MeRequest {};
 
         // Create request and add bearer token
         let mut req = Request::new(request);
@@ -54,17 +66,22 @@ impl AuthServer {
         let mut user_rpc = UserServiceClient::new(channel);
         let response = user_rpc.me(req).await?;
         let response = response.get_ref();
-        Ok(User { 
-            email: response.user.email.clone(), 
-            name: response.user.display_name.clone(), 
-            avatar: response.user.avatar_url.clone().unwrap_or_default() 
+        Ok(User {
+            email: response.user.email.clone(),
+            name: response.user.display_name.clone(),
+            avatar: response.user.avatar_url.clone().unwrap_or_default()
         })
     }
 
     // Helper method to create authenticated request
     async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), NetworkError> {
-        let session = self.session_repository.find_one(&SessionId {r#type: SessionType::Access})
-            .await.map_err(|e| NetworkError::Unauthorized(e.to_string()))?;
+        let session = self
+            .session_repository
+            .find_one(&SessionId {
+                r#type: SessionType::Access
+            })
+            .await
+            .map_err(|e| NetworkError::Unauthorized(e.to_string()))?;
 
         log::info!("Session: {:?}", session);
 

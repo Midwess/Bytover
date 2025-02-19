@@ -55,6 +55,16 @@ enum Theme: String {
         }
     }
     
+    static var textGradient: LinearGradient {
+        get {
+            LinearGradient(
+                colors: [Theme.Pink.color, Theme.PrimaryViolet.color],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+    }
+    
     var color: Color {
         get {
             Color(rawValue)

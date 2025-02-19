@@ -1,10 +1,14 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::{app::AppRequestBuilder, entities::{session::Session, token::Token, user::User}};
+use crate::app::AppRequestBuilder;
+use crate::entities::session::Session;
+use crate::entities::token::Token;
+use crate::entities::user::User;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -56,36 +60,35 @@ impl Operation for DatabaseOperation {
     type Output = DatabaseOperationOutput;
 }
 
-impl SessionOperation{
+impl SessionOperation {
     pub fn save_token(token: Token) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::WriteToken(token))))
-        .map(|it| {
-            match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {
-                    ()
-                },
-                _ => panic!("Invalid output")
-            }
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(
+            SessionOperation::WriteToken(token)
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {}
+            _ => panic!("Invalid output")
         })
     }
 
     pub fn save_user(user: User) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::WriteUser(user))))
-        .map(|it| {
-            match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())) => (),
-                _ => panic!("Invalid output")
-            }
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(
+            SessionOperation::WriteUser(user)
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())) => (),
+            _ => panic!("Invalid output")
         })
     }
 
     pub fn get_session() -> AppRequestBuilder<impl Future<Output = Option<Session>>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get())))
-        .map(|it| {
-            match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(session))) => session,
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get()))).map(
+            |it| match it {
+                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(
+                    session
+                ))) => session,
                 _ => panic!("Invalid output")
             }
-        })
+        )
     }
 }
