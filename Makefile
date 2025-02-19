@@ -3,5 +3,5 @@ ffmt:
 	cargo clippy --all --allow-dirty --allow-staged --fix; \
 	cargo +nightly fmt;
 
-dev:
-	cargo watch -x run
+gen:
+	cargo build -p shared_types

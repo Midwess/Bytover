@@ -6,14 +6,17 @@ use uniffi::Enum;
 /// but it's must be detailed enough to be used for debugging (Debug trait)
 #[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum NetworkError {
-    #[error("Internal server error")]
+    // Unknown error from backend, should not happend
+    #[error("Error happened, please try again")]
     InternalServerError(String),
     // The upstream has something to say
     #[error("{0}")]
     BadRequest(String),
+    // Should signout in this case because user is not authenticated or session is expired
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
-    #[error("Network issue")]
+    // Internet connection issue, ask user to check internet connection
+    #[error("Please check your internet connection")]
     Network(String)
 }
 
