@@ -9,30 +9,29 @@ import Foundation
 import SwiftUI
 
 struct HomeView: View {
-    @Environment(\.safeAreaInsets) private var safeAreaInsets
-    @Environment(\.screenSize) private var screenSize
     @StateObject private var core = Core()
     
+    init() {
+        UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor
+            .withAlphaComponent(0.4)
+    }
+    
     var body: some View {
-        ZStack {
-            Theme.darkBgGradient
-            Theme.starGradient(x: 0.5, y: 0.15)
-            VStack {
-                LogoView(width: 20)
-                    .frame(width: .infinity, height: 100)
-                Text("Secure and Fastest \n file transfer")
-                    .multilineTextAlignment(.center)
-                    .modifier(Label1())
-                    .foregroundStyle(Theme.gradientHeading)
-                    .padding(.top, 10)
-                UpgradePremiumButton()
-                Spacer()
-                Text("Add")
-                Spacer()
-            }
-            .padding(.top, safeAreaInsets.top + 50)
+        TabView {
+            ReceiveView()
+                .tabItem {
+                    ButtonNavigation(icon: "arrow.down.circle", label: "Receive")
+                }
+            ShareView()
+                .tabItem {
+                    ButtonNavigation(icon: "globe.europe.africa.fill", label: "Share")
+                }
+            SettingView()
+                .tabItem {
+                    ButtonNavigation(icon: "gearshape", label: "Settings")
+                }
         }
-        .ignoresSafeArea()
+        .accentColor(Theme.LightViolet.color)
     }
 }
 

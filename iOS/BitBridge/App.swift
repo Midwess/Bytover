@@ -13,7 +13,6 @@ struct Main: App {
     @StateObject private var core = Core()
     
     init() {
-        print("Sending app launched")
         core.update(AppEvent.environment(.appLaunched))
     }
 

@@ -15,7 +15,9 @@ enum Theme: String {
     case LightViolet
     case SecondaryViolet
     case Pink
+    case SecondaryDarkViolet
     case SecondaryBlue
+    case LightPrimaryViolet
     
     static var gradientHeading: LinearGradient {
         get {
@@ -45,6 +47,15 @@ enum Theme: String {
         }
     }
     
+    static var circlePrimaryGradient: RadialGradient {
+        get {
+            RadialGradient(colors: [
+                Theme.SecondaryDarkViolet.color,
+                Theme.TertiaryViolet.color,
+            ], center: .center, startRadius: 0.0, endRadius: 60.0)
+        }
+    }
+    
     static var primaryGradient: LinearGradient {
         get {
             LinearGradient(
@@ -68,6 +79,12 @@ enum Theme: String {
     var color: Color {
         get {
             Color(rawValue)
+        }
+    }
+    
+    var uiColor: UIColor {
+        get {
+            UIColor(color)
         }
     }
     
@@ -123,6 +140,12 @@ struct FontTheme {
     static var Label1: Font {
         get {
             .callout
+        }
+    }
+    
+    static var Label4: Font {
+        get {
+            .footnote
         }
     }
 }

@@ -43,6 +43,10 @@ impl NetworkModule for GrpcChannel {
             return Ok(());
         }
 
+        if !self.internet_connection.is_connected().await {
+            return Err(NetworkError::Network("No internet".to_string()));
+        }
+
         let channel = self.endpoint.clone().connect_timeout(timeout).connect().await?;
 
         self.channel.lock().await.replace(channel);

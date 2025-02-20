@@ -38,6 +38,13 @@ struct Label1: ViewModifier {
     }
 }
 
+struct Label4: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(FontTheme.Label4)
+    }
+}
+
 struct GradientHeading: ViewModifier {
     func body(content: Content) -> some View {
         content

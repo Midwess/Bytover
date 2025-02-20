@@ -42,11 +42,29 @@ struct UpgradePremiumButton: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .foregroundStyle(Theme.textGradient)
+                .modifier(Label4())
                 .background {
                     RoundedRectangle(cornerRadius: .infinity)
                         .fill(Theme.LightViolet.color.opacity(0.1))
                         .stroke(Theme.PrimaryViolet.color.opacity(0.15), lineWidth: 1)
                 }
+        }
+    }
+}
+
+struct AddFileButton: View {
+    var body: some View {
+        Button(action: {}) {
+            Image(systemName: "plus")
+                .resizable()
+                .foregroundColor(Theme.LightViolet.color)
+                .padding(.all, 8)
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: .infinity)
+                        .fill(Theme.LightViolet.color.opacity(0.1))
+                        .stroke(Theme.PrimaryViolet.color.opacity(0.45), lineWidth: 1)
+                )
         }
     }
 }
@@ -64,9 +82,78 @@ struct Button_Preview: PreviewProvider {
     }
 }
 
+struct ButtonNavigation: View {
+    var icon: String
+    var label: String
+    var body: some View {
+        VStack {
+            Image(systemName: icon)
+                .resizable()
+                .frame(width: 20, height: 20)
+            Text(label)
+                .modifier(Label4())
+                .padding(.top, 4)
+        }
+    }
+}
+
+struct ShareButton: View {
+    let width: CGFloat
+    @State private var startTime = Date.now
+    var body: some View {
+        ZStack {
+            Button(action: {}) {
+                ZStack {
+                    TimelineView(.animation) { timeline in
+                        let elapsedTime = startTime.distance(to: timeline.date)
+                        ZStack {
+                            Circle()
+                                .fill(Theme.LightViolet.color)
+                                .visualEffect { content, proxy in
+                                    content
+                                        .colorEffect(
+                                            ShaderLibrary.circleWave(
+                                                .float2(proxy.size),
+                                                .float(elapsedTime * 3)
+                                            )
+                                        )
+                                }
+                        }
+                    }
+                    .padding(10)
+                    Circle()
+                        .fill(Theme.circlePrimaryGradient)
+                        .stroke(Theme.LightPrimaryViolet.color, lineWidth: 3)
+                        .frame(width: width * 0.3)
+                    Text("Share")
+                        .foregroundStyle(Theme.LightViolet.color.opacity(0.9))
+                        .modifier(Label1())
+                }
+            }
+            .frame(width: width, height: width)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+#Preview("Bottom navigation") {
+    ButtonNavigation(icon: "plus", label: "plus")
+}
+
 #Preview("Premium button") {
     UpgradePremiumButton()
         .previewLayout(.sizeThatFits)
         .padding()
         .background(Theme.DarkViolet.color)
+}
+
+#Preview("Add file button") {
+    AddFileButton()
+        .previewLayout(.sizeThatFits)
+        .padding()
+        .background(Theme.DarkViolet.color)
+}
+
+#Preview("Share button") {
+    ShareButton(width: 300)
 }
