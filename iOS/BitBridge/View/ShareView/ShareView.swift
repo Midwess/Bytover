@@ -40,7 +40,7 @@ public struct ShareView: View {
                 Spacer()
                 Spacer()
             }
-            ShareButton(width: 280)
+            ShareButton(width: 350)
                 .padding(.bottom, 60)
         }
         .ignoresSafeArea()

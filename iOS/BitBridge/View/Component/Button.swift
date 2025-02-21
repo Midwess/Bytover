@@ -102,7 +102,7 @@ struct ShareButton: View {
     @State private var startTime = Date.now
     var body: some View {
         ZStack {
-            Button(action: {}) {
+            Group {
                 ZStack {
                     TimelineView(.animation) { timeline in
                         let elapsedTime = startTime.distance(to: timeline.date)
@@ -121,16 +121,19 @@ struct ShareButton: View {
                     }
                     Circle()
                         .fill(Theme.circlePrimaryGradient.opacity(0.7))
-                        .frame(width: width * 0.33)
-                    HStack {
-                        Text("Send")
-                            .modifier(Label1())
+                        .frame(width: width * 0.27)
+                    Button(action: {}) {
+                        HStack {
+                            Image(systemName: "paperplane.fill")
+                                .foregroundColor(Theme.LightPrimaryViolet.color.opacity(1))
+                                .font(.title)
+                        }
                     }
                 }
             }
         }
         .offset(x: 0, y: 80)
-        .frame(width: .infinity)
+        .frame(width: width)
         .ignoresSafeArea()
     }
 }

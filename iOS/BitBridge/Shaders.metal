@@ -16,7 +16,7 @@ float4 circle(float2 uv, float3 mainColor, float3 subColor, float2 center, float
     float rotatingGlow = 0.5 * (1.0 + sin(angle + time * rotationSpeed));
     
     // Border parameters
-    float borderWidth = 0.005;
+    float borderWidth = 0.006;
     float innerRadius = radius - borderWidth;
     float outerRadius = radius + borderWidth;
     float border = smoothstep(innerRadius, radius, dist) * 
@@ -57,8 +57,8 @@ float2 drawCircle(int i) {
     float3 color = float3(inputColor.r, inputColor.g, inputColor.b);
     float3 color2 = float3(subColor.r, subColor.g, subColor.b);
     
-    float4 c = circle(uvv, color, color2, drawCircle(0), 0.3, 0.15, sin((time))) +
-               circle(uvv, color2, color, drawCircle(0), 2.5, 0.12, sin((time + PI * 0.5)));
+    float4 c = circle(uvv, color, color2, drawCircle(0), 0.15, 0.15, sin((time))) +
+               circle(uvv, color2, color, drawCircle(0), 2.5, 0.13, sin((time + PI * 0.5)));
 
     return half4(c.r, c.g, c.b, c.a);
 }

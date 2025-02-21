@@ -10,6 +10,7 @@
 		0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 80ABCDEC1AE53705DFC3637E /* libshared_static.a */; };
 		97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C757A8712D662A31005561E9 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = C757A86F2D662A2A005561E9 /* Shaders.metal */; };
+		C757A8CB2D68F1E4005561E9 /* BackgroundShaders.Metal in Sources */ = {isa = PBXBuildFile; fileRef = C757A8CA2D68F1E4005561E9 /* BackgroundShaders.Metal */; };
 		C79443152D49065900866E37 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430D2D49065900866E37 /* App.swift */; };
 		C79443172D4907CB00866E37 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C79443162D4907CB00866E37 /* shared.udl */; };
 		C794AB252D5C6E30003CD57F /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794AB242D5C6E26003CD57F /* Core.swift */; };
@@ -111,6 +112,7 @@
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
 		C757A8312D649E26005561E9 /* shared-types */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "shared-types"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C757A86F2D662A2A005561E9 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		C757A8CA2D68F1E4005561E9 /* BackgroundShaders.Metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = BackgroundShaders.Metal; sourceTree = "<group>"; };
 		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		C79443162D4907CB00866E37 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../shared/src/shared.udl; sourceTree = "<group>"; };
 		C794AB242D5C6E26003CD57F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 		1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */ = {
 			isa = PBXGroup;
 			children = (
+				C757A8CA2D68F1E4005561E9 /* BackgroundShaders.Metal */,
 				C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */,
 				C794AB262D5C7585003CD57F /* View */,
 				C794AB242D5C6E26003CD57F /* Core.swift */,
@@ -350,6 +353,7 @@
 				C757A8712D662A31005561E9 /* Shaders.metal in Sources */,
 				C794AB252D5C6E30003CD57F /* Core.swift in Sources */,
 				C79443152D49065900866E37 /* App.swift in Sources */,
+				C757A8CB2D68F1E4005561E9 /* BackgroundShaders.Metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
