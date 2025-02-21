@@ -106,32 +106,31 @@ struct ShareButton: View {
                 ZStack {
                     TimelineView(.animation) { timeline in
                         let elapsedTime = startTime.distance(to: timeline.date)
-                        ZStack {
-                            Circle()
-                                .fill(Theme.LightViolet.color)
-                                .visualEffect { content, proxy in
-                                    content
-                                        .colorEffect(
-                                            ShaderLibrary.circleWave(
-                                                .float2(proxy.size),
-                                                .float(elapsedTime * 3)
-                                            )
+                        Circle()
+                            .fill(Theme.PrimaryViolet.color.opacity(0.9))
+                            .visualEffect { content, proxy in
+                                content
+                                    .colorEffect(
+                                        ShaderLibrary.circleWave(
+                                            .float2(proxy.size),
+                                            .color(Theme.SecondaryVividViolet.color),
+                                            .float(elapsedTime * 0.8)
                                         )
-                                }
-                        }
+                                    )
+                            }
                     }
-                    .padding(10)
                     Circle()
-                        .fill(Theme.circlePrimaryGradient)
-                        .stroke(Theme.LightPrimaryViolet.color, lineWidth: 3)
-                        .frame(width: width * 0.3)
-                    Text("Share")
-                        .foregroundStyle(Theme.LightViolet.color.opacity(0.9))
-                        .modifier(Label1())
+                        .fill(Theme.circlePrimaryGradient.opacity(0.7))
+                        .frame(width: width * 0.33)
+                    HStack {
+                        Text("Send")
+                            .modifier(Label1())
+                    }
                 }
             }
-            .frame(width: width, height: width)
         }
+        .offset(x: 0, y: 80)
+        .frame(width: .infinity)
         .ignoresSafeArea()
     }
 }
