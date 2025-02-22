@@ -1,20 +1,36 @@
+use std::path::PathBuf;
+
 use crux_core::typegen::TypeGen;
 use schema::value::platform::Platform;
 use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
 use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
+use shared::app::modules::transfer::{TransferEvent, TransferModel};
 use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput
+    SessionOperationOutput,
+    TransferSessionDatabaseOperation,
+    TransferSessionDatabaseOperationOutput
 };
+use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
+use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
+use shared::app::transfer::file_selection_service::{ResourceSelection, ResourceSelectionData};
 use shared::app::BitBridge;
+use shared::entities::file::{LocalResource, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
+use shared::entities::transfer::{
+    TransferMethod,
+    TransferProcess,
+    TransferProcessStatus,
+    TransferSession,
+    TransferSessionStatus,
+    TransferTarget
+};
 use shared::entities::user::User;
 use shared::errors::NetworkError;
-use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");
@@ -28,6 +44,16 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<SessionType>()?;
     gen.register_type::<User>()?;
     gen.register_type::<Platform>()?;
+    gen.register_type::<ResourceType>()?;
+    gen.register_type::<LocalResource>()?;
+    gen.register_type::<TransferTarget>()?;
+    gen.register_type::<TransferMethod>()?;
+    gen.register_type::<TransferProcessStatus>()?;
+    gen.register_type::<TransferSessionStatus>()?;
+    gen.register_type::<TransferProcess>()?;
+    gen.register_type::<TransferSession>()?;
+    gen.register_type::<ResourceSelection>()?;
+    gen.register_type::<ResourceSelectionData>()?;
 
     // Register operation enums
     gen.register_type::<DatabaseOperation>()?;
@@ -36,12 +62,20 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<RpcOperationOutput>()?;
     gen.register_type::<SessionOperation>()?;
     gen.register_type::<SessionOperationOutput>()?;
+    gen.register_type::<LocalStorageOperation>()?;
+    gen.register_type::<LocalStorageOperationOutput>()?;
+    gen.register_type::<TransferOperation>()?;
+    gen.register_type::<TransferOperationOutput>()?;
+    gen.register_type::<TransferSessionDatabaseOperation>()?;
+    gen.register_type::<TransferSessionDatabaseOperationOutput>()?;
 
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;
     gen.register_type::<EnvironmentModel>()?;
     gen.register_type::<AuthenticationEvent>()?;
     gen.register_type::<AuthenticationModel>()?;
+    gen.register_type::<TransferEvent>()?;
+    gen.register_type::<TransferModel>()?;
 
     gen.register_app::<BitBridge>()?;
 

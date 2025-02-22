@@ -22,7 +22,7 @@ pub enum DatabaseOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum TransferSessionDatabaseOperation {
-    GetLastSession,
+    GetLastSession(),
     Save(TransferSession)
 }
 
@@ -115,7 +115,7 @@ impl SessionOperation {
 impl TransferSessionDatabaseOperation {
     pub fn get_last_session() -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-            TransferSessionDatabaseOperation::GetLastSession
+            TransferSessionDatabaseOperation::GetLastSession()
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(

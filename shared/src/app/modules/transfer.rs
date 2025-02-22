@@ -24,7 +24,7 @@ pub struct TransferModule {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
 pub enum TransferEvent {
-    Init,
+    InitSession,
     UpdateSession(TransferSession),
     AddResource(LocalResource),
     SelectResource(ResourceSelection)
@@ -42,7 +42,7 @@ impl AppModule<BitBridge> for TransferModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            TransferEvent::Init => Command::new(|it| async {
+            TransferEvent::InitSession => Command::new(|it| async {
                 let transfer_service = DiContainer::get_instance().get_transfer_service();
                 transfer_service.update_current_transfer_session(it).await;
             }),

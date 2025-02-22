@@ -62,5 +62,10 @@ $ cd Desktop; cargo build
 ### 3. iOS
 Open xcode and trigger run
 
+### Format code
+```bash
+$ make ffmt
+```
+
 #### Output architect:
 It is decided via variable `CARGO_XCODE_TARGET_ARCH`, search in shared project and adjusted it according to your choice

@@ -20,13 +20,14 @@ pub enum TransferTarget {
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
 pub enum TransferMethod {
-    Internet,
-    LocalNetwork
+    Internet(InternetTransfer),
+    LocalNetwork(LocalNetworkTransfer)
 }
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct InternetTransfer {}
 
+#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct LocalNetworkTransfer {
     // Device or user within local network
 }

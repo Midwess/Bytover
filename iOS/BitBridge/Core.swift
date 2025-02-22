@@ -58,6 +58,8 @@ class Core: ObservableObject {
         case .appCapabilities(.localStorage(.getWorkDirPath)):
             let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(documentDirectory.path)).bincodeSerialize()))
+        case .appCapabilities(.localStorage(let ops)):
+            return nativeHandle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
@@ -79,6 +81,8 @@ class Core: ObservableObject {
         case .appCapabilities(.render):
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+        case .appCapabilities(.transfer(let trans)):
+            return nativeHandle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
         }
     }
 }
