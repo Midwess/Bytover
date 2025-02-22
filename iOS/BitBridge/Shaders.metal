@@ -56,8 +56,8 @@ float2 drawCircle(int i) {
     float3 color = float3(inputColor.r, inputColor.g, inputColor.b);
     float3 color2 = float3(subColor.r, subColor.g, subColor.b);
     
-    float4 c = circle(uvv, color, color2, drawCircle(0), 0.15, 0.15, sin((time))) +
-               circle(uvv, color2, color, drawCircle(0), 2.5, 0.13, sin((time + PI * 0.5)));
+    float4 c = circle(uvv, color, color2, drawCircle(0), 0.3, 0.3, sin((time))) +
+               circle(uvv, color2, color, drawCircle(0), 2.5, 0.25, sin((time + PI * 0.5)));
 
     return half4(c.r, c.g, c.b, c.a);
 }

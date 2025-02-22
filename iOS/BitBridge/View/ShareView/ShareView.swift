@@ -17,23 +17,7 @@ public struct ShareView: View {
     public var body: some View {
         ZStack(alignment: .bottom) {
             Theme.darkBgGradient.opacity(0.3)
-            TimelineView(.animation) { timeline in
-                let elapsedTime = startTime.distance(to: timeline.date)
-                Rectangle()
-                    .frame(width: .infinity, height: .infinity)
-                    .visualEffect { content, proxy in
-                        content
-                            .colorEffect(
-                                ShaderLibrary.generateBackground(
-                                    .float2(proxy.size),
-                                    .color(Theme.SecondaryVividViolet.color),
-                                    .color(Theme.DarkViolet.color),
-                                    .float(elapsedTime * 0.5)
-                                )
-                            )
-                    }
-            }
-
+            StunningBackgroundGradientAnimation()
             VStack {
                 Spacer()
                 LogoView(width: 65)
@@ -45,20 +29,15 @@ public struct ShareView: View {
                     .padding(.top, 10)
                 UpgradePremiumButton()
                 Spacer()
-                HStack {
-                    Text("Add new file")
-                        .modifier(Body2())
-                        .opacity(0.5)
-                    AddFileButton()
-                }
+                AddContentButton()
                 Spacer()
                 Spacer()
                 Spacer()
                 Spacer()
                 Spacer()
             }
-            ShareButton(width: 350)
-                .padding(.bottom, 60)
+            ShareButton(width: 150)
+                .padding(.bottom, 80)
         }
         .ignoresSafeArea()
     }

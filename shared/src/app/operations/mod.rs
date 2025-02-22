@@ -2,6 +2,7 @@ pub mod database;
 pub mod device;
 pub mod local_storage;
 pub mod rpc;
+pub mod transfer;
 pub mod webview;
 
 use crux_core::capability::Operation;
@@ -10,6 +11,7 @@ use device::{DeviceOperation, DeviceOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
+use transfer::{TransferOperation, TransferOperationOutput};
 use webview::{WebViewOperation, WebViewOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -19,6 +21,7 @@ pub enum CoreOperation {
     Device(DeviceOperation),
     Rpc(RpcOperation),
     Database(DatabaseOperation),
+    Transfer(TransferOperation),
     Render,
     Void
 }
@@ -30,6 +33,7 @@ pub enum CoreOperationOutput {
     Device(DeviceOperationOutput),
     Rpc(RpcOperationOutput),
     Database(DatabaseOperationOutput),
+    Transfer(TransferOperationOutput),
     Void
 }
 

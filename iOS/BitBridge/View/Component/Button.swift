@@ -119,21 +119,18 @@ struct ShareButton: View {
                                     )
                             }
                     }
-                    Circle()
-                        .fill(Theme.circlePrimaryGradient.opacity(0.7))
-                        .frame(width: width * 0.27)
                     Button(action: {}) {
-                        HStack {
-                            Image(systemName: "paperplane.fill")
-                                .foregroundColor(Theme.LightPrimaryViolet.color.opacity(1))
-                                .font(.title)
-                        }
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(Theme.LightPrimaryViolet.color.opacity(1))
+                            .font(.title)
                     }
+                    .frame(width: width * 0.49, height: width * 0.49)
+                    .background(Theme.circlePrimaryGradient)
+                    .clipShape(Circle())
                 }
             }
         }
-        .offset(x: 0, y: 80)
-        .frame(width: width)
+        .frame(width: width, height: width)
         .ignoresSafeArea()
     }
 }

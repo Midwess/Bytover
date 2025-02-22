@@ -2,6 +2,7 @@ pub mod authentication;
 pub mod modules;
 pub mod operations;
 pub mod system;
+pub mod transfer;
 
 // pub mod bridge;
 
@@ -16,6 +17,7 @@ use modules::authentication::{
     AuthenticationModule,
     AuthenticationViewModel
 };
+use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
@@ -27,19 +29,22 @@ pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitB
 #[derive(Default)]
 pub struct BitBridge {
     environment: EnvironmentModule,
-    authentication: AuthenticationModule
+    authentication: AuthenticationModule,
+    transfer: TransferModule
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
     environment: EnvironmentModel,
-    authentication: AuthenticationModel
+    authentication: AuthenticationModel,
+    transfer: TransferModel
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppViewModel {
     environment: Option<EnvironmentViewModel>,
-    authentication: Option<AuthenticationViewModel>
+    authentication: Option<AuthenticationViewModel>,
+    transfer: Option<TransferViewModel>
 }
 
 // The capability in CRUX has been deprecated by command API
@@ -69,6 +74,7 @@ pub struct AppEffect {
 pub enum AppEvent {
     Environment(EnvironmentEvent),
     Authentication(AuthenticationEvent),
+    Transfer(TransferEvent),
     Void
 }
 
@@ -87,7 +93,6 @@ impl App for BitBridge {
         model: &mut Self::Model,
         caps: &Self::Capabilities
     ) -> Command<Self::Effect, Self::Event> {
-        log::info!(target: "app-update", "Updating app with event {:?}", event);
         match event {
             AppEvent::Environment(event) => {
                 let model = &mut model.environment;
@@ -97,6 +102,10 @@ impl App for BitBridge {
                 let model = &mut model.authentication;
                 self.authentication.update(event, model, caps)
             }
+            AppEvent::Transfer(event) => {
+                let model = &mut model.transfer;
+                self.transfer.update(event, model, caps)
+            }
             AppEvent::Void => Command::done()
         }
     }
@@ -104,7 +113,8 @@ impl App for BitBridge {
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         AppViewModel {
             environment: Some(self.environment.view(&model.environment)),
-            authentication: Some(self.authentication.view(&model.authentication))
+            authentication: Some(self.authentication.view(&model.authentication)),
+            transfer: Some(self.transfer.view(&model.transfer))
         }
     }
 }
