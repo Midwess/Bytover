@@ -5,7 +5,7 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::AppRequestBuilder;
+use crate::{app::AppRequestBuilder, entities::transfer::TransferSession};
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::user::User;
@@ -15,7 +15,24 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DatabaseOperation {
     Session(SessionOperation),
-    User(UserDatabaseOperation)
+    User(UserDatabaseOperation),
+    TransferSession(TransferSessionDatabaseOperation)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+pub enum TransferSessionDatabaseOperation {
+    GetLastSession,
+    Save(TransferSession)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+pub enum TransferSessionDatabaseOperationOutput {
+    GetLastSession(Option<TransferSession>),
+    Save()
+}
+
+impl Operation for TransferSessionDatabaseOperation {
+    type Output = TransferSessionDatabaseOperationOutput;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
@@ -53,7 +70,8 @@ pub enum SessionOperationOutput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DatabaseOperationOutput {
     Session(SessionOperationOutput),
-    User(UserDatabaseOperationOutput)
+    User(UserDatabaseOperationOutput),
+    TransferSession(TransferSessionDatabaseOperationOutput)
 }
 
 impl Operation for DatabaseOperation {
@@ -66,8 +84,8 @@ impl SessionOperation {
             SessionOperation::WriteToken(token)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {}
-            _ => panic!("Invalid output")
+            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {},
+            _ => panic!("Invalid output expected WriteToken got {:?}", it)
         })
     }
 
@@ -77,7 +95,7 @@ impl SessionOperation {
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())) => (),
-            _ => panic!("Invalid output")
+            _ => panic!("Invalid output expected WriteUser got {:?}", it)
         })
     }
 
@@ -87,8 +105,26 @@ impl SessionOperation {
                 CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(
                     session
                 ))) => session,
-                _ => panic!("Invalid output")
+                _ => panic!("Invalid output expected Get got {:?}", it)
             }
         )
+    }
+}
+
+impl TransferSessionDatabaseOperation {
+    pub fn get_last_session() -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::GetLastSession)))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(session))) => session,
+            _ => panic!("Invalid output expected GetLastSession got {:?}", it)
+        })
+    }
+
+    pub fn save_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::Save(session))))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::Save())) => (),
+            _ => panic!("Invalid output expected Save got {:?}", it)
+        })
     }
 }

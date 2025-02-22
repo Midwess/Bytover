@@ -120,9 +120,10 @@ struct ShareButton: View {
                             }
                     }
                     Button(action: {}) {
-                        Image(systemName: "paperplane.fill")
-                            .foregroundColor(Theme.LightPrimaryViolet.color.opacity(1))
-                            .font(.title)
+                        Image(systemName: "paperplane")
+                            .foregroundColor(Theme.LightPrimaryViolet.color)
+                            .fontWeight(.medium)
+                            .font(.title2)
                     }
                     .frame(width: width * 0.49, height: width * 0.49)
                     .background(Theme.circlePrimaryGradient)

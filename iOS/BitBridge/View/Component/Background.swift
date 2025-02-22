@@ -23,8 +23,8 @@ struct StunningBackgroundGradientAnimation: View {
                             .colorEffect(
                                 ShaderLibrary.generateBackground(
                                     .float2(proxy.size),
-                                    .color(Theme.SecondaryVividViolet.color),
-                                    .color(Theme.DarkViolet.color),
+                                    .color(Theme.SecondaryViolet.color.opacity(0.5)),
+                                    .color(Theme.DarkViolet.color.opacity(0.3)),
                                     .float(elapsedTime * 0.5)
                                 )
                             )
