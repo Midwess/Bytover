@@ -9,7 +9,7 @@ use super::user::User;
 pub struct TransferSession {
     order_id: u64,
     resources: Vec<LocalResource>,
-    processes: Vec<TransferProcess>,
+    processes: Vec<TransferProcess>
 }
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
@@ -49,7 +49,7 @@ pub enum TransferSessionStatus {
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct TransferProcess {
     status: TransferProcessStatus,
-    method: TransferMethod,
+    method: TransferMethod
 }
 
 impl TransferSession {

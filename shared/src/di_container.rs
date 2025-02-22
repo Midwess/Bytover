@@ -10,7 +10,7 @@ use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
 use crate::app::authentication::service::AuthenticationService;
-use crate::app::transfer::file_selection_service::FileTransferSelectionService;
+use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::service::TransferService;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
@@ -112,7 +112,7 @@ impl DiContainer {
         TransferService {}
     }
 
-    pub fn get_file_transfer_selection_service(&self) -> FileTransferSelectionService {
-        FileTransferSelectionService {}
+    pub fn get_resource_transfer_selection_service(&self) -> ResourceTransferSelectionService {
+        ResourceTransferSelectionService {}
     }
 }

@@ -5,9 +5,10 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::{app::AppRequestBuilder, entities::transfer::TransferSession};
+use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
 use crate::entities::token::Token;
+use crate::entities::transfer::TransferSession;
 use crate::entities::user::User;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -84,7 +85,7 @@ impl SessionOperation {
             SessionOperation::WriteToken(token)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {},
+            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {}
             _ => panic!("Invalid output expected WriteToken got {:?}", it)
         })
     }
@@ -113,17 +114,25 @@ impl SessionOperation {
 
 impl TransferSessionDatabaseOperation {
     pub fn get_last_session() -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::GetLastSession)))
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionDatabaseOperation::GetLastSession
+        )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(session))) => session,
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
+                TransferSessionDatabaseOperationOutput::GetLastSession(session)
+            )) => session,
             _ => panic!("Invalid output expected GetLastSession got {:?}", it)
         })
     }
 
     pub fn save_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::Save(session))))
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionDatabaseOperation::Save(session)
+        )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::Save())) => (),
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
+                TransferSessionDatabaseOperationOutput::Save()
+            )) => (),
             _ => panic!("Invalid output expected Save got {:?}", it)
         })
     }

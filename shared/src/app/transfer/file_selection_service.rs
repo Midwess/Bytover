@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uniffi::{Enum, Record};
 
-use crate::{app::{modules::transfer::TransferEvent, operations::local_storage::LocalStorageOperation, AppCommandContext, AppEvent}, entities::{file::{LocalResource, ResourceType}, transfer::TransferSession}};
+use crate::app::modules::transfer::TransferEvent;
+use crate::app::operations::local_storage::LocalStorageOperation;
+use crate::app::{AppCommandContext, AppEvent};
+use crate::entities::file::ResourceType;
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
@@ -21,11 +24,7 @@ pub enum ResourceSelectionData {
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
-    pub async fn add_resource(
-        &self, 
-        ctx: AppCommandContext,
-        selection: ResourceSelection
-    ) {
+    pub async fn add_resource(&self, ctx: AppCommandContext, selection: ResourceSelection) {
         let local_resource = match selection.data {
             ResourceSelectionData::Bytes(bytes) => {
                 LocalStorageOperation::new_file(bytes, selection.name).into_future(ctx.clone()).await
