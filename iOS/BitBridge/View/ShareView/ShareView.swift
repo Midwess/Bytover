@@ -12,15 +12,32 @@ public struct ShareView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize
     @StateObject private var core = Core()
-    
+    @State private var startTime = Date.now
+
     public var body: some View {
         ZStack(alignment: .bottom) {
-            Theme.darkBgGradient
-            Theme.starGradient(x: 0.5, y: 0.15)
+            Theme.darkBgGradient.opacity(0.3)
+            TimelineView(.animation) { timeline in
+                let elapsedTime = startTime.distance(to: timeline.date)
+                Rectangle()
+                    .frame(width: .infinity, height: .infinity)
+                    .visualEffect { content, proxy in
+                        content
+                            .colorEffect(
+                                ShaderLibrary.generateBackground(
+                                    .float2(proxy.size),
+                                    .color(Theme.SecondaryVividViolet.color),
+                                    .color(Theme.DarkViolet.color),
+                                    .float(elapsedTime * 0.5)
+                                )
+                            )
+                    }
+            }
+
             VStack {
                 Spacer()
-                LogoView(width: 95)
-                    .frame(width: .infinity, height: 105)
+                LogoView(width: 65)
+                    .frame(width: .infinity, height: 100)
                 Text("Secure and Fastest \n file transfer")
                     .multilineTextAlignment(.center)
                     .modifier(Label1())

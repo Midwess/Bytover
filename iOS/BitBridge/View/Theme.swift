@@ -51,8 +51,8 @@ enum Theme: String {
         get {
             RadialGradient(colors: [
                 Theme.SecondaryDarkViolet.color,
-                Theme.TertiaryViolet.color,
-            ], center: .center, startRadius: 0.0, endRadius: 60.0)
+                Theme.SecondaryVividViolet.color,
+            ], center: .center, startRadius: 0.0, endRadius: 80.0)
         }
     }
     
