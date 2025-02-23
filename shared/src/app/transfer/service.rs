@@ -12,7 +12,9 @@ impl TransferService {
         if let Some(existing_session) =
             TransferSessionDatabaseOperation::get_last_session().into_future(ctx.clone()).await
         {
-            if existing_session.transfer_status() == TransferSessionStatus::New {
+            log::info!(target: "tiendang-debug", "Found existing session: {:?}", existing_session);
+            if matches!(existing_session.transfer_status(), TransferSessionStatus::New) {
+                log::info!(target: "tiendang-debug", "Session is new, update it");
                 ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateSession(existing_session)));
                 return;
             }

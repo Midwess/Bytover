@@ -11,7 +11,7 @@ import SwiftUI
 struct LandingView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize
-    @StateObject private var core = Core()
+    @EnvironmentObject private var core: Core
 
     var body: some View {
         ZStack {

@@ -10,6 +10,8 @@ import SwiftUI
 
 struct StunningBackgroundGradientAnimation: View {
     @State private var startTime = Date.now
+    @Environment(\.screenSize) private var screenSize
+    @Environment(\.safeAreaInsets) private var safeAreaInsets
 
     public var body: some View {
         ZStack(alignment: .bottom) {
@@ -17,7 +19,7 @@ struct StunningBackgroundGradientAnimation: View {
             TimelineView(.animation) { timeline in
                 let elapsedTime = startTime.distance(to: timeline.date)
                 Rectangle()
-                    .frame(width: .infinity, height: .infinity)
+                    .frame(width: screenSize.width, height: screenSize.height + safeAreaInsets.bottom)
                     .visualEffect { content, proxy in
                         content
                             .colorEffect(

@@ -22,6 +22,8 @@ struct Main: App {
                 .onOpenURL(perform: {url in
                     core.update(.authentication(.onRedirected(url: url.absoluteString)))
                 })
+                .environmentObject(core)
+                .preferredColorScheme(.dark)
         }
     }
 }

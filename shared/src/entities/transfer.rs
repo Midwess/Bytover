@@ -1,45 +1,46 @@
 use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
+use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
 
 use super::file::LocalResource;
 use super::user::User;
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct TransferSession {
-    order_id: u64,
-    resources: Vec<LocalResource>,
-    processes: Vec<TransferProcess>
+    pub order_id: u64,
+    pub resources: Vec<LocalResource>,
+    pub processes: Vec<TransferProcess>
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferTarget {
     User(User),
     Device(String)
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferMethod {
     Internet(InternetTransfer),
     LocalNetwork(LocalNetworkTransfer)
 }
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct InternetTransfer {}
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct LocalNetworkTransfer {
     // Device or user within local network
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferProcessStatus {
     Fail,
     InProgress,
     Success
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferSessionStatus {
     New,
     Fail,
@@ -47,7 +48,7 @@ pub enum TransferSessionStatus {
     Success
 }
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct TransferProcess {
     status: TransferProcessStatus,
     method: TransferMethod

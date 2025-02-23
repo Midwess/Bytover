@@ -32,7 +32,6 @@ use lazy_static::lazy_static;
 use tokio_scoped::scoped;
 #[cfg(feature = "lib")]
 use wasm_bindgen::prelude::wasm_bindgen;
-
 #[cfg(feature = "lib")]
 pub use crux_core::{bridge::Bridge, Core, Request};
 

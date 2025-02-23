@@ -16,7 +16,8 @@ pub struct TransferModel {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
-    session: Option<TransferSession>
+    session: Option<TransferSession>,
+    selected_resources: Vec<ResourceSelection>
 }
 
 #[derive(Default)]
@@ -26,8 +27,8 @@ pub struct TransferModule {}
 pub enum TransferEvent {
     InitSession,
     UpdateSession(TransferSession),
-    AddResource(LocalResource),
-    SelectResource(ResourceSelection)
+    UpdateLocalResources(Vec<LocalResource>),
+    AddResourceSelections(Vec<ResourceSelection>)
 }
 
 impl AppModule<BitBridge> for TransferModule {
@@ -48,26 +49,28 @@ impl AppModule<BitBridge> for TransferModule {
             }),
             TransferEvent::UpdateSession(session) => {
                 model.session = Some(session);
-                if model.session.is_none() {
-                    return Command::done();
-                }
-
-                {
-                    let session = model.session.clone().unwrap();
-                    Command::new(|it| async move {
-                        TransferSessionDatabaseOperation::save_session(session).into_future(it.clone()).await;
-                        it.request_from_shell(CoreOperation::Render).await;
-                    })
-                }
+                let session = model.session.clone().unwrap();
+                Command::new(|it| async move {
+                    TransferSessionDatabaseOperation::save_session(session).into_future(it.clone()).await;
+                    it.request_from_shell(CoreOperation::Render).await;
+                })
             }
-            TransferEvent::SelectResource(resource) => Command::new(|it| async {
-                let resource_transfer_selection_service =
-                    DiContainer::get_instance().get_resource_transfer_selection_service();
-                resource_transfer_selection_service.add_resource(it, resource).await;
-            }),
-            TransferEvent::AddResource(resource) => {
+            TransferEvent::AddResourceSelections(selections) => {
+                let selection_from_core = 
+                        model.session.as_ref().expect("Session must be initialized").resources.clone();
+                Command::new(|it| async move {
+                    let resource_transfer_selection_service =
+                        DiContainer::get_instance().get_resource_transfer_selection_service();
+                    resource_transfer_selection_service.add_resources(
+                        it,
+                        selection_from_core,
+                        selections
+                    ).await;         
+                })
+            }
+            TransferEvent::UpdateLocalResources(resources) => {
                 if let Some(session) = model.session.as_mut() {
-                    session.add_resource(resource);
+                    session.resources = resources;
 
                     let saved_session = session.clone();
                     Command::new(|it| async move {
@@ -83,7 +86,11 @@ impl AppModule<BitBridge> for TransferModule {
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         Self::ViewModel {
-            session: model.session.clone()
+            session: model.session.clone(),
+            selected_resources: match model.session.as_ref() {
+                Some(session) => session.resources.iter().map(|it| it.into()).collect(),
+                None => vec![]
+            }
         }
     }
 }

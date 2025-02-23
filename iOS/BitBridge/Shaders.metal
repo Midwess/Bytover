@@ -118,7 +118,7 @@ namespace Background {
     finalColor = mix(finalColor, brightColor, grad1.a);
     finalColor = mix(finalColor, mix(brightColor, darkColor, 0.3), grad2.a);
     finalColor = mix(finalColor, mix(brightColor, darkColor, 0.7), grad3.a);
-    finalColor = mix(finalColor, darkColor, grad4.a);
+    finalColor = mix(finalColor, darkColor, grad4.a * 1.1);
     
     float totalGlow = (grad1.a + grad2.a) * 0.55;
     float3 glowColor = mix(brightColor, darkColor, 0.1);

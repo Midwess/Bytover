@@ -18,6 +18,7 @@ use crate::native::executor::NativeExecutor;
 use crate::native::rpc::NativeRpc;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
+use crate::persistence::transfer_session::TransferSessionRepository;
 use crate::TOKIO_RT;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
@@ -99,11 +100,21 @@ impl DiContainer {
         }
     }
 
+    pub fn get_transfer_session_repository(&self) -> TransferSessionRepository {
+        TransferSessionRepository {
+            db: PoolRequestBuilder::new()
+                .retrieving_timeout(Duration::from_secs(10))
+                .pool(self.db.get().unwrap().clone())
+                .build()
+        }
+    }
+
     pub async fn get_native_executor(&self) -> NativeExecutor {
         NativeExecutor {
             rpc: NativeRpc {},
             database: NativeDatabase {
-                session_repository: self.get_session_repository()
+                session_repository: self.get_session_repository(),
+                transfer_session_repository: self.get_transfer_session_repository()
             }
         }
     }

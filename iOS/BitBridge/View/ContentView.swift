@@ -6,12 +6,11 @@
 //
 
 import Foundation
-import SplineRuntime
 import SwiftUI
 import SharedTypes
 
 struct ContentView: View {
-    @StateObject private var core: Core = Core()
+    @EnvironmentObject var core: Core
     var body: some View {
         LandingView()
             .navigate(to: HomeView(), when: $core.is_signed_in)

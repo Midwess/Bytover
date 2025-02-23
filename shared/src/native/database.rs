@@ -4,13 +4,15 @@ use crate::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput
+    SessionOperationOutput, TransferSessionDatabaseOperation, TransferSessionDatabaseOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
 use crate::persistence::session::{SessionId, SessionRepository};
+use crate::persistence::transfer_session::TransferSessionRepository;
 
 pub struct NativeDatabase {
-    pub session_repository: SessionRepository
+    pub session_repository: SessionRepository,
+    pub transfer_session_repository: TransferSessionRepository
 }
 
 impl NativeDatabase {
@@ -23,7 +25,6 @@ impl NativeDatabase {
                         r#type: SessionType::Access
                     })
                     .await;
-                log::info!(target: "db-debug", "Deleted session");
                 self.session_repository
                     .create(Session {
                         r#type: SessionType::Access,
@@ -32,7 +33,6 @@ impl NativeDatabase {
                     })
                     .await
                     .unwrap();
-                log::info!(target: "db-debug", "Created session");
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())
             }
             DatabaseOperation::Session(SessionOperation::Get()) => {
@@ -61,7 +61,14 @@ impl NativeDatabase {
 
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
             }
-
+            DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::GetLastSession()) => {
+                let session = self.transfer_session_repository.get_last_session().await.unwrap();
+                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(session))
+            }
+            DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::Save(session)) => {
+                let _ = self.transfer_session_repository.update_or_create(session).await;
+                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::Save())
+            }
             _ => panic!("Native database doesn't support this effect {:?}", effect)
         }
     }

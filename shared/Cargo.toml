@@ -42,7 +42,7 @@ lib = [
     "log",
     "bincode",
     "erased-serde",
-    "ping",
+    "reqwest",
     "tokio-scoped",
     "tonic",
     "thiserror",
@@ -61,7 +61,7 @@ surrealdb = { workspace = true, default-features = false, features = ["kv-surrea
 lazy_static = { workspace = true, optional = true }
 uniffi = { workspace = true, optional = true }
 wasm-bindgen = { version = "0.2.100", optional = true }
-core-services = { path = "../libs/core-services", default-features = false, features = ["db-local"], optional = true }
+core-services = { path = "../libs/core-services", default-features = false, features = ["db-local", "local-storage"], optional = true }
 schema = { path = "../libs/schema/rust", optional = true, features = ["bindgen"] }
 devlog-sdk = { path = "../libs/devlog-sdk", default-features = false, features = ["db-local"], optional = true }
 domain = { path = "../domain", optional = true }
@@ -75,7 +75,7 @@ tonic = { workspace = true, features = ["transport"], optional = true }
 thiserror = { workspace = true, optional = true }
 surreal_devl = { workspace = true, optional = true }
 surreal_derive_plus = { workspace = true, optional = true }
-ping = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

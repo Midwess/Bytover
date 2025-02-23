@@ -18,7 +18,7 @@ use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::{ResourceSelection, ResourceSelectionData};
 use shared::app::BitBridge;
-use shared::entities::file::{LocalResource, ResourceType};
+use shared::entities::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::transfer::{
@@ -68,6 +68,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferOperationOutput>()?;
     gen.register_type::<TransferSessionDatabaseOperation>()?;
     gen.register_type::<TransferSessionDatabaseOperationOutput>()?;
+    gen.register_type::<LocalResourcePath>()?;
 
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;

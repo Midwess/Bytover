@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject private var core = Core()
+    @EnvironmentObject private var core: Core
     
     init() {
         UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor

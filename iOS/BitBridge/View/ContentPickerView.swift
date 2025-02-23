@@ -1,24 +1,19 @@
 //
-//  AddContentButton.swift
+//  ContentPickerView.swift
 //  BitBridge
 //
-//  Created by Dang Minh Tien on 22/2/25.
+//  Created by Dang Minh Tien on 23/2/25.
 //
 
 import Foundation
 import SwiftUI
+import PhotosUI
 
-enum PickerType: Identifiable {
-    case photo, file
-    
-    var id: Int {
-        hashValue
-    }
-}
-
-struct AddContentButton: View {
+struct ContentPickerView: View {
     @State private var isShowingConfirmationDialog = false
-    @State private var selectedType: PickerType?
+    @State private var isShowingPhotosPicker = false
+    
+    @EnvironmentObject private var core: Core
     
     var body: some View {
         HStack {
@@ -43,26 +38,25 @@ struct AddContentButton: View {
                 "Hey! What type of file do you want to add?",
                 isPresented: self.$isShowingConfirmationDialog) {
                     Button("Photos and videos") {
-                        self.selectedType = .photo
+                        self.isShowingPhotosPicker = true
                     }
                     Button("Files") {
-                        self.selectedType = .file
                     }
                 }
         }
-        .sheet(item: self.$selectedType, onDismiss: { self.selectedType = nil }) { item in
-            switch item {
-            case .file: NavigationView {
-                FilePickerView()
-            }
-            case .photo: NavigationView {
-                MediaPickerView()
-            }
-            }
+        .photosPicker(isPresented: $isShowingPhotosPicker,
+                      selection: $core.selectedMediaItems,
+                      selectionBehavior: .ordered,
+                      matching: .any(of: [.images, .videos]),
+                      preferredItemEncoding: .automatic,
+                      photoLibrary: .shared()
+        )
+        .onChange(of: core.selectedMediaItems) { _, _ in
+            core.onMediasChanged()
         }
     }
 }
 
 #Preview {
-    AddContentButton()
+    ContentPickerView()
 }

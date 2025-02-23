@@ -14,6 +14,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
+    LoadFileSizeFromPlatformIdentifier(String),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
     Copy { source: String, destination: String },
@@ -24,9 +25,10 @@ pub enum LocalStorageOperation {
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     Get(Option<LocalResource>),
-    Resource(LocalResource),
+    NewFile(LocalResource),
     Copy(LocalResource),
-    Zip(LocalResource)
+    Zip(LocalResource),
+    LoadFileSizeFromPlatformIdentifier(u64)
 }
 
 impl Operation for LocalStorageOperation {
@@ -46,8 +48,8 @@ impl LocalStorageOperation {
     pub fn new_file(bytes: Vec<u8>, path: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::NewFile { bytes, path })).map(
             |it| match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Resource(resource)) => resource,
-                _ => panic!("Mismatch in response type, expected Resource, got {:?}", it)
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::NewFile(resource)) => resource,
+                _ => panic!("Mismatch in response type, expected NewFile, got {:?}", it)
             }
         )
     }
@@ -73,6 +75,13 @@ impl LocalStorageOperation {
         {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Get(resource)) => resource,
             _ => panic!("Mismatch in response type, expected Get, got {:?}", it)
+        })
+    }
+
+    pub fn load_file_size_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = u64>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileSizeFromPlatformIdentifier(identifier))).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(size)) => size,
+            _ => panic!("Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {:?}", it)
         })
     }
 }

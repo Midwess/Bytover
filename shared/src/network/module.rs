@@ -1,4 +1,3 @@
-use ping::{ping, Error};
 use std::time::{Duration, Instant};
 
 use crate::errors::NetworkError;
@@ -27,23 +26,17 @@ pub struct InternetConnection {}
 
 impl InternetConnection {
     pub async fn is_connected(&self) -> bool {
-        let timeout = Duration::from_millis(100);
-        let packet_size: u32 = 56;
-        let addr = "1.1.1.1";
+        let ns = "internet-check";
+        // This endpoint is located in Digitalocean Function
+        let addr = "https://faas-sgp1-18bc02ac.doserverless.co/api/v1/web/fn-40c6321e-1ea6-4748-bfec-44cee2c996d5/default/network-check";
+        let client = reqwest::Client::new();
 
-        match ping(addr.parse().unwrap(), Some(timeout), Some(packet_size), None, None, None) {
+        match client.get(addr).timeout(Duration::from_millis(2000)).send().await {
             Ok(_) => {
-                log::debug!("Ping successful to 1.1.1.1");
                 true
             }
             Err(err) => {
-                match err {
-                    Error::InvalidProtocol => log::debug!("Invalid protocol"),
-                    Error::InternalError => log::debug!("Internal error"),
-                    Error::DecodeV4Error => log::debug!("IPv4 decode error"),
-                    Error::DecodeEchoReplyError => log::debug!("Echo reply decode error"),
-                    Error::IoError { error } => log::debug!("IO error: {}", error)
-                }
+                log::info!(target: ns, "Internet connection failed: {:?}", err);
                 false
             }
         }
