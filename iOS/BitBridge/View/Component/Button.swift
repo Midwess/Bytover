@@ -39,10 +39,10 @@ struct UpgradePremiumButton: View {
     var body: some View {
         Button(action: {}) {
             Text("Upgrade premium")
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
                 .foregroundStyle(Theme.textGradient)
-                .modifier(Label4())
+                .modifier(Label1())
                 .background {
                     RoundedRectangle(cornerRadius: .infinity)
                         .fill(Theme.LightViolet.color.opacity(0.1))

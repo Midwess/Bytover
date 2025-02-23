@@ -163,3 +163,28 @@ struct DataUrl: Transferable {
     }
 }
 
+@MainActor
+class CoreMock: Core {
+    static func empty() -> Core {
+        CoreMock() as Core
+    }
+    
+    static func withSelectedFileTransfers() -> Core {
+        let x = CoreMock() as Core;
+        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
+        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .image, name: "Screen shot from BitBridge"));
+    
+        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .folder, name: "Folder 102384921"));
+        
+        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .image, name: "Image 4928301231"));
+        
+        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .video, name: "Video 29323"));
+        
+        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .file, name: "File 1"));
+        return x
+    }
+    
+    override func update(_ event: AppEvent) {}
+    
+    override func update_view(_ model: AppViewModel) {}
+}

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+import SharedTypes
 
 public struct ShareView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
@@ -18,22 +19,33 @@ public struct ShareView: View {
         ZStack(alignment: .bottom) {
             Theme.darkBgGradient.opacity(0.3)
             StunningBackgroundGradientAnimation()
-            ScrollView {
-                VStack {
-                    LogoView(width: 65)
+            ScrollView(.vertical) {
+                VStack(alignment: .center) {
+                    Rectangle()
+                        .fill(.clear)
+                        .frame(width: 10, height: safeAreaInsets.top + 10)
+                    LogoView(width: 60)
                         .frame(width: .infinity, height: 100)
-                    Text("Secure and Fastest \n file transfer")
-                        .multilineTextAlignment(.center)
-                        .modifier(Label1())
-                        .foregroundStyle(Theme.gradientHeading)
-                        .padding(.top, 10)
-                    UpgradePremiumButton()
                     
-                    ForEach(core.transfer?.selected_resources ?? [], id: \.self) { item in
-                        Text(item.name)
-                    }
+                    Text("Your best file transfer")
+                        .multilineTextAlignment(.center)
+                        .modifier(Body1())
+                        .foregroundStyle(Theme.gradientHeading)
+                        .padding(.top, 5)
+                    
+                    UpgradePremiumButton()
+                        .padding(.top, 5)
+                    
+                    Spacer().frame(height: 20)
                     
                     ContentPickerView()
+                        .padding(.horizontal, 19)
+
+                    ForEach(core.transfer?.selected_resources ?? [], id: \.self) { item in
+                        SelectedResourceItem(resource: item)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 16)
+                    }
                 }
             }
             
@@ -49,5 +61,6 @@ public struct ShareView: View {
 }
 
 #Preview {
-    ShareView()
+   ShareView()
+        .environmentObject(CoreMock.withSelectedFileTransfers())
 }

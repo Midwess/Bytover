@@ -4,7 +4,9 @@ use crate::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput, TransferSessionDatabaseOperation, TransferSessionDatabaseOperationOutput
+    SessionOperationOutput,
+    TransferSessionDatabaseOperation,
+    TransferSessionDatabaseOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
 use crate::persistence::session::{SessionId, SessionRepository};
@@ -63,7 +65,9 @@ impl NativeDatabase {
             }
             DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::GetLastSession()) => {
                 let session = self.transfer_session_repository.get_last_session().await.unwrap();
-                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(session))
+                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(
+                    session
+                ))
             }
             DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::Save(session)) => {
                 let _ = self.transfer_session_repository.update_or_create(session).await;

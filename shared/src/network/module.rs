@@ -27,14 +27,14 @@ pub struct InternetConnection {}
 impl InternetConnection {
     pub async fn is_connected(&self) -> bool {
         let ns = "internet-check";
-        // This endpoint is located in Digitalocean Function
+        // This endpoint is located in Digitalocean
         let addr = "https://faas-sgp1-18bc02ac.doserverless.co/api/v1/web/fn-40c6321e-1ea6-4748-bfec-44cee2c996d5/default/network-check";
         let client = reqwest::Client::new();
 
-        match client.get(addr).timeout(Duration::from_millis(2000)).send().await {
-            Ok(_) => {
-                true
-            }
+        // Timeout is 5 seconds seem too much, but it is neccessary for cross region connection
+        // And for Digital ocean sometime has a cold start which take more time than usual
+        match client.get(addr).timeout(Duration::from_millis(5000)).send().await {
+            Ok(_) => true,
             Err(err) => {
                 log::info!(target: ns, "Internet connection failed: {:?}", err);
                 false

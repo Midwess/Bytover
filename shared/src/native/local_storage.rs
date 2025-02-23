@@ -1,6 +1,7 @@
 use core_services::local_storage::file_system::File;
 
-use crate::{app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput}, entities::file::{LocalResource, LocalResourcePath, ResourceType}};
+use crate::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
+use crate::entities::file::{LocalResource, LocalResourcePath, ResourceType};
 
 pub struct NativeLocalStorage {}
 
@@ -15,7 +16,7 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(created_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File,
+                    r#type: ResourceType::File
                 };
 
                 LocalStorageOperationOutput::NewFile(resource)
@@ -29,7 +30,7 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File,
+                    r#type: ResourceType::File
                 };
 
                 LocalStorageOperationOutput::Copy(resource)
@@ -43,7 +44,7 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File,
+                    r#type: ResourceType::File
                 };
 
                 LocalStorageOperationOutput::Zip(resource)
@@ -56,7 +57,7 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File,
+                    r#type: ResourceType::File
                 };
 
                 LocalStorageOperationOutput::Get(Some(resource))

@@ -29,6 +29,17 @@ enum Theme: String {
         }
     }
     
+   static var gradientHeading2: LinearGradient {
+        get {
+            LinearGradient(
+                colors: [Theme.SecondaryVividViolet.color.opacity(0.2), Theme.DarkViolet.color.opacity(0.2)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
+ 
+    
     static func starGradient(x: Double, y: Double) -> AngularGradient {
         AngularGradient(colors: [
             Theme.DarkViolet.color.opacity(0.1),
@@ -127,7 +138,7 @@ struct FontTheme {
     
     static var Body1: Font {
         get {
-            .body.weight(.bold)
+            .title3.weight(.bold)
         }
     }
     
@@ -140,6 +151,18 @@ struct FontTheme {
     static var Label1: Font {
         get {
             .callout
+        }
+    }
+    
+    static var Label2: Font {
+        get {
+            .subheadline
+        }
+    }
+    
+    static var Label3: Font {
+        get {
+            .subheadline
         }
     }
     

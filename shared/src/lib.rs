@@ -23,6 +23,8 @@ use app::{operations::CoreOperation, BitBridge};
 #[cfg(feature = "lib")]
 use bincode::Options;
 #[cfg(feature = "lib")]
+pub use crux_core::{bridge::Bridge, Core, Request};
+#[cfg(feature = "lib")]
 use di_container::DiContainer;
 #[cfg(feature = "lib")]
 use erased_serde::Serialize;
@@ -32,8 +34,6 @@ use lazy_static::lazy_static;
 use tokio_scoped::scoped;
 #[cfg(feature = "lib")]
 use wasm_bindgen::prelude::wasm_bindgen;
-#[cfg(feature = "lib")]
-pub use crux_core::{bridge::Bridge, Core, Request};
 
 #[cfg(feature = "lib")]
 uniffi::include_scaffolding!("shared");

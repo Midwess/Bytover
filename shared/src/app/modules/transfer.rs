@@ -17,7 +17,7 @@ pub struct TransferModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     session: Option<TransferSession>,
-    selected_resources: Vec<ResourceSelection>
+    selected_resources: Vec<LocalResource>
 }
 
 #[derive(Default)]
@@ -56,16 +56,12 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::AddResourceSelections(selections) => {
-                let selection_from_core = 
-                        model.session.as_ref().expect("Session must be initialized").resources.clone();
+                let selection_from_core =
+                    model.session.as_ref().expect("Session must be initialized").resources.clone();
                 Command::new(|it| async move {
                     let resource_transfer_selection_service =
                         DiContainer::get_instance().get_resource_transfer_selection_service();
-                    resource_transfer_selection_service.add_resources(
-                        it,
-                        selection_from_core,
-                        selections
-                    ).await;         
+                    resource_transfer_selection_service.add_resources(it, selection_from_core, selections).await;
                 })
             }
             TransferEvent::UpdateLocalResources(resources) => {
@@ -88,7 +84,7 @@ impl AppModule<BitBridge> for TransferModule {
         Self::ViewModel {
             session: model.session.clone(),
             selected_resources: match model.session.as_ref() {
-                Some(session) => session.resources.iter().map(|it| it.into()).collect(),
+                Some(session) => session.resources.clone(),
                 None => vec![]
             }
         }

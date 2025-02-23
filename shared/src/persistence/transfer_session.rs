@@ -1,4 +1,3 @@
-use crate::entities::session::{Session, SessionType};
 use crate::entities::transfer::TransferSession;
 use core_services::db::repository::abstraction::errors::Resolve;
 use core_services::db::repository::abstraction::id::DbId;
@@ -82,7 +81,10 @@ impl LocalSurrealDbRepository<TransferSession, TransferSessionId> for TransferSe
 impl TransferSessionRepository {
     pub async fn get_last_session(&self) -> Resolve<Option<TransferSession>> {
         let db = self.get_db().await;
-        let result: Option<TransferSession> = db.query(surreal_quote!("SELECT * FROM transfer_session ORDER BY order_id DESC LIMIT 1")).await?.take(RPath::from(0))?;
+        let result: Option<TransferSession> = db
+            .query(surreal_quote!("SELECT * FROM transfer_session ORDER BY order_id DESC LIMIT 1"))
+            .await?
+            .take(RPath::from(0))?;
         Ok(result)
     }
 }

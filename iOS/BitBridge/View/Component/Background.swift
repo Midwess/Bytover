@@ -15,7 +15,6 @@ struct StunningBackgroundGradientAnimation: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            Theme.darkBgGradient.opacity(0.3)
             TimelineView(.animation) { timeline in
                 let elapsedTime = startTime.distance(to: timeline.date)
                 Rectangle()
@@ -25,9 +24,9 @@ struct StunningBackgroundGradientAnimation: View {
                             .colorEffect(
                                 ShaderLibrary.generateBackground(
                                     .float2(proxy.size),
-                                    .color(Theme.SecondaryViolet.color.opacity(0.5)),
+                                    .color(Theme.LightPrimaryViolet.color.opacity(0.9)),
                                     .color(Theme.DarkViolet.color.opacity(0.3)),
-                                    .float(elapsedTime * 0.5)
+                                    .float(elapsedTime * 0.6)
                                 )
                             )
                     }

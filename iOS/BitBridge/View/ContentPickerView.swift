@@ -17,9 +17,15 @@ struct ContentPickerView: View {
     
     var body: some View {
         HStack {
-            Text("Add new file")
-                .modifier(Body2())
-                .opacity(0.5)
+            if core.transfer?.selected_resources.isEmpty ?? true {
+                Text("Add new file")
+                    .modifier(Body2())
+                    .opacity(0.5)
+            }
+            else {
+                Spacer()
+            }
+            
             Button(action: {
                 self.isShowingConfirmationDialog = true
             }) {
@@ -59,4 +65,5 @@ struct ContentPickerView: View {
 
 #Preview {
     ContentPickerView()
+        .environmentObject(CoreMock())
 }

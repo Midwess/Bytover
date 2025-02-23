@@ -37,4 +37,5 @@ struct HomeView: View {
 
 #Preview("HomeView") {
     HomeView()
+        .environmentObject(CoreMock.withSelectedFileTransfers() as Core)
 }

@@ -28,7 +28,7 @@ impl ResourceSelection {
         match &self.data {
             ResourceSelectionData::LocalPath(path) => path,
             ResourceSelectionData::PlatformIdentifier(identifier) => identifier,
-            ResourceSelectionData::Bytes(_) => panic!("Resource selection data is not a path"),
+            ResourceSelectionData::Bytes(_) => panic!("Resource selection data is not a path")
         }
     }
 }
@@ -37,7 +37,7 @@ impl From<LocalResourcePath> for ResourceSelectionData {
     fn from(path: LocalResourcePath) -> Self {
         match path {
             LocalResourcePath::LocalPath(path) => ResourceSelectionData::LocalPath(path),
-            LocalResourcePath::PlatformIdentifier(identifier) => ResourceSelectionData::PlatformIdentifier(identifier),
+            LocalResourcePath::PlatformIdentifier(identifier) => ResourceSelectionData::PlatformIdentifier(identifier)
         }
     }
 }
@@ -64,17 +64,15 @@ impl ResourceTransferSelectionService {
         let mut local_resources = selections_from_core
             .into_iter()
             .filter(|it| {
-                !selections_from_shell.iter().any(|selection| {
-                    match &it.path {
-                        LocalResourcePath::LocalPath(path) => path.eq(selection.path()),
-                        LocalResourcePath::PlatformIdentifier(identifier) => identifier.eq(selection.path()),
-                    }
+                !selections_from_shell.iter().any(|selection| match &it.path {
+                    LocalResourcePath::LocalPath(path) => path.eq(selection.path()),
+                    LocalResourcePath::PlatformIdentifier(identifier) => identifier.eq(selection.path())
                 })
             })
             .collect::<Vec<_>>();
 
         for selection in selections_from_shell {
-           let local_resource = match selection.data {
+            let local_resource = match selection.data {
                 ResourceSelectionData::Bytes(bytes) => {
                     LocalStorageOperation::new_file(bytes, selection.name).into_future(ctx.clone()).await
                 }
@@ -85,9 +83,11 @@ impl ResourceTransferSelectionService {
                     }
 
                     resource.unwrap()
-                },
+                }
                 ResourceSelectionData::PlatformIdentifier(identifier) => {
-                    let file_size = LocalStorageOperation::load_file_size_from_platform_identifier(identifier.clone()).into_future(ctx.clone()).await;
+                    let file_size = LocalStorageOperation::load_file_size_from_platform_identifier(identifier.clone())
+                        .into_future(ctx.clone())
+                        .await;
                     let resource = LocalResource {
                         name: identifier.clone(),
                         size: file_size,

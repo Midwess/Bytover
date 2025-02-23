@@ -79,9 +79,17 @@ impl LocalStorageOperation {
     }
 
     pub fn load_file_size_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = u64>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileSizeFromPlatformIdentifier(identifier))).map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(size)) => size,
-            _ => panic!("Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {:?}", it)
+        Command::request_from_shell(CoreOperation::LocalStorage(
+            LocalStorageOperation::LoadFileSizeFromPlatformIdentifier(identifier)
+        ))
+        .map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(
+                size
+            )) => size,
+            _ => panic!(
+                "Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {:?}",
+                it
+            )
         })
     }
 }
