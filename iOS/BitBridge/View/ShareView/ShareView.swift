@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 import SharedTypes
+import SceneKit
 
 public struct ShareView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
@@ -17,38 +18,38 @@ public struct ShareView: View {
     
     public var body: some View {
         ZStack(alignment: .bottom) {
-            Theme.darkBgGradient.opacity(0.3)
-            StunningBackgroundGradientAnimation()
+            StunningBackgroundGradient()
             ScrollView(.vertical) {
                 VStack(alignment: .center) {
-                    Rectangle()
-                        .fill(.clear)
-                        .frame(width: 10, height: safeAreaInsets.top + 10)
-                    LogoView(width: 60)
-                        .frame(width: .infinity, height: 100)
+                    LogoScene(gltfFileName: "Rocket", logoScale: 1.7)
+                        .frame(width: screenSize.width, height: 100)
+                        .overlay(Theme.gradientHeading.opacity(0.5).blur(radius: 15).frame(width: .infinity, height: screenSize.width / 2))
                     
-                    Text("Your best file transfer")
+                    Text("Your dashboard")
+                        .padding(.horizontal, 20)
                         .multilineTextAlignment(.center)
-                        .modifier(Body1())
-                        .foregroundStyle(Theme.gradientHeading)
-                        .padding(.top, 5)
+                        .modifier(Heading2())
+                    
+                    Spacer().frame(height: 10)
                     
                     UpgradePremiumButton()
-                        .padding(.top, 5)
                     
-                    Spacer().frame(height: 20)
+                    Spacer().frame(height: 150)
                     
                     ContentPickerView()
                         .padding(.horizontal, 19)
 
                     ForEach(core.transfer?.selected_resources ?? [], id: \.self) { item in
                         SelectedResourceItem(resource: item)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 16)
+                            .padding(.horizontal, 15)
+                            .padding(.top, 10)
                     }
+                    Spacer().frame(width: 10, height: 210)
                 }
             }
-            
+            .padding(.bottom, 100)
+            .padding(.top, safeAreaInsets.top)
+
             ShareButton(width: 150)
                 .padding(.bottom, 80)
         }

@@ -13,7 +13,6 @@ struct Heading1: ViewModifier {
         content
             .lineSpacing(12)
             .font(FontTheme.H1Heading)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
@@ -22,7 +21,6 @@ struct Heading2: ViewModifier {
         content
             .lineSpacing(12)
             .font(FontTheme.H2Heading)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
@@ -30,7 +28,6 @@ struct Body1: ViewModifier {
     func body(content: Content) -> some View {
         content.lineSpacing(8)
             .font(FontTheme.Body1)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
@@ -38,16 +35,14 @@ struct Body2: ViewModifier {
     func body(content: Content) -> some View {
         content.lineSpacing(8)
             .font(FontTheme.Body2)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
 struct H1Heading: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .lineSpacing(12)
+            .lineSpacing(9)
             .font(FontTheme.H1Heading)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
@@ -55,8 +50,7 @@ struct Label1: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(FontTheme.Label1)
-            .fontWeight(.medium)
-            .foregroundColor(Theme.LightViolet.color)
+            .fontWeight(.bold)
     }
 }
 
@@ -64,7 +58,6 @@ struct Label2: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(FontTheme.Label2)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 
@@ -72,7 +65,6 @@ struct Label3: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(FontTheme.Label3)
-            .foregroundColor(Theme.LightViolet.color.opacity(0.7))
     }
 }
 
@@ -80,7 +72,6 @@ struct Label4: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(FontTheme.Label4)
-            .foregroundColor(Theme.LightViolet.color)
     }
 }
 

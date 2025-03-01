@@ -18,12 +18,12 @@ impl GrpcChannel {
         Self {
             channel: Mutex::new(None),
             endpoint,
-            internet_connection: InternetConnection {}
+            internet_connection: InternetConnection::new(),
         }
     }
 
     pub async fn connect(&self) -> Result<Channel, NetworkError> {
-        NetworkModule::connect(self, Duration::from_secs(1)).await?;
+        NetworkModule::connect(self, Duration::from_secs(5)).await?;
         Ok(self.channel.lock().await.clone().unwrap())
     }
 }

@@ -34,7 +34,6 @@ class Core: ObservableObject {
     func update_view(_ model: AppViewModel) {
         self.authentication = model.authentication
         self.environment = model.environment
-        print("Update view model \(model.transfer?.selected_resources.count)")
         self.transfer = model.transfer
         
         if self.authentication?.user != nil {
@@ -171,16 +170,14 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
-        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .image, name: "Screen shot from BitBridge"));
-    
-        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .folder, name: "Folder 102384921"));
-        
-        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .image, name: "Image 4928301231"));
-        
-        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .video, name: "Video 29323"));
-        
-        x.transfer?.selected_resources.append(ResourceSelection(data: ResourceSelectionData.localPath("/local"), type: .file, name: "File 1"));
+//        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
+//       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
+//        
+//       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 0, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
+//       
+//       x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
+//       
+//       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 1000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
         return x
     }
     

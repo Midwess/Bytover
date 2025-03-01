@@ -12,9 +12,11 @@ import GLTFSceneKit
 import CoreMotion
 
 struct LogoScene: UIViewRepresentable {
-    private let logoScale: Float = 0.95
     private let motionManager = CMMotionManager()
-    
+    public let gltfFileName: String
+    public var logoScale: Float = 1.1
+    public var rotation: SCNVector4?
+
     class Coordinator: NSObject {
         let maxMotion: Float = 0.3
         var parent: LogoScene
@@ -51,57 +53,83 @@ struct LogoScene: UIViewRepresentable {
         sceneView.allowsCameraControl = false
         
         do {
-            let sceneSource = GLTFSceneSource(url: Bundle.main.url(forResource: "lightning", withExtension: "gltf")!, options: nil)
+            let sceneSource = GLTFSceneSource(url: Bundle.main.url(forResource: gltfFileName, withExtension: "gltf")!, options: nil)
             let scene = try sceneSource.scene()
             context.coordinator.scene = scene
             
+            // Configure environment map
+            configureEnvironmentMap(for: scene)
+            
             sceneView.scene = scene
             
-            let ambientLight = SCNNode()
-            ambientLight.light = SCNLight()
-            ambientLight.light?.type = .ambient
-            ambientLight.light?.intensity = 100
-            ambientLight.light?.color = UIColor.init(Theme.LightViolet.color)
-            scene.rootNode.addChildNode(ambientLight)
-            
-            let directionalLight = SCNNode()
-            directionalLight.light = SCNLight()
-            directionalLight.light?.type = .directional
-            directionalLight.light?.intensity = 6000
-            directionalLight.light?.color = UIColor.init(Theme.LightViolet.color)
-            directionalLight.position = SCNVector3(x: 1, y: 0, z: 2)
-            directionalLight.eulerAngles = SCNVector3(x: -0.5, y: 0.5, z: 0)
-            scene.rootNode.addChildNode(directionalLight)
             
             scene.rootNode.scale.x = logoScale
             scene.rootNode.scale.y = logoScale
             scene.rootNode.scale.z = logoScale
             
-            scene.rootNode.enumerateChildNodes { (node, _) in
-                if node.parent?.name == "lightning-border" {
-                    if let geometry = node.geometry {
-                        let material = SCNMaterial()
-                        material.diffuse.contents = UIColor.init(Theme.SecondaryBlue.color)
-                        material.metalness.contents = 0.3
-                        material.roughness.contents = 0.2
-                        material.lightingModel = .physicallyBased
-                        
-                        geometry.materials = [material]
-                    }
-                }
-                else if node.parent?.name == "lightning-body" {
-                    if let geometry = node.geometry {
-                        let material = SCNMaterial()
-                        material.diffuse.contents = UIColor.init(Theme.PrimaryViolet.color)
-                        material.metalness.contents = 1.0
-                        material.roughness.contents = 0.3
-                        material.lightingModel = .physicallyBased
-                        
-                        geometry.materials = [material]
-                    }
-                }
+            if rotation != nil {
+                scene.rootNode.childNodes[0].rotation.x = rotation!.x
+                scene.rootNode.childNodes[0].rotation.y = rotation!.y
+                scene.rootNode.childNodes[0].rotation.z = rotation!.z
             }
             
+            scene.rootNode.enumerateChildNodes { (node, _) in
+                node.geometry?.firstMaterial?.lightingModel = .physicallyBased
+                if node.parent?.parent?.name == "Ocean" ||
+                    node.parent?.parent?.name == "Body" ||
+                    node.parent?.parent?.name == "Fins"
+                {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.SeaTertiary.color)
+                    node.geometry?.materials = [material]
+                }
+                else if
+                    node.parent?.parent?.name == "Windows"  {
+                     let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.BlueSky.color)
+                    node.geometry?.materials = [material]
+
+                }
+                else if node.parent?.parent?.name == "Land" ||
+                        node.parent?.parent?.name == "Exhaust"
+                {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.DarkBlue.color)
+                    node.geometry?.materials = [material]
+                }
+                else if node.parent?.parent?.name == "Head" ||
+                        node.parent?.parent?.name == "Screws" ||
+                        node.parent?.parent?.name == "Windows Frame" {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.Navy.color)
+                    node.geometry?.materials = [material]
+                }
+                else if node.parent?.parent?.name == "Trees" ||
+                        node.parent?.parent?.name == "Satelite Solar Panel" ||
+                        node.parent?.parent?.name == "Mountain" ||
+                        node.parent?.parent?.name == "Buildings"
+                {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.BlueViolet.color)
+                    node.geometry?.materials = [material]
+                }
+                else if (node.parent?.parent?.name == "Clouds" ||
+                        node.parent?.parent?.name == "Mountain Snowy Top" ||
+                        node.parent?.parent?.name == "Poles" ||
+                        node.parent?.parent?.name == "Satelite Body") {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.LightSea.color)
+                    node.geometry?.materials = [material]
+                }
+                else if node.parent?.parent?.name == "Satelite Solar Hinge" ||
+                    node.parent?.parent?.name == "Fire" ||
+                    node.parent?.parent?.name == "Scattered Fire"
+                {
+                    let material = SCNMaterial()
+                    material.diffuse.contents = UIColor(Theme.Orange.color)
+                    node.geometry?.materials = [material]
+                }
+            }
         } catch {
             print("Error loading GLTF: \(error.localizedDescription)")
         }
@@ -113,5 +141,26 @@ struct LogoScene: UIViewRepresentable {
     
     static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
         coordinator.parent.motionManager.stopDeviceMotionUpdates()
+    }
+    
+    private func configureEnvironmentMap(for scene: SCNScene) {
+        scene.background.contents = UIColor.clear
+        
+        // Add ambient light to ensure minimum lighting
+        let ambientLight = SCNNode()
+        ambientLight.light = SCNLight()
+        ambientLight.light?.type = .ambient
+        ambientLight.light?.color = UIColor(white: 1.5, alpha: 1.0)
+        ambientLight.light?.intensity = 5000.0
+        scene.rootNode.addChildNode(ambientLight)
+        
+        // Add directional light to simulate sun
+        let directionalLight = SCNNode()
+        directionalLight.light = SCNLight()
+        directionalLight.light?.type = .directional
+        directionalLight.light?.color = UIColor(white: 1.0, alpha: 1.0)
+        directionalLight.eulerAngles = SCNVector3(x: -Float.pi/3, y: Float.pi/4, z: 0)
+        ambientLight.light?.intensity = 100.0
+        scene.rootNode.addChildNode(directionalLight)
     }
 }

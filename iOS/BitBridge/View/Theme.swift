@@ -18,11 +18,22 @@ enum Theme: String {
     case SecondaryDarkViolet
     case SecondaryBlue
     case LightPrimaryViolet
+    case GreenSecondary
+    case BluePrimary
+    case PrimaryText
+    case SeaTertiary
+    case BlueViolet
+    case Orange
+    case LightSea
+    case DarkBlue
+    case BlackBase
+    case Navy
+    case BlueSky
     
     static var gradientHeading: LinearGradient {
         get {
             LinearGradient(
-                colors: [Theme.LightViolet.color, Theme.LightViolet.color.opacity(0.7)],
+                colors: [Theme.BlackBase.color.opacity(0.0), Theme.BlackBase.color],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -32,7 +43,7 @@ enum Theme: String {
    static var gradientHeading2: LinearGradient {
         get {
             LinearGradient(
-                colors: [Theme.SecondaryVividViolet.color.opacity(0.2), Theme.DarkViolet.color.opacity(0.2)],
+                colors: [Theme.SecondaryVividViolet.color.opacity(0.4), Theme.DarkViolet.color.opacity(0.3)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -108,6 +119,13 @@ enum Theme: String {
 
 enum ImageAsset: String {
     case SupaLighting
+    case GlobeEmpty
+    case GlobeFull
+    case SettingEmpty
+    case SettingFull
+    case PuzzelEmpty
+    case PuzzelFull
+    case SendEmpty
     
     var image: Image {
         get {
@@ -180,7 +198,7 @@ enum SpaceTheme {
         get {
             switch self {
                 case .screen:
-                    return 24
+                    return 20
             }
         }
     }

@@ -32,7 +32,7 @@ float4 circle(float2 uv, float3 mainColor, float3 subColor, float2 center, float
     float baseGlow = exp(-4.0 * distFromBorder / glowWidth);
     
     // Combine rotating glow
-    float glowIntensity = baseGlow * (0.2 + 0.6 * rotatingGlow);
+    float glowIntensity = baseGlow * (0.3 + 0.8 * rotatingGlow);
     
     float innerFill = 1.0 - smoothstep(radius * 0.95, radius, dist);
     
@@ -99,21 +99,21 @@ namespace Background {
 
 [[ stitchable ]] half4 generateBackground(float2 position, half4 inputColor, float2 size, half4 colorA, half4 colorB, float time) {
     float2 uv = position / size;
-    float3 brightColor = float3(colorA.r, colorA.g, colorA.b);
-    float3 darkColor = float3(colorB.r, colorB.g, colorB.b);
+    float3 brightColor = float3(colorA.r, colorA.g, colorA.b) * 1.2;
+    float3 darkColor = float3(colorB.r, colorB.g, colorB.b) * 0.9;
     
     // Create four rotating edge gradients
     float angle1 = time * 0.3;
-    float angle2 = angle1 + 1.57;
+    float angle2 = angle1 + 2.57;
     float angle3 = angle1 + 3.14;
     float angle4 = angle1 + 4.71;
     
-    float4 grad1 = Background::createBgEdgeGradient(uv, angle1, brightColor, 0.8, time);
-    float4 grad2 = Background::createBgEdgeGradient(uv, angle2, mix(brightColor, darkColor, 0.3), 0.7, time);
-    float4 grad3 = Background::createBgEdgeGradient(uv, angle3, mix(brightColor, darkColor, 0.7), 0.7, time);
-    float4 grad4 = Background::createBgEdgeGradient(uv, angle4, darkColor, 0.8, time);
+    float4 grad1 = Background::createBgEdgeGradient(uv, angle1, brightColor, 1, time);
+    float4 grad2 = Background::createBgEdgeGradient(uv, angle2, mix(brightColor, darkColor, 0.3), 1, time);
+    float4 grad3 = Background::createBgEdgeGradient(uv, angle3, mix(brightColor, darkColor, 0.7), 0.2, time);
+    float4 grad4 = Background::createBgEdgeGradient(uv, angle4, darkColor, 0.9, time);
     
-    float3 finalColor = darkColor * 0.2;
+    float3 finalColor = darkColor * 0.4;
     
     finalColor = mix(finalColor, brightColor, grad1.a);
     finalColor = mix(finalColor, mix(brightColor, darkColor, 0.3), grad2.a);
@@ -121,8 +121,8 @@ namespace Background {
     finalColor = mix(finalColor, darkColor, grad4.a * 1.1);
     
     float totalGlow = (grad1.a + grad2.a) * 0.55;
-    float3 glowColor = mix(brightColor, darkColor, 0.1);
-    finalColor += glowColor * smoothstep(0.5, 1.0, totalGlow) * 0.9;
+    float3 glowColor = mix(brightColor, darkColor, 0.4);
+    finalColor += glowColor * smoothstep(0.9, 1.0, totalGlow);
     
     return half4(finalColor.r, finalColor.g, finalColor.b, 0.5);
 }

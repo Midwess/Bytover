@@ -10,62 +10,68 @@ import Foundation
 import SharedTypes
 
 struct SelectedResourceItem: View {
-    @State var resource: ResourceSelection
+    @State var resource: LocalResource
     
     func getThumbnail() -> some View {
         switch resource.type {
         case .file: return Group {
-            Image(systemName: "doc")
-                .font(.title2)
+            Image(systemName: "doc.fill")
         } as Group
         case .folder: return Group {
-            Image(systemName: "folder")
-                .font(.title2)
+            Image(systemName: "folder.fill")
         } as Group
         case .image: return Group {
-            Image(systemName: "photo")
-                .font(.title2)
+            Image(systemName: "photo.fill")
         } as Group
         case .video: return Group {
-            Image(systemName: "video")
-                .font(.title2)
+            Image(systemName: "video.fill")
         } as Group
         case .other: return Group {
             Image(systemName: "questionmark")
-                .font(.title2)
         } as Group
         }
     }
     
     var body: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 5) {
             getThumbnail()
-                .frame(width: 50, height: 50)
-                .foregroundColor(Theme.LightViolet.color.opacity(0.8))
-                .background(
-                    Rectangle()
-                        .foregroundStyle(Theme.gradientHeading2)
-                        .cornerRadius(15)
-                )
-            VStack(alignment: .leading) {
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
                     .modifier(Label1())
-                Text("10 MB")
+                Text("/Users/tiendang")
                     .modifier(Label3())
                     .opacity(0.7)
             }
             .padding(.leading, 10)
             Spacer()
+            VStack(spacing: 5) {
+                Text("0.1 GB")
+                    .modifier(Label1())
+                Text("100 MB")
+                    .modifier(Label3())
+            }
             Button(action: {}) {
                 Image(systemName: "trash")
                     .font(.callout)
-                    .fontWeight(.regular)
-                    .foregroundColor(Theme.LightViolet.color.opacity(0.6))
+                    .opacity(0.7)
+                    .fontWeight(.bold)
+                    .foregroundColor(Theme.LightViolet.color.opacity(0.8))
+                    .padding(.leading, 12)
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .background(Theme.LightViolet.color.opacity(0.00))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Theme.LightViolet.color.opacity(0.0), lineWidth: 1))
     }
 }
 
 #Preview {
-    SelectedResourceItem(resource: ResourceSelection(data: .localPath("path"), type: .image, name: "Name"))
+    ZStack {
+        StunningBackgroundGradientAnimation()
+        SelectedResourceItem(resource: CoreMock.withSelectedFileTransfers().transfer!.selected_resources[0])
+            .padding()
+    }
 }

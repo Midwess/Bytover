@@ -8,6 +8,18 @@
 import Foundation
 import SwiftUI
 
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity)
+            .padding()
+            .font(FontTheme.H2Heading)
+            .foregroundColor(Theme.PrimaryText.color)
+            .background(Theme.BluePrimary.color)
+            .cornerRadius(.infinity)
+    }
+}
+
 struct PrimaryGradientButton<S: ShapeStyle>: ButtonStyle {
     let gradient: S
     func makeBody(configuration: Configuration) -> some View {
@@ -38,15 +50,14 @@ struct PrimaryButton: View {
 struct UpgradePremiumButton: View {
     var body: some View {
         Button(action: {}) {
-            Text("Upgrade premium")
+            Text("Upgrade to premium")
                 .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .foregroundStyle(Theme.textGradient)
-                .modifier(Label1())
+                .padding(.vertical, 8)
+                .modifier(Label3())
+                .foregroundStyle(Theme.PrimaryText.color.opacity(1))
                 .background {
                     RoundedRectangle(cornerRadius: .infinity)
-                        .fill(Theme.LightViolet.color.opacity(0.1))
-                        .stroke(Theme.PrimaryViolet.color.opacity(0.15), lineWidth: 1)
+                        .fill(Theme.SeaTertiary.color.opacity(0.1))
                 }
         }
     }
@@ -55,17 +66,17 @@ struct UpgradePremiumButton: View {
 struct AddFileButton: View {
     var body: some View {
         Button(action: {}) {
-            Image(systemName: "plus")
-                .resizable()
-                .foregroundColor(Theme.LightViolet.color)
-                .padding(.all, 8)
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: .infinity)
-                        .fill(Theme.LightViolet.color.opacity(0.1))
-                        .stroke(Theme.PrimaryViolet.color.opacity(0.45), lineWidth: 1)
-                )
+            HStack {
+                Text("Add new files")
+                    .padding(.trailing, 4)
+                Image(systemName: "plus")
+                    .resizable()
+                    .padding(.all, 8)
+                    .frame(width: 30, height: 30)
+            }
         }
+        .background(Theme.BluePrimary.color)
+        .foregroundColor(Theme.PrimaryText.color)
     }
 }
 
@@ -83,16 +94,23 @@ struct Button_Preview: PreviewProvider {
 }
 
 struct ButtonNavigation: View {
-    var icon: String
-    var label: String
+    var icon: Image
+    var icon_selected: Image
+    var isSelected: Bool
+    
+    // Add a default value for isSelected to maintain backward compatibility
+    init(icon: Image, icon_selected: Image, isSelected: Bool = false) {
+        self.icon = icon
+        self.icon_selected = icon_selected
+        self.isSelected = isSelected
+    }
+    
     var body: some View {
         VStack {
-            Image(systemName: icon)
+            // Use the selected icon when isSelected is true
+            (isSelected ? icon_selected : icon)
                 .resizable()
                 .frame(width: 20, height: 20)
-            Text(label)
-                .modifier(Label4())
-                .padding(.top, 4)
         }
     }
 }
@@ -107,26 +125,26 @@ struct ShareButton: View {
                     TimelineView(.animation) { timeline in
                         let elapsedTime = startTime.distance(to: timeline.date)
                         Circle()
-                            .fill(Theme.PrimaryViolet.color.opacity(0.9))
+                            .fill(Theme.GreenSecondary.color.opacity(0.6))
                             .visualEffect { content, proxy in
                                 content
                                     .colorEffect(
                                         ShaderLibrary.circleWave(
                                             .float2(proxy.size),
-                                            .color(Theme.SecondaryVividViolet.color),
+                                            .color(Theme.BluePrimary.color),
                                             .float(elapsedTime * 0.8)
                                         )
                                     )
                             }
                     }
                     Button(action: {}) {
-                        Image(systemName: "paperplane")
-                            .foregroundColor(Theme.LightPrimaryViolet.color)
-                            .fontWeight(.medium)
-                            .font(.title2)
+                        ImageAsset.SendEmpty.image
+                            .rotationEffect(.degrees(-45))
+                            .opacity(0.8)
+                            .offset(x: 1, y: -1)
                     }
                     .frame(width: width * 0.49, height: width * 0.49)
-                    .background(Theme.circlePrimaryGradient)
+                    .background(Theme.BlackBase.color)
                     .clipShape(Circle())
                 }
             }
@@ -137,7 +155,7 @@ struct ShareButton: View {
 }
 
 #Preview("Bottom navigation") {
-    ButtonNavigation(icon: "plus", label: "plus")
+    ButtonNavigation(icon: Image(systemName: "plus"), icon_selected: Image("plus.fill"), isSelected: false)
 }
 
 #Preview("Premium button") {

@@ -12,7 +12,7 @@ struct LogoView: View {
     let width: CGFloat
     var body: some View {
         VStack {
-            LogoScene()
+            LogoScene(gltfFileName: "Earth", logoScale: 1.1)
         }
     }
 }
@@ -20,7 +20,7 @@ struct LogoView: View {
 struct LogoView_Preview: PreviewProvider {
     static var previews: some View {
         LogoView(width: 200)
-            .frame(width: 300, height: 100)
+            .frame(width: 500, height: 500)
             .previewLayout(.sizeThatFits)
             .padding()
     }

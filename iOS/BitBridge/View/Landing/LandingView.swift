@@ -14,34 +14,35 @@ struct LandingView: View {
     @EnvironmentObject private var core: Core
 
     var body: some View {
-        ZStack {
-            Theme.darkBgGradient
-            Theme.starGradient(x: 0.5, y: 0.3)
-            VStack(alignment: .leading) {
-                LogoView(width: 10)
-                    .frame(maxWidth: .infinity, maxHeight: screenSize.height * 0.4)
-                    .padding(.top, screenSize.height * 0.1)
-                Spacer()
-                Text("The most secure and fastest file transfer")
-                    .font(FontTheme.H1Heading)
-                    .modifier(GradientHeading())
-                    .padding(.bottom, 17)
-                Text("We feel thankful that you’re here ❤️")
-                    .foregroundColor(Theme.LightViolet.color)
-                    .modifier(Body2())
+        VStack(alignment: .leading) {
+            LogoView(width: 10)
+                .frame(width: screenSize.width, height: screenSize.width)
+                .overlay(Theme.gradientHeading.opacity(1).blur(radius: 30).frame(width: .infinity, height: screenSize.width / 2).offset(y: screenSize.width / 4))
+                .padding(.top, safeAreaInsets.top)
+            Text("We feel thankful that you’re here 🙌")
+                .foregroundColor(Theme.LightSea.color)
+                .modifier(Label1())
+                .padding(.top, 20)
+                .padding(.horizontal, SpaceTheme.screen.value)
 
-                Button(action: {
-                    core.update(.authentication(.signIn))
-                }) {
-                    Text("Get started")
-                }
-                .padding(.top, 60)
-                .buttonStyle(PrimaryGradientButton(gradient: Theme.primaryGradient))
+            Text("The most\nsecure and fastest\nfile transfer 🚀")
+                .modifier(H1Heading())
+                .padding(.top, 10)
+                .padding(.horizontal, SpaceTheme.screen.value)
+            
+            Spacer()
+            
+            Button(action: {
+                core.update(.authentication(.signIn))
+            }) {
+                Text("Get started")
             }
             .padding(.horizontal, SpaceTheme.screen.value)
-            .padding(.bottom, safeAreaInsets.bottom + SpaceTheme.screen.value)
+            .buttonStyle(PrimaryButtonStyle())
         }
         .ignoresSafeArea(.all)
+        .padding(.bottom, safeAreaInsets.bottom)
+        .background(StunningBackgroundGradient())
     }
 }
 
