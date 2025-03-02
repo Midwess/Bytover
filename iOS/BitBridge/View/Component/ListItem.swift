@@ -11,29 +11,49 @@ import SharedTypes
 
 struct ResourceImage: View {
     var resource: LocalResource
+    @State private var thumbnail: UIImage?
+    @State private var isLoading: Bool = false
+    @EnvironmentObject private var core: Core
     
     func getThumbnail() -> some View {
         switch resource.type {
-        case .file: return
-            ImageAsset.File.image
-            .resizable()
-                .frame(width: 32, height: 32)
-        case .folder: return
-            ImageAsset.Folder.image
-                .resizable()
-                .frame(width: 32, height: 32)
-        case .image: return
-            ImageAsset.FileImage.image
-                .resizable()
-                .frame(width: 32, height: 32)
-        case .video: return
-            ImageAsset.CameraVideo.image
-                .resizable()
-                .frame(width: 32, height: 32)
-        case .other: return
-            ImageAsset.File.image
-                .resizable()
-                .frame(width: 32, height: 32)
+        case .file:
+            return AnyView(
+                ImageAsset.File.image
+                    .resizable()
+                    .frame(width: 32, height: 32)
+            )
+        case .folder:
+            return AnyView(
+                ImageAsset.Folder.image
+                    .resizable()
+                    .frame(width: 32, height: 32)
+            )
+        case .image, .video:
+            if let thumbnail = thumbnail {
+                return AnyView(
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                )
+            }
+           else {
+                let icon = resource.type == .image ?
+                    ImageAsset.FileImage.image : ImageAsset.CameraVideo.image
+                return AnyView(
+                    icon
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                )
+            }
+        case .other:
+            return AnyView(
+                ImageAsset.File.image
+                    .resizable()
+                    .frame(width: 32, height: 32)
+            )
         }
     }
     
@@ -49,39 +69,87 @@ struct ResourceImage: View {
     
     var body: some View {
         ZStack {
-            Rectangle()
-                .frame(width: 50, height: 50)
-                .cornerRadius(15)
-                .foregroundStyle(getColor())
+            if thumbnail == nil {
+                Rectangle()
+                    .frame(width: 48, height: 48)
+                    .cornerRadius(14)
+                    .foregroundStyle(getColor())
+            }
+            
             getThumbnail()
-                .frame(width: 50, height: 50)
+        }
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+    
+    private func loadThumbnail() {
+        if (resource.type == .image || resource.type == .video) &&
+            !isLoading &&
+            thumbnail == nil {
+            
+            let identifier = core.displayResourcePath(path: resource.path)
+            isLoading = true
+            
+            core.getMediaThumbnail(for: identifier, size: CGSize(width: 96, height: 96)) { image in
+                self.thumbnail = image
+                self.isLoading = false
+            }
         }
     }
 }
 
 struct SelectedResourceItem: View {
     @State var resource: LocalResource
+    @State var isShowingMoreDialog: Bool = false
+    @EnvironmentObject var core: Core
     
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
+        HStack(alignment: .center, spacing: 7) {
             ResourceImage(resource: resource)
                 .foregroundColor(.black.opacity(0.5))
             VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
                     .modifier(Label1())
-                Text("/Users/tiendang")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(core.displayResourcePath(path: resource.path))
                     .modifier(Label3())
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                     .opacity(0.7)
             }
             .padding(.leading, 10)
             Spacer()
-            VStack(spacing: 5) {
-                Text("0.1 GB")
-                    .modifier(Label1())
-                Text("100 MB")
-                    .modifier(Label3())
-                    .opacity(0.7)
+            VStack(alignment: .trailing, spacing: 7) {
+                if core.bytesToGB(bytesLength: Float(resource.size)) > 0 {
+                    Text(String(core.bytesToGB(bytesLength: Float(resource.size))) + " GB")
+                        .modifier(Label1())
+                }
+                
+                if core.bytesToGB(bytesLength: Float(resource.size)) <= 0 {
+                    Text(String(core.bytesToMB(bytesLength: Float(resource.size))) + " MB")
+                        .modifier(Label1())
+                }
+                else {
+                   Text(String(core.bytesToMB(bytesLength: Float(resource.size))) + " MB")
+                        .modifier(Label2())
+                        .opacity(0.7)
+                }
             }
+            Button(action: {isShowingMoreDialog = true}) {
+                ImageAsset.More.image
+                    .scaleEffect(1.6)
+                    .confirmationDialog(
+                        "\(resource.name)",
+                        isPresented: self.$isShowingMoreDialog) {
+                            Button("Remove") {
+                            }
+                            Button("Open") {
+                            }
+                        }
+            }
+            .frame(minWidth: 35, alignment: .trailing)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)

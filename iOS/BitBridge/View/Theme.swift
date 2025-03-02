@@ -66,8 +66,8 @@ enum Theme: String {
     static var darkBgGradient: LinearGradient {
         get {
             LinearGradient(colors: [
-                Theme.BlackBase.color.opacity(0.7),
-                .black
+                Theme.BlackBase.color.opacity(0.0),
+                Theme.BlackBase.color.opacity(1)
             ], startPoint: .top, endPoint: .bottom)
         }
     }
@@ -136,6 +136,7 @@ enum ImageAsset: String {
     case FileImage
     case MailReceiveEmpty
     case MailReceiveFull
+    case More
     
     var image: Image {
         get {

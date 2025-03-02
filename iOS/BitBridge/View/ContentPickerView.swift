@@ -49,6 +49,10 @@ struct ContentPickerView: View {
                             self.isShowingPhotosPicker = true
                         }
                         Button("Files") {
+                            
+                        }
+                        Button(action: {}) {
+                            Text("Can not find what you're looking for? 🤷‍♂️")
                         }
                     }
             }
@@ -65,14 +69,6 @@ struct ContentPickerView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .foregroundStyle(Theme.PrimaryText.color)
-        }
-        
-        if core.transfer?.selected_resources.isEmpty ?? true {
-            Button(action: {}) {
-                Text("Can not find what you're looking for? 🤷‍♂️")
-                    .modifier(Label2())
-                    .foregroundStyle(Theme.PrimaryText.color.opacity(0.5))
-            }
         }
     }
 }

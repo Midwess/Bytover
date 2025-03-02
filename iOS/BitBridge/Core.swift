@@ -13,6 +13,9 @@ import Serde
 import SharedTypes
 import PhotosUI
 import Photos
+import PhotosUI
+import Photos
+import AVFoundation
 
 @MainActor
 class Core: ObservableObject {
@@ -67,6 +70,9 @@ class Core: ObservableObject {
         case .appCapabilities(.localStorage(.loadFileSizeFromPlatformIdentifier(let identifier))):
             let fileSize = self.getFileSize(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileSizeFromPlatformIdentifier(fileSize)).bincodeSerialize()))
+        case .appCapabilities(.localStorage(.loadFileNameFromPlatformIdentifier(let identifier))):
+            let fileName = self.getFileName(item_identifier: identifier)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileNameFromPlatformIdentifier(fileName)).bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
             return nativeHandle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
@@ -138,15 +144,122 @@ class Core: ObservableObject {
             return 0
         }
         
-        // Get file size from resource
         let size = resource.value(forKey: "fileSize") as? Int ?? 0
         return UInt64(size)
+    }
+
+    func getFileName(item_identifier: String) -> String {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [item_identifier], options: nil)
+        guard let asset = fetchResult.firstObject,
+              let resource = PHAssetResource.assetResources(for: asset).first else {
+            return "Unknown"
+        }
+        
+        return resource.originalFilename
     }
     
     func getDocumentsDirectory() -> URL {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         
         return paths[0]
+    }
+    
+    func displayResourcePath(path: LocalResourcePath) -> String {
+        switch path {
+        case .localPath(let localPath): return localPath
+        case .platformIdentifier(let platformPath): return platformPath
+        }
+    }
+    
+    public func bytesToMB(bytesLength: Float) -> Float {
+        let result = bytesLength / 1024 / 1024
+        return roundf(result * 10) / 10
+    }
+    
+    public func bytesToGB(bytesLength: Float) -> Float {
+        let result = bytesToMB(bytesLength: bytesLength) / 1024
+        return roundf(result * 10) / 10
+    }
+
+    func getThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96), completion: @escaping (UIImage?) -> Void) {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
+        guard let asset = fetchResult.firstObject else {
+            completion(nil)
+            return
+        }
+        
+        let manager = PHImageManager.default()
+        let options = PHImageRequestOptions()
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        
+        manager.requestImage(
+            for: asset,
+            targetSize: size,
+            contentMode: .aspectFit,
+            options: options
+        ) { image, info in
+            DispatchQueue.main.async {
+                completion(image)
+            }
+        }
+    }
+
+    func getVideoThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96), completion: @escaping (UIImage?) -> Void) {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
+        guard let asset = fetchResult.firstObject, asset.mediaType == .video else {
+            completion(nil)
+            return
+        }
+        
+        let manager = PHImageManager.default()
+        let options = PHVideoRequestOptions()
+        options.isNetworkAccessAllowed = true
+        
+        manager.requestAVAsset(
+            forVideo: asset,
+            options: options
+        ) { avAsset, _, _ in
+            guard let avAsset = avAsset else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                
+                return
+            }
+            
+            let imageGenerator = AVAssetImageGenerator(asset: avAsset)
+            imageGenerator.appliesPreferredTrackTransform = true
+            imageGenerator.maximumSize = size
+            
+            imageGenerator.generateCGImageAsynchronously(for: CMTime(seconds: 1, preferredTimescale: 60), completionHandler: { cgImage, _, __ in
+                
+                if cgImage == nil {
+                    completion(nil)
+                    return
+                }
+                
+                let thumbnail = UIImage(cgImage: cgImage!)
+                DispatchQueue.main.async {
+                    completion(thumbnail)
+                }
+            })
+        }
+    }
+
+    func getMediaThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 100, height: 100), completion: @escaping (UIImage?) -> Void) {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
+        guard let asset = fetchResult.firstObject else {
+            completion(nil)
+            return
+        }
+        
+        if asset.mediaType == .video {
+            getVideoThumbnail(for: itemIdentifier, size: size, completion: completion)
+        } else {
+            getThumbnail(for: itemIdentifier, size: size, completion: completion)
+        }
     }
 }
 
@@ -171,13 +284,13 @@ class CoreMock: Core {
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
         x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
-       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
+       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
         
-       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 0, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
+       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 1238310, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
        
        x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
        
-       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 1000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
+       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 100000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
         return x
     }
     

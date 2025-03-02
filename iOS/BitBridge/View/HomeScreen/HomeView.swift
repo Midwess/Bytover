@@ -10,7 +10,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var core: Core
-    @State private var selectedTab: Int = 0
+    @State private var selectedTab: Int = 1
     
     init() {
         UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor

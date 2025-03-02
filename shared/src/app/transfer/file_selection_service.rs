@@ -88,8 +88,11 @@ impl ResourceTransferSelectionService {
                     let file_size = LocalStorageOperation::load_file_size_from_platform_identifier(identifier.clone())
                         .into_future(ctx.clone())
                         .await;
+                    let file_name = LocalStorageOperation::load_file_name_from_platform_identifier(identifier.clone())
+                        .into_future(ctx.clone())
+                        .await;
                     let resource = LocalResource {
-                        name: identifier.clone(),
+                        name: file_name,
                         size: file_size,
                         path: LocalResourcePath::PlatformIdentifier(identifier),
                         thumbnail_path: None,

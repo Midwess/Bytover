@@ -15,6 +15,7 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum LocalStorageOperation {
     GetWorkDirPath,
     LoadFileSizeFromPlatformIdentifier(String),
+    LoadFileNameFromPlatformIdentifier(String),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
     Copy { source: String, destination: String },
@@ -28,7 +29,8 @@ pub enum LocalStorageOperationOutput {
     NewFile(LocalResource),
     Copy(LocalResource),
     Zip(LocalResource),
-    LoadFileSizeFromPlatformIdentifier(u64)
+    LoadFileSizeFromPlatformIdentifier(u64),
+    LoadFileNameFromPlatformIdentifier(String)
 }
 
 impl Operation for LocalStorageOperation {
@@ -90,6 +92,13 @@ impl LocalStorageOperation {
                 "Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {:?}",
                 it
             )
+        })
+    }
+
+    pub fn load_file_name_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = String>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileNameFromPlatformIdentifier(identifier))).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileNameFromPlatformIdentifier(name)) => name,
+            _ => panic!("Mismatch in response type, expected LoadFileNameFromPlatformIdentifier, got {:?}", it)
         })
     }
 }
