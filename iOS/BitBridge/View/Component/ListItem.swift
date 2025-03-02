@@ -9,33 +9,63 @@ import SwiftUI
 import Foundation
 import SharedTypes
 
-struct SelectedResourceItem: View {
-    @State var resource: LocalResource
+struct ResourceImage: View {
+    var resource: LocalResource
     
     func getThumbnail() -> some View {
         switch resource.type {
-        case .file: return Group {
-            Image(systemName: "doc.fill")
-        } as Group
-        case .folder: return Group {
-            Image(systemName: "folder.fill")
-        } as Group
-        case .image: return Group {
-            Image(systemName: "photo.fill")
-        } as Group
-        case .video: return Group {
-            Image(systemName: "video.fill")
-        } as Group
-        case .other: return Group {
-            Image(systemName: "questionmark")
-        } as Group
+        case .file: return
+            ImageAsset.File.image
+            .resizable()
+                .frame(width: 32, height: 32)
+        case .folder: return
+            ImageAsset.Folder.image
+                .resizable()
+                .frame(width: 32, height: 32)
+        case .image: return
+            ImageAsset.FileImage.image
+                .resizable()
+                .frame(width: 32, height: 32)
+        case .video: return
+            ImageAsset.CameraVideo.image
+                .resizable()
+                .frame(width: 32, height: 32)
+        case .other: return
+            ImageAsset.File.image
+                .resizable()
+                .frame(width: 32, height: 32)
+        }
+    }
+    
+    func getColor() -> Color {
+        switch resource.type {
+        case .file: return Theme.FileColor.color
+        case .folder: return Theme.FolderColor.color
+        case .image: return Theme.DocumentColor.color
+        case .video: return Theme.DocumentColor.color
+        case .other: return Theme.DocumentColor.color
         }
     }
     
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
+        ZStack {
+            Rectangle()
+                .frame(width: 50, height: 50)
+                .cornerRadius(15)
+                .foregroundStyle(getColor())
             getThumbnail()
-                .font(.title3)
+                .frame(width: 50, height: 50)
+        }
+    }
+}
+
+struct SelectedResourceItem: View {
+    @State var resource: LocalResource
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 5) {
+            ResourceImage(resource: resource)
+                .foregroundColor(.black.opacity(0.5))
             VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
                     .modifier(Label1())
@@ -50,21 +80,14 @@ struct SelectedResourceItem: View {
                     .modifier(Label1())
                 Text("100 MB")
                     .modifier(Label3())
-            }
-            Button(action: {}) {
-                Image(systemName: "trash")
-                    .font(.callout)
                     .opacity(0.7)
-                    .fontWeight(.bold)
-                    .foregroundColor(Theme.LightViolet.color.opacity(0.8))
-                    .padding(.leading, 12)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 12)
-        .background(Theme.LightViolet.color.opacity(0.00))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Theme.LightViolet.color.opacity(0.0), lineWidth: 1))
+        .padding(.vertical, 10)
+        .background(.gray.opacity(0.0))
+        .clipShape(RoundedRectangle(cornerRadius: 15))
+        .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.0), lineWidth: 1))
     }
 }
 

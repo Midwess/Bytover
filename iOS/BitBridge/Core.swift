@@ -170,14 +170,14 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-//        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
-//       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
-//        
-//       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 0, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
-//       
-//       x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
-//       
-//       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 1000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
+        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
+       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
+        
+       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 0, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
+       
+       x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
+       
+       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 1000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
         return x
     }
     

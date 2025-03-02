@@ -26,14 +26,19 @@ struct HomeView: View {
                 .tag(1)
             ReceiveView()
                 .tabItem {
-                    ButtonNavigation(icon: ImageAsset.PuzzelEmpty.image, icon_selected: ImageAsset.PuzzelFull.image, isSelected: selectedTab == 2)
+                    ButtonNavigation(icon: ImageAsset.MailReceiveEmpty.image, icon_selected: ImageAsset.MailReceiveFull.image, isSelected: selectedTab == 2)
                 }
                 .tag(2)
-            SettingView()
+           SettingView()
                 .tabItem {
-                    ButtonNavigation(icon: ImageAsset.SettingEmpty.image, icon_selected: ImageAsset.SettingFull.image, isSelected: selectedTab == 3)
+                    ButtonNavigation(icon: ImageAsset.PuzzelEmpty.image, icon_selected: ImageAsset.PuzzelFull.image, isSelected: selectedTab == 3)
                 }
                 .tag(3)
+            SettingView()
+                .tabItem {
+                    ButtonNavigation(icon: ImageAsset.SettingEmpty.image, icon_selected: ImageAsset.SettingFull.image, isSelected: selectedTab == 4)
+                }
+                .tag(4)
         }
         .toolbarBackground(.background, for: .navigationBar)
         .accentColor(Theme.LightViolet.color)

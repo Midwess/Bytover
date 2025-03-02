@@ -69,8 +69,8 @@ struct StunningBackgroundGradient: View {
                 .blur(radius: 150)
             Circle()
                 .frame(width: screenSize.width, height: screenSize.width)
-                .foregroundStyle(Theme.SeaTertiary.color.opacity(0.2))
-                .blur(radius: 200)
+                .foregroundStyle(Theme.SeaTertiary.color.opacity(0.4))
+                .blur(radius: 150)
                 .position(x: 0, y: screenSize.height)
         }
         .background(Theme.BlackBase.color)

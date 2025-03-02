@@ -34,27 +34,35 @@ public struct ShareView: View {
                     
                     UpgradePremiumButton()
                     
-                    Spacer().frame(height: 150)
+                    if core.transfer?.selected_resources.isEmpty ?? true {
+                        Spacer().frame(height: 150)
+                    }
                     
                     ContentPickerView()
-                        .padding(.horizontal, 19)
-
+                        .padding(.trailing, SpaceTheme.screen.value - 10)
+                    
                     ForEach(core.transfer?.selected_resources ?? [], id: \.self) { item in
                         SelectedResourceItem(resource: item)
                             .padding(.horizontal, 15)
-                            .padding(.top, 10)
+                            .padding(.bottom, 8)
                     }
-                    Spacer().frame(width: 10, height: 210)
+                    
+                    Spacer().frame(width: 10, height: 120)
                 }
             }
-            .padding(.bottom, 100)
+            .padding(.bottom, 120)
             .padding(.top, safeAreaInsets.top)
-
-            ShareButton(width: 150)
+            
+            Rectangle()
+                .foregroundStyle(Theme.darkBgGradient.opacity(0.9))
+                .blur(radius: 35)
+                .frame(width: .infinity, height: 230)
+                .padding(-20)
+            
+            ShareButton(width: 130)
                 .padding(.bottom, 80)
         }
         .onAppear() {
-            print("On appear")
             core.update(.transfer(.initSession))
         }
         .ignoresSafeArea()

@@ -29,6 +29,9 @@ enum Theme: String {
     case BlackBase
     case Navy
     case BlueSky
+    case FileColor
+    case DocumentColor
+    case FolderColor
     
     static var gradientHeading: LinearGradient {
         get {
@@ -63,8 +66,8 @@ enum Theme: String {
     static var darkBgGradient: LinearGradient {
         get {
             LinearGradient(colors: [
-                Theme.SecondaryVividViolet.color,
-                Theme.DarkViolet.color
+                Theme.BlackBase.color.opacity(0.7),
+                .black
             ], startPoint: .top, endPoint: .bottom)
         }
     }
@@ -126,6 +129,13 @@ enum ImageAsset: String {
     case PuzzelEmpty
     case PuzzelFull
     case SendEmpty
+    case Folder
+    case File
+    case FilePdf
+    case CameraVideo
+    case FileImage
+    case MailReceiveEmpty
+    case MailReceiveFull
     
     var image: Image {
         get {

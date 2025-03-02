@@ -111,6 +111,7 @@ struct ButtonNavigation: View {
             (isSelected ? icon_selected : icon)
                 .resizable()
                 .frame(width: 20, height: 20)
+                .foregroundStyle(.white)
         }
     }
 }

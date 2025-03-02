@@ -27,6 +27,10 @@ struct ContentPickerView: View {
                             .foregroundStyle(Theme.PrimaryText.color.opacity(0.7))
                             .padding(.trailing, 1)
                     }
+                    else {
+                        Spacer()
+                    }
+                    
                     Image(systemName: "plus")
                         .resizable()
                         .foregroundColor(Theme.PrimaryText.color)
@@ -63,12 +67,13 @@ struct ContentPickerView: View {
             .foregroundStyle(Theme.PrimaryText.color)
         }
         
-        Button(action: {}) {
-            Text("Can not find what you're looking for? 🤷‍♂️")
-                .modifier(Label2())
-                .foregroundStyle(Theme.PrimaryText.color.opacity(0.5))
+        if core.transfer?.selected_resources.isEmpty ?? true {
+            Button(action: {}) {
+                Text("Can not find what you're looking for? 🤷‍♂️")
+                    .modifier(Label2())
+                    .foregroundStyle(Theme.PrimaryText.color.opacity(0.5))
+            }
         }
-        .padding(.top, 10)
     }
 }
 
