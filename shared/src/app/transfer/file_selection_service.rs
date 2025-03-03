@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+use surrealdb::Uuid;
 use uniffi::{Enum, Record};
 
 use crate::app::modules::transfer::TransferEvent;
@@ -74,7 +77,11 @@ impl ResourceTransferSelectionService {
         for selection in selections_from_shell {
             let local_resource = match selection.data {
                 ResourceSelectionData::Bytes(bytes) => {
-                    LocalStorageOperation::new_file(bytes, selection.name).into_future(ctx.clone()).await
+                    let new_name = Uuid::new_v4().to_string();
+                    let extension = PathBuf::from(selection.name).extension().map(|it| it.to_string_lossy().to_string()).unwrap_or_else(|| "".to_string());
+                    let new_path = format!("transfer/{}.{}", new_name, extension);
+                    let absolute_path = LocalStorageOperation::get_absolute_path(new_path, ctx.clone()).await;
+                    LocalStorageOperation::new_file(bytes, absolute_path).into_future(ctx.clone()).await
                 }
                 ResourceSelectionData::LocalPath(path) => {
                     let resource = LocalStorageOperation::get(path).into_future(ctx.clone()).await;
@@ -91,11 +98,20 @@ impl ResourceTransferSelectionService {
                     let file_name = LocalStorageOperation::load_file_name_from_platform_identifier(identifier.clone())
                         .into_future(ctx.clone())
                         .await;
+
+                    let mut thumbnail_path = None;
+                    if let Some(thumbnail_png) = LocalStorageOperation::load_file_thumbnail_png_from_platform_identifier(identifier.clone()).into_future(ctx.clone()).await {
+                        let path = format!("thumbnails/{}.png", file_name);
+                        let absolute_path = LocalStorageOperation::get_absolute_path(path.clone(), ctx.clone()).await;
+                        let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
+                        thumbnail_path = Some(path);
+                    }
+
                     let resource = LocalResource {
                         name: file_name,
                         size: file_size,
                         path: LocalResourcePath::PlatformIdentifier(identifier),
-                        thumbnail_path: None,
+                        thumbnail_path,
                         r#type: selection.r#type
                     };
 

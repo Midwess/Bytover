@@ -57,8 +57,8 @@ public struct ShareView: View {
             ShareButton(width: 130)
                 .padding(.bottom, 80)
         }
-        .onAppear() {
-            core.update(.transfer(.initSession))
+        .task {
+            await core.update(.transfer(.initSession))
         }
         .ignoresSafeArea()
     }

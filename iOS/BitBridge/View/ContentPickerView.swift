@@ -64,7 +64,9 @@ struct ContentPickerView: View {
                           photoLibrary: .shared()
             )
             .onChange(of: core.selectedMediaItems) { _, _ in
-                core.onMediasChanged()
+                Task {
+                    await core.onMediasChanged()
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)

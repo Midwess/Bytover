@@ -4,12 +4,13 @@ use crate::process_event;
 
 use super::database::NativeDatabase;
 use super::rpc::NativeRpc;
-
+use super::local_storage::NativeLocalStorage;
 // Handle the effect comming from the platform
 // This is the placed where we can put Rust logic to share accross platform
 pub struct NativeExecutor {
     pub rpc: NativeRpc,
-    pub database: NativeDatabase
+    pub database: NativeDatabase,
+    pub local_storage: NativeLocalStorage
 }
 
 impl NativeExecutor {
@@ -26,6 +27,10 @@ impl NativeExecutor {
             CoreOperation::Database(database) => {
                 let response = self.database.handle(database).await;
                 CoreOperationOutput::Database(response)
+            }
+            CoreOperation::LocalStorage(local_storage) => {
+                let response = self.local_storage.handle(local_storage).await;
+                CoreOperationOutput::LocalStorage(response)
             }
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }

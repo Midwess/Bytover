@@ -11,11 +11,9 @@ import SharedTypes
 
 struct ResourceImage: View {
     var resource: LocalResource
-    @State private var thumbnail: UIImage?
-    @State private var isLoading: Bool = false
     @EnvironmentObject private var core: Core
     
-    func getThumbnail() -> some View {
+    func getDefaultThumbnail() -> some View {
         switch resource.type {
         case .file:
             return AnyView(
@@ -29,25 +27,18 @@ struct ResourceImage: View {
                     .resizable()
                     .frame(width: 32, height: 32)
             )
-        case .image, .video:
-            if let thumbnail = thumbnail {
-                return AnyView(
-                    Image(uiImage: thumbnail)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                )
-            }
-           else {
-                let icon = resource.type == .image ?
-                    ImageAsset.FileImage.image : ImageAsset.CameraVideo.image
-                return AnyView(
-                    icon
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                )
-            }
+        case .image:
+            return AnyView(
+                ImageAsset.FileImage.image
+                    .resizable()
+                    .frame(width: 32, height: 32)
+            )
+        case .video:
+            return AnyView(
+                ImageAsset.CameraVideo.image
+                    .resizable()
+                    .frame(width: 32, height: 32)
+            )
         case .other:
             return AnyView(
                 ImageAsset.File.image
@@ -55,6 +46,23 @@ struct ResourceImage: View {
                     .frame(width: 32, height: 32)
             )
         }
+    }
+    
+    func getThumbnail() -> some View {
+        if let thumbnail_path = resource.thumbnail_path {
+            if let thumbnail_image = Image.fromRelativePath(thumbnail_path) {
+                return AnyView(thumbnail_image.resizable().frame(width: 48, height: 48).cornerRadius(14))
+            }
+        }
+        
+        return AnyView(ZStack {
+            Rectangle()
+                .frame(width: 48, height: 48)
+                .cornerRadius(14)
+                .foregroundStyle(getColor())
+            getDefaultThumbnail()
+                .frame(width: 32, height: 32)
+        })
     }
     
     func getColor() -> Color {
@@ -69,32 +77,7 @@ struct ResourceImage: View {
     
     var body: some View {
         ZStack {
-            if thumbnail == nil {
-                Rectangle()
-                    .frame(width: 48, height: 48)
-                    .cornerRadius(14)
-                    .foregroundStyle(getColor())
-            }
-            
             getThumbnail()
-        }
-        .onAppear {
-            loadThumbnail()
-        }
-    }
-    
-    private func loadThumbnail() {
-        if (resource.type == .image || resource.type == .video) &&
-            !isLoading &&
-            thumbnail == nil {
-            
-            let identifier = core.displayResourcePath(path: resource.path)
-            isLoading = true
-            
-            core.getMediaThumbnail(for: identifier, size: CGSize(width: 96, height: 96)) { image in
-                self.thumbnail = image
-                self.isLoading = false
-            }
         }
     }
 }

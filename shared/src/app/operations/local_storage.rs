@@ -5,7 +5,7 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::AppRequestBuilder;
+use crate::app::{AppCommandContext, AppRequestBuilder};
 use crate::entities::file::LocalResource;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -16,6 +16,7 @@ pub enum LocalStorageOperation {
     GetWorkDirPath,
     LoadFileSizeFromPlatformIdentifier(String),
     LoadFileNameFromPlatformIdentifier(String),
+    LoadFileThumbnailPngFromPlatformIdentifier(String),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
     Copy { source: String, destination: String },
@@ -30,7 +31,8 @@ pub enum LocalStorageOperationOutput {
     Copy(LocalResource),
     Zip(LocalResource),
     LoadFileSizeFromPlatformIdentifier(u64),
-    LoadFileNameFromPlatformIdentifier(String)
+    LoadFileNameFromPlatformIdentifier(String),
+    LoadFileThumbnailPngFromPlatformIdentifier(Option<Vec<u8>>)
 }
 
 impl Operation for LocalStorageOperation {
@@ -100,5 +102,17 @@ impl LocalStorageOperation {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileNameFromPlatformIdentifier(name)) => name,
             _ => panic!("Mismatch in response type, expected LoadFileNameFromPlatformIdentifier, got {:?}", it)
         })
+    }
+
+    pub fn load_file_thumbnail_png_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileThumbnailPngFromPlatformIdentifier(identifier))).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileThumbnailPngFromPlatformIdentifier(thumbnail)) => thumbnail,
+            _ => panic!("Mismatch in response type, expected LoadFileThumbnailPngFromPlatformIdentifier, got {:?}", it)
+        })
+    }
+
+    pub async fn get_absolute_path(path: String, ctx: AppCommandContext) -> String {
+        let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
+        format!("{}/{}", workdir_path, path)
     }
 }

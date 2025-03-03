@@ -15,6 +15,7 @@ use crate::app::transfer::service::TransferService;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
+use crate::native::local_storage::NativeLocalStorage;
 use crate::native::rpc::NativeRpc;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
@@ -115,7 +116,8 @@ impl DiContainer {
             database: NativeDatabase {
                 session_repository: self.get_session_repository(),
                 transfer_session_repository: self.get_transfer_session_repository()
-            }
+            },
+            local_storage: NativeLocalStorage {}
         }
     }
 

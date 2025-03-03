@@ -44,14 +44,14 @@ class Core: ObservableObject {
         }
     }
     
-    func update(_ event: AppEvent) {
+    func update(_ event: AppEvent) async {
         let effects = [UInt8](processEvent(Data(try! event.bincodeSerialize())))
         
         var requests: [Request] = try! .bincodeDeserialize(input: effects)
         
         while let request = requests.first {
             requests.removeFirst()
-            let data = [UInt8](processEffect(request))
+            let data = [UInt8](await processEffect(request))
             
             if let newRequests: [Request] = try? .bincodeDeserialize(input: data) {
                 requests.append(contentsOf: newRequests)
@@ -59,7 +59,7 @@ class Core: ObservableObject {
         }
     }
     
-    func processEffect(_ request: Request) -> Data {
+    func processEffect(_ request: Request) async -> Data {
         switch request.effect {
         case .appCapabilities(.webView(.openUrl(let url))):
             openURL(URL(string: url)!)
@@ -73,6 +73,10 @@ class Core: ObservableObject {
         case .appCapabilities(.localStorage(.loadFileNameFromPlatformIdentifier(let identifier))):
             let fileName = self.getFileName(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileNameFromPlatformIdentifier(fileName)).bincodeSerialize()))
+        case .appCapabilities(.localStorage(.loadFileThumbnailPngFromPlatformIdentifier(let identifier))):
+            let fileThumbnailData = await self.getThumbnailData(for: identifier)
+            let response = CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileThumbnailPngFromPlatformIdentifier(fileThumbnailData?.bytes))
+            return handleResponse(request.id, try! Data(response.bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
             return nativeHandle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
@@ -101,7 +105,7 @@ class Core: ObservableObject {
         }
     }
     
-    func onMediasChanged() {
+    func onMediasChanged() async {
         var selections: [ResourceSelection] = []
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
@@ -134,7 +138,7 @@ class Core: ObservableObject {
         }
         
         self.selectedMediaItems.removeAll()
-        self.update(.transfer(.addResourceSelections(selections)))
+        await self.update(.transfer(.addResourceSelections(selections)))
     }
     
     func getFileSize(item_identifier: String) -> UInt64 {
@@ -181,11 +185,14 @@ class Core: ObservableObject {
         return roundf(result * 10) / 10
     }
 
-    func getThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96), completion: @escaping (UIImage?) -> Void) {
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
         guard let asset = fetchResult.firstObject else {
-            completion(nil)
-            return
+            return nil
+        }
+        
+        if asset.mediaType == .video {
+            return await getVideoThumbnailData(for: itemIdentifier, size: size)
         }
         
         let manager = PHImageManager.default()
@@ -194,71 +201,65 @@ class Core: ObservableObject {
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         
-        manager.requestImage(
-            for: asset,
-            targetSize: size,
-            contentMode: .aspectFit,
-            options: options
-        ) { image, info in
-            DispatchQueue.main.async {
-                completion(image)
+        return await withCheckedContinuation { continuation in
+            manager.requestImage(
+                for: asset,
+                targetSize: size,
+                contentMode: .aspectFit,
+                options: options
+            ) { image, info in
+                if let image = image, let pngData = image.pngData() {
+                    continuation.resume(returning: pngData)
+                } else {
+                    continuation.resume(returning: nil)
+                }
             }
         }
     }
 
-    func getVideoThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96), completion: @escaping (UIImage?) -> Void) {
+    func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
         guard let asset = fetchResult.firstObject, asset.mediaType == .video else {
-            completion(nil)
-            return
+            return nil
         }
         
         let manager = PHImageManager.default()
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
         
-        manager.requestAVAsset(
-            forVideo: asset,
-            options: options
-        ) { avAsset, _, _ in
-            guard let avAsset = avAsset else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
-                
-                return
+        // Request the AVAsset
+        let avAsset = await withCheckedContinuation { continuation in
+            manager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                continuation.resume(returning: avAsset)
             }
-            
-            let imageGenerator = AVAssetImageGenerator(asset: avAsset)
-            imageGenerator.appliesPreferredTrackTransform = true
-            imageGenerator.maximumSize = size
-            
-            imageGenerator.generateCGImageAsynchronously(for: CMTime(seconds: 1, preferredTimescale: 60), completionHandler: { cgImage, _, __ in
-                
-                if cgImage == nil {
-                    completion(nil)
-                    return
-                }
-                
-                let thumbnail = UIImage(cgImage: cgImage!)
-                DispatchQueue.main.async {
-                    completion(thumbnail)
-                }
-            })
-        }
-    }
-
-    func getMediaThumbnail(for itemIdentifier: String, size: CGSize = CGSize(width: 100, height: 100), completion: @escaping (UIImage?) -> Void) {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
-        guard let asset = fetchResult.firstObject else {
-            completion(nil)
-            return
         }
         
-        if asset.mediaType == .video {
-            getVideoThumbnail(for: itemIdentifier, size: size, completion: completion)
+        guard let avAsset = avAsset else {
+            return nil
+        }
+        
+        // Generate the thumbnail
+        let imageGenerator = AVAssetImageGenerator(asset: avAsset)
+        imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.maximumSize = size
+        
+        let cgImage: CGImage? = await withCheckedContinuation { continuation in
+            imageGenerator.generateCGImageAsynchronously(for: CMTime(seconds: 1, preferredTimescale: 60)) { cgImage, time, error in
+                if let cgImage = cgImage {
+                    continuation.resume(returning: cgImage)
+                } else {
+                    // If there's an error or no image, just return nil
+                    print("Error or no image generated: \(error?.localizedDescription ?? "Unknown error")")
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+        
+        // If we got a valid CGImage, convert it to UIImage
+        if let cgImage = cgImage {
+            return UIImage(cgImage: cgImage).pngData()
         } else {
-            getThumbnail(for: itemIdentifier, size: size, completion: completion)
+            return nil
         }
     }
 }
@@ -275,6 +276,18 @@ struct DataUrl: Transferable {
     }
 }
 
+extension Data {
+    /// Converts Data to an array of UInt8 bytes
+    var bytes: [UInt8] {
+        return [UInt8](self)
+    }
+    
+    /// Initializes Data from an array of UInt8 bytes
+    init(bytes: [UInt8]) {
+        self.init(bytes)
+    }
+}
+
 @MainActor
 class CoreMock: Core {
     static func empty() -> Core {
@@ -284,17 +297,42 @@ class CoreMock: Core {
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
         x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
-       x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
-        
-       x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 1238310, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
-       
-       x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
-       
-       x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 100000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
+        x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
+        x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 1238310, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
+        x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
+        x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 100000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
         return x
     }
     
-    override func update(_ event: AppEvent) {}
+    override func update(_ event: AppEvent) async {}
     
     override func update_view(_ model: AppViewModel) {}
+}
+
+// Extension for UIImage to load from local path
+extension UIImage {
+    /// Initializes a UIImage from a local file path
+    /// - Parameter path: The file path as a String
+    /// - Returns: An optional UIImage, nil if loading fails
+    static func fromRelativePath(_ path: String) -> UIImage? {
+        let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return UIImage(contentsOfFile: documentDirectory.path.appending("/").appending(path))
+    }
+    
+    /// Initializes a UIImage from a URL (must be a file URL)
+    /// - Parameter url: The file URL
+    /// - Returns: An optional UIImage, nil if loading fails
+    static func fromURL(_ url: URL) -> UIImage? {
+        guard url.isFileURL else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+}
+
+extension Image {
+    static func fromRelativePath(_ path: String) -> Image? {
+        if let uiImage = UIImage.fromRelativePath(path) {
+            return Image(uiImage: uiImage)
+        }
+        return nil
+    }
 }

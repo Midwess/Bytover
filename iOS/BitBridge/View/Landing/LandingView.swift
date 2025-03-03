@@ -34,7 +34,9 @@ struct LandingView: View {
             Spacer()
             
             Button(action: {
-                core.update(.authentication(.signIn))
+                Task {
+                    await core.update(.authentication(.signIn))
+                }
             }) {
                 Text("Get started")
             }

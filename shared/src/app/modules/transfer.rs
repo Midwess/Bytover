@@ -17,7 +17,7 @@ pub struct TransferModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     session: Option<TransferSession>,
-    selected_resources: Vec<LocalResource>
+    selected_resources: Vec<LocalResource>,
 }
 
 #[derive(Default)]
