@@ -62,7 +62,6 @@ struct LogoScene: UIViewRepresentable {
             
             sceneView.scene = scene
             
-            
             scene.rootNode.scale.x = logoScale
             scene.rootNode.scale.y = logoScale
             scene.rootNode.scale.z = logoScale
@@ -74,7 +73,6 @@ struct LogoScene: UIViewRepresentable {
             }
             
             scene.rootNode.enumerateChildNodes { (node, _) in
-                node.geometry?.firstMaterial?.lightingModel = .physicallyBased
                 if node.parent?.parent?.name == "Ocean" ||
                     node.parent?.parent?.name == "Body" ||
                     node.parent?.parent?.name == "Fins"
@@ -85,45 +83,45 @@ struct LogoScene: UIViewRepresentable {
                 }
                 else if
                     node.parent?.parent?.name == "Windows"  {
-                     let material = SCNMaterial()
+                    let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.BlueSky.color)
                     node.geometry?.materials = [material]
-
+                    
                 }
                 else if node.parent?.parent?.name == "Land" ||
-                        node.parent?.parent?.name == "Exhaust"
+                            node.parent?.parent?.name == "Exhaust"
                 {
                     let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.DarkBlue.color)
                     node.geometry?.materials = [material]
                 }
                 else if node.parent?.parent?.name == "Head" ||
-                        node.parent?.parent?.name == "Screws" ||
-                        node.parent?.parent?.name == "Windows Frame" {
+                            node.parent?.parent?.name == "Screws" ||
+                            node.parent?.parent?.name == "Windows Frame" {
                     let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.Navy.color)
                     node.geometry?.materials = [material]
                 }
                 else if node.parent?.parent?.name == "Trees" ||
-                        node.parent?.parent?.name == "Satelite Solar Panel" ||
-                        node.parent?.parent?.name == "Mountain" ||
-                        node.parent?.parent?.name == "Buildings"
+                            node.parent?.parent?.name == "Satelite Solar Panel" ||
+                            node.parent?.parent?.name == "Mountain" ||
+                            node.parent?.parent?.name == "Buildings"
                 {
                     let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.BlueViolet.color)
                     node.geometry?.materials = [material]
                 }
                 else if (node.parent?.parent?.name == "Clouds" ||
-                        node.parent?.parent?.name == "Mountain Snowy Top" ||
-                        node.parent?.parent?.name == "Poles" ||
-                        node.parent?.parent?.name == "Satelite Body") {
+                         node.parent?.parent?.name == "Mountain Snowy Top" ||
+                         node.parent?.parent?.name == "Poles" ||
+                         node.parent?.parent?.name == "Satelite Body") {
                     let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.LightSea.color)
                     node.geometry?.materials = [material]
                 }
                 else if node.parent?.parent?.name == "Satelite Solar Hinge" ||
-                    node.parent?.parent?.name == "Fire" ||
-                    node.parent?.parent?.name == "Scattered Fire"
+                            node.parent?.parent?.name == "Fire" ||
+                            node.parent?.parent?.name == "Scattered Fire"
                 {
                     let material = SCNMaterial()
                     material.diffuse.contents = UIColor(Theme.Orange.color)

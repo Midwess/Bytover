@@ -14,6 +14,7 @@ struct ContentView: View {
     var body: some View {
         LandingView()
             .navigate(to: HomeView(), when: $core.is_signed_in)
+            .overlay(FadingBackground())
     }
 }
 struct CounterView_Previews: PreviewProvider {

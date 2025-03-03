@@ -77,6 +77,48 @@ struct StunningBackgroundGradient: View {
     }
 }
 
+struct FadingBackground: View {
+    @State private var opacity: Double
+    
+    private let finalOpacity: Double
+    private let duration: Double
+    private let autoStart: Bool
+    
+    init(
+        initialOpacity: Double = 1.0,
+        finalOpacity: Double = 0.0,
+        duration: Double = 1.5,
+        autoStart: Bool = true
+    ) {
+        self._opacity = State(initialValue: initialOpacity)
+        self.finalOpacity = finalOpacity
+        self.duration = duration
+        self.autoStart = autoStart
+    }
+    
+    var body: some View {
+        Rectangle()
+            .fill(Theme.BlackBase.color)
+            .ignoresSafeArea()
+            .opacity(opacity)
+            .onAppear {
+                if autoStart {
+                    startAnimation()
+                }
+            }
+    }
+    
+    func startAnimation() {
+        withAnimation(.easeInOut(duration: duration)) {
+            opacity = finalOpacity
+        }
+    }
+}
+
+#Preview {
+    FadingBackground()
+}
+
 #Preview {
     StunningBackgroundGradientAnimation()
 }
