@@ -3,6 +3,8 @@ pub mod modules;
 pub mod operations;
 pub mod system;
 pub mod transfer;
+pub mod view_models;
+pub mod file_system;
 
 // pub mod bridge;
 

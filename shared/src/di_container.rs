@@ -11,12 +11,12 @@ use tokio_scoped::scoped;
 
 use crate::app::authentication::service::AuthenticationService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
-use crate::app::transfer::service::TransferService;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
 use crate::native::local_storage::NativeLocalStorage;
 use crate::native::rpc::NativeRpc;
+use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
 use crate::persistence::transfer_session::TransferSessionRepository;
@@ -101,8 +101,8 @@ impl DiContainer {
         }
     }
 
-    pub fn get_transfer_session_repository(&self) -> TransferSessionRepository {
-        TransferSessionRepository {
+    pub fn get_local_resource_repository(&self) -> LocalResourceRepository {
+        LocalResourceRepository {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(10))
                 .pool(self.db.get().unwrap().clone())
@@ -115,14 +115,10 @@ impl DiContainer {
             rpc: NativeRpc {},
             database: NativeDatabase {
                 session_repository: self.get_session_repository(),
-                transfer_session_repository: self.get_transfer_session_repository()
+                local_resource_repository: self.get_local_resource_repository()
             },
             local_storage: NativeLocalStorage {}
         }
-    }
-
-    pub fn get_transfer_service(&self) -> TransferService {
-        TransferService {}
     }
 
     pub fn get_resource_transfer_selection_service(&self) -> ResourceTransferSelectionService {

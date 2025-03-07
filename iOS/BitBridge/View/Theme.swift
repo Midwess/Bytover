@@ -32,6 +32,7 @@ enum Theme: String {
     case FileColor
     case DocumentColor
     case FolderColor
+    case Gray
     
     static var gradientHeading: LinearGradient {
         get {
@@ -137,6 +138,13 @@ enum ImageAsset: String {
     case MailReceiveEmpty
     case MailReceiveFull
     case More
+    case AndroidPhone
+    case iPhone
+    case Macbook
+    case WindowLaptop
+    case UserEmpty
+    case DeviceEmpty
+    case ArrowDown
     
     var image: Image {
         get {

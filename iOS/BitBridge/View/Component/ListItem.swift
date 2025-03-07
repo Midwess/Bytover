@@ -10,7 +10,7 @@ import Foundation
 import SharedTypes
 
 struct ResourceImage: View {
-    var resource: LocalResource
+    var resource: SelectedResourceViewModel
     @EnvironmentObject private var core: Core
     
     func getDefaultThumbnail() -> some View {
@@ -83,7 +83,7 @@ struct ResourceImage: View {
 }
 
 struct SelectedResourceItem: View {
-    @State var resource: LocalResource
+    @State var resource: SelectedResourceViewModel
     @State var isShowingMoreDialog: Bool = false
     @EnvironmentObject var core: Core
     
@@ -96,7 +96,7 @@ struct SelectedResourceItem: View {
                     .modifier(Label1())
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(core.displayResourcePath(path: resource.path))
+                Text(resource.display_path)
                     .modifier(Label3())
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -105,17 +105,17 @@ struct SelectedResourceItem: View {
             .padding(.leading, 10)
             Spacer()
             VStack(alignment: .trailing, spacing: 7) {
-                if core.bytesToGB(bytesLength: Float(resource.size)) > 0 {
-                    Text(String(core.bytesToGB(bytesLength: Float(resource.size))) + " GB")
+                if resource.size_gb > 0 {
+                    Text("\(String(resource.size_gb)) GB")
                         .modifier(Label1())
                 }
                 
-                if core.bytesToGB(bytesLength: Float(resource.size)) <= 0 {
-                    Text(String(core.bytesToMB(bytesLength: Float(resource.size))) + " MB")
+                if resource.size_gb <= 0 {
+                    Text("\(String(resource.size_mb)) MB")
                         .modifier(Label1())
                 }
                 else {
-                   Text(String(core.bytesToMB(bytesLength: Float(resource.size))) + " MB")
+                   Text("\(String(resource.size_mb)) MB")
                         .modifier(Label2())
                         .opacity(0.7)
                 }
@@ -127,6 +127,9 @@ struct SelectedResourceItem: View {
                         "\(resource.name)",
                         isPresented: self.$isShowingMoreDialog) {
                             Button("Remove") {
+                                Task {
+                                    await core.update(.transfer(.removeResource(resource.order_id)))
+                                }
                             }
                             Button("Open") {
                             }

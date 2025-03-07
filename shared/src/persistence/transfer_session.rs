@@ -1,4 +1,3 @@
-use crate::entities::transfer::TransferSession;
 use core_services::db::repository::abstraction::errors::Resolve;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
@@ -12,6 +11,8 @@ use surreal_devl::surreal_qr::{RPath, SurrealResponseError};
 use surrealdb::engine::local::Db;
 use surrealdb::sql::{Thing, Value};
 use surrealdb::Surreal;
+
+use crate::app::transfer::session::TransferSession;
 
 #[derive(Clone)]
 pub struct TransferSessionId {

@@ -5,10 +5,10 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::AppRequestBuilder;
+use crate::app::file_system::file::LocalResourcePath;
+use crate::app::{file_system::file::LocalResource, AppRequestBuilder};
 use crate::entities::session::Session;
 use crate::entities::token::Token;
-use crate::entities::transfer::TransferSession;
 use crate::entities::user::User;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -17,23 +17,23 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum DatabaseOperation {
     Session(SessionOperation),
     User(UserDatabaseOperation),
-    TransferSession(TransferSessionDatabaseOperation)
+    LocalResource(LocalResourceDatabaseOperation),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
-pub enum TransferSessionDatabaseOperation {
-    GetLastSession(),
-    Save(TransferSession)
+pub enum LocalResourceDatabaseOperation {
+    Add(Vec<LocalResource>),
+    Remove(u64),
+    Find(LocalResourcePath),
+    FindAll
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
-pub enum TransferSessionDatabaseOperationOutput {
-    GetLastSession(Option<TransferSession>),
-    Save()
-}
-
-impl Operation for TransferSessionDatabaseOperation {
-    type Output = TransferSessionDatabaseOperationOutput;
+pub enum LocalResourceDatabaseOperationOutput {
+    Add(Vec<LocalResource>),
+    Remove(Option<LocalResource>),
+    Find(Option<LocalResource>),
+    FindAll(Vec<LocalResource>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
@@ -72,7 +72,7 @@ pub enum SessionOperationOutput {
 pub enum DatabaseOperationOutput {
     Session(SessionOperationOutput),
     User(UserDatabaseOperationOutput),
-    TransferSession(TransferSessionDatabaseOperationOutput)
+    LocalResource(LocalResourceDatabaseOperationOutput)
 }
 
 impl Operation for DatabaseOperation {
@@ -112,28 +112,44 @@ impl SessionOperation {
     }
 }
 
-impl TransferSessionDatabaseOperation {
-    pub fn get_last_session() -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-            TransferSessionDatabaseOperation::GetLastSession()
+impl LocalResourceDatabaseOperation {
+    pub fn add(resources: Vec<LocalResource>) -> AppRequestBuilder<impl Future<Output = Vec<LocalResource>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::LocalResource(
+            LocalResourceDatabaseOperation::Add(resources)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
-                TransferSessionDatabaseOperationOutput::GetLastSession(session)
-            )) => session,
-            _ => panic!("Invalid output expected GetLastSession got {:?}", it)
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(resources))) => resources,
+            _ => panic!("Invalid output expected Add got {:?}", it)
         })
     }
 
-    pub fn save_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-            TransferSessionDatabaseOperation::Save(session)
+    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::LocalResource(
+            LocalResourceDatabaseOperation::Remove(id)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
-                TransferSessionDatabaseOperationOutput::Save()
-            )) => (),
-            _ => panic!("Invalid output expected Save got {:?}", it)
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(resource))) => resource,
+            _ => panic!("Invalid output expected Remove got {:?}", it)
+        })
+    }
+
+    pub fn find(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::LocalResource(
+            LocalResourceDatabaseOperation::Find(path)
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))) => resource,
+            _ => panic!("Invalid output expected Find got {:?}", it)
+        })
+    }
+
+    pub fn find_all() -> AppRequestBuilder<impl Future<Output = Vec<LocalResource>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::LocalResource(
+            LocalResourceDatabaseOperation::FindAll
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))) => resources,
+            _ => panic!("Invalid output expected FindAll got {:?}", it)
         })
     }
 }

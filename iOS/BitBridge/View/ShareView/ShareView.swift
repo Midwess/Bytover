@@ -52,13 +52,14 @@ public struct ShareView: View {
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             .padding(.top, safeAreaInsets.top)
-            .padding(.bottom, 120)
+            .padding(.bottom, 200)
             
-            ShareButton(width: 130)
-                .padding(.bottom, 80)
+            ShareModal()
+                .padding(.bottom, safeAreaInsets.bottom + 80)
+                .padding(.horizontal, SpaceTheme.screen.value)
         }
         .task {
-            await core.update(.transfer(.initSession))
+            await core.update(.transfer(.launched))
         }
         .ignoresSafeArea()
     }

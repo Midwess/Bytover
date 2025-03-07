@@ -123,22 +123,21 @@ class Core: ObservableObject {
                 case .video:
                     return .video
                 default:
-                    return .other
+                    return .file
                 }
             }()
             
             // Create resource selection
             let resourceSelection = ResourceSelection(
-                data: .platformIdentifier(identifier),
-                type: resourceType,
-                name: resource.originalFilename
+                path: .platformIdentifier(identifier),
+                type: resourceType
             )
             
             selections.append(resourceSelection)
         }
         
         self.selectedMediaItems.removeAll()
-        await self.update(.transfer(.addResourceSelections(selections)))
+        await self.update(.transfer(.addResources(selections)))
     }
     
     func getFileSize(item_identifier: String) -> UInt64 {
@@ -296,11 +295,9 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(session: TransferSession(order_id: 1, resources: [], processes: []), selected_resources: []);
-        x.transfer?.selected_resources.append(LocalResource(name: "Screenshot", size: 200000000, path: .localPath("xyz"), thumbnail_path: "/local/thumbnail", type: .image));
-        x.transfer?.selected_resources.append(LocalResource(name: "Folder 102384921", size: 1238310, path: .localPath("xyz"), thumbnail_path: nil, type: .folder));
-        x.transfer?.selected_resources.append(LocalResource(name: "Video 29323", size: 500000, path: .localPath("/local"), thumbnail_path: nil, type: .video));
-        x.transfer?.selected_resources.append(LocalResource(name: "File 1", size: 100000, path: .localPath("ocal"), thumbnail_path: nil, type: .file));
+        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device);
+        x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
+        x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
         return x
     }
     
@@ -328,11 +325,27 @@ extension UIImage {
     }
 }
 
+extension LocalResourcePath {
+    func asString() -> String {
+        switch self {
+        case .localPath(let path): return path
+        case .platformIdentifier(let identifier): return identifier
+        }
+    }
+}
+
 extension Image {
-    static func fromRelativePath(_ path: String) -> Image? {
-        if let uiImage = UIImage.fromRelativePath(path) {
+    static func fromRelativePath(_ path: LocalResourcePath) -> Image? {
+        if let uiImage = UIImage.fromRelativePath(path.asString()) {
             return Image(uiImage: uiImage)
         }
+        
         return nil
+    }
+}
+
+extension Double {
+    func display() -> String {
+        String(self)
     }
 }

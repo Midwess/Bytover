@@ -18,6 +18,8 @@ pub mod network;
 #[cfg(feature = "lib")]
 pub mod persistence;
 
+use std::time::Duration;
+
 #[cfg(feature = "lib")]
 use app::{operations::CoreOperation, BitBridge};
 #[cfg(feature = "lib")]
@@ -47,7 +49,7 @@ lazy_static! {
 // Detailed here: https://redbadger.github.io/crux/internals/runtime.html#admonition-warning
 #[cfg(feature = "lib")]
 lazy_static! {
-    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
+    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread().thread_keep_alive(Duration::from_secs(30)).enable_all().build().unwrap();
 }
 
 #[cfg(feature = "lib")]

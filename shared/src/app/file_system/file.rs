@@ -4,10 +4,11 @@ use uniffi::{Enum, Record};
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct LocalResource {
+    pub order_id: u64,
     pub name: String,
     pub size: u64,
     pub path: LocalResourcePath,
-    pub thumbnail_path: Option<String>,
+    pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType
 }
 
@@ -24,4 +25,13 @@ pub enum ResourceType {
     File,
     Folder,
     Other
+}
+
+impl LocalResourcePath {
+    pub fn to_string(&self) -> String {
+        match self {
+            LocalResourcePath::LocalPath(path) => path.clone(),
+            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone()
+        }
+    }
 }

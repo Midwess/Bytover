@@ -27,18 +27,18 @@ struct LogoScene: UIViewRepresentable {
             super.init()
             
             // Start motion updates with callback
-            parent.motionManager.deviceMotionUpdateInterval = 1.0 / 20.0
-            parent.motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] motion, error in
-                guard let motion = motion,
-                      let scene = self?.scene else { return }
-                
-                // Update scene rotation based on device motion
-                scene.rootNode.eulerAngles = SCNVector3(
-                    Float(max(-0.1, min(0.1, motion.attitude.pitch * 0.3)) * -1),
-                    Float(max(-0.2, min(0.2, motion.attitude.roll * 0.3)) * 1),
-                    Float(max(-0.2, min(0.2, motion.attitude.roll * 0.1)) * 1)
-                )
-            }
+//            parent.motionManager.deviceMotionUpdateInterval = 1.0 / 20.0
+//            parent.motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] motion, error in
+//                guard let motion = motion,
+//                      let scene = self?.scene else { return }
+//                
+//                // Update scene rotation based on device motion
+//                scene.rootNode.eulerAngles = SCNVector3(
+//                    Float(max(-0.1, min(0.1, motion.attitude.pitch * 0.3)) * -1),
+//                    Float(max(-0.2, min(0.2, motion.attitude.roll * 0.3)) * 1),
+//                    Float(max(-0.2, min(0.2, motion.attitude.roll * 0.1)) * 1)
+//                )
+//            }
         }
     }
     

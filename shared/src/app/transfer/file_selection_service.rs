@@ -1,89 +1,50 @@
-use std::path::PathBuf;
-
+use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
-use surrealdb::Uuid;
 use uniffi::{Enum, Record};
 
 use crate::app::modules::transfer::TransferEvent;
+use crate::app::operations::database::{LocalResourceDatabaseOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::entities::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
-    data: ResourceSelectionData,
-    r#type: ResourceType,
-    name: String
-}
-
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
-pub enum ResourceSelectionData {
-    Bytes(Vec<u8>),
-    LocalPath(String),
-    // The only way to load resource is through the platform
-    // Eg: iOS has itemIdentifier to identify the photo
-    PlatformIdentifier(String)
-}
-
-impl ResourceSelection {
-    pub fn path(&self) -> &String {
-        match &self.data {
-            ResourceSelectionData::LocalPath(path) => path,
-            ResourceSelectionData::PlatformIdentifier(identifier) => identifier,
-            ResourceSelectionData::Bytes(_) => panic!("Resource selection data is not a path")
-        }
-    }
-}
-
-impl From<LocalResourcePath> for ResourceSelectionData {
-    fn from(path: LocalResourcePath) -> Self {
-        match path {
-            LocalResourcePath::LocalPath(path) => ResourceSelectionData::LocalPath(path),
-            LocalResourcePath::PlatformIdentifier(identifier) => ResourceSelectionData::PlatformIdentifier(identifier)
-        }
-    }
-}
-
-impl From<&LocalResource> for ResourceSelection {
-    fn from(resource: &LocalResource) -> Self {
-        ResourceSelection {
-            data: ResourceSelectionData::from(resource.path.clone()),
-            r#type: resource.r#type.clone(),
-            name: resource.name.clone()
-        }
-    }
+    pub path: LocalResourcePath,
+    pub r#type: ResourceType,
 }
 
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
+    pub async fn load_resources(
+        &self,
+        ctx: AppCommandContext
+    ) {
+        let resources = LocalResourceDatabaseOperation::find_all().into_future(ctx.clone()).await;
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+            new: resources,
+            removed: vec![]
+        }));
+
+        ctx.request_from_shell(CoreOperation::Render).await;
+    }
+
     pub async fn add_resources(
         &self,
         ctx: AppCommandContext,
-        selections_from_core: Vec<LocalResource>,
-        selections_from_shell: Vec<ResourceSelection>
+        selections: Vec<ResourceSelection>
     ) {
-        let mut local_resources = selections_from_core
-            .into_iter()
-            .filter(|it| {
-                !selections_from_shell.iter().any(|selection| match &it.path {
-                    LocalResourcePath::LocalPath(path) => path.eq(selection.path()),
-                    LocalResourcePath::PlatformIdentifier(identifier) => identifier.eq(selection.path())
-                })
-            })
-            .collect::<Vec<_>>();
+        let mut local_resources = vec![];
+        for selection in selections {
+            let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
+            if existing_resource.is_some() {
+                continue;
+            }
 
-        for selection in selections_from_shell {
-            let local_resource = match selection.data {
-                ResourceSelectionData::Bytes(bytes) => {
-                    let new_name = Uuid::new_v4().to_string();
-                    let extension = PathBuf::from(selection.name).extension().map(|it| it.to_string_lossy().to_string()).unwrap_or_else(|| "".to_string());
-                    let new_path = format!("transfer/{}.{}", new_name, extension);
-                    let absolute_path = LocalStorageOperation::get_absolute_path(new_path, ctx.clone()).await;
-                    LocalStorageOperation::new_file(bytes, absolute_path).into_future(ctx.clone()).await
-                }
-                ResourceSelectionData::LocalPath(path) => {
+            let local_resource = match selection.path {
+                LocalResourcePath::LocalPath(path) => {
                     let resource = LocalStorageOperation::get(path).into_future(ctx.clone()).await;
                     if resource.is_none() {
                         panic!("Resource not found")
@@ -91,10 +52,11 @@ impl ResourceTransferSelectionService {
 
                     resource.unwrap()
                 }
-                ResourceSelectionData::PlatformIdentifier(identifier) => {
+                LocalResourcePath::PlatformIdentifier(identifier) => {
                     let file_size = LocalStorageOperation::load_file_size_from_platform_identifier(identifier.clone())
                         .into_future(ctx.clone())
                         .await;
+
                     let file_name = LocalStorageOperation::load_file_name_from_platform_identifier(identifier.clone())
                         .into_future(ctx.clone())
                         .await;
@@ -104,10 +66,12 @@ impl ResourceTransferSelectionService {
                         let path = format!("thumbnails/{}.png", file_name);
                         let absolute_path = LocalStorageOperation::get_absolute_path(path.clone(), ctx.clone()).await;
                         let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
-                        thumbnail_path = Some(path);
+
+                        thumbnail_path = Some(LocalResourcePath::LocalPath(path));
                     }
 
                     let resource = LocalResource {
+                        order_id: gen_id().await,
                         name: file_name,
                         size: file_size,
                         path: LocalResourcePath::PlatformIdentifier(identifier),
@@ -122,7 +86,29 @@ impl ResourceTransferSelectionService {
             local_resources.push(local_resource);
         }
 
-        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateLocalResources(local_resources)));
+        let new_resources = LocalResourceDatabaseOperation::add(local_resources).into_future(ctx.clone()).await;
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+            new: new_resources,
+            removed: vec![]
+        }));
+
+        ctx.request_from_shell(CoreOperation::Render).await;
+    }
+
+    pub async fn remove_resource(
+        &self, 
+        ctx: AppCommandContext, 
+        id: u64
+    ) {
+        log::info!(target: "transfer", "Remove resource {:?}", id);
+        let removed_resource = LocalResourceDatabaseOperation::remove(id).into_future(ctx.clone()).await;
+        if let Some(removed_resource) = removed_resource {
+            ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                new: vec![],
+                removed: vec![removed_resource]
+            }));
+        }
+
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 }

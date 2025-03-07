@@ -10,25 +10,19 @@ use shared::app::operations::database::{
     DatabaseOperationOutput,
     SessionOperation,
     SessionOperationOutput,
-    TransferSessionDatabaseOperation,
-    TransferSessionDatabaseOperationOutput
+    LocalResourceDatabaseOperation,
+    LocalResourceDatabaseOperationOutput
 };
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
-use shared::app::transfer::file_selection_service::{ResourceSelection, ResourceSelectionData};
+use shared::app::transfer::file_selection_service::{ResourceSelection};
+use shared::app::transfer::session::TransferTarget;
+use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
-use shared::entities::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
-use shared::entities::transfer::{
-    TransferMethod,
-    TransferProcess,
-    TransferProcessStatus,
-    TransferSession,
-    TransferSessionStatus,
-    TransferTarget
-};
 use shared::entities::user::User;
 use shared::errors::NetworkError;
 
@@ -46,14 +40,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<Platform>()?;
     gen.register_type::<ResourceType>()?;
     gen.register_type::<LocalResource>()?;
-    gen.register_type::<TransferTarget>()?;
-    gen.register_type::<TransferMethod>()?;
-    gen.register_type::<TransferProcessStatus>()?;
-    gen.register_type::<TransferSessionStatus>()?;
-    gen.register_type::<TransferProcess>()?;
-    gen.register_type::<TransferSession>()?;
+    gen.register_type::<LocalResourcePath>()?;
     gen.register_type::<ResourceSelection>()?;
-    gen.register_type::<ResourceSelectionData>()?;
 
     // Register operation enums
     gen.register_type::<DatabaseOperation>()?;
@@ -66,9 +54,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<LocalStorageOperationOutput>()?;
     gen.register_type::<TransferOperation>()?;
     gen.register_type::<TransferOperationOutput>()?;
-    gen.register_type::<TransferSessionDatabaseOperation>()?;
-    gen.register_type::<TransferSessionDatabaseOperationOutput>()?;
-    gen.register_type::<LocalResourcePath>()?;
+    gen.register_type::<LocalResourceDatabaseOperation>()?;
+    gen.register_type::<LocalResourceDatabaseOperationOutput>()?;
 
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;
@@ -77,6 +64,9 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<AuthenticationModel>()?;
     gen.register_type::<TransferEvent>()?;
     gen.register_type::<TransferModel>()?;
+    gen.register_type::<TransferMethodSelection>()?;
+
+    gen.register_type::<TransferTarget>()?;
 
     gen.register_app::<BitBridge>()?;
 

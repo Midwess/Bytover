@@ -1,7 +1,8 @@
 use core_services::local_storage::file_system::File;
+use devlog_sdk::distributed_id::gen_id;
 
 use crate::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
-use crate::entities::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
 pub struct NativeLocalStorage {}
 
@@ -12,6 +13,7 @@ impl NativeLocalStorage {
                 let created_file = File::new(Some(bytes), path).await.unwrap();
                 let metadata = created_file.metadata().await.unwrap();
                 let resource = LocalResource {
+                    order_id: gen_id().await,
                     name: created_file.name,
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(created_file.path.to_string_lossy().to_string()),
@@ -26,6 +28,7 @@ impl NativeLocalStorage {
                 let new_file = created_file.copy_to(destination).await.unwrap();
                 let metadata = new_file.metadata().await.unwrap();
                 let resource = LocalResource {
+                    order_id: gen_id().await,
                     name: new_file.name,
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
@@ -40,6 +43,7 @@ impl NativeLocalStorage {
                 let new_file = created_file.zip(destination).await.unwrap();
                 let metadata = new_file.metadata().await.unwrap();
                 let resource = LocalResource {
+                    order_id: gen_id().await,
                     name: new_file.name,
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
@@ -53,6 +57,7 @@ impl NativeLocalStorage {
                 let file = File::new(None, path).await.unwrap();
                 let metadata = file.metadata().await.unwrap();
                 let resource = LocalResource {
+                    order_id: gen_id().await,
                     name: file.name.clone(),
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(file.path.to_string_lossy().to_string()),

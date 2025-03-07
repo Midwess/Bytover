@@ -1,20 +1,15 @@
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
 
 use crate::app::operations::database::{
-    DatabaseOperation,
-    DatabaseOperationOutput,
-    SessionOperation,
-    SessionOperationOutput,
-    TransferSessionDatabaseOperation,
-    TransferSessionDatabaseOperationOutput
+    DatabaseOperation, DatabaseOperationOutput, LocalResourceDatabaseOperation, LocalResourceDatabaseOperationOutput, SessionOperation, SessionOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
 use crate::persistence::session::{SessionId, SessionRepository};
-use crate::persistence::transfer_session::TransferSessionRepository;
+use crate::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
 
 pub struct NativeDatabase {
     pub session_repository: SessionRepository,
-    pub transfer_session_repository: TransferSessionRepository
+    pub local_resource_repository: LocalResourceRepository
 }
 
 impl NativeDatabase {
@@ -63,15 +58,33 @@ impl NativeDatabase {
 
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
             }
-            DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::GetLastSession()) => {
-                let session = self.transfer_session_repository.get_last_session().await.unwrap();
-                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::GetLastSession(
-                    session
-                ))
+            DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Add(resources)) => {
+                let mut created_resources = vec![];
+                for resource in resources {
+                    if let Ok(resource) = self.local_resource_repository.create(resource).await {
+                        created_resources.push(resource);
+                    }
+                }
+
+                return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(created_resources))
             }
-            DatabaseOperation::TransferSession(TransferSessionDatabaseOperation::Save(session)) => {
-                let _ = self.transfer_session_repository.update_or_create(session).await;
-                DatabaseOperationOutput::TransferSession(TransferSessionDatabaseOperationOutput::Save())
+            DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Remove(id)) => {
+                if let Ok(resource) = self.local_resource_repository.delete_one(&LocalResourceId {
+                    r#type: None,
+                    order_id: Some(id)
+                }).await {
+                    return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(Some(resource)))
+                } else {
+                    return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(None))
+                }
+            }
+            DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::FindAll) => {
+                let resources = self.local_resource_repository.find_all(None, None, None).await.unwrap_or(vec![]);
+                DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))
+            }
+            DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Find(path)) => {
+                let resource = self.local_resource_repository.find_by_path(&path).await;
+                DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
             }
             _ => panic!("Native database doesn't support this effect {:?}", effect)
         }

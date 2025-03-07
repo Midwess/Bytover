@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
 use crate::app::{AppCommandContext, AppRequestBuilder};
-use crate::entities::file::LocalResource;
+use crate::app::file_system::file::LocalResource;
 
 use super::{CoreOperation, CoreOperationOutput};
 
