@@ -11,6 +11,7 @@ import SharedTypes
 
 struct ContentView: View {
     @EnvironmentObject var core: Core
+    
     var body: some View {
         LandingView()
             .navigate(to: HomeView(), when: $core.is_signed_in)

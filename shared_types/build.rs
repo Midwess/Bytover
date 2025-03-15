@@ -25,6 +25,7 @@ use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::user::User;
 use shared::errors::NetworkError;
+use shared::native::message_to_shell::MessageToShell;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");
@@ -65,6 +66,10 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferEvent>()?;
     gen.register_type::<TransferModel>()?;
     gen.register_type::<TransferMethodSelection>()?;
+
+
+    // Register native msg
+    gen.register_type::<MessageToShell>()?;
 
     gen.register_type::<TransferTarget>()?;
 

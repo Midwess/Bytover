@@ -1,3 +1,4 @@
+use crate::app::operations::transfer::TransferOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_resources: Vec<LocalResource>,
-    transfer_method_selection: TransferMethodSelection
+    transfer_method_selection: TransferMethodSelection,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -53,7 +54,9 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(|it| async move {
                     let resource_transfer_selection_service =
                         DiContainer::get_instance().get_resource_transfer_selection_service();
-                    resource_transfer_selection_service.load_resources(it).await;
+                    resource_transfer_selection_service.load_resources(it.clone()).await;
+                    let nearby_service = DiContainer::get_instance().get_nearby_service();
+                    nearby_service.init(it.clone()).await;
                 })
             }
             TransferEvent::AddResources(selections) => {
@@ -71,7 +74,6 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::UpdateResourcesModel { new, removed } => {
-                log::info!(target: "transfer", "UpdateResourcesModel {:?}", new);
                 model.selected_resources.extend(new);
                 model.selected_resources.retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
 

@@ -78,6 +78,23 @@ struct StunningBackgroundGradient: View {
     }
 }
 
+struct StunningBackgroundGradientSecondary: View {
+    @Environment(\.safeAreaInsets) private var safeAreaInsets
+    @Environment(\.screenSize) private var screenSize
+
+    public var body: some View {
+        ZStack {
+            Circle()
+                .frame(width: 150, height: 150)
+                .position(x: screenSize.width / 2, y: -10)
+                .background(Theme.BlackSecondary.color.opacity(0.0))
+                .foregroundStyle(Theme.GreenSecondary.color.opacity(1))
+                .blur(radius: 120)
+        }
+        .background(Theme.BlackBase.color)
+    }
+}
+
 struct FadingBackground: View {
     @State private var opacity: Double
     
@@ -114,6 +131,10 @@ struct FadingBackground: View {
             opacity = finalOpacity
         }
     }
+}
+
+#Preview {
+    StunningBackgroundGradientSecondary()
 }
 
 #Preview {

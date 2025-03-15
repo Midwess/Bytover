@@ -11,6 +11,7 @@ import SharedTypes
 @main
 struct Main: App {
     @StateObject private var core = Core()
+    @StateObject private var server = WebSocketServer()
     
     var body: some Scene {
         WindowGroup {
@@ -23,6 +24,7 @@ struct Main: App {
                 .environmentObject(core)
                 .preferredColorScheme(.dark)
                 .task {
+                    print("Firing app launched")
                     await core.update(AppEvent.environment(.appLaunched))
                 }
         }

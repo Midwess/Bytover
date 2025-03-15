@@ -41,5 +41,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs to access your local network to enable WebSocket communication.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_websocket._tcp</string>
+	</array>
 </dict>
 </plist>

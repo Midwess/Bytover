@@ -57,33 +57,43 @@ struct ShareModal: View {
     let selections = TransferMethodSelection.allCases
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 15) {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(alignment: .center, spacing: 15) {
                 selection.icon
+                    .frame(width: 54, height: 54)
+                    .fontWeight(.bold)
                     .foregroundStyle(Theme.GreenSecondary.color)
-                    .padding(.all, 8)
+                    .padding(.all, 0)
                     .clipShape(Circle())
-                    .background(Circle().foregroundStyle(Theme.BluePrimary.color.opacity(0.1)))
+                    .background(Circle()
+                        .foregroundStyle(Theme.PrimaryText.color.opacity(0.15))
+                    )
                 
-                HStack {
-                    Menu(selection.name) {
-                        Button(TransferMethodSelection.device.name, action: {
-                            selection = .device
-                        })
-                        Button(TransferMethodSelection.user.name, action: {
-                            selection = .user
-                        })
-                        Button(TransferMethodSelection.internet.name, action: {
-                            selection = .internet
-                        })
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Share to")
+                        .modifier(Label2())
+                        .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
+                    HStack {
+                        Menu(selection.name) {
+                            Button(TransferMethodSelection.device.name, action: {
+                                selection = .device
+                            })
+                            Button(TransferMethodSelection.user.name, action: {
+                                selection = .user
+                            })
+                            Button(TransferMethodSelection.internet.name, action: {
+                                selection = .internet
+                            })
+                        }
+                        .modifier(Body1())
+                        .foregroundStyle(Theme.PrimaryText.color)
+                        .background(.clear)
+                        
+                        ImageAsset.ArrowDown.image
+                            .resizable()
+                            .frame(width: 25, height: 25)
                     }
-                    .modifier(Body1())
-                    .foregroundStyle(Theme.PrimaryText.color)
-                    .background(.clear)
-                    
-                    ImageAsset.ArrowDown.image
-                        .resizable()
-                        .frame(width: 25, height: 25)
                 }
                 
                 Spacer()
@@ -91,12 +101,17 @@ struct ShareModal: View {
             
             selection.body
                 .frame(width: .infinity)
+            
+            Spacer()
         }
-        .frame(minWidth: 300, maxWidth: 800)
-        .padding()
-        .background(Theme.BlackBase.color.opacity(0.2))
-        .clipShape(RoundedRectangle(cornerRadius: 30))
-        .overlay(RoundedRectangle(cornerRadius: 30).strokeBorder(Theme.PrimaryText.color.opacity(0.1), lineWidth: 1))
+        .padding(.horizontal, SpaceTheme.screen.value)
+        .padding(.top, 26)
+        .background(
+            .clear
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 36))
+//        .overlay(RoundedRectangle(cornerRadius: 36)
+//            .stroke(Theme.PrimaryText.color.opacity(0.1)))
         .shadow(radius: 2)
     }
 }

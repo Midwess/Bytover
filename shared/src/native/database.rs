@@ -79,7 +79,7 @@ impl NativeDatabase {
                 }
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::FindAll) => {
-                let resources = self.local_resource_repository.find_all(None, None, None).await.unwrap_or(vec![]);
+                let resources = self.local_resource_repository.find_all(None, None, None).await.unwrap();
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Find(path)) => {

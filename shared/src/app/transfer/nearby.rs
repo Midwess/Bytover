@@ -1,0 +1,9 @@
+use crate::app::{operations::transfer::TransferOperation, AppCommandContext};
+
+pub struct NearbyService {}
+
+impl NearbyService {
+    pub async fn init(&self, ctx: AppCommandContext) {
+        TransferOperation::start_nearby_server().into_future(ctx).await;
+    }
+}

@@ -47,11 +47,11 @@ impl AppModule<BitBridge> for EnvironmentModule {
             EnvironmentEvent::AppLaunched => {
                 logger::setup();
                 init_scoped_id_generator("BitBridge".to_string());
-                Command::new(|ctx| async {
+                Command::new(|ctx| async move {
                     let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
                     let di_container = DiContainer::get_instance();
                     di_container.init(workdir_path).await;
-                    di_container.get_authentication_service().update_signin_session(ctx).await;
+                    // di_container.get_authentication_service().update_signin_session(ctx).await;
                 })
                 .then(Command::done())
             }

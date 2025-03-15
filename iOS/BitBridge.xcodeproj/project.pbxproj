@@ -118,6 +118,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C794AB262D5C7585003CD57F /* View */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = View; sourceTree = "<group>"; };
+		C7DB35172D80609300D024FB /* Server */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Server; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +156,7 @@
 		1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */ = {
 			isa = PBXGroup;
 			children = (
+				C7DB35172D80609300D024FB /* Server */,
 				C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */,
 				C794AB262D5C7585003CD57F /* View */,
 				C794AB242D5C6E26003CD57F /* Core.swift */,
@@ -221,6 +223,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C794AB262D5C7585003CD57F /* View */,
+				C7DB35172D80609300D024FB /* Server */,
 			);
 			name = BitBridge;
 			packageProductDependencies = (
@@ -448,7 +451,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = BitBridge/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Transfer your selected photos and videos";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -569,7 +572,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = BitBridge/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Transfer your selected photos and videos";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

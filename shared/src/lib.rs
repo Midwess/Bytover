@@ -1,4 +1,7 @@
 // Only compile these modules when "lib" feature is enabled
+
+static CURRENT_VERSION: &str = "1.0.0";
+
 #[cfg(feature = "lib")]
 pub mod app;
 #[cfg(feature = "lib")]
@@ -33,9 +36,63 @@ use erased_serde::Serialize;
 #[cfg(feature = "lib")]
 use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
-use tokio_scoped::scoped;
+use native::executor::NativeExecutor;
+
 #[cfg(feature = "lib")]
-use wasm_bindgen::prelude::wasm_bindgen;
+use std::sync::Arc;
+
+#[cfg(feature = "lib")]
+use app::operations::CoreOperationOutput;
+
+#[cfg(feature = "lib")]
+lazy_static! {
+    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread().thread_keep_alive(Duration::from_secs(30)).enable_all().build().unwrap();
+}
+
+#[cfg(feature = "lib")]
+pub trait ShellRuntime: Send + Sync {
+    fn msg_from_native(&self, event: Vec<u8>);
+}
+
+// NativeProcessor implementation
+#[cfg(feature = "lib")]
+pub struct NativeProcessor {
+    shell: Arc<dyn ShellRuntime>,
+    native_executor: NativeExecutor,
+}
+
+#[cfg(feature = "lib")]
+impl NativeProcessor {
+    pub fn new(shell: Box<dyn ShellRuntime>) -> Self {
+        let shell: Arc<dyn ShellRuntime> = Arc::from(shell);
+        let di_container = DiContainer::get_instance();
+        let native_executor: NativeExecutor = di_container.get_native_executor(shell.clone());
+
+        Self { 
+            shell: shell.clone() , 
+            native_executor: native_executor
+        }
+    }
+
+    pub fn handle(&self, id: u32, effect: &[u8]) -> Vec<u8> {
+        let options = bincode_options();
+        let mut deser = bincode::Deserializer::from_slice(effect, options);
+        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+
+        let effect: CoreOperation = erased_serde::deserialize(&mut deserializer)
+            .expect("Failed to deserialize effect");
+
+        let mut output: Option<CoreOperationOutput> = None;
+        TOKIO_RT.block_on(async {
+            output = Some(self.native_executor.handle(effect, self.shell.clone()).await);
+        });
+
+        match output {
+            Some(output) => handle_response(id, &serialize(&output)),
+            None => Vec::new()
+        }
+    }
+}
 
 #[cfg(feature = "lib")]
 uniffi::include_scaffolding!("shared");
@@ -45,53 +102,19 @@ lazy_static! {
     pub static ref CORE_BRIDGE: Bridge<BitBridge> = Bridge::new(Core::new());
 }
 
-// Only used tokio runtime when using tokio feature, otherwise it might impact on CRUX
-// Detailed here: https://redbadger.github.io/crux/internals/runtime.html#admonition-warning
 #[cfg(feature = "lib")]
-lazy_static! {
-    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread().thread_keep_alive(Duration::from_secs(30)).enable_all().build().unwrap();
+pub fn process_event(msg: &[u8]) -> Vec<u8> {
+    CORE_BRIDGE.process_event(msg)
 }
 
 #[cfg(feature = "lib")]
-#[wasm_bindgen]
-pub fn process_event(data: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.process_event(data)
+pub fn handle_response(id: u32, res: &[u8]) -> Vec<u8> {
+    CORE_BRIDGE.handle_response(id, res)
 }
 
 #[cfg(feature = "lib")]
-#[wasm_bindgen]
-pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.handle_response(id, data)
-}
-
-#[cfg(feature = "lib")]
-#[wasm_bindgen]
 pub fn view() -> Vec<u8> {
     CORE_BRIDGE.view()
-}
-
-#[cfg(feature = "lib")]
-#[wasm_bindgen]
-pub fn native_handle(id: u32, data: &[u8]) -> Vec<u8> {
-    let options = bincode_options();
-    let mut deser = bincode::Deserializer::from_slice(data, options);
-    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-
-    let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-
-    let mut output_buffer = Vec::new();
-    scoped(TOKIO_RT.handle()).scope(|scope| {
-        scope.spawn(async {
-            let di_container = DiContainer::get_instance();
-            let executor = di_container.get_native_executor().await;
-            let output = executor.handle(effect).await;
-            let response = serialize(&output);
-
-            output_buffer = handle_response(id, &response);
-        });
-    });
-
-    output_buffer
 }
 
 #[cfg(feature = "lib")]

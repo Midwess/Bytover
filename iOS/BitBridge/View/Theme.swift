@@ -27,6 +27,7 @@ enum Theme: String {
     case LightSea
     case DarkBlue
     case BlackBase
+    case BlackSecondary
     case Navy
     case BlueSky
     case FileColor
@@ -145,10 +146,17 @@ enum ImageAsset: String {
     case UserEmpty
     case DeviceEmpty
     case ArrowDown
+    case Owl
     
     var image: Image {
         get {
             Image(self.string)
+        }
+    }
+    
+    var uiImage: UIImage {
+        get {
+            UIImage(named: self.string)!
         }
     }
     

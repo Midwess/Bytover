@@ -86,7 +86,7 @@ impl LocalResourceRepository {
         let db = self.get_db().await;
         let resources: Option<LocalResource> = db.query(surreal_quote!("SELECT * FROM LocalResource WHERE path = #val(path)"))
             .await
-            .unwrap()
+            .expect("Failed to connect to local resource database")
             .take(RPath::from(0))
             .unwrap();
 

@@ -12,6 +12,7 @@ import SharedTypes
 struct ResourceImage: View {
     var resource: SelectedResourceViewModel
     @EnvironmentObject private var core: Core
+    @State var isVisible = false
     
     func getDefaultThumbnail() -> some View {
         switch resource.type {
@@ -49,9 +50,13 @@ struct ResourceImage: View {
     }
     
     func getThumbnail() -> some View {
-        if let thumbnail_path = resource.thumbnail_path {
-            if let thumbnail_image = Image.fromRelativePath(thumbnail_path) {
-                return AnyView(thumbnail_image.resizable().frame(width: 48, height: 48).cornerRadius(14))
+        if isVisible {
+            if let thumbnail_path = resource.thumbnail_path {
+                if let thumbnail_image = Image.fromRelativePath(thumbnail_path) {
+                    return AnyView(thumbnail_image.resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48).cornerRadius(14))
+                }
             }
         }
         
@@ -79,18 +84,26 @@ struct ResourceImage: View {
         ZStack {
             getThumbnail()
         }
+        .onAppear {
+            isVisible = true
+        }
+        .onDisappear {
+            isVisible = false
+        }
     }
 }
 
 struct SelectedResourceItem: View {
     @State var resource: SelectedResourceViewModel
     @State var isShowingMoreDialog: Bool = false
+    @State private var isVisible: Bool = false
     @EnvironmentObject var core: Core
     
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
-            ResourceImage(resource: resource)
+           ResourceImage(resource: resource)
                 .foregroundColor(.black.opacity(0.5))
+            
             VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
                     .modifier(Label1())
@@ -142,6 +155,12 @@ struct SelectedResourceItem: View {
         .background(.gray.opacity(0.0))
         .clipShape(RoundedRectangle(cornerRadius: 15))
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.0), lineWidth: 1))
+        .onAppear {
+            isVisible = true
+        }
+        .onDisappear {
+            isVisible = false
+        }
     }
 }
 

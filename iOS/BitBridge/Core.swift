@@ -18,17 +18,19 @@ import Photos
 import AVFoundation
 
 @MainActor
-class Core: ObservableObject {
+class Core: ObservableObject, ShellRuntime {
     @Published var environment: EnvironmentViewModel?
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
     
-    @Published var is_signed_in = false
+    @Published var is_signed_in = true
     
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
     @Environment(\.openURL) private var openURL
     
+    lazy var nativeProcessor: NativeProcessor = NativeProcessor(self)
+
     init() {
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
         update_view(app)
@@ -78,7 +80,7 @@ class Core: ObservableObject {
             let response = CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileThumbnailPngFromPlatformIdentifier(fileThumbnailData?.bytes))
             return handleResponse(request.id, try! Data(response.bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
-            return nativeHandle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
+            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
@@ -92,17 +94,21 @@ class Core: ObservableObject {
                 ))
             ).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
-            return nativeHandle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
+            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
-            return nativeHandle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
+            return self.nativeProcessor.handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
         case .appCapabilities(.database(let database)):
-            return nativeHandle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
+            return self.nativeProcessor.handle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
         case .appCapabilities(.render):
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.transfer(let trans)):
-            return nativeHandle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
+            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
         }
+    }
+    
+    func msgFromNative(_ event: Data) {
+        
     }
     
     func onMediasChanged() async {
@@ -347,5 +353,30 @@ extension Image {
 extension Double {
     func display() -> String {
         String(self)
+    }
+}
+
+extension UIImage {
+    var averageColor: UIColor? {
+        guard let inputImage = CIImage(image: self) else { return nil }
+        let extentVector = CIVector(x: inputImage.extent.origin.x, y: inputImage.extent.origin.y, z: inputImage.extent.size.width, w: inputImage.extent.size.height)
+        
+        guard let filter = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: inputImage, kCIInputExtentKey: extentVector]) else { return nil }
+        guard let outputImage = filter.outputImage else { return nil }
+        
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: kCFNull!])
+        context.render(outputImage, toBitmap: &bitmap, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
+        
+        return UIColor(red: CGFloat(bitmap[0]) / 255, green: CGFloat(bitmap[1]) / 255, blue: CGFloat(bitmap[2]) / 255, alpha: 1)
+    }
+    
+    var backgroundColor: UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        self.averageColor?.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        return UIColor(hue: hue, saturation: 0.6, brightness: 0.3, alpha: alpha)
     }
 }

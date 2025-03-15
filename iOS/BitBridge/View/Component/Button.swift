@@ -38,6 +38,27 @@ struct PrimaryGradientButton<S: ShapeStyle>: ButtonStyle {
     }
 }
 
+struct PressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
+            .environment(\.isPressed, configuration.isPressed)
+    }
+}
+
+// Environment key to track button press state
+private struct IsPressedKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isPressed: Bool {
+        get { self[IsPressedKey.self] }
+        set { self[IsPressedKey.self] = newValue }
+    }
+}
+
 struct PrimaryButton: View {
     var body: some View {
         Button(action: {}) {
@@ -53,7 +74,7 @@ struct UpgradePremiumButton: View {
             Text("Upgrade to premium")
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .modifier(Label3())
+                .modifier(Label1())
                 .foregroundStyle(Theme.PrimaryText.color.opacity(1))
                 .background {
                     RoundedRectangle(cornerRadius: .infinity)
@@ -118,7 +139,12 @@ struct ButtonNavigation: View {
 
 struct ShareButton: View {
     let width: CGFloat
+
     @State private var startTime = Date.now
+    @State private var showShareModal = false
+    @State private var shareModalContentHeight = CGFloat(0)
+    @Environment(\.isPressed) private var isPressed
+    
     var body: some View {
         ZStack {
             Group {
@@ -126,27 +152,55 @@ struct ShareButton: View {
                     TimelineView(.animation) { timeline in
                         let elapsedTime = startTime.distance(to: timeline.date)
                         Circle()
-                            .fill(Theme.GreenSecondary.color.opacity(0.6))
+                            .fill(Theme.GreenSecondary.color.opacity(0.7))
                             .visualEffect { content, proxy in
                                 content
                                     .colorEffect(
                                         ShaderLibrary.circleWave(
                                             .float2(proxy.size),
                                             .color(Theme.BluePrimary.color),
-                                            .float(elapsedTime * 0.8)
+                                            .float(elapsedTime)
                                         )
                                     )
                             }
                     }
-                    Button(action: {}) {
+                    Button(action: {
+                        Task {
+                            try await Task.sleep(for: .milliseconds(200))
+                            showShareModal = true
+                        }
+                    }) {
                         ImageAsset.SendEmpty.image
                             .rotationEffect(.degrees(-45))
-                            .opacity(0.8)
                             .offset(x: 1, y: -1)
+                            .frame(width: width * 0.3, height: width * 0.3)
+                            .background(
+                                Circle()
+                                    .foregroundStyle(Theme.BlackBase.color)
+                            )
+                            .clipShape(Circle())
                     }
-                    .frame(width: width * 0.49, height: width * 0.49)
-                    .background(Theme.BlackBase.color)
-                    .clipShape(Circle())
+                    .opacity(isPressed ? 0.8 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isPressed)
+                    .buttonStyle(PressableButtonStyle())
+                    .sheet(isPresented: $showShareModal) {
+                        ShareModal()
+                            .presentationDetents([.height(shareModalContentHeight), .medium])
+                            .presentationCornerRadius(36)
+                            .presentationBackground(.clear)
+                            .background {
+                                GeometryReader { proxy in
+                                    Color.clear
+                                        .task {
+                                            shareModalContentHeight = proxy.size.height
+                                        }
+                                }
+                            }
+                            .background(Theme.BlackBase.color.opacity(0.3))
+                            .background(StunningBackgroundGradientSecondary().opacity(0.2))
+                            .background(.ultraThinMaterial)
+                            .environment(\.colorScheme, .dark)
+                    }
                 }
             }
         }
