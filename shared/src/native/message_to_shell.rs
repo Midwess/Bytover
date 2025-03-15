@@ -5,12 +5,6 @@ use crate::entities::user::User;
 
 #[derive(Debug, Clone, Enum, PartialEq, Serialize, Deserialize)]
 pub enum MessageToShell {
-    NewNearby {
-        address: String,
-        user: User
-    },
-    NearbyRemoved {
-        address: String,
-        user: User
-    },
+    NewNearby { address: String, user: User },
+    NearbyRemoved { address: String, user: User }
 }

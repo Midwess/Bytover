@@ -6,7 +6,7 @@ use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolReso
 use core_services::utils::pool::request::PoolRequestBuilder;
 use surrealdb::engine::local::Db;
 use surrealdb::Surreal;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
 use crate::app::authentication::service::AuthenticationService;
@@ -16,14 +16,12 @@ use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
 use crate::native::local_storage::NativeLocalStorage;
-use crate::native::nearby::server::HttpServer;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::webrtc::broadcast::BroadcastWebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
-use crate::persistence::transfer_session::TransferSessionRepository;
 use crate::{ShellRuntime, TOKIO_RT};
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
@@ -78,9 +76,7 @@ impl DiContainer {
                 let db_path = format!("{}/{}", work_dir_path, "surrealdb.db");
                 log::info!(target: "environment", "Connecting to local database at {}", db_path);
                 let local_db: Box<dyn PoolResourceProvider<Surreal<Db>>> = Box::new(SurrealDbConnectionProvider {
-                    connection: SurrealDbLocalConnectionInfo {
-                        db_path: db_path.clone()
-                    }
+                    connection: SurrealDbLocalConnectionInfo { db_path: db_path.clone() }
                 });
 
                 let _ = self.db.set(
@@ -126,9 +122,7 @@ impl DiContainer {
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
-                broadcast: Arc::new(BroadcastWebRtc::new(
-                    vec!["bitbridge".to_string()]
-                ))
+                broadcast: Arc::new(BroadcastWebRtc::new(vec!["bitbridge".to_string()]))
             }
         }
     }

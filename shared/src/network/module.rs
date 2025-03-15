@@ -25,13 +25,19 @@ pub trait NetworkModule {
 }
 
 pub struct InternetConnection {
-    last_passed: Mutex<Instant>,
+    last_passed: Mutex<Instant>
+}
+
+impl Default for InternetConnection {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InternetConnection {
     pub fn new() -> Self {
         Self {
-            last_passed: Mutex::new(Instant::now() - Duration::from_secs(5)),
+            last_passed: Mutex::new(Instant::now() - Duration::from_secs(5))
         }
     }
 
@@ -43,7 +49,8 @@ impl InternetConnection {
 
         let ns = "internet-check";
         // This endpoint is located in Digitalocean
-        let addr = "https://faas-sgp1-18bc02ac.doserverless.co/api/v1/web/fn-40c6321e-1ea6-4748-bfec-44cee2c996d5/default/network-check";
+        let addr =
+            "https://faas-sgp1-18bc02ac.doserverless.co/api/v1/web/fn-40c6321e-1ea6-4748-bfec-44cee2c996d5/default/network-check";
         let client = reqwest::Client::new();
 
         // Timeout is 5 seconds seem too much, but it is neccessary for cross region connection
@@ -54,7 +61,12 @@ impl InternetConnection {
                 true
             }
             Err(err) => {
-                log::info!(target: ns, "No internet connection in the last {} seconds: {:?}", last_passed.elapsed().as_secs(), err);
+                log::info!(
+                    target: ns,
+                    "No internet connection in the last {} seconds: {:?}",
+                    last_passed.elapsed().as_secs(),
+                    err
+                );
                 false
             }
         }

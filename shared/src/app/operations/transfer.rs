@@ -1,6 +1,7 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;

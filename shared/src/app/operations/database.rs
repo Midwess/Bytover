@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::file_system::file::LocalResourcePath;
-use crate::app::{file_system::file::LocalResource, AppRequestBuilder};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::user::User;
@@ -17,7 +17,7 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum DatabaseOperation {
     Session(SessionOperation),
     User(UserDatabaseOperation),
-    LocalResource(LocalResourceDatabaseOperation),
+    LocalResource(LocalResourceDatabaseOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
@@ -101,14 +101,10 @@ impl SessionOperation {
     }
 
     pub fn get_session() -> AppRequestBuilder<impl Future<Output = Option<Session>>> {
-        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get()))).map(
-            |it| match it {
-                CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(
-                    session
-                ))) => session,
-                _ => panic!("Invalid output expected Get got {:?}", it)
-            }
-        )
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get()))).map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(session))) => session,
+            _ => panic!("Invalid output expected Get got {:?}", it)
+        })
     }
 }
 
@@ -118,7 +114,9 @@ impl LocalResourceDatabaseOperation {
             LocalResourceDatabaseOperation::Add(resources)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(resources))) => resources,
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(
+                resources
+            ))) => resources,
             _ => panic!("Invalid output expected Add got {:?}", it)
         })
     }
@@ -128,7 +126,9 @@ impl LocalResourceDatabaseOperation {
             LocalResourceDatabaseOperation::Remove(id)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(resource))) => resource,
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(
+                resource
+            ))) => resource,
             _ => panic!("Invalid output expected Remove got {:?}", it)
         })
     }
@@ -138,7 +138,9 @@ impl LocalResourceDatabaseOperation {
             LocalResourceDatabaseOperation::Find(path)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))) => resource,
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(
+                resource
+            ))) => resource,
             _ => panic!("Invalid output expected Find got {:?}", it)
         })
     }
@@ -148,7 +150,9 @@ impl LocalResourceDatabaseOperation {
             LocalResourceDatabaseOperation::FindAll
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))) => resources,
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(
+                resources
+            ))) => resources,
             _ => panic!("Invalid output expected FindAll got {:?}", it)
         })
     }

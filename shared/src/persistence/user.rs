@@ -45,9 +45,7 @@ impl Table<UserId> for User {
     }
 
     fn id(&self) -> UserId {
-        UserId {
-            email: self.email.clone()
-        }
+        UserId { email: self.email.clone() }
     }
 }
 

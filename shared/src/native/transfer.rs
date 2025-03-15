@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
-use tokio::sync::{broadcast, Mutex};
-
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
-use crate::native::nearby::server::HttpServer;
 use crate::network::webrtc::broadcast::BroadcastWebRtc;
 
 pub struct TransferNative {
-    pub broadcast: Arc<BroadcastWebRtc>,
+    pub broadcast: Arc<BroadcastWebRtc>
 }
 
 impl TransferNative {
@@ -18,9 +15,7 @@ impl TransferNative {
                 log::info!(target: "transfer", "Start nearby server result: {:?}", result);
                 TransferOperationOutput::StartNearbyServer
             }
-            TransferOperation::StopNearbyServer => {
-                TransferOperationOutput::StopNearbyServer
-            }
+            TransferOperation::StopNearbyServer => TransferOperationOutput::StopNearbyServer
         }
     }
 }

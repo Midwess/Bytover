@@ -1,3 +1,3 @@
 pub mod client;
-pub mod server;
 pub mod finder;
+pub mod server;

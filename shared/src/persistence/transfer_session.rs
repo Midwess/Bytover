@@ -48,9 +48,7 @@ impl Table<TransferSessionId> for TransferSession {
     }
 
     fn id(&self) -> TransferSessionId {
-        TransferSessionId {
-            order_id: self.order_id.clone()
-        }
+        TransferSessionId { order_id: self.order_id }
     }
 }
 

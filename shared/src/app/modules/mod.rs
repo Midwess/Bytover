@@ -12,12 +12,7 @@ where
     type ViewModel;
     type Event;
 
-    fn update(
-        &self,
-        event: Self::Event,
-        model: &mut Self::Model,
-        caps: &T::Capabilities
-    ) -> Command<T::Effect, T::Event>;
+    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &T::Capabilities) -> Command<T::Effect, T::Event>;
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel;
 }

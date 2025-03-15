@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
+use uniffi::Enum;
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
 pub enum TransferMethodSelection {
@@ -14,8 +14,12 @@ impl Default for TransferMethodSelection {
     }
 }
 
-pub struct TransferSelectionService {
+pub struct TransferSelectionService {}
 
+impl Default for TransferSelectionService {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TransferSelectionService {

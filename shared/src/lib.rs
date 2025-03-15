@@ -46,7 +46,11 @@ use app::operations::CoreOperationOutput;
 
 #[cfg(feature = "lib")]
 lazy_static! {
-    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread().thread_keep_alive(Duration::from_secs(30)).enable_all().build().unwrap();
+    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_keep_alive(Duration::from_secs(30))
+        .enable_all()
+        .build()
+        .unwrap();
 }
 
 #[cfg(feature = "lib")]
@@ -58,7 +62,7 @@ pub trait ShellRuntime: Send + Sync {
 #[cfg(feature = "lib")]
 pub struct NativeProcessor {
     shell: Arc<dyn ShellRuntime>,
-    native_executor: NativeExecutor,
+    native_executor: NativeExecutor
 }
 
 #[cfg(feature = "lib")]
@@ -68,9 +72,9 @@ impl NativeProcessor {
         let di_container = DiContainer::get_instance();
         let native_executor: NativeExecutor = di_container.get_native_executor(shell.clone());
 
-        Self { 
-            shell: shell.clone() , 
-            native_executor: native_executor
+        Self {
+            shell: shell.clone(),
+            native_executor
         }
     }
 
@@ -79,8 +83,7 @@ impl NativeProcessor {
         let mut deser = bincode::Deserializer::from_slice(effect, options);
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
 
-        let effect: CoreOperation = erased_serde::deserialize(&mut deserializer)
-            .expect("Failed to deserialize effect");
+        let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
         let mut output: Option<CoreOperationOutput> = None;
         TOKIO_RT.block_on(async {

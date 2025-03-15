@@ -1,11 +1,16 @@
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
 
 use crate::app::operations::database::{
-    DatabaseOperation, DatabaseOperationOutput, LocalResourceDatabaseOperation, LocalResourceDatabaseOperationOutput, SessionOperation, SessionOperationOutput
+    DatabaseOperation,
+    DatabaseOperationOutput,
+    LocalResourceDatabaseOperation,
+    LocalResourceDatabaseOperationOutput,
+    SessionOperation,
+    SessionOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
-use crate::persistence::session::{SessionId, SessionRepository};
 use crate::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
+use crate::persistence::session::{SessionId, SessionRepository};
 
 pub struct NativeDatabase {
     pub session_repository: SessionRepository,
@@ -66,16 +71,20 @@ impl NativeDatabase {
                     }
                 }
 
-                return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(created_resources))
+                DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(created_resources))
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Remove(id)) => {
-                if let Ok(resource) = self.local_resource_repository.delete_one(&LocalResourceId {
-                    r#type: None,
-                    order_id: Some(id)
-                }).await {
-                    return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(Some(resource)))
+                if let Ok(resource) = self
+                    .local_resource_repository
+                    .delete_one(&LocalResourceId {
+                        r#type: None,
+                        order_id: Some(id)
+                    })
+                    .await
+                {
+                    DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(Some(resource)))
                 } else {
-                    return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(None))
+                    DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(None))
                 }
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::FindAll) => {

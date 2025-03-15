@@ -5,8 +5,8 @@ use crate::app::AppEvent;
 use crate::{process_event, ShellRuntime};
 
 use super::database::NativeDatabase;
-use super::rpc::NativeRpc;
 use super::local_storage::NativeLocalStorage;
+use super::rpc::NativeRpc;
 use super::transfer::TransferNative;
 // Handle the effect comming from the platform
 // This is the placed where we can put Rust logic to share accross platform
@@ -35,7 +35,7 @@ impl NativeExecutor {
             CoreOperation::LocalStorage(local_storage) => {
                 let response = self.local_storage.handle(local_storage).await;
                 CoreOperationOutput::LocalStorage(response)
-            },
+            }
             CoreOperation::Transfer(transfer) => {
                 let response = self.transfer.handle(transfer).await;
                 CoreOperationOutput::Transfer(response)

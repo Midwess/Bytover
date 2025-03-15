@@ -18,7 +18,7 @@ impl GrpcChannel {
         Self {
             channel: Mutex::new(None),
             endpoint,
-            internet_connection: InternetConnection::new(),
+            internet_connection: InternetConnection::new()
         }
     }
 

@@ -2,14 +2,15 @@ use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
 
-use crate::{app::file_system::file::LocalResource, entities::user::User};
+use crate::app::file_system::file::LocalResource;
+use crate::entities::user::User;
 
 #[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
     pub progress: TransferProgress,
-    pub target: TransferTarget,
+    pub target: TransferTarget
 }
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]

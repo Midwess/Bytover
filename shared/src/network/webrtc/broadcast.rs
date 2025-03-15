@@ -1,20 +1,24 @@
-use std::{sync::Arc, time::{self, Duration}};
+use std::sync::Arc;
+use std::time::Duration;
 
-use devlog_sdk::distributed_id::gen_id;
 use futures_util::lock::Mutex;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, JoinMessage, Message, OfferMessage};
+use schema::devlog::rpc_signalling::server::{IceCandidate, JoinMessage, Message};
 use thiserror::Error;
-use tokio::{spawn, sync::OnceCell, task::JoinHandle};
-use webrtc::{api::APIBuilder, ice_transport::{ice_candidate::{RTCIceCandidate, RTCIceCandidateInit}, ice_candidate_type::RTCIceCandidateType, ice_protocol::RTCIceProtocol, ice_server::RTCIceServer}, peer_connection::{self, configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription, RTCPeerConnection}};
+use tokio::spawn;
+use tokio::sync::OnceCell;
+use tokio::task::JoinHandle;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use super::{connection::ConnectionWebRtc, signalling::{RtcSignallingErrors, RtcsSignalling}};
+use super::connection::ConnectionWebRtc;
+use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 
 #[derive(Debug, Error)]
 pub enum BroadcastWebRtcErrors {
     #[error("failedServerError to create peer connection {:?}", .0)]
     WebRTCServerError(#[from] webrtc::Error),
     #[error("failed to connect to signalling server {:?}", .0)]
-    SignallingServerError(#[from] RtcSignallingErrors),
+    SignallingServerError(#[from] RtcSignallingErrors)
 }
 
 pub struct BroadcastWebRtc {
@@ -22,7 +26,7 @@ pub struct BroadcastWebRtc {
     broadcast_handle: Mutex<Option<JoinHandle<()>>>,
     my_id: String,
     connections: Mutex<Vec<ConnectionWebRtc>>,
-    signalling_client: OnceCell<Arc<RtcsSignalling>>,
+    signalling_client: OnceCell<Arc<RtcsSignalling>>
 }
 
 impl BroadcastWebRtc {
@@ -32,10 +36,10 @@ impl BroadcastWebRtc {
             broadcast_handle: Mutex::new(None),
             my_id: uuid::Uuid::new_v4().to_string(),
             connections: Mutex::new(Vec::new()),
-            signalling_client: OnceCell::new(),
+            signalling_client: OnceCell::new()
         }
     }
-    
+
     pub async fn start(self: &Arc<Self>) -> Result<(), BroadcastWebRtcErrors> {
         log::info!(target: "broadcast", "Starting broadcast");
         let signalling_client = RtcsSignalling::start().await?;
@@ -71,9 +75,7 @@ impl BroadcastWebRtc {
             loop {
                 interval.tick().await;
                 log::info!(target: "broadcast", "Broadcasting...");
-                let join_message = JoinMessage {
-                    id: my_id.clone(),
-                };
+                let join_message = JoinMessage { id: my_id.clone() };
 
                 let message = Message {
                     scopes: scopes.clone(),
@@ -97,7 +99,7 @@ impl BroadcastWebRtc {
         }
 
         let from_id = message.from_id.clone();
-        if let Some(_) = message.join {
+        if message.join.is_some() {
             log::info!(target: "broadcast", "Received join message from {}", from_id);
             let mut existing_connection = self.connections.lock().await;
             if existing_connection.iter().any(|connection| connection.peer_id.eq(&from_id)) {
@@ -105,11 +107,8 @@ impl BroadcastWebRtc {
                 return Ok(());
             }
 
-            let connection = ConnectionWebRtc::local(
-                my_id.clone(),
-                from_id.clone(),
-                self.signalling_client.get().unwrap().clone(),
-            ).await;
+            let connection =
+                ConnectionWebRtc::local(my_id.clone(), from_id.clone(), self.signalling_client.get().unwrap().clone()).await;
 
             existing_connection.push(connection);
         }
@@ -121,12 +120,8 @@ impl BroadcastWebRtc {
             }
 
             let desc = RTCSessionDescription::offer(offer.sdp)?;
-            let connection = ConnectionWebRtc::remote(
-                my_id.clone(),
-                from_id,
-                desc,
-                self.signalling_client.get().unwrap().clone(),
-            ).await;
+            let connection =
+                ConnectionWebRtc::remote(my_id.clone(), from_id, desc, self.signalling_client.get().unwrap().clone()).await;
 
             existing_connection.push(connection);
         }
@@ -140,7 +135,7 @@ impl BroadcastWebRtc {
             candidate: candidate.candidate,
             sdp_mid: Some(candidate.sdp_mid),
             sdp_mline_index: Some(candidate.sdp_mline_index as u16),
-            username_fragment: None,
+            username_fragment: None
         }
     }
 }

@@ -1,10 +1,10 @@
 pub mod authentication;
+pub mod file_system;
 pub mod modules;
 pub mod operations;
 pub mod system;
 pub mod transfer;
 pub mod view_models;
-pub mod file_system;
 
 // pub mod bridge;
 
@@ -13,12 +13,7 @@ use crux_core::capability::CapabilityContext;
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::Capability;
 use crux_core::{App, Command};
-use modules::authentication::{
-    AuthenticationEvent,
-    AuthenticationModel,
-    AuthenticationModule,
-    AuthenticationViewModel
-};
+use modules::authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use operations::CoreOperation;
@@ -89,12 +84,7 @@ impl App for BitBridge {
     type Model = AppModel;
     type ViewModel = AppViewModel;
 
-    fn update(
-        &self,
-        event: Self::Event,
-        model: &mut Self::Model,
-        caps: &Self::Capabilities
-    ) -> Command<Self::Effect, Self::Event> {
+    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
             AppEvent::Environment(event) => {
                 let model = &mut model.environment;

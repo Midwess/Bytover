@@ -2,25 +2,25 @@ use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
 use schema::value::platform::Platform;
+use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
 use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
 use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
-    SessionOperation,
-    SessionOperationOutput,
     LocalResourceDatabaseOperation,
-    LocalResourceDatabaseOperationOutput
+    LocalResourceDatabaseOperationOutput,
+    SessionOperation,
+    SessionOperationOutput
 };
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
-use shared::app::transfer::file_selection_service::{ResourceSelection};
+use shared::app::transfer::file_selection_service::ResourceSelection;
 use shared::app::transfer::session::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
-use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::user::User;
@@ -66,7 +66,6 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferEvent>()?;
     gen.register_type::<TransferModel>()?;
     gen.register_type::<TransferMethodSelection>()?;
-
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;

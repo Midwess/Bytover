@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::{AppCommandContext, AppRequestBuilder};
 use crate::app::file_system::file::LocalResource;
+use crate::app::{AppCommandContext, AppRequestBuilder};
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -41,42 +41,38 @@ impl Operation for LocalStorageOperation {
 
 impl LocalStorageOperation {
     pub fn get_work_dir_path_cmd() -> AppRequestBuilder<impl Future<Output = String>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetWorkDirPath)).map(|it| {
-            match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::WorkDirPath(path)) => path,
-                _ => panic!("Mismatch in response type, expected WorkDirPath, got {:?}", it)
-            }
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetWorkDirPath)).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::WorkDirPath(path)) => path,
+            _ => panic!("Mismatch in response type, expected WorkDirPath, got {:?}", it)
         })
     }
 
     pub fn new_file(bytes: Vec<u8>, path: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::NewFile { bytes, path })).map(
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::NewFile { bytes, path })).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::NewFile(resource)) => resource,
+            _ => panic!("Mismatch in response type, expected NewFile, got {:?}", it)
+        })
+    }
+
+    pub fn copy(source: String, destination: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Copy { source, destination })).map(
             |it| match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::NewFile(resource)) => resource,
-                _ => panic!("Mismatch in response type, expected NewFile, got {:?}", it)
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Copy(resource)) => resource,
+                _ => panic!("Mismatch in response type, expected Copy, got {:?}", it)
             }
         )
     }
 
-    pub fn copy(source: String, destination: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Copy { source, destination }))
-            .map(|it| match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Copy(resource)) => resource,
-                _ => panic!("Mismatch in response type, expected Copy, got {:?}", it)
-            })
-    }
-
     pub fn zip(source: String, destination: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Zip { source, destination }))
-            .map(|it| match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Zip(resource)) => resource,
-                _ => panic!("Mismatch in response type, expected Zip, got {:?}", it)
-            })
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Zip { source, destination })).map(|it| match it
+        {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Zip(resource)) => resource,
+            _ => panic!("Mismatch in response type, expected Zip, got {:?}", it)
+        })
     }
 
     pub fn get(path: String) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Get { path })).map(|it| match it
-        {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Get { path })).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Get(resource)) => resource,
             _ => panic!("Mismatch in response type, expected Get, got {:?}", it)
         })
@@ -87,9 +83,7 @@ impl LocalStorageOperation {
             LocalStorageOperation::LoadFileSizeFromPlatformIdentifier(identifier)
         ))
         .map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(
-                size
-            )) => size,
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(size)) => size,
             _ => panic!(
                 "Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {:?}",
                 it
@@ -98,16 +92,32 @@ impl LocalStorageOperation {
     }
 
     pub fn load_file_name_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = String>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileNameFromPlatformIdentifier(identifier))).map(|it| match it {
+        Command::request_from_shell(CoreOperation::LocalStorage(
+            LocalStorageOperation::LoadFileNameFromPlatformIdentifier(identifier)
+        ))
+        .map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileNameFromPlatformIdentifier(name)) => name,
-            _ => panic!("Mismatch in response type, expected LoadFileNameFromPlatformIdentifier, got {:?}", it)
+            _ => panic!(
+                "Mismatch in response type, expected LoadFileNameFromPlatformIdentifier, got {:?}",
+                it
+            )
         })
     }
 
-    pub fn load_file_thumbnail_png_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileThumbnailPngFromPlatformIdentifier(identifier))).map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileThumbnailPngFromPlatformIdentifier(thumbnail)) => thumbnail,
-            _ => panic!("Mismatch in response type, expected LoadFileThumbnailPngFromPlatformIdentifier, got {:?}", it)
+    pub fn load_file_thumbnail_png_from_platform_identifier(
+        identifier: String
+    ) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(
+            LocalStorageOperation::LoadFileThumbnailPngFromPlatformIdentifier(identifier)
+        ))
+        .map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileThumbnailPngFromPlatformIdentifier(thumbnail)) => {
+                thumbnail
+            }
+            _ => panic!(
+                "Mismatch in response type, expected LoadFileThumbnailPngFromPlatformIdentifier, got {:?}",
+                it
+            )
         })
     }
 

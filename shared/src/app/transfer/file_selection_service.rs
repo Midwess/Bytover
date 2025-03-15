@@ -1,27 +1,24 @@
 use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
+use uniffi::Record;
 
+use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::database::{LocalResourceDatabaseOperation};
+use crate::app::operations::database::LocalResourceDatabaseOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
-    pub r#type: ResourceType,
+    pub r#type: ResourceType
 }
 
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
-    pub async fn load_resources(
-        &self,
-        ctx: AppCommandContext
-    ) {
+    pub async fn load_resources(&self, ctx: AppCommandContext) {
         let resources = LocalResourceDatabaseOperation::find_all().into_future(ctx.clone()).await;
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
             new: resources,
@@ -31,11 +28,7 @@ impl ResourceTransferSelectionService {
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 
-    pub async fn add_resources(
-        &self,
-        ctx: AppCommandContext,
-        selections: Vec<ResourceSelection>
-    ) {
+    pub async fn add_resources(&self, ctx: AppCommandContext, selections: Vec<ResourceSelection>) {
         let mut local_resources = vec![];
         for selection in selections {
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
@@ -62,7 +55,11 @@ impl ResourceTransferSelectionService {
                         .await;
 
                     let mut thumbnail_path = None;
-                    if let Some(thumbnail_png) = LocalStorageOperation::load_file_thumbnail_png_from_platform_identifier(identifier.clone()).into_future(ctx.clone()).await {
+                    if let Some(thumbnail_png) =
+                        LocalStorageOperation::load_file_thumbnail_png_from_platform_identifier(identifier.clone())
+                            .into_future(ctx.clone())
+                            .await
+                    {
                         let path = format!("thumbnails/{}.png", file_name);
                         let absolute_path = LocalStorageOperation::get_absolute_path(path.clone(), ctx.clone()).await;
                         let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
@@ -95,11 +92,7 @@ impl ResourceTransferSelectionService {
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 
-    pub async fn remove_resource(
-        &self, 
-        ctx: AppCommandContext, 
-        id: u64
-    ) {
+    pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {
         log::info!(target: "transfer", "Remove resource {:?}", id);
         let removed_resource = LocalResourceDatabaseOperation::remove(id).into_future(ctx.clone()).await;
         if let Some(removed_resource) = removed_resource {

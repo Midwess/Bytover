@@ -21,7 +21,11 @@ pub struct LocalResourceId {
 
 impl SurrealSerializer for LocalResourceId {
     fn serialize(self) -> Value {
-        vec![self.r#type.serialize(), self.order_id.serialize()].serialize()
+        vec![
+            self.r#type.serialize(),
+            self.order_id.serialize(),
+        ]
+        .serialize()
     }
 }
 
@@ -84,7 +88,8 @@ impl LocalSurrealDbRepository<LocalResource, LocalResourceId> for LocalResourceR
 impl LocalResourceRepository {
     pub async fn find_by_path(&self, path: &LocalResourcePath) -> Option<LocalResource> {
         let db = self.get_db().await;
-        let resources: Option<LocalResource> = db.query(surreal_quote!("SELECT * FROM LocalResource WHERE path = #val(path)"))
+        let resources: Option<LocalResource> = db
+            .query(surreal_quote!("SELECT * FROM LocalResource WHERE path = #val(path)"))
             .await
             .expect("Failed to connect to local resource database")
             .take(RPath::from(0))

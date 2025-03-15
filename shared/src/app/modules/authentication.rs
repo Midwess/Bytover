@@ -59,8 +59,6 @@ impl AppModule<BitBridge> for AuthenticationModule {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        AuthenticationViewModel {
-            user: model.user.clone()
-        }
+        AuthenticationViewModel { user: model.user.clone() }
     }
 }

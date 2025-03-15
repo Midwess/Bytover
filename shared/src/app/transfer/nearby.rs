@@ -1,4 +1,5 @@
-use crate::app::{operations::transfer::TransferOperation, AppCommandContext};
+use crate::app::operations::transfer::TransferOperation;
+use crate::app::AppCommandContext;
 
 pub struct NearbyService {}
 

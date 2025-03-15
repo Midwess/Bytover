@@ -1,12 +1,13 @@
-use tiny_http::{Request, Response, Server, StatusCode};
-use tokio::{spawn, task::{spawn_blocking, JoinHandle}};
-use std::path::Path;
-use std::fs::File;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tiny_http::{Request, Response, Server, StatusCode};
+use tokio::spawn;
+use tokio::task::{spawn_blocking, JoinHandle};
 use url::Url;
 
-use crate::{entities::user::User, native::message_to_shell::MessageToShell, serialize, ShellRuntime};
+use crate::entities::user::User;
+use crate::native::message_to_shell::MessageToShell;
+use crate::{serialize, ShellRuntime};
 
 pub struct HttpServer {
     port: u16,
@@ -17,7 +18,12 @@ pub struct HttpServer {
 
 impl HttpServer {
     pub fn new(port: u16, current_active_workdir: String, shell_runtime: Arc<dyn ShellRuntime>) -> Self {
-        Self { port, current_active_workdir, server_handle: None, shell_runtime }
+        Self {
+            port,
+            current_active_workdir,
+            server_handle: None,
+            shell_runtime
+        }
     }
 
     pub async fn start(&mut self) {
@@ -25,7 +31,10 @@ impl HttpServer {
         let server = match {
             let port = self.port;
             spawn_blocking(move || Server::http(format!("0.0.0.0:{}", port)))
-        }.await.unwrap() {
+        }
+        .await
+        .unwrap()
+        {
             Ok(server) => server,
             Err(e) => {
                 log::error!(target: ns, "Failed to start server: {:?}", e);
@@ -43,17 +52,15 @@ impl HttpServer {
                     Ok(url) => url,
                     Err(e) => {
                         log::error!(target: ns, "Failed to parse URL: {:?}", e);
-                        let response = Response::from_string("Invalid URL")
-                            .with_status_code(400);
+                        let response = Response::from_string("Invalid URL").with_status_code(400);
                         let _ = request.respond(response);
                         continue;
                     }
                 };
 
                 let path = parsed_url.path().to_string();
-                let query_params: HashMap<String, String> = parsed_url.query_pairs()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect();
+                let query_params: HashMap<String, String> =
+                    parsed_url.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
 
                 match path.as_str() {
                     str if str.ends_with("say-hello") => {
@@ -62,14 +69,9 @@ impl HttpServer {
                             say_hello(request, path, query_params, shell_runtime).await;
                         });
                     }
-                    str if str.ends_with("thumbnail") => {
-
-                    }
-                    str if str.ends_with("session-invitation") => {
-                    }
-                    str if str.ends_with("file_download") => {
-
-                    }
+                    str if str.ends_with("thumbnail") => {}
+                    str if str.ends_with("session-invitation") => {}
+                    str if str.ends_with("file_download") => {}
                     _ => {
                         let response = Response::new_empty(StatusCode(404));
                         let _ = request.respond(response);
@@ -77,7 +79,7 @@ impl HttpServer {
                 }
             }
         });
-        
+
         self.server_handle = Some(server_handle);
     }
 

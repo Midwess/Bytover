@@ -38,9 +38,7 @@ impl RpcOperation {
         })
     }
 
-    pub fn get_sign_in_url(
-        device_info: DeviceInfo
-    ) -> AppRequestBuilder<impl Future<Output = Result<String, NetworkError>>> {
+    pub fn get_sign_in_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, NetworkError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info))).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::SignInUrl(url)) => Ok(url),
             CoreOperationOutput::Rpc(RpcOperationOutput::NetworkError(error)) => Err(error),

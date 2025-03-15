@@ -1,16 +1,22 @@
-use std::{sync::Arc, time::{self, Duration}};
+use std::sync::Arc;
 
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, Message, OfferMessage};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, Message, OfferMessage};
 use thiserror::Error;
-use tokio::{spawn, sync::{Mutex, OnceCell}, task::JoinHandle};
-use webrtc::{api::APIBuilder, data_channel::RTCDataChannel, ice_transport::{ice_candidate::{RTCIceCandidate, RTCIceCandidateInit}, ice_candidate_type::RTCIceCandidateType, ice_protocol::RTCIceProtocol, ice_server::RTCIceServer}, peer_connection::{self, configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription, RTCPeerConnection}, turn::proto::data};
+use tokio::sync::Mutex;
+use webrtc::api::APIBuilder;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 
-use super::{broadcast::BroadcastWebRtc, signalling::RtcsSignalling};
+use super::broadcast::BroadcastWebRtc;
+use super::signalling::RtcsSignalling;
 
 #[derive(Debug, Error)]
 pub enum ConnectionWebRtcErrors {
     #[error("failedServerError to create peer connection {:?}", .0)]
-    WebRTCServerError(#[from] webrtc::Error),
+    WebRTCServerError(#[from] webrtc::Error)
 }
 
 pub struct ConnectionWebRtc {
@@ -19,7 +25,7 @@ pub struct ConnectionWebRtc {
     pub peer_connection: Arc<RTCPeerConnection>,
     pub data_channel: Arc<Mutex<Option<Arc<RTCDataChannel>>>>,
     pub signalling_client: Arc<RtcsSignalling>,
-    pub ns: String,
+    pub ns: String
 }
 
 impl PartialEq for ConnectionWebRtc {
@@ -29,15 +35,10 @@ impl PartialEq for ConnectionWebRtc {
 }
 
 impl ConnectionWebRtc {
-    pub async fn local(
-        id: String,
-        peer_id: String,
-        signalling_client: Arc<RtcsSignalling>,
-    ) -> Self {
+    pub async fn local(id: String, peer_id: String, signalling_client: Arc<RtcsSignalling>) -> Self {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
         log::info!(target: ns.as_str(), "Creating local connection to peer {}", peer_id);
-        let api = APIBuilder::new()
-            .build();
+        let api = APIBuilder::new().build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await.unwrap();
         let data_channel = peer_connection.create_data_channel("data", None).await.unwrap();
@@ -52,12 +53,14 @@ impl ConnectionWebRtc {
         peer_connection.set_local_description(offer.clone()).await.unwrap();
 
         // TODO: Send offer to peer using signalling server
-        signalling_client.send(Message {
-            from_id: id.clone(),
-            to_id: Some(peer_id.clone()),
-            offer: Some(OfferMessage { sdp: offer.sdp.clone() }),
-            ..Default::default()
-        }).unwrap();
+        signalling_client
+            .send(Message {
+                from_id: id.clone(),
+                to_id: Some(peer_id.clone()),
+                offer: Some(OfferMessage { sdp: offer.sdp.clone() }),
+                ..Default::default()
+            })
+            .unwrap();
 
         let ns = ns.clone();
         let me = Self {
@@ -74,16 +77,10 @@ impl ConnectionWebRtc {
         me
     }
 
-    pub async fn remote(
-        id: String,
-        peer_id: String,
-        offer: RTCSessionDescription,
-        signalling_client: Arc<RtcsSignalling>,
-    ) -> Self {
+    pub async fn remote(id: String, peer_id: String, offer: RTCSessionDescription, signalling_client: Arc<RtcsSignalling>) -> Self {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
         log::info!(target: ns.as_str(), "Creating remote connection to peer {}", peer_id);
-        let api = APIBuilder::new()
-           .build();
+        let api = APIBuilder::new().build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await.unwrap();
         peer_connection.set_remote_description(offer).await.unwrap();
@@ -91,19 +88,21 @@ impl ConnectionWebRtc {
         let answer = peer_connection.create_answer(None).await.unwrap();
 
         log::info!(target: ns.as_str(), "Sending answer to peer {}", peer_id);
-        signalling_client.send(Message {
-            from_id: id.clone(),
-            to_id: Some(peer_id.clone()),
-            answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
-            ..Default::default()
-        }).unwrap();
+        signalling_client
+            .send(Message {
+                from_id: id.clone(),
+                to_id: Some(peer_id.clone()),
+                answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
+                ..Default::default()
+            })
+            .unwrap();
 
         peer_connection.set_local_description(answer).await.unwrap();
 
         let ns = ns.clone();
-       
+
         let data_channel_store = Arc::new(Mutex::new(None));
-       
+
         {
             let ns = ns.clone();
             let data_channel_store = data_channel_store.clone();
@@ -115,14 +114,14 @@ impl ConnectionWebRtc {
                 })
             }));
         }
-        
+
         let me = Self {
             id,
             peer_id,
             peer_connection: Arc::new(peer_connection),
             data_channel: data_channel_store,
             signalling_client,
-            ns,
+            ns
         };
 
         me.handle_signalling_message();
@@ -143,21 +142,25 @@ impl ConnectionWebRtc {
 
                 if let Some(candidate) = msg.ice_candidate_update {
                     log::info!(target: "rtc", "Adding ice candidate from {}", msg.from_id);
-                    peer_connection.add_ice_candidate(BroadcastWebRtc::parse_ice_candidate(
-                        msg.from_id.clone(),
-                        candidate.ice_candidates
-                    )).await.unwrap();
+                    peer_connection
+                        .add_ice_candidate(BroadcastWebRtc::parse_ice_candidate(
+                            msg.from_id.clone(),
+                            candidate.ice_candidates
+                        ))
+                        .await
+                        .unwrap();
 
                     return;
                 }
 
                 if let Some(answer) = msg.answer {
-                    if msg.to_id.map_or(false, |id| id == my_id) {
+                    if msg.to_id.is_some_and(|id| id == my_id) {
                         log::info!(target: "rtc", "Setting remote description from {}", msg.from_id);
-                        peer_connection.set_remote_description(RTCSessionDescription::answer(answer.sdp).expect("Answer sdb is wrong")).await.unwrap();
+                        peer_connection
+                            .set_remote_description(RTCSessionDescription::answer(answer.sdp).expect("Answer sdb is wrong"))
+                            .await
+                            .unwrap();
                     }
-
-                    return;
                 }
             })
         }));
@@ -166,13 +169,10 @@ impl ConnectionWebRtc {
     pub fn create_config() -> RTCConfiguration {
         RTCConfiguration {
             ice_servers: vec![RTCIceServer {
-                urls: vec![
-                    "stun:stun.l.google.com:19302".to_string(),
-                ],
+                urls: vec!["stun:stun.l.google.com:19302".to_string()],
                 ..Default::default()
             }],
             ..Default::default()
         }
     }
-    
 }
