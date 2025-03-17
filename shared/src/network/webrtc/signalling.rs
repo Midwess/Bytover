@@ -1,11 +1,15 @@
 use std::future::Future;
 use std::pin::Pin;
 
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use schema::devlog::rpc_signalling::server::Message as SignallingMessage;
-use tokio::sync::broadcast;
+use tokio::net::TcpStream;
+use tokio::spawn;
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::get_signalling_server_ws_url;
 use prost::Message as prost_message;
@@ -20,9 +24,9 @@ pub enum RtcSignallingErrors {
 }
 
 pub struct RtcsSignalling {
-    send_task: JoinHandle<()>,
     receive_task: JoinHandle<()>,
-    out_sender: broadcast::Sender<SignallingMessage>
+    out_sender: broadcast::Sender<SignallingMessage>,
+    server_writer: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>
 }
 
 impl RtcsSignalling {
@@ -31,12 +35,6 @@ impl RtcsSignalling {
         let (mut write, mut read) = ws_stream.split();
 
         let (out_sender, mut out_receiver) = broadcast::channel::<SignallingMessage>(16);
-
-        let send_task = tokio::spawn(async move {
-            while let Ok(message) = out_receiver.recv().await {
-                write.send(Message::Binary(message.encode_to_vec().into())).await.unwrap();
-            }
-        });
 
         let receive_task = {
             let out_sender = out_sender.clone();
@@ -54,14 +52,15 @@ impl RtcsSignalling {
         };
 
         Ok(Self {
-            send_task,
             receive_task,
-            out_sender
+            out_sender,
+            server_writer: Mutex::new(write)
         })
     }
 
-    pub fn send(&self, message: SignallingMessage) -> Result<(), RtcSignallingErrors> {
-        let _ = self.out_sender.send(message);
+    pub async fn send(&self, message: SignallingMessage) -> Result<(), RtcSignallingErrors> {
+        let mut writer = self.server_writer.lock().await;
+        writer.send(Message::Binary(message.encode_to_vec().into())).await?;
         Ok(())
     }
 
@@ -73,5 +72,11 @@ impl RtcsSignalling {
                 callback(message).await;
             }
         })
+    }
+}
+
+impl Drop for RtcsSignalling {
+    fn drop(&mut self) {
+        self.receive_task.abort();
     }
 }

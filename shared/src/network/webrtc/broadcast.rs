@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use super::connection::ConnectionWebRtc;
+use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 
 #[derive(Debug, Error)]
@@ -18,7 +18,9 @@ pub enum BroadcastWebRtcErrors {
     #[error("failedServerError to create peer connection {:?}", .0)]
     WebRTCServerError(#[from] webrtc::Error),
     #[error("failed to connect to signalling server {:?}", .0)]
-    SignallingServerError(#[from] RtcSignallingErrors)
+    SignallingServerError(#[from] RtcSignallingErrors),
+    #[error("failed to create connection {:?}", .0)]
+    ConnectionError(#[from] ConnectionWebRtcErrors)
 }
 
 pub struct BroadcastWebRtc {
@@ -41,7 +43,6 @@ impl BroadcastWebRtc {
     }
 
     pub async fn start(self: &Arc<Self>) -> Result<(), BroadcastWebRtcErrors> {
-        log::info!(target: "broadcast", "Starting broadcast");
         let signalling_client = RtcsSignalling::start().await?;
         let _ = self.signalling_client.set(Arc::new(signalling_client));
 
@@ -51,7 +52,9 @@ impl BroadcastWebRtc {
         self.signalling_client.get().unwrap().subscribe(Box::new(move |msg| {
             let me = me.clone();
             Box::pin(async move {
-                let _ = me.handle_signalling_message(msg).await;
+                if let Err(e) = me.handle_signalling_message(msg).await {
+                    log::error!(target: "broadcast", "Error handling signalling message: {:?}", e);
+                }
             })
         }));
 
@@ -64,7 +67,6 @@ impl BroadcastWebRtc {
             handle.abort();
         }
 
-        log::info!(target: "broadcast", "Starting broadcast");
         let scopes = self.scopes.clone();
         let my_id = self.my_id.clone();
         let signalling_client = self.signalling_client.clone();
@@ -84,7 +86,9 @@ impl BroadcastWebRtc {
                     ..Default::default()
                 };
 
-                let _ = signalling_client.get().unwrap().send(message);
+                if let Err(e) = signalling_client.get().unwrap().send(message).await {
+                    log::error!(target: "broadcast", "Error sending message: {:?}", e);
+                }
             }
         }));
 
@@ -93,8 +97,8 @@ impl BroadcastWebRtc {
 
     pub async fn handle_signalling_message(self: &Arc<Self>, message: Message) -> Result<(), BroadcastWebRtcErrors> {
         let my_id = self.my_id.clone();
-        if message.from_id == self.my_id {
-            log::info!(target: "broadcast", "Received message from myself");
+        if message.from_id.eq(&my_id) {
+            log::info!(target: "broadcast", "Received message from myself {} vs {}", message.from_id, my_id);
             return Ok(());
         }
 
@@ -108,7 +112,7 @@ impl BroadcastWebRtc {
             }
 
             let connection =
-                ConnectionWebRtc::local(my_id.clone(), from_id.clone(), self.signalling_client.get().unwrap().clone()).await;
+                ConnectionWebRtc::local(my_id.clone(), from_id.clone(), self.signalling_client.get().unwrap().clone()).await?;
 
             existing_connection.push(connection);
         }
@@ -121,7 +125,7 @@ impl BroadcastWebRtc {
 
             let desc = RTCSessionDescription::offer(offer.sdp)?;
             let connection =
-                ConnectionWebRtc::remote(my_id.clone(), from_id, desc, self.signalling_client.get().unwrap().clone()).await;
+                ConnectionWebRtc::remote(my_id.clone(), from_id, desc, self.signalling_client.get().unwrap().clone()).await?;
 
             existing_connection.push(connection);
         }
