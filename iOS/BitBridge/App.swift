@@ -11,7 +11,6 @@ import SharedTypes
 @main
 struct Main: App {
     @StateObject private var core = Core()
-    @StateObject private var server = WebSocketServer()
     
     var body: some Scene {
         WindowGroup {

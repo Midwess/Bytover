@@ -1,12 +1,14 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Duration;
 
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use schema::devlog::rpc_signalling::server::Message as SignallingMessage;
 use tokio::net::TcpStream;
-use tokio::spawn;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::broadcast::Receiver;
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
@@ -20,63 +22,91 @@ pub type OnMessageFn = Box<dyn (FnMut(SignallingMessage) -> Pin<Box<dyn Future<O
 #[derive(Debug, Error)]
 pub enum RtcSignallingErrors {
     #[error("failed to connect to signalling server {:?}", .0)]
-    SocketError(#[from] tokio_tungstenite::tungstenite::Error)
+    SocketError(#[from] tokio_tungstenite::tungstenite::Error),
+    #[error("failed to send message to signalling server")]
+    SendError(String),
 }
 
 pub struct RtcsSignalling {
-    receive_task: JoinHandle<()>,
-    out_sender: broadcast::Sender<SignallingMessage>,
-    server_writer: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>
+    msg_broadcast: broadcast::Sender<SignallingMessage>,
+    server_writer: Arc<Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    join_handle: JoinHandle<()>,
 }
 
 impl RtcsSignalling {
     pub async fn start() -> Result<Self, RtcSignallingErrors> {
-        let (ws_stream, _) = tokio_tungstenite::connect_async(get_signalling_server_ws_url()).await?;
-        let (mut write, mut read) = ws_stream.split();
+        let (msg_broadcast, _) = broadcast::channel::<SignallingMessage>(32);
 
-        let (out_sender, mut out_receiver) = broadcast::channel::<SignallingMessage>(16);
-
-        let receive_task = {
-            let out_sender = out_sender.clone();
+        let server_writer = Arc::new(Mutex::new(None));
+        let join_handle = {
+            let server_writer = server_writer.clone();
+            let msg_broadcast = msg_broadcast.clone();
             tokio::spawn(async move {
-                while let Some(Ok(message)) = read.next().await {
-                    if let Message::Binary(data) = message {
-                        let Ok(message) = SignallingMessage::decode(&data[..]) else {
-                            continue;
-                        };
+                let mut retry_ticker = tokio::time::interval(Duration::from_secs(5));
+                loop {
+                    let mut new_server_writer = server_writer.lock().await;
+                    let Ok((ws_stream, _)) = tokio_tungstenite::connect_async(get_signalling_server_ws_url()).await else {
+                        log::error!(target: "rtc-signalling", "Socket is not connected, retrying...");
+                        retry_ticker.tick().await;
+                        continue;
+                    };
 
-                        out_sender.send(message).unwrap();
+                    let (write, mut read) = ws_stream.split();
+                    *new_server_writer = Some(write);
+                    drop(new_server_writer);
+
+                    log::info!(target: "rtc-signalling", "Connected to signalling server");
+                    while let Some(Ok(message)) = read.next().await {
+                        if let Message::Binary(data) = message {
+                            let Ok(message) = SignallingMessage::decode(&data[..]) else {
+                                continue;
+                            };
+
+                            let _ = msg_broadcast.send(message);
+                        }
                     }
+
+                    let mut server_writer = server_writer.lock().await;
+                    *server_writer = None;
+                    log::error!(target: "rtc-signalling", "Socket is not connected, retrying...");
+
+                    retry_ticker.tick().await;
                 }
             })
         };
 
         Ok(Self {
-            receive_task,
-            out_sender,
-            server_writer: Mutex::new(write)
+            join_handle,
+            msg_broadcast,
+            server_writer,
         })
     }
 
     pub async fn send(&self, message: SignallingMessage) -> Result<(), RtcSignallingErrors> {
-        let mut writer = self.server_writer.lock().await;
-        writer.send(Message::Binary(message.encode_to_vec().into())).await?;
-        Ok(())
+        let timeout = Duration::from_secs(10);
+        let mut ticker = tokio::time::interval(Duration::from_secs(1));
+        let clock = tokio::time::Instant::now();
+        while clock.elapsed() < timeout {
+            let mut writer = self.server_writer.lock().await;
+            if let Some(writer) = writer.as_mut() {
+                writer.send(Message::Binary(message.encode_to_vec().into())).await?;
+                return Ok(());
+            }
+
+            log::info!(target: "rtc-signalling", "Waiting for socket to re-connect");
+            ticker.tick().await;
+        }
+
+        Err(RtcSignallingErrors::SendError("Socket is not connected".to_string()))
     }
 
-    pub fn subscribe(&self, mut callback: OnMessageFn) -> JoinHandle<()> {
-        let mut receiver = self.out_sender.subscribe();
-
-        tokio::spawn(async move {
-            while let Ok(message) = receiver.recv().await {
-                callback(message).await;
-            }
-        })
+    pub fn subscribe(&self) -> Receiver<SignallingMessage> {
+        self.msg_broadcast.subscribe()
     }
 }
 
 impl Drop for RtcsSignalling {
     fn drop(&mut self) {
-        self.receive_task.abort();
+        self.join_handle.abort();
     }
 }

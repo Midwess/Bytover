@@ -1,8 +1,12 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, Message, OfferMessage};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::spawn;
+use tokio::sync::{mpsc, oneshot, Mutex, OnceCell};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
@@ -19,15 +23,18 @@ pub enum ConnectionWebRtcErrors {
     #[error("failedServerError to create peer connection {:?}", .0)]
     WebRTCServerError(#[from] webrtc::Error),
     #[error("failed to send message to signalling server {:?}", .0)]
-    SignallingServerError(#[from] RtcSignallingErrors)
+    SignallingServerError(#[from] RtcSignallingErrors),
+    #[error("connection timed out")]
+    ConnectionTimeout
 }
 
 pub struct ConnectionWebRtc {
     pub id: String,
     pub peer_id: String,
     pub peer_connection: Arc<RTCPeerConnection>,
-    pub data_channel: Arc<Mutex<Option<Arc<RTCDataChannel>>>>,
+    pub data_channel: OnceCell<Arc<RTCDataChannel>>,
     pub signalling_client: Arc<RtcsSignalling>,
+    pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub ns: String
 }
 
@@ -43,46 +50,106 @@ impl ConnectionWebRtc {
         log::info!(target: ns.as_str(), "Creating local connection to peer {}", peer_id);
         let api = APIBuilder::new().build();
 
-        let peer_connection = api.new_peer_connection(Self::create_config()).await.unwrap();
-        let data_channel = peer_connection.create_data_channel("data", None).await.unwrap();
-        let ns2 = ns.clone();
-        data_channel.on_open(Box::new(move || {
-            Box::pin(async move {
-                log::info!(target: ns2.as_str(), "Data channel opened");
-            })
-        }));
+        let (notified_data_channel, mut data_channel_receiver) = mpsc::channel(1);
+        let peer_connection = api.new_peer_connection(Self::create_config()).await?;
+        {
+            let data_channel = peer_connection.create_data_channel("data", None).await?;
+            data_channel.clone().on_open(Box::new(move || {
+                Box::pin(async move {
+                    let _ = notified_data_channel.send(data_channel).await;
+                })
+            }));
+        }
 
-        let offer = peer_connection.create_offer(None).await.unwrap();
-        peer_connection.set_local_description(offer.clone()).await.unwrap();
+        let offer = peer_connection.create_offer(None).await?;
+        peer_connection.set_local_description(offer.clone()).await?;
 
-        let ns = ns.clone();
         let me = Self {
             id,
             peer_id,
             peer_connection: Arc::new(peer_connection),
-            data_channel: Arc::new(Mutex::new(Some(data_channel))),
+            data_channel: OnceCell::new(),
             signalling_client,
-            ns
+            signalling_join_handle: Arc::new(Mutex::new(None)),
+            ns: ns.clone()
         };
-
-        me.handle_signalling_message();
-
+        
         me.handle_ice_candidate();
 
-        me.signalling_client
-            .send(Message {
-                from_id: me.id.clone(),
-                to_id: Some(me.peer_id.clone()),
-                offer: Some(OfferMessage { sdp: offer.sdp.clone() }),
-                ..Default::default()
-            })
-            .await?;
+        log::info!(target: ns.as_str(), "Sending offer to signalling server");
+        let _ = spawn({
+            let to_id = me.peer_id.clone();
+            let from_id = me.id.clone();
+            let signalling_client = me.signalling_client.clone();
+            let ns = ns.clone();
+            async move {
+                if let Err(e) = signalling_client
+                    .send(Message {
+                        from_id,
+                        to_id: Some(to_id),
+                        offer: Some(OfferMessage { sdp: offer.sdp.clone() }),
+                        ..Default::default()
+                    })
+                    .await {
+                        log::error!(target: ns.as_str(), "Failed to send offer: {:?}", e);
+                    }
+            }
+        }); 
 
+        me.handle_signalling_message().await;
+
+        let clock = Instant::now();
+        let connection_timeout = Duration::from_secs(50);
+        let mut signalling_subscription = me.signalling_client.subscribe();
+        log::info!(target: ns.as_str(), "Waiting for answer from signalling server");
+
+        let mut answer_received = false;
+        while let Ok(msg) = signalling_subscription.recv().await {
+            if clock.elapsed() > connection_timeout {
+                log::error!(target: ns.as_str(), "Connection timed out waiting for answer");
+                return Err(ConnectionWebRtcErrors::ConnectionTimeout);
+            }
+
+            if let Some(answer) = msg.answer {
+                if msg.to_id.is_some_and(|id| id == me.id) && msg.from_id == me.peer_id {
+                    log::info!(target: ns.as_str(), "Setting remote description from {}", msg.from_id);
+                    if let Err(e) = me.peer_connection.set_remote_description(
+                        RTCSessionDescription::answer(answer.sdp).map_err(|e| {
+                            log::error!(target: ns.as_str(), "Invalid answer SDP: {:?}", e);
+                            ConnectionWebRtcErrors::WebRTCServerError(e)
+                        })?
+                    ).await {
+                        log::error!(target: ns.as_str(), "Failed to set remote description: {:?}", e);
+                        return Err(ConnectionWebRtcErrors::WebRTCServerError(e));
+                    }
+                    answer_received = true;
+                    break;
+                }
+            }
+        }
+
+        if !answer_received {
+            log::error!(target: ns.as_str(), "No answer received within timeout");
+            return Err(ConnectionWebRtcErrors::ConnectionTimeout);
+        }
+
+        match tokio::time::timeout(connection_timeout, data_channel_receiver.recv()).await {
+            Ok(Some(data_channel)) => {
+                let _ = me.data_channel.set(data_channel);
+            }
+            _ => {
+                log::error!(target: ns.as_str(), "Data channel connection timed out");
+                return Err(ConnectionWebRtcErrors::ConnectionTimeout);
+            }
+        }
+
+        log::info!(target: ns.as_str(), "Connection established in {:?}", clock.elapsed().as_secs_f32());
         Ok(me)
     }
 
     pub async fn remote(id: String, peer_id: String, offer: RTCSessionDescription, signalling_client: Arc<RtcsSignalling>) -> Result<Self, ConnectionWebRtcErrors> {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
+        let clock = Instant::now();
         log::info!(target: ns.as_str(), "Creating remote connection to peer {}", peer_id);
         let api = APIBuilder::new().build();
 
@@ -93,61 +160,89 @@ impl ConnectionWebRtc {
  
         peer_connection.set_local_description(answer.clone()).await.unwrap();
 
-        let data_channel_store = Arc::new(Mutex::new(None));
-
+        let (notified_data_channel, mut data_channel_receiver) = mpsc::channel(1);
         {
-            let ns = ns.clone();
-            let data_channel_store = data_channel_store.clone();
             peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-                let data_channel_store = data_channel_store.clone();
-                Box::pin(async move {
-                    let mut data_channel_store = data_channel_store.lock().await;
-                    *data_channel_store = Some(d);
-                })
+                let notified_data_channel = notified_data_channel.clone();
+                let connection = d.clone();
+                d.on_open(Box::new(move || {
+                    log::info!(target: "tiendang-debug", "Data channel opened");
+                    Box::pin(async move {
+                        let _ = notified_data_channel.send(connection).await;
+                    })
+                }));
+
+                Box::pin(async move {})
             }));
         }
+
+        let _ = spawn({
+            let signalling_client: Arc<RtcsSignalling> = signalling_client.clone();
+            let id = id.clone();
+            let peer_id = peer_id.clone();
+            log::info!(target: ns.as_str(), "Sending answer to signalling server");
+            async move {
+                let _ = signalling_client
+                    .send(Message {
+                        from_id: id,
+                        to_id: Some(peer_id),
+                        answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
+                        ..Default::default()
+                    })
+                    .await;
+            }
+        });
 
         let me = Self {
             id,
             peer_id,
-            peer_connection: Arc::new(peer_connection),
-            data_channel: data_channel_store,
             signalling_client,
-            ns
+            signalling_join_handle: Arc::new(Mutex::new(None)),
+            peer_connection: Arc::new(peer_connection),
+            data_channel: OnceCell::new(),
+            ns: ns.clone()
         };
 
-        me.handle_signalling_message();
+        me.handle_ice_candidate(); 
 
-        me.handle_ice_candidate();
+        let connection_timeout = Duration::from_secs(35);
+        
+        me.handle_signalling_message().await;
 
-        me.signalling_client
-            .send(Message {
-                from_id: me.id.clone(),
-                to_id: Some(me.peer_id.clone()),
-                answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
-                ..Default::default()
-            })
-            .await?;
+        match tokio::time::timeout(connection_timeout, data_channel_receiver.recv()).await {
+            Ok(Some(data_channel)) => {
+                let _ = me.data_channel.set(data_channel);
+            }
+            _ => {
+                log::error!(target: ns.as_str(), "Connection timed out");
+                return Err(ConnectionWebRtcErrors::ConnectionTimeout);
+            }
+        }
 
+        log::info!(target: ns.as_str(), "Connection established in {:?}", clock.elapsed().as_secs_f32());
         Ok(me)
     }
 
-    pub fn handle_signalling_message(&self) {
+    pub async fn handle_signalling_message(&self) {
+        let mut signalling_join_handle = self.signalling_join_handle.lock().await;
+        if let Some(join_handle) = signalling_join_handle.take() {
+            join_handle.abort();
+        }
+
         let peer_connection = self.peer_connection.clone();
         let my_id = self.id.clone();
-        self.signalling_client.subscribe(Box::new(move |msg| {
-            let my_id = my_id.clone();
-            let peer_connection = peer_connection.clone();
-            Box::pin(async move {
-                if msg.from_id == my_id {
+        let peer_connection = peer_connection.clone();
+        let mut signalling_subscription = self.signalling_client.subscribe();
+        *signalling_join_handle = Some(tokio::spawn(async move {
+            while let Ok(msg) = signalling_subscription.recv().await {
+                if msg.from_id == my_id || msg.to_id.is_some_and(|id| id != my_id) {
                     return;
                 }
-
+                
                 if let Some(candidate) = msg.ice_candidate_update {
                     log::info!(target: "rtc", "Adding ice candidate from {}", msg.from_id);
                     let result = peer_connection
                         .add_ice_candidate(BroadcastWebRtc::parse_ice_candidate(
-                            msg.from_id.clone(),
                             candidate.ice_candidates
                         ))
                         .await;
@@ -158,20 +253,7 @@ impl ConnectionWebRtc {
 
                     return;
                 }
-
-                if let Some(answer) = msg.answer {
-                    if msg.to_id.is_some_and(|id| id == my_id) {
-                        log::info!(target: "rtc", "Setting remote description from {}", msg.from_id);
-                        let result = peer_connection
-                            .set_remote_description(RTCSessionDescription::answer(answer.sdp).expect("Answer sdb is wrong"))
-                            .await;
-
-                        if let Err(e) = result {
-                            log::error!(target: "rtc", "Error setting remote description: {:?}", e);
-                        }
-                    }
-                }
-            })
+            }
         }));
     }
 
@@ -187,6 +269,7 @@ impl ConnectionWebRtc {
 
             Box::pin(async move {
                 if let Some(candidate) = candidate {
+                    log::info!(target: "rtc", "Sending ice candidate to {}", peer_id);
                     let result = signaling_client.send(Message {
                         from_id: my_id.clone(),
                         to_id: Some(peer_id.clone()),
@@ -227,5 +310,16 @@ impl ConnectionWebRtc {
             }],
             ..Default::default()
         }
+    }
+}
+
+impl Drop for ConnectionWebRtc {
+    fn drop(&mut self) {
+        let mut signalling_join_handle = self.signalling_join_handle.clone();
+        spawn(async move {
+            if let Some(join_handle) = signalling_join_handle.lock().await.take() {
+                join_handle.abort();
+            }
+        });
     }
 }

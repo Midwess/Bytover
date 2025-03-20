@@ -59,6 +59,7 @@ url = { version = "2.5.4" }
 mdns-sd = { version = "0.13.3" }
 webrtc = { version = "0.12.0" }
 uuid = { version = "1.16.0" }
+rand = { version = "0.9.0" }
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

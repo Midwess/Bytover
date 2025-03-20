@@ -55,7 +55,8 @@ lib = [
     "mdns-sd",
     "webrtc",
     "prost",
-    "uuid"
+    "uuid",
+    "rand"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -92,7 +93,7 @@ mdns-sd = { workspace = true, optional = true }
 webrtc = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
-
+rand = { workspace = true, optional = true }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
