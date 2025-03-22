@@ -10,6 +10,7 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
@@ -24,18 +25,18 @@ pub enum RtcSignallingErrors {
     #[error("failed to connect to signalling server {:?}", .0)]
     SocketError(#[from] tokio_tungstenite::tungstenite::Error),
     #[error("failed to send message to signalling server")]
-    SendError(String),
+    SendError(String)
 }
 
 pub struct RtcsSignalling {
     msg_broadcast: broadcast::Sender<SignallingMessage>,
     server_writer: Arc<Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
-    join_handle: JoinHandle<()>,
+    join_handle: JoinHandle<()>
 }
 
 impl RtcsSignalling {
     pub async fn start() -> Result<Self, RtcSignallingErrors> {
-        let (msg_broadcast, _) = broadcast::channel::<SignallingMessage>(32);
+        let (msg_broadcast, _) = broadcast::channel::<SignallingMessage>(128);
 
         let server_writer = Arc::new(Mutex::new(None));
         let join_handle = {
@@ -47,6 +48,7 @@ impl RtcsSignalling {
                     let mut new_server_writer = server_writer.lock().await;
                     let Ok((ws_stream, _)) = tokio_tungstenite::connect_async(get_signalling_server_ws_url()).await else {
                         log::error!(target: "rtc-signalling", "Socket is not connected, retrying...");
+                        drop(new_server_writer);
                         retry_ticker.tick().await;
                         continue;
                     };
@@ -59,16 +61,20 @@ impl RtcsSignalling {
                     while let Some(Ok(message)) = read.next().await {
                         if let Message::Binary(data) = message {
                             let Ok(message) = SignallingMessage::decode(&data[..]) else {
+                                log::error!(target: "rtc-signalling", "Failed to decode message");
                                 continue;
                             };
 
-                            let _ = msg_broadcast.send(message);
+                            if let Err(e) = msg_broadcast.send(message) {
+                                log::error!(target: "rtc-signalling", "Failed to send message to broadcast: {:?}", e);
+                            }
                         }
                     }
 
                     let mut server_writer = server_writer.lock().await;
                     *server_writer = None;
                     log::error!(target: "rtc-signalling", "Socket is not connected, retrying...");
+                    drop(server_writer);
 
                     retry_ticker.tick().await;
                 }
@@ -78,19 +84,27 @@ impl RtcsSignalling {
         Ok(Self {
             join_handle,
             msg_broadcast,
-            server_writer,
+            server_writer
         })
     }
 
     pub async fn send(&self, message: SignallingMessage) -> Result<(), RtcSignallingErrors> {
-        let timeout = Duration::from_secs(10);
+        let connection_timeout = Duration::from_secs(10);
         let mut ticker = tokio::time::interval(Duration::from_secs(1));
         let clock = tokio::time::Instant::now();
-        while clock.elapsed() < timeout {
-            let mut writer = self.server_writer.lock().await;
-            if let Some(writer) = writer.as_mut() {
-                writer.send(Message::Binary(message.encode_to_vec().into())).await?;
-                return Ok(());
+        while clock.elapsed() < connection_timeout {
+            let writer = timeout(Duration::from_secs(1), self.server_writer.lock()).await;
+            if let Ok(mut writer) = writer {
+                if let Some(writer) = writer.as_mut() {
+                    if let Err(e) = writer.send(Message::Binary(message.encode_to_vec().into())).await {
+                        log::error!(target: "rtc-signalling", "Failed to send message to signalling server: {:?}", e);
+                        continue;
+                    }
+
+                    return Ok(());
+                }
+
+                drop(writer);
             }
 
             log::info!(target: "rtc-signalling", "Waiting for socket to re-connect");

@@ -29,10 +29,10 @@ pub enum BroadcastWebRtcErrors {
 pub struct BroadcastWebRtc {
     scopes: Vec<String>,
     broadcast_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
-    id: String,
-    connections: Mutex<HashMap<String, OnceCell<ConnectionWebRtc>>>,
+    id: u128,
+    connections: Mutex<HashMap<u128, OnceCell<ConnectionWebRtc>>>,
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
-    handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
+    handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>
 }
 
 impl BroadcastWebRtc {
@@ -40,7 +40,7 @@ impl BroadcastWebRtc {
         Self {
             scopes,
             broadcast_handle: Arc::new(Mutex::new(None)),
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().as_u128(),
             connections: Mutex::new(HashMap::new()),
             signalling_client: OnceCell::new(),
             handle_signalling_message_join: Arc::new(Mutex::new(None))
@@ -65,23 +65,23 @@ impl BroadcastWebRtc {
         }
 
         let scopes = self.scopes.clone();
-        let my_id = self.id.clone();
+        let my_id = self.id;
         let signalling_client = self.signalling_client.clone();
         let message = Message {
             scopes,
-            from_id: my_id.clone(),
-            join: Some(JoinMessage { id: my_id }),
+            from_id: my_id.to_string(),
+            join: Some(JoinMessage { id: my_id.to_string() }),
             ..Default::default()
         };
 
         *broadcast_handle = Some(spawn(async move {
+            log::info!(target: "broadcast", "{} Broadcasting...", my_id);
             loop {
-                log::info!(target: "broadcast", "Broadcasting...");
-                sleep(Duration::from_secs(random_number_in_range(5, 15) as u64)).await;
-
                 if let Err(e) = signalling_client.get().unwrap().send(message.clone()).await {
                     log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
                 }
+
+                sleep(Duration::from_secs(random_number_in_range(5, 8) as u64)).await;
             }
         }));
 
@@ -89,80 +89,104 @@ impl BroadcastWebRtc {
     }
 
     pub async fn handle_signalling_message(self: &Arc<Self>) -> Result<(), BroadcastWebRtcErrors> {
-        let mut subscription = self.signalling_client.get().expect("Signalling client not initialized")
-            .subscribe();
-
         if let Some(handle) = self.handle_signalling_message_join.lock().await.take() {
             handle.abort();
         }
 
         let self_clone = self.clone();
         *self.handle_signalling_message_join.lock().await = Some(spawn(async move {
+            let mut subscription = self_clone.signalling_client.get().unwrap().subscribe();
             while let Ok(message) = subscription.recv().await {
-                let my_id = self_clone.id.clone();
-                if message.from_id.eq(&my_id) {
-                    continue;
-                }
-
-                let peer_id = message.from_id.clone();
+                let my_id = self_clone.id;
+                let peer_id = message.from_id_number();
 
                 if let Some(join) = message.join {
-                    let mut current_connections= self_clone.connections.lock().await;
-                    if current_connections.contains_key(&peer_id) {
+                    if peer_id >= my_id {
                         continue;
                     }
 
-                    current_connections.insert(peer_id.clone(), OnceCell::new());
-                    drop(current_connections);
-
-                    match ConnectionWebRtc::local(
-                        my_id.clone(),
-                        peer_id.clone(),
-                        self_clone.signalling_client.get().unwrap().clone()
-                    ).await {
-                        Ok(connection) => {
-                            let mut current_connections = self_clone.connections.lock().await;
-                            current_connections.get_mut(&peer_id).unwrap().set(connection);
-                        },
-                        Err(e) => {
-                            log::error!(target: "broadcast", "No connection to peer {:?} {:?}", peer_id, e);
-                            let mut current_connections = self_clone.connections.lock().await;
-                            current_connections.remove(&peer_id);
-                        },
-                    }
-                }
-
-                if let Some(offer) = message.offer {
                     let mut current_connections = self_clone.connections.lock().await;
                     if current_connections.contains_key(&peer_id) {
                         continue;
                     }
 
-                    current_connections.insert(peer_id.clone(), OnceCell::new());
+                    current_connections.insert(peer_id, OnceCell::new());
+                    drop(current_connections);
+
+                    let self_clone = self_clone.clone();
+                    spawn(async move {
+                        let connect_result =
+                            ConnectionWebRtc::local(my_id, peer_id, self_clone.signalling_client.get().unwrap().clone()).await;
+
+                        self_clone.handle_connection(connect_result).await;
+                    });
+                }
+
+                if let Some(offer) = message.offer {
+                    if peer_id <= my_id {
+                        log::info!(target: "broadcast", "Peer {:?} is not greater than my id {:?}, reject offer", peer_id, my_id);
+                        continue;
+                    }
+
+                    let mut current_connections = self_clone.connections.lock().await;
+                    if current_connections.contains_key(&peer_id) {
+                        log::info!(target: "broadcast", "Connection already exists for peer {:?}, reject offer", peer_id);
+                        continue;
+                    }
+
+                    current_connections.insert(peer_id, OnceCell::new());
 
                     drop(current_connections);
 
-                    match RTCSessionDescription::offer(offer.sdp) {
-                        Ok(desc) => {
-                            match ConnectionWebRtc::remote(my_id.clone(), peer_id.clone(), desc, self_clone.signalling_client.get().unwrap().clone()).await {
-                                Ok(connection) => {
-                                    let mut current_connections = self_clone.connections.lock().await;
-                                    let _ = current_connections.get_mut(&peer_id).unwrap().set(connection);
-                                },
-                                Err(e) => {
-                                    log::error!(target: "broadcast", "Error creating remote connection: {:?} {:?}", peer_id, e);
-                                    let mut current_connections = self_clone.connections.lock().await;
-                                    current_connections.remove(&peer_id);
-                                }
+                    let self_clone = self_clone.clone();
+                    spawn(async move {
+                        match RTCSessionDescription::offer(offer.sdp) {
+                            Ok(desc) => {
+                                let connection = ConnectionWebRtc::remote(
+                                    my_id,
+                                    peer_id,
+                                    desc,
+                                    self_clone.signalling_client.get().unwrap().clone()
+                                )
+                                .await;
+                                self_clone.handle_connection(connection).await;
                             }
-                        },
-                        Err(e) => log::error!(target: "broadcast", "Error creating session description: {:?}", e),
-                    }
+                            Err(e) => log::error!(target: "broadcast", "Error creating session description: {:?}", e)
+                        }
+                    });
                 }
             }
+
+            log::info!(target: "broadcast", "Unsubscribed from signalling messages");
         }));
 
         Ok(())
+    }
+
+    pub async fn handle_connection(self: &Arc<Self>, connect_result: Result<ConnectionWebRtc, ConnectionWebRtcErrors>) {
+        match connect_result {
+            Ok(connection) => {
+                connection.on_disconnect({
+                    let self_clone = self.clone();
+                    Box::new(move || {
+                        let self_clone = self_clone.clone();
+                        Box::pin(async move {
+                            log::info!(target: "broadcast", "Closing connection for peer {:?}", connection.peer_id);
+                            let mut current_connections = self_clone.connections.lock().await;
+                            log::info!(target: "broadcast", "Removing connection for peer {:?}", connection.peer_id);
+                            current_connections.remove(&connection.peer_id);
+                        })
+                    })
+                });
+
+                let peer_id = connection.peer_id;
+                let mut current_connections = self.connections.lock().await;
+                let _ = current_connections.get_mut(&peer_id).unwrap().set(connection);
+            }
+            Err(e) => {
+                log::error!(target: "broadcast", "Error creating connection: {:?}", e);
+            }
+        }
     }
 
     pub fn parse_ice_candidate(candidate: IceCandidate) -> RTCIceCandidateInit {

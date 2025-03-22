@@ -94,6 +94,7 @@ webrtc = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
+
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
