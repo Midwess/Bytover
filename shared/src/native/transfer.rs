@@ -10,8 +10,8 @@ pub struct TransferNative {
 impl TransferNative {
     pub async fn handle(&self, effect: TransferOperation) -> TransferOperationOutput {
         match effect {
-            TransferOperation::StartNearbyServer => {
-                let result = self.broadcast.start().await;
+            TransferOperation::StartNearbyServer(scopes) => {
+                let result = self.broadcast.start(scopes).await;
                 log::info!(target: "transfer", "Start nearby server result: {:?}", result);
                 TransferOperationOutput::StartNearbyServer
             }

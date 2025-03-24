@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use crate::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::AppEvent;
+use crate::network::module::InternetConnection;
 use crate::{process_event, ShellRuntime};
 
 use super::database::NativeDatabase;
@@ -39,6 +41,17 @@ impl NativeExecutor {
             CoreOperation::Transfer(transfer) => {
                 let response = self.transfer.handle(transfer).await;
                 CoreOperationOutput::Transfer(response)
+            }
+            CoreOperation::Internet(internet) => {
+                match internet {
+                    InternetOperation::GetCurrentIpAddress => {
+                        let internet_connection = InternetConnection::new();
+                        match internet_connection.ip_address().await {
+                            Ok(ip_address) => CoreOperationOutput::Internet(InternetOperationOutput::GetCurrentIpAddress(ip_address)),
+                            Err(error) => CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error))
+                        }
+                    }
+                }
             }
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }

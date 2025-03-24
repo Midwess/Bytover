@@ -104,6 +104,8 @@ class Core: ObservableObject, ShellRuntime {
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.transfer(let trans)):
             return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
+        case .appCapabilities(.internet(let internetOps)):
+            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.internet(internetOps).bincodeSerialize()))
         }
     }
     

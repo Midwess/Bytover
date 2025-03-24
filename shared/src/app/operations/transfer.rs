@@ -4,14 +4,14 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::AppRequestBuilder;
+use crate::app::{transfer::finding_scope::FindingScope, AppRequestBuilder};
 
 use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferOperation {
-    StartNearbyServer,
+    StartNearbyServer(Vec<FindingScope>),
     StopNearbyServer
 }
 
@@ -26,8 +26,8 @@ impl Operation for TransferOperation {
 }
 
 impl TransferOperation {
-    pub fn start_nearby_server() -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StartNearbyServer)).map(|it| match it {
+    pub fn start_nearby_server(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StartNearbyServer(scopes))).map(|it| match it {
             CoreOperationOutput::Transfer(TransferOperationOutput::StartNearbyServer) => (),
             _ => panic!("Mismatch in response type, expected StartNearbyServer, got {:?}", it)
         })

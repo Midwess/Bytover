@@ -122,7 +122,7 @@ impl DiContainer {
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
-                broadcast: Arc::new(BroadcastWebRtc::new(vec!["bitbridge".to_string()]))
+                broadcast: Arc::new(BroadcastWebRtc::new())
             }
         }
     }

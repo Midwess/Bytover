@@ -17,6 +17,8 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
+use crate::app::transfer::finding_scope::FindingScope;
+
 use super::broadcast::BroadcastWebRtc;
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 
@@ -33,6 +35,7 @@ pub enum ConnectionWebRtcErrors {
 pub struct ConnectionWebRtc {
     pub id: u128,
     pub peer_id: u128,
+    pub finding_scope: FindingScope,
     pub peer_connection: Arc<RTCPeerConnection>,
     pub data_channel: OnceCell<Arc<RTCDataChannel>>,
     pub signalling_client: Arc<RtcsSignalling>,
@@ -57,10 +60,23 @@ impl ConnectionWebRtc {
         }
     }
 
-    pub async fn local(id: u128, peer_id: u128, signalling_client: Arc<RtcsSignalling>) -> Result<Self, ConnectionWebRtcErrors> {
+    // This configuration is much longer than the default ones
+    // I assume that, this configuration is more suitable for rule of battery life on Android and iOS
+    pub fn setting_engine() -> SettingEngine {
+        let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
+        setting_engine.set_ice_timeouts(
+            Some(Duration::from_secs(40)),
+            Some(Duration::from_secs(120)),
+            Some(Duration::from_secs(15))
+        );
+
+        setting_engine
+    }
+
+    pub async fn offer(scope: FindingScope, id: u128, peer_id: u128, signalling_client: Arc<RtcsSignalling>) -> Result<Self, ConnectionWebRtcErrors> {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
         let clock = Instant::now();
-        log::info!(target: ns.as_str(), "Creating local connection to peer {}", peer_id);
+        log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
         let setting_engine = Self::setting_engine();
         let api = APIBuilder::new().with_setting_engine(setting_engine).build();
 
@@ -81,6 +97,7 @@ impl ConnectionWebRtc {
         let me = Self {
             id,
             peer_id,
+            finding_scope: scope,
             peer_connection: Arc::new(peer_connection),
             data_channel: OnceCell::new(),
             signalling_client,
@@ -95,11 +112,13 @@ impl ConnectionWebRtc {
         let _ = spawn({
             let to_id = me.peer_id;
             let from_id = me.id;
+            let scope = me.finding_scope.clone();
             let signalling_client = me.signalling_client.clone();
             let ns = ns.clone();
             async move {
                 if let Err(e) = signalling_client
                     .send(Message {
+                        scopes: vec![scope.as_string()],
                         from_id: from_id.to_string(),
                         to_id: Some(to_id.to_string()),
                         offer: Some(OfferMessage { sdp: offer.sdp.clone() }),
@@ -112,7 +131,7 @@ impl ConnectionWebRtc {
             }
         });
 
-        let connection_timeout = Duration::from_secs(25);
+        let connection_timeout = Duration::from_secs(15);
         log::info!(target: ns.as_str(), "Waiting for answer from signalling server");
 
         me.handle_ice_candidate();
@@ -131,18 +150,8 @@ impl ConnectionWebRtc {
         Ok(me)
     }
 
-    pub fn setting_engine() -> SettingEngine {
-        let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
-        setting_engine.set_ice_timeouts(
-            Some(Duration::from_secs(30)),
-            Some(Duration::from_secs(60)),
-            Some(Duration::from_secs(3))
-        );
-
-        setting_engine
-    }
-
-    pub async fn remote(
+    pub async fn accept_offer(
+        scope: FindingScope,
         id: u128,
         peer_id: u128,
         offer: RTCSessionDescription,
@@ -150,7 +159,7 @@ impl ConnectionWebRtc {
     ) -> Result<Self, ConnectionWebRtcErrors> {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
         let clock = Instant::now();
-        log::info!(target: ns.as_str(), "Creating remote connection to peer {}", peer_id);
+        log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
         let setting_engine = Self::setting_engine();
 
         let api = APIBuilder::new().with_setting_engine(setting_engine).build();
@@ -171,11 +180,9 @@ impl ConnectionWebRtc {
 
         let (notified_data_channel, mut data_channel_receiver) = mpsc::channel(1);
         {
-            let ns = ns.clone();
             peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 let notified_data_channel = notified_data_channel.clone();
                 let connection = d.clone();
-                let ns = ns.clone();
 
                 d.on_open(Box::new(move || {
                     Box::pin(async move {
@@ -190,6 +197,7 @@ impl ConnectionWebRtc {
         let me = Self {
             id,
             peer_id,
+            finding_scope: scope,
             signalling_client,
             signalling_join_handle: Arc::new(Mutex::new(None)),
             peer_connection: Arc::new(peer_connection),
@@ -204,10 +212,12 @@ impl ConnectionWebRtc {
             let id = me.id;
             let peer_id = me.peer_id;
             let ns = ns.clone();
+            let scope = me.finding_scope.clone();
             log::info!(target: ns.as_str(), "Sending answer to signalling server");
             async move {
                 if let Err(e) = signalling_client
                     .send(Message {
+                        scopes: vec![scope.as_string()],
                         from_id: id.to_string(),
                         to_id: Some(peer_id.to_string()),
                         answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
@@ -223,7 +233,7 @@ impl ConnectionWebRtc {
 
         me.handle_ice_candidate();
 
-        let connection_timeout = Duration::from_secs(25);
+        let connection_timeout = Duration::from_secs(15);
         match tokio::time::timeout(connection_timeout, data_channel_receiver.recv()).await {
             Ok(Some(data_channel)) => {
                 let _ = me.data_channel.set(data_channel);
@@ -274,6 +284,7 @@ impl ConnectionWebRtc {
                         .add_ice_candidate(BroadcastWebRtc::parse_ice_candidate(candidate.ice_candidates))
                         .await;
 
+
                     if let Err(e) = result {
                         log::error!(target: "rtc", "Error adding ice candidate: {:?}", e);
                     }
@@ -286,20 +297,29 @@ impl ConnectionWebRtc {
         let signaling_client = self.signalling_client.clone();
         let my_id = self.id;
         let peer_id = self.peer_id;
+        let scope = self.finding_scope.clone();
 
         self.peer_connection.on_ice_candidate(Box::new(move |candidate| {
             let signaling_client = signaling_client.clone();
             let my_id = my_id;
             let peer_id = peer_id;
+            let finding_scope = scope.clone();
 
             Box::pin(async move {
                 if let Some(candidate) = candidate {
+                    let ice_candidate = Self::build_ice_candidate_message(candidate);
+
+                    if finding_scope.is_local() && ice_candidate.is_public() {
+                        return;
+                    }
+
                     let result = signaling_client
                         .send(Message {
+                            scopes: vec![finding_scope.as_string()],
                             from_id: my_id.to_string(),
                             to_id: Some(peer_id.to_string()),
                             ice_candidate_update: Some(IceCandidateUpdateMessage {
-                                ice_candidates: Self::build_ice_candidate_message(candidate)
+                                ice_candidates: ice_candidate
                             }),
                             ..Default::default()
                         })

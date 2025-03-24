@@ -14,10 +14,12 @@ use shared::app::operations::database::{
     SessionOperation,
     SessionOperationOutput
 };
+use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::ResourceSelection;
+use shared::app::transfer::finding_scope::FindingScope;
 use shared::app::transfer::session::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
@@ -43,6 +45,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<LocalResource>()?;
     gen.register_type::<LocalResourcePath>()?;
     gen.register_type::<ResourceSelection>()?;
+    gen.register_type::<FindingScope>()?;
 
     // Register operation enums
     gen.register_type::<DatabaseOperation>()?;
@@ -57,6 +60,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferOperationOutput>()?;
     gen.register_type::<LocalResourceDatabaseOperation>()?;
     gen.register_type::<LocalResourceDatabaseOperationOutput>()?;
+    gen.register_type::<InternetOperation>()?;
+    gen.register_type::<InternetOperationOutput>()?;
 
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;

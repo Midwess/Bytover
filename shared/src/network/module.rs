@@ -1,8 +1,12 @@
 use std::time::{Duration, Instant};
+use std::net::ToSocketAddrs;
 
+use futures_util::TryFutureExt;
 use tokio::sync::Mutex;
+use tokio::net::UdpSocket;
 
 use crate::errors::NetworkError;
+use stunclient::StunClient;
 
 #[async_trait::async_trait]
 pub trait NetworkModule {
@@ -39,6 +43,42 @@ impl InternetConnection {
         Self {
             last_passed: Mutex::new(Instant::now() - Duration::from_secs(5))
         }
+    }
+
+    pub async fn ip_address(&self) -> Result<String, NetworkError> {
+        const MAX_RETRIES: usize = 10;
+        const RETRY_DELAY_MS: u64 = 500;
+        
+        let stun_addr = "stun.l.google.com:19302".to_socket_addrs().unwrap().filter(|x|x.is_ipv4()).next().unwrap();
+        
+        for attempt in 1..=MAX_RETRIES {
+            let socket = match UdpSocket::bind("0.0.0.0:0").await {
+                Ok(s) => s,
+                Err(e) => {
+                    log::warn!(target: "internet-check", "Attempt {}/{}: Failed to bind UDP socket: {}", attempt, MAX_RETRIES, e);
+                    if attempt == MAX_RETRIES {
+                        return Err(NetworkError::Network(format!("Failed to bind UDP socket after {} attempts: {}", MAX_RETRIES, e)));
+                    }
+                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
+                    continue;
+                }
+            };
+            
+            let client = StunClient::new(stun_addr);
+            
+            match client.query_external_address_async(&socket).await {
+                Ok(addr) => return Ok(format!("{}", addr.ip())),
+                Err(e) => {
+                    log::warn!(target: "internet-check", "Attempt {}/{}: Failed to get public IP: {}", attempt, MAX_RETRIES, e);
+                    if attempt == MAX_RETRIES {
+                        return Err(NetworkError::Network(format!("Failed to get public IP after {} attempts: {}", MAX_RETRIES, e)));
+                    }
+                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
+                }
+            }
+        }
+        
+        Err(NetworkError::Network("Failed to get public IP address".to_string()))
     }
 
     pub async fn is_connected(&self) -> bool {

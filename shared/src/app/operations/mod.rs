@@ -4,10 +4,12 @@ pub mod local_storage;
 pub mod rpc;
 pub mod transfer;
 pub mod webview;
+pub mod internet;
 
 use crux_core::capability::Operation;
 use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
+use internet::{InternetOperation, InternetOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,7 @@ pub enum CoreOperation {
     Rpc(RpcOperation),
     Database(DatabaseOperation),
     Transfer(TransferOperation),
+    Internet(InternetOperation),
     Render,
     Void
 }
@@ -34,6 +37,7 @@ pub enum CoreOperationOutput {
     Rpc(RpcOperationOutput),
     Database(DatabaseOperationOutput),
     Transfer(TransferOperationOutput),
+    Internet(InternetOperationOutput),
     Void
 }
 
