@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
-use h3ron::{H3Cell, HasH3Resolution, Index};
+use h3ron::{H3Cell, HasH3Resolution, Index, ToCoordinate};
 use geo_types::Coord;
 use std::collections::HashSet;
 
@@ -24,18 +24,19 @@ impl FindingScope {
             return vec![];
         };
         
-        // Extract latitude and longitude from geo_location
         let lat = geo_location.latitude;
         let lng = geo_location.longitude;
         
-        // Use resolution 15 for approximately 10m² cells
+        // Use resolution 12 for cells, approximately 11m edge length
         let resolution = 12;
         
         // Get the center cell
-        let center = H3Cell::from_coordinate(
+        let Ok(center) = H3Cell::from_coordinate(
             Coord { x: lng, y: lat }, 
             resolution
-        ).unwrap();
+        ) else {
+            return vec![];
+        };
         
         let mut cells = Vec::with_capacity(5);
         let mut cell_set = HashSet::new();
@@ -45,55 +46,64 @@ impl FindingScope {
         cells.push(center_str.clone());
         cell_set.insert(center_str);
         
-        // Define small offsets in degrees for the 4 directions
-        // This is approximately 10m at the equator
-        let step = 0.0001;
+        // Get all neighbors arround the center cell
+        let Ok(k_ring) = center.grid_ring_unsafe(1) else {
+            // If we can't get neighbors, just return the center cell
+            return vec![Self::Local(center.to_string())];
+        };
         
-        // Top cell
-        let top_point = Coord { x: lng, y: lat + step };
-        let Ok(top_cell) = H3Cell::from_coordinate(top_point, resolution) else {
-            return vec![];
+        let neighbors: Vec<H3Cell> = k_ring.into_iter()
+            .filter(|cell| *cell != center)
+            .collect();
+        
+        let Ok(center_coord) = center.to_coordinate() else {
+            return vec![Self::Local(center.to_string())];
         };
 
-        let top_str = top_cell.to_string();
-        if !cell_set.contains(&top_str) {
-            cells.push(top_str.clone());
-            cell_set.insert(top_str);
+        let mut neighbors_with_angles = Vec::new();
+        for neighbor in neighbors {
+            if let Ok(neighbor_coord) = neighbor.to_coordinate() {
+                // Calculate angle from center to neighbor (in radians)
+                let dx = neighbor_coord.x - center_coord.x;
+                let dy = neighbor_coord.y - center_coord.y;
+                let angle = dy.atan2(dx);
+                
+                neighbors_with_angles.push((neighbor, angle));
+            }
         }
         
-        // Top-right cell
-        let top_right_point = Coord { x: lng + step, y: lat + step };
-        let Ok(top_right_cell) = H3Cell::from_coordinate(top_right_point, resolution) else {
-            return vec![];
-        };
-
-        let top_right_str = top_right_cell.to_string();
-        if !cell_set.contains(&top_right_str) {
-            cells.push(top_right_str.clone());
-            cell_set.insert(top_right_str);
-        }
+        neighbors_with_angles.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         
-        // Bottom-right cell
-        let bottom_right_point = Coord { x: lng + step, y: lat - step };
-        let Ok(bottom_right_cell) = H3Cell::from_coordinate(bottom_right_point, resolution) else {
-            return vec![];
-        };
-
-        let bottom_right_str = bottom_right_cell.to_string();
-        if !cell_set.contains(&bottom_right_str) {
-            cells.push(bottom_right_str.clone());
-            cell_set.insert(bottom_right_str);
-        }
+        // Select neighbors at specific positions:
+        // - North (top): closest to π/2 (90°)
+        // - Northeast (top-right): closest to π/4 (45°)
+        // - East (right): closest to 0°
+        // - Southeast (bottom-right): closest to -π/4 (-45°)
+        // - South (bottom): closest to -π/2 (-90°)
         
-        // Bottom cell
-        let bottom_point = Coord { x: lng, y: lat - step };
-        let Ok(bottom_cell) = H3Cell::from_coordinate(bottom_point, resolution) else {
-            return vec![];
-        };
-
-        let bottom_str = bottom_cell.to_string();
-        if !cell_set.contains(&bottom_str) {
-            cells.push(bottom_str);
+        let positions = [
+            (std::f64::consts::FRAC_PI_2, "top"),           // North (90°)
+            (std::f64::consts::FRAC_PI_4, "top-right"),     // Northeast (45°)
+            (0.0, "right"),                                 // East (0°)
+            (-std::f64::consts::FRAC_PI_4, "bottom-right"), // Southeast (-45°)
+            (-std::f64::consts::FRAC_PI_2, "bottom"),       // South (-90°)
+        ];
+        
+        for (target_angle, _position) in positions {
+            // Find the neighbor closest to this angle
+            if let Some((neighbor, _)) = neighbors_with_angles.iter()
+                .min_by(|(_, angle1), (_, angle2)| {
+                    let diff1 = (angle1 - target_angle).abs();
+                    let diff2 = (angle2 - target_angle).abs();
+                    diff1.partial_cmp(&diff2).unwrap_or(std::cmp::Ordering::Equal)
+                }) 
+            {
+                let neighbor_str = neighbor.to_string();
+                if !cell_set.contains(&neighbor_str) {
+                    cells.push(neighbor_str.clone());
+                    cell_set.insert(neighbor_str);
+                }
+            }
         }
         
         // Convert H3 cell IDs to FindingScope instances
