@@ -1,5 +1,6 @@
-use crate::app::{modules::AppModule, operations::CoreOperation};
+use crate::app::modules::AppModule;
 use crate::app::operations::local_storage::LocalStorageOperation;
+use crate::app::operations::CoreOperation;
 use crate::app::BitBridge;
 use crate::di_container::DiContainer;
 use core_services::logger;

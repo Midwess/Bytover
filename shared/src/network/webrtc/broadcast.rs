@@ -103,7 +103,8 @@ impl BroadcastWebRtc {
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
                     drop(scopes);
-                    sleep(delay).await;
+                    // Use the shorter duration to avoid waiting too long
+                    sleep(Duration::from_secs(1)).await;
                     continue;
                 }
 

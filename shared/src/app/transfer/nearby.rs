@@ -3,8 +3,6 @@ use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::transfer::TransferOperation;
 use crate::app::{AppCommandContext, AppEvent};
 
-use super::finding_scope::FindingScope;
-
 pub struct NearbyService {}
 
 impl NearbyService {
