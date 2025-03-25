@@ -108,7 +108,6 @@ impl BroadcastWebRtc {
                     continue;
                 }
 
-                log::info!(target: "broadcast", "{} Broadcasting...", my_id);
                 let message = Message {
                     scopes: scopes.iter().map(|scope| scope.as_string()).collect(),
                     from_id: my_id.to_string(),
@@ -138,6 +137,12 @@ impl BroadcastWebRtc {
             while let Ok(message) = subscription.recv().await {
                 let my_id = self_clone.id;
                 let peer_id = message.from_id_number();
+                if let Some(to_id) = message.to_id_number() {
+                    if to_id != my_id {
+                        continue;
+                    }
+                }
+
                 let Some(from_scope) = message.from_scope.and_then(FindingScope::from_string) else {
                     log::error!(target: "broadcast", "No from scope found");
                     continue;
@@ -169,7 +174,6 @@ impl BroadcastWebRtc {
                 }
 
                 if let Some(offer) = message.offer {
-                    log::info!(target: "broadcast", "Received offer from peer {:?}", peer_id);
                     if peer_id <= my_id {
                         log::info!(target: "broadcast", "Peer {:?} is not greater than my id {:?}, reject offer", peer_id, my_id);
                         continue;
@@ -177,7 +181,6 @@ impl BroadcastWebRtc {
 
                     let mut current_connections = self_clone.connections.lock().await;
                     if current_connections.contains_key(&peer_id) {
-                        log::info!(target: "broadcast", "Connection already exists for peer {:?}, reject offer", peer_id);
                         continue;
                     }
 
