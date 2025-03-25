@@ -81,8 +81,9 @@ impl BroadcastWebRtc {
 
         let scopes = self.scopes.clone();
         *broadcast_handle = Some(spawn(async move {
+            log::info!(target: "broadcast", "{} Broadcasting...", my_id);
             loop {
-                let delay = Duration::from_secs(random_number_in_range(5, 8) as u64);
+                let delay = Duration::from_secs(random_number_in_range(7, 15) as u64);
                 let scopes = scopes.lock().await.clone();
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
@@ -90,7 +91,6 @@ impl BroadcastWebRtc {
                     continue;
                 }
 
-                log::info!(target: "broadcast", "{} Broadcasting...", my_id);
                 let message = Message {
                     scopes: scopes.iter().map(|scope| scope.as_string()).collect(),
                     from_id: my_id.to_string(),
@@ -127,7 +127,6 @@ impl BroadcastWebRtc {
 
                 if let Some(join) = message.join {
                     if peer_id >= my_id {
-                        log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject join", peer_id, my_id);
                         continue;
                     }
 

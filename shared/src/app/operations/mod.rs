@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};
 use webview::{WebViewOperation, WebViewOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CoreOperation {
     LocalStorage(LocalStorageOperation),
     WebView(WebViewOperation),
@@ -29,7 +29,7 @@ pub enum CoreOperation {
     Void
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CoreOperationOutput {
     LocalStorage(LocalStorageOperationOutput),
     WebView(WebViewOperationOutput),

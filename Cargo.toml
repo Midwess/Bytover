@@ -62,6 +62,8 @@ uuid = { version = "1.16.0" }
 rand = { version = "0.9.0" }
 regex = { version = "1.11.1" }
 stunclient = "0.4.1"
+h3ron = { version = "0.18.0" }
+geo-types = "0.7.16"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

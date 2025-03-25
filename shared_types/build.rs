@@ -14,6 +14,7 @@ use shared::app::operations::database::{
     SessionOperation,
     SessionOperationOutput
 };
+use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
@@ -46,6 +47,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<LocalResourcePath>()?;
     gen.register_type::<ResourceSelection>()?;
     gen.register_type::<FindingScope>()?;
+    gen.register_type::<GeoLocation>()?;
 
     // Register operation enums
     gen.register_type::<DatabaseOperation>()?;
@@ -62,7 +64,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<LocalResourceDatabaseOperationOutput>()?;
     gen.register_type::<InternetOperation>()?;
     gen.register_type::<InternetOperationOutput>()?;
-
+    gen.register_type::<DeviceOperation>()?;
+    gen.register_type::<DeviceOperationOutput>()?;
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;
     gen.register_type::<EnvironmentModel>()?;

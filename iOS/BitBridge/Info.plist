@@ -17,7 +17,9 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Transfer your selected photos and videos</string>
+	<string>BitBridge needs access to your photo library to transfer photos and videos</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BitBridge needs your location to find nearby devices for file transfers</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -40,12 +42,6 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>This app needs to access your local network to enable WebSocket communication.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_websocket._tcp</string>
 	</array>
 </dict>
 </plist>

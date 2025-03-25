@@ -16,6 +16,8 @@ import Photos
 import PhotosUI
 import Photos
 import AVFoundation
+import CoreLocation
+import Combine
 
 @MainActor
 class Core: ObservableObject, ShellRuntime {
@@ -93,6 +95,9 @@ class Core: ObservableObject, ShellRuntime {
                     unique_id: deviceId
                 ))
             ).bincodeSerialize()))
+        case .appCapabilities(.device(.getGeoLocation)):
+            let geoLocation = await self.getGeoLocation();
+            return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
             return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
@@ -222,6 +227,35 @@ class Core: ObservableObject, ShellRuntime {
                 }
             }
         }
+    }
+
+    func getGeoLocation() async -> GeoLocation? {
+        let locationManager = CLLocationManager()
+        
+        // Request permission if not already granted
+        switch locationManager.authorizationStatus {
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+        case .restricted, .denied:
+            // Request again even if previously denied
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            locationManager.startUpdatingLocation()
+        @unknown default:
+            locationManager.requestWhenInUseAuthorization()
+        }
+        
+        // Wait for location update with timeout
+        for _ in 0..<10 { // Try for about 10 seconds
+            if let location = locationManager.location {
+                print("Found geolocation \(location)")
+                return GeoLocation(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+            }
+            
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // Wait 1 second
+        }
+        
+        return nil
     }
 
     func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
@@ -380,5 +414,33 @@ extension UIImage {
         var alpha: CGFloat = 0
         self.averageColor?.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         return UIColor(hue: hue, saturation: 0.6, brightness: 0.3, alpha: alpha)
+    }
+}
+
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let locationManager = CLLocationManager()
+    @Published var location: CLLocation?
+    @Published var authorizationStatus: CLAuthorizationStatus
+    
+    override init() {
+        authorizationStatus = locationManager.authorizationStatus
+        
+        super.init()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationStatus = manager.authorizationStatus
+        
+        if manager.authorizationStatus == .authorizedWhenInUse || 
+           manager.authorizationStatus == .authorizedAlways {
+            locationManager.startUpdatingLocation()
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        self.location = location
     }
 }

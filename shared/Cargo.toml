@@ -58,7 +58,9 @@ lib = [
     "uuid",
     "rand",
     "chrono",
-    "stunclient"
+    "stunclient",
+    "h3ron",
+    "geo-types"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -98,7 +100,8 @@ uuid = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 stunclient = { workspace = true, optional = true }
-
+h3ron = { workspace = true, optional = true }
+geo-types = { workspace = true, optional = true }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
