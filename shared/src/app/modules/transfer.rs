@@ -1,4 +1,4 @@
-use crate::app::file_system::file::LocalResource;
+use crate::app::{file_system::file::LocalResource, operations::internet::InternetOperation};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::GeoLocation;
 use crate::app::operations::transfer::TransferOperation;
@@ -34,6 +34,7 @@ pub enum TransferEvent {
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
     OnLocationUpdated(GeoLocation),
+    OnIpAddressUpdated(String),
 
     // Event from core
     UpdateResourcesModel {
@@ -73,6 +74,15 @@ impl AppModule<BitBridge> for TransferModule {
                 model.selected_resources.retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
 
                 Command::done()
+            }
+            TransferEvent::OnIpAddressUpdated(ip_address) => {
+                let finding_scope = FindingScope::Local(ip_address);
+                model.finding_scopes.retain(|it| !it.is_local());
+                model.finding_scopes.push(finding_scope);
+                let finding_scopes = model.finding_scopes.clone();
+                Command::new(|it| async move {
+                    TransferOperation::update_finding_scopes(finding_scopes).into_future(it).await;
+                })
             }
             TransferEvent::OnLocationUpdated(location) => {
                 let finding_scope = FindingScope::nearby_location(location);

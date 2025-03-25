@@ -33,7 +33,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     
     var lastKnownLocation: CLLocationCoordinate2D?
     var manager = CLLocationManager()
-    lazy var nativeProcessor: NativeProcessor = NativeProcessor(self)
+    var nativeProcessor: NativeProcessor?
 
     override init() {
         super.init()
@@ -68,8 +68,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         }
     }
     
+    func nativeProcessor() async -> NativeProcessor {
+        while self.nativeProcessor == nil {
+            try? await Task.sleep(nanoseconds: 100000000) // 100ms
+        }
+        
+        return self.nativeProcessor!
+    }
+    
     func processEffect(_ request: Request) async -> Data {
         switch request.effect {
+        case .appCapabilities(.initNativeExecutor):
+            self.nativeProcessor = NativeProcessor(self)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
         case .appCapabilities(.webView(.openUrl(let url))):
             openURL(URL(string: url)!)
             return handleResponse(request.id, Data(try! CoreOperationOutput.webView( WebViewOperationOutput.openUrl).bincodeSerialize()))
@@ -87,7 +98,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             let response = CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileThumbnailPngFromPlatformIdentifier(fileThumbnailData?.bytes))
             return handleResponse(request.id, try! Data(response.bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
-            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
@@ -104,18 +115,18 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0);
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
-            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
-            return self.nativeProcessor.handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
         case .appCapabilities(.database(let database)):
-            return self.nativeProcessor.handle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
         case .appCapabilities(.render):
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.transfer(let trans)):
-            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
         case .appCapabilities(.internet(let internetOps)):
-            return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.internet(internetOps).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.internet(internetOps).bincodeSerialize()))
         }
     }
     

@@ -26,6 +26,7 @@ pub enum CoreOperation {
     Transfer(TransferOperation),
     Internet(InternetOperation),
     Render,
+    InitNativeExecutor,
     Void
 }
 
@@ -38,6 +39,7 @@ pub enum CoreOperationOutput {
     Database(DatabaseOperationOutput),
     Transfer(TransferOperationOutput),
     Internet(InternetOperationOutput),
+    InitNativeExecutor,
     Void
 }
 

@@ -1,4 +1,4 @@
-use crate::app::modules::AppModule;
+use crate::app::{modules::AppModule, operations::CoreOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::BitBridge;
 use crate::di_container::DiContainer;
@@ -51,6 +51,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
                     let di_container = DiContainer::get_instance();
                     di_container.init(workdir_path).await;
+                    ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
                     // di_container.get_authentication_service().update_signin_session(ctx).await;
                 })
                 .then(Command::done())
