@@ -73,7 +73,12 @@ impl ConnectionWebRtc {
         setting_engine
     }
 
-    pub async fn offer(scope: FindingScope, id: u128, peer_id: u128, signalling_client: Arc<RtcsSignalling>) -> Result<Self, ConnectionWebRtcErrors> {
+    pub async fn offer(
+        scope: FindingScope,
+        id: u128,
+        peer_id: u128,
+        signalling_client: Arc<RtcsSignalling>
+    ) -> Result<Self, ConnectionWebRtcErrors> {
         let ns = format!("rtc-m{}-p{}", id, peer_id);
         let clock = Instant::now();
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
@@ -283,7 +288,6 @@ impl ConnectionWebRtc {
                     let result = peer_connection
                         .add_ice_candidate(BroadcastWebRtc::parse_ice_candidate(candidate.ice_candidates))
                         .await;
-
 
                     if let Err(e) = result {
                         log::error!(target: "rtc", "Error adding ice candidate: {:?}", e);

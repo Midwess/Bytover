@@ -13,7 +13,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Record)]
 pub struct GeoLocation {
     pub latitude: f64,
-    pub longitude: f64,
+    pub longitude: f64
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

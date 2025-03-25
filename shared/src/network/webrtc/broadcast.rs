@@ -37,6 +37,12 @@ pub struct BroadcastWebRtc {
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>
 }
 
+impl Default for BroadcastWebRtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BroadcastWebRtc {
     pub fn new() -> Self {
         Self {
@@ -60,6 +66,16 @@ impl BroadcastWebRtc {
         self.broadcast().await?;
 
         self.handle_signalling_message().await?;
+
+        Ok(())
+    }
+
+    pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) -> Result<(), BroadcastWebRtcErrors> {
+        let mut current_scopes = self.scopes.lock().await;
+        current_scopes.clear();
+        current_scopes.extend(scopes);
+
+        log::info!(target: "broadcast", "Updated finding scopes: {:?}", current_scopes);
 
         Ok(())
     }
@@ -120,7 +136,7 @@ impl BroadcastWebRtc {
             while let Ok(message) = subscription.recv().await {
                 let my_id = self_clone.id;
                 let peer_id = message.from_id_number();
-                let Some(from_scope) = message.from_scope.and_then(|scope| FindingScope::from_string(scope)) else {
+                let Some(from_scope) = message.from_scope.and_then(FindingScope::from_string) else {
                     log::error!(target: "broadcast", "No from scope found");
                     continue;
                 };
@@ -141,7 +157,8 @@ impl BroadcastWebRtc {
                     let self_clone = self_clone.clone();
                     spawn(async move {
                         let connect_result =
-                            ConnectionWebRtc::offer(from_scope, my_id, peer_id, self_clone.signalling_client.get().unwrap().clone()).await;
+                            ConnectionWebRtc::offer(from_scope, my_id, peer_id, self_clone.signalling_client.get().unwrap().clone())
+                                .await;
 
                         self_clone.handle_connection(connect_result, peer_id).await;
                     });

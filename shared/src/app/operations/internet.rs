@@ -1,10 +1,12 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::{app::AppRequestBuilder, errors::NetworkError};
+use crate::app::AppRequestBuilder;
+use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
 

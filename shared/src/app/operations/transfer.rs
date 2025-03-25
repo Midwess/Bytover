@@ -4,7 +4,8 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::{transfer::finding_scope::FindingScope, AppRequestBuilder};
+use crate::app::transfer::finding_scope::FindingScope;
+use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -12,13 +13,15 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferOperation {
     StartNearbyServer(Vec<FindingScope>),
-    StopNearbyServer
+    StopNearbyServer,
+    UpdateFindingScopes(Vec<FindingScope>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferOperationOutput {
     StartNearbyServer,
-    StopNearbyServer
+    StopNearbyServer,
+    UpdateFindingScopes
 }
 
 impl Operation for TransferOperation {
@@ -37,6 +40,13 @@ impl TransferOperation {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StopNearbyServer)).map(|it| match it {
             CoreOperationOutput::Transfer(TransferOperationOutput::StopNearbyServer) => (),
             _ => panic!("Mismatch in response type, expected StopNearbyServer, got {:?}", it)
+        })
+    }
+
+    pub fn update_finding_scopes(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::UpdateFindingScopes(scopes))).map(|it| match it {
+            CoreOperationOutput::Transfer(TransferOperationOutput::UpdateFindingScopes) => (),
+            _ => panic!("Mismatch in response type, expected UpdateFindingScopes, got {:?}", it)
         })
     }
 }

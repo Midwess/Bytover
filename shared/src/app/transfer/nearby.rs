@@ -7,7 +7,7 @@ pub struct NearbyService {}
 
 impl NearbyService {
     pub async fn init(&self, ctx: AppCommandContext) {
-        let mut finding_scopes = FindingScope::nearby_location(ctx.clone()).await;
+        let mut finding_scopes = vec![];
         // The network scope is required
         let Ok(local_network_scope) = FindingScope::local_network(ctx.clone()).await else {
             log::error!(target: "nearby", "Failed to get local network scope");

@@ -15,7 +15,12 @@ impl TransferNative {
                 log::info!(target: "transfer", "Start nearby server result: {:?}", result);
                 TransferOperationOutput::StartNearbyServer
             }
-            TransferOperation::StopNearbyServer => TransferOperationOutput::StopNearbyServer
+            TransferOperation::StopNearbyServer => TransferOperationOutput::StopNearbyServer,
+            TransferOperation::UpdateFindingScopes(scopes) => {
+                let result = self.broadcast.update_finding_scopes(scopes).await;
+                log::info!(target: "transfer", "Update finding scopes result: {:?}", result);
+                TransferOperationOutput::UpdateFindingScopes
+            }
         }
     }
 }

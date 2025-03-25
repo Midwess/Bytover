@@ -20,7 +20,7 @@ import CoreLocation
 import Combine
 
 @MainActor
-class Core: ObservableObject, ShellRuntime {
+class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate {
     @Published var environment: EnvironmentViewModel?
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
@@ -31,10 +31,15 @@ class Core: ObservableObject, ShellRuntime {
     
     @Environment(\.openURL) private var openURL
     
+    var lastKnownLocation: CLLocationCoordinate2D?
+    var manager = CLLocationManager()
     lazy var nativeProcessor: NativeProcessor = NativeProcessor(self)
 
-    init() {
+    override init() {
+        super.init()
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
+        manager.delegate = self
+        
         update_view(app)
     }
     
@@ -96,7 +101,7 @@ class Core: ObservableObject, ShellRuntime {
                 ))
             ).bincodeSerialize()))
         case .appCapabilities(.device(.getGeoLocation)):
-            let geoLocation = await self.getGeoLocation();
+            let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0);
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
             return self.nativeProcessor.handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
@@ -180,23 +185,6 @@ class Core: ObservableObject, ShellRuntime {
         return paths[0]
     }
     
-    func displayResourcePath(path: LocalResourcePath) -> String {
-        switch path {
-        case .localPath(let localPath): return localPath
-        case .platformIdentifier(let platformPath): return platformPath
-        }
-    }
-    
-    public func bytesToMB(bytesLength: Float) -> Float {
-        let result = bytesLength / 1024 / 1024
-        return roundf(result * 10) / 10
-    }
-    
-    public func bytesToGB(bytesLength: Float) -> Float {
-        let result = bytesToMB(bytesLength: bytesLength) / 1024
-        return roundf(result * 10) / 10
-    }
-
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
         guard let asset = fetchResult.firstObject else {
@@ -229,33 +217,43 @@ class Core: ObservableObject, ShellRuntime {
         }
     }
 
-    func getGeoLocation() async -> GeoLocation? {
-        let locationManager = CLLocationManager()
+    func checkLocationAuthorization() {
+        manager.delegate = self
+        manager.startUpdatingLocation()
         
-        // Request permission if not already granted
-        switch locationManager.authorizationStatus {
+        switch manager.authorizationStatus {
         case .notDetermined:
-            locationManager.requestWhenInUseAuthorization()
-        case .restricted, .denied:
-            // Request again even if previously denied
-            locationManager.requestWhenInUseAuthorization()
-        case .authorizedWhenInUse, .authorizedAlways:
-            locationManager.startUpdatingLocation()
-        @unknown default:
-            locationManager.requestWhenInUseAuthorization()
-        }
-        
-        // Wait for location update with timeout
-        for _ in 0..<10 { // Try for about 10 seconds
-            if let location = locationManager.location {
-                print("Found geolocation \(location)")
-                return GeoLocation(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
-            }
+            manager.requestWhenInUseAuthorization()
             
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // Wait 1 second
+        case .restricted:
+            print("Location restricted")
+            
+        case .denied:
+            print("Location denied")
+            
+        case .authorizedAlways:
+            print("Location authorizedAlways")
+            
+        case .authorizedWhenInUse:
+            print("Location authorized when in use")
+            lastKnownLocation = manager.location?.coordinate
+            
+        @unknown default:
+            print("Location service disabled")
         }
-        
-        return nil
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        checkLocationAuthorization()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.first?.coordinate {
+            lastKnownLocation = locations.first?.coordinate
+            Task {
+                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
+            }
+        }
     }
 
     func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
@@ -414,33 +412,5 @@ extension UIImage {
         var alpha: CGFloat = 0
         self.averageColor?.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         return UIColor(hue: hue, saturation: 0.6, brightness: 0.3, alpha: alpha)
-    }
-}
-
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let locationManager = CLLocationManager()
-    @Published var location: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus
-    
-    override init() {
-        authorizationStatus = locationManager.authorizationStatus
-        
-        super.init()
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-    }
-    
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
-        
-        if manager.authorizationStatus == .authorizedWhenInUse || 
-           manager.authorizationStatus == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-        }
-    }
-    
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        self.location = location
     }
 }

@@ -1,6 +1,9 @@
 use crate::app::file_system::file::LocalResource;
 use crate::app::modules::AppModule;
+use crate::app::operations::device::GeoLocation;
+use crate::app::operations::transfer::TransferOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
+use crate::app::transfer::finding_scope::FindingScope;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::BitBridge;
@@ -11,7 +14,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_resources: Vec<LocalResource>,
-    transfer_method_selection: TransferMethodSelection
+    transfer_method_selection: TransferMethodSelection,
+    finding_scopes: Vec<FindingScope>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -29,6 +33,7 @@ pub enum TransferEvent {
     Launched(),
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
+    OnLocationUpdated(GeoLocation),
 
     // Event from core
     UpdateResourcesModel {
@@ -68,6 +73,15 @@ impl AppModule<BitBridge> for TransferModule {
                 model.selected_resources.retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
 
                 Command::done()
+            }
+            TransferEvent::OnLocationUpdated(location) => {
+                let finding_scope = FindingScope::nearby_location(location);
+                model.finding_scopes.retain(|it| !it.is_location());
+                model.finding_scopes.extend(finding_scope);
+                let finding_scopes = model.finding_scopes.clone();
+                Command::new(|it| async move {
+                    TransferOperation::update_finding_scopes(finding_scopes).into_future(it).await;
+                })
             }
         }
     }
