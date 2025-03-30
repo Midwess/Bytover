@@ -14,7 +14,7 @@ pub struct TransferNative {
 impl TransferNative {
     pub fn update_shell_runtime(&self, shell_runtime: &Arc<dyn ShellRuntime>) {
         if self.shell_runtime.get().is_none() {
-            self.shell_runtime.set(shell_runtime.clone());
+            let _ = self.shell_runtime.set(shell_runtime.clone());
         }
     }
 

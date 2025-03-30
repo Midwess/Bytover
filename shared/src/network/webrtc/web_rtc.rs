@@ -233,6 +233,11 @@ impl WebRtc {
                         }
                     });
                 }
+
+                if let Some(left_message) = message.left_message {
+                    let mut current_connections = self_clone.connections.lock().await;
+                    current_connections.remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"));
+                }
             }
 
             log::info!(target: "broadcast", "Unsubscribed from signalling messages");
@@ -264,7 +269,7 @@ impl WebRtc {
 
                 let peer_id = connection.peer_id;
                 let current_connections = self.connections.lock().await;
-                current_connections.get(&peer_id).unwrap().set(connection);
+                let _ = current_connections.get(&peer_id).unwrap().set(connection);
             }
             Err(e) => {
                 let mut current_connections = self.connections.lock().await;

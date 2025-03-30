@@ -7,23 +7,21 @@
 
 import SwiftUI
 import Foundation
+import SharedTypes
 
 struct PeopleShareItem: View {
+    var peer: PeerViewModel
+    
     var body: some View {
         HStack(spacing: 12) {
-            ImageAsset.Owl.image
-                .resizable()
-                .scaledToFit()
-                .frame(width: 35, height: 35)
-                .padding(.all, 3)
-                .background(Circle()
-                    .fill(Color(ImageAsset.Owl.uiImage.backgroundColor)))
+            Avartar(url: URL(string: peer.avatar_url)!)
+                .frame(width: 42, height: 42)
             VStack(alignment: .leading, spacing: 4) {
-                Text("tiendvlp")
+                Text(peer.display_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
                 
-                Text("Send by email")
+                Text("Nearby")
                     .modifier(Label2())
                     .padding(.trailing, 8)
                     .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
@@ -39,6 +37,7 @@ struct PeopleShareItem: View {
 }
 
 struct PeopleShareView: View {
+    @EnvironmentObject private var core: Core
     var body: some View {
         VStack(spacing: 16) {
             Button(action: {}) {
@@ -55,18 +54,27 @@ struct PeopleShareView: View {
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
             
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    PeopleShareItem()
-                    PeopleShareItem()
-                    PeopleShareItem()
-                }
+            if core.transfer?.peers.isEmpty ?? true {
+                Text("No nearby friends found")
+                    .modifier(Label1())
+                    .foregroundStyle(Theme.PrimaryText.color)
+                    .padding()
             }
-            .scrollIndicators(.hidden)
+            else {
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top) {
+                        ForEach(core.transfer?.peers ?? [], id: \.self) { peer in
+                            PeopleShareItem(peer: peer)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
         }
     }
 }
 
 #Preview {
     PeopleShareView()
+        .environmentObject(CoreMock.empty() as Core)
 }

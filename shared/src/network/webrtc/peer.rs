@@ -7,7 +7,8 @@ use schema::devlog::bitbridge::{IntroduceRequest, IntroduceResponse, PeerErrors 
 use thiserror::Error;
 
 use crate::entities::peer::Peer as PeerEntity;
-use crate::ShellRuntime;
+use crate::native::message_to_shell::MessageToShell;
+use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 
@@ -37,22 +38,15 @@ impl PeerCommunication {
         peer_id: u128,
         shell_runtime: Arc<dyn ShellRuntime>
     ) -> Result<Self, PeerErrors> {
-        if current_peer.id() > peer_id {
+        let peer = if current_peer.id() > peer_id {
             let introduce_request = IntroduceRequest {
                 mine: current_peer.clone().into()
             };
 
             let response = connection.send::<IntroduceResponse>(Request::IntroduceRequest(introduce_request)).await??;
-            let peer = response.peer.into();
-
-            log::info!(target: "peer", "Connected to peer {:?}, size = {}", peer, mem::size_of::<PeerCommunication>());
-            Ok(Self {
-                mine: current_peer,
-                peer,
-                connection,
-                shell_runtime
-            })
+            response.peer.into()
         } else {
+            let mut peer_result = None;
             while let Ok(request) = connection.next_request().await {
                 if let Request::IntroduceRequest(introduction) = request.message() {
                     let peer = introduction.mine.clone().into();
@@ -61,18 +55,26 @@ impl PeerCommunication {
                             peer: current_peer.clone().into()
                         }))
                         .await?;
-                    log::info!(target: "peer", "Connected to peer {:?}, size = {}", peer, mem::size_of::<PeerCommunication>());
-                    return Ok(Self {
-                        mine: current_peer,
-                        peer,
-                        connection,
-                        shell_runtime
-                    })
+                    peer_result = Some(peer);
+                    break;
                 }
             }
 
-            Err(PeerErrors::NoResponseFromPeer)
-        }
+            peer_result.ok_or(PeerErrors::NoResponseFromPeer)?
+        };
+
+        log::info!(target: "peer", "Connected to peer {:?}, size = {}", peer, mem::size_of::<PeerCommunication>());
+
+        let me = Self {
+            mine: current_peer,
+            peer,
+            connection,
+            shell_runtime: shell_runtime.clone()
+        };
+
+        shell_runtime.msg_from_native(serialize(&MessageToShell::NewPeer(me.peer.clone())));
+
+        Ok(me)
     }
 }
 
@@ -81,5 +83,11 @@ impl Deref for PeerCommunication {
 
     fn deref(&self) -> &Self::Target {
         &self.connection
+    }
+}
+
+impl Drop for PeerCommunication {
+    fn drop(&mut self) {
+        self.shell_runtime.msg_from_native(serialize(&MessageToShell::PeerLeaved(self.peer.clone())));
     }
 }

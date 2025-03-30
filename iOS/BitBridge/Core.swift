@@ -132,7 +132,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func msgFromNative(_ event: Data) {
-        
+        Task {
+            await self._msgFromNative(event)
+        }
+    }
+    
+    func _msgFromNative(_ event: Data) async {
+        var event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
+        switch event {
+        case .newPeer(let peer):
+            await update(.transfer(.onNewPeer(peer)))
+        case .peerLeaved(let peer):
+            await update(.transfer(.onPeerLeaved(peer)))
+        }
     }
     
     func onMediasChanged() async {
@@ -348,7 +360,7 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device);
+        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device, peers: []);
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
         return x
@@ -394,6 +406,20 @@ extension Image {
         }
         
         return nil
+    }
+    
+    func toUIImage() -> UIImage? {
+        let controller = UIHostingController(rootView: self)
+        let view = controller.view
+        
+        let targetSize = controller.view.intrinsicContentSize
+        view?.bounds = CGRect(origin: .zero, size: targetSize)
+        view?.backgroundColor = .clear
+        
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        return renderer.image { _ in
+            view?.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
+        }
     }
 }
 

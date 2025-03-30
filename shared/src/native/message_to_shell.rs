@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::entities::user::User;
+use crate::entities::{peer::Peer, user::User};
 
 #[derive(Debug, Clone, Enum, PartialEq, Serialize, Deserialize)]
 pub enum MessageToShell {
-    NewNearby { address: String, user: User },
-    NearbyRemoved { address: String, user: User }
+    NewPeer(Peer),
+    PeerLeaved(Peer)
 }

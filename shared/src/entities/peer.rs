@@ -9,7 +9,7 @@ use crate::entities::device::DeviceInfo;
 #[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Peer {
     pub id: String,
-    pub name: String,
+    pub name: Option<String>,
     pub avatar_url: String,
     pub email: Option<String>,
     pub device: DeviceInfo
