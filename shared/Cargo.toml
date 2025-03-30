@@ -50,9 +50,7 @@ lib = [
     "surreal_derive_plus",
     "tokio-tungstenite",
     "futures-util",
-    "tiny_http",
     "url",
-    "mdns-sd",
     "webrtc",
     "prost",
     "uuid",
@@ -91,9 +89,7 @@ surreal_derive_plus = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
-tiny_http = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
-mdns-sd = { workspace = true, optional = true }
 webrtc = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }

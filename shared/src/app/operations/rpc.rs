@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::modules::environment::DeviceInfo;
 use crate::app::AppRequestBuilder;
+use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::errors::NetworkError;
 

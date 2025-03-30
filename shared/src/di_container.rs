@@ -18,7 +18,7 @@ use crate::native::executor::NativeExecutor;
 use crate::native::local_storage::NativeLocalStorage;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
-use crate::network::webrtc::broadcast::BroadcastWebRtc;
+use crate::network::webrtc::web_rtc::WebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
@@ -122,7 +122,8 @@ impl DiContainer {
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
-                broadcast: Arc::new(BroadcastWebRtc::new())
+                web_rtc: Arc::new(WebRtc::new()),
+                shell_runtime: OnceCell::new()
             }
         }
     }

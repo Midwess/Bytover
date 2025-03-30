@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
-use crate::app::modules::environment::DeviceInfo;
 use crate::app::AppRequestBuilder;
+use crate::entities::device::DeviceInfo;
 
 use super::{CoreOperation, CoreOperationOutput};
 

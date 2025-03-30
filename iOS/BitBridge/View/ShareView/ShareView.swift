@@ -65,9 +65,6 @@ public struct ShareView: View {
                 .padding(.bottom, safeAreaInsets.bottom + 30)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
-       .task {
-            await core.update(.transfer(.launched))
-        }
         .ignoresSafeArea()
     }
 }

@@ -6,7 +6,7 @@ use crate::app::transfer::file_selection_service::ResourceSelection;
 use crate::app::transfer::finding_scope::FindingScope;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
-use crate::app::BitBridge;
+use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
@@ -45,22 +45,24 @@ pub enum TransferEvent {
 
 impl AppModule<BitBridge> for TransferModule {
     type Event = TransferEvent;
-    type Model = TransferModel;
     type ViewModel = TransferViewModel;
 
     fn update(
         &self,
         event: Self::Event,
-        model: &mut Self::Model,
+        model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            TransferEvent::Launched() => Command::new(|it| async move {
-                let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
-                resource_transfer_selection_service.load_resources(it.clone()).await;
-                let nearby_service = DiContainer::get_instance().get_nearby_service();
-                nearby_service.init(it.clone()).await;
-            }),
+            TransferEvent::Launched() => {
+                let user = model.authentication.user.clone();
+                Command::new(|it| async move {
+                    let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
+                    resource_transfer_selection_service.load_resources(it.clone()).await;
+                    let nearby_service = DiContainer::get_instance().get_nearby_service();
+                    nearby_service.init(user, it.clone()).await;
+                })
+            }
             TransferEvent::AddResources(selections) => Command::new(|it| async move {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
                 resource_transfer_selection_service.add_resources(it, selections).await;
@@ -70,25 +72,28 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_transfer_selection_service.remove_resource(it, id).await;
             }),
             TransferEvent::UpdateResourcesModel { new, removed } => {
-                model.selected_resources.extend(new);
-                model.selected_resources.retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
+                model.transfer.selected_resources.extend(new);
+                model
+                    .transfer
+                    .selected_resources
+                    .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
 
                 Command::done()
             }
             TransferEvent::OnIpAddressUpdated(ip_address) => {
                 let finding_scope = FindingScope::Local(ip_address);
-                model.finding_scopes.retain(|it| !it.is_local());
-                model.finding_scopes.push(finding_scope);
-                let finding_scopes = model.finding_scopes.clone();
+                model.transfer.finding_scopes.retain(|it| !it.is_local());
+                model.transfer.finding_scopes.push(finding_scope);
+                let finding_scopes = model.transfer.finding_scopes.clone();
                 Command::new(|it| async move {
                     TransferOperation::update_finding_scopes(finding_scopes).into_future(it).await;
                 })
             }
             TransferEvent::OnLocationUpdated(location) => {
                 let finding_scope = FindingScope::nearby_location(location);
-                model.finding_scopes.retain(|it| !it.is_location());
-                model.finding_scopes.extend(finding_scope);
-                let finding_scopes = model.finding_scopes.clone();
+                model.transfer.finding_scopes.retain(|it| !it.is_location());
+                model.transfer.finding_scopes.extend(finding_scope);
+                let finding_scopes = model.transfer.finding_scopes.clone();
                 Command::new(|it| async move {
                     TransferOperation::update_finding_scopes(finding_scopes).into_future(it).await;
                 })
@@ -96,10 +101,10 @@ impl AppModule<BitBridge> for TransferModule {
         }
     }
 
-    fn view(&self, model: &Self::Model) -> Self::ViewModel {
+    fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
-            selected_resources: model.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
-            transfer_method_selection: model.transfer_method_selection.clone()
+            selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
+            transfer_method_selection: model.transfer.transfer_method_selection.clone()
         }
     }
 }

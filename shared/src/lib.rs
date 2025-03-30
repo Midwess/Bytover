@@ -21,8 +21,6 @@ pub mod network;
 #[cfg(feature = "lib")]
 pub mod persistence;
 
-use std::time::Duration;
-
 #[cfg(feature = "lib")]
 use app::{operations::CoreOperation, BitBridge};
 #[cfg(feature = "lib")]
@@ -46,11 +44,8 @@ use app::operations::CoreOperationOutput;
 
 #[cfg(feature = "lib")]
 lazy_static! {
-    pub static ref TOKIO_RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_keep_alive(Duration::from_secs(30))
-        .enable_all()
-        .build()
-        .unwrap();
+    pub static ref TOKIO_RT: tokio::runtime::Runtime =
+        tokio::runtime::Builder::new_multi_thread().max_blocking_threads(10).enable_all().build().unwrap();
 }
 
 #[cfg(feature = "lib")]
@@ -107,17 +102,17 @@ lazy_static! {
 
 #[cfg(feature = "lib")]
 pub fn process_event(msg: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.process_event(msg)
+    CORE_BRIDGE.process_event(msg).unwrap_or_default()
 }
 
 #[cfg(feature = "lib")]
 pub fn handle_response(id: u32, res: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.handle_response(id, res)
+    CORE_BRIDGE.handle_response(id, res).unwrap_or_default()
 }
 
 #[cfg(feature = "lib")]
 pub fn view() -> Vec<u8> {
-    CORE_BRIDGE.view()
+    CORE_BRIDGE.view().unwrap_or_default()
 }
 
 #[cfg(feature = "lib")]

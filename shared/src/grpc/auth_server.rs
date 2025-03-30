@@ -10,8 +10,8 @@ use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::app::modules::environment::DeviceInfo;
 use crate::config::get_gateway_grpc_url;
+use crate::entities::device::DeviceInfo;
 use crate::entities::session::SessionType;
 use crate::entities::user::User;
 use crate::errors::NetworkError;
@@ -42,7 +42,8 @@ impl AuthServer {
             device: RegisteringDevice {
                 device_name: device.name,
                 device_unique_key: device.unique_id,
-                platform: device.platform.into()
+                platform: device.platform.into(),
+                device_type: device.device_type.into()
             }
         };
 

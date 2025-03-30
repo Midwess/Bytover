@@ -25,7 +25,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
     
-    @Published var is_signed_in = true
+    @Published var is_signed_in = false
     
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
@@ -108,7 +108,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
                 .deviceInfo(DeviceInfo(
                     platform: Platform.ios,
                     name: deviceName,
-                    unique_id: deviceId
+                    unique_id: deviceId,
+                    device_type: .applePhone
                 ))
             ).bincodeSerialize()))
         case .appCapabilities(.device(.getGeoLocation)):
@@ -196,7 +197,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         return paths[0]
     }
     
-    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 16, height: 16)) async -> Data? {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
         guard let asset = fetchResult.firstObject else {
             return nil
@@ -263,6 +264,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             lastKnownLocation = locations.first?.coordinate
             Task {
                 await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
+                manager.stopUpdatingLocation()
             }
         }
     }

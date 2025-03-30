@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
+use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
@@ -74,6 +75,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferEvent>()?;
     gen.register_type::<TransferModel>()?;
     gen.register_type::<TransferMethodSelection>()?;
+    gen.register_type::<DeviceType>()?;
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;

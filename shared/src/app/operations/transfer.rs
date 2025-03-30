@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::transfer::finding_scope::FindingScope;
 use crate::app::AppRequestBuilder;
+use crate::entities::peer::Peer;
 
 use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferOperation {
-    StartNearbyServer(Vec<FindingScope>),
+    StartNearbyServer(Peer),
     StopNearbyServer,
     UpdateFindingScopes(Vec<FindingScope>)
 }
@@ -29,8 +30,8 @@ impl Operation for TransferOperation {
 }
 
 impl TransferOperation {
-    pub fn start_nearby_server(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StartNearbyServer(scopes))).map(|it| match it {
+    pub fn start_nearby_server(peer: Peer) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StartNearbyServer(peer))).map(|it| match it {
             CoreOperationOutput::Transfer(TransferOperationOutput::StartNearbyServer) => (),
             _ => panic!("Mismatch in response type, expected StartNearbyServer, got {:?}", it)
         })

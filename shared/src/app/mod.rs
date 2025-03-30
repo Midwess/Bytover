@@ -86,27 +86,18 @@ impl App for BitBridge {
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
-            AppEvent::Environment(event) => {
-                let model = &mut model.environment;
-                self.environment.update(event, model, caps)
-            }
-            AppEvent::Authentication(event) => {
-                let model = &mut model.authentication;
-                self.authentication.update(event, model, caps)
-            }
-            AppEvent::Transfer(event) => {
-                let model = &mut model.transfer;
-                self.transfer.update(event, model, caps)
-            }
+            AppEvent::Environment(event) => self.environment.update(event, model, caps),
+            AppEvent::Authentication(event) => self.authentication.update(event, model, caps),
+            AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
             AppEvent::Void => Command::done()
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         AppViewModel {
-            environment: Some(self.environment.view(&model.environment)),
-            authentication: Some(self.authentication.view(&model.authentication)),
-            transfer: Some(self.transfer.view(&model.transfer))
+            environment: Some(self.environment.view(model)),
+            authentication: Some(self.authentication.view(model)),
+            transfer: Some(self.transfer.view(model))
         }
     }
 }

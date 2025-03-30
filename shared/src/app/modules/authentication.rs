@@ -1,10 +1,11 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
-use crate::app::BitBridge;
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::user::User;
 
+use super::transfer::TransferEvent;
 use super::AppModule;
 
 #[derive(Default)]
@@ -31,13 +32,12 @@ pub enum AuthenticationEvent {
 
 impl AppModule<BitBridge> for AuthenticationModule {
     type Event = AuthenticationEvent;
-    type Model = AuthenticationModel;
     type ViewModel = AuthenticationViewModel;
 
     fn update(
         &self,
         event: Self::Event,
-        model: &mut Self::Model,
+        model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
@@ -52,13 +52,17 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignUp => Command::done(),
             AuthenticationEvent::OnSignInSuccess { user } => {
-                model.user.replace(user);
-                Command::done()
+                model.authentication.user.replace(user);
+                Command::new(|ctx| async move {
+                    ctx.send_event(AppEvent::Transfer(TransferEvent::Launched()));
+                })
             }
         }
     }
 
-    fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        AuthenticationViewModel { user: model.user.clone() }
+    fn view(&self, model: &AppModel) -> Self::ViewModel {
+        AuthenticationViewModel {
+            user: model.authentication.user.clone()
+        }
     }
 }
