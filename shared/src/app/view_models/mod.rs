@@ -1,2 +1,2 @@
-pub mod selected_resource;
 pub mod peer;
+pub mod selected_resource;

@@ -113,18 +113,14 @@ impl AppModule<BitBridge> for TransferModule {
                 model.transfer.peers.retain(|it| !removed.iter().any(|removed| removed.id == it.id));
                 Command::done()
             }
-            TransferEvent::OnNewPeer(peer) => {
-                Command::new(async |it| {
-                    let nearby_service = DiContainer::get_instance().get_nearby_service();
-                    nearby_service.on_new_peer_come(peer, it).await;
-                })
-            }
-            TransferEvent::OnPeerLeaved(peer) => {
-                Command::new(async |it| {
-                    let nearby_service = DiContainer::get_instance().get_nearby_service();
-                    nearby_service.on_peer_leaved(peer, it).await;
-                })
-            }
+            TransferEvent::OnNewPeer(peer) => Command::new(async |it| {
+                let nearby_service = DiContainer::get_instance().get_nearby_service();
+                nearby_service.on_new_peer_come(peer, it).await;
+            }),
+            TransferEvent::OnPeerLeaved(peer) => Command::new(async |it| {
+                let nearby_service = DiContainer::get_instance().get_nearby_service();
+                nearby_service.on_peer_leaved(peer, it).await;
+            })
         }
     }
 
@@ -132,14 +128,17 @@ impl AppModule<BitBridge> for TransferModule {
         Self::ViewModel {
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
             transfer_method_selection: model.transfer.transfer_method_selection.clone(),
-            peers: model.transfer.peers.iter().map(|it| {
-                PeerViewModel {
+            peers: model
+                .transfer
+                .peers
+                .iter()
+                .map(|it| PeerViewModel {
                     id: it.id.clone(),
                     display_name: it.name.clone().unwrap_or(it.device.name.clone()),
                     avatar_url: it.avatar_url.clone(),
                     device: it.device.clone()
-                }
-            }).collect()
+                })
+                .collect()
         }
     }
 }

@@ -41,14 +41,20 @@ impl NearbyService {
     pub async fn on_new_peer_come(&self, peer: Peer, ctx: AppCommandContext) {
         let new_peers = vec![peer];
         let removed_peers = vec![];
-        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers { new: new_peers, removed: removed_peers }));
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers {
+            new: new_peers,
+            removed: removed_peers
+        }));
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 
     pub async fn on_peer_leaved(&self, peer: Peer, ctx: AppCommandContext) {
         let new_peers = vec![];
         let removed_peers = vec![peer];
-        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers { new: new_peers, removed: removed_peers }));
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers {
+            new: new_peers,
+            removed: removed_peers
+        }));
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 }

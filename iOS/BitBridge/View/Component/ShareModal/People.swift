@@ -68,6 +68,7 @@ struct PeopleShareView: View {
                         }
                     }
                 }
+                .frame(minWidth: 100, minHeight: 70)
                 .scrollIndicators(.hidden)
             }
         }
