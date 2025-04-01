@@ -91,12 +91,13 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::done()
             }
             TransferEvent::OnIpAddressUpdated(ip_address) => {
-                let finding_scope = FindingScope::Local(ip_address);
+                let finding_scope = FindingScope::Local(ip_address.clone());
                 model.transfer.finding_scopes.retain(|it| !it.is_local());
                 model.transfer.finding_scopes.push(finding_scope);
                 let finding_scopes = model.transfer.finding_scopes.clone();
+
                 Command::new(|it| async move {
-                    TransferOperation::update_finding_scopes(finding_scopes).into_future(it).await;
+                    TransferOperation::update_finding_scopes(finding_scopes).into_future(it.clone()).await;
                 })
             }
             TransferEvent::OnLocationUpdated(location) => {

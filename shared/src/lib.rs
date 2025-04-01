@@ -32,6 +32,8 @@ use di_container::DiContainer;
 #[cfg(feature = "lib")]
 use erased_serde::Serialize;
 #[cfg(feature = "lib")]
+use instrument::Instrument;
+#[cfg(feature = "lib")]
 use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
@@ -40,7 +42,15 @@ use native::executor::NativeExecutor;
 use std::sync::Arc;
 
 #[cfg(feature = "lib")]
+mod instrument;
+
+#[cfg(feature = "lib")]
 use app::operations::CoreOperationOutput;
+
+#[cfg(feature = "lib")]
+lazy_static! {
+    pub static ref INSTRUMENT: Arc<Instrument> = Arc::new(Instrument::new());
+}
 
 #[cfg(feature = "lib")]
 lazy_static! {
@@ -82,6 +92,7 @@ impl NativeProcessor {
 
         let mut output: Option<CoreOperationOutput> = None;
         TOKIO_RT.block_on(async {
+            log::info!(target: "mem-usage", "Memory log: {:?}", INSTRUMENT.mem_log().await);
             output = Some(self.native_executor.handle(effect, self.shell.clone()).await);
         });
 

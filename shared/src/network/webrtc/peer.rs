@@ -38,7 +38,7 @@ impl PeerCommunication {
         peer_id: u128,
         shell_runtime: Arc<dyn ShellRuntime>
     ) -> Result<Self, PeerErrors> {
-        let peer = if current_peer.id() > peer_id {
+        let peer = if current_peer.id() < peer_id {
             let introduce_request = IntroduceRequest {
                 mine: current_peer.clone().into()
             };

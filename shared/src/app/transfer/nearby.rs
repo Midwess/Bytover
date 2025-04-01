@@ -1,4 +1,4 @@
-use uuid::Uuid;
+use chrono::Utc;
 
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::device::DeviceOperation;
@@ -14,17 +14,29 @@ pub struct NearbyService {}
 impl NearbyService {
     pub async fn init(&self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
-        let peer_id = Uuid::new_v4().as_u128().to_string();
+        let Ok(current_ip) = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await else {
+            log::error!(target: "nearby", "Failed to get current ip address, skip starting nearby service");
+            return;
+        };
+
+        let ip_parts: String = current_ip
+            .split('.')
+            .map(|part| part.parse::<i64>().unwrap_or(0).to_string())
+            .fold(String::new(), |acc, part| format!("{}{}", acc, part));
+
+        let current_mics = Utc::now().timestamp_micros();
+        let peer_id = format!("{}{}", current_mics, ip_parts);
+
         let peer = match user {
             Some(user) => Peer {
-                id: peer_id,
+                id: peer_id.clone(),
                 name: Some(user.name),
                 avatar_url: user.avatar,
                 email: Some(user.email),
                 device
             },
             None => Peer {
-                id: peer_id,
+                id: peer_id.clone(),
                 name: None,
                 avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
                 email: None,

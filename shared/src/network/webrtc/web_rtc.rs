@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use core_services::utils::random_number_in_range;
+use core_services::utils::number::ExponentialGrowth;
 use futures_util::lock::Mutex;
 use schema::devlog::rpc_signalling::server::{JoinMessage, Message};
 use thiserror::Error;
@@ -111,14 +111,15 @@ impl WebRtc {
         let signalling_client = self.signalling_client.clone();
 
         let scopes = self.scopes.clone();
+        let exponential_growth_delay = ExponentialGrowth::new(3, 0.25, 3, 35);
         *broadcast_handle = Some(spawn(async move {
             loop {
-                let delay = Duration::from_secs(random_number_in_range(7, 15) as u64);
+                let delay = Duration::from_secs(exponential_growth_delay.next() as u64);
+                log::info!(target: "broadcast", "Broadcasting with delay: {:?}", delay);
                 let scopes = scopes.lock().await.clone();
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
                     drop(scopes);
-                    // Use the shorter duration to avoid waiting too long
                     sleep(Duration::from_secs(1)).await;
                     continue;
                 }
@@ -164,7 +165,7 @@ impl WebRtc {
                 };
 
                 if message.join.is_some() {
-                    if peer_id >= my_id {
+                    if peer_id <= my_id {
                         continue;
                     }
 
@@ -195,8 +196,8 @@ impl WebRtc {
                 }
 
                 if let Some(offer) = message.offer {
-                    if peer_id <= my_id {
-                        log::info!(target: "broadcast", "Peer {:?} is not greater than my id {:?}, reject offer", peer_id, my_id);
+                    if peer_id >= my_id {
+                        log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject offer", peer_id, my_id);
                         continue;
                     }
 
