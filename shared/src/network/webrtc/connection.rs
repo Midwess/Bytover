@@ -56,6 +56,7 @@ pub struct ConnectionWebRtc {
     pub msg_channel: OnceCell<MessageChannel>,
     pub signalling_client: Arc<RtcsSignalling>,
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
     pub ns: String
 }
 
@@ -126,6 +127,7 @@ impl ConnectionWebRtc {
             msg_channel: OnceCell::new(),
             signalling_client,
             signalling_join_handle: Arc::new(Mutex::new(None)),
+            on_disconnect: OnceCell::new(),
             ns: ns.clone()
         };
 
@@ -218,7 +220,8 @@ impl ConnectionWebRtc {
             signalling_join_handle: Arc::new(Mutex::new(None)),
             peer_connection: Arc::new(peer_connection),
             msg_channel: OnceCell::new(),
-            ns: ns.clone()
+            ns: ns.clone(),
+            on_disconnect: OnceCell::new()
         };
 
         me.handle_signalling_message().await;
@@ -375,6 +378,7 @@ impl ConnectionWebRtc {
 
     pub fn on_disconnect(&self, callback: OnCloseHdlrFn) {
         let callback = Arc::new(Mutex::new(callback));
+        let _ = self.on_disconnect.set(callback.clone());
         {
             let callback = callback.clone();
             self.peer_connection.on_peer_connection_state_change(Box::new(move |state| {
@@ -586,12 +590,21 @@ impl Deref for ConnectionWebRtc {
 
 impl Drop for ConnectionWebRtc {
     fn drop(&mut self) {
-        log::info!(target: "rtc", "Dropping connection to peer {}", self.peer_id);
         let signalling_join_handle = self.signalling_join_handle.clone();
+        let connection = self.peer_connection.clone();
+        let peer_id = self.peer_id;
+        let mut on_disconnect = self.on_disconnect.get().map(|cell| cell.clone());
         spawn(async move {
+            let _ = connection.close().await;
             if let Some(join_handle) = signalling_join_handle.lock().await.take() {
                 join_handle.abort();
             }
+
+            if let Some(callback) = on_disconnect.take() {
+                let _ = callback.lock().await.as_mut()().await;
+            }
+
+            log::info!(target: "rtc", "Dropped connection to peer {}", peer_id);
         });
     }
 }
