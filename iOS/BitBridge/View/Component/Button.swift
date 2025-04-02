@@ -149,14 +149,15 @@ struct CircleWaveEffect: ViewModifier {
                         ShaderLibrary.circleWave(
                             .float2(proxy.size),
                             .color(Theme.BluePrimary.color),
-                            .float(animationPhase * 0.6)
+                            .float(animationPhase * 0.4)
                         )
                     )
             }
+            .drawingGroup()
             .onAppear {
                 // Update every 1/60th of a second instead of every frame
-                timer = Timer.scheduledTimer(withTimeInterval: 1/15, repeats: true) { _ in
-                    animationPhase += 1/15
+                timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
+                    animationPhase += 1/12
                 }
             }
             .onDisappear {
@@ -179,7 +180,6 @@ struct ShareButton: View {
             Circle()
                 .fill(Theme.GreenSecondary.color.opacity(0.7))
                 .modifier(CircleWaveEffect())
-                .drawingGroup()
             Button(action: {
                 Task {
                     try await Task.sleep(for: .milliseconds(200))
