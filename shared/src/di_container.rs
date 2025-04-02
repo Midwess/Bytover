@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
-use surrealdb::engine::local::Db;
+use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
@@ -22,12 +22,12 @@ use crate::network::webrtc::web_rtc::WebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
-use crate::{ShellRuntime, TOKIO_RT};
+use crate::{get_tokio_rt, ShellRuntime};
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
-    db: OnceCell<Arc<PoolAllocator<Surreal<Db>>>>,
+    db: OnceCell<Arc<PoolAllocator<Surreal<Any>>>>,
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>
 }
@@ -70,12 +70,12 @@ impl DiContainer {
         }
     }
 
-    pub async fn init(&self, work_dir_path: String) {
-        scoped(TOKIO_RT.handle()).scope(move |scope| {
+    pub fn init(&self, work_dir_path: String) {
+        scoped(get_tokio_rt().handle()).scope(move |scope| {
             scope.spawn(async move {
                 let db_path = format!("{}/{}", work_dir_path, "surrealdb.db");
                 log::info!(target: "environment", "Connecting to local database at {}", db_path);
-                let local_db: Box<dyn PoolResourceProvider<Surreal<Db>>> = Box::new(SurrealDbConnectionProvider {
+                let local_db: Box<dyn PoolResourceProvider<Surreal<Any>>> = Box::new(SurrealDbConnectionProvider {
                     connection: SurrealDbLocalConnectionInfo { db_path: db_path.clone() }
                 });
 

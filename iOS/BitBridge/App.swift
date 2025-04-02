@@ -23,7 +23,6 @@ struct Main: App {
                 .environmentObject(core)
                 .preferredColorScheme(.dark)
                 .task {
-                    print("Firing app launched")
                     await core.update(AppEvent.environment(.appLaunched))
                 }
         }

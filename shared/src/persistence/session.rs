@@ -7,7 +7,7 @@ use core_services::utils::pool::request::PoolRequest;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::SurrealResponseError;
-use surrealdb::engine::local::Db;
+use surrealdb::engine::any::Any;
 use surrealdb::sql::{Thing, Value};
 use surrealdb::Surreal;
 
@@ -66,12 +66,12 @@ impl DbId for SessionId {
 }
 
 pub struct SessionRepository {
-    pub db: PoolRequest<Surreal<Db>>
+    pub db: PoolRequest<Surreal<Any>>
 }
 
 #[async_trait::async_trait]
 impl LocalSurrealDbRepository<Session, SessionId> for SessionRepository {
-    async fn get_db(&self) -> PoolResponse<Surreal<Db>> {
+    async fn get_db(&self) -> PoolResponse<Surreal<Any>> {
         self.db.retrieve().await.unwrap()
     }
 }

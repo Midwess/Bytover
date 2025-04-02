@@ -25,7 +25,7 @@ public struct ShareView: View {
                     LogoScene(gltfFileName: "Rocket", logoScale: 1.7)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
-                            .opacity(0.5)
+                            .opacity(0.4)
                             .blur(radius: 15)
                             .frame(width: .infinity, height: screenSize.width / 2)
                         )

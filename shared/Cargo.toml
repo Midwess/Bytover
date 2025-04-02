@@ -69,7 +69,7 @@ uniffi-bindgen = ["uniffi"]
 [dependencies]
 crux_core = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-surrealdb = { workspace = true, default-features = false, features = ["kv-surrealkv"], optional = true }
+surrealdb = { workspace = true, default-features = false, features = ["kv-surrealkv", "kv-mem"], optional = true }
 lazy_static = { workspace = true, optional = true }
 uniffi = { workspace = true, optional = true }
 wasm-bindgen = { version = "0.2.100", optional = true }

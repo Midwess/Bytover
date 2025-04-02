@@ -593,7 +593,7 @@ impl Drop for ConnectionWebRtc {
         let signalling_join_handle = self.signalling_join_handle.clone();
         let connection = self.peer_connection.clone();
         let peer_id = self.peer_id;
-        let mut on_disconnect = self.on_disconnect.get().map(|cell| cell.clone());
+        let mut on_disconnect = self.on_disconnect.get().cloned();
         spawn(async move {
             let _ = connection.close().await;
             if let Some(join_handle) = signalling_join_handle.lock().await.take() {

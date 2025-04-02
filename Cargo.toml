@@ -32,7 +32,7 @@ edition = "2021"
 anyhow = "1.0.95"
 crux_core = "0.12.2"
 serde = { version = "1.0.217", default-features = false }
-surrealdb = {version="2.2.1", default-features = false}
+surrealdb = {version="2.2.0", default-features = false}
 thiserror = { version = "1.0.61", default-features = false }
 serde_derive = { version = "1.0.203", default-features = false }
 serde_json = { version = "1.0.117", default-features = false }
@@ -41,7 +41,7 @@ surreal_derive_plus = "2.2.2"
 surreal_devl = "2.2.2"
 lazy_static = "1.5.0"
 tonic-middleware = { version = "0.1.4", default-features = false }
-tokio = {version = "1.28.2", default-features = false, features = ["sync"]}
+tokio = {version = "1.44.1", default-features = false, features = ["sync"]}
 reqwest = { version = "0.12.9", default-features = false, features = ["json", "native-tls-vendored"] }
 async-trait = { version = "0.1.13", default-features = false }
 log = { version = "0.4.22", default-features = false }
@@ -64,6 +64,11 @@ stunclient = "0.4.1"
 h3ron = { version = "0.18.0" }
 geo-types = "0.7.16"
 sysinfo = { version = "0.34.1" }
+
+[patch.crates-io]
+# This one is including a memory leak fix for surrealdb on 2.2.0
+# Should be remove after we upgrade surrealdb to >= 2.2.1
+affinitypool = { git = "https://github.com/surrealdb/affinitypool.git", version = "0.3.1" }
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

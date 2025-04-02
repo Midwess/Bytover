@@ -152,14 +152,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
             
-            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
-            guard let asset = fetchResult.firstObject else { continue }
-            
-            let resources = PHAssetResource.assetResources(for: asset)
-            guard let resource = resources.first else { continue }
+            guard let asset_type = PHAsset.getCachedAsset(identifier: identifier)?.asset.mediaType else {
+                continue;
+            }
             
             let resourceType: ResourceType = {
-                switch asset.mediaType {
+                switch asset_type {
                 case .image:
                     return .image
                 case .video:
@@ -183,24 +181,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func getFileSize(item_identifier: String) -> UInt64 {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [item_identifier], options: nil)
-        guard let asset = fetchResult.firstObject,
-              let resource = PHAssetResource.assetResources(for: asset).first else {
-            return 0
-        }
-        
-        let size = resource.value(forKey: "fileSize") as? Int ?? 0
-        return UInt64(size)
+        return PHAsset.getCachedAsset(identifier: item_identifier)?.fileSize ?? 0
     }
 
     func getFileName(item_identifier: String) -> String {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [item_identifier], options: nil)
-        guard let asset = fetchResult.firstObject,
-              let resource = PHAssetResource.assetResources(for: asset).first else {
-            return "Unknown"
-        }
-        
-        return resource.originalFilename
+        return PHAsset.getCachedAsset(identifier: item_identifier)?.fileName ?? ""
     }
     
     func getDocumentsDirectory() -> URL {
@@ -209,13 +194,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         return paths[0]
     }
     
-    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 16, height: 16)) async -> Data? {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
-        guard let asset = fetchResult.firstObject else {
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
+        guard let asset_cached = PHAsset.getCachedAsset(identifier: itemIdentifier) else {
             return nil
         }
         
-        if asset.mediaType == .video {
+        if asset_cached.asset.mediaType == .video {
             return await getVideoThumbnailData(for: itemIdentifier, size: size)
         }
         
@@ -227,7 +211,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         
         return await withCheckedContinuation { continuation in
             manager.requestImage(
-                for: asset,
+                for: asset_cached.asset,
                 targetSize: size,
                 contentMode: .aspectFit,
                 options: options
@@ -274,16 +258,16 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
-            Task {
-                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
-                manager.stopUpdatingLocation()
-            }
+//            Task {
+//                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
+//                manager.stopUpdatingLocation()
+//            }
         }
     }
 
-    func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 96, height: 96)) async -> Data? {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [itemIdentifier], options: nil)
-        guard let asset = fetchResult.firstObject, asset.mediaType == .video else {
+    func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
+        let fetchResult = PHAsset.getCachedAsset(identifier: itemIdentifier)
+        guard let asset_cached = fetchResult, asset_cached.asset.mediaType == .video else {
             return nil
         }
         
@@ -293,7 +277,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         
         // Request the AVAsset
         let avAsset = await withCheckedContinuation { continuation in
-            manager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+            manager.requestAVAsset(forVideo: asset_cached.asset, options: options) { avAsset, _, _ in
                 continuation.resume(returning: avAsset)
             }
         }
@@ -451,5 +435,72 @@ extension UIImage {
         var alpha: CGFloat = 0
         self.averageColor?.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
         return UIColor(hue: hue, saturation: 0.6, brightness: 0.3, alpha: alpha)
+    }
+}
+
+class PHAssetCached {
+    var fileSize: UInt64
+    var fileName: String
+    var asset: PHAsset
+    
+    init(fileName: String, fileSize: UInt64, asset: PHAsset) {
+        self.fileName = fileName
+        self.fileSize = fileSize
+        self.asset = asset
+    }
+}
+
+class AssetCache {
+    static var shared = AssetCache()
+    private var cache: [String: PHAssetCached] = [:]
+    private let queue = DispatchQueue(label: "com.bitbridge.assetcache")
+    
+    func get(identifier: String) -> PHAssetCached? {
+        queue.sync {
+            return cache[identifier]
+        }
+    }
+    
+    func set(identifier: String, asset: PHAssetCached) {
+        queue.sync {
+            cache[identifier] = asset
+        }
+    }
+    
+    func clear() {
+        queue.sync {
+            cache.removeAll()
+        }
+    }
+}
+
+extension PHAsset {
+    static func getCachedAsset(identifier: String) -> PHAssetCached? {
+        // Check cache first
+        if let cached = AssetCache.shared.get(identifier: identifier) {
+            return cached
+        }
+        
+        // If not in cache, fetch and cache
+        var options = PHFetchOptions()
+        options.fetchLimit = 1
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
+        guard let asset = fetchResult.firstObject,
+              let resource = PHAssetResource.assetResources(for: asset).first else {
+            return nil
+        }
+        
+        // Get file size
+        let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
+        
+        // Create cached object
+        let cached = PHAssetCached(
+            fileName: resource.originalFilename,
+            fileSize: UInt64(fileSize),
+            asset: asset
+        )
+        
+        AssetCache.shared.set(identifier: identifier, asset: cached)
+        return cached
     }
 }

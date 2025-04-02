@@ -42,7 +42,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                 Command::new(|ctx| async move {
                     let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
                     let di_container = DiContainer::get_instance();
-                    di_container.init(workdir_path).await;
+                    di_container.init(workdir_path);
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
                     di_container.get_authentication_service().update_signin_session(ctx).await;
                 })

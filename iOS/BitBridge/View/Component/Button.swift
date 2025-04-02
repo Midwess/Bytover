@@ -137,6 +137,35 @@ struct ButtonNavigation: View {
     }
 }
 
+struct CircleWaveEffect: ViewModifier {
+    @State private var animationPhase: CGFloat = 0
+    @State private var timer: Timer?
+    
+    func body(content: Content) -> some View {
+        content
+            .visualEffect { content, proxy in
+                content
+                    .colorEffect(
+                        ShaderLibrary.circleWave(
+                            .float2(proxy.size),
+                            .color(Theme.BluePrimary.color),
+                            .float(animationPhase * 0.6)
+                        )
+                    )
+            }
+            .onAppear {
+                // Update every 1/60th of a second instead of every frame
+                timer = Timer.scheduledTimer(withTimeInterval: 1/15, repeats: true) { _ in
+                    animationPhase += 1/15
+                }
+            }
+            .onDisappear {
+                timer?.invalidate()
+                timer = nil
+            }
+    }
+}
+
 struct ShareButton: View {
     let width: CGFloat
 
@@ -147,61 +176,46 @@ struct ShareButton: View {
     
     var body: some View {
         ZStack {
-            Group {
-                ZStack {
-                    TimelineView(.animation) { timeline in
-                        let elapsedTime = startTime.distance(to: timeline.date)
-                        Circle()
-                            .fill(Theme.GreenSecondary.color.opacity(0.7))
-                            .visualEffect { content, proxy in
-                                content
-                                    .colorEffect(
-                                        ShaderLibrary.circleWave(
-                                            .float2(proxy.size),
-                                            .color(Theme.BluePrimary.color),
-                                            .float(elapsedTime)
-                                        )
-                                    )
-                            }
-                    }
-                    Button(action: {
-                        Task {
-                            try await Task.sleep(for: .milliseconds(200))
-                            showShareModal = true
-                        }
-                    }) {
-                        ImageAsset.SendEmpty.image
-                            .rotationEffect(.degrees(-45))
-                            .offset(x: 1, y: -1)
-                            .frame(width: width * 0.3, height: width * 0.3)
-                            .background(
-                                Circle()
-                                    .foregroundStyle(Theme.BlackBase.color)
-                            )
-                            .clipShape(Circle())
-                    }
-                    .opacity(isPressed ? 0.8 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: isPressed)
-                    .buttonStyle(PressableButtonStyle())
-                    .sheet(isPresented: $showShareModal) {
-                        ShareModal()
-                            .presentationDetents([.height(shareModalContentHeight), .medium])
-                            .presentationCornerRadius(36)
-                            .presentationBackground(.clear)
-                            .background {
-                                GeometryReader { proxy in
-                                    Color.clear
-                                        .task {
-                                            shareModalContentHeight = proxy.size.height
-                                        }
-                                }
-                            }
-                            .background(Theme.BlackBase.color.opacity(0.3))
-                            .background(StunningBackgroundGradientSecondary().opacity(0.2))
-                            .background(.ultraThinMaterial)
-                            .environment(\.colorScheme, .dark)
-                    }
+            Circle()
+                .fill(Theme.GreenSecondary.color.opacity(0.7))
+                .modifier(CircleWaveEffect())
+                .drawingGroup()
+            Button(action: {
+                Task {
+                    try await Task.sleep(for: .milliseconds(200))
+                    showShareModal = true
                 }
+            }) {
+                ImageAsset.SendEmpty.image
+                    .rotationEffect(.degrees(-45))
+                    .offset(x: 1, y: -1)
+                    .frame(width: width * 0.3, height: width * 0.3)
+                    .background(
+                        Circle()
+                            .foregroundStyle(Theme.BlackBase.color)
+                    )
+                    .clipShape(Circle())
+            }
+            .opacity(isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isPressed)
+            .buttonStyle(PressableButtonStyle())
+            .sheet(isPresented: $showShareModal) {
+                ShareModal()
+                    .presentationDetents([.height(shareModalContentHeight), .medium])
+                    .presentationCornerRadius(36)
+                    .presentationBackground(.clear)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .task {
+                                    shareModalContentHeight = proxy.size.height
+                                }
+                        }
+                    }
+                    .background(Theme.BlackBase.color.opacity(0.3))
+                    .background(StunningBackgroundGradientSecondary().opacity(0.2))
+                    .background(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
             }
         }
         .frame(width: width, height: width)

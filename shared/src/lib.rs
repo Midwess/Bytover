@@ -45,18 +45,15 @@ use std::sync::Arc;
 mod instrument;
 
 #[cfg(feature = "lib")]
-use app::operations::CoreOperationOutput;
-
-#[cfg(feature = "lib")]
 lazy_static! {
     pub static ref INSTRUMENT: Arc<Instrument> = Arc::new(Instrument::new());
 }
 
 #[cfg(feature = "lib")]
-lazy_static! {
-    pub static ref TOKIO_RT: tokio::runtime::Runtime =
-        tokio::runtime::Builder::new_multi_thread().max_blocking_threads(10).enable_all().build().unwrap();
-}
+use tokio::sync::OnceCell;
+
+#[cfg(feature = "lib")]
+pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
 #[cfg(feature = "lib")]
 pub trait ShellRuntime: Send + Sync {
@@ -68,6 +65,18 @@ pub trait ShellRuntime: Send + Sync {
 pub struct NativeProcessor {
     shell: Arc<dyn ShellRuntime>,
     native_executor: NativeExecutor
+}
+
+#[cfg(feature = "lib")]
+pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
+    match TOKIO_RT.get() {
+        Some(rt) => rt,
+        None => {
+            let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap();
+            TOKIO_RT.set(rt).unwrap();
+            TOKIO_RT.get().expect("Tokio runtime not initialized")
+        }
+    }
 }
 
 #[cfg(feature = "lib")]
@@ -90,16 +99,12 @@ impl NativeProcessor {
 
         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
-        let mut output: Option<CoreOperationOutput> = None;
-        TOKIO_RT.block_on(async {
-            log::info!(target: "mem-usage", "Memory log: {:?}", INSTRUMENT.mem_log().await);
-            output = Some(self.native_executor.handle(effect, self.shell.clone()).await);
+        let output = get_tokio_rt().block_on(async {
+            let result = self.native_executor.handle(effect, self.shell.clone()).await;
+            result
         });
 
-        match output {
-            Some(output) => handle_response(id, &serialize(&output)),
-            None => Vec::new()
-        }
+        handle_response(id, &serialize(&output))
     }
 }
 
