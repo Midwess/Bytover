@@ -1,4 +1,5 @@
 use chrono::Local;
+use futures_util::StreamExt;
 use geo_types::Coord;
 use h3ron::{H3Cell, Index, ToCoordinate};
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,12 @@ pub enum FindingScope {
 
 impl FindingScope {
     pub async fn local_network(ctx: AppCommandContext) -> Result<Self, NetworkError> {
-        let local_ip = InternetOperation::get_current_ip_address().into_future(ctx).await?;
+        let local_ip = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await?;
+        let mut result = ctx.stream_from_shell(crate::app::operations::CoreOperation::InitNativeExecutor);
+        while let Some(response) = result.next().await {
+            println!("response: {:?}", response);
+        }
+
         Ok(Self::Local(local_ip))
     }
 

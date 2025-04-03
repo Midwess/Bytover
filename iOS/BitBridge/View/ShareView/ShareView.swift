@@ -62,7 +62,7 @@ public struct ShareView: View {
             .padding(.bottom, 150)
             
             ShareButton(width: 230)
-                .padding(.bottom, safeAreaInsets.bottom + 30)
+                .padding(.bottom, safeAreaInsets.bottom + 16)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
         .ignoresSafeArea()

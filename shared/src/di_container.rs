@@ -83,7 +83,7 @@ impl DiContainer {
                     PoolBuilder::new(local_db)
                         .max_pool_size(1)
                         .min_pool_size(0)
-                        .resource_idle_timeout(Duration::from_secs(10))
+                        .resource_idle_timeout(Duration::from_secs(5))
                         .build()
                         .await
                 );

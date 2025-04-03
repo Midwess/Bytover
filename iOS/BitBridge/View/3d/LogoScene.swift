@@ -18,10 +18,89 @@ struct LogoScene: UIViewRepresentable {
     class Coordinator: NSObject {
         var parent: LogoScene
         weak var scene: SCNScene?
+        weak var sceneView: SCNView?
         
         init(_ parent: LogoScene) {
             self.parent = parent
             super.init()
+            
+            // Subscribe to app lifecycle notifications
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(applicationWillResignActive),
+                name: UIApplication.willResignActiveNotification,
+                object: nil
+            )
+            
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(applicationDidBecomeActive),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
+        
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+        
+        @objc func applicationWillResignActive() {
+            // Unload scene when app goes to background
+            sceneView?.scene = nil
+            sceneView?.isPlaying = false
+        }
+        
+        @objc func applicationDidBecomeActive() {
+            // Reload scene when app becomes active
+            if let sceneView = sceneView, sceneView.scene == nil {
+                loadScene(for: sceneView)
+            }
+        }
+        
+        func loadScene(for sceneView: SCNView) {
+            // Load the GLTF scene
+            do {
+                guard let url = Bundle.main.url(forResource: parent.gltfFileName, withExtension: "gltf") else {
+                    print("Failed to find GLTF file: \(parent.gltfFileName)")
+                    return
+                }
+                
+                let sceneSource = GLTFSceneSource(url: url, options: [
+                    SCNSceneSource.LoadingOption.flattenScene: true,
+                    SCNSceneSource.LoadingOption.preserveOriginalTopology: false,
+                    SCNSceneSource.LoadingOption.createNormalsIfAbsent: true,
+                ])
+                let scene = try sceneSource.scene()
+                self.scene = scene
+                
+                parent.configureEnvironmentMap(for: scene)
+                
+                sceneView.scene = scene
+                
+                let scale = SCNVector3(parent.logoScale, parent.logoScale, parent.logoScale)
+                scene.rootNode.scale = scale
+                
+                if let rotation = parent.rotation {
+                    scene.rootNode.childNodes[0].rotation = rotation
+                }
+                
+                let materialCache: [String: SCNMaterial] = [
+                    "SeaTertiary": parent.createMaterial(with: Theme.SeaTertiary.color),
+                    "BlueSky": parent.createMaterial(with: Theme.BlueSky.color),
+                    "DarkBlue": parent.createMaterial(with: Theme.DarkBlue.color),
+                    "Navy": parent.createMaterial(with: Theme.Navy.color),
+                    "BlueViolet": parent.createMaterial(with: Theme.BlueViolet.color),
+                    "LightSea": parent.createMaterial(with: Theme.LightSea.color),
+                    "Orange": parent.createMaterial(with: Theme.Orange.color)
+                ]
+                
+                parent.applyMaterials(to: scene.rootNode, using: materialCache)
+                parent.optimizeNodeHierarchy(scene.rootNode)
+                
+                sceneView.isPlaying = true
+            } catch {
+                print("Error loading GLTF: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -39,50 +118,11 @@ struct LogoScene: UIViewRepresentable {
         sceneView.preferredFramesPerSecond = 15
         sceneView.isPlaying = false
         
-        let materialCache: [String: SCNMaterial] = [
-            "SeaTertiary": createMaterial(with: Theme.SeaTertiary.color),
-            "BlueSky": createMaterial(with: Theme.BlueSky.color),
-            "DarkBlue": createMaterial(with: Theme.DarkBlue.color),
-            "Navy": createMaterial(with: Theme.Navy.color),
-            "BlueViolet": createMaterial(with: Theme.BlueViolet.color),
-            "LightSea": createMaterial(with: Theme.LightSea.color),
-            "Orange": createMaterial(with: Theme.Orange.color)
-        ]
+        // Store reference to sceneView in coordinator
+        context.coordinator.sceneView = sceneView
         
-        do {
-            guard let url = Bundle.main.url(forResource: gltfFileName, withExtension: "gltf") else {
-                print("Failed to find GLTF file: \(gltfFileName)")
-                return sceneView
-            }
-            
-            let sceneSource = GLTFSceneSource(url: url, options: [
-                SCNSceneSource.LoadingOption.flattenScene: true,
-                SCNSceneSource.LoadingOption.preserveOriginalTopology: false,
-                SCNSceneSource.LoadingOption.createNormalsIfAbsent: true,
-            ])
-            let scene = try sceneSource.scene()
-            context.coordinator.scene = scene
-            
-            configureEnvironmentMap(for: scene)
-            
-            sceneView.scene = scene
-            
-            let scale = SCNVector3(logoScale, logoScale, logoScale)
-            scene.rootNode.scale = scale
-            
-            if let rotation = rotation {
-                scene.rootNode.childNodes[0].rotation = rotation
-            }
-            
-            applyMaterials(to: scene.rootNode, using: materialCache)
-            
-        } catch {
-            print("Error loading GLTF: \(error.localizedDescription)")
-        }
-        
-        if let rootNode = sceneView.scene?.rootNode {
-            self.optimizeNodeHierarchy(rootNode)
-        }
+        // Load the scene
+        context.coordinator.loadScene(for: sceneView)
         
         return sceneView
     }

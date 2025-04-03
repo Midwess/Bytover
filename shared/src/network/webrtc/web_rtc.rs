@@ -115,7 +115,6 @@ impl WebRtc {
         *broadcast_handle = Some(spawn(async move {
             loop {
                 let delay = Duration::from_secs(exponential_growth_delay.next() as u64);
-                log::info!(target: "broadcast", "Broadcasting with delay: {:?}", delay);
                 let scopes = scopes.lock().await.clone();
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");

@@ -24,9 +24,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     @Published var environment: EnvironmentViewModel?
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
-    
-    @Published var is_signed_in = false
-    
+    @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
     @Environment(\.openURL) private var openURL
@@ -49,7 +47,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         self.transfer = model.transfer
         
         if self.authentication?.user != nil {
-            self.is_signed_in = true
+            self.isSignedIn = true
         }
     }
     
@@ -88,10 +86,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(documentDirectory.path)).bincodeSerialize()))
         case .appCapabilities(.localStorage(.loadFileSizeFromPlatformIdentifier(let identifier))):
-            let fileSize = self.getFileSize(item_identifier: identifier)
+            let fileSize = await self.getFileSize(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileSizeFromPlatformIdentifier(fileSize)).bincodeSerialize()))
         case .appCapabilities(.localStorage(.loadFileNameFromPlatformIdentifier(let identifier))):
-            let fileName = self.getFileName(item_identifier: identifier)
+            let fileName = await self.getFileName(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileNameFromPlatformIdentifier(fileName)).bincodeSerialize()))
         case .appCapabilities(.localStorage(.loadFileThumbnailPngFromPlatformIdentifier(let identifier))):
             let fileThumbnailData = await self.getThumbnailData(for: identifier)
@@ -152,9 +150,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
             
-            guard let asset_type = PHAsset.getCachedAsset(identifier: identifier)?.asset.mediaType else {
+            guard let asset = await PHAsset.getCachedAsset(identifier: identifier)?.asset else {
                 continue;
             }
+            
+            let asset_type = asset.mediaType
             
             let resourceType: ResourceType = {
                 switch asset_type {
@@ -167,7 +167,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
                 }
             }()
             
-            // Create resource selection
+            let absolute = await asset.getAbsoluteURL()
             let resourceSelection = ResourceSelection(
                 path: .platformIdentifier(identifier),
                 type: resourceType
@@ -180,12 +180,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         await self.update(.transfer(.addResources(selections)))
     }
     
-    func getFileSize(item_identifier: String) -> UInt64 {
-        return PHAsset.getCachedAsset(identifier: item_identifier)?.fileSize ?? 0
+    func getFileSize(item_identifier: String) async -> UInt64 {
+        return await PHAsset.getCachedAsset(identifier: item_identifier)?.fileSize ?? 0
     }
 
-    func getFileName(item_identifier: String) -> String {
-        return PHAsset.getCachedAsset(identifier: item_identifier)?.fileName ?? ""
+    func getFileName(item_identifier: String) async -> String {
+        return await PHAsset.getCachedAsset(identifier: item_identifier)?.fileName ?? ""
     }
     
     func getDocumentsDirectory() -> URL {
@@ -195,7 +195,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
-        guard let asset_cached = PHAsset.getCachedAsset(identifier: itemIdentifier) else {
+        guard let asset_cached = await PHAsset.getCachedAsset(identifier: itemIdentifier) else {
             return nil
         }
         
@@ -258,15 +258,16 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
-//            Task {
-//                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
-//                manager.stopUpdatingLocation()
-//            }
+            Task {
+                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
+                
+                manager.stopUpdatingLocation()
+            }
         }
     }
 
     func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
-        let fetchResult = PHAsset.getCachedAsset(identifier: itemIdentifier)
+        let fetchResult: PHAssetCached? = await PHAsset.getCachedAsset(identifier: itemIdentifier)
         guard let asset_cached = fetchResult, asset_cached.asset.mediaType == .video else {
             return nil
         }
@@ -275,7 +276,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
         
-        // Request the AVAsset
         let avAsset = await withCheckedContinuation { continuation in
             manager.requestAVAsset(forVideo: asset_cached.asset, options: options) { avAsset, _, _ in
                 continuation.resume(returning: avAsset)
@@ -286,7 +286,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             return nil
         }
         
-        // Generate the thumbnail
         let imageGenerator = AVAssetImageGenerator(asset: avAsset)
         imageGenerator.appliesPreferredTrackTransform = true
         imageGenerator.maximumSize = size
@@ -296,14 +295,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
                 if let cgImage = cgImage {
                     continuation.resume(returning: cgImage)
                 } else {
-                    // If there's an error or no image, just return nil
                     print("Error or no image generated: \(error?.localizedDescription ?? "Unknown error")")
                     continuation.resume(returning: nil)
                 }
             }
         }
         
-        // If we got a valid CGImage, convert it to UIImage
         if let cgImage = cgImage {
             return UIImage(cgImage: cgImage).pngData()
         } else {
@@ -325,12 +322,10 @@ struct DataUrl: Transferable {
 }
 
 extension Data {
-    /// Converts Data to an array of UInt8 bytes
     var bytes: [UInt8] {
         return [UInt8](self)
     }
     
-    /// Initializes Data from an array of UInt8 bytes
     init(bytes: [UInt8]) {
         self.init(bytes)
     }
@@ -355,19 +350,12 @@ class CoreMock: Core {
     override func update_view(_ model: AppViewModel) {}
 }
 
-// Extension for UIImage to load from local path
 extension UIImage {
-    /// Initializes a UIImage from a local file path
-    /// - Parameter path: The file path as a String
-    /// - Returns: An optional UIImage, nil if loading fails
     static func fromRelativePath(_ path: String) -> UIImage? {
         let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         return UIImage(contentsOfFile: documentDirectory.path.appending("/").appending(path))
     }
     
-    /// Initializes a UIImage from a URL (must be a file URL)
-    /// - Parameter url: The file URL
-    /// - Returns: An optional UIImage, nil if loading fails
     static func fromURL(_ url: URL) -> UIImage? {
         guard url.isFileURL else { return nil }
         return UIImage(contentsOfFile: url.path)
@@ -407,12 +395,6 @@ extension Image {
     }
 }
 
-extension Double {
-    func display() -> String {
-        String(self)
-    }
-}
-
 extension UIImage {
     var averageColor: UIColor? {
         guard let inputImage = CIImage(image: self) else { return nil }
@@ -441,11 +423,13 @@ extension UIImage {
 class PHAssetCached {
     var fileSize: UInt64
     var fileName: String
+    var fileUrl: URL?
     var asset: PHAsset
     
-    init(fileName: String, fileSize: UInt64, asset: PHAsset) {
+    init(fileName: String, fileSize: UInt64, fileUrl: URL?, asset: PHAsset) {
         self.fileName = fileName
         self.fileSize = fileSize
+        self.fileUrl = fileUrl
         self.asset = asset
     }
 }
@@ -475,13 +459,11 @@ class AssetCache {
 }
 
 extension PHAsset {
-    static func getCachedAsset(identifier: String) -> PHAssetCached? {
-        // Check cache first
+    static func getCachedAsset(identifier: String) async -> PHAssetCached? {
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }
         
-        // If not in cache, fetch and cache
         var options = PHFetchOptions()
         options.fetchLimit = 1
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
@@ -490,17 +472,69 @@ extension PHAsset {
             return nil
         }
         
-        // Get file size
         let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
         
-        // Create cached object
         let cached = PHAssetCached(
             fileName: resource.originalFilename,
             fileSize: UInt64(fileSize),
+            fileUrl: await asset.getAbsoluteURL(),
             asset: asset
         )
         
         AssetCache.shared.set(identifier: identifier, asset: cached)
         return cached
+    }
+    
+    func getAbsoluteURL(completionHandler: @escaping (URL?) -> Void) {
+        switch self.mediaType {
+        case .image:
+            let options = PHContentEditingInputRequestOptions()
+            options.canHandleAdjustmentData = { _ in return false }
+            
+            self.requestContentEditingInput(with: options) { (contentEditingInput, _) in
+                completionHandler(contentEditingInput?.fullSizeImageURL)
+            }
+            
+        case .video:
+            let options = PHVideoRequestOptions()
+            options.version = .original
+            options.deliveryMode = .highQualityFormat
+            
+            PHImageManager.default().requestAVAsset(forVideo: self, options: options) { (asset, _, _) in
+                if let urlAsset = asset as? AVURLAsset {
+                    completionHandler(urlAsset.url)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+            
+        default:
+            let resources = PHAssetResource.assetResources(for: self)
+            if let resource = resources.first {
+                let tempDirURL = FileManager.default.temporaryDirectory
+                let fileName = resource.originalFilename
+                let localURL = tempDirURL.appendingPathComponent(fileName)
+                
+                try? FileManager.default.removeItem(at: localURL)
+                
+                PHAssetResourceManager.default().writeData(for: resource, toFile: localURL, options: nil) { (error) in
+                    if error == nil {
+                        completionHandler(localURL)
+                    } else {
+                        completionHandler(nil)
+                    }
+                }
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
+    
+    func getAbsoluteURL() async -> URL? {
+        return await withCheckedContinuation { continuation in
+            getAbsoluteURL { url in
+                continuation.resume(returning: url)
+            }
+        }
     }
 }

@@ -140,26 +140,40 @@ struct ButtonNavigation: View {
 struct CircleWaveEffect: ViewModifier {
     @State private var animationPhase: CGFloat = 0
     @State private var timer: Timer?
-    
+    @Environment(\.scenePhase) private var scenePhase
+
     func body(content: Content) -> some View {
         content
             .visualEffect { content, proxy in
-                content
+                return content
                     .colorEffect(
                         ShaderLibrary.circleWave(
                             .float2(proxy.size),
                             .color(Theme.BluePrimary.color),
                             .float(animationPhase * 0.4)
-                        )
+                        ),
+                        isEnabled: timer?.isValid ?? false
                     )
             }
             .drawingGroup()
             .onAppear {
-                // Update every 1/60th of a second instead of every frame
+                animationPhase = 0
                 timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
                     animationPhase += 1/12
                 }
             }
+            .onChange(of: scenePhase, { _, newPhase in
+                switch newPhase {
+                case .background:
+                    timer?.invalidate()
+                    timer = nil
+                default:
+                    animationPhase = 0
+                    timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
+                        animationPhase += 1/12
+                    }
+                }
+            })
             .onDisappear {
                 timer?.invalidate()
                 timer = nil
@@ -174,9 +188,14 @@ struct ShareButton: View {
     @State private var showShareModal = false
     @State private var shareModalContentHeight = CGFloat(0)
     @Environment(\.isPressed) private var isPressed
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
-        ZStack {
+        if scenePhase == .background {
+            return AnyView(EmptyView())
+        }
+        
+        return AnyView(ZStack {
             Circle()
                 .fill(Theme.GreenSecondary.color.opacity(0.7))
                 .modifier(CircleWaveEffect())
@@ -218,8 +237,9 @@ struct ShareButton: View {
                     .environment(\.colorScheme, .dark)
             }
         }
-        .frame(width: width, height: width)
-        .ignoresSafeArea()
+            .frame(width: width, height: width)
+            .ignoresSafeArea()
+        )
     }
 }
 

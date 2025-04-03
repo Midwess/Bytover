@@ -28,10 +28,20 @@ pub enum ResourceType {
 }
 
 impl LocalResourcePath {
-    pub fn to_string(&self) -> String {
+    pub fn serialize(&self) -> String {
         match self {
-            LocalResourcePath::LocalPath(path) => path.clone(),
-            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone()
+            LocalResourcePath::LocalPath(path) => format!("local://{}", path),
+            LocalResourcePath::PlatformIdentifier(identifier) => format!("platform://{}", identifier)
+        }
+    }
+
+    pub fn deserialize(serialized: &str) -> Result<Self, String> {
+        if serialized.starts_with("local://") {
+            Ok(LocalResourcePath::LocalPath(serialized[7..].to_string()))
+        } else if serialized.starts_with("platform://") {
+            Ok(LocalResourcePath::PlatformIdentifier(serialized[10..].to_string()))
+        } else {
+            Err(format!("Invalid local resource path: {}", serialized))
         }
     }
 }

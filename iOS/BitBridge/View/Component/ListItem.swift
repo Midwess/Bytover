@@ -166,7 +166,6 @@ struct SelectedResourceItem: View {
 
 #Preview {
     ZStack {
-        StunningBackgroundGradientAnimation()
         SelectedResourceItem(resource: CoreMock.withSelectedFileTransfers().transfer!.selected_resources[0])
             .padding()
     }

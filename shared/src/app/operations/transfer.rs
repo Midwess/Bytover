@@ -4,7 +4,7 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::transfer::finding_scope::FindingScope;
+use crate::app::{file_system::file::LocalResource, transfer::finding_scope::FindingScope};
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
 
@@ -15,7 +15,9 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum TransferOperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
-    UpdateFindingScopes(Vec<FindingScope>)
+    UpdateFindingScopes(Vec<FindingScope>),
+    // Transfer((Vec<LocalResource>, Peer)),
+    // TransferProgressUpdate()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -8,54 +8,6 @@
 import Foundation
 import SwiftUI
 
-struct StunningBackgroundGradientAnimation: View {
-    @State private var startTime = Date.now
-    @Environment(\.screenSize) private var screenSize
-    @Environment(\.safeAreaInsets) private var safeAreaInsets
-
-    public var body: some View {
-        ZStack(alignment: .bottom) {
-            // Bottom glow
-            Theme.BlackBase.color
-            TimelineView(.animation) { timeline in
-                let elapsedTime = startTime.distance(to: timeline.date)
-                Rectangle()
-                    .frame(width: screenSize.width, height: screenSize.height + safeAreaInsets.bottom)
-                    .visualEffect { content, proxy in
-                        content
-                            .colorEffect(
-                                ShaderLibrary.generateBackground(
-                                    .float2(proxy.size),
-                                    .color(Theme.GreenSecondary.color.opacity(0.5)),
-                                    .color(Theme.BlackBase.color.opacity(0.9)),
-                                    .float(elapsedTime * 0.6)
-                                )
-                            )
-                    }
-            }
-            
-            // Top glow (with different colors and timing)
-            TimelineView(.animation) { timeline in
-                let elapsedTime = startTime.distance(to: timeline.date)
-                Rectangle()
-                    .frame(width: screenSize.width, height: screenSize.height + safeAreaInsets.bottom)
-                    .visualEffect { content, proxy in
-                        content
-                            .colorEffect(
-                                ShaderLibrary.generateBackground(
-                                    .float2(proxy.size),
-                                    .color(Theme.BluePrimary.color.opacity(0.2)),
-                                    .color(Theme.BlackBase.color.opacity(0.9)),
-                                    .float(elapsedTime * 0.6)
-                                )
-                            )
-                    }
-                    .rotationEffect(.degrees(180)) // Flip to create different movement pattern
-                    .opacity(0.5)
-            }
-        }
-    }
-}
 
 struct StunningBackgroundGradient: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
@@ -139,10 +91,6 @@ struct FadingBackground: View {
 
 #Preview {
     FadingBackground()
-}
-
-#Preview {
-    StunningBackgroundGradientAnimation()
 }
 
 #Preview {

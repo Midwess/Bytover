@@ -21,7 +21,7 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             name: resource.name.clone(),
             size_gb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
             size_mb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
-            display_path: resource.path.to_string(),
+            display_path: resource.path.serialize().replace("local://", "").replace("platform://", ""),
             thumbnail_path: resource.thumbnail_path.clone(),
             r#type: resource.r#type.clone()
         }

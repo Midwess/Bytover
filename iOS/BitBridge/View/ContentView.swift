@@ -14,7 +14,7 @@ struct ContentView: View {
     
     var body: some View {
         LandingView()
-            .navigate(to: HomeView(), when: $core.is_signed_in)
+            .navigate(to: HomeView(), when: $core.isSignedIn)
             .overlay(FadingBackground())
     }
 }

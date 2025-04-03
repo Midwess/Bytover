@@ -12,13 +12,22 @@ struct LogoView: View {
     let width: CGFloat
     @State private var isVisible: Bool = false
     @EnvironmentObject var core: Core
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack {
-            if isVisible && !core.is_signed_in {
+            if isVisible && !core.isSignedIn {
                 LogoScene(gltfFileName: "Earth", logoScale: 1.1)
             }
         }
+        .onChange(of: scenePhase, {_, newPhase in
+            switch newPhase {
+            case .background:
+                isVisible = false
+            default:
+                isVisible = true
+            }
+        })
         .onAppear {
             isVisible = true
         }
