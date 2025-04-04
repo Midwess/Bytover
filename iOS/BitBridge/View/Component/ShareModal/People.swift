@@ -14,7 +14,7 @@ struct PeopleShareItem: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            Avartar(url: URL(string: peer.avatar_url)!)
+            Avartar(avatar: peer.avatar)
                 .frame(width: 42, height: 42)
             VStack(alignment: .leading, spacing: 4) {
                 Text(peer.display_name)
@@ -28,7 +28,7 @@ struct PeopleShareItem: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .clipShape(Capsule())
         .background(Capsule().fill(Theme.PrimaryText.color.opacity(0.1)))

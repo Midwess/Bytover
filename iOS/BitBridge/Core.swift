@@ -194,7 +194,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         return paths[0]
     }
     
-    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 128, height: 128)) async -> Data? {
         guard let asset_cached = await PHAsset.getCachedAsset(identifier: itemIdentifier) else {
             return nil
         }
@@ -205,7 +205,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         
         let manager = PHImageManager.default()
         let options = PHImageRequestOptions()
-        options.resizeMode = .fast
+        options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         
@@ -233,15 +233,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
             
-        case .restricted:
-            print("Location restricted")
-            
-        case .denied:
-            print("Location denied")
-            
-        case .authorizedAlways:
-            print("Location authorizedAlways")
-            
         case .authorizedWhenInUse:
             print("Location authorized when in use")
             lastKnownLocation = manager.location?.coordinate
@@ -266,7 +257,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         }
     }
 
-    func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 64, height: 64)) async -> Data? {
+    func getVideoThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 128, height: 128)) async -> Data? {
         let fetchResult: PHAssetCached? = await PHAsset.getCachedAsset(identifier: itemIdentifier)
         guard let asset_cached = fetchResult, asset_cached.asset.mediaType == .video else {
             return nil
@@ -379,45 +370,6 @@ extension Image {
         
         return nil
     }
-    
-    func toUIImage() -> UIImage? {
-        let controller = UIHostingController(rootView: self)
-        let view = controller.view
-        
-        let targetSize = controller.view.intrinsicContentSize
-        view?.bounds = CGRect(origin: .zero, size: targetSize)
-        view?.backgroundColor = .clear
-        
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        return renderer.image { _ in
-            view?.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
-        }
-    }
-}
-
-extension UIImage {
-    var averageColor: UIColor? {
-        guard let inputImage = CIImage(image: self) else { return nil }
-        let extentVector = CIVector(x: inputImage.extent.origin.x, y: inputImage.extent.origin.y, z: inputImage.extent.size.width, w: inputImage.extent.size.height)
-        
-        guard let filter = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: inputImage, kCIInputExtentKey: extentVector]) else { return nil }
-        guard let outputImage = filter.outputImage else { return nil }
-        
-        var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: kCFNull!])
-        context.render(outputImage, toBitmap: &bitmap, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
-        
-        return UIColor(red: CGFloat(bitmap[0]) / 255, green: CGFloat(bitmap[1]) / 255, blue: CGFloat(bitmap[2]) / 255, alpha: 1)
-    }
-    
-    var backgroundColor: UIColor {
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-        self.averageColor?.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return UIColor(hue: hue, saturation: 0.6, brightness: 0.3, alpha: alpha)
-    }
 }
 
 class PHAssetCached {
@@ -489,6 +441,7 @@ extension PHAsset {
         switch self.mediaType {
         case .image:
             let options = PHContentEditingInputRequestOptions()
+            options.isNetworkAccessAllowed = true
             options.canHandleAdjustmentData = { _ in return false }
             
             self.requestContentEditingInput(with: options) { (contentEditingInput, _) in
@@ -498,6 +451,7 @@ extension PHAsset {
         case .video:
             let options = PHVideoRequestOptions()
             options.version = .original
+            options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
             
             PHImageManager.default().requestAVAsset(forVideo: self, options: options) { (asset, _, _) in

@@ -5,6 +5,7 @@ use crate::app::operations::transfer::TransferOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
 use crate::app::transfer::finding_scope::FindingScope;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
+use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
@@ -136,7 +137,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .map(|it| PeerViewModel {
                     id: it.id.clone(),
                     display_name: it.name.clone().unwrap_or(it.device.name.clone()),
-                    avatar_url: it.avatar_url.clone(),
+                    avatar: AvatarViewModel::new(it.avatar_url.clone()),
                     device: it.device.clone()
                 })
                 .collect()
