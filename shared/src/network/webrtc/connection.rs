@@ -1,21 +1,15 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use prost::Message as prost_message;
-use schema::devlog::bitbridge::peer_message::{Request, Response};
-use schema::devlog::bitbridge::{PeerErrors, PeerMessage};
 use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, Message, OfferMessage};
 use thiserror::Error;
 use tokio::spawn;
-use tokio::sync::{broadcast, mpsc, Mutex, OnceCell};
+use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
-use uuid::Uuid;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
-use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::{OnCloseHdlrFn, RTCDataChannel};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
@@ -25,6 +19,7 @@ use webrtc::peer_connection::RTCPeerConnection;
 
 use crate::app::transfer::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
+use crate::network::webrtc::message_channel::MessageChannel;
 use crate::network::webrtc::peer::PeerCommunication;
 use crate::ShellRuntime;
 
@@ -45,7 +40,9 @@ pub enum ConnectionWebRtcErrors {
     #[error("failed to parse response {:?}", .0)]
     ParseError(String),
     #[error("Request timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed)
+    Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("Connection not found")]
+    ConnectionNotFound
 }
 
 pub struct ConnectionWebRtc {
@@ -57,6 +54,7 @@ pub struct ConnectionWebRtc {
     pub signalling_client: Arc<RtcsSignalling>,
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
+    pub workdir: String,
     pub ns: String
 }
 
@@ -99,7 +97,8 @@ impl ConnectionWebRtc {
         current: Peer,
         peer_id: u128,
         signalling_client: Arc<RtcsSignalling>,
-        shell_runtime: Arc<dyn ShellRuntime>
+        shell_runtime: Arc<dyn ShellRuntime>,
+        workdir: String
     ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
@@ -110,6 +109,7 @@ impl ConnectionWebRtc {
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
         let msg_channel = peer_connection.create_data_channel("data", Some(Self::channel_config())).await?;
+
         msg_channel.clone().on_open(Box::new(move || {
             Box::pin(async move {
                 let _ = notified_msg_channel_ready.send(MessageChannel::new(msg_channel)).await;
@@ -128,7 +128,8 @@ impl ConnectionWebRtc {
             signalling_client,
             signalling_join_handle: Arc::new(Mutex::new(None)),
             on_disconnect: OnceCell::new(),
-            ns: ns.clone()
+            ns: ns.clone(),
+            workdir: workdir.clone()
         };
 
         log::info!(target: ns.as_str(), "Sending offer to signalling server");
@@ -165,7 +166,7 @@ impl ConnectionWebRtc {
         match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.unwrap())
+                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime, workdir).await.unwrap())
             }
             _ => {
                 log::error!(target: ns.as_str(), "Data channel connection timed out");
@@ -180,7 +181,8 @@ impl ConnectionWebRtc {
         peer_id: u128,
         offer: RTCSessionDescription,
         signalling_client: Arc<RtcsSignalling>,
-        shell_runtime: Arc<dyn ShellRuntime>
+        shell_runtime: Arc<dyn ShellRuntime>,
+        workdir: String
     ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
@@ -221,7 +223,8 @@ impl ConnectionWebRtc {
             peer_connection: Arc::new(peer_connection),
             msg_channel: OnceCell::new(),
             ns: ns.clone(),
-            on_disconnect: OnceCell::new()
+            on_disconnect: OnceCell::new(),
+            workdir: workdir.clone()
         };
 
         me.handle_signalling_message().await;
@@ -253,10 +256,10 @@ impl ConnectionWebRtc {
         me.handle_ice_candidate();
 
         let connection_timeout = Duration::from_secs(15);
-        match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
+        let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.unwrap())
+                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime, workdir).await.unwrap())
             }
             Ok(None) => {
                 log::error!(target: ns.as_str(), "Data channel receiver closed without receiving data channel");
@@ -266,7 +269,13 @@ impl ConnectionWebRtc {
                 log::error!(target: ns.as_str(), "Data channel connection timed out");
                 Err(ConnectionWebRtcErrors::ConnectionTimeout)
             }
-        }
+        };
+
+        let Ok(peer_communication) = result else {
+            return Err(ConnectionWebRtcErrors::ConnectionTimeout);
+        };
+
+        Ok(peer_communication)
     }
 
     pub async fn handle_signalling_message(&self) {
@@ -402,181 +411,6 @@ impl ConnectionWebRtc {
             sdp_mline_index: Some(candidate.sdp_mline_index as u16),
             username_fragment: None
         }
-    }
-}
-
-pub struct PeerRequest {
-    request: Request,
-    id: String,
-    is_resolved: bool,
-    msg_channel: Arc<RTCDataChannel>
-}
-
-impl PeerRequest {
-    pub fn new(request: Request, id: String, msg_channel: Arc<RTCDataChannel>) -> Self {
-        Self {
-            request,
-            id,
-            is_resolved: false,
-            msg_channel
-        }
-    }
-
-    pub fn message(&self) -> &Request {
-        &self.request
-    }
-
-    pub async fn resolve(mut self, reponse: Response) -> Result<(), ConnectionWebRtcErrors> {
-        let message = PeerMessage {
-            id: self.id.clone(),
-            response: Some(reponse),
-            ..Default::default()
-        };
-
-        let bytes = MessageChannel::encode_msg(&message)?;
-        self.msg_channel.send(&bytes.into()).await?;
-        self.is_resolved = true;
-
-        Ok(())
-    }
-}
-
-impl Deref for PeerRequest {
-    type Target = Request;
-
-    fn deref(&self) -> &Self::Target {
-        &self.request
-    }
-}
-
-impl DerefMut for PeerRequest {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.request
-    }
-}
-
-impl Drop for PeerRequest {
-    fn drop(&mut self) {
-        if !self.is_resolved {
-            log::info!(target: "rtc", "Auto resolving request");
-            let message = PeerMessage {
-                id: self.id.clone(),
-                response: Some(Response::Errors(PeerErrors::NoResponse.into())),
-                ..Default::default()
-            };
-
-            if let Ok(bytes) = MessageChannel::encode_msg(&message) {
-                let msg_channel = self.msg_channel.clone();
-                spawn(async move {
-                    let _ = msg_channel.send(&bytes.into()).await;
-                });
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct MessageChannel {
-    msg_channel: Arc<RTCDataChannel>,
-    msg_response_broadcast: broadcast::Sender<(String, Response)>,
-    msg_request_receiver: Arc<Mutex<mpsc::Receiver<(String, Request)>>>
-}
-
-impl MessageChannel {
-    pub fn new(msg_channel: Arc<RTCDataChannel>) -> Self {
-        let (msg_response_broadcast, _) = broadcast::channel(100);
-        let (msg_request_sender, msg_request_receiver) = mpsc::channel(100);
-
-        let msg_response_broadcast_cloned = msg_response_broadcast.clone();
-        msg_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-            let msg = match PeerMessage::decode(msg.data) {
-                Ok(msg) => msg,
-                Err(e) => {
-                    log::error!(target: "rtc", "Failed to decode message {:?}", e);
-                    return Box::pin(async move {});
-                }
-            };
-
-            if let Some(response) = msg.response {
-                let result = msg_response_broadcast_cloned.send((msg.id.clone(), response));
-                if let Err(e) = result {
-                    log::error!(target: "rtc", "Failed to send message {:?}", e);
-                }
-            }
-
-            if let Some(request) = msg.request {
-                let msg_request_sender = msg_request_sender.clone();
-                return Box::pin(async move {
-                    let result = msg_request_sender.send((msg.id, request)).await;
-                    if let Err(e) = result {
-                        log::error!(target: "rtc", "Failed to send message {:?}", e);
-                    }
-                });
-            }
-
-            Box::pin(async move {})
-        }));
-
-        Self {
-            msg_channel,
-            msg_response_broadcast,
-            msg_request_receiver: Arc::new(Mutex::new(msg_request_receiver))
-        }
-    }
-
-    pub async fn next_request(&self) -> Result<PeerRequest, ConnectionWebRtcErrors> {
-        let mut receiver = self.msg_request_receiver.lock().await;
-        let Some((request_id, request)) = timeout(Duration::from_secs(15), receiver.recv()).await? else {
-            return Err(ConnectionWebRtcErrors::ConnectionCorrupted);
-        };
-
-        Ok(PeerRequest::new(request, request_id, self.msg_channel.clone()))
-    }
-
-    pub async fn send<T: TryFrom<Response, Error = String>>(
-        &self,
-        msg: Request
-    ) -> Result<Result<T, PeerErrors>, ConnectionWebRtcErrors> {
-        let request_id = Self::random_id();
-        let message = PeerMessage {
-            id: request_id.clone(),
-            request: Some(msg),
-            response: None,
-            ..Default::default()
-        };
-
-        let bytes = Self::encode_msg(&message)?;
-        let _ = timeout(Duration::from_secs(5), self.msg_channel.send(&bytes.into())).await?;
-
-        let mut subscription = self.msg_response_broadcast.subscribe();
-        while let Ok((response_id, response)) = timeout(Duration::from_secs(15), subscription.recv()).await? {
-            if response_id != request_id {
-                continue;
-            }
-
-            if let Response::Errors(e) = response {
-                if let Ok(error) = PeerErrors::try_from(e) {
-                    return Ok(Err(error));
-                }
-
-                return Err(ConnectionWebRtcErrors::ParseError(format!("Not a valid error code {:?}", e)));
-            }
-
-            return Ok(Ok(response.try_into().map_err(ConnectionWebRtcErrors::ParseError)?));
-        }
-
-        Err(ConnectionWebRtcErrors::ConnectionCorrupted)
-    }
-
-    pub fn encode_msg(msg: &PeerMessage) -> Result<Vec<u8>, ConnectionWebRtcErrors> {
-        let mut buf = Vec::new();
-        msg.encode(&mut buf)?;
-        Ok(buf)
-    }
-
-    pub fn random_id() -> String {
-        let uuid = Uuid::new_v4();
-        uuid.to_string()
     }
 }
 

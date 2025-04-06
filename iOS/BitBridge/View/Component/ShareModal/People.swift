@@ -54,7 +54,7 @@ struct PeopleShareView: View {
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
             
-            if core.transfer?.peers.isEmpty ?? true {
+            if core.transfer?.nearby_peers.isEmpty ?? true {
                 Text("No nearby friends found")
                     .modifier(Label1())
                     .foregroundStyle(Theme.PrimaryText.color)
@@ -63,7 +63,7 @@ struct PeopleShareView: View {
             else {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top) {
-                        ForEach(core.transfer?.peers ?? [], id: \.self) { peer in
+                        ForEach(core.transfer?.nearby_peers ?? [], id: \.self) { peer in
                             PeopleShareItem(peer: peer)
                         }
                     }

@@ -15,6 +15,7 @@ use super::{CoreOperation, CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DatabaseOperation {
+    GenId(),
     Session(SessionOperation),
     User(UserDatabaseOperation),
     LocalResource(LocalResourceDatabaseOperation)
@@ -72,11 +73,21 @@ pub enum SessionOperationOutput {
 pub enum DatabaseOperationOutput {
     Session(SessionOperationOutput),
     User(UserDatabaseOperationOutput),
-    LocalResource(LocalResourceDatabaseOperationOutput)
+    LocalResource(LocalResourceDatabaseOperationOutput),
+    GenId(u64)
 }
 
 impl Operation for DatabaseOperation {
     type Output = DatabaseOperationOutput;
+}
+
+impl DatabaseOperation {
+    pub fn gen_id() -> AppRequestBuilder<impl Future<Output = u64>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::GenId())).map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::GenId(id)) => id,
+            _ => panic!("Invalid output expected GenId got {:?}", it)
+        })
+    }
 }
 
 impl SessionOperation {

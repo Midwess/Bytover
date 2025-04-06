@@ -1,12 +1,13 @@
-use schema::devlog::bitbridge::Peer as PeerSchema;
+use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
+use surreal_derive_plus::SurrealDerive;
 use uniffi::Record;
 
 use crate::entities::device::DeviceInfo;
 
 // Peer is represent for the information that you want other
 // people to know about
-#[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq, SurrealDerive)]
 pub struct Peer {
     pub id: String,
     pub name: Option<String>,
@@ -21,8 +22,8 @@ impl Peer {
     }
 }
 
-impl From<PeerSchema> for Peer {
-    fn from(value: PeerSchema) -> Self {
+impl From<PeerMessage> for Peer {
+    fn from(value: PeerMessage) -> Self {
         Self {
             id: value.id,
             name: value.name,
@@ -33,7 +34,7 @@ impl From<PeerSchema> for Peer {
     }
 }
 
-impl From<Peer> for PeerSchema {
+impl From<Peer> for PeerMessage {
     fn from(value: Peer) -> Self {
         Self {
             id: value.id,

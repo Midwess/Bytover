@@ -12,6 +12,7 @@ use tokio_scoped::scoped;
 use crate::app::authentication::service::AuthenticationService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::nearby::NearbyService;
+use crate::app::transfer::transfer_service::TransferService;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
@@ -29,7 +30,8 @@ static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Surreal<Any>>>>,
     auth_service: OnceCell<AuthenticationService>,
-    auth_server: OnceCell<AuthServer>
+    auth_server: OnceCell<AuthServer>,
+    workdir: OnceCell<String>
 }
 
 impl DiContainer {
@@ -40,7 +42,8 @@ impl DiContainer {
                 let instance = DiContainer {
                     db: OnceCell::new(),
                     auth_service: OnceCell::new(),
-                    auth_server: OnceCell::new()
+                    auth_server: OnceCell::new(),
+                    workdir: OnceCell::new()
                 };
 
                 let _ = DI_SINGLETON.set(instance);
@@ -70,7 +73,12 @@ impl DiContainer {
         }
     }
 
+    pub fn get_transfer_service(&'static self) -> TransferService {
+        TransferService {}
+    }
+
     pub fn init(&self, work_dir_path: String) {
+        let _ = self.workdir.set(work_dir_path.clone());
         scoped(get_tokio_rt().handle()).scope(move |scope| {
             scope.spawn(async move {
                 let db_path = format!("{}/{}", work_dir_path, "surrealdb.db");
@@ -122,7 +130,7 @@ impl DiContainer {
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
-                web_rtc: Arc::new(WebRtc::new()),
+                web_rtc: Arc::new(WebRtc::new(self.workdir.get().unwrap().clone())),
                 shell_runtime: OnceCell::new()
             }
         }

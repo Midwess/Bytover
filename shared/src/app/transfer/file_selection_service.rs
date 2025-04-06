@@ -30,12 +30,14 @@ impl ResourceTransferSelectionService {
 
     pub async fn add_resources(&self, ctx: AppCommandContext, selections: Vec<ResourceSelection>) {
         let mut local_resources = vec![];
+        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
         for selection in selections {
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
                 continue;
             }
 
+            let order_id = gen_id().await;
             let local_resource = match selection.path {
                 LocalResourcePath::LocalPath(path) => {
                     let resource = LocalStorageOperation::get(path).into_future(ctx.clone()).await;
@@ -60,23 +62,21 @@ impl ResourceTransferSelectionService {
                             .into_future(ctx.clone())
                             .await
                     {
-                        let path = format!("thumbnails/{}.png", file_name);
-                        let absolute_path = LocalStorageOperation::get_absolute_path(path.clone(), ctx.clone()).await;
+                        let path = format!("thumbnails/{}.png", order_id);
+                        let absolute_path = format!("{}/{}", workdir, path);
                         let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
 
                         thumbnail_path = Some(LocalResourcePath::LocalPath(path));
                     }
 
-                    let resource = LocalResource {
-                        order_id: gen_id().await,
+                    LocalResource {
+                        order_id,
                         name: file_name,
                         size: file_size,
                         path: LocalResourcePath::PlatformIdentifier(identifier),
                         thumbnail_path,
                         r#type: selection.r#type
-                    };
-
-                    resource
+                    }
                 }
             };
 

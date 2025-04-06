@@ -9,6 +9,8 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
 
+use super::target::TransferTarget;
+
 pub struct NearbyService {}
 
 impl NearbyService {
@@ -50,20 +52,20 @@ impl NearbyService {
         }
     }
 
-    pub async fn on_new_peer_come(&self, peer: Peer, ctx: AppCommandContext) {
-        let new_peers = vec![peer];
+    pub async fn on_new_nearby_peer_come(&self, peer: Peer, ctx: AppCommandContext) {
+        let new_peers = vec![TransferTarget::Nearby(peer)];
         let removed_peers = vec![];
-        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers {
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
             new: new_peers,
             removed: removed_peers
         }));
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 
-    pub async fn on_peer_leaved(&self, peer: Peer, ctx: AppCommandContext) {
+    pub async fn on_nearby_peer_leaved(&self, peer: Peer, ctx: AppCommandContext) {
         let new_peers = vec![];
-        let removed_peers = vec![peer];
-        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdatePeers {
+        let removed_peers = vec![TransferTarget::Nearby(peer)];
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
             new: new_peers,
             removed: removed_peers
         }));

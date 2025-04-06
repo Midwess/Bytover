@@ -17,7 +17,6 @@ import PhotosUI
 import Photos
 import AVFoundation
 import CoreLocation
-import Combine
 
 @MainActor
 class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate {
@@ -142,6 +141,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             await update(.transfer(.onNewPeer(peer)))
         case .peerLeaved(let peer):
             await update(.transfer(.onPeerLeaved(peer)))
+        case .sessionRequest(let request, let peer):
+            await update(.transfer(.transferRequest(request, peer)))
+        case .sessionProgress(let session_id, let progress):
+            await update(.transfer(.newTransferProgress(session_id: session_id, progress: progress)))
         }
     }
     
@@ -300,28 +303,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
 }
 
-struct DataUrl: Transferable {
-    let url: URL
-    
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(contentType: .data) { data in
-            SentTransferredFile(data.url)
-        } importing: { received in
-            Self(url: received.file)
-        }
-    }
-}
-
-extension Data {
-    var bytes: [UInt8] {
-        return [UInt8](self)
-    }
-    
-    init(bytes: [UInt8]) {
-        self.init(bytes)
-    }
-}
-
 @MainActor
 class CoreMock: Core {
     static func empty() -> Core {
@@ -330,7 +311,7 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device, peers: []);
+        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device, nearby_peers: []);
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
         return x
@@ -339,6 +320,12 @@ class CoreMock: Core {
     override func update(_ event: AppEvent) async {}
     
     override func update_view(_ model: AppViewModel) {}
+}
+
+extension Data {
+    var bytes: [UInt8] {
+        return [UInt8](self)
+    }
 }
 
 extension UIImage {

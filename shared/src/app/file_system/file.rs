@@ -27,6 +27,32 @@ pub enum ResourceType {
     Other
 }
 
+impl LocalResource {
+    pub fn identifer(&self, session_id: u64) -> String {
+        let path = match &self.path {
+            LocalResourcePath::LocalPath(path) => path.clone(),
+            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone()
+        };
+
+        let file_name = path.split("/").last().unwrap_or("").to_string();
+        format!("{}-{}-{}-{}", session_id, self.order_id, file_name, self.size)
+    }
+
+    pub fn read_identifier(identifier: String) -> Result<(u64, u64, String, u64), String> {
+        let parts = identifier.split("-").collect::<Vec<&str>>();
+        if parts.len() != 4 {
+            return Err(format!("Invalid identifier: {}", identifier));
+        }
+
+        Ok((
+            parts[0].parse::<u64>().unwrap(),
+            parts[1].parse::<u64>().unwrap(),
+            parts[2].to_string(),
+            parts[3].parse::<u64>().unwrap()
+        ))
+    }
+}
+
 impl LocalResourcePath {
     pub fn serialize(&self) -> String {
         match self {

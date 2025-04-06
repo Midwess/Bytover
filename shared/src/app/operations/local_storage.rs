@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::file_system::file::LocalResource;
-use crate::app::{AppCommandContext, AppRequestBuilder};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -14,6 +14,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
+    GetAbsolutePath(LocalResourcePath),
     LoadFileSizeFromPlatformIdentifier(String),
     LoadFileNameFromPlatformIdentifier(String),
     LoadFileThumbnailPngFromPlatformIdentifier(String),
@@ -27,6 +28,7 @@ pub enum LocalStorageOperation {
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     Get(Option<LocalResource>),
+    GetAbsolutePath(String),
     NewFile(LocalResource),
     Copy(LocalResource),
     Zip(LocalResource),
@@ -121,8 +123,10 @@ impl LocalStorageOperation {
         })
     }
 
-    pub async fn get_absolute_path(path: String, ctx: AppCommandContext) -> String {
-        let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
-        format!("{}/{}", workdir_path, path)
+    pub fn get_absolute_path(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = String>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetAbsolutePath(path))).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetAbsolutePath(path)) => path,
+            _ => panic!("Mismatch in response type, expected GetAbsolutePath, got {:?}", it)
+        })
     }
 }

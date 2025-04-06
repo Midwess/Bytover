@@ -12,12 +12,14 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
+use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::finding_scope::FindingScope;
+use crate::app::transfer::session::TransferSession;
 use crate::entities::peer::Peer;
 use crate::ShellRuntime;
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
-use super::peer::PeerCommunication;
+use super::peer::{PeerCommunication, PeerErrors};
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 
 #[derive(Debug, Error)]
@@ -27,7 +29,9 @@ pub enum WebRtcErrors {
     #[error("failed to connect to signalling server {:?}", .0)]
     SignallingServerError(#[from] RtcSignallingErrors),
     #[error("failed to create connection {:?}", .0)]
-    ConnectionError(#[from] ConnectionWebRtcErrors)
+    ConnectionError(#[from] ConnectionWebRtcErrors),
+    #[error("failed to transfer data {:?}", .0)]
+    TransferError(#[from] PeerErrors)
 }
 
 pub struct WebRtc {
@@ -37,17 +41,18 @@ pub struct WebRtc {
     connections: Mutex<HashMap<u128, OnceCell<PeerCommunication>>>,
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
-    shell_runtime: OnceCell<Arc<dyn ShellRuntime>>
+    shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
+    workdir: String
 }
 
 impl Default for WebRtc {
     fn default() -> Self {
-        Self::new()
+        Self::new(String::new())
     }
 }
 
 impl WebRtc {
-    pub fn new() -> Self {
+    pub fn new(workdir: String) -> Self {
         Self {
             peer: OnceCell::new(),
             shell_runtime: OnceCell::new(),
@@ -55,7 +60,8 @@ impl WebRtc {
             broadcast_handle: Arc::new(Mutex::new(None)),
             connections: Mutex::new(HashMap::new()),
             signalling_client: OnceCell::new(),
-            handle_signalling_message_join: Arc::new(Mutex::new(None))
+            handle_signalling_message_join: Arc::new(Mutex::new(None)),
+            workdir
         }
     }
 
@@ -174,7 +180,6 @@ impl WebRtc {
                     }
 
                     current_connections.insert(peer_id, OnceCell::new());
-                    drop(current_connections);
 
                     let self_clone = self_clone.clone();
                     let peer = self_clone.peer().clone();
@@ -184,7 +189,8 @@ impl WebRtc {
                             peer,
                             peer_id,
                             self_clone.signalling_client.get().unwrap().clone(),
-                            self_clone.shell_runtime().clone()
+                            self_clone.shell_runtime().clone(),
+                            self_clone.workdir.clone()
                         )
                         .await;
 
@@ -207,8 +213,6 @@ impl WebRtc {
 
                     current_connections.insert(peer_id, OnceCell::new());
 
-                    drop(current_connections);
-
                     let self_clone = self_clone.clone();
                     spawn(async move {
                         let from_scope = from_scope.clone();
@@ -220,7 +224,8 @@ impl WebRtc {
                                     peer_id,
                                     desc,
                                     self_clone.signalling_client.get().unwrap().clone(),
-                                    self_clone.shell_runtime().clone()
+                                    self_clone.shell_runtime().clone(),
+                                    self_clone.workdir.clone()
                                 )
                                 .await;
                                 self_clone.handle_connection(connection, peer_id).await;
@@ -232,16 +237,47 @@ impl WebRtc {
                             }
                         }
                     });
+
+                    continue;
                 }
 
                 if let Some(left_message) = message.left_message {
                     let mut current_connections = self_clone.connections.lock().await;
                     current_connections.remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"));
+                    continue;
                 }
             }
 
             log::info!(target: "broadcast", "Unsubscribed from signalling messages");
         }));
+
+        Ok(())
+    }
+
+    pub async fn send_session(&self, session: TransferSession) -> Result<(), WebRtcErrors> {
+        let Some(peer_id) = session.peer_id() else {
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+        };
+
+        let mut current_connections = self.connections.lock().await;
+        let Some(connection) = current_connections.get_mut(&peer_id) else {
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+        };
+
+        let peer_communication = connection.get_mut().unwrap();
+        peer_communication.send_session(session).await?;
+
+        Ok(())
+    }
+
+    pub async fn send_resource(&self, peer_id: u128, session_id: u64, resource: LocalResource) -> Result<(), WebRtcErrors> {
+        let mut current_connections = self.connections.lock().await;
+        let Some(connection) = current_connections.get_mut(&peer_id) else {
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+        };
+
+        let peer_communication = connection.get_mut().unwrap();
+        peer_communication.send_resource(session_id, resource).await?;
 
         Ok(())
     }
@@ -259,10 +295,9 @@ impl WebRtc {
                     Box::new(move || {
                         let self_clone = self_clone.clone();
                         Box::pin(async move {
-                            log::info!(target: "broadcast", "Closing connection for peer {:?}", peer_id);
                             let mut current_connections = self_clone.connections.lock().await;
-                            log::info!(target: "broadcast", "Removing connection for peer {:?}", peer_id);
                             current_connections.remove(&peer_id);
+                            log::info!(target: "broadcast", "Removed connection for peer {:?}", peer_id);
                         })
                     })
                 });

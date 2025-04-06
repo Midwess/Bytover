@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::spawn;
 use tokio::sync::OnceCell;
 
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -34,6 +35,24 @@ impl TransferNative {
                 let result = self.web_rtc.update_finding_scopes(scopes).await;
                 log::info!(target: "transfer", "Update finding scopes result: {:?}", result);
                 TransferOperationOutput::UpdateFindingScopes
+            }
+            TransferOperation::SendSession(session) => {
+                let web_rtc = self.web_rtc.clone();
+                spawn(async move {
+                    let result = web_rtc.send_session(session).await;
+                    log::info!(target: "transfer", "Transfer result: {:?}", result);
+                });
+
+                TransferOperationOutput::SendSession
+            }
+            TransferOperation::SendResource(peer_id, session_id, resource) => {
+                let web_rtc = self.web_rtc.clone();
+                spawn(async move {
+                    let result = web_rtc.send_resource(peer_id, session_id, resource).await;
+                    log::info!(target: "transfer", "Transfer result: {:?}", result);
+                });
+
+                TransferOperationOutput::SendResource
             }
         }
     }

@@ -22,7 +22,8 @@ use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::ResourceSelection;
 use shared::app::transfer::finding_scope::FindingScope;
-use shared::app::transfer::session::TransferTarget;
+use shared::app::transfer::session::{TransferStatus, TransferType};
+use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
 use shared::entities::session::{Session, SessionType};
@@ -76,6 +77,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferModel>()?;
     gen.register_type::<TransferMethodSelection>()?;
     gen.register_type::<DeviceType>()?;
+    gen.register_type::<TransferStatus>()?;
+    gen.register_type::<TransferType>()?;
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;
