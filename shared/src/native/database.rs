@@ -1,4 +1,5 @@
 use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
+use devlog_sdk::distributed_id::gen_id;
 
 use crate::app::operations::database::{
     DatabaseOperation,
@@ -95,6 +96,7 @@ impl NativeDatabase {
                 let resource = self.local_resource_repository.find_by_path(&path).await;
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
             }
+            DatabaseOperation::GenId() => DatabaseOperationOutput::GenId(gen_id().await),
             _ => panic!("Native database doesn't support this effect {:?}", effect)
         }
     }

@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::spawn;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use webrtc::data_channel::RTCDataChannel;
 
@@ -24,7 +25,7 @@ pub enum DataChannelError {
     #[error("Invalid format of data channel label")]
     InvalidLabelFormat(String),
     #[error("Failed to create data channel {:?}", .0)]
-    CreateDataChannelError(#[from] webrtc::Error),
+    WebRtcError(#[from] webrtc::Error),
     #[error("Failed to open data channel")]
     OpenDataChannelError(String),
     #[error("File not exists")]
@@ -32,7 +33,9 @@ pub enum DataChannelError {
     #[error("Resource not found")]
     ResourceNotFound,
     #[error("Data channel is closed")]
-    DataChannelClosed
+    DataChannelClosed,
+    #[error("Data corrupted")]
+    DataCorrupted
 }
 
 #[derive(Clone)]
@@ -53,14 +56,15 @@ impl DataChannel {
         shell_runtime: Arc<dyn ShellRuntime>,
         workdir: String
     ) -> Result<Self, DataChannelError> {
+        data_channel.on_open(Box::new(move || {
+            log::info!(target: "nearby", "Data channel opened");
+            Box::pin(async move {})
+        }));
+
         let label = data_channel.label().to_owned();
-        let parts = label.split(":").collect::<Vec<&str>>();
-        if parts.len() != 3 {
-            return Err(DataChannelError::InvalidLabelFormat(label));
-        }
 
         let (session_id, resource_id, file_name, file_size) =
-            LocalResource::read_identifier(parts[0].to_string()).map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
+            LocalResource::read_identifier(label.clone()).map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         let saved_path = format!("{}/sessions/{}/{}/{}", workdir, session_id, resource_id, file_name);
 
@@ -84,10 +88,8 @@ impl DataChannel {
         workdir: String
     ) -> Result<Self, DataChannelError> {
         let label = local_resource.identifer(session_id);
-        let data_channel = connection
-            .peer_connection
-            .create_data_channel(label.as_str(), Some(ConnectionWebRtc::channel_config()))
-            .await?;
+        log::info!(target: "nearby", "Creating data channel: {}", label);
+        let data_channel = connection.peer_connection.create_data_channel(label.as_str(), None).await?;
 
         let (open_sender, open_receiver) = oneshot::channel();
         data_channel.on_open(Box::new(move || {
@@ -109,6 +111,7 @@ impl DataChannel {
             }
         };
 
+        log::info!(target: "nearby", "Data channel created: {}", label);
         Ok(Self {
             data_channel,
             shell_runtime,
@@ -127,7 +130,6 @@ impl DataChannel {
 
     pub async fn start_download(&self) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
-
         let file_size = self.file_size;
 
         let file = File::new(None, self.saved_path.clone())
@@ -135,29 +137,31 @@ impl DataChannel {
             .map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        let mut left_bytes = file_size;
+        let mut received_bytes = 0;
+        log::info!(target: "nearby", "Start downloading file into: {}", self.saved_path);
         while let Some(Ok(bytes)) = stream.next().await {
-            let recevied_bytes_len = bytes.len();
-            file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-            left_bytes -= recevied_bytes_len as u64;
-
-            let progress = TransferProgress {
-                resource_order_id: self.resource_id,
-                percentage: (file_size - left_bytes) as f32 / file_size as f32,
-                status: TransferStatus::InProgress
+            let written_bytes = match file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string())) {
+                Ok(written_bytes) => written_bytes,
+                Err(e) => {
+                    log::error!(target: "nearby", "Failed to write data, stop transfer: {:?}", e);
+                    break;
+                }
             };
 
-            self.update_progress(progress).await;
+            received_bytes += written_bytes;
+            if received_bytes == file_size as usize {
+                break;
+            }
         }
 
         let progress = TransferProgress {
             resource_order_id: self.resource_id,
-            percentage: if left_bytes == 0 {
-                1.0
+            percentage: 1.0,
+            status: if received_bytes == file_size as usize {
+                TransferStatus::Success
             } else {
-                (file_size - left_bytes) as f32 / file_size as f32
-            },
-            status: TransferStatus::Success
+                TransferStatus::Fail
+            }
         };
 
         self.update_progress(progress).await;
@@ -177,34 +181,54 @@ impl DataChannel {
             .await
             .map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = self.file_size;
-        let mut cursor = file.cursor(0, 6 * 1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-        let mut left_bytes = file_size;
-        while let Ok(Some(bytes)) = cursor.next().await {
-            let sent_bytes_len = bytes.len();
-            self.data_channel.send(&bytes.into()).await?;
-            left_bytes -= sent_bytes_len as u64;
-            let progress = TransferProgress {
-                resource_order_id: self.resource_id,
-                percentage: (file_size - left_bytes) as f32 / file_size as f32,
-                status: TransferStatus::InProgress
+        let mut cursor = file.cursor(0, 16 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+
+        log::info!(target: "nearby", "Start uploading file: {}", self.saved_path);
+        let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
+        let mut total_sent = 0;
+        while let Ok(bytes) = cursor.next().await {
+            if let Some(handle) = last_sent_handle {
+                let sent_bytes = match handle.await {
+                    Ok(Ok(sent_bytes)) => {
+                        sent_bytes
+                    }
+                    other => {
+                        log::error!(target: "nearby", "Failed to send data, stop transfer {:?}", other);
+                        break;
+                    }
+                };
+
+                total_sent += sent_bytes;
+            }
+
+            let Some(bytes) = bytes else {
+                break;
             };
 
-            self.update_progress(progress).await;
+            let data_channel = self.data_channel.clone();
+            last_sent_handle = Some(spawn(async move {
+                let expected_bytes = bytes.len();
+                let sent_bytes = data_channel.send(&bytes.into()).await?;
+
+                if sent_bytes < expected_bytes {
+                    Err(DataChannelError::DataCorrupted)
+                } else {
+                    Ok(sent_bytes)
+                }
+            }));
         }
 
         let progress = TransferProgress {
             resource_order_id: self.resource_id,
-            percentage: if left_bytes == 0 {
-                1.0
+            percentage: 1.0,
+            status: if total_sent == file_size as usize {
+                TransferStatus::Success
             } else {
-                (file_size - left_bytes) as f32 / file_size as f32
-            },
-            status: TransferStatus::Success
+                TransferStatus::Fail
+            }
         };
 
         self.update_progress(progress).await;
-
-        self.data_channel.close().await?;
 
         Ok(())
     }
@@ -242,27 +266,31 @@ impl Stream for RTCStreamChannel {
 
 impl RTCStreamChannel {
     pub fn new(data_channel: Arc<RTCDataChannel>) -> Self {
-        let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(100);
+        let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(2048); // TODO: Handle buffer overflow
 
         let msg_sender = message_sender.clone();
         let data_channel_cloned = data_channel.clone();
         data_channel.on_message(Box::new(move |message| {
             let msg_sender = msg_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Ok(message.data.to_vec()));
+                let _ = msg_sender.send(Ok(message.data.to_vec())).await;
             })
         }));
 
         let msg_sender = message_sender.clone();
         data_channel.on_close(Box::new(move || {
-            let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
-            Box::pin(async move {})
+            let msg_sender = msg_sender.clone();
+            Box::pin(async move {
+                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
+            })
         }));
 
         let msg_sender = message_sender.clone();
         data_channel.on_error(Box::new(move |_err| {
-            let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
-            Box::pin(async move {})
+            let msg_sender = msg_sender.clone();
+            Box::pin(async move {
+                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
+            })
         }));
 
         Self {

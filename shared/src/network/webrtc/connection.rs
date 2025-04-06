@@ -108,7 +108,7 @@ impl ConnectionWebRtc {
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
-        let msg_channel = peer_connection.create_data_channel("data", Some(Self::channel_config())).await?;
+        let msg_channel = peer_connection.create_data_channel("message-channel", Some(Self::channel_config())).await?;
 
         msg_channel.clone().on_open(Box::new(move || {
             Box::pin(async move {

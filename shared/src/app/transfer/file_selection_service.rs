@@ -1,10 +1,9 @@
-use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::database::LocalResourceDatabaseOperation;
+use crate::app::operations::database::{DatabaseOperation, LocalResourceDatabaseOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
@@ -37,7 +36,7 @@ impl ResourceTransferSelectionService {
                 continue;
             }
 
-            let order_id = gen_id().await;
+            let order_id = DatabaseOperation::gen_id().into_future(ctx.clone()).await;
             let local_resource = match selection.path {
                 LocalResourcePath::LocalPath(path) => {
                     let resource = LocalStorageOperation::get(path).into_future(ctx.clone()).await;

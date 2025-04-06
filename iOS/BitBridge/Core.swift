@@ -94,6 +94,15 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             let fileThumbnailData = await self.getThumbnailData(for: identifier)
             let response = CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileThumbnailPngFromPlatformIdentifier(fileThumbnailData?.bytes))
             return handleResponse(request.id, try! Data(response.bincodeSerialize()))
+        case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
+            let absolutePath = switch path {
+            case .localPath(let absolute):
+                absolute
+            case .platformIdentifier(let identifier):
+                await PHAsset.getCachedAsset(identifier: identifier)?.fileUrl?.path() ?? ""
+            };
+            
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
             return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):

@@ -35,7 +35,8 @@ impl LocalResource {
         };
 
         let file_name = path.split("/").last().unwrap_or("").to_string();
-        format!("{}-{}-{}-{}", session_id, self.order_id, file_name, self.size)
+        let ascii_file_name = Self::filename_to_ascii(&file_name);
+        format!("{}-{}-{}-{}", session_id, self.order_id, ascii_file_name, self.size)
     }
 
     pub fn read_identifier(identifier: String) -> Result<(u64, u64, String, u64), String> {
@@ -44,12 +45,34 @@ impl LocalResource {
             return Err(format!("Invalid identifier: {}", identifier));
         }
 
+        let original_filename = Self::ascii_to_filename(parts[2]);
+
         Ok((
             parts[0].parse::<u64>().unwrap(),
             parts[1].parse::<u64>().unwrap(),
-            parts[2].to_string(),
+            original_filename,
             parts[3].parse::<u64>().unwrap()
         ))
+    }
+
+    fn filename_to_ascii(filename: &str) -> String {
+        filename.chars().map(|c| format!("{:03}", c as u32)).collect()
+    }
+
+    fn ascii_to_filename(ascii: &str) -> String {
+        let mut result = String::new();
+        let mut i = 0;
+
+        while i + 2 < ascii.len() {
+            if let Ok(code) = ascii[i..i + 3].parse::<u32>() {
+                if let Some(c) = std::char::from_u32(code) {
+                    result.push(c);
+                }
+            }
+            i += 3;
+        }
+
+        result
     }
 }
 

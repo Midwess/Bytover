@@ -137,7 +137,9 @@ impl PeerCommunication {
 
                     active_data_channels.lock().await.push(data_channel.clone());
 
-                    data_channel.start_download().await;
+                    spawn(async move {
+                        data_channel.start_download().await;
+                    });
                 })
             })
         });
@@ -180,6 +182,7 @@ impl PeerCommunication {
             while let Ok(request) = connection.next_request().await {
                 if let Request::TransferRequest(body) = request.message() {
                     shell_runtime.msg_from_native(serialize(&MessageToShell::SessionRequest(body.session.clone(), peer.clone())));
+                    request.resolve(Response::TransferResponse(TransferResponse {})).await;
                 }
             }
         });

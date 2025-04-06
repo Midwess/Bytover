@@ -24,7 +24,7 @@ pub struct TransferSession {
 #[derive(Debug, PartialEq, Serialize, Record, Deserialize, Clone, SurrealDerive)]
 pub struct TransferProgress {
     pub resource_order_id: u64,
-    pub percentage: f32,
+    pub percentage: f64,
     pub status: TransferStatus
 }
 
@@ -58,10 +58,14 @@ impl TransferSession {
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
-        let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) else {
-            return;
-        };
+        if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+            self.progress[index] = progress;
+        } else {
+            self.progress.push(progress);
+        }
+    }
 
-        self.progress[index] = progress;
+    pub fn total_progress(&self) -> f64 {
+        self.progress.iter().map(|it| it.percentage).sum::<f64>() / self.progress.len() as f64
     }
 }

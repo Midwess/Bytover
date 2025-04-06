@@ -21,7 +21,7 @@ struct PeopleShareItem: View {
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
                 
-                Text("Nearby")
+                Text("Nearby \(peer.transfer_progress)")
                     .modifier(Label2())
                     .padding(.trailing, 8)
                     .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
@@ -64,7 +64,13 @@ struct PeopleShareView: View {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top) {
                         ForEach(core.transfer?.nearby_peers ?? [], id: \.self) { peer in
-                            PeopleShareItem(peer: peer)
+                            Button(action: {
+                                Task {
+                                    await core.update(.transfer(.startTransfer(target_id: peer.id)))
+                                }
+                            }) {
+                                PeopleShareItem(peer: peer)
+                            }
                         }
                     }
                 }

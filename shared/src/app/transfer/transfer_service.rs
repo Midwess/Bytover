@@ -1,4 +1,3 @@
-use core_services::local_storage::file_system::File;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
@@ -36,14 +35,21 @@ impl TransferService {
             return;
         };
 
+        if selected_resources.is_empty() {
+            return;
+        }
+
         for resource in selected_resources.iter_mut() {
-            resource.path = LocalResourcePath::LocalPath(
-                LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await
-            );
+            resource.path = match LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await {
+                Some(path) => LocalResourcePath::LocalPath(path),
+                None => continue
+            };
+
             resource.thumbnail_path = match resource.thumbnail_path.clone() {
-                Some(path) => Some(LocalResourcePath::LocalPath(
-                    LocalStorageOperation::get_absolute_path(path).into_future(cmd.clone()).await
-                )),
+                Some(path) => LocalStorageOperation::get_absolute_path(path)
+                    .into_future(cmd.clone())
+                    .await
+                    .map(LocalResourcePath::LocalPath),
                 _ => None
             };
         }
@@ -51,13 +57,24 @@ impl TransferService {
         let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
         let transfer_session = TransferSession {
             order_id,
+            progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
             resources: selected_resources,
-            progress: vec![],
             transfer_type: TransferType::Send,
             target: transfer_target.clone()
         };
 
         TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await;
+
+        let mut sorted_resources: Vec<_> = transfer_session.resources.iter().collect();
+        sorted_resources.sort_by(|a, b| a.size.cmp(&b.size));
+
+        let resources = sorted_resources;
+
+        for resource in resources {
+            let peer_id = transfer_target.id().parse::<u128>().unwrap_or(0);
+            TransferOperation::send_resource(peer_id, order_id, resource.clone()).into_future(cmd.clone()).await;
+        }
+
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session],
             removed: vec![]
@@ -68,18 +85,25 @@ impl TransferService {
         let mut resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
         for resource_request in request.resources {
-            let thumbnail_path = format!("{}/thumbnails/{}.png", workdir, resource_request.order_id);
-            let thumbnail_file_path = File::new(resource_request.thumbnail_png, thumbnail_path.clone())
-                .await
-                .ok()
-                .map(|_it| LocalResourcePath::LocalPath(thumbnail_path.clone()));
+            let thumbnail_path = match resource_request.thumbnail_png {
+                Some(thumbnail_png) => {
+                    let thumbnail_path = format!("{}/thumbnails/{}.png", workdir, resource_request.order_id);
+                    Some(
+                        LocalStorageOperation::new_file(thumbnail_png, thumbnail_path.clone())
+                            .into_future(cmd.clone())
+                            .await
+                            .path
+                    )
+                }
+                None => None
+            };
 
             resources.push(LocalResource {
                 path: LocalResourcePath::LocalPath(format!(
                     "{}/sessions/{}/{}/{}",
                     workdir, request.order_id, resource_request.order_id, resource_request.name
                 )),
-                thumbnail_path: thumbnail_file_path,
+                thumbnail_path,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::Other)
                 ),

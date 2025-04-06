@@ -184,12 +184,21 @@ impl AppModule<BitBridge> for TransferModule {
                 .transfer_targets
                 .iter()
                 .filter_map(|it| match it {
-                    TransferTarget::Nearby(peer) => Some(PeerViewModel {
-                        id: peer.id.clone(),
-                        display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
-                        avatar: AvatarViewModel::new(peer.avatar_url.clone()),
-                        device: peer.device.clone()
-                    })
+                    TransferTarget::Nearby(peer) => {
+                        let session = model
+                            .transfer
+                            .transfer_sessions
+                            .iter()
+                            .find(|it| it.peer_id().as_ref().unwrap().to_string() == peer.id);
+                        Some(PeerViewModel {
+                            id: peer.id.clone(),
+                            display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
+                            avatar: AvatarViewModel::new(peer.avatar_url.clone()),
+                            device: peer.device.clone(),
+                            transfer_progress: session.map(|it| it.total_progress()).unwrap_or(0.0)
+                        })
+                    }
+                    _ => None
                 })
                 .collect()
         }

@@ -28,7 +28,7 @@ pub enum LocalStorageOperation {
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     Get(Option<LocalResource>),
-    GetAbsolutePath(String),
+    GetAbsolutePath(Option<String>),
     NewFile(LocalResource),
     Copy(LocalResource),
     Zip(LocalResource),
@@ -123,7 +123,7 @@ impl LocalStorageOperation {
         })
     }
 
-    pub fn get_absolute_path(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = String>> {
+    pub fn get_absolute_path(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<String>>> {
         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetAbsolutePath(path))).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetAbsolutePath(path)) => path,
             _ => panic!("Mismatch in response type, expected GetAbsolutePath, got {:?}", it)
