@@ -35,7 +35,9 @@ pub enum DataChannelError {
     #[error("Data channel is closed")]
     DataChannelClosed,
     #[error("Data corrupted")]
-    DataCorrupted
+    DataCorrupted,
+    #[error("Timeout")]
+    Timeout(#[from] tokio::time::error::Elapsed)
 }
 
 #[derive(Clone)]
@@ -139,7 +141,7 @@ impl DataChannel {
 
         let mut received_bytes = 0;
         log::info!(target: "nearby", "Start downloading file into: {}", self.saved_path);
-        while let Some(Ok(bytes)) = stream.next().await {
+        while let Ok(Some(Ok(bytes))) = timeout(Duration::from_secs(5), stream.next()).await {
             let written_bytes = match file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string())) {
                 Ok(written_bytes) => written_bytes,
                 Err(e) => {
@@ -208,7 +210,7 @@ impl DataChannel {
             let data_channel = self.data_channel.clone();
             last_sent_handle = Some(spawn(async move {
                 let expected_bytes = bytes.len();
-                let sent_bytes = data_channel.send(&bytes.into()).await?;
+                let sent_bytes = timeout(Duration::from_secs(5), data_channel.send(&bytes.into())).await??;
 
                 if sent_bytes < expected_bytes {
                     Err(DataChannelError::DataCorrupted)
@@ -281,7 +283,7 @@ impl RTCStreamChannel {
         data_channel.on_close(Box::new(move || {
             let msg_sender = msg_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
+                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed)).await;
             })
         }));
 
@@ -289,7 +291,7 @@ impl RTCStreamChannel {
         data_channel.on_error(Box::new(move |_err| {
             let msg_sender = msg_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed));
+                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed)).await;
             })
         }));
 
