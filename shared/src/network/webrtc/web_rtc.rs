@@ -270,14 +270,31 @@ impl WebRtc {
         Ok(())
     }
 
-    pub async fn send_resource(&self, peer_id: u128, session_id: u64, resource: LocalResource) -> Result<(), WebRtcErrors> {
+    pub async fn send_resource(&self, peer_id: u128, core_request_id: u32, resource: LocalResource) -> Result<(), WebRtcErrors> {
         let mut current_connections = self.connections.lock().await;
         let Some(connection) = current_connections.get_mut(&peer_id) else {
             return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
         };
 
         let peer_communication = connection.get_mut().unwrap();
-        peer_communication.send_resource(session_id, resource).await?;
+        peer_communication.send_resource(core_request_id, resource).await?;
+
+        Ok(())
+    }
+
+    pub async fn download_resource(
+        &self,
+        peer_id: u128,
+        core_request_id: u32,
+        resources: Vec<LocalResource>
+    ) -> Result<(), WebRtcErrors> {
+        let mut current_connections = self.connections.lock().await;
+        let Some(connection) = current_connections.get_mut(&peer_id) else {
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+        };
+
+        let peer_communication = connection.get_mut().unwrap();
+        peer_communication.download_resource(core_request_id, resources).await?;
 
         Ok(())
     }

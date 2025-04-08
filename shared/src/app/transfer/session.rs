@@ -40,9 +40,15 @@ impl TransferProgress {
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferStatus {
-    Fail,
+    Fail(String),
     InProgress,
     Success
+}
+
+impl TransferStatus {
+    pub fn is_completed(&self) -> bool {
+        matches!(self, TransferStatus::Success | TransferStatus::Fail(_))
+    }
 }
 
 impl TransferSession {

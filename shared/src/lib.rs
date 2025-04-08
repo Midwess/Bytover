@@ -56,8 +56,9 @@ use tokio::sync::OnceCell;
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
 #[cfg(feature = "lib")]
+#[async_trait::async_trait]
 pub trait ShellRuntime: Send + Sync {
-    fn msg_from_native(&self, event: Vec<u8>);
+    async fn msg_from_native(&self, event: Vec<u8>);
 }
 
 // NativeProcessor implementation
@@ -81,8 +82,8 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
 
 #[cfg(feature = "lib")]
 impl NativeProcessor {
-    pub fn new(shell: Box<dyn ShellRuntime>) -> Self {
-        let shell: Arc<dyn ShellRuntime> = Arc::from(shell);
+    pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
+        let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
         let native_executor: NativeExecutor = di_container.get_native_executor(shell.clone());
 
@@ -92,7 +93,7 @@ impl NativeProcessor {
         }
     }
 
-    pub fn handle(&self, id: u32, effect: &[u8]) -> Vec<u8> {
+    pub async fn handle(&self, id: u32, effect: &[u8]) -> Vec<u8> {
         let options = bincode_options();
         let mut deser = bincode::Deserializer::from_slice(effect, options);
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
@@ -100,7 +101,7 @@ impl NativeProcessor {
         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
         let output = get_tokio_rt().block_on(async {
-            let result = self.native_executor.handle(effect, self.shell.clone()).await;
+            let result = self.native_executor.handle(id, effect, self.shell.clone()).await;
             result
         });
 

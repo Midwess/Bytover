@@ -1,10 +1,12 @@
+use futures_util::StreamExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::database::DatabaseOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;
-use crate::app::operations::transfer::TransferOperation;
+use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
+use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 
@@ -63,7 +65,7 @@ impl TransferService {
             target: transfer_target.clone()
         };
 
-        TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await;
+        let _ = TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await;
 
         let mut sorted_resources: Vec<_> = transfer_session.resources.iter().collect();
         sorted_resources.sort_by(|a, b| a.size.cmp(&b.size));
@@ -72,7 +74,23 @@ impl TransferService {
 
         for resource in resources {
             let peer_id = transfer_target.id().parse::<u128>().unwrap_or(0);
-            TransferOperation::send_resource(peer_id, order_id, resource.clone()).into_future(cmd.clone()).await;
+            let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendResource(
+                peer_id,
+                resource.clone()
+            )));
+            while let Some(CoreOperationOutput::Transfer(transfer_output)) = stream.next().await {
+                match transfer_output {
+                    TransferOperationOutput::SendResourceProgressUpdate(progress) => {
+                        log::info!(target: "transfer", "Transfer resource: {:?}", progress);
+                        if progress.status.is_completed() {
+                            break;
+                        }
+                    }
+                    _ => {
+                        break;
+                    }
+                }
+            }
         }
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
@@ -82,6 +100,7 @@ impl TransferService {
     }
 
     pub async fn received_session_request(&self, request: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
+        let peer_id = peer.id();
         let mut resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
         for resource_request in request.resources {
@@ -116,7 +135,7 @@ impl TransferService {
         let transfer_session = TransferSession {
             order_id: request.order_id,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
-            resources,
+            resources: resources.clone(),
             transfer_type: TransferType::Receive,
             target: TransferTarget::Nearby(peer)
         };
@@ -125,5 +144,20 @@ impl TransferService {
             new: vec![transfer_session],
             removed: vec![]
         }));
+
+        // start download here
+        let request = CoreOperation::Transfer(TransferOperation::DownloadResources(peer_id, resources));
+        let mut stream = cmd.stream_from_shell(request);
+
+        while let Some(CoreOperationOutput::Transfer(transfer_output)) = stream.next().await {
+            match transfer_output {
+                TransferOperationOutput::DownloadResourceProgressUpdate(progress) => {
+                    log::info!(target: "transfer", "Download resource: {:?}", progress);
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
     }
 }

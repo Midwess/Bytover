@@ -3,7 +3,7 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
+use uniffi::{Enum, Record};
 
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
@@ -22,7 +22,7 @@ pub enum DeviceOperation {
     GetGeoLocation
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum DeviceOperationOutput {
     DeviceInfo(DeviceInfo),
     GetGeoLocation(Option<GeoLocation>)

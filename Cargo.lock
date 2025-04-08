@@ -1446,7 +1446,7 @@ dependencies = [
  "surreal_derive_plus",
  "surreal_devl",
  "surrealdb",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-scoped",
  "tokio-stream",
@@ -1555,9 +1555,9 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 
 [[package]]
 name = "crux_core"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7841ef0555e5dc84e23747fccec6a02ed45507aca01f528001ad2c026972ad4c"
+checksum = "d2222782d83d1851d16151ca5aaf7a750c5f7825c71a3ae55987f02a24e75942"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1575,11 +1575,12 @@ dependencies = [
 
 [[package]]
 name = "crux_macros"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "604414ff006961a834912ca0155eb001f634a90d79895575a5c4fd83e3c7ff3f"
+checksum = "e985c4d38a49848783835f03dcb4d0760021eb62099a1d67a40402baf3863880"
 dependencies = [
  "darling",
+ "heck 0.5.0",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -1646,9 +1647,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.20.10"
+version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f63b86c8a8826a49b8c21f08a2d07338eec8d900540f8630dc76284be802989"
+checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -1656,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.20.10"
+version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95133861a8032aaea082871032f5815eb9e98cef03fa916ab4500513994df9e5"
+checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1670,9 +1671,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.10"
+version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
+checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core",
  "quote",
@@ -1768,7 +1769,7 @@ dependencies = [
  "surreal_derive_plus",
  "surreal_devl",
  "surrealdb",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tonic",
  "tonic-middleware",
@@ -1841,7 +1842,7 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -5224,7 +5225,7 @@ dependencies = [
  "surreal_devl",
  "surrealdb",
  "sysinfo 0.34.1",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-scoped",
  "tokio-tungstenite 0.26.2",

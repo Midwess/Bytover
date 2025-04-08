@@ -1,5 +1,7 @@
-callback interface ShellRuntime {
-    void msg_from_native([ByRef] bytes event);
+[Trait, WithForeign]
+interface ShellRuntime {
+    [Async]
+    void msg_from_native(bytes event);
 };
 
 namespace shared {
@@ -11,5 +13,6 @@ namespace shared {
 interface NativeProcessor {
   constructor(ShellRuntime shell);
  
+  [Async]
   bytes handle(u32 id, [ByRef] bytes effect);
 };

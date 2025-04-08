@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use futures_util::future::join_all;
-use futures_util::lock::Mutex;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
     IntroduceRequest,
@@ -15,6 +14,7 @@ use schema::devlog::bitbridge::{
 };
 use thiserror::Error;
 use tokio::spawn;
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use crate::app::file_system::file::LocalResource;
@@ -45,8 +45,7 @@ pub struct PeerCommunication {
     peer: PeerEntity,
     connection: Arc<ConnectionWebRtc>,
     shell_runtime: Arc<dyn ShellRuntime>,
-    active_data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
-    session_handle: JoinHandle<()>,
+    data_channel_tx: broadcast::Sender<Arc<DataChannel>>,
     workdir: String
 }
 
@@ -86,48 +85,35 @@ impl PeerCommunication {
 
         log::info!(target: "peer", "Connected to peer {:?}, size = {}", peer, mem::size_of::<PeerCommunication>());
 
-        let active_data_channels = Arc::new(Mutex::new(vec![]));
-        Self::handle_data_channel(
-            active_data_channels.clone(),
-            shell_runtime.clone(),
-            &connection,
-            workdir.clone()
-        );
-
-        let session_handle = Self::handle_incomming_session(connection.clone(), shell_runtime.clone(), peer.clone()).await?;
+        let (data_channel_tx, _) = broadcast::channel(16);
 
         let me = Self {
             mine: current_peer,
             peer,
             connection,
             shell_runtime: shell_runtime.clone(),
-            active_data_channels,
-            session_handle,
+            data_channel_tx,
             workdir
         };
 
-        shell_runtime.msg_from_native(serialize(&MessageToShell::NewPeer(me.peer.clone())));
+        me.handle_data_channel();
+
+        shell_runtime.msg_from_native(serialize(&MessageToShell::NewPeer(me.peer.clone()))).await;
 
         Ok(me)
     }
 
-    fn handle_data_channel(
-        active_data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
-        shell_runtime: Arc<dyn ShellRuntime>,
-        connection: &ConnectionWebRtc,
-        workdir: String
-    ) {
-        connection.peer_connection.on_data_channel({
-            let active_data_channels = active_data_channels.clone();
-            let shell_runtime = shell_runtime.clone();
-            let workdir = workdir.clone();
+    fn handle_data_channel(&self) {
+        self.connection.peer_connection.on_data_channel({
+            let data_channel_tx = self.data_channel_tx.clone();
+            let shell_runtime = self.shell_runtime.clone();
+
             Box::new(move |d: Arc<webrtc::data_channel::RTCDataChannel>| {
-                let active_data_channels = active_data_channels.clone();
+                let data_channel_tx = data_channel_tx.clone();
                 let shell_runtime = shell_runtime.clone();
-                let workdir = workdir.clone();
 
                 Box::pin(async move {
-                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), workdir.clone()).await {
+                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone()).await {
                         Ok(data_channel) => Arc::new(data_channel),
                         Err(e) => {
                             log::error!(target: "peer", "Failed to create data channel {:?}", e);
@@ -135,11 +121,7 @@ impl PeerCommunication {
                         }
                     };
 
-                    active_data_channels.lock().await.push(data_channel.clone());
-
-                    spawn(async move {
-                        data_channel.start_download().await;
-                    });
+                    let _ = data_channel_tx.send(data_channel.clone());
                 })
             })
         });
@@ -158,17 +140,24 @@ impl PeerCommunication {
         Ok(())
     }
 
-    pub async fn send_resource(&self, session_id: u64, resource: LocalResource) -> Result<(), PeerErrors> {
-        let data_channel = DataChannel::stream_resource(
-            session_id,
-            resource,
-            &self.connection,
-            self.shell_runtime.clone(),
-            self.workdir.clone()
-        )
-        .await?;
+    pub async fn download_resource(&self, core_request_id: u32, mut resources: Vec<LocalResource>) -> Result<(), PeerErrors> {
+        let mut subscription = self.data_channel_tx.subscribe();
+        while let Ok(data_channel) = subscription.recv().await {
+            let Some(found_index) = resources.iter().position(|r| r.order_id == data_channel.resource_id) else {
+                continue;
+            };
 
-        data_channel.start_upload().await?;
+            let resource = resources.remove(found_index);
+            data_channel.start_download(core_request_id, resource).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn send_resource(&self, core_request_id: u32, resource: LocalResource) -> Result<(), PeerErrors> {
+        let data_channel = DataChannel::stream_resource(&resource, &self.connection, self.shell_runtime.clone()).await?;
+
+        data_channel.start_upload(core_request_id, resource).await?;
 
         Ok(())
     }
@@ -181,7 +170,9 @@ impl PeerCommunication {
         let handle = spawn(async move {
             while let Ok(request) = connection.next_request().await {
                 if let Request::TransferRequest(body) = request.message() {
-                    shell_runtime.msg_from_native(serialize(&MessageToShell::SessionRequest(body.session.clone(), peer.clone())));
+                    shell_runtime
+                        .msg_from_native(serialize(&MessageToShell::SessionRequest(body.session.clone(), peer.clone())))
+                        .await;
                     request.resolve(Response::TransferResponse(TransferResponse {})).await;
                 }
             }
@@ -191,12 +182,12 @@ impl PeerCommunication {
     }
 
     pub async fn stop_session(&self) {
-        let mut active_data_channels = self.active_data_channels.lock().await;
-        for data_channel in active_data_channels.iter_mut() {
-            data_channel.stop_transfer().await;
-        }
+        // let mut active_data_channels = self.active_data_channels.lock().await;
+        // for data_channel in active_data_channels.iter_mut() {
+        //     data_channel.stop_transfer().await;
+        // }
 
-        active_data_channels.clear();
+        // active_data_channels.clear();
     }
 }
 
@@ -210,7 +201,10 @@ impl Deref for PeerCommunication {
 
 impl Drop for PeerCommunication {
     fn drop(&mut self) {
-        self.session_handle.abort();
-        self.shell_runtime.msg_from_native(serialize(&MessageToShell::PeerLeaved(self.peer.clone())));
+        let runtime = self.shell_runtime.clone();
+        let peer = self.peer.clone();
+        spawn(async move {
+            runtime.msg_from_native(serialize(&MessageToShell::PeerLeaved(peer))).await;
+        });
     }
 }

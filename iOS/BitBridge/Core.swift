@@ -65,6 +65,24 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         }
     }
     
+    func _handleResponse(_ id: UInt32, _ response: CoreOperationOutput) async {
+        print("Handle response \(id)")
+        let effects = [UInt8](handleResponse(id, Data(try! response.bincodeSerialize())))
+        if effects.isEmpty {
+            return
+        }
+            
+        var requests: [Request] = try! .bincodeDeserialize(input: effects)
+        while let request = requests.first {
+            requests.removeFirst()
+            let data = [UInt8](await processEffect(request))
+            
+            if let newRequests: [Request] = try? .bincodeDeserialize(input: data) {
+                requests.append(contentsOf: newRequests)
+            }
+        }
+    }
+    
     func nativeProcessor() async -> NativeProcessor {
         while self.nativeProcessor == nil {
             try? await Task.sleep(nanoseconds: 100000000) // 100ms
@@ -137,13 +155,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         }
     }
     
-    func msgFromNative(_ event: Data) {
-        Task {
-            await self._msgFromNative(event)
-        }
-    }
-    
-    func _msgFromNative(_ event: Data) async {
+    func msgFromNative(_ event: Data) async {
+        print("Msg from native")
         var event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
         case .newPeer(let peer):
@@ -154,6 +167,9 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             await update(.transfer(.transferRequest(request, peer)))
         case .sessionProgress(let session_id, let progress):
             await update(.transfer(.newTransferProgress(session_id: session_id, progress: progress)))
+        case .handleResponse(let id, let response):
+            print("Handle response \(id)")
+            await self._handleResponse(id, response)
         }
     }
     

@@ -1,4 +1,6 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::operations::transfer::TransferOperationOutput;
+use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferProgress, TransferStatus};
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
@@ -44,19 +46,13 @@ pub enum DataChannelError {
 pub struct DataChannel {
     data_channel: Arc<RTCDataChannel>,
     shell_runtime: Arc<dyn ShellRuntime>,
-    pub session_id: u64,
-    pub resource_id: u64,
-    pub file_name: String,
-    pub file_size: u64,
-    pub workdir: String,
-    pub saved_path: String
+    pub resource_id: u64
 }
 
 impl DataChannel {
     pub async fn from_channel(
         data_channel: Arc<RTCDataChannel>,
-        shell_runtime: Arc<dyn ShellRuntime>,
-        workdir: String
+        shell_runtime: Arc<dyn ShellRuntime>
     ) -> Result<Self, DataChannelError> {
         data_channel.on_open(Box::new(move || {
             log::info!(target: "nearby", "Data channel opened");
@@ -65,31 +61,21 @@ impl DataChannel {
 
         let label = data_channel.label().to_owned();
 
-        let (session_id, resource_id, file_name, file_size) =
-            LocalResource::read_identifier(label.clone()).map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
-
-        let saved_path = format!("{}/sessions/{}/{}/{}", workdir, session_id, resource_id, file_name);
+        let resource_id = label.parse::<u64>().map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         Ok(Self {
             data_channel,
             shell_runtime,
-            session_id,
-            resource_id,
-            file_name,
-            file_size,
-            workdir,
-            saved_path
+            resource_id
         })
     }
 
     pub async fn stream_resource(
-        session_id: u64,
-        local_resource: LocalResource,
+        local_resource: &LocalResource,
         connection: &ConnectionWebRtc,
-        shell_runtime: Arc<dyn ShellRuntime>,
-        workdir: String
+        shell_runtime: Arc<dyn ShellRuntime>
     ) -> Result<Self, DataChannelError> {
-        let label = local_resource.identifer(session_id);
+        let label = local_resource.order_id.to_string();
         log::info!(target: "nearby", "Creating data channel: {}", label);
         let data_channel = connection.peer_connection.create_data_channel(label.as_str(), None).await?;
 
@@ -106,23 +92,11 @@ impl DataChannel {
             )));
         };
 
-        let saved_path = match &local_resource.path {
-            LocalResourcePath::LocalPath(file_path) => file_path.clone(),
-            LocalResourcePath::PlatformIdentifier(_) => {
-                return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
-            }
-        };
-
         log::info!(target: "nearby", "Data channel created: {}", label);
         Ok(Self {
             data_channel,
             shell_runtime,
-            session_id,
-            resource_id: local_resource.order_id,
-            file_name: local_resource.name,
-            file_size: local_resource.size,
-            workdir,
-            saved_path
+            resource_id: local_resource.order_id
         })
     }
 
@@ -130,83 +104,85 @@ impl DataChannel {
         let _ = self.data_channel.close().await;
     }
 
-    pub async fn start_download(&self) -> Result<(), DataChannelError> {
+    pub async fn start_download(&self, core_request_id: u32, out_resource: LocalResource) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
-        let file_size = self.file_size;
+        let file_size = out_resource.size;
 
-        let file = File::new(None, self.saved_path.clone())
-            .await
-            .map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let saved_path = match &out_resource.path {
+            LocalResourcePath::LocalPath(file_path) => file_path.clone(),
+            LocalResourcePath::PlatformIdentifier(_) => {
+                return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
+            }
+        };
+
+        let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         let mut received_bytes = 0;
-        log::info!(target: "nearby", "Start downloading file into: {}", self.saved_path);
+        log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
         while let Ok(Some(Ok(bytes))) = timeout(Duration::from_secs(5), stream.next()).await {
-            let written_bytes = match file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string())) {
-                Ok(written_bytes) => written_bytes,
-                Err(e) => {
-                    log::error!(target: "nearby", "Failed to write data, stop transfer: {:?}", e);
-                    break;
-                }
-            };
+            let written_bytes = file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
             received_bytes += written_bytes;
             if received_bytes == file_size as usize {
                 break;
             }
+
+            self.update_progress(
+                core_request_id,
+                TransferProgress {
+                    resource_order_id: self.resource_id,
+                    percentage: received_bytes as f64 / file_size as f64,
+                    status: TransferStatus::InProgress
+                }
+            );
         }
 
-        let progress = TransferProgress {
-            resource_order_id: self.resource_id,
-            percentage: 1.0,
-            status: if received_bytes == file_size as usize {
-                TransferStatus::Success
-            } else {
-                TransferStatus::Fail
+        if received_bytes < file_size as usize {
+            Err(DataChannelError::DataCorrupted)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn update_progress(&self, core_request_id: u32, progress: TransferProgress) -> JoinHandle<()> {
+        log::info!(target: "nearby", "Sending progress: {:?}", progress);
+        let runtime = self.shell_runtime.clone();
+        spawn(async move {
+            runtime
+                .msg_from_native(serialize(&MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::SendResourceProgressUpdate(progress))
+                )))
+                .await;
+        })
+    }
+
+    pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
+        let saved_path = match &resource.path {
+            LocalResourcePath::LocalPath(file_path) => file_path.clone(),
+            LocalResourcePath::PlatformIdentifier(_) => {
+                return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
             }
         };
 
-        self.update_progress(progress).await;
+        let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let file_size = resource.size;
+        let mut cursor = file.cursor(0, 32 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        let _ = stream.close().await;
-
-        Ok(())
-    }
-
-    pub async fn update_progress(&self, progress: TransferProgress) {
-        self.shell_runtime
-            .msg_from_native(serialize(&MessageToShell::SessionProgress(self.session_id, progress)));
-    }
-
-    pub async fn start_upload(&self) -> Result<(), DataChannelError> {
-        let file = File::existing(self.saved_path.clone())
-            .await
-            .map_err(|e| DataChannelError::FileError(e.to_string()))?;
-        let file_size = self.file_size;
-        let mut cursor = file.cursor(0, 16 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-
-        log::info!(target: "nearby", "Start uploading file: {}", self.saved_path);
+        log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         let mut total_sent = 0;
         while let Ok(bytes) = cursor.next().await {
             if let Some(handle) = last_sent_handle {
-                let sent_bytes = match handle.await {
-                    Ok(Ok(sent_bytes)) => {
-                        sent_bytes
-                    }
-                    other => {
-                        log::error!(target: "nearby", "Failed to send data, stop transfer {:?}", other);
-                        break;
-                    }
-                };
-
-                total_sent += sent_bytes;
+                let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
 
             let Some(bytes) = bytes else {
                 break;
             };
 
+            total_sent += bytes.len();
             let data_channel = self.data_channel.clone();
             last_sent_handle = Some(spawn(async move {
                 let expected_bytes = bytes.len();
@@ -218,21 +194,22 @@ impl DataChannel {
                     Ok(sent_bytes)
                 }
             }));
+
+            self.update_progress(
+                core_request_id,
+                TransferProgress {
+                    resource_order_id: self.resource_id,
+                    percentage: total_sent as f64 / file_size as f64,
+                    status: TransferStatus::InProgress
+                }
+            );
         }
 
-        let progress = TransferProgress {
-            resource_order_id: self.resource_id,
-            percentage: 1.0,
-            status: if total_sent == file_size as usize {
-                TransferStatus::Success
-            } else {
-                TransferStatus::Fail
-            }
-        };
-
-        self.update_progress(progress).await;
-
-        Ok(())
+        if total_sent < file_size as usize {
+            Err(DataChannelError::DataCorrupted)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -268,7 +245,7 @@ impl Stream for RTCStreamChannel {
 
 impl RTCStreamChannel {
     pub fn new(data_channel: Arc<RTCDataChannel>) -> Self {
-        let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(2048); // TODO: Handle buffer overflow
+        let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(2048);
 
         let msg_sender = message_sender.clone();
         let data_channel_cloned = data_channel.clone();

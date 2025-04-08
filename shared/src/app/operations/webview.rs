@@ -3,17 +3,18 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
+use uniffi::Enum;
 
 use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum WebViewOperation {
     OpenUrl(String)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum WebViewOperationOutput {
     OpenUrl
 }

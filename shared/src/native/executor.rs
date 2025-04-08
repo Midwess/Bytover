@@ -20,7 +20,7 @@ pub struct NativeExecutor {
 }
 
 impl NativeExecutor {
-    pub async fn handle(&self, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
+    pub async fn handle(&self, request_id: u32, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
         self.transfer.update_shell_runtime(&shell_runtime);
 
         match effect {
@@ -41,7 +41,7 @@ impl NativeExecutor {
                 CoreOperationOutput::LocalStorage(response)
             }
             CoreOperation::Transfer(transfer) => {
-                let response = self.transfer.handle(transfer).await;
+                let response = self.transfer.handle(request_id, transfer).await;
                 CoreOperationOutput::Transfer(response)
             }
             CoreOperation::Internet(internet) => match internet {

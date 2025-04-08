@@ -29,11 +29,11 @@ authors = ["Jimmy"]
 edition = "2021"
 
 [workspace.dependencies]
-anyhow = "1.0.95"
-crux_core = "0.12.2"
+anyhow = "1.0.97"
+crux_core = "0.13.0"
 serde = { version = "1.0.217", default-features = false }
 surrealdb = {version="2.2.0", default-features = false}
-thiserror = { version = "1.0.61", default-features = false }
+thiserror = { version = "2.0.12", default-features = false }
 serde_derive = { version = "1.0.203", default-features = false }
 serde_json = { version = "1.0.117", default-features = false }
 chrono = "0.4.39"

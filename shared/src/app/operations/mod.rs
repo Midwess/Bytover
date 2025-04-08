@@ -14,6 +14,7 @@ use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};
+use uniffi::Enum;
 use webview::{WebViewOperation, WebViewOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -30,7 +31,7 @@ pub enum CoreOperation {
     Void
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum CoreOperationOutput {
     LocalStorage(LocalStorageOperationOutput),
     WebView(WebViewOperationOutput),

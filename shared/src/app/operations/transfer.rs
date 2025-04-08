@@ -3,12 +3,14 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
+use uniffi::Enum;
 
 use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::finding_scope::FindingScope;
-use crate::app::transfer::session::TransferSession;
+use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
+use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -19,16 +21,19 @@ pub enum TransferOperation {
     StopNearbyServer,
     UpdateFindingScopes(Vec<FindingScope>),
     SendSession(TransferSession),
-    SendResource(u128, u64, LocalResource)
+    DownloadResources(u128, Vec<LocalResource>),
+    SendResource(u128, LocalResource)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperationOutput {
     StartNearbyServer,
     StopNearbyServer,
     UpdateFindingScopes,
     SendSession,
-    SendResource
+    ConnectionError(NetworkError),
+    SendResourceProgressUpdate(TransferProgress),
+    DownloadResourceProgressUpdate(TransferProgress)
 }
 
 impl Operation for TransferOperation {
@@ -57,20 +62,11 @@ impl TransferOperation {
         })
     }
 
-    pub fn send_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = ()>> {
+    pub fn send_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(session))).map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::SendSession) => (),
+            CoreOperationOutput::Transfer(TransferOperationOutput::SendSession) => Ok(()),
+            CoreOperationOutput::Transfer(TransferOperationOutput::ConnectionError(error)) => Err(error),
             _ => panic!("Mismatch in response type, expected SendSession, got {:?}", it)
-        })
-    }
-
-    pub fn send_resource(peer_id: u128, session_id: u64, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::SendResource(
-            peer_id, session_id, resource
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::SendResource) => (),
-            _ => panic!("Mismatch in response type, expected SendResource, got {:?}", it)
         })
     }
 }
