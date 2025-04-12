@@ -3,13 +3,11 @@ use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferProgress, TransferStatus};
 use crate::native::message_to_shell::MessageToShell;
-use crate::{get_tokio_rt, serialize, ShellRuntime};
+use crate::{serialize, ShellRuntime};
 use core_services::local_storage::file_system::File;
 use futures_util::{Stream, StreamExt};
-use tokio::runtime::Runtime;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::spawn;
@@ -121,22 +119,22 @@ impl DataChannel {
         // let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         let mut received_bytes = 0;
-        // log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
-        // while let Some(next_bytes) = timeout(Duration::from_secs(5), stream.next()).await? {
-        //     let bytes = next_bytes?;
-        //     // let written_bytes = file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
+        while let Some(next_bytes) = timeout(Duration::from_secs(5), stream.next()).await? {
+            let bytes = next_bytes?;
+            // let written_bytes = file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        //     received_bytes += bytes.len(); 
+            received_bytes += bytes.len(); 
 
-        //     // self.update_progress(
-        //     //     core_request_id,
-        //     //     TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
-        //     // );
+            // self.update_progress(
+            //     core_request_id,
+            //     TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
+            // );
 
-        //     if received_bytes >= file_size as usize {
-        //         break;
-        //     }
-        // }
+            if received_bytes >= file_size as usize {
+                break;
+            }
+        }
 
         log::info!(target: "nearby", "Received bytes final: {} vs {}", received_bytes, file_size);
 
@@ -157,50 +155,6 @@ impl DataChannel {
     }
 
     pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
-        let data_channel = self.data_channel.clone();
-
-        let (low_threshold_tx, mut low_threshold_rx) = mpsc::channel(1);
-
-        data_channel.set_buffered_amount_low_threshold(1024 * 128).await;
-        data_channel.on_buffered_amount_low(Box::new(move || {
-            let low_threshold_tx = low_threshold_tx.clone();
-            Box::pin(async move {
-                let _ = low_threshold_tx.send(()).await;
-            })
-        })).await;
-
-        let data_channel_clone = data_channel.clone();
-        
-        let mut last_time = std::time::Instant::now();
-        let mut bytes_since_last_log = 0;
-
-        let bytes = bytes::Bytes::from_static(&[0; 1024]);
-        loop {
-            if let Err(_) = data_channel_clone.send(&bytes).await {
-                break;
-            }
-            bytes_since_last_log += bytes.len();
-            let buffered_amount = data_channel_clone.buffered_amount().await;
-
-            let elapsed = last_time.elapsed();
-            if elapsed >= Duration::from_secs(1) {
-                let throughput = bytes_since_last_log as f64 * 8.0 / elapsed.as_secs_f64();
-                log::info!(target: "nearby", "Throughput: {:.03} Mbps", throughput / (1024.0 * 1024.0));
-                last_time = std::time::Instant::now();
-                bytes_since_last_log = 0;
-            }
-
-            if buffered_amount + bytes.len() >= 1024 * 128 * 2 {
-                // if let Err(_) = timeout(Duration::from_secs(2), low_threshold_rx.recv()).await {
-                //     break;
-                // }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn _start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
         let saved_path = match &resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
@@ -215,54 +169,38 @@ impl DataChannel {
         log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         let mut total_sent = 0;
-
-        let (low_threshold_tx, mut low_threshold_rx) = mpsc::channel(1);
-
-        {
-            self.data_channel.set_buffered_amount_low_threshold(1024 * 500);
-            let low_threshold_tx = low_threshold_tx.clone();
-            self.data_channel.on_buffered_amount_low(Box::new(move || {
-                let low_threshold_tx = low_threshold_tx.clone();
-                Box::pin(async move {
-                    let _ = low_threshold_tx.send(()).await;
-                })
-            }));
-        };
-
         loop {
-            // let bytes = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))?;
-            // if let Some(handle) = last_sent_handle {
-            //     let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
-            // }
-
-            // let Some(bytes) = bytes else {
-            //     break;
-            // };
-
-
-            let bytes = bytes::Bytes::from_static(&[0; 1024]);
-
-            // total_sent += bytes.len();
-            // let data_channel = self.data_channel.clone();
-            // let order_id = self.resource_id;
-            // last_sent_handle = Some(spawn(async move {
-                // let expected_bytes = bytes.len();
-                let sent_bytes = self.data_channel.send(&bytes).await.map_err(|e| DataChannelError::WebRtcError(e))?;
-
-                let curr_amount = self.data_channel.buffered_amount().await;
-                log::info!(target: "nearby", "Buffered amount of {}: {}", self.resource_id, curr_amount);
-
-                if sent_bytes + curr_amount > 1024 * 500 * 2 {
-                    log::info!(target: "nearby", "Buffered amount is too high, waiting for low threshold");
-                    let _ = low_threshold_rx.recv().await;
-                }
-
-                // if sent_bytes < expected_bytes {
-                //     Err(DataChannelError::DataCorrupted)
-                // } else {
-                //     Ok(sent_bytes)
-                // }
+            let bytes = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))?;
+            if let Some(handle) = last_sent_handle {
+                let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
+
+            let Some(bytes) = bytes else {
+                break;
+            };
+
+            total_sent += bytes.len();
+            let data_channel = self.data_channel.clone();
+            let order_id = self.resource_id;
+            last_sent_handle = Some(spawn(async move {
+                let expected_bytes = bytes.len();
+                let sent_bytes = timeout(Duration::from_secs(5), data_channel.send(&bytes.into())).await??;
+
+                let curr_amount = data_channel.buffered_amount().await;
+                log::info!(target: "nearby", "Buffered amount of {}: {}", order_id, curr_amount);
+
+                if sent_bytes < expected_bytes {
+                    Err(DataChannelError::DataCorrupted)
+                } else {
+                    Ok(sent_bytes)
+                }
+            }));
+
+            // self.update_progress(
+            //     core_request_id,
+            //     TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
+            // );
+        }
 
         if total_sent < file_size as usize {
             Err(DataChannelError::DataCorrupted)
@@ -309,13 +247,9 @@ impl RTCStreamChannel {
         let msg_sender = message_sender.clone();
         let data_channel_cloned = data_channel.clone();
         data_channel.on_message(Box::new(move |message| {
-            // let msg_sender = msg_sender.clone();
-            // Box::pin(async move {
-            //     let _ = msg_sender.send(Ok(message.data.to_vec())).await;
-            // })
-
+            let msg_sender = msg_sender.clone();
             Box::pin(async move {
-                // let _ = msg_sender.send(Ok(message.data.to_vec())).await;
+                let _ = msg_sender.send(Ok(message.data.to_vec())).await;
             })
         }));
 

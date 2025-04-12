@@ -73,8 +73,8 @@ impl PartialEq for ConnectionWebRtc {
 impl ConnectionWebRtc {
     pub fn channel_config() -> RTCDataChannelInit {
         RTCDataChannelInit {
-            ordered: Some(false),
-            max_retransmits: Some(0u16),
+            ordered: Some(true),
+            max_retransmits: Some(3u16),
             ..Default::default()
         }
     }
@@ -108,19 +108,8 @@ impl ConnectionWebRtc {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
-
-        let mut media_engine = MediaEngine::default();
-
-        media_engine.register_default_codecs()?;
-    
-        let mut interceptor_registry = Registry::new();
-    
-        interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
-    
-        // Create API that bundles the global functions of the WebRTC API
         let api = APIBuilder::new()
-            .with_media_engine(media_engine)
-            .with_interceptor_registry(interceptor_registry)
+            .with_setting_engine(Self::setting_engine())
             .build();
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
@@ -204,19 +193,8 @@ impl ConnectionWebRtc {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
-        let setting_engine = Self::setting_engine();
-        let mut media_engine = MediaEngine::default();
-
-        media_engine.register_default_codecs()?;
-    
-        let mut interceptor_registry = Registry::new();
-    
-        interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
-    
-        // Create API that bundles the global functions of the WebRTC API
         let api = APIBuilder::new()
-            .with_media_engine(media_engine)
-            .with_interceptor_registry(interceptor_registry)
+            .with_setting_engine(Self::setting_engine())
             .build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
@@ -360,9 +338,9 @@ impl ConnectionWebRtc {
                 if let Some(candidate) = candidate {
                     let ice_candidate = Self::build_ice_candidate_message(candidate);
 
-                    // if finding_scope.is_local_network_only() && ice_candidate.is_public() {
-                    //     return;
-                    // }
+                    if finding_scope.is_local_network_only() && ice_candidate.is_public() {
+                        return;
+                    }
 
                     let result = signaling_client
                         .send(Message {

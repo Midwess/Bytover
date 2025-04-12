@@ -34,14 +34,7 @@ impl TransferService {
         cmd: AppCommandContext
     ) {
         if selected_resources.is_empty() {
-            selected_resources.push(LocalResource {
-                path: LocalResourcePath::LocalPath("".to_string()),
-                thumbnail_path: None,
-                r#type: ResourceType::Image,
-                name: "dummy".to_string(),
-                size: 100,
-                order_id: 1
-            });
+           return;
         }
 
         for resource in selected_resources.iter_mut() {
@@ -60,6 +53,7 @@ impl TransferService {
         }
 
         let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
+        log::info!(target: "transfer", "Order id: {}", order_id);
         let transfer_session = TransferSession {
             order_id,
             progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),

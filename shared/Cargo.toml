@@ -102,6 +102,7 @@ h3ron = { workspace = true, optional = true }
 geo-types = { workspace = true, optional = true }
 sysinfo = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
+anyhow = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

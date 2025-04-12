@@ -65,7 +65,6 @@ impl NativeDatabase {
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Add(resources)) => {
-                return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(vec![]));
                 let mut created_resources = vec![];
                 for resource in resources {
                     if let Ok(resource) = self.local_resource_repository.create(resource).await {
@@ -90,7 +89,6 @@ impl NativeDatabase {
                 }
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::FindAll) => {
-                return DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(vec![]));
                 let resources = self.local_resource_repository.find_all(None, None, None).await.unwrap();
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))
             }
