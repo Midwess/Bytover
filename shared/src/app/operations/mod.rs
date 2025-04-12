@@ -2,6 +2,7 @@ pub mod database;
 pub mod device;
 pub mod internet;
 pub mod local_storage;
+pub mod p2p;
 pub mod rpc;
 pub mod transfer;
 pub mod webview;
@@ -11,11 +12,16 @@ use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
 use internet::{InternetOperation, InternetOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
+use p2p::{P2POperation, P2POperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};
 use uniffi::Enum;
 use webview::{WebViewOperation, WebViewOperationOutput};
+
+use crate::errors::{DeviceError, NetworkError};
+
+use super::AppEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CoreOperation {
@@ -25,10 +31,12 @@ pub enum CoreOperation {
     Rpc(RpcOperation),
     Database(DatabaseOperation),
     Transfer(TransferOperation),
+    P2P(P2POperation),
     Internet(InternetOperation),
     Render,
     InitNativeExecutor,
-    Void
+    Void,
+    Notified(AppEvent)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -39,9 +47,12 @@ pub enum CoreOperationOutput {
     Rpc(RpcOperationOutput),
     Database(DatabaseOperationOutput),
     Transfer(TransferOperationOutput),
+    P2P(P2POperationOutput),
     Internet(InternetOperationOutput),
     InitNativeExecutor,
-    Void
+    Void,
+    ConnectionError(NetworkError),
+    DeviceError(DeviceError)
 }
 
 impl Operation for CoreOperation {

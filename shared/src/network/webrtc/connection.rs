@@ -7,22 +7,26 @@ use thiserror::Error;
 use tokio::spawn;
 use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio::task::JoinHandle;
+use webrtc::api::interceptor_registry::register_default_interceptors;
+use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
 use webrtc::data_channel::{OnCloseHdlrFn, RTCDataChannel};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
-use crate::app::transfer::finding_scope::FindingScope;
+use crate::app::nearby::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crate::network::webrtc::message_channel::MessageChannel;
 use crate::network::webrtc::peer::PeerCommunication;
 use crate::ShellRuntime;
 
+use super::peer::PeerErrors;
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 
 #[derive(Debug, Error)]
@@ -42,7 +46,9 @@ pub enum ConnectionWebRtcErrors {
     #[error("Request timeout")]
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("Connection not found")]
-    ConnectionNotFound
+    ConnectionNotFound,
+    #[error("Upgrade to peer communication, will retry it a few secs")]
+    UpgradeError(#[from] Box<PeerErrors>)
 }
 
 pub struct ConnectionWebRtc {
@@ -67,11 +73,9 @@ impl PartialEq for ConnectionWebRtc {
 impl ConnectionWebRtc {
     pub fn channel_config() -> RTCDataChannelInit {
         RTCDataChannelInit {
-            ordered: Some(true),
-            max_packet_life_time: None,
-            max_retransmits: None,
-            protocol: None,
-            negotiated: None
+            ordered: Some(false),
+            max_retransmits: Some(0u16),
+            ..Default::default()
         }
     }
 
@@ -79,6 +83,7 @@ impl ConnectionWebRtc {
     // I assume that, this configuration is more suitable for rule of battery life on Android and iOS
     pub fn setting_engine() -> SettingEngine {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
+        
         setting_engine.set_ice_timeouts(
             Some(Duration::from_secs(40)),
             Some(Duration::from_secs(120)),
@@ -103,8 +108,20 @@ impl ConnectionWebRtc {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
-        let setting_engine = Self::setting_engine();
-        let api = APIBuilder::new().with_setting_engine(setting_engine).build();
+
+        let mut media_engine = MediaEngine::default();
+
+        media_engine.register_default_codecs()?;
+    
+        let mut interceptor_registry = Registry::new();
+    
+        interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
+    
+        // Create API that bundles the global functions of the WebRTC API
+        let api = APIBuilder::new()
+            .with_media_engine(media_engine)
+            .with_interceptor_registry(interceptor_registry)
+            .build();
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
@@ -166,7 +183,7 @@ impl ConnectionWebRtc {
         match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime, workdir).await.unwrap())
+                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.unwrap())
             }
             _ => {
                 log::error!(target: ns.as_str(), "Data channel connection timed out");
@@ -188,8 +205,19 @@ impl ConnectionWebRtc {
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
         let setting_engine = Self::setting_engine();
+        let mut media_engine = MediaEngine::default();
 
-        let api = APIBuilder::new().with_setting_engine(setting_engine).build();
+        media_engine.register_default_codecs()?;
+    
+        let mut interceptor_registry = Registry::new();
+    
+        interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
+    
+        // Create API that bundles the global functions of the WebRTC API
+        let api = APIBuilder::new()
+            .with_media_engine(media_engine)
+            .with_interceptor_registry(interceptor_registry)
+            .build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
         if let Err(e) = peer_connection.set_remote_description(offer).await {
@@ -259,7 +287,7 @@ impl ConnectionWebRtc {
         let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime, workdir).await.unwrap())
+                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.map_err(|e| Box::new(e))?)
             }
             Ok(None) => {
                 log::error!(target: ns.as_str(), "Data channel receiver closed without receiving data channel");
@@ -332,9 +360,9 @@ impl ConnectionWebRtc {
                 if let Some(candidate) = candidate {
                     let ice_candidate = Self::build_ice_candidate_message(candidate);
 
-                    if finding_scope.is_local() && ice_candidate.is_public() {
-                        return;
-                    }
+                    // if finding_scope.is_local_network_only() && ice_candidate.is_public() {
+                    //     return;
+                    // }
 
                     let result = signaling_client
                         .send(Message {
@@ -369,18 +397,8 @@ impl ConnectionWebRtc {
     pub fn create_config() -> RTCConfiguration {
         RTCConfiguration {
             ice_servers: vec![RTCIceServer {
-                urls: vec![
-                    // IPv4 version
-                    "stun:stun.l.google.com:19302".to_string(),
-                    // Add Google's IPv4-specific STUN server
-                    "stun:stun4.l.google.com:19302".to_string(),
-                    // Try an alternative STUN server
-                    "stun:stun.stunprotocol.org:3478".to_string(),
-                ],
                 ..Default::default()
             }],
-            ice_candidate_pool_size: 20,
-            ice_transport_policy: webrtc::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy::All,
             ..Default::default()
         }
     }
@@ -412,6 +430,13 @@ impl ConnectionWebRtc {
             username_fragment: None
         }
     }
+
+    pub async fn close(&self) {
+        let _ = self.peer_connection.close().await;
+        if let Some(msg_channel) = self.msg_channel.get() {
+            let _ = msg_channel.close().await;
+        }
+    }
 }
 
 impl Deref for ConnectionWebRtc {
@@ -440,5 +465,114 @@ impl Drop for ConnectionWebRtc {
 
             log::info!(target: "rtc", "Dropped connection to peer {}", peer_id);
         });
+    }
+}
+
+#[cfg(test)]
+pub mod test_webrtc {
+    use std::{sync::Arc, time::Duration};
+
+    use core_services::logger;
+    use futures_util::future::join_all;
+    use schema::value::{device::DeviceType, platform::Platform};
+    use tokio::{spawn, time::{sleep, Sleep}};
+    use webrtc::mdns::conn;
+
+    use crate::{app::{file_system::file::{LocalResource, LocalResourcePath, ResourceType}, nearby::finding_scope::FindingScope, transfer::{session::{TransferSession, TransferType}, target::TransferTarget}}, entities::{device::DeviceInfo, peer::Peer}, network::webrtc::web_rtc::WebRtc, ShellRuntime};
+
+    pub struct MockShellRunTime {}
+    #[async_trait::async_trait]
+    impl ShellRuntime for MockShellRunTime {
+        async fn msg_from_native(&self, event: Vec<u8>) {
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_webrtc() {
+        logger::setup();
+        let workdir = "/Users/tiendang/webrtc-test";
+        let shell_runtime = Arc::new(MockShellRunTime {});
+        let core_request_id = 9;
+        let device = DeviceInfo {
+            platform: Platform::Ios,
+            name: "iPhone Test".to_string(),
+            unique_id: "123123".to_string(),
+            device_type: DeviceType::ApplePhone
+        };
+
+        let peer = Peer {
+            id: "1".to_string(),
+            name: Some("Test".to_string()),
+            avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
+            email: Some("test@test.com".to_string()),
+            device: device
+        };
+
+        let h1 = spawn({
+            let webrtc = Arc::new(WebRtc::new(workdir.to_string()));
+            webrtc.add_scope(FindingScope::Local("171.236.49.57".to_owned())).await;
+            async move {
+                let webrtc_cloned = webrtc.clone();
+                spawn(async move {
+                    webrtc_cloned.start(core_request_id, peer, shell_runtime).await.unwrap();
+                });
+
+                loop {
+                    let any_conn = webrtc.connections.lock().await.iter().next().and_then(|(_, conn)| conn.get().cloned());
+                    if let Some(connection) = any_conn {
+                        log::info!(target: "test", "Connection established");
+                        let test_resource = LocalResource {
+                            order_id: 1,
+                            name: "test".to_string(),
+                            size: 100,
+                            path: LocalResourcePath::LocalPath("/Users/tiendang/test.txt".to_string()),
+                            thumbnail_path: None,
+                            r#type: ResourceType::File
+                        };
+
+                        let test_session = TransferSession {
+                            order_id: 1,
+                            resources: vec![test_resource.clone()],
+                            progress: vec![],
+                            transfer_type: TransferType::Send,
+                            target: TransferTarget::Nearby(connection.peer.clone())
+                        };
+
+                        // connection.send_session(test_session).await;
+                        log::info!(target: "test", "Sent session");
+
+                        connection.send_resource(core_request_id, test_resource).await;
+                    }
+
+                    sleep(Duration::from_millis(100)).await;
+                }
+            }
+        });
+
+        let h2 = spawn(async move {
+            sleep(Duration::from_secs(1)).await;
+            let shell_runtime = Arc::new(MockShellRunTime {});
+            let device = DeviceInfo {
+                platform: Platform::Ios,
+                name: "iPhone Test".to_string(),
+                unique_id: "123123".to_string(),
+                device_type: DeviceType::ApplePhone
+            };
+
+            let peer = Peer {
+                id: "2".to_string(),
+                name: Some("Test".to_string()),
+                avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
+                email: Some("test@test.com".to_string()),
+                device: device
+            };
+            let webrtc = Arc::new(WebRtc::new(workdir.to_string()));
+            webrtc.add_scope(FindingScope::Local("171.236.49.57".to_owned())).await;
+            webrtc.start(core_request_id, peer, shell_runtime).await.unwrap();
+        });
+
+        join_all(vec![h1, h2]).await;
+        // Wait for connection established
+        
     }
 }

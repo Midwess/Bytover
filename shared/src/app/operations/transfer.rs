@@ -2,14 +2,14 @@ use std::future::Future;
 
 use crux_core::capability::Operation;
 use crux_core::Command;
+use schema::devlog::bitbridge::peer_message_body::Response;
+use schema::devlog::bitbridge::PeerMessageBody;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
 use crate::app::file_system::file::LocalResource;
-use crate::app::transfer::finding_scope::FindingScope;
 use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::app::AppRequestBuilder;
-use crate::entities::peer::Peer;
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -17,23 +17,15 @@ use super::{CoreOperation, CoreOperationOutput};
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
-    StartNearbyServer(Peer),
-    StopNearbyServer,
-    UpdateFindingScopes(Vec<FindingScope>),
     SendSession(TransferSession),
-    DownloadResources(u128, Vec<LocalResource>),
+    AnswerSessionRequest(u128, Vec<LocalResource>, String, Response),
     SendResource(u128, LocalResource)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
-pub enum TransferOperationOutput {
-    StartNearbyServer,
-    StopNearbyServer,
-    UpdateFindingScopes,
-    SendSession,
-    ConnectionError(NetworkError),
-    SendResourceProgressUpdate(TransferProgress),
-    DownloadResourceProgressUpdate(TransferProgress)
+pub enum TransferOperationOutput { 
+    TransferResourceProgressUpdate(TransferProgress),
+    TransferCompleted
 }
 
 impl Operation for TransferOperation {
@@ -41,32 +33,11 @@ impl Operation for TransferOperation {
 }
 
 impl TransferOperation {
-    pub fn start_nearby_server(peer: Peer) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StartNearbyServer(peer))).map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::StartNearbyServer) => (),
-            _ => panic!("Mismatch in response type, expected StartNearbyServer, got {:?}", it)
-        })
-    }
-
-    pub fn stop_nearby_server() -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::StopNearbyServer)).map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::StopNearbyServer) => (),
-            _ => panic!("Mismatch in response type, expected StopNearbyServer, got {:?}", it)
-        })
-    }
-
-    pub fn update_finding_scopes(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::UpdateFindingScopes(scopes))).map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::UpdateFindingScopes) => (),
-            _ => panic!("Mismatch in response type, expected UpdateFindingScopes, got {:?}", it)
-        })
-    }
-
     pub fn send_session(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(session))).map(|it| match it {
-            CoreOperationOutput::Transfer(TransferOperationOutput::SendSession) => Ok(()),
-            CoreOperationOutput::Transfer(TransferOperationOutput::ConnectionError(error)) => Err(error),
-            _ => panic!("Mismatch in response type, expected SendSession, got {:?}", it)
+            CoreOperationOutput::Void => Ok(()),
+            CoreOperationOutput::ConnectionError(error) => Err(error),
+            _ => panic!("Mismatch in response type, expected Void, got {:?}", it)
         })
     }
 }

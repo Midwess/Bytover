@@ -8,6 +8,7 @@ use crate::{process_event, ShellRuntime};
 
 use super::database::NativeDatabase;
 use super::local_storage::NativeLocalStorage;
+use super::p2p::P2PNativeExecutor;
 use super::rpc::NativeRpc;
 use super::transfer::TransferNative;
 // Handle the effect comming from the platform
@@ -16,12 +17,14 @@ pub struct NativeExecutor {
     pub rpc: NativeRpc,
     pub database: NativeDatabase,
     pub local_storage: NativeLocalStorage,
-    pub transfer: TransferNative
+    pub transfer: TransferNative,
+    pub p2p: P2PNativeExecutor
 }
 
 impl NativeExecutor {
     pub async fn handle(&self, request_id: u32, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
         self.transfer.update_shell_runtime(&shell_runtime);
+        self.p2p.update_shell_runtime(&shell_runtime);
 
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
@@ -29,7 +32,7 @@ impl NativeExecutor {
                 CoreOperationOutput::Rpc(response)
             }
             CoreOperation::Void => {
-                process_event(&crate::serialize(&AppEvent::Void));
+                process_event(crate::serialize(&AppEvent::Void));
                 CoreOperationOutput::Void
             }
             CoreOperation::Database(database) => {
@@ -41,8 +44,7 @@ impl NativeExecutor {
                 CoreOperationOutput::LocalStorage(response)
             }
             CoreOperation::Transfer(transfer) => {
-                let response = self.transfer.handle(request_id, transfer).await;
-                CoreOperationOutput::Transfer(response)
+                self.transfer.handle(request_id, transfer).await
             }
             CoreOperation::Internet(internet) => match internet {
                 InternetOperation::GetCurrentIpAddress => {
@@ -53,6 +55,9 @@ impl NativeExecutor {
                     }
                 }
             },
+            CoreOperation::P2P(p2p) => {
+                self.p2p.handle(request_id, p2p).await
+            }
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }
     }

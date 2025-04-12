@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
+use crate::network::webrtc::{connection::ConnectionWebRtcErrors, peer::PeerErrors, web_rtc::WebRtcErrors};
+
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
 /// but it's must be detailed enough to be used for debugging (Debug trait)
@@ -13,7 +15,7 @@ pub enum NetworkError {
     #[error("{0}")]
     BadRequest(String),
     // Should signout in this case because user is not authenticated or session is expired
-    #[error("Unauthorized: {0}")]
+    #[error("Unauthorized")]
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
     #[error("Please check your internet connection")]
@@ -45,5 +47,34 @@ impl From<tonic::Status> for NetworkError {
 
             _ => NetworkError::Network(status.message().to_string())
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum DeviceError {
+    #[error("Insufficient storage")]
+    StorageInsufficient(String),
+}
+
+impl From<WebRtcErrors> for NetworkError {
+    fn from(err: WebRtcErrors) -> Self {
+        match err {
+            WebRtcErrors::ConnectionError(e) => NetworkError::Network(e.to_string()),
+            WebRtcErrors::SignallingServerError(e) => NetworkError::Network(e.to_string()),
+            WebRtcErrors::TransferError(e) => NetworkError::Network(e.to_string()),
+            WebRtcErrors::WebRTCServerError(e) => NetworkError::Network(e.to_string()),
+        }
+    }
+}
+
+impl From<ConnectionWebRtcErrors> for NetworkError {
+    fn from(err: ConnectionWebRtcErrors) -> Self {
+        NetworkError::Network(format!("{:?}", err))
+    }
+}
+
+impl From<PeerErrors> for NetworkError {
+    fn from(err: PeerErrors) -> Self {
+        NetworkError::Network(format!("{:?}", err))
     }
 }

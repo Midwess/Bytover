@@ -8,9 +8,5 @@ use crate::entities::peer::Peer;
 
 #[derive(Debug, Clone, Enum, PartialEq, Serialize, Deserialize)]
 pub enum MessageToShell {
-    NewPeer(Peer),
-    PeerLeaved(Peer),
-    SessionRequest(TransferSessionMessage, Peer),
-    SessionProgress(u64, TransferProgress),
     HandleResponse(u32, CoreOperationOutput)
 }

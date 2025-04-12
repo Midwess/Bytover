@@ -1,13 +1,15 @@
 use crate::app::modules::AppModule;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::device::DeviceInfo;
 use core_services::logger;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use serde::{Deserialize, Serialize};
+
+use super::nearby::NearbyEvent;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
@@ -20,7 +22,7 @@ pub struct EnvironmentViewModel {}
 #[derive(Default)]
 pub struct EnvironmentModule {}
 
-#[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum EnvironmentEvent {
     AppLaunched
 }
@@ -44,7 +46,9 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     let di_container = DiContainer::get_instance();
                     di_container.init(workdir_path);
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    di_container.get_authentication_service().update_signin_session(ctx).await;
+                    // di_container.get_authentication_service().update_signin_session(ctx).await;
+                    log::info!(target: "nearby", "Starting");
+                    ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::Launch()))).await;
                 })
                 .then(Command::done())
             }

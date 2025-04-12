@@ -59,7 +59,8 @@ lib = [
     "stunclient",
     "h3ron",
     "geo-types",
-    "sysinfo"
+    "sysinfo",
+    "bytes"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -100,6 +101,7 @@ stunclient = { workspace = true, optional = true }
 h3ron = { workspace = true, optional = true }
 geo-types = { workspace = true, optional = true }
 sysinfo = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

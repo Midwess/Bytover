@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
+use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
 use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
+use shared::app::modules::nearby::NearbyEvent;
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
 use shared::app::operations::database::{
     DatabaseOperation,
@@ -18,10 +20,11 @@ use shared::app::operations::database::{
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
+use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::ResourceSelection;
-use shared::app::transfer::finding_scope::FindingScope;
+use shared::app::nearby::finding_scope::FindingScope;
 use shared::app::transfer::session::{TransferStatus, TransferType};
 use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
@@ -68,6 +71,9 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<InternetOperationOutput>()?;
     gen.register_type::<DeviceOperation>()?;
     gen.register_type::<DeviceOperationOutput>()?;
+    gen.register_type::<P2POperation>()?;
+    gen.register_type::<P2POperationOutput>()?;
+    gen.register_type::<NearbyEvent>()?;
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;
     gen.register_type::<EnvironmentModel>()?;
@@ -79,6 +85,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<DeviceType>()?;
     gen.register_type::<TransferStatus>()?;
     gen.register_type::<TransferType>()?;
+    gen.register_type::<Response>()?;
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;

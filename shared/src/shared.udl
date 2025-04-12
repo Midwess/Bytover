@@ -5,8 +5,8 @@ interface ShellRuntime {
 };
 
 namespace shared {
-  bytes process_event([ByRef] bytes msg);
-  bytes handle_response(u32 id, [ByRef] bytes res);
+  bytes process_event(bytes msg);
+  bytes handle_response(u32 id, bytes res);
   bytes view();
 };
 
@@ -14,5 +14,5 @@ interface NativeProcessor {
   constructor(ShellRuntime shell);
  
   [Async]
-  bytes handle(u32 id, [ByRef] bytes effect);
+  bytes handle(u32 id, bytes effect);
 };

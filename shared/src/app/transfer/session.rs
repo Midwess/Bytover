@@ -36,6 +36,30 @@ impl TransferProgress {
             status: TransferStatus::InProgress
         }
     }
+
+    pub fn progress(resource_order_id: u64, percentage: f64) -> Self {
+        Self {
+            resource_order_id,
+            percentage,
+            status: if percentage == 1.0 { TransferStatus::Success } else { TransferStatus::InProgress }
+        }
+    }
+
+    pub fn success(resource_order_id: u64) -> Self {
+        Self {
+            resource_order_id,
+            percentage: 1.0,
+            status: TransferStatus::Success
+        }
+    }
+
+    pub fn fail(resource_order_id: u64, msg: String) -> Self {
+        Self {
+            resource_order_id,
+            percentage: 0.0,
+            status: TransferStatus::Fail(msg)
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
@@ -71,7 +95,17 @@ impl TransferSession {
         }
     }
 
+    pub fn force_complete(&mut self, msg: String) {
+        self.progress.iter_mut().for_each(|it| {
+            it.status = TransferStatus::Fail(msg.clone());
+        });
+    }
+
     pub fn total_progress(&self) -> f64 {
         self.progress.iter().map(|it| it.percentage).sum::<f64>() / self.progress.len() as f64
+    }
+
+    pub fn is_completed(&self) -> bool {
+        self.progress.iter().all(|it| it.status.is_completed())
     }
 }

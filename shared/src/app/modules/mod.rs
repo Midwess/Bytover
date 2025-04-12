@@ -1,6 +1,7 @@
 pub mod authentication;
 pub mod environment;
 pub mod transfer;
+pub mod nearby;
 
 use crux_core::{App, Command};
 

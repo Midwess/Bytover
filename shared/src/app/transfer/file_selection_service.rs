@@ -31,6 +31,7 @@ impl ResourceTransferSelectionService {
         let mut local_resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
         for selection in selections {
+            log::info!(target: "transfer", "Add resource: {:?}", selection);
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
                 continue;

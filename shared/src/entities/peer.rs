@@ -25,7 +25,7 @@ impl Peer {
 impl From<PeerMessage> for Peer {
     fn from(value: PeerMessage) -> Self {
         Self {
-            id: value.id,
+            id: value.peer_id,
             name: value.name,
             avatar_url: value.avatar_url,
             email: value.email,
@@ -37,7 +37,7 @@ impl From<PeerMessage> for Peer {
 impl From<Peer> for PeerMessage {
     fn from(value: Peer) -> Self {
         Self {
-            id: value.id,
+            peer_id: value.id,
             name: value.name,
             avatar_url: value.avatar_url,
             email: value.email,

@@ -11,6 +11,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
+use tokio_tungstenite::tungstenite::error::UrlError;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
@@ -46,7 +47,10 @@ impl RtcsSignalling {
                 let mut retry_ticker = tokio::time::interval(Duration::from_secs(5));
                 loop {
                     let mut new_server_writer = server_writer.lock().await;
-                    let Ok((ws_stream, _)) = tokio_tungstenite::connect_async(get_signalling_server_ws_url()).await else {
+                    let Ok(Ok((ws_stream, _))) = timeout(
+                        Duration::from_secs(10),
+                        tokio_tungstenite::connect_async(get_signalling_server_ws_url())
+                    ).await else {
                         log::error!(target: "rtc-signalling", "Socket is not connected, retrying...");
                         drop(new_server_writer);
                         retry_ticker.tick().await;
