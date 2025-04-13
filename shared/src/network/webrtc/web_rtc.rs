@@ -78,7 +78,12 @@ impl WebRtc {
         self.shell_runtime.get().expect("Shell runtime is not set")
     }
 
-    pub async fn start(self: &Arc<Self>, core_request_id: u32, peer: Peer, shell_runtime: Arc<dyn ShellRuntime>) -> Result<(), WebRtcErrors> {
+    pub async fn start(
+        self: &Arc<Self>,
+        core_request_id: u32,
+        peer: Peer,
+        shell_runtime: Arc<dyn ShellRuntime>
+    ) -> Result<(), WebRtcErrors> {
         let _ = self.peer.set(peer);
         let _ = self.shell_runtime.set(shell_runtime);
 
@@ -242,7 +247,8 @@ impl WebRtc {
                 let mut current_connections = self.connections.lock().await;
                 if let Some(conn) = current_connections
                     .remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))
-                    .and_then(|conn| conn.get().cloned()) {
+                    .and_then(|conn| conn.get().cloned())
+                {
                     let _ = conn.close().await;
                     log::info!(target: "broadcast", "Peer {:?} left", left_message.id);
                 }
@@ -300,7 +306,9 @@ impl WebRtc {
                 let msg = CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connection.peer.clone()));
                 let _ = current_connections.get(&peer_id).unwrap().set(Arc::new(connection));
                 drop(current_connections);
-                self.shell_runtime().msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg))).await;
+                self.shell_runtime()
+                    .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                    .await;
             }
             Err(e) => {
                 let mut current_connections = self.connections.lock().await;

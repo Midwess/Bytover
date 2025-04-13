@@ -38,8 +38,6 @@ use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
 #[cfg(feature = "lib")]
-use tokio::task::spawn_blocking;
-#[cfg(feature = "lib")]
 use tokio::{spawn, task::JoinHandle};
 
 #[cfg(feature = "lib")]
@@ -118,9 +116,10 @@ impl NativeProcessor {
         });
 
         if let Some(out) = output {
-            return get_tokio_rt().spawn_blocking(move || {
-                handle_response(id, serialize(&out))
-            }).await.unwrap_or_default()
+            return get_tokio_rt()
+                .spawn_blocking(move || handle_response(id, serialize(&out)))
+                .await
+                .unwrap_or_default()
         }
 
         vec![]

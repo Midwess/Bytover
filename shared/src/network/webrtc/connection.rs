@@ -7,15 +7,12 @@ use thiserror::Error;
 use tokio::spawn;
 use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio::task::JoinHandle;
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
 use webrtc::data_channel::{OnCloseHdlrFn, RTCDataChannel};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
@@ -83,7 +80,7 @@ impl ConnectionWebRtc {
     // I assume that, this configuration is more suitable for rule of battery life on Android and iOS
     pub fn setting_engine() -> SettingEngine {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
-        
+
         setting_engine.set_ice_timeouts(
             Some(Duration::from_secs(40)),
             Some(Duration::from_secs(120)),
@@ -108,9 +105,7 @@ impl ConnectionWebRtc {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
-        let api = APIBuilder::new()
-            .with_setting_engine(Self::setting_engine())
-            .build();
+        let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
@@ -193,9 +188,7 @@ impl ConnectionWebRtc {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
-        let api = APIBuilder::new()
-            .with_setting_engine(Self::setting_engine())
-            .build();
+        let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
         if let Err(e) = peer_connection.set_remote_description(offer).await {
@@ -265,7 +258,7 @@ impl ConnectionWebRtc {
         let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.map_err(|e| Box::new(e))?)
+                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.map_err(Box::new)?)
             }
             Ok(None) => {
                 log::error!(target: ns.as_str(), "Data channel receiver closed without receiving data channel");
@@ -374,9 +367,7 @@ impl ConnectionWebRtc {
 
     pub fn create_config() -> RTCConfiguration {
         RTCConfiguration {
-            ice_servers: vec![RTCIceServer {
-                ..Default::default()
-            }],
+            ice_servers: vec![RTCIceServer { ..Default::default() }],
             ..Default::default()
         }
     }
@@ -448,21 +439,29 @@ impl Drop for ConnectionWebRtc {
 
 #[cfg(test)]
 pub mod test_webrtc {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use core_services::logger;
     use futures_util::future::join_all;
-    use schema::value::{device::DeviceType, platform::Platform};
-    use tokio::{spawn, time::{sleep, Sleep}};
-    use webrtc::mdns::conn;
+    use schema::value::device::DeviceType;
+    use schema::value::platform::Platform;
+    use tokio::spawn;
+    use tokio::time::sleep;
 
-    use crate::{app::{file_system::file::{LocalResource, LocalResourcePath, ResourceType}, nearby::finding_scope::FindingScope, transfer::{session::{TransferSession, TransferType}, target::TransferTarget}}, entities::{device::DeviceInfo, peer::Peer}, network::webrtc::web_rtc::WebRtc, ShellRuntime};
+    use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+    use crate::app::nearby::finding_scope::FindingScope;
+    use crate::app::transfer::session::{TransferSession, TransferType};
+    use crate::app::transfer::target::TransferTarget;
+    use crate::entities::device::DeviceInfo;
+    use crate::entities::peer::Peer;
+    use crate::network::webrtc::web_rtc::WebRtc;
+    use crate::ShellRuntime;
 
     pub struct MockShellRunTime {}
     #[async_trait::async_trait]
     impl ShellRuntime for MockShellRunTime {
-        async fn msg_from_native(&self, event: Vec<u8>) {
-        }
+        async fn msg_from_native(&self, event: Vec<u8>) {}
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -483,7 +482,7 @@ pub mod test_webrtc {
             name: Some("Test".to_string()),
             avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
             email: Some("test@test.com".to_string()),
-            device: device
+            device
         };
 
         let h1 = spawn({
@@ -519,7 +518,7 @@ pub mod test_webrtc {
                         // connection.send_session(test_session).await;
                         log::info!(target: "test", "Sent session");
 
-                        connection.send_resource(core_request_id, test_resource).await;
+                        connection.send_resource(core_request_id, test_resource, test_session.order_id).await;
                     }
 
                     sleep(Duration::from_millis(100)).await;
@@ -542,7 +541,7 @@ pub mod test_webrtc {
                 name: Some("Test".to_string()),
                 avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
                 email: Some("test@test.com".to_string()),
-                device: device
+                device
             };
             let webrtc = Arc::new(WebRtc::new(workdir.to_string()));
             webrtc.add_scope(FindingScope::Local("171.236.49.57".to_owned())).await;
@@ -551,6 +550,5 @@ pub mod test_webrtc {
 
         join_all(vec![h1, h2]).await;
         // Wait for connection established
-        
     }
 }

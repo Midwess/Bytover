@@ -6,7 +6,6 @@ use crate::di_container::DiContainer;
 use crate::entities::user::User;
 
 use super::nearby::NearbyEvent;
-use super::transfer::TransferEvent;
 use super::AppModule;
 
 #[derive(Default)]

@@ -1,12 +1,9 @@
 use chrono::Utc;
-use crux_core::Command;
 use futures_util::StreamExt;
-use schema::devlog::bitbridge::peer_message_body::Request;
-use schema::devlog::bitbridge::PeerMessageBody;
 
 use crate::app::modules::nearby::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::device::{DeviceOperation, DeviceOperationOutput};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
@@ -25,7 +22,10 @@ impl NearbyService {
             return;
         };
 
-        ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(current_ip.clone())))).await;
+        ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(
+            current_ip.clone()
+        ))))
+        .await;
 
         log::info!(target: "nearby", "Current ip = {current_ip}");
         let ip_parts: String = current_ip
@@ -107,9 +107,16 @@ impl NearbyService {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     break;
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { request_id, remote_session }) => {
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
+                    request_id,
+                    remote_session
+                }) => {
                     log::info!(target: ns.as_str(), "Received session request from peer: {}", peer.id);
-                    let request = AppEvent::Transfer(TransferEvent::TransferRequest { request_id, remote_session, peer: peer.clone() });
+                    let request = AppEvent::Transfer(TransferEvent::TransferRequest {
+                        request_id,
+                        remote_session,
+                        peer: peer.clone()
+                    });
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::ConnectionError(error) => {

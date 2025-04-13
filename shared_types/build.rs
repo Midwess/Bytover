@@ -9,6 +9,7 @@ use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationMo
 use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
 use shared::app::modules::nearby::NearbyEvent;
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
+use shared::app::nearby::finding_scope::FindingScope;
 use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
@@ -24,7 +25,6 @@ use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::ResourceSelection;
-use shared::app::nearby::finding_scope::FindingScope;
 use shared::app::transfer::session::{TransferStatus, TransferType};
 use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;

@@ -1,7 +1,7 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferProgress, TransferStatus};
+use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
 use core_services::local_storage::file_system::File;
@@ -35,11 +35,11 @@ pub enum DataChannelError {
     #[error("Resource not found")]
     ResourceNotFound,
     #[error("Data channel is closed")]
-    DataChannelClosed,
+    DataChannelClosed(String),
     #[error("Data corrupted")]
     DataCorrupted,
     #[error("Timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed),
+    Timeout(#[from] tokio::time::error::Elapsed)
 }
 
 #[derive(Clone)]
@@ -50,18 +50,29 @@ pub struct DataChannel {
 }
 
 impl DataChannel {
-    pub fn from_channel(
-        data_channel: Arc<RTCDataChannel>,
-        shell_runtime: Arc<dyn ShellRuntime>
-    ) -> Result<Self, DataChannelError> {
+    pub fn data_label(resource_id: u64, session_id: u64) -> String {
+        format!("{}-{}", resource_id, session_id)
+    }
+
+    pub fn from_label(label: &str) -> Result<(u64, u64), DataChannelError> {
+        let parts = label.split('-').collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            return Err(DataChannelError::InvalidLabelFormat(label.to_string()));
+        }
+
+        let resource_id = parts[0].parse::<u64>().map_err(|_| DataChannelError::InvalidLabelFormat(label.to_string()))?;
+        let session_id = parts[1].parse::<u64>().map_err(|_| DataChannelError::InvalidLabelFormat(label.to_string()))?;
+        Ok((resource_id, session_id))
+    }
+
+    pub fn from_channel(data_channel: Arc<RTCDataChannel>, shell_runtime: Arc<dyn ShellRuntime>) -> Result<Self, DataChannelError> {
         data_channel.on_open(Box::new(move || {
             log::info!(target: "nearby", "Data channel opened");
             Box::pin(async move {})
         }));
 
         let label = data_channel.label().to_owned();
-
-        let resource_id = label.parse::<u64>().map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
+        let (resource_id, _) = DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         Ok(Self {
             data_channel,
@@ -72,12 +83,16 @@ impl DataChannel {
 
     pub async fn stream_resource(
         local_resource: &LocalResource,
+        session_id: u64,
         connection: &ConnectionWebRtc,
         shell_runtime: Arc<dyn ShellRuntime>
     ) -> Result<Self, DataChannelError> {
-        let label = local_resource.order_id.to_string();
+        let label = DataChannel::data_label(local_resource.order_id, session_id);
         log::info!(target: "nearby", "Creating data channel: {}", label);
-        let data_channel = connection.peer_connection.create_data_channel(label.as_str(), Some(ConnectionWebRtc::channel_config())).await?;
+        let data_channel = connection
+            .peer_connection
+            .create_data_channel(label.as_str(), Some(ConnectionWebRtc::channel_config()))
+            .await?;
 
         let (open_sender, open_receiver) = oneshot::channel();
         data_channel.on_open(Box::new(move || {
@@ -115,16 +130,29 @@ impl DataChannel {
             }
         };
 
-        // let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-        // let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         let mut received_bytes = 0;
         log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
-        while let Some(next_bytes) = timeout(Duration::from_secs(5), stream.next()).await? {
-            let bytes = next_bytes?;
-            // let written_bytes = file.write(&bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let result = loop {
+            let next_bytes = match timeout(Duration::from_secs(90), stream.next()).await {
+                Ok(Some(Ok(bytes))) => bytes,
+                Ok(None) => match received_bytes > file_size as usize {
+                    true => break Ok(()),
+                    false => break Err(DataChannelError::DataCorrupted)
+                },
+                Ok(Some(Err(e))) => break Err(e),
+                Err(e) => break Err(e.into())
+            };
 
-            received_bytes += bytes.len(); 
+            let written_bytes = file.write(&next_bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+
+            if written_bytes < next_bytes.len() {
+                break Err(DataChannelError::DataCorrupted);
+            }
+
+            received_bytes += written_bytes;
 
             // self.update_progress(
             //     core_request_id,
@@ -132,26 +160,31 @@ impl DataChannel {
             // );
 
             if received_bytes >= file_size as usize {
-                break;
+                break Ok(());
             }
-        }
+        };
 
         log::info!(target: "nearby", "Received bytes final: {} vs {}", received_bytes, file_size);
 
-        if received_bytes < file_size as usize {
-            Err(DataChannelError::DataCorrupted)
+        let percentage = received_bytes as f64 / file_size as f64;
+        if let Err(e) = result {
+            self.update_progress(
+                core_request_id,
+                TransferProgress::fail(self.resource_id, percentage, e.to_string())
+            );
         } else {
-            Ok(())
+            self.update_progress(core_request_id, TransferProgress::progress(self.resource_id, percentage));
         }
+
+        Ok(())
     }
 
     pub fn update_progress(&self, core_request_id: u32, progress: TransferProgress) -> JoinHandle<()> {
         let runtime = self.shell_runtime.clone();
-        runtime
-            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
-                core_request_id,
-                CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
-            )))
+        runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
+            core_request_id,
+            CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
+        )))
     }
 
     pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
@@ -187,7 +220,6 @@ impl DataChannel {
                 let sent_bytes = timeout(Duration::from_secs(5), data_channel.send(&bytes.into())).await??;
 
                 let curr_amount = data_channel.buffered_amount().await;
-                log::info!(target: "nearby", "Buffered amount of {}: {}", order_id, curr_amount);
 
                 if sent_bytes < expected_bytes {
                     Err(DataChannelError::DataCorrupted)
@@ -218,17 +250,9 @@ impl Deref for DataChannel {
     }
 }
 
-impl Drop for DataChannel {
-    fn drop(&mut self) {
-        let channel = self.data_channel.clone();
-        spawn(async move {
-            // let _ = channel.close().await;
-        });
-    }
-}
-
 pub struct RTCStreamChannel {
     receiver: mpsc::Receiver<Result<Vec<u8>, DataChannelError>>,
+    sender: Arc<mpsc::Sender<Result<Vec<u8>, DataChannelError>>>,
     data_channel: Arc<RTCDataChannel>
 }
 
@@ -243,39 +267,47 @@ impl Stream for RTCStreamChannel {
 impl RTCStreamChannel {
     pub fn new(data_channel: Arc<RTCDataChannel>) -> Self {
         let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(2048);
+        let message_sender = Arc::new(message_sender).clone();
 
-        let msg_sender = message_sender.clone();
-        let data_channel_cloned = data_channel.clone();
+        let maybe_sender = Arc::downgrade(&message_sender);
         data_channel.on_message(Box::new(move |message| {
-            let msg_sender = msg_sender.clone();
+            let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Ok(message.data.to_vec())).await;
+                if let Some(sender) = maybe_sender.upgrade() {
+                    let _ = sender.send(Ok(message.data.to_vec())).await;
+                }
             })
         }));
 
-        let msg_sender = message_sender.clone();
+        let maybe_sender = Arc::downgrade(&message_sender);
         data_channel.on_close(Box::new(move || {
-            let msg_sender = msg_sender.clone();
+            let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed)).await;
+                if let Some(sender) = maybe_sender.upgrade() {
+                    let _ = sender.send(Err(DataChannelError::DataChannelClosed("".to_owned()))).await;
+                }
             })
         }));
 
-        let msg_sender = message_sender.clone();
+        let maybe_sender = Arc::downgrade(&message_sender);
         data_channel.on_error(Box::new(move |_err| {
-            let msg_sender = msg_sender.clone();
+            let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
-                let _ = msg_sender.send(Err(DataChannelError::DataChannelClosed)).await;
+                if let Some(sender) = maybe_sender.upgrade() {
+                    let _ = sender.send(Err(DataChannelError::DataChannelClosed(format!("{:?}", _err)))).await;
+                }
             })
         }));
 
         Self {
             receiver: message_receiver,
-            data_channel: data_channel_cloned
+            data_channel,
+            sender: message_sender
         }
     }
 
     pub async fn close(&self) -> bool {
+        self.sender.closed().await;
         self.data_channel.close().await.is_ok()
     }
 }

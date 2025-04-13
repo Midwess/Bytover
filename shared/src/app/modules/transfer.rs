@@ -1,7 +1,7 @@
 use crate::app::file_system::file::LocalResource;
 use crate::app::modules::AppModule;
 use crate::app::transfer::file_selection_service::ResourceSelection;
-use crate::app::transfer::session::{TransferProgress, TransferSession};
+use crate::app::transfer::session::TransferSession;
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
@@ -11,7 +11,7 @@ use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
-use schema::devlog::bitbridge::{TransferRequestMessage, TransferSessionMessage};
+use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -94,7 +94,7 @@ impl AppModule<BitBridge> for TransferModule {
                     .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
 
                 Command::done()
-            } 
+            }
             TransferEvent::StartTransfer { target_id } => {
                 let selected_resources = model.transfer.selected_resources.clone();
                 let transfer_targets = model.transfer.transfer_targets.clone();
@@ -107,7 +107,11 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.transfer(selected_resources, target, it).await;
                 })
             }
-            TransferEvent::TransferRequest { request_id, remote_session, peer } => {
+            TransferEvent::TransferRequest {
+                request_id,
+                remote_session,
+                peer
+            } => {
                 let transfer_service = DiContainer::get_instance().get_transfer_service();
                 Command::new(|it| async move {
                     transfer_service.received_session_request((request_id, remote_session), peer, it).await;

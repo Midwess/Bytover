@@ -1,11 +1,15 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
-use schema::devlog::bitbridge::{peer_message_body::Request, PeerMessageBody, TransferSessionMessage};
+use crux_core::capability::Operation;
+use crux_core::Command;
+use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
+use uniffi::Enum;
 
-use crate::{app::{nearby::finding_scope::FindingScope, AppRequestBuilder}, entities::peer::Peer, errors::NetworkError};
+use crate::app::nearby::finding_scope::FindingScope;
+use crate::app::AppRequestBuilder;
+use crate::entities::peer::Peer;
+use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -22,9 +26,9 @@ pub enum P2POperationOutput {
     PeerDisconnected(),
     ReceivedSessionRequest {
         request_id: String,
-        remote_session: TransferSessionMessage,
+        remote_session: TransferSessionMessage
     },
-    NearbyServerStopped,
+    NearbyServerStopped
 }
 
 impl Operation for P2POperation {

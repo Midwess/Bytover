@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::network::webrtc::{connection::ConnectionWebRtcErrors, peer::PeerErrors, web_rtc::WebRtcErrors};
+use crate::network::webrtc::connection::ConnectionWebRtcErrors;
+use crate::network::webrtc::peer::PeerErrors;
+use crate::network::webrtc::web_rtc::WebRtcErrors;
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
@@ -53,7 +55,7 @@ impl From<tonic::Status> for NetworkError {
 #[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum DeviceError {
     #[error("Insufficient storage")]
-    StorageInsufficient(String),
+    StorageInsufficient(String)
 }
 
 impl From<WebRtcErrors> for NetworkError {
@@ -62,7 +64,7 @@ impl From<WebRtcErrors> for NetworkError {
             WebRtcErrors::ConnectionError(e) => NetworkError::Network(e.to_string()),
             WebRtcErrors::SignallingServerError(e) => NetworkError::Network(e.to_string()),
             WebRtcErrors::TransferError(e) => NetworkError::Network(e.to_string()),
-            WebRtcErrors::WebRTCServerError(e) => NetworkError::Network(e.to_string()),
+            WebRtcErrors::WebRTCServerError(e) => NetworkError::Network(e.to_string())
         }
     }
 }

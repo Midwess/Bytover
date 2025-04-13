@@ -6,12 +6,18 @@ use std::time::Duration;
 use futures_util::future::join_all;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
-    IntroduceRequestMessage, IntroduceResponseMessage, PeerErrorsMessage, PeerMessageBody, TransferRequestMessage, TransferResponseMessage, TransferSessionMessage
+    IntroduceRequestMessage,
+    IntroduceResponseMessage,
+    PeerErrorsMessage,
+    PeerMessageBody,
+    TransferRequestMessage,
+    TransferResponseMessage,
+    TransferSessionMessage
 };
 use thiserror::Error;
+use tokio::sync::{broadcast, OnceCell};
 use tokio::time::timeout;
 use tokio::{select, spawn};
-use tokio::sync::{broadcast, OnceCell};
 
 use crate::app::file_system::file::LocalResource;
 use crate::app::operations::p2p::P2POperationOutput;
@@ -20,7 +26,6 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
-use crate::network::webrtc::message_channel::PeerRequest;
 use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
@@ -48,7 +53,7 @@ pub struct PeerCommunication {
     connection: Arc<ConnectionWebRtc>,
     shell_runtime: Arc<dyn ShellRuntime>,
     data_channel_tx: broadcast::Sender<Arc<DataChannel>>,
-    peer_event_request_id: OnceCell<u32>,
+    peer_event_request_id: OnceCell<u32>
 }
 
 impl PeerCommunication {
@@ -94,7 +99,7 @@ impl PeerCommunication {
             peer,
             connection,
             shell_runtime: shell_runtime.clone(),
-            data_channel_tx,
+            data_channel_tx
         };
 
         me.handle_data_channel();
@@ -165,7 +170,13 @@ impl PeerCommunication {
         Ok(())
     }
 
-    pub async fn answer_session_request(&self, core_request_id: u32, mut out_resources: Vec<LocalResource>, request_id: String, response: Response) -> Result<(), PeerErrors> {
+    pub async fn answer_session_request(
+        &self,
+        core_request_id: u32,
+        mut out_resources: Vec<LocalResource>,
+        request_id: String,
+        response: Response
+    ) -> Result<(), PeerErrors> {
         let mut subscription = self.data_channel_tx.subscribe();
 
         let msg_channel = self.connection.msg_channel.get().unwrap();
@@ -174,11 +185,13 @@ impl PeerCommunication {
             _ => false
         };
 
-        msg_channel.send_and_forget(PeerMessageBody {
-            request_id,
-            request: None,
-            response: Some(response)
-        }).await?;
+        msg_channel
+            .send_and_forget(PeerMessageBody {
+                request_id,
+                request: None,
+                response: Some(response)
+            })
+            .await?;
 
         if !is_accepted {
             return Ok(());
@@ -186,14 +199,12 @@ impl PeerCommunication {
 
         let mut join_handles = Vec::new();
         loop {
-            let data_channel = match timeout(Duration::from_secs(5), subscription.recv()).await {
-                Ok(Ok(data_channel)) => {
-                    data_channel
-                }
+            let data_channel = match timeout(Duration::from_secs(15), subscription.recv()).await {
+                Ok(Ok(data_channel)) => data_channel,
                 Err(e) => {
                     join_all(join_handles).await;
                     return Err(PeerErrors::NoResponseFromPeer);
-                },
+                }
                 Ok(Err(e)) => {
                     return Err(PeerErrors::ErrorWhileReceivingResource(format!("{:?}", e)));
                 }
@@ -213,11 +224,13 @@ impl PeerCommunication {
                         shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                     }
                     Err(e) => {
-                        let progress = TransferProgress::fail(out_resource.order_id, e.to_string());
+                        let progress = TransferProgress::fail(out_resource.order_id, 0.0, e.to_string());
                         let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
                         shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                     }
-                }
+                };
+
+                let _ = data_channel.close().await;
             }));
 
             if out_resources.is_empty() {
@@ -226,16 +239,18 @@ impl PeerCommunication {
         }
 
         join_all(join_handles).await;
-        
+
         Ok(())
     }
 
-    pub async fn send_resource(&self, core_request_id: u32, resource: LocalResource) -> Result<(), PeerErrors> {
-        let data_channel = DataChannel::stream_resource(&resource, &self.connection, self.shell_runtime.clone()).await?;
+    pub async fn send_resource(&self, core_request_id: u32, resource: LocalResource, session_id: u64) -> Result<(), PeerErrors> {
+        let data_channel = DataChannel::stream_resource(&resource, session_id, &self.connection, self.shell_runtime.clone()).await?;
 
         let result = data_channel.start_upload(core_request_id, resource).await;
 
-        log::info!(target: "peer", "Upload result: {:?}", result);
+        if let Err(e) = &result {
+            data_channel.close().await;
+        }
 
         Ok(result?)
     }
@@ -265,7 +280,7 @@ impl Deref for PeerCommunication {
 impl Drop for PeerCommunication {
     fn drop(&mut self) {
         let runtime = self.shell_runtime.clone();
-        if let Some(core_request_id) = self.peer_event_request_id.get().map(|id| *id) {
+        if let Some(core_request_id) = self.peer_event_request_id.get().copied() {
             let leaved_msg = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected());
             log::info!(target: "peer", "Sending leaved message to peer {:?}", self.peer.id());
             let connection = self.connection.clone();

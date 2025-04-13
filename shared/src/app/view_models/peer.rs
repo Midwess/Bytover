@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
-use crate::entities::{device::DeviceInfo, peer::Peer};
+use crate::entities::device::DeviceInfo;
+use crate::entities::peer::Peer;
 
 use super::avatar::AvatarViewModel;
 

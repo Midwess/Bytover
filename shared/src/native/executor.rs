@@ -43,9 +43,7 @@ impl NativeExecutor {
                 let response = self.local_storage.handle(local_storage).await;
                 CoreOperationOutput::LocalStorage(response)
             }
-            CoreOperation::Transfer(transfer) => {
-                self.transfer.handle(request_id, transfer).await
-            }
+            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
             CoreOperation::Internet(internet) => match internet {
                 InternetOperation::GetCurrentIpAddress => {
                     let internet_connection = InternetConnection::new();
@@ -55,9 +53,7 @@ impl NativeExecutor {
                     }
                 }
             },
-            CoreOperation::P2P(p2p) => {
-                self.p2p.handle(request_id, p2p).await
-            }
+            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
             _ => panic!("Native executor doesn't support this effect {:?}", effect)
         }
     }

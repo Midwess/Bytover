@@ -3,7 +3,6 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::bitbridge::PeerMessageBody;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
@@ -19,11 +18,15 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum TransferOperation {
     SendSession(TransferSession),
     AnswerSessionRequest(u128, Vec<LocalResource>, String, Response),
-    SendResource(u128, LocalResource)
+    SendResource {
+        peer_id: u128,
+        resource: LocalResource,
+        session_id: u64
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
-pub enum TransferOperationOutput { 
+pub enum TransferOperationOutput {
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted
 }

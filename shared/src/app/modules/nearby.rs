@@ -1,8 +1,8 @@
 use crate::app::modules::AppModule;
+use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::operations::device::GeoLocation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperation;
-use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
@@ -24,9 +24,7 @@ pub struct NearbyViewModel {
 }
 
 #[derive(Default)]
-pub struct NearbyModule {
-
-}
+pub struct NearbyModule {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum NearbyEvent {
@@ -34,10 +32,7 @@ pub enum NearbyEvent {
     OnLocationUpdated(GeoLocation),
     OnIpAddressUpdated(String),
 
-    UpdateNearbyPeers {
-        new: Vec<Peer>,
-        removed: Vec<Peer>
-    },
+    UpdateNearbyPeers { new: Vec<Peer>, removed: Vec<Peer> },
 
     ClearNearbyPeers
 }
@@ -59,7 +54,7 @@ impl AppModule<BitBridge> for NearbyModule {
                     let nearby_service = DiContainer::get_instance().get_nearby_service();
                     nearby_service.start_service(user, it.clone()).await;
                 })
-            },
+            }
             NearbyEvent::OnIpAddressUpdated(ip_address) => {
                 log::info!(target: "nearby", "Updated ip address {}", ip_address);
                 let finding_scope = FindingScope::Local(ip_address.clone());
@@ -70,7 +65,7 @@ impl AppModule<BitBridge> for NearbyModule {
                 Command::new(|it| async move {
                     let _ = P2POperation::update_finding_scopes(finding_scopes).into_future(it.clone()).await;
                 })
-            },
+            }
             NearbyEvent::OnLocationUpdated(location) => {
                 let finding_scope = FindingScope::nearby_location(location);
                 model.nearby.finding_scopes.retain(|it| !it.is_location());
@@ -79,17 +74,14 @@ impl AppModule<BitBridge> for NearbyModule {
                 Command::new(|it| async move {
                     let _ = P2POperation::update_finding_scopes(finding_scopes).into_future(it).await;
                 })
-            },
-            NearbyEvent::UpdateNearbyPeers {
-                new,
-                removed
-            } => {
+            }
+            NearbyEvent::UpdateNearbyPeers { new, removed } => {
                 model.nearby.peers.retain(|it| !removed.contains(it));
                 model.nearby.peers.extend(new);
                 Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
                 })
-            },
+            }
             NearbyEvent::ClearNearbyPeers => {
                 model.nearby.peers.clear();
                 Command::new(|it| async move {

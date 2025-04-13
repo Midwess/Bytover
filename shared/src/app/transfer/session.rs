@@ -41,7 +41,11 @@ impl TransferProgress {
         Self {
             resource_order_id,
             percentage,
-            status: if percentage == 1.0 { TransferStatus::Success } else { TransferStatus::InProgress }
+            status: if percentage == 1.0 {
+                TransferStatus::Success
+            } else {
+                TransferStatus::InProgress
+            }
         }
     }
 
@@ -53,11 +57,15 @@ impl TransferProgress {
         }
     }
 
-    pub fn fail(resource_order_id: u64, msg: String) -> Self {
-        Self {
-            resource_order_id,
-            percentage: 0.0,
-            status: TransferStatus::Fail(msg)
+    pub fn fail(resource_order_id: u64, percentage: f64, msg: String) -> Self {
+        if percentage == 1.0 {
+            Self::success(resource_order_id)
+        } else {
+            Self {
+                resource_order_id,
+                percentage,
+                status: TransferStatus::Fail(msg)
+            }
         }
     }
 }

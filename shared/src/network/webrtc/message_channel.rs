@@ -6,10 +6,9 @@ use core_services::retry;
 use prost::Message as prost_message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{PeerErrorsMessage, PeerMessageBody};
-use tokio::spawn;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::SendError;
-use tokio::sync::{broadcast, mpsc, Mutex};
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 use uuid::Uuid;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
@@ -70,7 +69,7 @@ impl DerefMut for PeerRequest {
 pub struct MessageChannel {
     msg_channel: Arc<RTCDataChannel>,
     msg_response_broadcast: broadcast::Sender<Result<(String, Response), String>>,
-    msg_request_broadcast: broadcast::Sender<Result<(String, Request), String>>,
+    msg_request_broadcast: broadcast::Sender<Result<(String, Request), String>>
 }
 
 impl MessageChannel {
@@ -88,8 +87,8 @@ impl MessageChannel {
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 Box::pin(async move {
                     log::info!(target: "broadcast", "Connection closed");
-                    let _ = msg_request_broadcast.send(Err(format!("Channel closed")));
-                    let _ = msg_response_broadcast_cloned.send(Err(format!("Channel closed")));
+                    let _ = msg_request_broadcast.send(Err("Channel closed".to_string()));
+                    let _ = msg_response_broadcast_cloned.send(Err("Channel closed".to_string()));
                 })
             }));
 
@@ -120,28 +119,22 @@ impl MessageChannel {
             if let Some(response) = msg.response {
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 return Box::pin(async move {
-                    let result = retry!(
-                        retries = 10,
-                        delay = Duration::from_millis(50),
-                        |_e: &SendError<_>| true,
-                        { msg_response_broadcast_cloned.send(Ok((msg.request_id.clone(), response.clone()))) }
-                    );
+                    let result = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
+                        msg_response_broadcast_cloned.send(Ok((msg.request_id.clone(), response.clone())))
+                    });
 
                     if let Err(e) = result {
                         log::error!(target: "rtc", "Failed to broadcast response message {:?}", e);
                     }
-                }); 
+                });
             }
 
             if let Some(request) = msg.request {
                 let msg_request_broadcast = msg_request_broadcast_cloned.clone();
                 return Box::pin(async move {
-                    let result = retry!(
-                        retries = 10,
-                        delay = Duration::from_millis(50),
-                        |_e: &SendError<_>| true,
-                        { msg_request_broadcast.send(Ok((msg.request_id.clone(), request.clone()))) }
-                    );
+                    let result = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
+                        msg_request_broadcast.send(Ok((msg.request_id.clone(), request.clone())))
+                    });
 
                     if let Err(e) = result {
                         log::error!(target: "rtc", "Failed to broadcast request message {:?}", e);
@@ -155,7 +148,7 @@ impl MessageChannel {
         Self {
             msg_channel,
             msg_response_broadcast,
-            msg_request_broadcast,
+            msg_request_broadcast
         }
     }
 
@@ -169,18 +162,16 @@ impl MessageChannel {
     pub async fn close(&self) {
         let _ = self.msg_channel.close().await;
         let _ = self.msg_request_broadcast.send(Err("Connection closed".to_string()));
-        let _  = self.msg_response_broadcast.send(Err("Connection closed".to_string()));
+        let _ = self.msg_response_broadcast.send(Err("Connection closed".to_string()));
     }
 
     pub async fn next_request(&self) -> Result<PeerRequest, ConnectionWebRtcErrors> {
         let mut subscription = self.msg_request_broadcast.subscribe();
         let result = subscription.recv().await;
         match result {
-            Ok(Ok((request_id, request))) => {
-                Ok(PeerRequest::new(request, request_id, self.msg_channel.clone()))
-            }
+            Ok(Ok((request_id, request))) => Ok(PeerRequest::new(request, request_id, self.msg_channel.clone())),
             Ok(Err(e)) => Err(ConnectionWebRtcErrors::ConnectionCorrupted),
-            Err(e) => Err(ConnectionWebRtcErrors::ConnectionCorrupted),
+            Err(e) => Err(ConnectionWebRtcErrors::ConnectionCorrupted)
         }
     }
 
