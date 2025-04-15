@@ -1,6 +1,7 @@
 pub mod authentication;
 pub mod file_system;
 pub mod modules;
+pub mod nearby;
 pub mod operations;
 pub mod system;
 pub mod transfer;
@@ -14,6 +15,7 @@ use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::Capability;
 use crux_core::{App, Command};
 use modules::authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
+use modules::nearby::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use operations::CoreOperation;
@@ -27,21 +29,24 @@ pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitB
 pub struct BitBridge {
     environment: EnvironmentModule,
     authentication: AuthenticationModule,
-    transfer: TransferModule
+    transfer: TransferModule,
+    nearby: NearbyModule
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
     environment: EnvironmentModel,
     authentication: AuthenticationModel,
-    transfer: TransferModel
+    transfer: TransferModel,
+    nearby: NearbyModel
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppViewModel {
     environment: Option<EnvironmentViewModel>,
     authentication: Option<AuthenticationViewModel>,
-    transfer: Option<TransferViewModel>
+    transfer: Option<TransferViewModel>,
+    nearby: Option<NearbyViewModel>
 }
 
 // The capability in CRUX has been deprecated by command API
@@ -67,11 +72,12 @@ pub struct AppEffect {
     capabilities: AppCapabilities<AppEvent>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AppEvent {
     Environment(EnvironmentEvent),
     Authentication(AuthenticationEvent),
     Transfer(TransferEvent),
+    Nearby(NearbyEvent),
     Void
 }
 
@@ -89,6 +95,7 @@ impl App for BitBridge {
             AppEvent::Environment(event) => self.environment.update(event, model, caps),
             AppEvent::Authentication(event) => self.authentication.update(event, model, caps),
             AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
+            AppEvent::Nearby(event) => self.nearby.update(event, model, caps),
             AppEvent::Void => Command::done()
         }
     }
@@ -97,7 +104,8 @@ impl App for BitBridge {
         AppViewModel {
             environment: Some(self.environment.view(model)),
             authentication: Some(self.authentication.view(model)),
-            transfer: Some(self.transfer.view(model))
+            transfer: Some(self.transfer.view(model)),
+            nearby: Some(self.nearby.view(model))
         }
     }
 }

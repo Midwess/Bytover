@@ -38,7 +38,7 @@ impl AuthenticationService {
         let url = match RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await {
             Ok(url) => url,
             Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {}", e);
+                log::error!(target: "auth", "Failed to get sign in url: {:?}", e);
                 return;
             }
         };

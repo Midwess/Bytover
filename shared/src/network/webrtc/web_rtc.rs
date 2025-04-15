@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use core_services::utils::number::ExponentialGrowth;
@@ -12,15 +12,17 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use crate::app::file_system::file::LocalResource;
-use crate::app::transfer::finding_scope::FindingScope;
-use crate::app::transfer::session::TransferSession;
+use crate::app::nearby::finding_scope::FindingScope;
+use crate::app::operations::p2p::P2POperationOutput;
+use crate::app::operations::CoreOperationOutput;
 use crate::entities::peer::Peer;
-use crate::ShellRuntime;
+use crate::native::message_to_shell::MessageToShell;
+use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::peer::{PeerCommunication, PeerErrors};
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
+use super::throughput::ThroughputController;
 
 #[derive(Debug, Error)]
 pub enum WebRtcErrors {
@@ -38,11 +40,12 @@ pub struct WebRtc {
     scopes: Arc<Mutex<Vec<FindingScope>>>,
     broadcast_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     peer: OnceCell<Peer>,
-    connections: Mutex<HashMap<u128, OnceCell<PeerCommunication>>>,
+    pub(crate) connections: Mutex<HashMap<u128, OnceCell<Arc<PeerCommunication>>>>,
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
-    workdir: String
+    workdir: String,
+    throughput_controller: Arc<ThroughputController>
 }
 
 impl Default for WebRtc {
@@ -52,6 +55,10 @@ impl Default for WebRtc {
 }
 
 impl WebRtc {
+    pub fn throughput_controller() -> Arc<ThroughputController> {
+        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10)))
+    }
+
     pub fn new(workdir: String) -> Self {
         Self {
             peer: OnceCell::new(),
@@ -61,7 +68,8 @@ impl WebRtc {
             connections: Mutex::new(HashMap::new()),
             signalling_client: OnceCell::new(),
             handle_signalling_message_join: Arc::new(Mutex::new(None)),
-            workdir
+            workdir,
+            throughput_controller: Self::throughput_controller()
         }
     }
 
@@ -77,16 +85,22 @@ impl WebRtc {
         self.shell_runtime.get().expect("Shell runtime is not set")
     }
 
-    pub async fn start(self: &Arc<Self>, peer: Peer, shell_runtime: Arc<dyn ShellRuntime>) -> Result<(), WebRtcErrors> {
+    pub async fn start(
+        self: &Arc<Self>,
+        core_request_id: u32,
+        peer: Peer,
+        shell_runtime: Arc<dyn ShellRuntime>
+    ) -> Result<(), WebRtcErrors> {
         let _ = self.peer.set(peer);
         let _ = self.shell_runtime.set(shell_runtime);
 
+        log::info!(target: "rtc", "Starting signalling client");
         let signalling_client = RtcsSignalling::start().await?;
         let _ = self.signalling_client.set(Arc::new(signalling_client));
 
         self.broadcast().await?;
 
-        self.handle_signalling_message().await?;
+        self.handle_nearby_event(core_request_id).await?;
 
         Ok(())
     }
@@ -147,160 +161,134 @@ impl WebRtc {
         Ok(())
     }
 
-    pub async fn handle_signalling_message(self: &Arc<Self>) -> Result<(), WebRtcErrors> {
-        if let Some(handle) = self.handle_signalling_message_join.lock().await.take() {
-            handle.abort();
-        }
-
-        let self_clone = self.clone();
-        *self.handle_signalling_message_join.lock().await = Some(spawn(async move {
-            let mut subscription = self_clone.signalling_client.get().unwrap().subscribe();
-            while let Ok(message) = subscription.recv().await {
-                let my_id = self_clone.id();
-                let peer_id = message.from_id_number();
-                if let Some(to_id) = message.to_id_number() {
-                    if to_id != my_id {
-                        continue;
-                    }
-                }
-
-                let Some(from_scope) = message.from_scope.and_then(FindingScope::from_string) else {
-                    log::error!(target: "broadcast", "No from scope found");
-                    continue;
-                };
-
-                if message.join.is_some() {
-                    if peer_id <= my_id {
-                        continue;
-                    }
-
-                    let mut current_connections = self_clone.connections.lock().await;
-                    if current_connections.contains_key(&peer_id) {
-                        continue;
-                    }
-
-                    current_connections.insert(peer_id, OnceCell::new());
-
-                    let self_clone = self_clone.clone();
-                    let peer = self_clone.peer().clone();
-                    spawn(async move {
-                        let connect_result = ConnectionWebRtc::offer(
-                            from_scope,
-                            peer,
-                            peer_id,
-                            self_clone.signalling_client.get().unwrap().clone(),
-                            self_clone.shell_runtime().clone(),
-                            self_clone.workdir.clone()
-                        )
-                        .await;
-
-                        self_clone.handle_connection(connect_result, peer_id).await;
-                    });
-
-                    continue;
-                }
-
-                if let Some(offer) = message.offer {
-                    if peer_id >= my_id {
-                        log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject offer", peer_id, my_id);
-                        continue;
-                    }
-
-                    let mut current_connections = self_clone.connections.lock().await;
-                    if current_connections.contains_key(&peer_id) {
-                        continue;
-                    }
-
-                    current_connections.insert(peer_id, OnceCell::new());
-
-                    let self_clone = self_clone.clone();
-                    spawn(async move {
-                        let from_scope = from_scope.clone();
-                        match RTCSessionDescription::offer(offer.sdp) {
-                            Ok(desc) => {
-                                let connection = ConnectionWebRtc::accept_offer(
-                                    from_scope,
-                                    self_clone.peer().clone(),
-                                    peer_id,
-                                    desc,
-                                    self_clone.signalling_client.get().unwrap().clone(),
-                                    self_clone.shell_runtime().clone(),
-                                    self_clone.workdir.clone()
-                                )
-                                .await;
-                                self_clone.handle_connection(connection, peer_id).await;
-                            }
-                            Err(e) => {
-                                log::error!(target: "broadcast", "Error creating session description: {:?}", e);
-                                let mut current_connections = self_clone.connections.lock().await;
-                                current_connections.remove(&peer_id);
-                            }
-                        }
-                    });
-
-                    continue;
-                }
-
-                if let Some(left_message) = message.left_message {
-                    let mut current_connections = self_clone.connections.lock().await;
-                    current_connections.remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"));
+    pub async fn handle_nearby_event(self: &Arc<Self>, core_request_id: u32) -> Result<(), WebRtcErrors> {
+        let mut subscription = self.signalling_client.get().unwrap().subscribe();
+        while let Ok(message) = subscription.recv().await {
+            let my_id = self.id();
+            let peer_id = message.from_id_number();
+            if let Some(to_id) = message.to_id_number() {
+                if to_id != my_id {
                     continue;
                 }
             }
 
-            log::info!(target: "broadcast", "Unsubscribed from signalling messages");
-        }));
+            let Some(from_scope) = message.from_scope.and_then(FindingScope::from_string) else {
+                log::error!(target: "broadcast", "No from scope found");
+                continue;
+            };
+
+            if message.join.is_some() {
+                if peer_id <= my_id {
+                    continue;
+                }
+
+                let mut current_connections = self.connections.lock().await;
+                if current_connections.contains_key(&peer_id) {
+                    continue;
+                }
+
+                current_connections.insert(peer_id, OnceCell::new());
+
+                let peer = self.peer().clone();
+                let self_clone = self.clone();
+                spawn(async move {
+                    let connect_result = ConnectionWebRtc::offer(
+                        from_scope,
+                        peer,
+                        peer_id,
+                        self_clone.signalling_client.get().unwrap().clone(),
+                        self_clone.shell_runtime().clone(),
+                        self_clone.throughput_controller.clone(),
+                        self_clone.workdir.clone()
+                    )
+                    .await;
+
+                    self_clone.handle_connection(core_request_id, connect_result, peer_id).await;
+                });
+
+                continue;
+            }
+
+            if let Some(offer) = message.offer {
+                if peer_id >= my_id {
+                    log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject offer", peer_id, my_id);
+                    continue;
+                }
+
+                let mut current_connections = self.connections.lock().await;
+                if current_connections.contains_key(&peer_id) {
+                    continue;
+                }
+
+                current_connections.insert(peer_id, OnceCell::new());
+
+                let self_clone = self.clone();
+                spawn(async move {
+                    let from_scope = from_scope.clone();
+                    match RTCSessionDescription::offer(offer.sdp) {
+                        Ok(desc) => {
+                            let connection = ConnectionWebRtc::accept_offer(
+                                from_scope,
+                                self_clone.peer().clone(),
+                                peer_id,
+                                desc,
+                                self_clone.signalling_client.get().unwrap().clone(),
+                                self_clone.shell_runtime().clone(),
+                                self_clone.throughput_controller.clone(),
+                                self_clone.workdir.clone()
+                            )
+                            .await;
+
+                            self_clone.handle_connection(core_request_id, connection, peer_id).await;
+                        }
+                        Err(e) => {
+                            log::error!(target: "broadcast", "Error creating session description: {:?}", e);
+                            let mut current_connections = self_clone.connections.lock().await;
+                            current_connections.remove(&peer_id);
+                        }
+                    }
+                });
+
+                continue;
+            }
+
+            if let Some(left_message) = message.left_message {
+                let mut current_connections = self.connections.lock().await;
+                if let Some(conn) = current_connections
+                    .remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))
+                    .and_then(|conn| conn.get().cloned())
+                {
+                    let _ = conn.close().await;
+                    log::info!(target: "broadcast", "Peer {:?} left", left_message.id);
+                }
+
+                continue;
+            }
+        }
+
+        log::info!(target: "broadcast", "Unsubscribed from signalling messages");
 
         Ok(())
     }
 
-    pub async fn send_session(&self, session: TransferSession) -> Result<(), WebRtcErrors> {
-        let Some(peer_id) = session.peer_id() else {
-            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+    pub async fn get_connection(&self, peer_id: u128) -> Result<Weak<PeerCommunication>, WebRtcErrors> {
+        let current_connections = self.connections.lock().await;
+        let Some(connection) = current_connections.get(&peer_id) else {
+            log::error!(target: "broadcast", "Connection not found for peer {:?}", peer_id);
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound))
         };
 
-        let mut current_connections = self.connections.lock().await;
-        let Some(connection) = current_connections.get_mut(&peer_id) else {
-            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
+        let Some(connection) = connection.get() else {
+            log::error!(target: "broadcast", "Connection not yet available for peer {:?}", peer_id);
+            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound))
         };
 
-        let peer_communication = connection.get_mut().unwrap();
-        peer_communication.send_session(session).await?;
-
-        Ok(())
-    }
-
-    pub async fn send_resource(&self, peer_id: u128, core_request_id: u32, resource: LocalResource) -> Result<(), WebRtcErrors> {
-        let mut current_connections = self.connections.lock().await;
-        let Some(connection) = current_connections.get_mut(&peer_id) else {
-            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
-        };
-
-        let peer_communication = connection.get_mut().unwrap();
-        peer_communication.send_resource(core_request_id, resource).await?;
-
-        Ok(())
-    }
-
-    pub async fn download_resource(
-        &self,
-        peer_id: u128,
-        core_request_id: u32,
-        resources: Vec<LocalResource>
-    ) -> Result<(), WebRtcErrors> {
-        let mut current_connections = self.connections.lock().await;
-        let Some(connection) = current_connections.get_mut(&peer_id) else {
-            return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound));
-        };
-
-        let peer_communication = connection.get_mut().unwrap();
-        peer_communication.download_resource(core_request_id, resources).await?;
-
-        Ok(())
+        Ok(Arc::downgrade(connection))
     }
 
     pub async fn handle_connection(
         self: &Arc<Self>,
+        core_request_id: u32,
         connect_result: Result<PeerCommunication, ConnectionWebRtcErrors>,
         peer_id: u128
     ) {
@@ -313,7 +301,10 @@ impl WebRtc {
                         let self_clone = self_clone.clone();
                         Box::pin(async move {
                             let mut current_connections = self_clone.connections.lock().await;
-                            current_connections.remove(&peer_id);
+                            if let Some(conn) = current_connections.remove(&peer_id).and_then(|conn| conn.get().cloned()) {
+                                let _ = conn.close().await;
+                            }
+
                             log::info!(target: "broadcast", "Removed connection for peer {:?}", peer_id);
                         })
                     })
@@ -321,7 +312,12 @@ impl WebRtc {
 
                 let peer_id = connection.peer_id;
                 let current_connections = self.connections.lock().await;
-                let _ = current_connections.get(&peer_id).unwrap().set(connection);
+                let msg = CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connection.peer.clone()));
+                let _ = current_connections.get(&peer_id).unwrap().set(Arc::new(connection));
+                drop(current_connections);
+                self.shell_runtime()
+                    .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                    .await;
             }
             Err(e) => {
                 let mut current_connections = self.connections.lock().await;

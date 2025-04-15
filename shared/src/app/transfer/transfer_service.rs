@@ -1,5 +1,6 @@
 use futures_util::StreamExt;
-use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
+use schema::devlog::bitbridge::peer_message_body::Response;
+use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
@@ -26,17 +27,7 @@ impl TransferService {
         Self {}
     }
 
-    pub async fn transfer(
-        &self,
-        mut selected_resources: Vec<LocalResource>,
-        transfer_targets: Vec<TransferTarget>,
-        target_id: String,
-        cmd: AppCommandContext
-    ) {
-        let Some(transfer_target) = transfer_targets.iter().find(|it| it.id() == target_id) else {
-            return;
-        };
-
+    pub async fn transfer(&self, mut selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
         if selected_resources.is_empty() {
             return;
         }
@@ -57,6 +48,7 @@ impl TransferService {
         }
 
         let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
+        log::info!(target: "transfer", "Order id: {}", order_id);
         let transfer_session = TransferSession {
             order_id,
             progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
@@ -65,45 +57,57 @@ impl TransferService {
             target: transfer_target.clone()
         };
 
-        let _ = TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await;
+        if let Err(error) = TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await {
+            log::error!(target: "transfer", "Failed to send session to target {:?}: {:?}", transfer_target.id(), error);
+            return;
+        }
 
         let mut sorted_resources: Vec<_> = transfer_session.resources.iter().collect();
         sorted_resources.sort_by(|a, b| a.size.cmp(&b.size));
 
-        let resources = sorted_resources;
+        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target.id());
 
-        for resource in resources {
+        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            new: vec![transfer_session.clone()],
+            removed: vec![]
+        }));
+
+        for resource in sorted_resources {
             let peer_id = transfer_target.id().parse::<u128>().unwrap_or(0);
-            let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendResource(
+            let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendResource {
                 peer_id,
-                resource.clone()
-            )));
+                resource: resource.clone(),
+                session_id: transfer_session.order_id
+            }));
+
             while let Some(CoreOperationOutput::Transfer(transfer_output)) = stream.next().await {
                 match transfer_output {
-                    TransferOperationOutput::SendResourceProgressUpdate(progress) => {
-                        log::info!(target: "transfer", "Transfer resource: {:?}", progress);
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         if progress.status.is_completed() {
                             break;
                         }
                     }
-                    _ => {
+                    other => {
+                        log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
                         break;
                     }
                 }
             }
         }
 
-        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            new: vec![transfer_session],
-            removed: vec![]
-        }));
+        log::info!(target: "transfer", "Transfer session completed");
     }
 
-    pub async fn received_session_request(&self, request: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
+    pub async fn received_session_request(
+        &self,
+        (request_id, remote_session): (String, TransferSessionMessage),
+        peer: Peer,
+        cmd: AppCommandContext
+    ) {
         let peer_id = peer.id();
         let mut resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        for resource_request in request.resources {
+        for resource_request in remote_session.resources {
             let thumbnail_path = match resource_request.thumbnail_png {
                 Some(thumbnail_png) => {
                     let thumbnail_path = format!("{}/thumbnails/{}.png", workdir, resource_request.order_id);
@@ -120,7 +124,7 @@ impl TransferService {
             resources.push(LocalResource {
                 path: LocalResourcePath::LocalPath(format!(
                     "{}/sessions/{}/{}/{}",
-                    workdir, request.order_id, resource_request.order_id, resource_request.name
+                    workdir, remote_session.order_id, resource_request.order_id, resource_request.name
                 )),
                 thumbnail_path,
                 r#type: ResourceType::from(
@@ -132,8 +136,8 @@ impl TransferService {
             });
         }
 
-        let transfer_session = TransferSession {
-            order_id: request.order_id,
+        let mut transfer_session = TransferSession {
+            order_id: remote_session.order_id,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
             resources: resources.clone(),
             transfer_type: TransferType::Receive,
@@ -141,22 +145,43 @@ impl TransferService {
         };
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            new: vec![transfer_session],
+            new: vec![transfer_session.clone()],
             removed: vec![]
         }));
 
-        // start download here
-        let request = CoreOperation::Transfer(TransferOperation::DownloadResources(peer_id, resources));
-        let mut stream = cmd.stream_from_shell(request);
+        let response = Response::TransferResponse(TransferResponseMessage {});
+        let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest(
+            peer_id, resources, request_id, response
+        ));
+        let mut stream = cmd.stream_from_shell(response);
 
-        while let Some(CoreOperationOutput::Transfer(transfer_output)) = stream.next().await {
+        while let Some(transfer_output) = stream.next().await {
             match transfer_output {
-                TransferOperationOutput::DownloadResourceProgressUpdate(progress) => {
-                    log::info!(target: "transfer", "Download resource: {:?}", progress);
-                }
-                _ => {
+                CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
+                        if progress.status.is_completed() {
+                            log::info!(target: "transfer", "Resource {:?} completed with status {:?}", progress.resource_order_id, progress.status);
+                        }
+
+                        transfer_session.update_progress(progress);
+                    }
+                    _ => {
+                        continue;
+                    }
+                },
+                CoreOperationOutput::ConnectionError(error) => {
+                    transfer_session.force_complete(format!("Connection error: {:?}", error));
+                    log::error!(target: "transfer", "Connection error: {:?}", error);
                     break;
                 }
+                _ => {
+                    continue;
+                }
+            }
+
+            if transfer_session.is_completed() {
+                log::info!(target: "transfer", "Transfer session completed");
+                break;
             }
         }
     }

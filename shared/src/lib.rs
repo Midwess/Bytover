@@ -37,6 +37,8 @@ use instrument::Instrument;
 use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
+#[cfg(feature = "lib")]
+use tokio::{spawn, task::JoinHandle};
 
 #[cfg(feature = "lib")]
 use std::sync::Arc;
@@ -57,8 +59,14 @@ pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
 #[cfg(feature = "lib")]
 #[async_trait::async_trait]
-pub trait ShellRuntime: Send + Sync {
+pub trait ShellRuntime: Send + Sync + 'static {
     async fn msg_from_native(&self, event: Vec<u8>);
+    fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<()> {
+        let self_clone = self.clone();
+        spawn(async move {
+            self_clone.msg_from_native(event).await;
+        })
+    }
 }
 
 // NativeProcessor implementation
@@ -73,7 +81,7 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     match TOKIO_RT.get() {
         Some(rt) => rt,
         None => {
-            let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap();
+            let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
             TOKIO_RT.set(rt).unwrap();
             TOKIO_RT.get().expect("Tokio runtime not initialized")
         }
@@ -93,19 +101,28 @@ impl NativeProcessor {
         }
     }
 
-    pub async fn handle(&self, id: u32, effect: &[u8]) -> Vec<u8> {
+    pub async fn handle(&self, id: u32, effect: Vec<u8>) -> Vec<u8> {
         let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(effect, options);
+        let mut deser = bincode::Deserializer::from_slice(&effect, options);
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
 
         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
-        let output = get_tokio_rt().block_on(async {
-            let result = self.native_executor.handle(id, effect, self.shell.clone()).await;
-            result
+        let mut output = None;
+        tokio_scoped::scoped(get_tokio_rt().handle()).scope(|scope| {
+            scope.spawn(async {
+                output = Some(self.native_executor.handle(id, effect, self.shell.clone()).await);
+            });
         });
 
-        handle_response(id, &serialize(&output))
+        if let Some(out) = output {
+            return get_tokio_rt()
+                .spawn_blocking(move || handle_response(id, serialize(&out)))
+                .await
+                .unwrap_or_default()
+        }
+
+        vec![]
     }
 }
 
@@ -118,13 +135,13 @@ lazy_static! {
 }
 
 #[cfg(feature = "lib")]
-pub fn process_event(msg: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.process_event(msg).unwrap_or_default()
+pub fn process_event(msg: Vec<u8>) -> Vec<u8> {
+    CORE_BRIDGE.process_event(&msg).unwrap_or_default()
 }
 
 #[cfg(feature = "lib")]
-pub fn handle_response(id: u32, res: &[u8]) -> Vec<u8> {
-    CORE_BRIDGE.handle_response(id, res).unwrap_or_default()
+pub fn handle_response(id: u32, res: Vec<u8>) -> Vec<u8> {
+    CORE_BRIDGE.handle_response(id, &res).unwrap_or_default()
 }
 
 #[cfg(feature = "lib")]

@@ -1086,9 +1086,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61dac84819c6588b558454b194026eb1f09c293b9036ae9b159e74e73ab6cf9"
+checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 dependencies = [
  "serde",
 ]
@@ -1555,9 +1555,9 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 
 [[package]]
 name = "crux_core"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2222782d83d1851d16151ca5aaf7a750c5f7825c71a3ae55987f02a24e75942"
+checksum = "11947b1345c8326218f20713ea1610087e885196efa3098361b8eb729fb89e8f"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1575,9 +1575,9 @@ dependencies = [
 
 [[package]]
 name = "crux_macros"
-version = "0.4.6"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e985c4d38a49848783835f03dcb4d0760021eb62099a1d67a40402baf3863880"
+checksum = "db73187832796313ada15f7534f7d9cbaa85aab8ac460022c55264ce4b7dd1cd"
 dependencies = [
  "darling",
  "heck 0.5.0",
@@ -5202,8 +5202,10 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
+ "bytes",
  "chrono",
  "core-services",
  "crux_core",
@@ -5587,9 +5589,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb"
-version = "2.2.0"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "363c7c2c8ef56a48dd6decbb2bd3193053599b1fcf31ab7d06c8bebb44f4f255"
+checksum = "cd369a114a892aa1d0851d743f35c4c48672d6b0fb5aaf2b3e4dcacfac68a070"
 dependencies = [
  "arrayvec",
  "async-channel",
@@ -5628,9 +5630,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-core"
-version = "2.2.0"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13fc66ca59645fc4a019ee2428325ed101f54fc54904ef250a98e28fc5f98eda"
+checksum = "f4a5383db5d230e9a0c2481342e71349d4a9efc52c37ffe60e6756953246a690"
 dependencies = [
  "addr",
  "affinitypool",

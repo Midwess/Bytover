@@ -5,7 +5,7 @@ use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::user::User;
 
-use super::transfer::TransferEvent;
+use super::nearby::NearbyEvent;
 use super::AppModule;
 
 #[derive(Default)]
@@ -21,7 +21,7 @@ pub struct AuthenticationViewModel {
     pub user: Option<User>
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum AuthenticationEvent {
     SignIn,
     SignUp,
@@ -54,7 +54,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
             AuthenticationEvent::OnSignInSuccess { user } => {
                 model.authentication.user.replace(user);
                 Command::new(|ctx| async move {
-                    ctx.send_event(AppEvent::Transfer(TransferEvent::Launched()));
+                    ctx.send_event(AppEvent::Nearby(NearbyEvent::Launch()));
                 })
             }
         }

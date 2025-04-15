@@ -52,7 +52,7 @@ impl FindingScope {
         // Get all neighbors arround the center cell
         let Ok(k_ring) = center.grid_ring_unsafe(1) else {
             // If we can't get neighbors, just return the center cell
-            return vec![Self::Local(
+            return vec![Self::Location(
                 center.to_string()
             )];
         };
@@ -60,7 +60,7 @@ impl FindingScope {
         let neighbors: Vec<H3Cell> = k_ring.into_iter().filter(|cell| *cell != center).collect();
 
         let Ok(center_coord) = center.to_coordinate() else {
-            return vec![Self::Local(
+            return vec![Self::Location(
                 center.to_string()
             )];
         };
@@ -150,8 +150,12 @@ impl FindingScope {
         offset_seconds / 3600
     }
 
+    pub fn is_local_network_only(&self) -> bool {
+        matches!(self, FindingScope::Local(_) | FindingScope::Location(_))
+    }
+
     pub fn is_local(&self) -> bool {
-        matches!(self, FindingScope::Local(_)) || matches!(self, FindingScope::Location(_))
+        matches!(self, FindingScope::Local(_))
     }
 
     pub fn is_location(&self) -> bool {

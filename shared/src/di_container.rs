@@ -10,13 +10,14 @@ use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
 use crate::app::authentication::service::AuthenticationService;
+use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
-use crate::app::transfer::nearby::NearbyService;
 use crate::app::transfer::transfer_service::TransferService;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
 use crate::native::local_storage::NativeLocalStorage;
+use crate::native::p2p::P2PNativeExecutor;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::webrtc::web_rtc::WebRtc;
@@ -31,7 +32,8 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Surreal<Any>>>>,
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>,
-    workdir: OnceCell<String>
+    workdir: OnceCell<String>,
+    nearby_service: OnceCell<NearbyService>
 }
 
 impl DiContainer {
@@ -43,7 +45,8 @@ impl DiContainer {
                     db: OnceCell::new(),
                     auth_service: OnceCell::new(),
                     auth_server: OnceCell::new(),
-                    workdir: OnceCell::new()
+                    workdir: OnceCell::new(),
+                    nearby_service: OnceCell::new()
                 };
 
                 let _ = DI_SINGLETON.set(instance);
@@ -122,6 +125,7 @@ impl DiContainer {
     }
 
     pub fn get_native_executor(&self, shell_runtime: Arc<dyn ShellRuntime>) -> NativeExecutor {
+        let web_rtc = Arc::new(WebRtc::new(self.workdir.get().unwrap().clone()));
         NativeExecutor {
             rpc: NativeRpc {},
             database: NativeDatabase {
@@ -130,7 +134,11 @@ impl DiContainer {
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
-                web_rtc: Arc::new(WebRtc::new(self.workdir.get().unwrap().clone())),
+                web_rtc: web_rtc.clone(),
+                shell_runtime: OnceCell::new()
+            },
+            p2p: P2PNativeExecutor {
+                web_rtc,
                 shell_runtime: OnceCell::new()
             }
         }
@@ -140,7 +148,14 @@ impl DiContainer {
         ResourceTransferSelectionService {}
     }
 
-    pub fn get_nearby_service(&self) -> NearbyService {
-        NearbyService {}
+    pub fn get_nearby_service(&'static self) -> &'static NearbyService {
+        match self.nearby_service.get() {
+            Some(service) => service,
+            None => {
+                let service = NearbyService {};
+                let _ = self.nearby_service.set(service);
+                self.nearby_service.get().unwrap()
+            }
+        }
     }
 }

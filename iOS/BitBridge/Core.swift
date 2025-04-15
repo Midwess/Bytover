@@ -23,7 +23,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     @Published var environment: EnvironmentViewModel?
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
-    @Published var isSignedIn = false
+    @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
     @Environment(\.openURL) private var openURL
@@ -66,7 +66,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func _handleResponse(_ id: UInt32, _ response: CoreOperationOutput) async {
-        print("Handle response \(id)")
         let effects = [UInt8](handleResponse(id, Data(try! response.bincodeSerialize())))
         if effects.isEmpty {
             return
@@ -152,23 +151,18 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
             return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
         case .appCapabilities(.internet(let internetOps)):
             return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.internet(internetOps).bincodeSerialize()))
+        case .appCapabilities(.p2P(let p2p)):
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.p2P(p2p).bincodeSerialize()))
+        case .appCapabilities(.notified(let event)):
+            await self.update(event)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         }
     }
     
     func msgFromNative(_ event: Data) async {
-        print("Msg from native")
         var event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
-        case .newPeer(let peer):
-            await update(.transfer(.onNewPeer(peer)))
-        case .peerLeaved(let peer):
-            await update(.transfer(.onPeerLeaved(peer)))
-        case .sessionRequest(let request, let peer):
-            await update(.transfer(.transferRequest(request, peer)))
-        case .sessionProgress(let session_id, let progress):
-            await update(.transfer(.newTransferProgress(session_id: session_id, progress: progress)))
         case .handleResponse(let id, let response):
-            print("Handle response \(id)")
             await self._handleResponse(id, response)
         }
     }
@@ -235,6 +229,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         let options = PHImageRequestOptions()
         options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
+        options.deliveryMode = .fastFormat
         options.isSynchronous = false
         
         return await withCheckedContinuation { continuation in
@@ -278,7 +273,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
             Task {
-                await self.update(.transfer(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
+                await self.update(.nearby(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
                 
                 manager.stopUpdatingLocation()
             }

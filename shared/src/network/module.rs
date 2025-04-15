@@ -45,7 +45,7 @@ impl InternetConnection {
     }
 
     pub async fn ip_address(&self) -> Result<String, NetworkError> {
-        const MAX_RETRIES: usize = 10;
+        const MAX_RETRIES: usize = 30;
         const RETRY_DELAY_MS: u64 = 500;
 
         let stun_addr = "stun.l.google.com:19302".to_socket_addrs().unwrap().find(|x| x.is_ipv4()).unwrap();
