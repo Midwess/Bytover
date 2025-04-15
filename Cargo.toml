@@ -30,7 +30,7 @@ edition = "2021"
 
 [workspace.dependencies]
 anyhow = "1.0.97"
-crux_core = "0.13.0"
+crux_core = "0.14.0"
 serde = { version = "1.0.217", default-features = false }
 surrealdb = {version="2.2.2", default-features = false}
 thiserror = { version = "2.0.12", default-features = false }
@@ -56,7 +56,7 @@ tokio-tungstenite = { version = "0.26.2" }
 futures-util = { version = "0.3.31" }
 tiny_http = { version = "0.12.0" }
 url = { version = "2.5.4" }
-webrtc = { git = "0.12.0" }
+webrtc = { version = "0.12.0" }
 uuid = { version = "1.16.0" }
 rand = { version = "0.9.0" }
 regex = { version = "1.11.1" }
