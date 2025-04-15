@@ -25,6 +25,7 @@ use crate::ShellRuntime;
 
 use super::peer::PeerErrors;
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
+use super::throughput::ThroughputController;
 
 #[derive(Debug, Error)]
 pub enum ConnectionWebRtcErrors {
@@ -58,7 +59,8 @@ pub struct ConnectionWebRtc {
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
     pub workdir: String,
-    pub ns: String
+    pub ns: String,
+    pub throughput_controller: Arc<ThroughputController>
 }
 
 impl PartialEq for ConnectionWebRtc {
@@ -100,6 +102,7 @@ impl ConnectionWebRtc {
         peer_id: u128,
         signalling_client: Arc<RtcsSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
+        throughput_controller: Arc<ThroughputController>,
         workdir: String
     ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
         let my_id = current.id();
@@ -130,7 +133,8 @@ impl ConnectionWebRtc {
             signalling_join_handle: Arc::new(Mutex::new(None)),
             on_disconnect: OnceCell::new(),
             ns: ns.clone(),
-            workdir: workdir.clone()
+            workdir: workdir.clone(),
+            throughput_controller
         };
 
         log::info!(target: ns.as_str(), "Sending offer to signalling server");
@@ -167,7 +171,12 @@ impl ConnectionWebRtc {
         match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.unwrap())
+                let throughput_controller = me.throughput_controller.clone();
+                Ok(
+                    PeerCommunication::upgrade(me, current, peer_id, shell_runtime, throughput_controller)
+                        .await
+                        .unwrap()
+                )
             }
             _ => {
                 log::error!(target: ns.as_str(), "Data channel connection timed out");
@@ -183,6 +192,7 @@ impl ConnectionWebRtc {
         offer: RTCSessionDescription,
         signalling_client: Arc<RtcsSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
+        throughput_controller: Arc<ThroughputController>,
         workdir: String
     ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
         let my_id = current.id();
@@ -223,7 +233,8 @@ impl ConnectionWebRtc {
             msg_channel: OnceCell::new(),
             ns: ns.clone(),
             on_disconnect: OnceCell::new(),
-            workdir: workdir.clone()
+            workdir: workdir.clone(),
+            throughput_controller
         };
 
         me.handle_signalling_message().await;
@@ -258,7 +269,12 @@ impl ConnectionWebRtc {
         let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
-                Ok(PeerCommunication::upgrade(me, current, peer_id, shell_runtime).await.map_err(Box::new)?)
+                let throughput_controller = me.throughput_controller.clone();
+                Ok(
+                    PeerCommunication::upgrade(me, current, peer_id, shell_runtime, throughput_controller)
+                        .await
+                        .map_err(Box::new)?
+                )
             }
             Ok(None) => {
                 log::error!(target: ns.as_str(), "Data channel receiver closed without receiving data channel");

@@ -190,9 +190,9 @@ impl MessageChannel {
         let bytes = Self::encode_msg(&message)?;
         let mut subscription = self.msg_response_broadcast.subscribe();
 
-        let _ = timeout(Duration::from_secs(5), self.msg_channel.send(&bytes.into())).await?;
+        let _ = timeout(Duration::from_secs(90), self.msg_channel.send(&bytes.into())).await?;
 
-        while let Ok(Ok((response_id, response))) = timeout(Duration::from_secs(15), subscription.recv()).await? {
+        while let Ok(Ok((response_id, response))) = timeout(Duration::from_secs(300), subscription.recv()).await? {
             if response_id != request_id {
                 continue;
             }

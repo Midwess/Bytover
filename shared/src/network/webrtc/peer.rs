@@ -30,6 +30,7 @@ use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::data_channel::{DataChannel, DataChannelError};
+use super::throughput::ThroughputController;
 
 #[derive(Debug, Error)]
 pub enum PeerErrors {
@@ -53,7 +54,8 @@ pub struct PeerCommunication {
     connection: Arc<ConnectionWebRtc>,
     shell_runtime: Arc<dyn ShellRuntime>,
     data_channel_tx: broadcast::Sender<Arc<DataChannel>>,
-    peer_event_request_id: OnceCell<u32>
+    peer_event_request_id: OnceCell<u32>,
+    throughput_controller: Arc<ThroughputController>
 }
 
 impl PeerCommunication {
@@ -61,7 +63,8 @@ impl PeerCommunication {
         connection: ConnectionWebRtc,
         current_peer: PeerEntity,
         peer_id: u128,
-        shell_runtime: Arc<dyn ShellRuntime>
+        shell_runtime: Arc<dyn ShellRuntime>,
+        throughput_controller: Arc<ThroughputController>
     ) -> Result<Self, PeerErrors> {
         let connection = Arc::new(connection);
         let peer = if current_peer.id() < peer_id {
@@ -99,7 +102,8 @@ impl PeerCommunication {
             peer,
             connection,
             shell_runtime: shell_runtime.clone(),
-            data_channel_tx
+            data_channel_tx,
+            throughput_controller
         };
 
         me.handle_data_channel();
@@ -115,7 +119,10 @@ impl PeerCommunication {
                 let request = request?;
                 match request.message() {
                     Request::TransferRequest(transfer_request) => {
-                        let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { request_id: request.id.clone(), remote_session: transfer_request.session.clone() });
+                        let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
+                            request_id: request.id.clone(),
+                            remote_session: transfer_request.session.clone()
+                        });
                         self.shell_runtime.clone()
                             .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
                     }
@@ -133,13 +140,13 @@ impl PeerCommunication {
         self.connection.peer_connection.on_data_channel({
             let data_channel_tx = self.data_channel_tx.clone();
             let shell_runtime = self.shell_runtime.clone();
-
+            let throughput_controller = self.throughput_controller.clone();
             Box::new(move |d: Arc<webrtc::data_channel::RTCDataChannel>| {
                 let data_channel_tx = data_channel_tx.clone();
                 let shell_runtime = shell_runtime.clone();
-
+                let throughput_controller = throughput_controller.clone();
                 Box::pin(async move {
-                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone()) {
+                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), throughput_controller.clone()) {
                         Ok(data_channel) => Arc::new(data_channel),
                         Err(e) => {
                             log::error!(target: "peer", "Failed to create data channel {:?}", e);
@@ -244,7 +251,14 @@ impl PeerCommunication {
     }
 
     pub async fn send_resource(&self, core_request_id: u32, resource: LocalResource, session_id: u64) -> Result<(), PeerErrors> {
-        let data_channel = DataChannel::stream_resource(&resource, session_id, &self.connection, self.shell_runtime.clone()).await?;
+        let data_channel = DataChannel::stream_resource(
+            &resource,
+            session_id,
+            &self.connection,
+            self.shell_runtime.clone(),
+            self.throughput_controller.clone()
+        )
+        .await?;
 
         let result = data_channel.start_upload(core_request_id, resource).await;
 

@@ -22,6 +22,7 @@ use crate::{serialize, ShellRuntime};
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::peer::{PeerCommunication, PeerErrors};
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
+use super::throughput::ThroughputController;
 
 #[derive(Debug, Error)]
 pub enum WebRtcErrors {
@@ -43,7 +44,8 @@ pub struct WebRtc {
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
-    workdir: String
+    workdir: String,
+    throughput_controller: Arc<ThroughputController>
 }
 
 impl Default for WebRtc {
@@ -53,6 +55,10 @@ impl Default for WebRtc {
 }
 
 impl WebRtc {
+    pub fn throughput_controller() -> Arc<ThroughputController> {
+        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10)))
+    }
+
     pub fn new(workdir: String) -> Self {
         Self {
             peer: OnceCell::new(),
@@ -62,7 +68,8 @@ impl WebRtc {
             connections: Mutex::new(HashMap::new()),
             signalling_client: OnceCell::new(),
             handle_signalling_message_join: Arc::new(Mutex::new(None)),
-            workdir
+            workdir,
+            throughput_controller: Self::throughput_controller()
         }
     }
 
@@ -191,6 +198,7 @@ impl WebRtc {
                         peer_id,
                         self_clone.signalling_client.get().unwrap().clone(),
                         self_clone.shell_runtime().clone(),
+                        self_clone.throughput_controller.clone(),
                         self_clone.workdir.clone()
                     )
                     .await;
@@ -226,6 +234,7 @@ impl WebRtc {
                                 desc,
                                 self_clone.signalling_client.get().unwrap().clone(),
                                 self_clone.shell_runtime().clone(),
+                                self_clone.throughput_controller.clone(),
                                 self_clone.workdir.clone()
                             )
                             .await;

@@ -4,6 +4,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
+use bytes::Bytes;
 use core_services::local_storage::file_system::File;
 use futures_util::{Stream, StreamExt};
 use std::ops::Deref;
@@ -17,6 +18,7 @@ use tokio::time::timeout;
 use webrtc::data_channel::RTCDataChannel;
 
 use super::connection::ConnectionWebRtc;
+use super::throughput::ThroughputController;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
@@ -39,13 +41,14 @@ pub enum DataChannelError {
     #[error("Data corrupted")]
     DataCorrupted,
     #[error("Timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed)
+    Timeout(Duration)
 }
 
 #[derive(Clone)]
 pub struct DataChannel {
     data_channel: Arc<RTCDataChannel>,
     shell_runtime: Arc<dyn ShellRuntime>,
+    throughput_controller: Arc<ThroughputController>,
     pub resource_id: u64
 }
 
@@ -65,18 +68,18 @@ impl DataChannel {
         Ok((resource_id, session_id))
     }
 
-    pub fn from_channel(data_channel: Arc<RTCDataChannel>, shell_runtime: Arc<dyn ShellRuntime>) -> Result<Self, DataChannelError> {
-        data_channel.on_open(Box::new(move || {
-            log::info!(target: "nearby", "Data channel opened");
-            Box::pin(async move {})
-        }));
-
+    pub fn from_channel(
+        data_channel: Arc<RTCDataChannel>,
+        shell_runtime: Arc<dyn ShellRuntime>,
+        throughput_controller: Arc<ThroughputController>
+    ) -> Result<Self, DataChannelError> {
         let label = data_channel.label().to_owned();
         let (resource_id, _) = DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         Ok(Self {
             data_channel,
             shell_runtime,
+            throughput_controller,
             resource_id
         })
     }
@@ -85,10 +88,10 @@ impl DataChannel {
         local_resource: &LocalResource,
         session_id: u64,
         connection: &ConnectionWebRtc,
-        shell_runtime: Arc<dyn ShellRuntime>
+        shell_runtime: Arc<dyn ShellRuntime>,
+        throughput_controller: Arc<ThroughputController>
     ) -> Result<Self, DataChannelError> {
         let label = DataChannel::data_label(local_resource.order_id, session_id);
-        log::info!(target: "nearby", "Creating data channel: {}", label);
         let data_channel = connection
             .peer_connection
             .create_data_channel(label.as_str(), Some(ConnectionWebRtc::channel_config()))
@@ -107,10 +110,13 @@ impl DataChannel {
             )));
         };
 
+        throughput_controller.handle(Arc::downgrade(&data_channel)).await;
+
         log::info!(target: "nearby", "Data channel created: {}", label);
         Ok(Self {
             data_channel,
             shell_runtime,
+            throughput_controller,
             resource_id: local_resource.order_id
         })
     }
@@ -136,14 +142,13 @@ impl DataChannel {
         let mut received_bytes = 0;
         log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
         let result = loop {
-            let next_bytes = match timeout(Duration::from_secs(90), stream.next()).await {
-                Ok(Some(Ok(bytes))) => bytes,
+            let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
+                Ok(Some(bytes)) => bytes,
                 Ok(None) => match received_bytes > file_size as usize {
                     true => break Ok(()),
                     false => break Err(DataChannelError::DataCorrupted)
                 },
-                Ok(Some(Err(e))) => break Err(e),
-                Err(e) => break Err(e.into())
+                Err(e) => break Err(e)
             };
 
             let written_bytes = file.write(&next_bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
@@ -154,10 +159,10 @@ impl DataChannel {
 
             received_bytes += written_bytes;
 
-            // self.update_progress(
-            //     core_request_id,
-            //     TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
-            // );
+            self.update_progress(
+                core_request_id,
+                TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
+            );
 
             if received_bytes >= file_size as usize {
                 break Ok(());
@@ -208,30 +213,26 @@ impl DataChannel {
                 let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
 
-            let Some(bytes) = bytes else {
+            let Some(bytes) = bytes.map(Bytes::from) else {
                 break;
             };
 
             total_sent += bytes.len();
             let data_channel = self.data_channel.clone();
-            let order_id = self.resource_id;
+            let throughput_controller = self.throughput_controller.clone();
             last_sent_handle = Some(spawn(async move {
-                let expected_bytes = bytes.len();
-                let sent_bytes = timeout(Duration::from_secs(5), data_channel.send(&bytes.into())).await??;
-
-                let curr_amount = data_channel.buffered_amount().await;
-
-                if sent_bytes < expected_bytes {
+                let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
+                if sent_bytes < bytes.len() {
                     Err(DataChannelError::DataCorrupted)
                 } else {
                     Ok(sent_bytes)
                 }
             }));
 
-            // self.update_progress(
-            //     core_request_id,
-            //     TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
-            // );
+            self.update_progress(
+                core_request_id,
+                TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
+            );
         }
 
         if total_sent < file_size as usize {
