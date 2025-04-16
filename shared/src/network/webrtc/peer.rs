@@ -181,6 +181,7 @@ impl PeerCommunication {
         &self,
         core_request_id: u32,
         mut out_resources: Vec<LocalResource>,
+        session_id: u64,
         request_id: String,
         response: Response
     ) -> Result<(), PeerErrors> {
@@ -217,7 +218,10 @@ impl PeerCommunication {
                 }
             };
 
-            let Some(found_index) = out_resources.iter().position(|r| r.order_id == data_channel.resource_id) else {
+            let Some(found_index) = out_resources
+                .iter()
+                .position(|r| r.order_id == data_channel.resource_id && session_id == data_channel.session_id)
+            else {
                 continue;
             };
 
@@ -263,7 +267,7 @@ impl PeerCommunication {
         let result = data_channel.start_upload(core_request_id, resource).await;
 
         if let Err(e) = &result {
-            data_channel.close().await;
+            let _ = data_channel.close().await;
         }
 
         Ok(result?)

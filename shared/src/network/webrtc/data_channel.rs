@@ -4,7 +4,6 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
-use bytes::Bytes;
 use core_services::local_storage::file_system::File;
 use futures_util::{Stream, StreamExt};
 use std::ops::Deref;
@@ -49,7 +48,8 @@ pub struct DataChannel {
     data_channel: Arc<RTCDataChannel>,
     shell_runtime: Arc<dyn ShellRuntime>,
     throughput_controller: Arc<ThroughputController>,
-    pub resource_id: u64
+    pub resource_id: u64,
+    pub session_id: u64
 }
 
 impl DataChannel {
@@ -74,14 +74,17 @@ impl DataChannel {
         throughput_controller: Arc<ThroughputController>
     ) -> Result<Self, DataChannelError> {
         let label = data_channel.label().to_owned();
-        let (resource_id, _) = DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
+        let (resource_id, session_id) =
+            DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         throughput_controller.handle(Arc::downgrade(&data_channel)).await;
+
         Ok(Self {
             data_channel,
             shell_runtime,
             throughput_controller,
-            resource_id
+            resource_id,
+            session_id
         })
     }
 
@@ -118,7 +121,8 @@ impl DataChannel {
             data_channel,
             shell_runtime,
             throughput_controller,
-            resource_id: local_resource.order_id
+            resource_id: local_resource.order_id,
+            session_id
         })
     }
 
@@ -170,7 +174,7 @@ impl DataChannel {
             }
         };
 
-        log::info!(target: "nearby", "Received bytes final: {} vs {}", received_bytes, file_size);
+        log::info!(target: "nearby", "Received bytes final: {} vs {} for file {}", received_bytes, file_size, self.resource_id);
 
         let percentage = received_bytes as f64 / file_size as f64;
         if let Err(e) = result {
@@ -208,15 +212,10 @@ impl DataChannel {
         log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         let mut total_sent = 0;
-        loop {
-            let bytes = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))?;
+        while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
             if let Some(handle) = last_sent_handle {
                 let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
-
-            let Some(bytes) = bytes.map(Bytes::from) else {
-                break;
-            };
 
             total_sent += bytes.len();
             let data_channel = self.data_channel.clone();
@@ -286,7 +285,9 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    let _ = sender.send(Ok(message.data.to_vec())).await;
+                    if let Err(e) = sender.send(Ok(message.data.to_vec())).await {
+                        log::error!(target: "nearby", "Failed to send message: {:?}", e);
+                    }
                 }
             })
         }));

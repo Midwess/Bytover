@@ -84,6 +84,10 @@ impl TransferService {
                 match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         if progress.status.is_completed() {
+                            log::info!(
+                                target: "transfer",
+                                "Resource {:?} completed with status {:?}",
+                                progress.resource_order_id, progress.status);
                             break;
                         }
                     }
@@ -151,7 +155,11 @@ impl TransferService {
 
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest(
-            peer_id, resources, request_id, response
+            peer_id,
+            resources,
+            transfer_session.order_id,
+            request_id,
+            response
         ));
         let mut stream = cmd.stream_from_shell(response);
 
@@ -160,7 +168,11 @@ impl TransferService {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         if progress.status.is_completed() {
-                            log::info!(target: "transfer", "Resource {:?} completed with status {:?}", progress.resource_order_id, progress.status);
+                            log::info!(
+                                target: "transfer",
+                                "Resource {:?} completed with status {:?}",
+                                progress.resource_order_id, progress.status
+                            );
                         }
 
                         transfer_session.update_progress(progress);

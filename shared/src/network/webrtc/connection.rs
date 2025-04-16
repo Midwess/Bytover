@@ -118,7 +118,9 @@ impl ConnectionWebRtc {
         msg_channel.clone().on_open(Box::new(move || {
             let throughput_controller_cloned = throughput_controller_cloned.clone();
             Box::pin(async move {
-                let _ = notified_msg_channel_ready.send(MessageChannel::new(msg_channel, throughput_controller_cloned).await).await;
+                let _ = notified_msg_channel_ready
+                    .send(MessageChannel::new(msg_channel, throughput_controller_cloned).await)
+                    .await;
             })
         }));
 
@@ -223,7 +225,9 @@ impl ConnectionWebRtc {
             let throughput_controller_cloned = throughput_controller_cloned.clone();
 
             Box::pin(async move {
-                let _ = notified_msg_channel_ready.send(MessageChannel::new(connection, throughput_controller_cloned).await).await;
+                let _ = notified_msg_channel_ready
+                    .send(MessageChannel::new(connection, throughput_controller_cloned).await)
+                    .await;
             })
         }));
 

@@ -1429,6 +1429,7 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
+ "bytes",
  "chrono",
  "jsonwebtoken",
  "lazy_static",
