@@ -203,7 +203,7 @@ impl DataChannel {
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
-        let mut cursor = file.cursor(0, 64 * 1024 - 1).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut cursor = file.cursor(0, 60 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
@@ -241,6 +241,16 @@ impl DataChannel {
         } else {
             Ok(())
         }
+    }
+}
+
+impl Drop for DataChannel {
+    fn drop(&mut self) {
+        let throughput_controller = self.throughput_controller.clone();
+        let label = self.data_channel.label().to_string();
+        spawn(async move {
+            let _ = throughput_controller.un_handle(&label);
+        });
     }
 }
 

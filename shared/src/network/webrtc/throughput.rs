@@ -27,7 +27,7 @@ pub struct ThroughputController {
 
 impl ThroughputController {
     pub fn new(max_bytes_buffer: usize, received_timeout: Duration) -> Self {
-        let (received_tx, _) = broadcast::channel(16);
+        let (received_tx, _) = broadcast::channel(2048);
         Self {
             max_bytes_buffer,
             received_timeout,
@@ -81,6 +81,12 @@ impl ThroughputController {
             Ok(sent_bytes)
         } else {
             Err(DataChannelError::DataChannelClosed("Channel already deallocated".to_string()))
+        }
+    }
+
+    pub async fn un_handle(&self, channel_label: &str) {
+        if let Some(sender) = self.ready_to_send_broadcast.lock().await.remove(channel_label) {
+            let _ = sender.closed().await;
         }
     }
 

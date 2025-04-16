@@ -114,9 +114,11 @@ impl ConnectionWebRtc {
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
         let msg_channel = peer_connection.create_data_channel("message-channel", Some(Self::channel_config())).await?;
 
+        let throughput_controller_cloned = throughput_controller.clone();
         msg_channel.clone().on_open(Box::new(move || {
+            let throughput_controller_cloned = throughput_controller_cloned.clone();
             Box::pin(async move {
-                let _ = notified_msg_channel_ready.send(MessageChannel::new(msg_channel)).await;
+                let _ = notified_msg_channel_ready.send(MessageChannel::new(msg_channel, throughput_controller_cloned).await).await;
             })
         }));
 
@@ -214,12 +216,14 @@ impl ConnectionWebRtc {
         }
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
+        let throughput_controller_cloned = throughput_controller.clone();
         peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             let notified_msg_channel_ready = notified_msg_channel_ready.clone();
             let connection = d.clone();
+            let throughput_controller_cloned = throughput_controller_cloned.clone();
 
             Box::pin(async move {
-                let _ = notified_msg_channel_ready.send(MessageChannel::new(connection)).await;
+                let _ = notified_msg_channel_ready.send(MessageChannel::new(connection, throughput_controller_cloned).await).await;
             })
         }));
 

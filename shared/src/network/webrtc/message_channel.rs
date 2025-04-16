@@ -6,6 +6,7 @@ use core_services::retry;
 use prost::Message as prost_message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{PeerErrorsMessage, PeerMessageBody};
+use tokio::spawn;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::SendError;
 use tokio::time::timeout;
@@ -14,6 +15,7 @@ use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 
 use super::connection::ConnectionWebRtcErrors;
+use super::throughput::ThroughputController;
 
 pub struct PeerRequest {
     request: Request,
@@ -69,14 +71,14 @@ impl DerefMut for PeerRequest {
 pub struct MessageChannel {
     msg_channel: Arc<RTCDataChannel>,
     msg_response_broadcast: broadcast::Sender<Result<(String, Response), String>>,
-    msg_request_broadcast: broadcast::Sender<Result<(String, Request), String>>
+    msg_request_broadcast: broadcast::Sender<Result<(String, Request), String>>,
+    throughput_controller: Arc<ThroughputController>
 }
 
 impl MessageChannel {
-    pub fn new(msg_channel: Arc<RTCDataChannel>) -> Self {
+    pub async fn new(msg_channel: Arc<RTCDataChannel>, throughput_controller: Arc<ThroughputController>) -> Self {
         let (msg_response_broadcast, _) = broadcast::channel(100);
         let (msg_request_broadcast, _) = broadcast::channel(100);
-
         let msg_response_broadcast_cloned = msg_response_broadcast.clone();
 
         {
@@ -106,6 +108,7 @@ impl MessageChannel {
         }
 
         let msg_request_broadcast_cloned = msg_request_broadcast.clone();
+        throughput_controller.handle(Arc::downgrade(&msg_channel)).await;
         msg_channel.on_message(Box::new(move |msg: DataChannelMessage| {
             log::info!(target: "broadcast", "Received message");
             let msg = match PeerMessageBody::decode(msg.data) {
@@ -148,7 +151,8 @@ impl MessageChannel {
         Self {
             msg_channel,
             msg_response_broadcast,
-            msg_request_broadcast
+            msg_request_broadcast,
+            throughput_controller
         }
     }
 
@@ -220,5 +224,15 @@ impl MessageChannel {
     pub fn random_id() -> String {
         let uuid = Uuid::new_v4();
         uuid.to_string()
+    }
+}
+
+impl Drop for MessageChannel {
+    fn drop(&mut self) {
+        let throughput_controller = self.throughput_controller.clone();
+        let label = self.msg_channel.label().to_string();
+        spawn(async move {
+            let _ = throughput_controller.un_handle(&label).await;
+        });
     }
 }
