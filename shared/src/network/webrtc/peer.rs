@@ -207,7 +207,7 @@ impl PeerCommunication {
 
         let mut join_handles = Vec::new();
         loop {
-            let data_channel = match timeout(Duration::from_secs(15), subscription.recv()).await {
+            let data_channel = match timeout(Duration::from_secs(35), subscription.recv()).await {
                 Ok(Ok(data_channel)) => data_channel,
                 Err(e) => {
                     join_all(join_handles).await;

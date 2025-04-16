@@ -73,7 +73,7 @@ impl ConnectionWebRtc {
     pub fn channel_config() -> RTCDataChannelInit {
         RTCDataChannelInit {
             ordered: Some(true),
-            max_retransmits: Some(3u16),
+            max_retransmits: Some(3),
             ..Default::default()
         }
     }

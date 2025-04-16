@@ -75,7 +75,7 @@ impl TransferNative {
                     .answer_session_request(request_id, resources, session_id, peer_request_id, response)
                     .await;
 
-                log::info!(target: "transfer", "Answered session request result {:?}", result);
+                log::info!(target: "transfer", "Answered session request: {:?}", result);
 
                 match result {
                     Ok(_) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted),

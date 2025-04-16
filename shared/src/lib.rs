@@ -81,7 +81,11 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     match TOKIO_RT.get() {
         Some(rt) => rt,
         None => {
-            let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .thread_name("bitbridge-worker")
+                .enable_all()
+                .build()
+                .unwrap();
             TOKIO_RT.set(rt).unwrap();
             TOKIO_RT.get().expect("Tokio runtime not initialized")
         }
