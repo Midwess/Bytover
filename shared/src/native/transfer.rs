@@ -66,18 +66,17 @@ impl TransferNative {
                 }
             }
             TransferOperation::AnswerSessionRequest(peer_id, resources, session_id, peer_request_id, response) => {
-                log::info!(target: "transfer", "Answering session request result");
                 let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
                 else {
                     return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
                 };
 
-                log::info!(target: "transfer", "Answering session request result1");
-
                 let result = connection
                     .answer_session_request(request_id, resources, session_id, peer_request_id, response)
                     .await;
-                log::info!(target: "transfer", "Answer session request result {:?}", result);
+
+                log::info!(target: "transfer", "Answered session request result {:?}", result);
+
                 match result {
                     Ok(_) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted),
                     Err(error) => CoreOperationOutput::ConnectionError(error.into())
