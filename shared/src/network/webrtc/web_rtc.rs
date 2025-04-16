@@ -56,7 +56,7 @@ impl Default for WebRtc {
 
 impl WebRtc {
     pub fn throughput_controller() -> Arc<ThroughputController> {
-        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10)))
+        Arc::new(ThroughputController::new(1 * 1024 * 1024, Duration::from_secs(10)))
     }
 
     pub fn new(workdir: String) -> Self {

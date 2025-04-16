@@ -146,7 +146,7 @@ impl PeerCommunication {
                 let shell_runtime = shell_runtime.clone();
                 let throughput_controller = throughput_controller.clone();
                 Box::pin(async move {
-                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), throughput_controller.clone()) {
+                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), throughput_controller.clone()).await {
                         Ok(data_channel) => Arc::new(data_channel),
                         Err(e) => {
                             log::error!(target: "peer", "Failed to create data channel {:?}", e);

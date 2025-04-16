@@ -68,7 +68,7 @@ impl DataChannel {
         Ok((resource_id, session_id))
     }
 
-    pub fn from_channel(
+    pub async fn from_channel(
         data_channel: Arc<RTCDataChannel>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>
@@ -76,6 +76,7 @@ impl DataChannel {
         let label = data_channel.label().to_owned();
         let (resource_id, _) = DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
+        throughput_controller.handle(Arc::downgrade(&data_channel)).await;
         Ok(Self {
             data_channel,
             shell_runtime,
@@ -202,7 +203,7 @@ impl DataChannel {
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
-        let mut cursor = file.cursor(0, 32 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut cursor = file.cursor(0, 64 * 1024 - 1).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
