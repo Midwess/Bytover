@@ -77,8 +77,6 @@ impl DataChannel {
         let (resource_id, session_id) =
             DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
-        throughput_controller.handle(Arc::downgrade(&data_channel)).await;
-
         Ok(Self {
             data_channel,
             shell_runtime,
@@ -113,8 +111,6 @@ impl DataChannel {
                 label
             )));
         };
-
-        throughput_controller.handle(Arc::downgrade(&data_channel)).await;
 
         log::info!(target: "nearby", "Data channel created: {}", label);
         Ok(Self {
@@ -235,21 +231,13 @@ impl DataChannel {
             );
         }
 
+        log::info!(target: "nearby", "Total sent: {} vs {}", total_sent, file_size);
+
         if total_sent < file_size as usize {
             Err(DataChannelError::DataCorrupted)
         } else {
             Ok(())
         }
-    }
-}
-
-impl Drop for DataChannel {
-    fn drop(&mut self) {
-        let throughput_controller = self.throughput_controller.clone();
-        let label = self.data_channel.label().to_string();
-        spawn(async move {
-            let _ = throughput_controller.un_handle(&label);
-        });
     }
 }
 

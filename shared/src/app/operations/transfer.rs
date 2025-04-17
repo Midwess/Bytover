@@ -17,12 +17,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     SendSession(TransferSession),
-    AnswerSessionRequest(u128, Vec<LocalResource>, u64, String, Response),
-    SendResource {
-        peer_id: u128,
-        resource: LocalResource,
-        session_id: u64
-    }
+    AnswerSessionRequest(u128, Vec<LocalResource>, u64, String, Response)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]

@@ -9,6 +9,7 @@ use schema::devlog::bitbridge::{PeerErrorsMessage, PeerMessageBody};
 use tokio::spawn;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::SendError;
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use uuid::Uuid;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
@@ -108,7 +109,6 @@ impl MessageChannel {
         }
 
         let msg_request_broadcast_cloned = msg_request_broadcast.clone();
-        throughput_controller.handle(Arc::downgrade(&msg_channel)).await;
         msg_channel.on_message(Box::new(move |msg: DataChannelMessage| {
             log::info!(target: "broadcast", "Received message");
             let msg = match PeerMessageBody::decode(msg.data) {
@@ -122,13 +122,9 @@ impl MessageChannel {
             if let Some(response) = msg.response {
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 return Box::pin(async move {
-                    let result = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
+                    let _ = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
                         msg_response_broadcast_cloned.send(Ok((msg.request_id.clone(), response.clone())))
                     });
-
-                    if let Err(e) = result {
-                        log::error!(target: "rtc", "Failed to broadcast response message {:?}", e);
-                    }
                 });
             }
 
@@ -156,11 +152,29 @@ impl MessageChannel {
         }
     }
 
-    pub async fn send_and_forget(&self, message: PeerMessageBody) -> Result<(), ConnectionWebRtcErrors> {
-        let bytes = Self::encode_msg(&message)?;
-        let _ = timeout(Duration::from_secs(5), self.msg_channel.send(&bytes.into())).await?;
+    pub async fn send_request_and_forget(&self, message: Request) -> Result<(), ConnectionWebRtcErrors> {
+        let bytes = Self::encode_msg(&PeerMessageBody {
+            request_id: Self::random_id(),
+            request: Some(message),
+            response: None,
+            ..Default::default()
+        })?;
+
+        let msg_channel = self.msg_channel.clone();
+
+        spawn(async move {
+            let _ = timeout(Duration::from_secs(30), msg_channel.send(&bytes.into())).await;
+        });
 
         Ok(())
+    }
+
+    pub fn send_and_forget(&self, message: PeerMessageBody) -> Result<JoinHandle<()>, ConnectionWebRtcErrors> {
+        let bytes = Self::encode_msg(&message)?;
+        let msg_channel = self.msg_channel.clone();
+        Ok(spawn(async move {
+            let _ = timeout(Duration::from_secs(5), msg_channel.send(&bytes.into())).await;
+        }))
     }
 
     pub async fn close(&self) {
@@ -228,15 +242,5 @@ impl MessageChannel {
     pub fn random_id() -> String {
         let uuid = Uuid::new_v4();
         uuid.to_string()
-    }
-}
-
-impl Drop for MessageChannel {
-    fn drop(&mut self) {
-        let throughput_controller = self.throughput_controller.clone();
-        let label = self.msg_channel.label().to_string();
-        spawn(async move {
-            let _ = throughput_controller.un_handle(&label).await;
-        });
     }
 }

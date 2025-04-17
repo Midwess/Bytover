@@ -42,6 +42,8 @@ pub enum PeerErrors {
     NoResponseFromPeer,
     #[error("Error while receiving resource")]
     ErrorWhileReceivingResource(String),
+    #[error("Error while sending resource")]
+    ErrorWhileSendingResource(String),
     #[error("Channel error {:?}", .0)]
     ChannelError(#[from] DataChannelError)
 }
@@ -155,24 +157,75 @@ impl PeerCommunication {
                     };
 
                     if let Err(e) = data_channel_tx.send(data_channel.clone()) {
-                        log::error!(target: "peer", "Failed to send data channel {:?}", e.to_string());
+                        log::error!(target: "peer", "Failed to broadcast data channel {:?}", e.to_string());
                     }
                 })
             })
         });
     }
 
-    pub async fn send_session(&self, session: TransferSession) -> Result<(), PeerErrors> {
+    pub async fn send_session(&self, mut session: TransferSession, core_request_id: u32) -> Result<(), PeerErrors> {
         let transfer_session = TransferSessionMessage {
             order_id: session.order_id,
             resources: join_all(session.resources.iter().map(|r| r.to_proto())).await.into_iter().collect()
         };
 
         log::info!(target: "peer", "Sending session to peer {:?}", self.peer.id());
-        let request = Request::TransferRequest(TransferRequestMessage { session: transfer_session });
+        let request = Request::TransferRequest(TransferRequestMessage {
+            session: transfer_session.clone()
+        });
 
-        let _: TransferResponseMessage = self.connection.send(request).await??;
-        log::info!(target: "peer", "Session sent to peer {:?}", self.peer.id());
+        let mut channel_subscription = self.data_channel_tx.subscribe();
+
+        let _ = self.connection.send::<TransferResponseMessage>(request).await??;
+
+        let resources = &mut session.resources;
+        loop {
+            let data_channel = match timeout(Duration::from_secs(15), channel_subscription.recv()).await {
+                Ok(Ok(data_channel)) => data_channel,
+                Err(e) => {
+                    return Err(PeerErrors::NoResponseFromPeer);
+                }
+                Ok(Err(e)) => {
+                    return Err(PeerErrors::ErrorWhileSendingResource(format!("{:?}", e)));
+                }
+            };
+
+            let Some(found_index) = resources
+                .iter()
+                .position(|r| r.order_id == data_channel.resource_id && session.order_id == data_channel.session_id)
+            else {
+                continue;
+            };
+
+            let resource = resources.remove(found_index);
+            let order_id = resource.order_id;
+            let shell_runtime = self.shell_runtime.clone();
+
+            if let Err(e) = data_channel.start_upload(core_request_id, resource).await {
+                log::error!(target: "peer", "Failed to send resource {:?}", e);
+                shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(TransferProgress::fail(
+                        order_id,
+                        0.0,
+                        e.to_string()
+                    )))
+                )));
+
+                let _ = data_channel.close().await;
+            } else {
+                let progress = TransferProgress::success(order_id);
+                shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
+                )));
+            }
+
+            if resources.is_empty() {
+                break;
+            }
+        }
 
         Ok(())
     }
@@ -185,38 +238,33 @@ impl PeerCommunication {
         request_id: String,
         response: Response
     ) -> Result<(), PeerErrors> {
-        let mut subscription = self.data_channel_tx.subscribe();
-
         let msg_channel = self.connection.msg_channel.get().unwrap();
         let is_accepted = match response {
             Response::TransferResponse(_) => true,
             _ => false
         };
 
-        msg_channel
+        let _ = msg_channel
             .send_and_forget(PeerMessageBody {
                 request_id,
                 request: None,
                 response: Some(response)
-            })
-            .await?;
+            })?
+            .await;
 
         if !is_accepted {
             return Ok(());
         }
 
-        let mut join_handles = Vec::new();
         loop {
-            let data_channel = match timeout(Duration::from_secs(35), subscription.recv()).await {
-                Ok(Ok(data_channel)) => data_channel,
-                Err(e) => {
-                    join_all(join_handles).await;
-                    return Err(PeerErrors::NoResponseFromPeer);
-                }
-                Ok(Err(e)) => {
-                    return Err(PeerErrors::ErrorWhileReceivingResource(format!("{:?}", e)));
-                }
-            };
+            let data_channel = DataChannel::stream_resource(
+                &out_resources[0],
+                session_id,
+                &self.connection,
+                self.shell_runtime.clone(),
+                self.throughput_controller.clone()
+            )
+            .await?;
 
             let Some(found_index) = out_resources
                 .iter()
@@ -227,50 +275,27 @@ impl PeerCommunication {
 
             let out_resource = out_resources.remove(found_index);
             let shell_runtime = self.shell_runtime.clone();
-            join_handles.push(spawn(async move {
-                match data_channel.start_download(core_request_id, &out_resource).await {
-                    Ok(_) => {
-                        let progress = TransferProgress::success(out_resource.order_id);
-                        let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
-                        shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
-                    }
-                    Err(e) => {
-                        let progress = TransferProgress::fail(out_resource.order_id, 0.0, e.to_string());
-                        let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
-                        shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
-                    }
-                };
+            match data_channel.start_download(core_request_id, &out_resource).await {
+                Ok(_) => {
+                    let progress = TransferProgress::success(out_resource.order_id);
+                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
+                    shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                }
+                Err(e) => {
+                    let progress = TransferProgress::fail(out_resource.order_id, 0.0, e.to_string());
+                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
+                    shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                }
+            };
 
-                let _ = data_channel.close().await;
-            }));
+            let _ = data_channel.close().await;
 
             if out_resources.is_empty() {
                 break;
             }
         }
 
-        join_all(join_handles).await;
-
         Ok(())
-    }
-
-    pub async fn send_resource(&self, core_request_id: u32, resource: LocalResource, session_id: u64) -> Result<(), PeerErrors> {
-        let data_channel = DataChannel::stream_resource(
-            &resource,
-            session_id,
-            &self.connection,
-            self.shell_runtime.clone(),
-            self.throughput_controller.clone()
-        )
-        .await?;
-
-        let result = data_channel.start_upload(core_request_id, resource).await;
-
-        if let Err(e) = &result {
-            let _ = data_channel.close().await;
-        }
-
-        Ok(result?)
     }
 
     pub async fn stop_session(&self) {

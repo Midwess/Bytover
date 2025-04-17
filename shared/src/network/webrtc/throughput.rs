@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::StreamExt;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
+use tokio::task::yield_now;
 use tokio::time::{sleep, timeout};
 use webrtc::data_channel::RTCDataChannel;
 
@@ -21,7 +21,6 @@ pub enum ThroughputError {
 pub struct ThroughputController {
     pub max_bytes_buffer: usize,
     pub received_timeout: Duration,
-    pub ready_to_send_broadcast: Mutex<HashMap<String, broadcast::Sender<()>>>,
     pub received_broadcast: broadcast::Sender<()>
 }
 
@@ -31,39 +30,18 @@ impl ThroughputController {
         Self {
             max_bytes_buffer,
             received_timeout,
-            ready_to_send_broadcast: Mutex::new(HashMap::new()),
             received_broadcast: received_tx
         }
     }
 
-    pub async fn handle(&self, channel: Weak<RTCDataChannel>) {
-        if let Some(channel) = channel.upgrade() {
-            let (ready_to_send_tx, _) = broadcast::channel(1);
-            self.ready_to_send_broadcast
-                .lock()
-                .await
-                .insert(channel.label().to_string(), ready_to_send_tx.clone());
-
-            channel.set_buffered_amount_low_threshold(self.max_bytes_buffer / 2).await;
-            channel
-                .on_buffered_amount_low(Box::new(move || {
-                    let _ = ready_to_send_tx.send(());
-                    Box::pin(async move {})
-                }))
-                .await;
-        }
-    }
-
     pub async fn wait_buffer(&self, channel: Weak<RTCDataChannel>, sent_bytes: usize) {
-        if let Some(channel) = channel.upgrade() {
-            let label = channel.label().to_string();
+        while let Some(channel) = channel.upgrade() {
             let current_buffer = channel.buffered_amount().await;
             if sent_bytes + current_buffer < self.max_bytes_buffer {
                 return;
             }
 
-            let mut rx = self.ready_to_send_broadcast.lock().await.get(&label).unwrap().subscribe();
-            let _ = rx.recv().await;
+            yield_now().await;
         }
     }
 
@@ -81,12 +59,6 @@ impl ThroughputController {
             Ok(sent_bytes)
         } else {
             Err(DataChannelError::DataChannelClosed("Channel already deallocated".to_string()))
-        }
-    }
-
-    pub async fn un_handle(&self, channel_label: &str) {
-        if let Some(sender) = self.ready_to_send_broadcast.lock().await.remove(channel_label) {
-            let _ = sender.closed().await;
         }
     }
 

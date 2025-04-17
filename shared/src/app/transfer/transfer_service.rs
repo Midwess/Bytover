@@ -48,8 +48,8 @@ impl TransferService {
         }
 
         let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
-        log::info!(target: "transfer", "Order id: {}", order_id);
-        let transfer_session = TransferSession {
+
+        let mut transfer_session = TransferSession {
             order_id,
             progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
             resources: selected_resources,
@@ -57,13 +57,7 @@ impl TransferService {
             target: transfer_target.clone()
         };
 
-        if let Err(error) = TransferOperation::send_session(transfer_session.clone()).into_future(cmd.clone()).await {
-            log::error!(target: "transfer", "Failed to send session to target {:?}: {:?}", transfer_target.id(), error);
-            return;
-        }
-
-        let mut sorted_resources: Vec<_> = transfer_session.resources.iter().collect();
-        sorted_resources.sort_by(|a, b| a.size.cmp(&b.size));
+        transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
         log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target.id());
 
@@ -72,30 +66,45 @@ impl TransferService {
             removed: vec![]
         }));
 
-        for resource in sorted_resources {
-            let peer_id = transfer_target.id().parse::<u128>().unwrap_or(0);
-            let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendResource {
-                peer_id,
-                resource: resource.clone(),
-                session_id: transfer_session.order_id
-            }));
+        let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
+            transfer_session.clone()
+        )));
 
-            while let Some(CoreOperationOutput::Transfer(transfer_output)) = stream.next().await {
-                match transfer_output {
+        while let Some(output) = stream.next().await {
+            match output {
+                CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         if progress.status.is_completed() {
                             log::info!(
                                 target: "transfer",
                                 "Resource {:?} completed with status {:?}",
                                 progress.resource_order_id, progress.status);
-                            break;
                         }
+
+                        transfer_session.update_progress(progress);
                     }
                     other => {
                         log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
                         break;
                     }
+                },
+                CoreOperationOutput::ConnectionError(error) => {
+                    transfer_session.force_complete(format!("Connection error: {:?}", error));
+                    log::error!(target: "transfer", "Connection error: {:?}", error);
+                    break;
                 }
+                CoreOperationOutput::DeviceError(error) => {
+                    transfer_session.force_complete(format!("Device error: {:?}", error));
+                    log::error!(target: "transfer", "Device error: {:?}", error);
+                    break;
+                }
+                _ => {
+                    continue;
+                }
+            }
+
+            if transfer_session.is_completed() {
+                break;
             }
         }
 
@@ -184,6 +193,11 @@ impl TransferService {
                 CoreOperationOutput::ConnectionError(error) => {
                     transfer_session.force_complete(format!("Connection error: {:?}", error));
                     log::error!(target: "transfer", "Connection error: {:?}", error);
+                    break;
+                }
+                CoreOperationOutput::DeviceError(error) => {
+                    transfer_session.force_complete(format!("Device error: {:?}", error));
+                    log::error!(target: "transfer", "Device error: {:?}", error);
                     break;
                 }
                 _ => {

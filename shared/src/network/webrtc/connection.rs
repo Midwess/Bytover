@@ -541,8 +541,6 @@ pub mod test_webrtc {
 
                         // connection.send_session(test_session).await;
                         log::info!(target: "test", "Sent session");
-
-                        connection.send_resource(core_request_id, test_resource, test_session.order_id).await;
                     }
 
                     sleep(Duration::from_millis(100)).await;
