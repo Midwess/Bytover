@@ -15,6 +15,7 @@ use schema::devlog::bitbridge::{
     TransferSessionMessage
 };
 use thiserror::Error;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, OnceCell};
 use tokio::time::timeout;
 use tokio::{select, spawn};
@@ -96,6 +97,7 @@ impl PeerCommunication {
 
         log::info!(target: "peer", "Connected to peer {:?}, size = {}", peer, mem::size_of::<PeerCommunication>());
 
+        // Indicate that the maximum number of concurrent resources per peer is 16
         let (data_channel_tx, _) = broadcast::channel(16);
 
         let me = Self {
@@ -149,14 +151,18 @@ impl PeerCommunication {
                 let throughput_controller = throughput_controller.clone();
                 Box::pin(async move {
                     let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), throughput_controller.clone()).await {
-                        Ok(data_channel) => Arc::new(data_channel),
+                        Ok(data_channel) => {
+                            // If channel got lagged, it will be closed automatically
+                            data_channel.auto_close(true);
+                            Arc::new(data_channel)
+                        },
                         Err(e) => {
                             log::error!(target: "peer", "Failed to create data channel {:?}", e);
                             return;
                         }
                     };
 
-                    if let Err(e) = data_channel_tx.send(data_channel.clone()) {
+                    if let Err(e) = data_channel_tx.send(data_channel) {
                         log::error!(target: "peer", "Failed to broadcast data channel {:?}", e.to_string());
                     }
                 })
@@ -182,12 +188,25 @@ impl PeerCommunication {
         let resources = &mut session.resources;
         loop {
             let data_channel = match timeout(Duration::from_secs(15), channel_subscription.recv()).await {
-                Ok(Ok(data_channel)) => data_channel,
-                Err(e) => {
+                Ok(Ok(data_channel)) => {
+                    // Make sure the channel is not closed automatically
+                    // while the buffer is not empty
+                    data_channel.auto_close(false);
+                    data_channel
+                },
+                Err(_) => {
                     return Err(PeerErrors::NoResponseFromPeer);
                 }
                 Ok(Err(e)) => {
-                    return Err(PeerErrors::ErrorWhileSendingResource(format!("{:?}", e)));
+                    match e {
+                        RecvError::Closed => {
+                            return Err(PeerErrors::NoResponseFromPeer);
+                        }
+                        RecvError::Lagged(e) => {
+                            log::warn!(target: "peer", "Data channel lagged by {:?} channels", e);
+                            continue;
+                        }
+                    }
                 }
             };
 

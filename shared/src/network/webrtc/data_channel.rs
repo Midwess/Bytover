@@ -5,8 +5,10 @@ use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
 use core_services::local_storage::file_system::File;
+use futures_util::lock::Mutex;
 use futures_util::{Stream, StreamExt};
 use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -43,13 +45,13 @@ pub enum DataChannelError {
     Timeout(Duration)
 }
 
-#[derive(Clone)]
 pub struct DataChannel {
     data_channel: Arc<RTCDataChannel>,
     shell_runtime: Arc<dyn ShellRuntime>,
     throughput_controller: Arc<ThroughputController>,
     pub resource_id: u64,
-    pub session_id: u64
+    pub session_id: u64,
+    pub auto_close: AtomicBool
 }
 
 impl DataChannel {
@@ -82,7 +84,8 @@ impl DataChannel {
             shell_runtime,
             throughput_controller,
             resource_id,
-            session_id
+            session_id,
+            auto_close: AtomicBool::new(false)
         })
     }
 
@@ -118,8 +121,13 @@ impl DataChannel {
             shell_runtime,
             throughput_controller,
             resource_id: local_resource.order_id,
-            session_id
+            session_id,
+            auto_close: AtomicBool::new(false)
         })
+    }
+
+    pub fn auto_close(&self, value: bool) {
+        self.auto_close.store(value, Ordering::Relaxed);
     }
 
     pub async fn stop_transfer(&self) {
@@ -237,6 +245,19 @@ impl DataChannel {
             Err(DataChannelError::DataCorrupted)
         } else {
             Ok(())
+        }
+    }
+}
+
+impl Drop for DataChannel {
+    fn drop(&mut self) {
+        let auto_close = self.auto_close.load(Ordering::Relaxed);
+        if auto_close {
+            let channel = self.data_channel.clone();
+            let _ = spawn(async move {
+                log::info!(target: "nearby", "Auto closing data channel: {}", channel.label());
+                let _ = channel.close().await;
+            });
         }
     }
 }
