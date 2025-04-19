@@ -5,7 +5,6 @@ use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
 use core_services::local_storage::file_system::File;
-use futures_util::lock::Mutex;
 use futures_util::{Stream, StreamExt};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
