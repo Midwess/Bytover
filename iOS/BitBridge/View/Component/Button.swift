@@ -155,26 +155,12 @@ struct CircleWaveEffect: ViewModifier {
                         isEnabled: timer?.isValid ?? false
                     )
             }
-            .drawingGroup()
             .onAppear {
                 animationPhase = 0
                 timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
                     animationPhase += 1/12
                 }
             }
-            .onChange(of: scenePhase, { _, newPhase in
-                switch newPhase {
-                case .background:
-                    animationPhase = 0
-                    timer?.invalidate()
-                    timer = nil
-                default:
-                    animationPhase = 0
-                    timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
-                        animationPhase += 1/12
-                    }
-                }
-            })
             .onDisappear {
                 animationPhase = 0
                 timer?.invalidate()
