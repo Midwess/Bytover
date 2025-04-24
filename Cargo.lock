@@ -1701,6 +1701,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "575f75dfd25738df5b91b8e43e14d44bda14637a58fae779fd2b064f8bf3e010"
 
 [[package]]
+name = "debounced"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "107e5cd9b5163c19751e53eef634cae25cf5ed5f6d0c81125feaa92e43703cc7"
+dependencies = [
+ "futures-timer",
+ "futures-util",
+]
+
+[[package]]
 name = "der"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5206,9 +5216,11 @@ dependencies = [
  "chrono",
  "core-services",
  "crux_core",
+ "debounced",
  "devlog-sdk",
  "domain",
  "erased-serde",
+ "futures-channel",
  "futures-util",
  "geo-types",
  "h3ron",

@@ -49,6 +49,21 @@ impl TransferProgress {
         }
     }
 
+    pub fn complete(resource_order_id: u64, percentage: f64) -> Self {
+        Self {
+            resource_order_id,
+            percentage,
+            status: if percentage == 1.0 {
+                TransferStatus::Success
+            } else {
+                TransferStatus::Fail(format!(
+                    "Data corrupted transfer for resource {} received {}/1.0",
+                    resource_order_id, percentage
+                ))
+            }
+        }
+    }
+
     pub fn success(resource_order_id: u64) -> Self {
         Self {
             resource_order_id,

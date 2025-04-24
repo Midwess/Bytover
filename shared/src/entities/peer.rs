@@ -1,8 +1,8 @@
+use rand::seq::IndexedRandom;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::Record;
-use rand::seq::{IndexedRandom, SliceRandom};
 
 use crate::entities::device::DeviceInfo;
 
@@ -24,19 +24,14 @@ impl Peer {
 
     pub fn random_avatar() -> String {
         let animals = [
-            "Penguin", "Rabbit", "Sheep", "Squirrel", "Tiger",
-            "Bear", "Cat", "Chicken", "Cow", "Deer", "Dog",
-            "Elephant", "Fox", "Giraffe", "Koala", "Lion",
-            "Owl", "Panda",
+            "Penguin", "Rabbit", "Sheep", "Squirrel", "Tiger", "Bear", "Cat", "Chicken", "Cow", "Deer", "Dog", "Elephant", "Fox",
+            "Giraffe", "Koala", "Lion", "Owl", "Panda"
         ];
 
         let mut rng = rand::thread_rng();
         let chosen_animal = animals.choose(&mut rng).unwrap_or(&"Panda"); // Default to Panda if slice is empty (shouldn't happen here)
 
-        format!(
-            "https://cdn.devlog.studio/public/animal_avatars/{}.png",
-            chosen_animal
-        )
+        format!("https://cdn.devlog.studio/public/animal_avatars/{}.png", chosen_animal)
     }
 }
 

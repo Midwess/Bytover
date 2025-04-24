@@ -3,9 +3,9 @@ use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
-use crate::{serialize, ShellRuntime};
+use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::File;
-use futures_util::{Stream, StreamExt};
+use futures_util::{SinkExt, Stream};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -137,6 +137,8 @@ impl DataChannel {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
         let file_size = out_resource.size;
 
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(1000));
+
         let saved_path = match &out_resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
@@ -167,10 +169,14 @@ impl DataChannel {
 
             received_bytes += written_bytes;
 
-            self.update_progress(
-                core_request_id,
-                TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
-            );
+            let _ = progress_sender
+                .send(MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
+                        TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
+                    ))
+                ))
+                .await;
 
             if received_bytes >= file_size as usize {
                 break Ok(());
@@ -181,23 +187,12 @@ impl DataChannel {
 
         let percentage = received_bytes as f64 / file_size as f64;
         if let Err(e) = result {
-            self.update_progress(
-                core_request_id,
-                TransferProgress::fail(self.resource_id, percentage, e.to_string())
-            );
-        } else {
-            self.update_progress(core_request_id, TransferProgress::progress(self.resource_id, percentage));
+            return Err(e);
+        } else if percentage < 1.0 {
+            return Err(DataChannelError::DataCorrupted);
         }
 
         Ok(())
-    }
-
-    pub fn update_progress(&self, core_request_id: u32, progress: TransferProgress) -> JoinHandle<()> {
-        let runtime = self.shell_runtime.clone();
-        runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
-            core_request_id,
-            CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
-        )))
     }
 
     pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
@@ -207,6 +202,8 @@ impl DataChannel {
                 return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
             }
         };
+
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(1000));
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
@@ -232,19 +229,23 @@ impl DataChannel {
                 }
             }));
 
-            self.update_progress(
-                core_request_id,
-                TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
-            );
+            let _ = progress_sender
+                .send(MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
+                        TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
+                    ))
+                ))
+                .await;
         }
 
         log::info!(target: "nearby", "Total sent: {} vs {}", total_sent, file_size);
 
         if total_sent < file_size as usize {
-            Err(DataChannelError::DataCorrupted)
-        } else {
-            Ok(())
+            return Err(DataChannelError::DataCorrupted);
         }
+
+        Ok(())
     }
 }
 

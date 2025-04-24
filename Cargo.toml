@@ -65,6 +65,8 @@ h3ron = { version = "0.18.0" }
 geo-types = "0.7.16"
 sysinfo = { version = "0.34.1" }
 bytes = "1.10.1"
+debounced = "0.2.0"
+futures-channel = "0.3.31"
 
 [patch.crates-io]
 # This one is including a memory leak fix for surrealdb on 2.2.0

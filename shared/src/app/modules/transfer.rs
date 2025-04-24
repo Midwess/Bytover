@@ -102,12 +102,10 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_transfer_selection_service.add_resources(it.clone(), selections).await;
                 it.request_from_shell(CoreOperation::Render).await;
             }),
-            TransferEvent::RemoveResource(id) => {
-                Command::new(|it| async move {
-                    let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
-                    resource_transfer_selection_service.remove_resource(it, id).await;
-                })
-            }
+            TransferEvent::RemoveResource(id) => Command::new(|it| async move {
+                let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
+                resource_transfer_selection_service.remove_resource(it, id).await;
+            }),
             TransferEvent::UpdateResourcesModel { new, removed } => {
                 model.transfer.selected_resources.extend(new);
                 model

@@ -155,7 +155,7 @@ impl PeerCommunication {
                             // If channel got lagged, it will be closed automatically
                             data_channel.auto_close(true);
                             Arc::new(data_channel)
-                        },
+                        }
                         Err(e) => {
                             log::error!(target: "peer", "Failed to create data channel {:?}", e);
                             return;
@@ -193,19 +193,17 @@ impl PeerCommunication {
                     // while the buffer is not empty
                     data_channel.auto_close(false);
                     data_channel
-                },
+                }
                 Err(_) => {
                     return Err(PeerErrors::NoResponseFromPeer);
                 }
-                Ok(Err(e)) => {
-                    match e {
-                        RecvError::Closed => {
-                            return Err(PeerErrors::NoResponseFromPeer);
-                        }
-                        RecvError::Lagged(e) => {
-                            log::warn!(target: "peer", "Data channel lagged by {:?} channels", e);
-                            continue;
-                        }
+                Ok(Err(e)) => match e {
+                    RecvError::Closed => {
+                        return Err(PeerErrors::NoResponseFromPeer);
+                    }
+                    RecvError::Lagged(e) => {
+                        log::warn!(target: "peer", "Data channel lagged by {:?} channels", e);
+                        continue;
                     }
                 }
             };
