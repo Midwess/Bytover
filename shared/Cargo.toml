@@ -5,16 +5,6 @@ edition = "2021"
 
 [profile.dev]
 opt-level = 0
-debug = 1
-strip = false
-split-debuginfo = "unpacked"
-incremental = true
-codegen-units = 256
-lto = false
-panic = "unwind"
-debug-assertions = true
-overflow-checks = true
-rpath = false
 
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]

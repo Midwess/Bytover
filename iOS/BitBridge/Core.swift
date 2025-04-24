@@ -168,6 +168,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func onMediasChanged() async {
+        await self.update(.transfer(.beginLoadingResources))
         var selections: [ResourceSelection] = []
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
@@ -195,11 +196,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
                 type: resourceType
             )
             
-            selections.append(resourceSelection)
+            await self.update(.transfer(.addResources([resourceSelection])))
         }
         
+        await self.update(.transfer(.endLoadingResources))
         self.selectedMediaItems.removeAll()
-        await self.update(.transfer(.addResources(selections)))
     }
     
     func getFileSize(item_identifier: String) async -> UInt64 {
@@ -331,7 +332,7 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(selected_resources: [], transfer_method_selection: .device, nearby_peers: []);
+        x.transfer = TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: []);
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
         x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
         return x

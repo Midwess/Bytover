@@ -437,7 +437,7 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
 				CURRENT_PROJECT_VERSION = 0.1;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
+				DEVLOG_PUBLIC_GATEWAY_HOST = YMQ9KLHPG6.local;
 				DEVLOG_PUBLIC_GATEWAY_PORT = 8000;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_NAME = shared;
@@ -468,7 +468,7 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
 				CURRENT_PROJECT_VERSION = 0.1;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
+				DEVLOG_PUBLIC_GATEWAY_HOST = YMQ9KLHPG6.local;
 				DEVLOG_PUBLIC_GATEWAY_PORT = 8000;
 				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = YES;

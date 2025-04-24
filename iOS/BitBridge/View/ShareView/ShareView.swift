@@ -20,8 +20,8 @@ public struct ShareView: View {
     public var body: some View {
         ZStack(alignment: .bottom) {
             StunningBackgroundGradient()
-            ScrollView(.vertical) {
-                VStack(alignment: .center) {
+            ScrollView {
+                LazyVStack(spacing: 8) {
                     LogoScene(gltfFileName: "Rocket", logoScale: 1.7)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
@@ -46,11 +46,19 @@ public struct ShareView: View {
                     ContentPickerView()
                         .padding(.trailing, SpaceTheme.screen.value - 10)
                     
-                    LazyVStack(spacing: 8) {
-                        ForEach(core.transfer?.selected_resources ?? [], id: \.self.order_id) { item in
-                            SelectedResourceItem(resource: item)
-                                .padding(.horizontal, 15)
-                                .id(item.order_id)
+                    ForEach(core.transfer?.selected_resources ?? [], id: \.self.order_id) { item in
+                        SelectedResourceItem(resource: item)
+                            .padding(.horizontal, 15)
+                            .id(item.order_id)
+                    }
+                    
+                    if core.transfer?.is_loading_selected_resources ?? false {
+                        VStack(alignment: .center, spacing: 5) {
+                            ProgressView()
+                                .scaleEffect(1.3)
+                                .frame(width: 40, height: 40)
+                            Text("Some media may need to download from iCloud")
+                                .modifier(Label1())
                         }
                     }
                     

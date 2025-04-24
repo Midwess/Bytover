@@ -13,11 +13,17 @@ pub struct ResourceSelection {
     pub path: LocalResourcePath,
     pub r#type: ResourceType
 }
-
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
     pub async fn load_resources(&self, ctx: AppCommandContext) {
+        ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+            new: vec![],
+            removed: vec![]
+        }));
+
+        ctx.request_from_shell(CoreOperation::Render).await;
+
         let resources = LocalResourceDatabaseOperation::find_all().into_future(ctx.clone()).await;
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
             new: resources,
@@ -27,10 +33,10 @@ impl ResourceTransferSelectionService {
         ctx.request_from_shell(CoreOperation::Render).await;
     }
 
-    pub async fn add_resources(&self, ctx: AppCommandContext, selections: Vec<ResourceSelection>) {
-        let mut local_resources = vec![];
+    pub async fn add_resources(&self, ctx: AppCommandContext, mut selections: Vec<ResourceSelection>) {
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
-        for selection in selections {
+
+        while let Some(selection) = selections.pop() {
             log::info!(target: "transfer", "Add resource: {:?}", selection);
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
@@ -80,12 +86,17 @@ impl ResourceTransferSelectionService {
                 }
             };
 
-            local_resources.push(local_resource);
+            let new_resources = LocalResourceDatabaseOperation::add(vec![local_resource]).into_future(ctx.clone()).await;
+            ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                new: new_resources,
+                removed: vec![]
+            }));
+
+            ctx.request_from_shell(CoreOperation::Render).await;
         }
 
-        let new_resources = LocalResourceDatabaseOperation::add(local_resources).into_future(ctx.clone()).await;
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-            new: new_resources,
+            new: vec![],
             removed: vec![]
         }));
 
@@ -93,7 +104,6 @@ impl ResourceTransferSelectionService {
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {
-        log::info!(target: "transfer", "Remove resource {:?}", id);
         let removed_resource = LocalResourceDatabaseOperation::remove(id).into_future(ctx.clone()).await;
         if let Some(removed_resource) = removed_resource {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {

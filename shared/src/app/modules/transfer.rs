@@ -1,5 +1,6 @@
 use crate::app::file_system::file::LocalResource;
 use crate::app::modules::AppModule;
+use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
 use crate::app::transfer::session::TransferSession;
 use crate::app::transfer::target::TransferTarget;
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_resources: Vec<LocalResource>,
+    is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
     transfer_sessions: Vec<TransferSession>,
     transfer_targets: Vec<TransferTarget>
@@ -25,6 +27,7 @@ pub struct TransferModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     selected_resources: Vec<SelectedResourceViewModel>,
+    is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
     nearby_peers: Vec<PeerViewModel>
 }
@@ -36,6 +39,10 @@ pub struct TransferModule {}
 pub enum TransferEvent {
     // Event from shell
     Launch(),
+    // This event is used to notify the core that the shell need sometime to load resources
+    // The core will control the loading progress after the AddResources is triggered
+    BeginLoadingResources(),
+    EndLoadingResources(),
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
     StartTransfer {
@@ -78,14 +85,29 @@ impl AppModule<BitBridge> for TransferModule {
                     resource_transfer_selection_service.load_resources(it).await;
                 })
             }
+            TransferEvent::BeginLoadingResources() => {
+                model.transfer.is_loading_selected_resources = true;
+                Command::new(async |it| {
+                    it.request_from_shell(CoreOperation::Render).await;
+                })
+            }
+            TransferEvent::EndLoadingResources() => {
+                model.transfer.is_loading_selected_resources = false;
+                Command::new(|it| async move {
+                    it.request_from_shell(CoreOperation::Render).await;
+                })
+            }
             TransferEvent::AddResources(selections) => Command::new(|it| async move {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
-                resource_transfer_selection_service.add_resources(it, selections).await;
+                resource_transfer_selection_service.add_resources(it.clone(), selections).await;
+                it.request_from_shell(CoreOperation::Render).await;
             }),
-            TransferEvent::RemoveResource(id) => Command::new(|it| async move {
-                let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
-                resource_transfer_selection_service.remove_resource(it, id).await;
-            }),
+            TransferEvent::RemoveResource(id) => {
+                Command::new(|it| async move {
+                    let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
+                    resource_transfer_selection_service.remove_resource(it, id).await;
+                })
+            }
             TransferEvent::UpdateResourcesModel { new, removed } => {
                 model.transfer.selected_resources.extend(new);
                 model
@@ -135,7 +157,9 @@ impl AppModule<BitBridge> for TransferModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
+        log::info!(target: "transfer", "Viewing transfer model is loading: {}", model.transfer.is_loading_selected_resources);
         Self::ViewModel {
+            is_loading_selected_resources: model.transfer.is_loading_selected_resources,
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
             transfer_method_selection: model.transfer.transfer_method_selection.clone(),
             nearby_peers: model
