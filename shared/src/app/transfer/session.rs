@@ -114,6 +114,8 @@ impl TransferSession {
     }
 
     pub fn is_completed(&self) -> bool {
-        self.progress.iter().all(|it| it.status.is_completed())
+        let resource_left = self.progress.iter().filter(|it| !it.status.is_completed()).count();
+
+        resource_left == 0
     }
 }

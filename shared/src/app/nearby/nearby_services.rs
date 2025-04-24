@@ -47,7 +47,7 @@ impl NearbyService {
             None => Peer {
                 id: peer_id.clone(),
                 name: None,
-                avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
+                avatar_url: Peer::random_avatar(),
                 email: None,
                 device
             }
