@@ -165,6 +165,7 @@ struct CircleWaveEffect: ViewModifier {
             .onChange(of: scenePhase, { _, newPhase in
                 switch newPhase {
                 case .background:
+                    animationPhase = 0
                     timer?.invalidate()
                     timer = nil
                 default:
@@ -175,6 +176,7 @@ struct CircleWaveEffect: ViewModifier {
                 }
             })
             .onDisappear {
+                animationPhase = 0
                 timer?.invalidate()
                 timer = nil
             }
