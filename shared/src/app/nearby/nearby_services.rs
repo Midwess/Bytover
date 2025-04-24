@@ -53,6 +53,9 @@ impl NearbyService {
             }
         };
 
+        ctx.send_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new: peer.clone() }));
+        ctx.request_from_shell(CoreOperation::Render).await;
+
         let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
         let mut start_p2p_server_stream = ctx.stream_from_shell(start_p2p_server_request);
 

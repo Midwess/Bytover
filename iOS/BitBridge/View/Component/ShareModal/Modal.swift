@@ -30,13 +30,15 @@ extension TransferMethodSelection {
         }
     }
     
-    var icon: Image {
-        get {
-            switch self {
-            case .device: return ImageAsset.DeviceEmpty.image
-            case .user: return ImageAsset.UserEmpty.image
-            case .internet: return ImageAsset.GlobeEmpty.image
+    func icon(_ model: NearbyViewModel?) -> AnyView {
+        switch self {
+        case .device: return AnyView(ImageAsset.DeviceEmpty.image)
+        case .user:
+            if let peer_avatar = model?.me?.avatar {
+                return AnyView(Avartar(avatar: peer_avatar))
             }
+            return AnyView(ImageAsset.UserEmpty.image)
+        case .internet: return AnyView(ImageAsset.GlobeEmpty.image)
         }
     }
     
@@ -59,7 +61,7 @@ struct ShareModal: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .center, spacing: 15) {
-                selection.icon
+                selection.icon(core.nearby)
                     .frame(width: 54, height: 54)
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.GreenSecondary.color)

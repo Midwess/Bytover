@@ -23,6 +23,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     @Published var environment: EnvironmentViewModel?
     @Published var authentication: AuthenticationViewModel?
     @Published var transfer: TransferViewModel?
+    @Published var nearby: NearbyViewModel?
     @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
@@ -44,6 +45,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         self.authentication = model.authentication
         self.environment = model.environment
         self.transfer = model.transfer
+        self.nearby = model.nearby
         
         if self.authentication?.user != nil {
             self.isSignedIn = true

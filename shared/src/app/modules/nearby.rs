@@ -15,11 +15,13 @@ use serde::{Deserialize, Serialize};
 pub struct NearbyModel {
     pub device: Option<DeviceInfo>,
     pub finding_scopes: Vec<FindingScope>,
+    pub me: Option<Peer>,
     pub peers: Vec<Peer>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct NearbyViewModel {
+    pub me: Option<PeerViewModel>,
     pub peers: Vec<PeerViewModel>
 }
 
@@ -32,6 +34,7 @@ pub enum NearbyEvent {
     OnLocationUpdated(GeoLocation),
     OnIpAddressUpdated(String),
 
+    UpdateMe { new: Peer },
     UpdateNearbyPeers { new: Vec<Peer>, removed: Vec<Peer> },
 
     ClearNearbyPeers
@@ -88,11 +91,18 @@ impl AppModule<BitBridge> for NearbyModule {
                     it.notify_shell(CoreOperation::Render);
                 })
             }
+            NearbyEvent::UpdateMe { new } => {
+                model.nearby.me = Some(new);
+                Command::new(|it| async move {
+                    it.notify_shell(CoreOperation::Render);
+                })
+            }
         }
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
+            me: model.nearby.me.as_ref().map(PeerViewModel::from),
             peers: model.nearby.peers.iter().map(PeerViewModel::from).collect()
         }
     }
