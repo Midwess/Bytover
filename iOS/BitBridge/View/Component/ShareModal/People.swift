@@ -21,11 +21,13 @@ struct PeopleShareItem: View {
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
                 
-                Text("Nearby \(peer.transfer_progress)")
+                Text("Nearby")
                     .modifier(Label2())
                     .padding(.trailing, 8)
                     .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
             }
+            SharingProgress(progress: peer.transfer_progress)
+                .frame(width: 42, height: 42)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)

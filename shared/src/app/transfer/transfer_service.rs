@@ -63,6 +63,7 @@ impl TransferService {
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session.clone()],
+            updated: vec![],
             removed: vec![]
         }));
 
@@ -82,6 +83,13 @@ impl TransferService {
                         }
 
                         transfer_session.update_progress(progress);
+                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+                            new: vec![],
+                            removed: vec![],
+                            updated: vec![transfer_session.clone()]
+                        }));
+
+                        cmd.notify_shell(CoreOperation::Render);
                     }
                     other => {
                         log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
@@ -159,7 +167,8 @@ impl TransferService {
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session.clone()],
-            removed: vec![]
+            removed: vec![],
+            updated: vec![]
         }));
 
         let response = Response::TransferResponse(TransferResponseMessage {});
@@ -185,6 +194,12 @@ impl TransferService {
                         }
 
                         transfer_session.update_progress(progress);
+                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+                            new: vec![],
+                            removed: vec![],
+                            updated: vec![transfer_session.clone()]
+                        }));
+                        cmd.notify_shell(CoreOperation::Render);
                     }
                     _ => {
                         continue;

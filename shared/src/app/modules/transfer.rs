@@ -56,7 +56,8 @@ pub enum TransferEvent {
     // Event from core
     UpdateTransferSessions {
         new: Vec<TransferSession>,
-        removed: Vec<TransferSession>
+        removed: Vec<TransferSession>,
+        updated: Vec<TransferSession>
     },
     UpdateResourcesModel {
         new: Vec<LocalResource>,
@@ -138,12 +139,19 @@ impl AppModule<BitBridge> for TransferModule {
                     log::info!(target: "transfer", "Done download, shell should done");
                 })
             }
-            TransferEvent::UpdateTransferSessions { new, removed } => {
+            TransferEvent::UpdateTransferSessions { new, removed, updated } => {
                 model.transfer.transfer_sessions.extend(new);
                 model
                     .transfer
                     .transfer_sessions
                     .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
+
+                for updated in updated {
+                    if let Some(index) = model.transfer.transfer_sessions.iter().position(|it| it.order_id == updated.order_id) {
+                        model.transfer.transfer_sessions[index] = updated;
+                    }
+                }
+
                 Command::done()
             }
             TransferEvent::UpdateTransferTargets { new, removed } => {
@@ -155,7 +163,6 @@ impl AppModule<BitBridge> for TransferModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        log::info!(target: "transfer", "Viewing transfer model is loading: {}", model.transfer.is_loading_selected_resources);
         Self::ViewModel {
             is_loading_selected_resources: model.transfer.is_loading_selected_resources,
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
@@ -171,6 +178,7 @@ impl AppModule<BitBridge> for TransferModule {
                             .transfer_sessions
                             .iter()
                             .find(|it| it.peer_id().as_ref().unwrap().to_string() == peer.id);
+
                         Some(PeerViewModel {
                             id: peer.id.clone(),
                             display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
