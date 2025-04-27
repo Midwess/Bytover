@@ -13,9 +13,12 @@ struct ContentView: View {
     @EnvironmentObject var core: Core
     
     var body: some View {
-        LandingView()
-            .navigate(to: HomeView(), when: $core.isSignedIn)
-            .overlay(FadingBackground())
+        ZStack {
+            LandingView()
+                .navigate(to: HomeView(), when: $core.isSignedIn)
+                .overlay(FadingBackground())
+            Alert()
+        }
     }
 }
 struct CounterView_Previews: PreviewProvider {

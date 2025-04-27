@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SharedTypes
+import ToastUI
 
 @main
 struct Main: App {

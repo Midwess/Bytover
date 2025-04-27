@@ -121,10 +121,28 @@ impl AppModule<BitBridge> for TransferModule {
                 let transfer_targets = model.transfer.transfer_targets.clone();
                 let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {
                     return Command::done();
-                };
+                }; 
+
+                let duplicated_session = model.transfer.transfer_sessions.iter().find(|it| {
+                    if it.is_completed() {
+                        return false;
+                    }
+
+                    if let TransferTarget::Nearby(peer) = &target {
+                        it.peer_id() == Some(peer.id()) && it.transfer_type == TransferType::Send
+                    } else {
+                        false
+                    }
+                }).cloned();
 
                 Command::new(async |it| {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
+                    if let Some(duplicated_session) = duplicated_session {
+                        if transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await {
+                            return;
+                        }
+                    }
+
                     transfer_service.transfer(selected_resources, target, it).await;
                 })
             }
@@ -196,18 +214,7 @@ impl AppModule<BitBridge> for TransferModule {
                                     None
                                 }
                             }),
-                            display_download_speed: session.and_then(|it| {
-                                if it.transfer_type == TransferType::Receive {
-                                    if it.is_initializing() {
-                                        return Some("Initializing".to_owned());
-                                    }
-
-                                    let bytes_per_second = it.bytes_per_second();
-                                    Some(format!("{:.2} MB/s", bytes_per_second as f64 / 1024.0 / 1024.0))
-                                } else {
-                                    None
-                                }
-                            })
+                            display_download_speed: None // The download speed is displayed in the received screen
                         })
                     }
                     _ => None

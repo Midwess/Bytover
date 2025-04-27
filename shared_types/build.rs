@@ -19,6 +19,7 @@ use shared::app::operations::database::{
     SessionOperationOutput
 };
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
+use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
@@ -53,8 +54,11 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<ResourceSelection>()?;
     gen.register_type::<FindingScope>()?;
     gen.register_type::<GeoLocation>()?;
+    gen.register_type::<AlertDialog>()?;
 
     // Register operation enums
+    gen.register_type::<DialogOperation>()?;
+    gen.register_type::<DialogOperationOutput>()?;
     gen.register_type::<DatabaseOperation>()?;
     gen.register_type::<DatabaseOperationOutput>()?;
     gen.register_type::<RpcOperation>()?;

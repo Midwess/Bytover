@@ -40,21 +40,6 @@ struct PeopleShareItem: View {
                             .padding(.leading, 1)
                             .scaleEffect(1)
                             .foregroundColor(Theme.BluePrimary.color)
-                        }
-                    
-                    if let downloadSpeed = peer.display_download_speed {
-                        ZStack(alignment: .trailing) {
-                            Text("00.00 MB/s")
-                                .font(.caption)
-                                .opacity(0)
-                            Text(downloadSpeed)
-                                .font(.caption)
-                                .foregroundColor(Theme.PrimaryText.color)
-                        }
-                        ImageAsset.Download.image
-                            .padding(.leading, 1)
-                            .scaleEffect(1)
-                            .foregroundColor(Theme.BluePrimary.color)
                     }
                     
                     Spacer()
@@ -66,7 +51,8 @@ struct PeopleShareItem: View {
                     .frame(width: 38, height: 38)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .clipShape(Capsule())

@@ -5,6 +5,7 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, Tr
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::database::DatabaseOperation;
+use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
@@ -27,8 +28,31 @@ impl TransferService {
         Self {}
     }
 
+    pub async fn cancel_transfer(&self, transfer_session: TransferSession, cmd: AppCommandContext) -> bool {
+        log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
+        let confirmation = DialogOperation::alert(AlertDialog::confirmation(
+            "Cancel the transfer ?".to_string(),
+            "Yes".to_string(),
+            Some("No".to_string())
+        )).into_future(cmd.clone()).await;
+        if !confirmation {
+            return false;
+        }
+
+        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            new: vec![],
+            removed: vec![transfer_session.clone()],
+            updated: vec![]
+        }));
+
+        cmd.notify_shell(CoreOperation::Render);
+
+        true
+    }
+
     pub async fn transfer(&self, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
         if selected_resources.is_empty() {
+            DialogOperation::toast("No resources selected".to_string()).into_future(cmd.clone()).await;
             return;
         }
 
@@ -125,6 +149,14 @@ impl TransferService {
         }
 
         log::info!(target: "transfer", "Transfer session completed");
+
+        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            new: vec![],
+            removed: vec![transfer_session.clone()],
+            updated: vec![]
+        }));
+
+        cmd.notify_shell(CoreOperation::Render);
     }
 
     pub async fn received_session_request(

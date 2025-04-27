@@ -19,6 +19,21 @@ import AVFoundation
 import CoreLocation
 import Combine;
 
+final class SingleWaiter<T> {
+    private var continuation: CheckedContinuation<T, Never>?
+
+    func wait() async -> T {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resolve(_ value: T) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}
+
 @MainActor
 class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocationManagerDelegate {
     var environment: CurrentValueSubject<EnvironmentViewModel?, Never> = .init(nil)
@@ -27,6 +42,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
     @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
+    var alert: CurrentValueSubject<(AlertDialog, SingleWaiter<Bool>)?, Never> = .init(nil)
+    var toastMessage: CurrentValueSubject<String?, Never> = .init(nil)
     
     @Environment(\.openURL) private var openURL
     
@@ -159,6 +176,14 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .appCapabilities(.notified(let event)):
             await self.update(event)
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+        case .appCapabilities(.dialog(.alert(let alert))):
+            self.alert.send((alert, SingleWaiter()))
+            let response = await self.alert.value!.1.wait()
+            self.alert.send(nil)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.alert(is_confirmed: response)).bincodeSerialize()))
+        case .appCapabilities(.dialog(.toast(let message))):
+            self.toastMessage.send(message)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
         }
     }
     

@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 80ABCDEC1AE53705DFC3637E /* libshared_static.a */; };
 		97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		C71F863B2D8C613600C51846 /* buildAndRunMultipleSimulators.sh in Sources */ = {isa = PBXBuildFile; fileRef = C71F863A2D8C613500C51846 /* buildAndRunMultipleSimulators.sh */; };
+		C73956D02DBE7DB900A73950 /* ToastUI in Frameworks */ = {isa = PBXBuildFile; productRef = C73956CF2DBE7DB900A73950 /* ToastUI */; };
 		C757A8712D662A31005561E9 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = C757A86F2D662A2A005561E9 /* Shaders.metal */; };
 		C79443152D49065900866E37 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430D2D49065900866E37 /* App.swift */; };
 		C79443172D4907CB00866E37 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C79443162D4907CB00866E37 /* shared.udl */; };
@@ -109,7 +109,6 @@
 		4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		58EE16ACA8E76DC26004C5AA /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
-		C71F863A2D8C613500C51846 /* buildAndRunMultipleSimulators.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = buildAndRunMultipleSimulators.sh; sourceTree = "<group>"; };
 		C757A8312D649E26005561E9 /* shared-types */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "shared-types"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C757A86F2D662A2A005561E9 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -127,6 +126,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C73956D02DBE7DB900A73950 /* ToastUI in Frameworks */,
 				0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */,
 				D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */,
 				C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */,
@@ -146,7 +146,6 @@
 		1C46BF452BA4D4CC56D829CE = {
 			isa = PBXGroup;
 			children = (
-				C71F863A2D8C613500C51846 /* buildAndRunMultipleSimulators.sh */,
 				C79443162D4907CB00866E37 /* shared.udl */,
 				1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */,
 				A47BF5DCC98B22ED079F3B75 /* Packages */,
@@ -230,6 +229,7 @@
 			packageProductDependencies = (
 				5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */,
 				C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */,
+				C73956CF2DBE7DB900A73950 /* ToastUI */,
 			);
 			productName = BitBridge;
 			productReference = 4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */;
@@ -282,6 +282,7 @@
 			packageReferences = (
 				DBDCE38EE48AEA503735ADA5 /* XCLocalSwiftPackageReference "../shared_types/generated/swift/SharedTypes" */,
 				C7B01BC92D5CF60900F9C90A /* XCRemoteSwiftPackageReference "GLTFSceneKit" */,
+				C73956CE2DBE7D5500A73950 /* XCRemoteSwiftPackageReference "ToastUI" */,
 			);
 			projectDirPath = "";
 			projectReferences = (
@@ -369,7 +370,6 @@
 				C79443172D4907CB00866E37 /* shared.udl in Sources */,
 				C757A8712D662A31005561E9 /* Shaders.metal in Sources */,
 				C794AB252D5C6E30003CD57F /* Core.swift in Sources */,
-				C71F863B2D8C613600C51846 /* buildAndRunMultipleSimulators.sh in Sources */,
 				C79443152D49065900866E37 /* App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -650,6 +650,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		C73956CE2DBE7D5500A73950 /* XCRemoteSwiftPackageReference "ToastUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/quanshousio/ToastUI.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.0;
+			};
+		};
 		C7B01BC92D5CF60900F9C90A /* XCRemoteSwiftPackageReference "GLTFSceneKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/magicien/GLTFSceneKit";
@@ -664,6 +672,11 @@
 		5C3D6239ABFA0F06CCCA18E4 /* SharedTypes */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SharedTypes;
+		};
+		C73956CF2DBE7DB900A73950 /* ToastUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C73956CE2DBE7D5500A73950 /* XCRemoteSwiftPackageReference "ToastUI" */;
+			productName = ToastUI;
 		};
 		C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */ = {
 			isa = XCSwiftPackageProductDependency;

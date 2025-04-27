@@ -6,10 +6,12 @@ pub mod p2p;
 pub mod rpc;
 pub mod transfer;
 pub mod webview;
+pub mod dialog;
 
 use crux_core::capability::Operation;
 use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
+use dialog::{DialogOperation, DialogOperationOutput};
 use internet::{InternetOperation, InternetOperationOutput};
 use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use p2p::{P2POperation, P2POperationOutput};
@@ -36,7 +38,8 @@ pub enum CoreOperation {
     Render,
     InitNativeExecutor,
     Void,
-    Notified(AppEvent)
+    Notified(AppEvent),
+    Dialog(DialogOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -52,7 +55,8 @@ pub enum CoreOperationOutput {
     InitNativeExecutor,
     Void,
     ConnectionError(NetworkError),
-    DeviceError(DeviceError)
+    DeviceError(DeviceError),
+    Dialog(DialogOperationOutput)
 }
 
 impl Operation for CoreOperation {
