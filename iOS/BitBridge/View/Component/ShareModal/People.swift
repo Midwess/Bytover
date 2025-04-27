@@ -22,24 +22,25 @@ struct PeopleShareItem: View {
                 Text(peer.display_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     Text("Nearby")
                         .modifier(Label2())
                         .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
                     
                     if let uploadSpeed = peer.display_upload_speed {
-                        ZStack(alignment: .trailing) {
-                            Text("00.00 MB/s")
+                        ZStack(alignment: .leading) {
+                            Text("00000.0 MB/s")
                                 .font(.caption)
                                 .opacity(0)
-                            Text(uploadSpeed)
-                                .font(.caption)
-                                .foregroundColor(Theme.PrimaryText.color)
+                            HStack {
+                                Text(uploadSpeed)
+                                    .font(.caption)
+                                    .foregroundColor(Theme.PrimaryText.color)
+                                ImageAsset.Upload.image
+                                    .offset(x: -1)
+                                    .foregroundColor(Theme.BluePrimary.color)
+                            }
                         }
-                        ImageAsset.Upload.image
-                            .padding(.leading, 1)
-                            .scaleEffect(1)
-                            .foregroundColor(Theme.BluePrimary.color)
                     }
                     
                     Spacer()

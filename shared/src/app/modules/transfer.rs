@@ -143,7 +143,7 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(async |it| {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     if let Some(duplicated_session) = duplicated_session {
-                        if transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await {
+                        if !transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await {
                             return;
                         }
                     }
@@ -214,7 +214,12 @@ impl AppModule<BitBridge> for TransferModule {
                                         return Some("Initializing".to_owned());
                                     }
                                     let bytes_per_second = it.bytes_per_second();
-                                    Some(format!("{:.2} MB/s", bytes_per_second as f64 / 1024.0 / 1024.0))
+                                    let kb_per_second = bytes_per_second as f64 / 1024.0;
+                                    if kb_per_second < 100.0 {
+                                        Some(format!("{:.1} KB/s", kb_per_second))
+                                    } else {
+                                        Some(format!("{:.1} MB/s", kb_per_second / 1024.0))
+                                    }
                                 } else {
                                     None
                                 }
