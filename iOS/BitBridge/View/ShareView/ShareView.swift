@@ -14,6 +14,8 @@ public struct ShareView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject var core: Core
+    @State private var selectedResources: [SelectedResourceViewModel] = []
+    @State private var isLoadingSelectedResource = false
     @State private var startTime = Date.now
     @State private var showShareModal = false
 
@@ -39,20 +41,20 @@ public struct ShareView: View {
                     
                     UpgradePremiumButton()
                     
-                    if core.transfer?.selected_resources.isEmpty ?? true {
+                    if selectedResources.isEmpty {
                         Spacer().frame(height: 150)
                     }
                     
                     ContentPickerView()
                         .padding(.trailing, SpaceTheme.screen.value - 10)
                     
-                    ForEach(core.transfer?.selected_resources ?? [], id: \.self) { item in
+                    ForEach(selectedResources, id: \.self) { item in
                         SelectedResourceItem(resource: item)
                             .padding(.horizontal, 15)
                             .id(item.order_id)
                     }
                     
-                    if core.transfer?.is_loading_selected_resources ?? false {
+                    if isLoadingSelectedResource {
                         VStack(alignment: .center, spacing: 5) {
                             ProgressView()
                                 .scaleEffect(1.3)
@@ -73,10 +75,16 @@ public struct ShareView: View {
                 .padding(.bottom, safeAreaInsets.bottom + 16)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
+        .ignoresSafeArea()
         .task {
             await core.update(.transfer(.launch))
         }
-        .ignoresSafeArea()
+        .onReceive(self.core.transfer, perform: { value in
+            self.isLoadingSelectedResource = value?.is_loading_selected_resources ?? false
+            if self.selectedResources.count != value?.selected_resources.count ?? 0 {
+                self.selectedResources = value?.selected_resources ?? []
+            }
+        })
     }
 }
 

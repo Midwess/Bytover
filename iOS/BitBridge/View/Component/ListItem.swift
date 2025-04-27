@@ -101,7 +101,7 @@ struct SelectedResourceItem: View {
     
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
-           ResourceImage(resource: resource)
+            ResourceImage(resource: resource)
                 .foregroundColor(.black.opacity(0.5))
             
             VStack(alignment: .leading, spacing: 5) {
@@ -128,7 +128,7 @@ struct SelectedResourceItem: View {
                         .modifier(Label1())
                 }
                 else {
-                   Text("\(String(resource.size_mb)) MB")
+                    Text("\(String(resource.size_mb)) MB")
                         .modifier(Label2())
                         .opacity(0.7)
                 }
@@ -161,12 +161,18 @@ struct SelectedResourceItem: View {
         .onDisappear {
             isVisible = false
         }
+        .onReceive(self.core.transfer, perform: { value in
+            let newResource = value?.selected_resources.first(where: { resource in resource.order_id == self.resource.order_id }) ?? self.resource
+            if newResource != self.resource {
+                self.resource = newResource
+            }
+        })
     }
 }
 
 #Preview {
     ZStack {
-        SelectedResourceItem(resource: CoreMock.withSelectedFileTransfers().transfer!.selected_resources[0])
+        SelectedResourceItem(resource: CoreMock.withSelectedFileTransfers().transfer.value!.selected_resources[0])
             .padding()
     }
 }

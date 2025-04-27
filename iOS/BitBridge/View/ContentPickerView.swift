@@ -8,10 +8,12 @@
 import Foundation
 import SwiftUI
 import PhotosUI
+import SharedTypes
 
 struct ContentPickerView: View {
     @State private var isShowingConfirmationDialog = false
     @State private var isShowingPhotosPicker = false
+    @State private var selectedResources: [SelectedResourceViewModel] = []
     
     @EnvironmentObject private var core: Core
     
@@ -21,7 +23,7 @@ struct ContentPickerView: View {
                 self.isShowingConfirmationDialog = true
             }) {
                 HStack {
-                    if core.transfer?.selected_resources.isEmpty ?? true {
+                    if self.selectedResources.isEmpty {
                         Text("Add files now")
                             .modifier(Label2())
                             .foregroundStyle(Theme.PrimaryText.color.opacity(0.7))
@@ -71,6 +73,11 @@ struct ContentPickerView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .foregroundStyle(Theme.PrimaryText.color)
+            .onReceive(self.core.transfer, perform: { value in
+                if value?.selected_resources.count != self.selectedResources.count {
+                    self.selectedResources = value?.selected_resources ?? []
+                }
+            })
         }
     }
 }

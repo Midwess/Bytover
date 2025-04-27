@@ -17,13 +17,14 @@ import PhotosUI
 import Photos
 import AVFoundation
 import CoreLocation
+import Combine;
 
 @MainActor
-class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate {
-    @Published var environment: EnvironmentViewModel?
-    @Published var authentication: AuthenticationViewModel?
-    @Published var transfer: TransferViewModel?
-    @Published var nearby: NearbyViewModel?
+class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocationManagerDelegate {
+    var environment: CurrentValueSubject<EnvironmentViewModel?, Never> = .init(nil)
+    var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
+    var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
+    var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
     @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     
@@ -42,12 +43,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func update_view(_ model: AppViewModel) {
-        self.authentication = model.authentication
-        self.environment = model.environment
-        self.transfer = model.transfer
-        self.nearby = model.nearby
+        self.authentication.send(model.authentication)
+        self.environment.send(model.environment)
+        self.transfer.send(model.transfer)
+        self.nearby.send(model.nearby)
         
-        if self.authentication?.user != nil {
+        if self.authentication.value?.user != nil {
             self.isSignedIn = true
         }
     }
@@ -162,7 +163,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     }
     
     func msgFromNative(_ event: Data) async {
-        var event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
+        let event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
         case .handleResponse(let id, let response):
             await self._handleResponse(id, response)
@@ -171,7 +172,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
     
     func onMediasChanged() async {
         await self.update(.transfer(.beginLoadingResources))
-        var selections: [ResourceSelection] = []
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
             
@@ -192,7 +192,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
                 }
             }()
             
-            let absolute = await asset.getAbsoluteURL()
             let resourceSelection = ResourceSelection(
                 path: .platformIdentifier(identifier),
                 type: resourceType
@@ -258,18 +257,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, CLLocationManagerDelegate 
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
-            
         case .authorizedWhenInUse:
             print("Location authorized when in use")
             lastKnownLocation = manager.location?.coordinate
-            
-        @unknown default:
+        default:
             print("Location service disabled")
         }
-    }
-    
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        checkLocationAuthorization()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -334,9 +327,9 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: []);
-        x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
-        x.transfer?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
+        x.transfer = .init(TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: []));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
         return x
     }
     
@@ -426,7 +419,7 @@ extension PHAsset {
             return cached
         }
         
-        var options = PHFetchOptions()
+        let options = PHFetchOptions()
         options.fetchLimit = 1
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
         guard let asset = fetchResult.firstObject,

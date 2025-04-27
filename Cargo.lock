@@ -1701,16 +1701,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "575f75dfd25738df5b91b8e43e14d44bda14637a58fae779fd2b064f8bf3e010"
 
 [[package]]
-name = "debounced"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "107e5cd9b5163c19751e53eef634cae25cf5ed5f6d0c81125feaa92e43703cc7"
-dependencies = [
- "futures-timer",
- "futures-util",
-]
-
-[[package]]
 name = "der"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3571,15 +3561,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "objc2-core-foundation"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daeaf60f25471d26948a1c2f840e3f7d86f4109e3af4e8e4b5cd70c39690d925"
-dependencies = [
- "bitflags 2.8.0",
-]
-
-[[package]]
 name = "object"
 version = "0.36.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5216,11 +5197,9 @@ dependencies = [
  "chrono",
  "core-services",
  "crux_core",
- "debounced",
  "devlog-sdk",
  "domain",
  "erased-serde",
- "futures-channel",
  "futures-util",
  "geo-types",
  "h3ron",
@@ -5235,7 +5214,6 @@ dependencies = [
  "surreal_derive_plus",
  "surreal_devl",
  "surrealdb",
- "sysinfo 0.34.1",
  "thiserror 2.0.12",
  "tokio",
  "tokio-scoped",
@@ -5711,7 +5689,7 @@ dependencies = [
  "strsim",
  "subtle",
  "surrealkv",
- "sysinfo 0.33.1",
+ "sysinfo",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -5808,19 +5786,6 @@ dependencies = [
  "memchr",
  "ntapi",
  "rayon",
- "windows 0.57.0",
-]
-
-[[package]]
-name = "sysinfo"
-version = "0.34.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "927fa32067cbb22b8a91987d84c0ff94c7441ccf3f767165a58d77a656d6267c"
-dependencies = [
- "libc",
- "memchr",
- "ntapi",
- "objc2-core-foundation",
  "windows 0.57.0",
 ]
 

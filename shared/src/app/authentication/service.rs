@@ -30,7 +30,7 @@ impl AuthenticationService {
 
         let user = user.unwrap();
         ctx.send_event(AppEvent::Authentication(AuthenticationEvent::OnSignInSuccess { user }));
-        ctx.request_from_shell(CoreOperation::Render).await;
+        ctx.notify_shell(CoreOperation::Render);
     }
 
     pub async fn signin(&self, ctx: AppCommandContext) {

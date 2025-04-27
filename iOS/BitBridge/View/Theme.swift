@@ -147,6 +147,8 @@ enum ImageAsset: String {
     case DeviceEmpty
     case ArrowDown
     case Owl
+    case Download
+    case Upload
     
     var image: Image {
         get {

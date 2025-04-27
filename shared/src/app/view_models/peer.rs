@@ -12,7 +12,9 @@ pub struct PeerViewModel {
     pub display_name: String,
     pub avatar: AvatarViewModel,
     pub device: DeviceInfo,
-    pub transfer_progress: f64
+    pub transfer_progress: f64,
+    pub display_upload_speed: Option<String>,
+    pub display_download_speed: Option<String>
 }
 
 impl From<&Peer> for PeerViewModel {
@@ -22,7 +24,9 @@ impl From<&Peer> for PeerViewModel {
             display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
             avatar: AvatarViewModel::new(peer.avatar_url.clone()),
             device: peer.device.clone(),
-            transfer_progress: 0.0
+            transfer_progress: 0.0,
+            display_upload_speed: None,
+            display_download_speed: None
         }
     }
 }

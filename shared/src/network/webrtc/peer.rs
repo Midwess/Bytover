@@ -24,7 +24,7 @@ use crate::app::file_system::file::LocalResource;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferProgress, TransferSession};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
@@ -218,21 +218,19 @@ impl PeerCommunication {
             let resource = resources.remove(found_index);
             let order_id = resource.order_id;
             let shell_runtime = self.shell_runtime.clone();
+            let mut progress = TransferProgress::new(order_id, resource.size, TransferType::Send);
 
-            if let Err(e) = data_channel.start_upload(core_request_id, resource).await {
+            if let Err(e) = data_channel.start_upload(core_request_id, resource, &mut progress).await {
                 log::error!(target: "peer", "Failed to send resource {:?}", e);
+                progress.fail(e.to_string());
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(TransferProgress::fail(
-                        order_id,
-                        0.0,
-                        e.to_string()
-                    )))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
                 )));
 
                 let _ = data_channel.close().await;
             } else {
-                let progress = TransferProgress::success(order_id);
+                progress.success();
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
@@ -292,14 +290,15 @@ impl PeerCommunication {
 
             let out_resource = out_resources.remove(found_index);
             let shell_runtime = self.shell_runtime.clone();
-            match data_channel.start_download(core_request_id, &out_resource).await {
+            let mut progress = TransferProgress::new(out_resource.order_id, out_resource.size, TransferType::Receive);
+            match data_channel.start_download(core_request_id, &out_resource, &mut progress).await {
                 Ok(_) => {
-                    let progress = TransferProgress::success(out_resource.order_id);
+                    progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
                     shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                 }
                 Err(e) => {
-                    let progress = TransferProgress::fail(out_resource.order_id, 0.0, e.to_string());
+                    progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
                     shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                 }

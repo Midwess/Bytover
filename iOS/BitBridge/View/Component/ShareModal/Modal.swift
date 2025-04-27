@@ -55,13 +55,14 @@ extension TransferMethodSelection {
 
 struct ShareModal: View {
     @EnvironmentObject var core: Core
+    @State private var nearby: NearbyViewModel?
     @State private var selection = TransferMethodSelection.user
     let selections = TransferMethodSelection.allCases
     
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .center, spacing: 15) {
-                selection.icon(core.nearby)
+                selection.icon(nearby)
                     .frame(width: 54, height: 54)
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.GreenSecondary.color)
@@ -102,7 +103,6 @@ struct ShareModal: View {
             }
             
             selection.body
-                .frame(width: .infinity)
             
             Spacer()
         }
@@ -112,9 +112,10 @@ struct ShareModal: View {
             .clear
         )
         .clipShape(RoundedRectangle(cornerRadius: 36))
-//        .overlay(RoundedRectangle(cornerRadius: 36)
-//            .stroke(Theme.PrimaryText.color.opacity(0.1)))
         .shadow(radius: 2)
+        .onReceive(self.core.nearby, perform: {value in
+            self.nearby = value
+        })
     }
 }
 

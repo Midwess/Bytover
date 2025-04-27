@@ -1,7 +1,7 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::TransferProgress;
+use crate::app::transfer::session::{TransferProgress, TransferType};
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::File;
@@ -133,7 +133,7 @@ impl DataChannel {
         let _ = self.data_channel.close().await;
     }
 
-    pub async fn start_download(&self, core_request_id: u32, out_resource: &LocalResource) -> Result<(), DataChannelError> {
+    pub async fn start_download(&self, core_request_id: u32, out_resource: &LocalResource, progress: &mut TransferProgress) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
         let file_size = out_resource.size;
 
@@ -149,12 +149,11 @@ impl DataChannel {
         let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        let mut received_bytes = 0;
         log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
         let result = loop {
             let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
                 Ok(Some(bytes)) => bytes,
-                Ok(None) => match received_bytes > file_size as usize {
+                Ok(None) => match progress.is_completed() {
                     true => break Ok(()),
                     false => break Err(DataChannelError::DataCorrupted)
                 },
@@ -167,35 +166,34 @@ impl DataChannel {
                 break Err(DataChannelError::DataCorrupted);
             }
 
-            received_bytes += written_bytes;
+            progress.update_progress(written_bytes as u64);
 
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
-                        TransferProgress::progress(self.resource_id, received_bytes as f64 / file_size as f64)
+                        progress.clone()
                     ))
                 ))
                 .await;
 
-            if received_bytes >= file_size as usize {
+            if progress.is_completed() {
                 break Ok(());
             }
         };
 
-        log::info!(target: "nearby", "Received bytes final: {} vs {} for file {}", received_bytes, file_size, self.resource_id);
+        log::info!(target: "nearby", "Received bytes final: {} vs {} for file {}", progress.total_bytes_counter, file_size, self.resource_id);
 
-        let percentage = received_bytes as f64 / file_size as f64;
         if let Err(e) = result {
             return Err(e);
-        } else if percentage < 1.0 {
+        } else if !progress.is_completed() {
             return Err(DataChannelError::DataCorrupted);
         }
 
         Ok(())
     }
 
-    pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource) -> Result<(), DataChannelError> {
+    pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource, progress: &mut TransferProgress) -> Result<(), DataChannelError> {
         let saved_path = match &resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
@@ -203,7 +201,7 @@ impl DataChannel {
             }
         };
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(1000));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(500));
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
@@ -211,13 +209,12 @@ impl DataChannel {
 
         log::info!(target: "nearby", "Start uploading file: {}", saved_path);
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
-        let mut total_sent = 0;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
             if let Some(handle) = last_sent_handle {
                 let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
 
-            total_sent += bytes.len();
+            progress.update_progress(bytes.len() as u64);
             let data_channel = self.data_channel.clone();
             let throughput_controller = self.throughput_controller.clone();
             last_sent_handle = Some(spawn(async move {
@@ -233,15 +230,15 @@ impl DataChannel {
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
-                        TransferProgress::progress(self.resource_id, total_sent as f64 / file_size as f64)
+                        progress.clone()
                     ))
                 ))
                 .await;
         }
 
-        log::info!(target: "nearby", "Total sent: {} vs {}", total_sent, file_size);
+        log::info!(target: "nearby", "Total sent: {} vs {}", progress.total_bytes_counter, file_size);
 
-        if total_sent < file_size as usize {
+        if !progress.is_completed() {
             return Err(DataChannelError::DataCorrupted);
         }
 

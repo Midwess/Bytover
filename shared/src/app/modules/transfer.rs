@@ -2,7 +2,7 @@ use crate::app::file_system::file::LocalResource;
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
-use crate::app::transfer::session::TransferSession;
+use crate::app::transfer::session::{TransferSession, TransferType};
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
@@ -89,19 +89,19 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::BeginLoadingResources() => {
                 model.transfer.is_loading_selected_resources = true;
                 Command::new(async |it| {
-                    it.request_from_shell(CoreOperation::Render).await;
+                    it.notify_shell(CoreOperation::Render);
                 })
             }
             TransferEvent::EndLoadingResources() => {
                 model.transfer.is_loading_selected_resources = false;
                 Command::new(|it| async move {
-                    it.request_from_shell(CoreOperation::Render).await;
+                    it.notify_shell(CoreOperation::Render);
                 })
             }
             TransferEvent::AddResources(selections) => Command::new(|it| async move {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
                 resource_transfer_selection_service.add_resources(it.clone(), selections).await;
-                it.request_from_shell(CoreOperation::Render).await;
+                it.notify_shell(CoreOperation::Render);
             }),
             TransferEvent::RemoveResource(id) => Command::new(|it| async move {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
@@ -184,7 +184,30 @@ impl AppModule<BitBridge> for TransferModule {
                             display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                             avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                             device: peer.device.clone(),
-                            transfer_progress: session.map(|it| it.total_progress()).unwrap_or(0.0)
+                            transfer_progress: session.map(|it| it.total_progress()).unwrap_or(0.0),
+                            display_upload_speed: session.and_then(|it| {
+                                if it.transfer_type == TransferType::Send {
+                                    if it.is_initializing() {
+                                        return Some("Initializing".to_owned());
+                                    }
+                                    let bytes_per_second = it.bytes_per_second();
+                                    Some(format!("{:.2} MB/s", bytes_per_second as f64 / 1024.0 / 1024.0))
+                                } else {
+                                    None
+                                }
+                            }),
+                            display_download_speed: session.and_then(|it| {
+                                if it.transfer_type == TransferType::Receive {
+                                    if it.is_initializing() {
+                                        return Some("Initializing".to_owned());
+                                    }
+
+                                    let bytes_per_second = it.bytes_per_second();
+                                    Some(format!("{:.2} MB/s", bytes_per_second as f64 / 1024.0 / 1024.0))
+                                } else {
+                                    None
+                                }
+                            })
                         })
                     }
                     _ => None

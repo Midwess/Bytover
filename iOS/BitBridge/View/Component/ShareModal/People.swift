@@ -10,24 +10,61 @@ import Foundation
 import SharedTypes
 
 struct PeopleShareItem: View {
-    var peer: PeerViewModel
+    @EnvironmentObject private var core: Core
+    @State var peer: PeerViewModel
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
             Avartar(avatar: peer.avatar)
                 .frame(width: 42, height: 42)
+                .padding(.trailing, 12)
             VStack(alignment: .leading, spacing: 4) {
                 Text(peer.display_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
-                
-                Text("Nearby")
-                    .modifier(Label2())
-                    .padding(.trailing, 8)
-                    .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
+                HStack(spacing: 2) {
+                    Text("Nearby")
+                        .modifier(Label2())
+                        .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
+                    
+                    if let uploadSpeed = peer.display_upload_speed {
+                        ZStack(alignment: .trailing) {
+                            Text("00.00 MB/s")
+                                .font(.caption)
+                                .opacity(0)
+                            Text(uploadSpeed)
+                                .font(.caption)
+                                .foregroundColor(Theme.PrimaryText.color)
+                        }
+                        ImageAsset.Upload.image
+                            .padding(.leading, 1)
+                            .scaleEffect(1)
+                            .foregroundColor(Theme.BluePrimary.color)
+                        }
+                    
+                    if let downloadSpeed = peer.display_download_speed {
+                        ZStack(alignment: .trailing) {
+                            Text("00.00 MB/s")
+                                .font(.caption)
+                                .opacity(0)
+                            Text(downloadSpeed)
+                                .font(.caption)
+                                .foregroundColor(Theme.PrimaryText.color)
+                        }
+                        ImageAsset.Download.image
+                            .padding(.leading, 1)
+                            .scaleEffect(1)
+                            .foregroundColor(Theme.BluePrimary.color)
+                    }
+                    
+                    Spacer()
+                }
             }
-            SharingProgress(progress: peer.transfer_progress)
-                .frame(width: 42, height: 42)
+            
+            if peer.transfer_progress > 0 {
+                SharingProgress(progress: peer.transfer_progress)
+                    .frame(width: 38, height: 38)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
@@ -35,11 +72,19 @@ struct PeopleShareItem: View {
         .clipShape(Capsule())
         .background(Capsule().fill(Theme.PrimaryText.color.opacity(0.1)))
         .overlay(Capsule().stroke(Theme.PrimaryText.color.opacity(0.1)))
+        .onReceive(self.core.transfer, perform: { value in
+            let newPeer = value?.nearby_peers.first(where: {peer in peer.id == self.peer.id}) ?? self.peer
+            if self.peer != newPeer {
+                self.peer = newPeer
+            }
+        })
     }
 }
 
 struct PeopleShareView: View {
     @EnvironmentObject private var core: Core
+    @State private var nearbyPeers: [PeerViewModel] = []
+    
     var body: some View {
         VStack(spacing: 16) {
             Button(action: {}) {
@@ -56,7 +101,7 @@ struct PeopleShareView: View {
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
             
-            if core.transfer?.nearby_peers.isEmpty ?? true {
+            if nearbyPeers.isEmpty {
                 Text("No nearby friends found")
                     .modifier(Label1())
                     .foregroundStyle(Theme.PrimaryText.color)
@@ -65,7 +110,7 @@ struct PeopleShareView: View {
             else {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top) {
-                        ForEach(core.transfer?.nearby_peers ?? [], id: \.self) { peer in
+                        ForEach(nearbyPeers, id: \.self) { peer in
                             Button(action: {
                                 Task {
                                     await core.update(.transfer(.startTransfer(target_id: peer.id)))
@@ -80,6 +125,11 @@ struct PeopleShareView: View {
                 .scrollIndicators(.hidden)
             }
         }
+        .onReceive(self.core.transfer, perform: { value in
+            if value?.nearby_peers.count ?? 0 != nearbyPeers.count {
+                nearbyPeers = value?.nearby_peers ?? []
+            }
+        })
     }
 }
 

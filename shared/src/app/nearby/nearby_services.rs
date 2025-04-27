@@ -54,7 +54,7 @@ impl NearbyService {
         };
 
         ctx.send_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new: peer.clone() }));
-        ctx.request_from_shell(CoreOperation::Render).await;
+        ctx.notify_shell(CoreOperation::Render);
 
         let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
         let mut start_p2p_server_stream = ctx.stream_from_shell(start_p2p_server_request);
@@ -78,18 +78,18 @@ impl NearbyService {
                         self.handle_peer_connection(peer, it).await;
                     });
 
-                    ctx.request_from_shell(CoreOperation::Render).await;
+                    ctx.notify_shell(CoreOperation::Render);
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     log::error!(target: "nearby", "Device error: {:?}", error);
                     ctx.send_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
-                    ctx.request_from_shell(CoreOperation::Render).await;
+                    ctx.notify_shell(CoreOperation::Render);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped");
                     ctx.send_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
-                    ctx.request_from_shell(CoreOperation::Render).await;
+                    ctx.notify_shell(CoreOperation::Render);
                     break;
                 }
                 _ => {
@@ -151,6 +151,6 @@ impl NearbyService {
             removed: vec![TransferTarget::Nearby(peer.clone())]
         }));
 
-        ctx.request_from_shell(CoreOperation::Render).await;
+        ctx.notify_shell(CoreOperation::Render);
     }
 }

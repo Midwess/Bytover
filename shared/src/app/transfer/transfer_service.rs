@@ -27,12 +27,30 @@ impl TransferService {
         Self {}
     }
 
-    pub async fn transfer(&self, mut selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
+    pub async fn transfer(&self, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
         if selected_resources.is_empty() {
             return;
         }
 
-        for resource in selected_resources.iter_mut() {
+        let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
+
+        let mut transfer_session = TransferSession {
+            order_id,
+            progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            resources: selected_resources,
+            transfer_type: TransferType::Send,
+            target: transfer_target.clone()
+        };
+
+        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            new: vec![transfer_session.clone()],
+            updated: vec![],
+            removed: vec![]
+        }));
+
+        cmd.notify_shell(CoreOperation::Render);
+
+        for resource in transfer_session.resources.iter_mut() {
             resource.path = match LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await {
                 Some(path) => LocalResourcePath::LocalPath(path),
                 None => continue
@@ -47,25 +65,15 @@ impl TransferService {
             };
         }
 
-        let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
-
-        let mut transfer_session = TransferSession {
-            order_id,
-            progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
-            resources: selected_resources,
-            transfer_type: TransferType::Send,
-            target: transfer_target.clone()
-        };
-
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
-        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target.id());
-
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            new: vec![transfer_session.clone()],
-            updated: vec![],
+            new: vec![],
+            updated: vec![transfer_session.clone()],
             removed: vec![]
         }));
+
+        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target.id());
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -159,7 +167,7 @@ impl TransferService {
 
         let mut transfer_session = TransferSession {
             order_id: remote_session.order_id,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id)).collect(),
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive)).collect(),
             resources: resources.clone(),
             transfer_type: TransferType::Receive,
             target: TransferTarget::Nearby(peer)
@@ -171,6 +179,8 @@ impl TransferService {
             updated: vec![]
         }));
 
+        cmd.notify_shell(CoreOperation::Render);
+
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest(
             peer_id,
@@ -179,8 +189,8 @@ impl TransferService {
             request_id,
             response
         ));
-        let mut stream = cmd.stream_from_shell(response);
 
+        let mut stream = cmd.stream_from_shell(response);
         while let Some(transfer_output) = stream.next().await {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
@@ -199,6 +209,7 @@ impl TransferService {
                             removed: vec![],
                             updated: vec![transfer_session.clone()]
                         }));
+
                         cmd.notify_shell(CoreOperation::Render);
                     }
                     _ => {

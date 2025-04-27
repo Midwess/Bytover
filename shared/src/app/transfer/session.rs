@@ -1,6 +1,10 @@
+use std::time::Instant;
+
+use chrono::{Date, DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
+use tokio::time::Duration;
 
 use crate::app::file_system::file::LocalResource;
 
@@ -21,66 +25,88 @@ pub struct TransferSession {
     pub target: TransferTarget
 }
 
-#[derive(Debug, PartialEq, Serialize, Record, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct TransferProgress {
     pub resource_order_id: u64,
-    pub percentage: f64,
+    pub file_size: u64,
+    pub total_bytes_counter: u64,
+    pub bytes_per_second: u64,
+    pub start_time_utc_ms: u64,
+    pub bytes_sec_counter: u64,
+    pub transfer_type: TransferType,
     pub status: TransferStatus
 }
 
 impl TransferProgress {
-    pub fn new(resource_order_id: u64) -> Self {
+    pub fn new(resource_order_id: u64, file_size: u64, transfer_type: TransferType) -> Self {
         Self {
             resource_order_id,
-            percentage: 0.0,
+            file_size,
+            total_bytes_counter: 0,
+            bytes_per_second: 0,
+            bytes_sec_counter: 0,
+            start_time_utc_ms: Utc::now().timestamp_millis() as u64,
+            transfer_type,
             status: TransferStatus::InProgress
         }
     }
 
-    pub fn progress(resource_order_id: u64, percentage: f64) -> Self {
-        Self {
-            resource_order_id,
-            percentage,
-            status: if percentage == 1.0 {
-                TransferStatus::Success
-            } else {
-                TransferStatus::InProgress
-            }
-        }
-    }
-
-    pub fn complete(resource_order_id: u64, percentage: f64) -> Self {
-        Self {
-            resource_order_id,
-            percentage,
-            status: if percentage == 1.0 {
-                TransferStatus::Success
-            } else {
-                TransferStatus::Fail(format!(
-                    "Data corrupted transfer for resource {} received {}/1.0",
-                    resource_order_id, percentage
-                ))
-            }
-        }
-    }
-
-    pub fn success(resource_order_id: u64) -> Self {
-        Self {
-            resource_order_id,
-            percentage: 1.0,
-            status: TransferStatus::Success
-        }
-    }
-
-    pub fn fail(resource_order_id: u64, percentage: f64, msg: String) -> Self {
-        if percentage == 1.0 {
-            Self::success(resource_order_id)
+    pub fn complete(&mut self) {
+        self.status = if self.percentage() == 1.0 {
+            TransferStatus::Success
         } else {
-            Self {
-                resource_order_id,
-                percentage,
-                status: TransferStatus::Fail(msg)
-            }
+            TransferStatus::Fail(format!(
+                "Data corrupted transfer for resource {} received {}/1.0",
+                self.resource_order_id, self.percentage()
+            ))
+        };
+
+        self.total_bytes_counter = self.file_size;
+        self.bytes_per_second = 0;
+        self.bytes_sec_counter = 0;
+    }
+
+    pub fn success(&mut self) {
+        self.complete();
+        self.status = TransferStatus::Success;
+    }
+
+    pub fn fail(&mut self, msg: String) {
+        self.complete();
+        if self.percentage() == 1.0 {
+            self.success();
+        } else {
+            self.status = TransferStatus::Fail(msg);
+        }
+    }
+
+    pub fn percentage(&self) -> f64 {
+        (self.total_bytes_counter as f64 / self.file_size as f64).min(1.0)
+    }
+
+    pub fn is_completed(&self) -> bool {
+        self.percentage() == 1.0
+    }
+
+    pub fn elapsed(&self) -> u64 {
+        Utc::now().timestamp_millis() as u64 - self.start_time_utc_ms
+    }
+
+    pub fn update_progress(&mut self, bytes_count: u64) {
+        let elapsed = self.elapsed(); 
+
+        self.total_bytes_counter += bytes_count;
+
+        self.bytes_sec_counter += bytes_count;
+
+        if elapsed >= 1000 {
+            self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
+            self.start_time_utc_ms = Utc::now().timestamp_millis() as u64;
+            self.bytes_sec_counter = bytes_count;
+        }
+
+        if self.bytes_per_second == 0 {
+            self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
         }
     }
 }
@@ -110,6 +136,10 @@ impl TransferSession {
         }
     }
 
+    pub fn is_initializing(&self) -> bool {
+        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
+    }
+
     pub fn update_progress(&mut self, progress: TransferProgress) {
         if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
             self.progress[index] = progress;
@@ -125,7 +155,18 @@ impl TransferSession {
     }
 
     pub fn total_progress(&self) -> f64 {
-        self.progress.iter().map(|it| it.percentage).sum::<f64>() / self.progress.len() as f64
+        let total_size = self.resources.iter().map(|it| it.size).sum::<u64>();
+        if total_size == 0 {
+            return 1.0;
+        }
+
+        let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
+        log::info!(target: "tiendang-debug", "Total progress: {} / {} speed = {}", total_bytes_sent, total_size, self.bytes_per_second());
+        total_bytes_sent as f64 / total_size as f64
+    }
+
+    pub fn bytes_per_second(&self) -> u64 {
+        self.progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {

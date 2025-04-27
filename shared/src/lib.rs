@@ -32,29 +32,13 @@ use di_container::DiContainer;
 #[cfg(feature = "lib")]
 use erased_serde::Serialize;
 #[cfg(feature = "lib")]
-use futures_util::SinkExt;
-#[cfg(feature = "lib")]
-use futures_util::StreamExt;
-#[cfg(feature = "lib")]
-use instrument::Instrument;
-#[cfg(feature = "lib")]
 use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
 #[cfg(feature = "lib")]
 use tokio::{spawn, task::JoinHandle};
-
-use std::ops::{Deref, DerefMut};
 #[cfg(feature = "lib")]
 use std::sync::Arc;
-
-#[cfg(feature = "lib")]
-mod instrument;
-
-#[cfg(feature = "lib")]
-lazy_static! {
-    pub static ref INSTRUMENT: Arc<Instrument> = Arc::new(Instrument::new());
-}
 
 #[cfg(feature = "lib")]
 use tokio::sync::OnceCell;
@@ -71,67 +55,6 @@ pub trait ShellRuntime: Send + Sync + 'static {
         spawn(async move {
             self_clone.msg_from_native(event).await;
         })
-    }
-}
-
-#[cfg(feature = "lib")]
-pub struct DebouncedShellRuntime<E: Serialize + Send + 'static> {
-    join_handle: Option<JoinHandle<()>>,
-    sender: Option<futures_channel::mpsc::Sender<E>>
-}
-
-#[cfg(feature = "lib")]
-impl<E: Serialize + Send + 'static> Deref for DebouncedShellRuntime<E> {
-    type Target = futures_channel::mpsc::Sender<E>;
-
-    fn deref(&self) -> &Self::Target {
-        self.sender.as_ref().expect("Channel already closed")
-    }
-}
-
-#[cfg(feature = "lib")]
-impl<E: Serialize + Send + 'static> DerefMut for DebouncedShellRuntime<E> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.sender.as_mut().expect("Channel already closed")
-    }
-}
-
-#[cfg(feature = "lib")]
-impl<E: Serialize + Send + 'static> Drop for DebouncedShellRuntime<E> {
-    fn drop(&mut self) {
-        let sender = self.sender.take();
-        let join_handle = self.join_handle.take();
-        spawn(async move {
-            if let Some(mut sender) = sender {
-                let _ = sender.close().await;
-            }
-
-            if let Some(join_handle) = join_handle {
-                join_handle.abort();
-            }
-        });
-    }
-}
-
-#[cfg(feature = "lib")]
-// Create a debounced message handler
-// You will need to handle the aborting of the debounced stream
-fn debounced_msg_stream<E: Serialize + Send + 'static>(
-    shell_runtime: &Arc<dyn ShellRuntime>,
-    delay: std::time::Duration
-) -> DebouncedShellRuntime<E> {
-    let shell_runtime = shell_runtime.clone();
-    let (tx, rx) = futures_channel::mpsc::channel::<E>(1024);
-    let mut debounced = debounced::debounced(rx, delay);
-    let handle = spawn(async move {
-        while let Some(event) = debounced.next().await {
-            shell_runtime.msg_from_native(serialize(&event)).await;
-        }
-    });
-
-    DebouncedShellRuntime {
-        join_handle: Some(handle),
-        sender: Some(tx)
     }
 }
 
