@@ -1,6 +1,7 @@
 use std::future::Future;
 
-use crux_core::{capability::Operation, Command};
+use crux_core::capability::Operation;
+use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::{Enum, Record};
 
@@ -17,11 +18,19 @@ pub struct AlertDialog {
 
 impl AlertDialog {
     pub fn confirmation(message: String, affirmative: String, negative: Option<String>) -> Self {
-        Self { message, affirmative, negative }
+        Self {
+            message,
+            affirmative,
+            negative
+        }
     }
 
     pub fn alert(message: String) -> Self {
-        Self { message, affirmative: "OK".to_string(), negative: None }
+        Self {
+            message,
+            affirmative: "OK".to_string(),
+            negative: None
+        }
     }
 }
 
@@ -34,9 +43,7 @@ pub enum DialogOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum DialogOperationOutput {
     Toast,
-    Alert {
-        is_confirmed: bool
-    }
+    Alert { is_confirmed: bool }
 }
 
 impl Operation for DialogOperation {

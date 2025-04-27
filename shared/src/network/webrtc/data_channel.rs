@@ -1,7 +1,7 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferProgress, TransferType};
+use crate::app::transfer::session::TransferProgress;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::File;
@@ -133,11 +133,16 @@ impl DataChannel {
         let _ = self.data_channel.close().await;
     }
 
-    pub async fn start_download(&self, core_request_id: u32, out_resource: &LocalResource, progress: &mut TransferProgress) -> Result<(), DataChannelError> {
+    pub async fn start_download(
+        &self,
+        core_request_id: u32,
+        out_resource: &LocalResource,
+        progress: &mut TransferProgress
+    ) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
         let file_size = out_resource.size;
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(1000));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(300));
 
         let saved_path = match &out_resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
@@ -171,9 +176,7 @@ impl DataChannel {
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
-                        progress.clone()
-                    ))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 ))
                 .await;
 
@@ -181,8 +184,6 @@ impl DataChannel {
                 break Ok(());
             }
         };
-
-        log::info!(target: "nearby", "Received bytes final: {} vs {} for file {}", progress.total_bytes_counter, file_size, self.resource_id);
 
         if let Err(e) = result {
             return Err(e);
@@ -193,7 +194,12 @@ impl DataChannel {
         Ok(())
     }
 
-    pub async fn start_upload(&self, core_request_id: u32, resource: LocalResource, progress: &mut TransferProgress) -> Result<(), DataChannelError> {
+    pub async fn start_upload(
+        &self,
+        core_request_id: u32,
+        resource: LocalResource,
+        progress: &mut TransferProgress
+    ) -> Result<(), DataChannelError> {
         let saved_path = match &resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
@@ -201,7 +207,7 @@ impl DataChannel {
             }
         };
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(500));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(300));
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
@@ -229,9 +235,7 @@ impl DataChannel {
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
-                        progress.clone()
-                    ))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 ))
                 .await;
         }

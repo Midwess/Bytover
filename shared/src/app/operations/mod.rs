@@ -1,12 +1,12 @@
 pub mod database;
 pub mod device;
+pub mod dialog;
 pub mod internet;
 pub mod local_storage;
 pub mod p2p;
 pub mod rpc;
 pub mod transfer;
 pub mod webview;
-pub mod dialog;
 
 use crux_core::capability::Operation;
 use database::{DatabaseOperation, DatabaseOperationOutput};

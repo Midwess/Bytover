@@ -34,7 +34,9 @@ impl TransferService {
             "Cancel the transfer ?".to_string(),
             "Yes".to_string(),
             Some("No".to_string())
-        )).into_future(cmd.clone()).await;
+        ))
+        .into_future(cmd.clone())
+        .await;
         if !confirmation {
             return false;
         }
@@ -60,7 +62,10 @@ impl TransferService {
 
         let mut transfer_session = TransferSession {
             order_id,
-            progress: selected_resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            progress: selected_resources
+                .iter()
+                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
+                .collect(),
             resources: selected_resources,
             transfer_type: TransferType::Send,
             target: transfer_target.clone()
@@ -199,7 +204,10 @@ impl TransferService {
 
         let mut transfer_session = TransferSession {
             order_id: remote_session.order_id,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive)).collect(),
+            progress: resources
+                .iter()
+                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
+                .collect(),
             resources: resources.clone(),
             transfer_type: TransferType::Receive,
             target: TransferTarget::Nearby(peer)

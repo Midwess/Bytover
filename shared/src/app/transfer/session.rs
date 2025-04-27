@@ -1,10 +1,7 @@
-use std::time::Instant;
-
-use chrono::{Date, DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
-use tokio::time::Duration;
 
 use crate::app::file_system::file::LocalResource;
 
@@ -57,7 +54,8 @@ impl TransferProgress {
         } else {
             TransferStatus::Fail(format!(
                 "Data corrupted transfer for resource {} received {}/1.0",
-                self.resource_order_id, self.percentage()
+                self.resource_order_id,
+                self.percentage()
             ))
         };
 
@@ -93,21 +91,18 @@ impl TransferProgress {
     }
 
     pub fn update_progress(&mut self, bytes_count: u64) {
-        let elapsed = self.elapsed(); 
+        let elapsed = self.elapsed();
 
         self.total_bytes_counter += bytes_count;
 
         self.bytes_sec_counter += bytes_count;
 
         if elapsed >= 1000 {
-            self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
             self.start_time_utc_ms = Utc::now().timestamp_millis() as u64;
             self.bytes_sec_counter = bytes_count;
         }
 
-        if self.percentage() < 0.1 {
-            self.bytes_per_second = (self.total_bytes_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
-        }
+        self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
     }
 }
 
@@ -161,7 +156,6 @@ impl TransferSession {
         }
 
         let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
-        log::info!(target: "tiendang-debug", "Total progress: {} / {} speed = {}", total_bytes_sent, total_size, self.bytes_per_second());
         total_bytes_sent as f64 / total_size as f64
     }
 

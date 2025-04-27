@@ -121,19 +121,24 @@ impl AppModule<BitBridge> for TransferModule {
                 let transfer_targets = model.transfer.transfer_targets.clone();
                 let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {
                     return Command::done();
-                }; 
+                };
 
-                let duplicated_session = model.transfer.transfer_sessions.iter().find(|it| {
-                    if it.is_completed() {
-                        return false;
-                    }
+                let duplicated_session = model
+                    .transfer
+                    .transfer_sessions
+                    .iter()
+                    .find(|it| {
+                        if it.is_completed() {
+                            return false;
+                        }
 
-                    if let TransferTarget::Nearby(peer) = &target {
-                        it.peer_id() == Some(peer.id()) && it.transfer_type == TransferType::Send
-                    } else {
-                        false
-                    }
-                }).cloned();
+                        if let TransferTarget::Nearby(peer) = &target {
+                            it.peer_id() == Some(peer.id()) && it.transfer_type == TransferType::Send
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned();
 
                 Command::new(async |it| {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();

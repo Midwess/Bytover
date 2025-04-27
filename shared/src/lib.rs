@@ -36,9 +36,9 @@ use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
 #[cfg(feature = "lib")]
-use tokio::{spawn, task::JoinHandle};
-#[cfg(feature = "lib")]
 use std::sync::Arc;
+#[cfg(feature = "lib")]
+use tokio::{spawn, task::JoinHandle};
 
 #[cfg(feature = "lib")]
 use tokio::sync::OnceCell;
