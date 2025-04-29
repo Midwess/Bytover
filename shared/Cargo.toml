@@ -50,6 +50,7 @@ lib = [
     "h3ron",
     "geo-types",
     "bytes",
+    "ulid"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -91,6 +92,7 @@ h3ron = { workspace = true, optional = true }
 geo-types = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 anyhow = { workspace = true }
+ulid = { workspace = true, optional = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

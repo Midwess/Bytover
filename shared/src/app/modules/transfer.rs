@@ -127,6 +127,9 @@ impl AppModule<BitBridge> for TransferModule {
                     .transfer
                     .transfer_sessions
                     .iter()
+                    .filter(|it| {
+                        it.transfer_type == TransferType::Send
+                    })
                     .find(|it| {
                         if it.is_completed() {
                             return false;
@@ -143,9 +146,8 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(async |it| {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     if let Some(duplicated_session) = duplicated_session {
-                        if !transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await {
-                            return;
-                        }
+                        transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await;
+                        return;
                     }
 
                     transfer_service.transfer(selected_resources, target, it).await;
@@ -175,7 +177,9 @@ impl AppModule<BitBridge> for TransferModule {
                     }
                 }
 
-                Command::done()
+                Command::new(|it| async move {
+                    it.notify_shell(CoreOperation::Render);
+                })
             }
             TransferEvent::UpdateTransferTargets { new, removed } => {
                 model.transfer.transfer_targets.extend(new);
@@ -196,19 +200,22 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter_map(|it| match it {
                     TransferTarget::Nearby(peer) => {
-                        let session = model
+                        let send_session = model
                             .transfer
                             .transfer_sessions
                             .iter()
-                            .find(|it| it.peer_id().as_ref().unwrap().to_string() == peer.id);
+                            .find(|it|
+                                it.transfer_type == TransferType::Send &&
+                                it.peer_id().as_ref().unwrap().to_string() == peer.id
+                            );
 
                         Some(PeerViewModel {
                             id: peer.id.clone(),
                             display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                             avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                             device: peer.device.clone(),
-                            transfer_progress: session.map(|it| it.total_progress()).unwrap_or(0.0),
-                            display_upload_speed: session.and_then(|it| {
+                            transfer_progress: send_session.map(|it| it.total_progress()).unwrap_or(0.0),
+                            display_upload_speed: send_session.and_then(|it| {
                                 if it.transfer_type == TransferType::Send {
                                     if it.is_initializing() {
                                         return Some("Initializing".to_owned());

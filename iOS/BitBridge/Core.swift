@@ -114,6 +114,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         switch request.effect {
         case .appCapabilities(.initNativeExecutor):
             self.nativeProcessor = NativeProcessor(self)
+            self.checkLocationAuthorization()
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
         case .appCapabilities(.webView(.openUrl(let url))):
             openURL(URL(string: url)!)
@@ -174,7 +175,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .appCapabilities(.p2P(let p2p)):
             return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.p2P(p2p).bincodeSerialize()))
         case .appCapabilities(.notified(let event)):
-            await self.update(event)
+            Task {
+                await self.update(event)
+            }
+            
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.dialog(.alert(let alert))):
             self.alert.send((alert, SingleWaiter()))
@@ -184,6 +188,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .appCapabilities(.dialog(.toast(let message))):
             self.toastMessage.send(message)
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
+        case .appCapabilities(.delay(let duration)):
+            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.delay(duration).bincodeSerialize()))
         }
     }
     
@@ -294,6 +300,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
             Task {
+                print("on location updated")
                 await self.update(.nearby(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
                 
                 manager.stopUpdatingLocation()

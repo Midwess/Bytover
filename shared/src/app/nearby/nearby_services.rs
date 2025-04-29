@@ -1,10 +1,12 @@
-use chrono::Utc;
+use std::time::Duration;
+
 use futures_util::StreamExt;
+use ulid::Ulid;
 
 use crate::app::modules::nearby::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::internet::InternetOperation;
+use crate::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::target::TransferTarget;
@@ -17,24 +19,8 @@ pub struct NearbyService {}
 impl NearbyService {
     pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
-        let Ok(current_ip) = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await else {
-            log::error!(target: "nearby", "Failed to get current ip address, skip starting nearby service");
-            return;
-        };
 
-        ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(
-            current_ip.clone()
-        ))))
-        .await;
-
-        log::info!(target: "nearby", "Current ip = {current_ip}");
-        let ip_parts: String = current_ip
-            .split('.')
-            .map(|part| part.parse::<i64>().unwrap_or(0).to_string())
-            .fold(String::new(), |acc, part| format!("{}{}", acc, part));
-
-        let current_mics = Utc::now().timestamp_micros();
-        let peer_id = format!("{}{}", current_mics, ip_parts);
+        let peer_id = Ulid::new().random().to_string();
 
         let peer = match user {
             Some(user) => Peer {
@@ -59,6 +45,7 @@ impl NearbyService {
         let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
         let mut start_p2p_server_stream = ctx.stream_from_shell(start_p2p_server_request);
 
+        log::info!(target: "nearby", "Starting nearby server");
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
@@ -96,6 +83,17 @@ impl NearbyService {
                     panic!("Unexpected output from nearby server, output: {:?}", output);
                 }
             }
+        }
+    }
+
+    pub async fn start_ip_address_monitor(&'static self, ctx: AppCommandContext) {
+        loop {
+            let ip_address = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await;
+            if let Ok(ip_address) = ip_address {
+                ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(ip_address)))).await;
+            }
+
+            ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
         }
     }
 

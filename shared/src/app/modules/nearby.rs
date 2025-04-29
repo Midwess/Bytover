@@ -4,7 +4,7 @@ use crate::app::operations::device::GeoLocation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::device::DeviceInfo;
 use crate::entities::peer::Peer;
@@ -31,6 +31,7 @@ pub struct NearbyModule {}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum NearbyEvent {
     Launch(),
+    StartIpAddressMonitor,
     OnLocationUpdated(GeoLocation),
     OnIpAddressUpdated(String),
 
@@ -53,13 +54,18 @@ impl AppModule<BitBridge> for NearbyModule {
         match event {
             NearbyEvent::Launch() => {
                 let user = model.authentication.user.clone();
-                Command::new(|it| async move {
+                let nearby_command = Command::new(|it| async move {
                     let nearby_service = DiContainer::get_instance().get_nearby_service();
                     nearby_service.start_service(user, it.clone()).await;
-                })
+                });
+
+                let start_ip_address_monitor_command = Command::new(|it| async move {
+                    it.notify_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::StartIpAddressMonitor)));
+                });
+
+                Command::all(vec![nearby_command, start_ip_address_monitor_command])
             }
             NearbyEvent::OnIpAddressUpdated(ip_address) => {
-                log::info!(target: "nearby", "Updated ip address {}", ip_address);
                 let finding_scope = FindingScope::Local(ip_address.clone());
                 model.nearby.finding_scopes.retain(|it| !it.is_local());
                 model.nearby.finding_scopes.push(finding_scope);
@@ -67,6 +73,12 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::new(|it| async move {
                     let _ = P2POperation::update_finding_scopes(finding_scopes).into_future(it.clone()).await;
+                })
+            }
+            NearbyEvent::StartIpAddressMonitor => {
+                Command::new(|it| async move {
+                    let nearby_service = DiContainer::get_instance().get_nearby_service();
+                    nearby_service.start_ip_address_monitor(it.clone()).await;
                 })
             }
             NearbyEvent::OnLocationUpdated(location) => {

@@ -84,9 +84,9 @@ impl ConnectionWebRtc {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
 
         setting_engine.set_ice_timeouts(
-            Some(Duration::from_secs(40)),
-            Some(Duration::from_secs(120)),
-            Some(Duration::from_secs(15))
+            Some(Duration::from_secs(60)),
+            Some(Duration::from_secs(150)),
+            Some(Duration::from_secs(10))
         );
 
         setting_engine
@@ -167,7 +167,7 @@ impl ConnectionWebRtc {
             }
         });
 
-        let connection_timeout = Duration::from_secs(15);
+        let connection_timeout = Duration::from_secs(10);
         log::info!(target: ns.as_str(), "Waiting for answer from signalling server");
 
         me.handle_ice_candidate();
@@ -273,7 +273,7 @@ impl ConnectionWebRtc {
 
         me.handle_ice_candidate();
 
-        let connection_timeout = Duration::from_secs(15);
+        let connection_timeout = Duration::from_secs(10);
         let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);

@@ -8,6 +8,8 @@ pub mod rpc;
 pub mod transfer;
 pub mod webview;
 
+use std::time::Duration;
+
 use crux_core::capability::Operation;
 use database::{DatabaseOperation, DatabaseOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
@@ -39,7 +41,8 @@ pub enum CoreOperation {
     InitNativeExecutor,
     Void,
     Notified(AppEvent),
-    Dialog(DialogOperation)
+    Dialog(DialogOperation),
+    Delay(Duration)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -56,7 +59,8 @@ pub enum CoreOperationOutput {
     Void,
     ConnectionError(NetworkError),
     DeviceError(DeviceError),
-    Dialog(DialogOperationOutput)
+    Dialog(DialogOperationOutput),
+    Delay()
 }
 
 impl Operation for CoreOperation {

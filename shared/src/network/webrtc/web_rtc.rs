@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use core_services::logger::ThrottleLogger;
 use core_services::utils::number::ExponentialGrowth;
 use futures_util::lock::Mutex;
 use schema::devlog::rpc_signalling::server::{JoinMessage, Message};
@@ -107,6 +108,10 @@ impl WebRtc {
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) -> Result<(), WebRtcErrors> {
         let mut current_scopes = self.scopes.lock().await;
+        if current_scopes.eq(&scopes) {
+            return Ok(());
+        }
+
         current_scopes.clear();
         current_scopes.extend(scopes);
 
@@ -131,7 +136,8 @@ impl WebRtc {
         let signalling_client = self.signalling_client.clone();
 
         let scopes = self.scopes.clone();
-        let exponential_growth_delay = ExponentialGrowth::new(3, 0.25, 3, 35);
+        let exponential_growth_delay = ExponentialGrowth::new(3, 0.1, 3, 35);
+        let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
         *broadcast_handle = Some(spawn(async move {
             loop {
                 let delay = Duration::from_secs(exponential_growth_delay.next() as u64);
@@ -154,6 +160,8 @@ impl WebRtc {
                     log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
                 }
 
+                throttle_logger.log(format!("Broadcasting..., my id = {my_id}")).await;
+
                 sleep(delay).await;
             }
         }));
@@ -163,6 +171,8 @@ impl WebRtc {
 
     pub async fn handle_nearby_event(self: &Arc<Self>, core_request_id: u32) -> Result<(), WebRtcErrors> {
         let mut subscription = self.signalling_client.get().unwrap().subscribe();
+        let throttle_logger = ThrottleLogger::new("handle-nearby-event".to_string(), Duration::from_secs(15));
+        let ns = "handle-nearby-event".to_string();
         while let Ok(message) = subscription.recv().await {
             let my_id = self.id();
             let peer_id = message.from_id_number();
@@ -181,6 +191,8 @@ impl WebRtc {
                 if peer_id <= my_id {
                     continue;
                 }
+
+                throttle_logger.log(format!("Received join message from {peer_id}")).await;
 
                 let mut current_connections = self.connections.lock().await;
                 if current_connections.contains_key(&peer_id) {
@@ -214,6 +226,8 @@ impl WebRtc {
                     log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject offer", peer_id, my_id);
                     continue;
                 }
+
+                throttle_logger.log(format!("Received offer from {peer_id}")).await;
 
                 let mut current_connections = self.connections.lock().await;
                 if current_connections.contains_key(&peer_id) {
@@ -253,6 +267,8 @@ impl WebRtc {
             }
 
             if let Some(left_message) = message.left_message {
+                throttle_logger.log(format!("Received left message from {}", left_message.id)).await;
+
                 let mut current_connections = self.connections.lock().await;
                 if let Some(conn) = current_connections
                     .remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))

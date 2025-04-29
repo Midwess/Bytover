@@ -47,7 +47,7 @@ struct PeopleShareItem: View {
                 }
             }
             
-            if peer.transfer_progress > 0 {
+            if peer.display_upload_speed != nil {
                 SharingProgress(progress: peer.transfer_progress)
                     .frame(width: 38, height: 38)
             }

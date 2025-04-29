@@ -29,7 +29,6 @@ impl TransferService {
     }
 
     pub async fn cancel_transfer(&self, transfer_session: TransferSession, cmd: AppCommandContext) -> bool {
-        log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
         let confirmation = DialogOperation::alert(AlertDialog::confirmation(
             "Cancel the transfer ?".to_string(),
             "Yes".to_string(),
@@ -37,9 +36,12 @@ impl TransferService {
         ))
         .into_future(cmd.clone())
         .await;
+
         if !confirmation {
             return false;
         }
+
+        log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],
