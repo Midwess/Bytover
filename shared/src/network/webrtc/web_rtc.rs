@@ -159,8 +159,9 @@ impl WebRtc {
                 if let Err(e) = signalling_client.get().unwrap().send(message.clone()).await {
                     log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
                 }
-
-                throttle_logger.log(format!("Broadcasting..., my id = {my_id}")).await;
+                else {
+                    throttle_logger.log(format!("Broadcasting..., my id = {my_id}")).await;
+                }
 
                 sleep(delay).await;
             }

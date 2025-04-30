@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use schema::devlog::rpc_signalling::server::Message as SignallingMessage;
@@ -63,15 +64,32 @@ impl RtcsSignalling {
                     drop(new_server_writer);
 
                     log::info!(target: "rtc-signalling", "Connected to signalling server");
-                    while let Some(Ok(message)) = read.next().await {
-                        if let Message::Binary(data) = message {
-                            let Ok(message) = SignallingMessage::decode(&data[..]) else {
-                                log::error!(target: "rtc-signalling", "Failed to decode message");
-                                continue;
-                            };
+                    let mut ping_alive_ticker = tokio::time::interval(Duration::from_secs(2));
+                    loop {
+                        tokio::select! {
+                            _ = ping_alive_ticker.tick() => {
+                                let mut server_writer = server_writer.lock().await;
+                                if let Some(write) = server_writer.as_mut() {
+                                    if let Err(e) = write.send(Message::Ping(Bytes::from_static(&[1]))).await {
+                                        log::error!(target: "rtc-signalling", "Failed to send ping to signalling server: {:?}", e);
+                                    }
+                                }
+                            }
+                            message = read.next() => {
+                                let Some(Ok(message)) = message else {
+                                    break;
+                                };
 
-                            if let Err(e) = msg_broadcast.send(message) {
-                                log::error!(target: "rtc-signalling", "Failed to send message to broadcast: {:?}", e);
+                                if let Message::Binary(data) = message {
+                                    let Ok(message) = SignallingMessage::decode(&data[..]) else {
+                                        log::error!(target: "rtc-signalling", "Failed to decode message");
+                                        continue;
+                                    };
+
+                                    if let Err(e) = msg_broadcast.send(message) {
+                                        log::error!(target: "rtc-signalling", "Failed to send message to broadcast: {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }

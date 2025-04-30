@@ -48,7 +48,9 @@ impl InternetConnection {
         const MAX_RETRIES: usize = 30;
         const RETRY_DELAY_MS: u64 = 500;
 
-        let stun_addr = "stun.l.google.com:19302".to_socket_addrs().unwrap().find(|x| x.is_ipv4()).unwrap();
+        let Some(stun_addr) = "stun.l.google.com:19302".to_socket_addrs().ok().as_mut().and_then(|it| it.find(|x| x.is_ipv4())) else {
+            return Err(NetworkError::Network("Failed to get public IP address".to_string()));
+        };
 
         for attempt in 1..=MAX_RETRIES {
             let socket = match UdpSocket::bind("0.0.0.0:0").await {
