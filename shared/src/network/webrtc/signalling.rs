@@ -64,7 +64,7 @@ impl RtcsSignalling {
                     drop(new_server_writer);
 
                     log::info!(target: "rtc-signalling", "Connected to signalling server");
-                    let mut ping_alive_ticker = tokio::time::interval(Duration::from_secs(2));
+                    let mut ping_alive_ticker = tokio::time::interval(Duration::from_secs(3));
                     loop {
                         tokio::select! {
                             _ = ping_alive_ticker.tick() => {

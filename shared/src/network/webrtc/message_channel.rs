@@ -89,7 +89,7 @@ impl MessageChannel {
                 let msg_request_broadcast = msg_request_broadcast_cloned.clone();
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 Box::pin(async move {
-                    log::info!(target: "broadcast", "Connection closed");
+                    log::info!(target: "message-channel", "Connection closed");
                     let _ = msg_request_broadcast.send(Err("Channel closed".to_string()));
                     let _ = msg_response_broadcast_cloned.send(Err("Channel closed".to_string()));
                 })
@@ -101,7 +101,7 @@ impl MessageChannel {
                 let msg_request_broadcast = msg_request_broadcast_cloned.clone();
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 Box::pin(async move {
-                    log::info!(target: "broadcast", "Connection error: {:?}", e);
+                    log::info!(target: "message-channel", "Connection error: {:?}", e);
                     let _ = msg_request_broadcast.send(Err(format!("Channel error: {:?}", e)));
                     let _ = msg_response_broadcast_cloned.send(Err(format!("Channel error: {:?}", e)));
                 })
@@ -110,7 +110,7 @@ impl MessageChannel {
 
         let msg_request_broadcast_cloned = msg_request_broadcast.clone();
         msg_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-            log::info!(target: "broadcast", "Received message");
+            log::info!(target: "message-channel", "Received message");
             let msg = match PeerMessageBody::decode(msg.data) {
                 Ok(msg) => msg,
                 Err(e) => {
@@ -178,9 +178,9 @@ impl MessageChannel {
     }
 
     pub async fn close(&self) {
-        let _ = self.msg_channel.close().await;
         let _ = self.msg_request_broadcast.send(Err("Connection closed".to_string()));
         let _ = self.msg_response_broadcast.send(Err("Connection closed".to_string()));
+        let _ = self.msg_channel.close().await;
     }
 
     pub async fn next_request(&self) -> Result<PeerRequest, ConnectionWebRtcErrors> {

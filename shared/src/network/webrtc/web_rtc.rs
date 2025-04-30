@@ -41,7 +41,7 @@ pub struct WebRtc {
     scopes: Arc<Mutex<Vec<FindingScope>>>,
     broadcast_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     peer: OnceCell<Peer>,
-    pub(crate) connections: Mutex<HashMap<u128, OnceCell<Arc<PeerCommunication>>>>,
+    connections: Mutex<HashMap<u128, OnceCell<Arc<PeerCommunication>>>>,
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
@@ -57,7 +57,7 @@ impl Default for WebRtc {
 
 impl WebRtc {
     pub fn throughput_controller() -> Arc<ThroughputController> {
-        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10)))
+        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10), 2))
     }
 
     pub fn new(workdir: String) -> Self {
@@ -98,6 +98,11 @@ impl WebRtc {
         log::info!(target: "rtc", "Starting signalling client");
         let signalling_client = RtcsSignalling::start().await?;
         let _ = self.signalling_client.set(Arc::new(signalling_client));
+
+        let throughput_controller = self.throughput_controller.clone();
+        spawn(async move {
+            throughput_controller.start();
+        });
 
         self.broadcast().await?;
 
@@ -140,7 +145,7 @@ impl WebRtc {
         let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
         *broadcast_handle = Some(spawn(async move {
             loop {
-                let delay = Duration::from_secs(exponential_growth_delay.next() as u64);
+                let delay = Duration::from_secs(2);
                 let scopes = scopes.lock().await.clone();
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
@@ -158,8 +163,7 @@ impl WebRtc {
 
                 if let Err(e) = signalling_client.get().unwrap().send(message.clone()).await {
                     log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
-                }
-                else {
+                } else {
                     throttle_logger.log(format!("Broadcasting..., my id = {my_id}")).await;
                 }
 
@@ -268,15 +272,15 @@ impl WebRtc {
             }
 
             if let Some(left_message) = message.left_message {
-                throttle_logger.log(format!("Received left message from {}", left_message.id)).await;
-
-                let mut current_connections = self.connections.lock().await;
-                if let Some(conn) = current_connections
-                    .remove(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))
-                    .and_then(|conn| conn.get().cloned())
+                let current_connections = self.connections.lock().await;
+                log::info!(target: "broadcast", "Received left message from {}", left_message.id);
+                if let Some(connection) = current_connections
+                    .get(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))
+                    .and_then(|cell| cell.get().cloned())
                 {
-                    let _ = conn.close().await;
-                    log::info!(target: "broadcast", "Peer {:?} left", left_message.id);
+                    drop(current_connections);
+
+                    connection.close().await;
                 }
 
                 continue;
@@ -317,11 +321,9 @@ impl WebRtc {
                     Box::new(move || {
                         let self_clone = self_clone.clone();
                         Box::pin(async move {
+                            log::info!(target: "broadcast", "Removing connection for peer {:?}", peer_id);
                             let mut current_connections = self_clone.connections.lock().await;
-                            if let Some(conn) = current_connections.remove(&peer_id).and_then(|conn| conn.get().cloned()) {
-                                let _ = conn.close().await;
-                            }
-
+                            current_connections.remove(&peer_id);
                             log::info!(target: "broadcast", "Removed connection for peer {:?}", peer_id);
                         })
                     })

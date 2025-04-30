@@ -7,6 +7,7 @@ use thiserror::Error;
 use tokio::spawn;
 use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
@@ -14,6 +15,7 @@ use webrtc::data_channel::{OnCloseHdlrFn, RTCDataChannel};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
@@ -84,9 +86,9 @@ impl ConnectionWebRtc {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
 
         setting_engine.set_ice_timeouts(
-            Some(Duration::from_secs(60)),
-            Some(Duration::from_secs(150)),
-            Some(Duration::from_secs(10))
+            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(20)),
+            Some(Duration::from_secs(5))
         );
 
         setting_engine
@@ -399,19 +401,25 @@ impl ConnectionWebRtc {
     pub fn on_disconnect(&self, callback: OnCloseHdlrFn) {
         let callback = Arc::new(Mutex::new(callback));
         let _ = self.on_disconnect.set(callback.clone());
-        {
+        let msg_channel = self.msg_channel.get().cloned();
+        self.peer_connection.on_peer_connection_state_change(Box::new(move |state| {
             let callback = callback.clone();
-            self.peer_connection.on_peer_connection_state_change(Box::new(move |state| {
-                let callback = callback.clone();
-                Box::pin(async move {
-                    if state == webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState::Failed {
-                        log::info!(target: "rtc", "Peer connection closed {:?}", state);
-                        let mut c = callback.lock().await;
-                        c.as_mut()().await;
+            let msg_channel = msg_channel.clone();
+            Box::pin(async move {
+                if state == RTCPeerConnectionState::Disconnected ||
+                    state == RTCPeerConnectionState::Failed ||
+                    state == RTCPeerConnectionState::Closed
+                {
+                    if let Some(msg_channel) = msg_channel {
+                        let _ = msg_channel.close().await;
                     }
-                })
-            }));
-        }
+
+                    let mut callback = callback.lock().await;
+                    log::info!(target: "rtc", "Peer connection closed {:?}", state);
+                    callback().await;
+                }
+            })
+        }));
     }
 
     pub fn parse_ice_candidate(candidate: IceCandidate) -> RTCIceCandidateInit {
@@ -425,10 +433,27 @@ impl ConnectionWebRtc {
     }
 
     pub async fn close(&self) {
-        let _ = self.peer_connection.close().await;
-        if let Some(msg_channel) = self.msg_channel.get() {
-            let _ = msg_channel.close().await;
+        if self.peer_connection.connection_state() == RTCPeerConnectionState::Closed {
+            log::warn!(target: "peer", "The peer connection is already closed");
+            return;
         }
+
+        if let Some(msg_channel) = self.msg_channel.get() {
+            msg_channel.close().await;
+        }
+
+        let peer_connection = self.peer_connection.clone();
+        // Webrtc having a bug that cause the close connection hangup
+        // we need to spawn a task to allow the current connection to be dropped properly
+
+        let result = timeout(Duration::from_secs(3), peer_connection.close()).await;
+        if result.is_err() {
+            if let Some(callback) = self.on_disconnect.get().cloned() {
+                let _ = callback.lock().await.as_mut()().await;
+            }
+        }
+
+        log::info!(target: "peer", "The peer connection is closed with closing process status = {:?}", result);
     }
 }
 
@@ -444,10 +469,11 @@ impl Drop for ConnectionWebRtc {
     fn drop(&mut self) {
         let signalling_join_handle = self.signalling_join_handle.clone();
         let connection = self.peer_connection.clone();
-        let peer_id = self.peer_id;
         let mut on_disconnect = self.on_disconnect.get().cloned();
         spawn(async move {
-            let _ = connection.close().await;
+            let result = timeout(Duration::from_secs(3), connection.close()).await;
+            log::info!(target: "rtc", "The peer connection is closed with closing process status = {:?}", result);
+
             if let Some(join_handle) = signalling_join_handle.lock().await.take() {
                 join_handle.abort();
             }
@@ -455,122 +481,6 @@ impl Drop for ConnectionWebRtc {
             if let Some(callback) = on_disconnect.take() {
                 let _ = callback.lock().await.as_mut()().await;
             }
-
-            log::info!(target: "rtc", "Dropped connection to peer {}", peer_id);
         });
-    }
-}
-
-#[cfg(test)]
-pub mod test_webrtc {
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use core_services::logger;
-    use futures_util::future::join_all;
-    use schema::value::device::DeviceType;
-    use schema::value::platform::Platform;
-    use tokio::spawn;
-    use tokio::time::sleep;
-
-    use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-    use crate::app::nearby::finding_scope::FindingScope;
-    use crate::app::transfer::session::{TransferSession, TransferType};
-    use crate::app::transfer::target::TransferTarget;
-    use crate::entities::device::DeviceInfo;
-    use crate::entities::peer::Peer;
-    use crate::network::webrtc::web_rtc::WebRtc;
-    use crate::ShellRuntime;
-
-    pub struct MockShellRunTime {}
-    #[async_trait::async_trait]
-    impl ShellRuntime for MockShellRunTime {
-        async fn msg_from_native(&self, event: Vec<u8>) {}
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    pub async fn test_webrtc() {
-        logger::setup();
-        let workdir = "/Users/tiendang/webrtc-test";
-        let shell_runtime = Arc::new(MockShellRunTime {});
-        let core_request_id = 9;
-        let device = DeviceInfo {
-            platform: Platform::Ios,
-            name: "iPhone Test".to_string(),
-            unique_id: "123123".to_string(),
-            device_type: DeviceType::ApplePhone
-        };
-
-        let peer = Peer {
-            id: "1".to_string(),
-            name: Some("Test".to_string()),
-            avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
-            email: Some("test@test.com".to_string()),
-            device
-        };
-
-        let h1 = spawn({
-            let webrtc = Arc::new(WebRtc::new(workdir.to_string()));
-            webrtc.add_scope(FindingScope::Local("171.236.49.57".to_owned())).await;
-            async move {
-                let webrtc_cloned = webrtc.clone();
-                spawn(async move {
-                    webrtc_cloned.start(core_request_id, peer, shell_runtime).await.unwrap();
-                });
-
-                loop {
-                    let any_conn = webrtc.connections.lock().await.iter().next().and_then(|(_, conn)| conn.get().cloned());
-                    if let Some(connection) = any_conn {
-                        log::info!(target: "test", "Connection established");
-                        let test_resource = LocalResource {
-                            order_id: 1,
-                            name: "test".to_string(),
-                            size: 100,
-                            path: LocalResourcePath::LocalPath("/Users/tiendang/test.txt".to_string()),
-                            thumbnail_path: None,
-                            r#type: ResourceType::File
-                        };
-
-                        let test_session = TransferSession {
-                            order_id: 1,
-                            resources: vec![test_resource.clone()],
-                            progress: vec![],
-                            transfer_type: TransferType::Send,
-                            target: TransferTarget::Nearby(connection.peer.clone())
-                        };
-
-                        // connection.send_session(test_session).await;
-                        log::info!(target: "test", "Sent session");
-                    }
-
-                    sleep(Duration::from_millis(100)).await;
-                }
-            }
-        });
-
-        let h2 = spawn(async move {
-            sleep(Duration::from_secs(1)).await;
-            let shell_runtime = Arc::new(MockShellRunTime {});
-            let device = DeviceInfo {
-                platform: Platform::Ios,
-                name: "iPhone Test".to_string(),
-                unique_id: "123123".to_string(),
-                device_type: DeviceType::ApplePhone
-            };
-
-            let peer = Peer {
-                id: "2".to_string(),
-                name: Some("Test".to_string()),
-                avatar_url: "https://cdn.devlog.studio/public/animal_avatars/Cat.jpg".to_string(),
-                email: Some("test@test.com".to_string()),
-                device
-            };
-            let webrtc = Arc::new(WebRtc::new(workdir.to_string()));
-            webrtc.add_scope(FindingScope::Local("171.236.49.57".to_owned())).await;
-            webrtc.start(core_request_id, peer, shell_runtime).await.unwrap();
-        });
-
-        join_all(vec![h1, h2]).await;
-        // Wait for connection established
     }
 }

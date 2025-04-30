@@ -322,10 +322,6 @@ impl PeerCommunication {
 
         // active_data_channels.clear();
     }
-
-    pub async fn close(&self) {
-        let _ = self.connection.close().await;
-    }
 }
 
 impl Deref for PeerCommunication {
@@ -339,13 +335,17 @@ impl Deref for PeerCommunication {
 impl Drop for PeerCommunication {
     fn drop(&mut self) {
         let runtime = self.shell_runtime.clone();
+        log::info!(target: "peer", "Dropping peer communication");
+        let connection = self.connection.clone();
+
         if let Some(core_request_id) = self.peer_event_request_id.get().copied() {
-            let leaved_msg = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected());
             log::info!(target: "peer", "Sending leaved message to peer {:?}", self.peer.id());
-            let connection = self.connection.clone();
+            let leaved_msg = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected());
             spawn(async move {
-                let _ = connection.peer_connection.close().await;
                 runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, leaved_msg)));
+                // For some reason, this close will be hangup randomly
+                // we need to monitor if it could serious memory leak or performance issue
+                let _ = connection.close().await;
             });
         }
     }

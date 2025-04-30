@@ -56,7 +56,7 @@ tokio-tungstenite = { version = "0.26.2" }
 futures-util = { version = "0.3.31" }
 tiny_http = { version = "0.12.0" }
 url = { version = "2.5.4" }
-webrtc = { git = "https://github.com/webrtc-rs/webrtc.git" }
+webrtc = { version = "0.12.0" }
 uuid = { version = "1.16.0" }
 rand = { version = "0.9.0" }
 regex = { version = "1.11.1" }

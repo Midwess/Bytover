@@ -63,7 +63,10 @@ impl AppModule<BitBridge> for NearbyModule {
                     it.notify_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::StartIpAddressMonitor)));
                 });
 
-                Command::all(vec![nearby_command, start_ip_address_monitor_command])
+                Command::all(vec![
+                    nearby_command,
+                    start_ip_address_monitor_command,
+                ])
             }
             NearbyEvent::OnIpAddressUpdated(ip_address) => {
                 let finding_scope = FindingScope::Local(ip_address.clone());
@@ -75,12 +78,10 @@ impl AppModule<BitBridge> for NearbyModule {
                     let _ = P2POperation::update_finding_scopes(finding_scopes).into_future(it.clone()).await;
                 })
             }
-            NearbyEvent::StartIpAddressMonitor => {
-                Command::new(|it| async move {
-                    let nearby_service = DiContainer::get_instance().get_nearby_service();
-                    nearby_service.start_ip_address_monitor(it.clone()).await;
-                })
-            }
+            NearbyEvent::StartIpAddressMonitor => Command::new(|it| async move {
+                let nearby_service = DiContainer::get_instance().get_nearby_service();
+                nearby_service.start_ip_address_monitor(it.clone()).await;
+            }),
             NearbyEvent::OnLocationUpdated(location) => {
                 let finding_scope = FindingScope::nearby_location(location);
                 model.nearby.finding_scopes.retain(|it| !it.is_location());

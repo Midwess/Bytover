@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::time::sleep;
 
@@ -7,11 +6,10 @@ use crate::app::operations::internet::{InternetOperation, InternetOperationOutpu
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::AppEvent;
 use crate::network::module::InternetConnection;
-use crate::{process_event, serialize, ShellRuntime};
+use crate::{process_event, ShellRuntime};
 
 use super::database::NativeDatabase;
 use super::local_storage::NativeLocalStorage;
-use super::message_to_shell::MessageToShell;
 use super::p2p::P2PNativeExecutor;
 use super::rpc::NativeRpc;
 use super::transfer::TransferNative;

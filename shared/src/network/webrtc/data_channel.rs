@@ -41,7 +41,9 @@ pub enum DataChannelError {
     #[error("Data corrupted")]
     DataCorrupted,
     #[error("Timeout")]
-    Timeout(Duration)
+    Timeout(Duration),
+    #[error("The throughput controller error")]
+    ThroughputController(String)
 }
 
 pub struct DataChannel {
@@ -140,7 +142,6 @@ impl DataChannel {
         progress: &mut TransferProgress
     ) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
-        let file_size = out_resource.size;
 
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(300));
 

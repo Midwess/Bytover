@@ -6,7 +6,7 @@ use ulid::Ulid;
 use crate::app::modules::nearby::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::internet::{InternetOperation, InternetOperationOutput};
+use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::target::TransferTarget;
@@ -20,7 +20,7 @@ impl NearbyService {
     pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
 
-        let peer_id = Ulid::new().random().to_string();
+        let peer_id = Ulid::new().0.to_string();
 
         let peer = match user {
             Some(user) => Peer {
@@ -90,7 +90,10 @@ impl NearbyService {
         loop {
             let ip_address = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await;
             if let Ok(ip_address) = ip_address {
-                ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(ip_address)))).await;
+                ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(
+                    ip_address
+                ))))
+                .await;
             }
 
             ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
