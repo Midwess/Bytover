@@ -17,7 +17,7 @@ pub enum TransferType {
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferSessionStatus {
-    PrepareFile,
+    Initializing,
     InProgress { bytes_per_second: u64, percentage: f64 },
     Success,
     Failed(String)
@@ -26,7 +26,7 @@ pub enum TransferSessionStatus {
 impl Display for TransferSessionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransferSessionStatus::PrepareFile => write!(f, "Preparing file..."),
+            TransferSessionStatus::Initializing => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 let kb_per_second = *bytes_per_second as f64 / 1024.0;
                 if kb_per_second < 100.0 {
@@ -207,6 +207,10 @@ impl TransferSession {
     }
 
     pub fn status(&self) -> TransferSessionStatus {
+        if self.is_initializing() {
+            return TransferSessionStatus::Initializing;
+        }
+
         let is_in_progress = self.transfer_progress.iter().any(|it| it.status == TransferStatus::InProgress);
         if is_in_progress {
             return TransferSessionStatus::InProgress {

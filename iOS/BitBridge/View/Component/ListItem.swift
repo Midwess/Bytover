@@ -124,14 +124,9 @@ struct SelectedResourceItem: View {
                         .modifier(Label1())
                 }
                 
-                if resource.size_gb <= 0 {
+                if resource.size_mb >= 0 {
                     Text("\(String(resource.size_mb)) MB")
                         .modifier(Label1())
-                }
-                else {
-                    Text("\(String(resource.size_mb)) MB")
-                        .modifier(Label2())
-                        .opacity(0.7)
                 }
             }
             Button(action: {isShowingMoreDialog = true}) {
