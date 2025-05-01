@@ -33,7 +33,9 @@ pub struct DiContainer {
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>,
     workdir: OnceCell<String>,
-    nearby_service: OnceCell<NearbyService>
+    nearby_service: OnceCell<NearbyService>,
+    transfer_service: OnceCell<TransferService>,
+    transfer_selection_service: OnceCell<ResourceTransferSelectionService>
 }
 
 impl DiContainer {
@@ -46,7 +48,9 @@ impl DiContainer {
                     auth_service: OnceCell::new(),
                     auth_server: OnceCell::new(),
                     workdir: OnceCell::new(),
-                    nearby_service: OnceCell::new()
+                    nearby_service: OnceCell::new(),
+                    transfer_service: OnceCell::new(),
+                    transfer_selection_service: OnceCell::new()
                 };
 
                 let _ = DI_SINGLETON.set(instance);
@@ -76,8 +80,15 @@ impl DiContainer {
         }
     }
 
-    pub fn get_transfer_service(&'static self) -> TransferService {
-        TransferService {}
+    pub fn get_transfer_service(&'static self) -> &'static TransferService {
+        match self.transfer_service.get() {
+            Some(service) => service,
+            None => {
+                let service = TransferService {};
+                let _ = self.transfer_service.set(service);
+                self.transfer_service.get().unwrap()
+            }
+        }
     }
 
     pub fn init(&self, work_dir_path: String) {
@@ -144,8 +155,15 @@ impl DiContainer {
         }
     }
 
-    pub fn get_resource_transfer_selection_service(&self) -> ResourceTransferSelectionService {
-        ResourceTransferSelectionService {}
+    pub fn get_resource_transfer_selection_service(&'static self) -> &'static ResourceTransferSelectionService {
+        match self.transfer_selection_service.get() {
+            Some(service) => service,
+            None => {
+                let service = ResourceTransferSelectionService {};
+                let _ = self.transfer_selection_service.set(service);
+                self.transfer_selection_service.get().unwrap()
+            }
+        }
     }
 
     pub fn get_nearby_service(&'static self) -> &'static NearbyService {
