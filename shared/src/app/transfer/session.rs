@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
@@ -13,11 +15,37 @@ pub enum TransferType {
     Receive
 }
 
+#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+pub enum TransferSessionStatus {
+    PrepareFile,
+    InProgress { bytes_per_second: u64, percentage: f64 },
+    Success,
+    Failed(String)
+}
+
+impl Display for TransferSessionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransferSessionStatus::PrepareFile => write!(f, "Preparing file..."),
+            TransferSessionStatus::InProgress { bytes_per_second, .. } => {
+                let kb_per_second = *bytes_per_second as f64 / 1024.0;
+                if kb_per_second < 100.0 {
+                    write!(f, "{:.1} KB/s", kb_per_second)
+                } else {
+                    write!(f, "{:.1} MB/s", kb_per_second / 1024.0)
+                }
+            }
+            TransferSessionStatus::Success => write!(f, "Success"),
+            TransferSessionStatus::Failed(msg) => write!(f, "Failed {}", msg)
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
-    pub progress: Vec<TransferProgress>,
+    pub transfer_progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget
 }
@@ -59,7 +87,6 @@ impl TransferProgress {
             ))
         };
 
-        self.total_bytes_counter = self.file_size;
         self.bytes_per_second = 0;
         self.bytes_sec_counter = 0;
     }
@@ -84,6 +111,14 @@ impl TransferProgress {
 
     pub fn is_completed(&self) -> bool {
         self.percentage() == 1.0
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self.status, TransferStatus::Fail(_))
+    }
+
+    pub fn is_success(&self) -> bool {
+        matches!(self.status, TransferStatus::Success)
     }
 
     pub fn elapsed(&self) -> u64 {
@@ -132,19 +167,21 @@ impl TransferSession {
     }
 
     pub fn is_initializing(&self) -> bool {
-        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
+        self.transfer_progress
+            .iter()
+            .all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
-        if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
-            self.progress[index] = progress;
+        if let Some(index) = self.transfer_progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+            self.transfer_progress[index] = progress;
         } else {
-            self.progress.push(progress);
+            self.transfer_progress.push(progress);
         }
     }
 
     pub fn force_complete(&mut self, msg: String) {
-        self.progress.iter_mut().for_each(|it| {
+        self.transfer_progress.iter_mut().for_each(|it| {
             it.status = TransferStatus::Fail(msg.clone());
         });
     }
@@ -155,17 +192,42 @@ impl TransferSession {
             return 1.0;
         }
 
-        let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
+        let total_bytes_sent = self.transfer_progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
         total_bytes_sent as f64 / total_size as f64
     }
 
     pub fn bytes_per_second(&self) -> u64 {
-        self.progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
+        self.transfer_progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {
-        let resource_left = self.progress.iter().filter(|it| !it.status.is_completed()).count();
+        let resource_left = self.transfer_progress.iter().filter(|it| !it.status.is_completed()).count();
 
         resource_left == 0
+    }
+
+    pub fn status(&self) -> TransferSessionStatus {
+        let is_in_progress = self.transfer_progress.iter().any(|it| it.status == TransferStatus::InProgress);
+        if is_in_progress {
+            return TransferSessionStatus::InProgress {
+                bytes_per_second: self.bytes_per_second(),
+                percentage: self.total_progress()
+            }
+        }
+
+        let failed_messages = self
+            .transfer_progress
+            .iter()
+            .filter_map(|it| match &it.status {
+                TransferStatus::Fail(msg) => Some(msg.clone()),
+                _ => None
+            })
+            .collect::<Vec<String>>();
+
+        if !failed_messages.is_empty() {
+            return TransferSessionStatus::Failed(failed_messages.join(", "));
+        }
+
+        TransferSessionStatus::Success
     }
 }

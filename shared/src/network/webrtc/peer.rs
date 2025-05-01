@@ -19,6 +19,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, OnceCell};
 use tokio::time::timeout;
 use tokio::{select, spawn};
+use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
 use crate::app::file_system::file::LocalResource;
 use crate::app::operations::p2p::P2POperationOutput;
@@ -207,6 +208,12 @@ impl PeerCommunication {
                     }
                 }
             };
+
+            if data_channel.ready_state() == RTCDataChannelState::Closed || data_channel.ready_state() == RTCDataChannelState::Closing
+            {
+                log::warn!(target: "peer", "Data channel is closed or closing, skipping...");
+                continue;
+            }
 
             let Some(found_index) = resources
                 .iter()

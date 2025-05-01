@@ -155,12 +155,14 @@ impl DataChannel {
         let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        log::info!(target: "nearby", "Start downloading file into: {}", saved_path);
+        log::info!(target: "nearby", "Start downloading file into: {}, size = {}", saved_path, progress.file_size);
         let result = loop {
             let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
                 Ok(Some(bytes)) => bytes,
                 Ok(None) => match progress.is_completed() {
-                    true => break Ok(()),
+                    true => {
+                        break Ok(());
+                    }
                     false => break Err(DataChannelError::DataCorrupted)
                 },
                 Err(e) => break Err(e)
@@ -308,7 +310,7 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    let _ = sender.send(Err(DataChannelError::DataChannelClosed("".to_owned()))).await;
+                    let _ = sender.send(Err(DataChannelError::DataChannelClosed("The channel is closed".to_owned()))).await;
                 }
             })
         }));

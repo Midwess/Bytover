@@ -14,6 +14,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
+    IsFileExists(LocalResourcePath),
     GetAbsolutePath(LocalResourcePath),
     LoadFileSizeFromPlatformIdentifier(String),
     LoadFileNameFromPlatformIdentifier(String),
@@ -27,6 +28,7 @@ pub enum LocalStorageOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
+    IsFileExists(bool),
     Get(Option<LocalResource>),
     GetAbsolutePath(Option<String>),
     NewFile(LocalResource),
@@ -127,6 +129,13 @@ impl LocalStorageOperation {
         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetAbsolutePath(path))).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetAbsolutePath(path)) => path,
             _ => panic!("Mismatch in response type, expected GetAbsolutePath, got {:?}", it)
+        })
+    }
+
+    pub fn is_file_exists(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = bool>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::IsFileExists(path))).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::IsFileExists(exists)) => exists,
+            _ => panic!("Mismatch in response type, expected IsFileExists, got {:?}", it)
         })
     }
 }

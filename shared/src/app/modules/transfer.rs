@@ -61,7 +61,8 @@ pub enum TransferEvent {
     },
     UpdateResourcesModel {
         new: Vec<LocalResource>,
-        removed: Vec<LocalResource>
+        removed: Vec<LocalResource>,
+        updated: Vec<LocalResource>
     },
     UpdateTransferTargets {
         new: Vec<TransferTarget>,
@@ -107,12 +108,18 @@ impl AppModule<BitBridge> for TransferModule {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
                 resource_transfer_selection_service.remove_resource(it, id).await;
             }),
-            TransferEvent::UpdateResourcesModel { new, removed } => {
+            TransferEvent::UpdateResourcesModel { new, removed, updated } => {
                 model.transfer.selected_resources.extend(new);
                 model
                     .transfer
                     .selected_resources
                     .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
+
+                for updated in updated {
+                    if let Some(index) = model.transfer.selected_resources.iter().position(|it| it.order_id == updated.order_id) {
+                        model.transfer.selected_resources[index] = updated;
+                    }
+                }
 
                 Command::done()
             }
@@ -208,22 +215,7 @@ impl AppModule<BitBridge> for TransferModule {
                             avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                             device: peer.device.clone(),
                             transfer_progress: send_session.map(|it| it.total_progress()).unwrap_or(0.0),
-                            display_upload_speed: send_session.and_then(|it| {
-                                if it.transfer_type == TransferType::Send {
-                                    if it.is_initializing() {
-                                        return Some("Initializing".to_owned());
-                                    }
-                                    let bytes_per_second = it.bytes_per_second();
-                                    let kb_per_second = bytes_per_second as f64 / 1024.0;
-                                    if kb_per_second < 100.0 {
-                                        Some(format!("{:.1} KB/s", kb_per_second))
-                                    } else {
-                                        Some(format!("{:.1} MB/s", kb_per_second / 1024.0))
-                                    }
-                                } else {
-                                    None
-                                }
-                            }),
+                            display_upload_speed: send_session.map(|it| it.status().to_string()),
                             display_download_speed: None // The download speed is displayed in the received screen
                         })
                     }

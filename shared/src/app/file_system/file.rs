@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
 
+use crate::app::operations::database::LocalResourceDatabaseOperation;
+use crate::app::operations::local_storage::LocalStorageOperation;
+use crate::app::AppCommandContext;
+
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct LocalResource {
     pub order_id: u64,
@@ -9,7 +13,9 @@ pub struct LocalResource {
     pub size: u64,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType
+    pub r#type: ResourceType,
+    #[surreal(default)]
+    pub is_valid: bool
 }
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
@@ -73,6 +79,19 @@ impl LocalResource {
         }
 
         result
+    }
+
+    // Return true if value is updated
+    pub async fn validate(&mut self, cmd: AppCommandContext) -> bool {
+        let is_valid = LocalStorageOperation::is_file_exists(self.path.clone()).into_future(cmd.clone()).await;
+        let is_changed = self.is_valid != is_valid;
+        self.is_valid = is_valid;
+
+        if is_changed && !is_valid {
+            LocalResourceDatabaseOperation::remove(self.order_id).into_future(cmd.clone()).await;
+        }
+
+        is_changed
     }
 }
 

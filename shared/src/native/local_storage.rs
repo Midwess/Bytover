@@ -18,7 +18,8 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(created_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File
+                    r#type: ResourceType::File,
+                    is_valid: true
                 };
 
                 LocalStorageOperationOutput::NewFile(resource)
@@ -33,7 +34,8 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File
+                    r#type: ResourceType::File,
+                    is_valid: true
                 };
 
                 LocalStorageOperationOutput::Copy(resource)
@@ -48,7 +50,8 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File
+                    r#type: ResourceType::File,
+                    is_valid: true
                 };
 
                 LocalStorageOperationOutput::Zip(resource)
@@ -62,7 +65,8 @@ impl NativeLocalStorage {
                     size: metadata.size,
                     path: LocalResourcePath::LocalPath(file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
-                    r#type: ResourceType::File
+                    r#type: ResourceType::File,
+                    is_valid: true
                 };
 
                 LocalStorageOperationOutput::Get(Some(resource))

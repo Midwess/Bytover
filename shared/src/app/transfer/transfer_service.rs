@@ -54,9 +54,27 @@ impl TransferService {
         true
     }
 
-    pub async fn transfer(&self, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
+    pub async fn transfer(&self, mut selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
+        let mut update_resources = vec![];
+        for selected_resource in selected_resources.iter_mut() {
+            if selected_resource.validate(cmd.clone()).await {
+                update_resources.push(selected_resource.clone());
+            }
+        }
+
+        if !update_resources.is_empty() {
+            cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                new: vec![],
+                removed: vec![],
+                updated: update_resources
+            }));
+
+            cmd.notify_shell(CoreOperation::Render);
+        }
+
+        let selected_resources = selected_resources.into_iter().filter(|it| it.is_valid).collect::<Vec<_>>();
         if selected_resources.is_empty() {
-            DialogOperation::toast("No resources selected".to_string()).into_future(cmd.clone()).await;
+            DialogOperation::toast("No valid resources selected".to_string()).into_future(cmd.clone()).await;
             return;
         }
 
@@ -64,7 +82,7 @@ impl TransferService {
 
         let mut transfer_session = TransferSession {
             order_id,
-            progress: selected_resources
+            transfer_progress: selected_resources
                 .iter()
                 .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
                 .collect(),
@@ -84,7 +102,17 @@ impl TransferService {
         for resource in transfer_session.resources.iter_mut() {
             resource.path = match LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await {
                 Some(path) => LocalResourcePath::LocalPath(path),
-                None => continue
+                None => {
+                    resource.is_valid = false;
+                    cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                        new: vec![],
+                        removed: vec![],
+                        updated: vec![resource.clone()]
+                    }));
+
+                    cmd.notify_shell(CoreOperation::Render);
+                    continue;
+                }
             };
 
             resource.thumbnail_path = match resource.thumbnail_path.clone() {
@@ -190,6 +218,7 @@ impl TransferService {
             };
 
             resources.push(LocalResource {
+                is_valid: true,
                 path: LocalResourcePath::LocalPath(format!(
                     "{}/sessions/{}/{}/{}",
                     workdir, remote_session.order_id, resource_request.order_id, resource_request.name
@@ -206,7 +235,7 @@ impl TransferService {
 
         let mut transfer_session = TransferSession {
             order_id: remote_session.order_id,
-            progress: resources
+            transfer_progress: resources
                 .iter()
                 .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
                 .collect(),

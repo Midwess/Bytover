@@ -106,6 +106,7 @@ struct SelectedResourceItem: View {
             
             VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
+                    .strikethrough(!resource.is_valid)
                     .modifier(Label1())
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -150,6 +151,7 @@ struct SelectedResourceItem: View {
             }
             .frame(minWidth: 35, alignment: .trailing)
         }
+        .opacity(resource.is_valid ? 1 : 0.5)
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .background(.gray.opacity(0.0))

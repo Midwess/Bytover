@@ -37,7 +37,7 @@ thiserror = { version = "2.0.12", default-features = false }
 serde_derive = { version = "1.0.203", default-features = false }
 serde_json = { version = "1.0.117", default-features = false }
 chrono = "0.4.39"
-surreal_derive_plus = "2.2.2"
+surreal_derive_plus = "2.2.3"
 surreal_devl = "2.2.2"
 lazy_static = "1.5.0"
 tonic-middleware = { version = "0.1.4", default-features = false }

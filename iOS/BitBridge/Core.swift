@@ -125,6 +125,16 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .appCapabilities(.localStorage(.loadFileSizeFromPlatformIdentifier(let identifier))):
             let fileSize = await self.getFileSize(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileSizeFromPlatformIdentifier(fileSize)).bincodeSerialize()))
+        case .appCapabilities(.localStorage(.isFileExists(.localPath(let localPath)))):
+            let fileManager = FileManager.default
+            let exists = fileManager.fileExists(atPath: localPath)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.isFileExists(exists)).bincodeSerialize()))
+        case .appCapabilities(.localStorage(.isFileExists(.platformIdentifier(let identifier)))):
+            let options = PHFetchOptions()
+            options.fetchLimit = 1
+            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
+            let exists = fetchResult.firstObject != nil
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.isFileExists(exists)).bincodeSerialize()))
         case .appCapabilities(.localStorage(.loadFileNameFromPlatformIdentifier(let identifier))):
             let fileName = await self.getFileName(item_identifier: identifier)
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileNameFromPlatformIdentifier(fileName)).bincodeSerialize()))
@@ -360,8 +370,8 @@ class CoreMock: Core {
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
         x.transfer = .init(TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: []));
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image));
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image, is_valid: false));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder, is_valid: true));
         return x
     }
     
