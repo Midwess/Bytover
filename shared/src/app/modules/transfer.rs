@@ -109,7 +109,14 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_transfer_selection_service.remove_resource(it, id).await;
             }),
             TransferEvent::UpdateResourcesModel { new, removed, updated } => {
-                model.transfer.selected_resources.extend(new);
+                for new in new {
+                    if model.transfer.selected_resources.iter().any(|it| it.order_id == new.order_id) {
+                        continue;
+                    }
+
+                    model.transfer.selected_resources.push(new);
+                }
+
                 model
                     .transfer
                     .selected_resources
@@ -170,7 +177,14 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::UpdateTransferSessions { new, removed, updated } => {
-                model.transfer.transfer_sessions.extend(new);
+                for new in new {
+                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id) {
+                        continue;
+                    }
+
+                    model.transfer.transfer_sessions.push(new);
+                }
+
                 model
                     .transfer
                     .transfer_sessions

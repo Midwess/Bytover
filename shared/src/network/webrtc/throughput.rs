@@ -35,6 +35,7 @@ pub struct ThroughputController {
     pub max_bytes_buffer: usize,
     pub received_timeout: Duration,
     pub received_broadcast: broadcast::Sender<()>,
+    pub send_timeout: Duration,
     max_concurrent_sends: usize,
     sent_queue: OnceCell<mpsc::Sender<SendRequest>>
 }
@@ -45,6 +46,8 @@ impl ThroughputController {
         Self {
             max_bytes_buffer,
             received_timeout,
+            // Max size of message is 64KB, we expect the speed must at least 10KB/s
+            send_timeout: Duration::from_millis(6400),
             received_broadcast: received_tx,
             max_concurrent_sends,
             sent_queue: OnceCell::new()
@@ -87,15 +90,10 @@ impl ThroughputController {
     }
 
     async fn send_by_channel(&self, channel: Weak<RTCDataChannel>, bytes: &Bytes) -> Result<usize, DataChannelError> {
-        let send_timeout = match bytes.len() {
-            len if len <= 1024 * 64 => Duration::from_millis(2500),
-            _ => Duration::from_secs(10)
-        };
-
         if let Some(channel) = channel.upgrade() {
-            let sent_bytes = timeout(send_timeout, channel.send(bytes))
+            let sent_bytes = timeout(self.send_timeout, channel.send(bytes))
                 .await
-                .map_err(|_| DataChannelError::Timeout(send_timeout))??;
+                .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
             self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
             Ok(sent_bytes)
         } else {

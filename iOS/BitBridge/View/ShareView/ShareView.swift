@@ -48,7 +48,7 @@ public struct ShareView: View {
                     ContentPickerView()
                         .padding(.trailing, SpaceTheme.screen.value - 10)
                     
-                    ForEach(selectedResources, id: \.self) { item in
+                    ForEach(selectedResources, id: \.self.order_id) { item in
                         SelectedResourceItem(resource: item)
                             .padding(.horizontal, 15)
                             .id(item.order_id)
