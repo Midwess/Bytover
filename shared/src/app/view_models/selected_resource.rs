@@ -17,7 +17,7 @@ pub struct SelectedResourceViewModel {
 
 impl From<&LocalResource> for SelectedResourceViewModel {
     fn from(resource: &LocalResource) -> Self {
-        let mut viewModel = SelectedResourceViewModel {
+        let mut view_model = SelectedResourceViewModel {
             order_id: resource.order_id,
             name: resource.name.clone(),
             size_gb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
@@ -28,12 +28,11 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             is_valid: resource.is_valid
         };
 
-
-        if viewModel.size_gb < 0.1 {
-            viewModel.size_gb = 0.0;
-            viewModel.size_mb = (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0);
+        if view_model.size_gb < 0.1 {
+            view_model.size_gb = 0.0;
+            view_model.size_mb = (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0);
         }
 
-        viewModel
+        view_model
     }
 }
