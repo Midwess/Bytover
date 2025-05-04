@@ -3,11 +3,12 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use core_services::logger::ThrottleLogger;
+use core_services::utils::number::ExponentialGrowth;
 use futures_util::lock::Mutex;
 use schema::devlog::rpc_signalling::server::{JoinMessage, Message};
 use thiserror::Error;
 use tokio::spawn;
-use tokio::sync::OnceCell;
+use tokio::sync::{mpsc, OnceCell};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
@@ -23,6 +24,10 @@ use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::peer::{PeerCommunication, PeerErrors};
 use super::signalling::{RtcSignallingErrors, RtcsSignalling};
 use super::throughput::ThroughputController;
+
+enum BroadcastOperation {
+    Restart
+}
 
 #[derive(Debug, Error)]
 pub enum WebRtcErrors {
@@ -45,7 +50,8 @@ pub struct WebRtc {
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
     workdir: String,
-    throughput_controller: Arc<ThroughputController>
+    throughput_controller: Arc<ThroughputController>,
+    broadcast_operation_sender: OnceCell<mpsc::Sender<BroadcastOperation>>
 }
 
 impl Default for WebRtc {
@@ -69,7 +75,8 @@ impl WebRtc {
             signalling_client: OnceCell::new(),
             handle_signalling_message_join: Arc::new(Mutex::new(None)),
             workdir,
-            throughput_controller: Self::throughput_controller()
+            throughput_controller: Self::throughput_controller(),
+            broadcast_operation_sender: OnceCell::new()
         }
     }
 
@@ -103,7 +110,7 @@ impl WebRtc {
             throughput_controller.start();
         });
 
-        self.broadcast().await?;
+        self.start_broadcast().await?;
 
         self.handle_nearby_event(core_request_id).await?;
 
@@ -130,44 +137,75 @@ impl WebRtc {
         scopes.push(scope);
     }
 
-    pub async fn broadcast(&self) -> Result<(), WebRtcErrors> {
+    pub async fn broadcast(
+        signalling_client: &Arc<RtcsSignalling>,
+        my_id: u128,
+        scopes: Vec<FindingScope>
+    ) -> Result<(), WebRtcErrors> {
+        if scopes.is_empty() {
+            log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
+            return Ok(());
+        }
+
+        let message = Message {
+            scopes: scopes.iter().map(|scope| scope.as_string()).collect(),
+            from_id: my_id.to_string(),
+            join: Some(JoinMessage { id: my_id.to_string() }),
+            ..Default::default()
+        };
+
+        if let Err(e) = signalling_client.send(message.clone()).await {
+            log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
+        }
+
+        Ok(())
+    }
+
+    pub fn broadcast_delay() -> ExponentialGrowth {
+        ExponentialGrowth::new(2, 0.2, 2, 9)
+    }
+
+    pub async fn start_broadcast(&self) -> Result<(), WebRtcErrors> {
         let mut broadcast_handle = self.broadcast_handle.lock().await;
         if let Some(handle) = broadcast_handle.take() {
             handle.abort();
         }
 
+        let signalling_client = self.signalling_client.get().unwrap().clone();
         let my_id = self.id();
-        let signalling_client = self.signalling_client.clone();
-
-        let scopes = self.scopes.clone();
+        let scopes_mutex = self.scopes.clone();
         let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
-        *broadcast_handle = Some(spawn(async move {
-            loop {
-                let delay = Duration::from_secs(3);
-                let scopes = scopes.lock().await.clone();
-                if scopes.is_empty() {
-                    log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
-                    drop(scopes);
-                    sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
 
-                let message = Message {
-                    scopes: scopes.iter().map(|scope| scope.as_string()).collect(),
-                    from_id: my_id.to_string(),
-                    join: Some(JoinMessage { id: my_id.to_string() }),
-                    ..Default::default()
+        let (broadcast_operation_sender, mut broadcast_operation_receiver) = mpsc::channel(1);
+        let _ = self.broadcast_operation_sender.set(broadcast_operation_sender);
+        *broadcast_handle = Some(spawn(async move {
+            let mut exponential_growth_delay = Self::broadcast_delay();
+            loop {
+                let operation = tokio::select! {
+                    op = broadcast_operation_receiver.recv() => op,
+                    _ = sleep(Duration::from_secs(exponential_growth_delay.next() as u64)) => None,
                 };
 
-                if let Err(e) = signalling_client.get().unwrap().send(message.clone()).await {
-                    log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
-                } else {
-                    throttle_logger.log(format!("Broadcasting..., my id = {my_id}")).await;
+                if let Some(op) = operation {
+                    match op {
+                        BroadcastOperation::Restart => {
+                            log::info!(target: "broadcast", "Restarting broadcast with initial delay");
+                            exponential_growth_delay = Self::broadcast_delay();
+                        }
+                    }
                 }
 
-                sleep(delay).await;
+                let scopes = scopes_mutex.lock().await.clone();
+                if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
+                    log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
+                } else {
+                    throttle_logger.log("Broadcasting completed successfully".to_string()).await;
+                }
             }
         }));
+
+        // Make sure broadcast will start immediately
+        self.restart_broadcast().await;
 
         Ok(())
     }
@@ -290,6 +328,12 @@ impl WebRtc {
         Ok(Arc::downgrade(connection))
     }
 
+    pub async fn restart_broadcast(&self) {
+        if let Some(broadcast_operation_sender) = self.broadcast_operation_sender.get() {
+            let _ = broadcast_operation_sender.send(BroadcastOperation::Restart).await;
+        }
+    }
+
     pub async fn handle_connection(
         self: &Arc<Self>,
         core_request_id: u32,
@@ -308,6 +352,7 @@ impl WebRtc {
                             let mut current_connections = self_clone.connections.lock().await;
                             current_connections.remove(&peer_id);
                             log::info!(target: "broadcast", "Removed connection for peer {:?}", peer_id);
+                            self_clone.restart_broadcast().await;
                         })
                     })
                 });
@@ -325,6 +370,7 @@ impl WebRtc {
                 let mut current_connections = self.connections.lock().await;
                 current_connections.remove_entry(&peer_id);
                 log::error!(target: "broadcast", "Error creating connection: {:?}", e);
+                self.restart_broadcast().await;
             }
         }
     }
