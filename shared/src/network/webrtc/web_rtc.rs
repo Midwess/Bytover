@@ -177,7 +177,7 @@ impl WebRtc {
         let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
 
         let (broadcast_operation_sender, mut broadcast_operation_receiver) = mpsc::channel(1);
-        let _ = self.broadcast_operation_sender.set(broadcast_operation_sender);
+        let _ = self.broadcast_operation_sender.set(broadcast_operation_sender.clone());
         *broadcast_handle = Some(spawn(async move {
             let mut exponential_growth_delay = Self::broadcast_delay();
             loop {
@@ -198,6 +198,7 @@ impl WebRtc {
                 let scopes = scopes_mutex.lock().await.clone();
                 if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
                     log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
+                    broadcast_operation_sender.send(BroadcastOperation::Restart).await.unwrap();
                 } else {
                     throttle_logger.log("Broadcasting completed successfully".to_string()).await;
                 }
