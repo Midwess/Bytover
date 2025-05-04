@@ -4,21 +4,25 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use core_services::logger::ThrottleLogger;
 use futures_util::future::join_all;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
     CancelTransferSessionRequest,
     IntroduceRequestMessage,
     IntroduceResponseMessage,
+    KeepAliveRequestMessage,
     PeerErrorsMessage,
     PeerMessageBody,
     TransferRequestMessage,
     TransferResponseMessage,
-    TransferSessionMessage
+    TransferSessionMessage,
+    VoidResponseMessage
 };
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, Mutex, OnceCell};
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
@@ -61,7 +65,8 @@ pub struct PeerCommunication {
     data_channel_tx: broadcast::Sender<Arc<DataChannel>>,
     peer_event_request_id: OnceCell<u32>,
     throughput_controller: Arc<ThroughputController>,
-    active_sessions: Arc<Mutex<HashMap<u64, Weak<Mutex<TransferSession>>>>>
+    active_sessions: Arc<Mutex<HashMap<u64, Weak<Mutex<TransferSession>>>>>,
+    keep_alive_handle: OnceCell<(JoinHandle<()>, JoinHandle<()>)>
 }
 
 impl PeerCommunication {
@@ -78,7 +83,9 @@ impl PeerCommunication {
                 mine: current_peer.clone().into()
             };
 
-            let response = connection.send::<IntroduceResponseMessage>(Request::IntroduceRequest(introduce_request)).await??;
+            let response = connection
+                .send::<IntroduceResponseMessage>(Request::IntroduceRequest(introduce_request), None, None)
+                .await??;
             response.peer.into()
         } else {
             let mut peer_result = None;
@@ -111,12 +118,101 @@ impl PeerCommunication {
             shell_runtime: shell_runtime.clone(),
             data_channel_tx,
             throughput_controller,
-            active_sessions: Arc::new(Mutex::new(HashMap::new()))
+            active_sessions: Arc::new(Mutex::new(HashMap::new())),
+            keep_alive_handle: OnceCell::new()
         };
 
+        me.keep_alive();
         me.handle_data_channel();
 
         Ok(me)
+    }
+
+    pub fn keep_alive(&self) {
+        let connection = self.connection.clone();
+        let active_sessions = self.active_sessions.clone();
+        let throttle_logger = ThrottleLogger::new("keep_alive".to_string(), Duration::from_secs(15));
+        let peer_id = self.peer.id();
+
+        // Spawn task for sending keep-alive requests
+        let sender_handle = {
+            let connection = connection.clone();
+            let active_sessions = active_sessions.clone();
+            let keep_alive_request = Request::KeepAlive(KeepAliveRequestMessage {});
+            let send_timeout = Some(Duration::from_secs(4));
+            let recv_timeout = Some(Duration::from_secs(4));
+
+            spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(3));
+
+                loop {
+                    interval.tick().await;
+
+                    // Skip sending keep-alive if there's active data transfer
+                    let mut should_skip = false;
+                    for (_, session) in active_sessions.lock().await.iter_mut() {
+                        if let Some(session) = session.upgrade() {
+                            let session_guard = session.lock().await;
+                            if session_guard.bytes_per_second() > 0 {
+                                should_skip = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if should_skip {
+                        continue;
+                    }
+
+                    match connection.send::<VoidResponseMessage>(keep_alive_request.clone(), send_timeout, recv_timeout).await {
+                        Ok(Ok(_)) => {
+                            continue;
+                        }
+                        Ok(Err(e)) => {
+                            log::error!(target: "peer", "Failed to send keep alive request {:?}", e);
+                            break;
+                        }
+                        Err(e) => {
+                            log::error!(target: "peer", "Failed to send keep alive request {:?}", e);
+                            break;
+                        }
+                    }
+                }
+
+                connection.close().await;
+            })
+        };
+
+        // Spawn task for handling incoming keep-alive requests
+        let receiver_handle = {
+            let connection = connection.clone();
+
+            spawn(async move {
+                loop {
+                    match connection.next_request().await {
+                        Ok(request) => {
+                            if let Request::KeepAlive(_) = request.message() {
+                                throttle_logger.log(format!("Received keep alive request from peer {:?}", peer_id)).await;
+                                if let Err(e) = request.resolve(Response::VoidResponse(VoidResponseMessage {})).await {
+                                    log::error!(target: "peer", "Failed to resolve keep alive request {:?}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!(target: "peer", "Failed to receive keep alive request {:?}", e);
+                            break;
+                        }
+                    }
+                }
+
+                connection.close().await;
+            })
+        };
+
+        // Store the sender handle - we only need one handle to cancel both tasks
+        // since if either task exits, it will close the connection and cause the other to exit
+        let _ = self.keep_alive_handle.set((sender_handle, receiver_handle));
     }
 
     pub async fn next_peers_event(&self, core_request_id: u32) -> Result<(), PeerErrors> {
@@ -144,9 +240,7 @@ impl PeerCommunication {
                         self.shell_runtime.clone()
                             .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
                     }
-                    _ => {
-                        log::warn!(target: "peer", "Unexpected request from peer {:?}", self.peer.id());
-                    }
+                    _ => {}
                 }
             }
         };
@@ -236,7 +330,7 @@ impl PeerCommunication {
 
         let mut channel_subscription = self.data_channel_tx.subscribe();
 
-        let _ = self.connection.send::<TransferResponseMessage>(request).await??;
+        let _ = self.connection.send::<TransferResponseMessage>(request, None, None).await??;
 
         drop(session_guard);
 
@@ -425,6 +519,11 @@ impl Drop for PeerCommunication {
                 // we need to monitor if it could serious memory leak or performance issue
                 let _ = connection.close().await;
             });
+        }
+
+        if let Some((sender_handle, receiver_handle)) = self.keep_alive_handle.get() {
+            sender_handle.abort();
+            receiver_handle.abort();
         }
     }
 }

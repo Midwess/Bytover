@@ -58,9 +58,10 @@ pub struct TransferProgress {
     pub resource_order_id: u64,
     pub file_size: u64,
     pub total_bytes_counter: u64,
-    pub bytes_per_second: u64,
-    pub start_time_utc_ms: u64,
-    pub bytes_sec_counter: u64,
+    bytes_per_second: u64,
+    start_time_utc_ms: u64,
+    bytes_sec_counter: u64,
+    last_update_time_ms: u64,
     pub transfer_type: TransferType,
     pub status: TransferStatus
 }
@@ -73,6 +74,7 @@ impl TransferProgress {
             total_bytes_counter: 0,
             bytes_per_second: 0,
             bytes_sec_counter: 0,
+            last_update_time_ms: Utc::now().timestamp_millis() as u64,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
             status: TransferStatus::Pending
@@ -89,9 +91,6 @@ impl TransferProgress {
                 self.percentage()
             ))
         };
-
-        self.bytes_per_second = 0;
-        self.bytes_sec_counter = 0;
     }
 
     pub fn success(&mut self) {
@@ -133,6 +132,10 @@ impl TransferProgress {
     }
 
     pub fn update_progress(&mut self, bytes_count: u64) {
+        if bytes_count > 0 {
+            self.last_update_time_ms = Utc::now().timestamp_millis() as u64;
+        }
+
         if self.status == TransferStatus::Pending {
             self.status = TransferStatus::InProgress;
         }
@@ -157,6 +160,14 @@ impl TransferProgress {
         if self.percentage() == 1.0 {
             self.success();
         }
+    }
+
+    pub fn bytes_per_second(&self) -> u64 {
+        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - 2000 {
+            return 0;
+        }
+
+        self.bytes_per_second
     }
 }
 
@@ -246,7 +257,7 @@ impl TransferSession {
     }
 
     pub fn bytes_per_second(&self) -> u64 {
-        self.progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
+        self.progress.iter().map(|it| it.bytes_per_second()).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {

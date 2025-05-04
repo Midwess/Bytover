@@ -86,9 +86,9 @@ impl ConnectionWebRtc {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
 
         setting_engine.set_ice_timeouts(
-            Some(Duration::from_secs(10)),
-            Some(Duration::from_secs(20)),
-            Some(Duration::from_secs(5))
+            Some(Duration::from_secs(45)),
+            Some(Duration::from_secs(90)),
+            Some(Duration::from_secs(15))
         );
 
         setting_engine

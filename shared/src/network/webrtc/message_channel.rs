@@ -110,7 +110,6 @@ impl MessageChannel {
 
         let msg_request_broadcast_cloned = msg_request_broadcast.clone();
         msg_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-            log::info!(target: "message-channel", "Received message");
             let msg = match PeerMessageBody::decode(msg.data) {
                 Ok(msg) => msg,
                 Err(e) => {
@@ -184,16 +183,25 @@ impl MessageChannel {
     pub async fn next_request(&self) -> Result<PeerRequest, ConnectionWebRtcErrors> {
         let mut subscription = self.msg_request_broadcast.subscribe();
         let result = subscription.recv().await;
+
         match result {
             Ok(Ok((request_id, request))) => Ok(PeerRequest::new(request, request_id, self.msg_channel.clone())),
-            Ok(Err(e)) => Err(ConnectionWebRtcErrors::ConnectionCorrupted),
-            Err(e) => Err(ConnectionWebRtcErrors::ConnectionCorrupted)
+            Ok(Err(e)) => {
+                log::error!(target: "message-channel", "Failed to receive request {:?}", e);
+                Err(ConnectionWebRtcErrors::ConnectionCorrupted)
+            }
+            Err(e) => {
+                log::error!(target: "message-channel", "Failed to receive request {:?}", e);
+                Err(ConnectionWebRtcErrors::ConnectionCorrupted)
+            }
         }
     }
 
     pub async fn send<T: TryFrom<Response, Error = String>>(
         &self,
-        msg: Request
+        msg: Request,
+        send_timeout: Option<Duration>,
+        recv_timeout: Option<Duration>
     ) -> Result<Result<T, PeerErrorsMessage>, ConnectionWebRtcErrors> {
         let request_id = Self::random_id();
         let message = PeerMessageBody {
@@ -207,12 +215,14 @@ impl MessageChannel {
         let mut subscription = self.msg_response_broadcast.subscribe();
 
         let _ = timeout(
-            Duration::from_secs(90),
+            send_timeout.unwrap_or(Duration::from_secs(90)),
             self.throughput_controller.send(Arc::downgrade(&self.msg_channel), &bytes.into())
         )
         .await?;
 
-        while let Ok(Ok((response_id, response))) = timeout(Duration::from_secs(300), subscription.recv()).await? {
+        while let Ok(Ok((response_id, response))) =
+            timeout(recv_timeout.unwrap_or(Duration::from_secs(300)), subscription.recv()).await?
+        {
             if response_id != request_id {
                 continue;
             }

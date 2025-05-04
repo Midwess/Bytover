@@ -56,7 +56,7 @@ impl Default for WebRtc {
 
 impl WebRtc {
     pub fn throughput_controller() -> Arc<ThroughputController> {
-        Arc::new(ThroughputController::new(2 * 1024 * 1024, Duration::from_secs(10), 2))
+        Arc::new(ThroughputController::new(4 * 1024 * 1024, Duration::from_secs(10), 2))
     }
 
     pub fn new(workdir: String) -> Self {
@@ -143,7 +143,7 @@ impl WebRtc {
         let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
         *broadcast_handle = Some(spawn(async move {
             loop {
-                let delay = Duration::from_secs(2);
+                let delay = Duration::from_secs(3);
                 let scopes = scopes.lock().await.clone();
                 if scopes.is_empty() {
                     log::info!(target: "broadcast", "No scopes to broadcast, skipping...");
@@ -265,21 +265,6 @@ impl WebRtc {
                         }
                     }
                 });
-
-                continue;
-            }
-
-            if let Some(left_message) = message.left_message {
-                let current_connections = self.connections.lock().await;
-                log::info!(target: "broadcast", "Received left message from {}", left_message.id);
-                if let Some(connection) = current_connections
-                    .get(&left_message.id.parse::<u128>().expect("Failed to parse peer id"))
-                    .and_then(|cell| cell.get().cloned())
-                {
-                    drop(current_connections);
-
-                    connection.close().await;
-                }
 
                 continue;
             }

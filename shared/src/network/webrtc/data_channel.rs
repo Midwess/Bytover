@@ -261,7 +261,7 @@ impl DataChannel {
             }
         };
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(300));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;

@@ -34,7 +34,6 @@ impl P2PNativeExecutor {
                         return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
                     };
 
-                    log::info!(target: "peer", "Next peers event");
                     match connection.next_peers_event(request_id).await {
                         Ok(_) => {
                             continue;
