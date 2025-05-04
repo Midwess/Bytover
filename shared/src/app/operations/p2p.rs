@@ -28,6 +28,10 @@ pub enum P2POperationOutput {
         request_id: String,
         remote_session: TransferSessionMessage
     },
+    CancelSessionRequest {
+        request_id: String,
+        session_id: u64
+    },
     NearbyServerStopped
 }
 

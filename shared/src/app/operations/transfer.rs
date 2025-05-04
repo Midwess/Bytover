@@ -16,13 +16,15 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     SendSession(TransferSession),
-    AnswerSessionRequest(u128, TransferSession, String, Response)
+    AnswerSessionRequest(u128, TransferSession, String, Response),
+    CancelSession(u128, u64)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperationOutput {
     TransferResourceProgressUpdate(TransferProgress),
-    TransferCompleted
+    TransferCompleted,
+    TransferCanceled
 }
 
 impl Operation for TransferOperation {

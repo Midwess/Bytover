@@ -111,6 +111,12 @@ impl NearbyService {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     break;
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { request_id, session_id }) => {
+                    log::info!(target: ns.as_str(), "Received cancel session request from peer: {}", peer.id);
+                    let request = AppEvent::Transfer(TransferEvent::TransferCanceled { session_id });
+
+                    ctx.notify_shell(CoreOperation::Notified(request));
+                }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
                     request_id,
                     remote_session

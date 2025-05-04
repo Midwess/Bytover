@@ -8,6 +8,7 @@ use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
+use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 
@@ -28,19 +29,33 @@ impl TransferService {
     }
 
     pub async fn cancel_transfer(&self, transfer_session: TransferSession, cmd: AppCommandContext) -> bool {
-        let confirmation = DialogOperation::alert(AlertDialog::confirmation(
-            "Cancel the transfer ?".to_string(),
-            "Yes".to_string(),
-            Some("No".to_string())
-        ))
-        .into_future(cmd.clone())
-        .await;
-
-        if !confirmation {
+        let status = transfer_session.status();
+        if matches!(status, TransferSessionStatus::Failed(_) | TransferSessionStatus::Success) {
             return false;
         }
 
+        // If not canceled, ask for confirmation
+        if transfer_session.status() != TransferSessionStatus::Canceled {
+            let confirmation = DialogOperation::alert(AlertDialog::confirmation(
+                "Cancel the transfer ?".to_string(),
+                "Yes".to_string(),
+                Some("No".to_string())
+            ))
+            .into_future(cmd.clone())
+            .await;
+
+            if !confirmation {
+                return false;
+            }
+        }
+
         log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
+
+        cmd.request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(
+            transfer_session.peer_id().unwrap(),
+            transfer_session.order_id
+        )))
+        .await;
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],

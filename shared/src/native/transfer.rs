@@ -57,6 +57,16 @@ impl TransferNative {
                     Err(error) => CoreOperationOutput::ConnectionError(error.into())
                 }
             }
+            TransferOperation::CancelSession(peer_id, session_id) => {
+                let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
+                else {
+                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
+                };
+
+                connection.stop_session(session_id).await;
+
+                CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled)
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ use std::time::Duration;
 use futures_util::future::join_all;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
+    CancelTransferSessionRequest,
     IntroduceRequestMessage,
     IntroduceResponseMessage,
     PeerErrorsMessage,
@@ -133,6 +134,16 @@ impl PeerCommunication {
                         self.shell_runtime.clone()
                             .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
                     }
+                    Request::CancelRequest(cancel_request) => {
+                        log::info!(target: "peer", "Received cancel request from peer {:?}", self.peer.id());
+                        let response = CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest {
+                            request_id: request.id.clone(),
+                            session_id: cancel_request.session_id as u64
+                        });
+
+                        self.shell_runtime.clone()
+                            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
+                    }
                     _ => {
                         log::warn!(target: "peer", "Unexpected request from peer {:?}", self.peer.id());
                     }
@@ -230,6 +241,13 @@ impl PeerCommunication {
         drop(session_guard);
 
         loop {
+            let session_guard = session.lock().await;
+            if session_guard.is_completed() {
+                break;
+            }
+
+            drop(session_guard);
+
             let data_channel = match timeout(Duration::from_secs(15), channel_subscription.recv()).await {
                 Ok(Ok(data_channel)) => {
                     // Make sure the channel is not closed automatically
@@ -263,6 +281,7 @@ impl PeerCommunication {
 
             let mut session_guard = session.lock().await;
             let progress = session_guard.resource_mut_progress(data_channel.resource_id).expect("Progress not found");
+
             if let Err(e) = upload_result {
                 log::error!(target: "peer", "Failed to send resource {:?}", e);
                 progress.fail(e.to_string());
@@ -271,16 +290,14 @@ impl PeerCommunication {
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 )));
 
+                drop(session_guard);
+
                 let _ = data_channel.close().await;
             } else {
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 )));
-            }
-
-            if session_guard.is_completed() {
-                break;
             }
         }
 
@@ -371,19 +388,16 @@ impl PeerCommunication {
         Ok(())
     }
 
-    pub async fn stop_session(&self) {
+    pub async fn stop_session(&self, session_id: u64) {
         let mut active_sessions = self.active_sessions.lock().await;
-        let mut removed_session_ids = Vec::new();
-        for (_, session) in active_sessions.iter_mut() {
-            if let Some(session) = session.upgrade() {
-                let mut session_guard = session.lock().await;
-                session_guard.cancel();
-                removed_session_ids.push(session_guard.order_id);
-            }
-        }
+        if let Some(session) = active_sessions.remove(&session_id).and_then(|s| s.upgrade()) {
+            let request = Request::CancelRequest(CancelTransferSessionRequest {
+                session_id: session_id as i64
+            });
 
-        for session_id in removed_session_ids {
-            active_sessions.remove(&session_id);
+            let mut session_guard = session.lock().await;
+            let _ = self.connection.send_request_and_forget(request);
+            session_guard.cancel();
         }
     }
 }

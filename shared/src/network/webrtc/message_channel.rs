@@ -152,7 +152,7 @@ impl MessageChannel {
         }
     }
 
-    pub async fn send_request_and_forget(&self, message: Request) -> Result<(), ConnectionWebRtcErrors> {
+    pub fn send_request_and_forget(&self, message: Request) -> Result<JoinHandle<()>, ConnectionWebRtcErrors> {
         let bytes = Self::encode_msg(&PeerMessageBody {
             request_id: Self::random_id(),
             request: Some(message),
@@ -162,11 +162,9 @@ impl MessageChannel {
 
         let msg_channel = self.msg_channel.clone();
 
-        spawn(async move {
+        Ok(spawn(async move {
             let _ = timeout(Duration::from_secs(30), msg_channel.send(&bytes.into())).await;
-        });
-
-        Ok(())
+        }))
     }
 
     pub fn send_and_forget(&self, message: PeerMessageBody) -> Result<JoinHandle<()>, ConnectionWebRtcErrors> {

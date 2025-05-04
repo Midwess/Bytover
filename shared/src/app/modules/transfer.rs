@@ -48,6 +48,9 @@ pub enum TransferEvent {
     StartTransfer {
         target_id: String
     },
+    TransferCanceled {
+        session_id: u64
+    },
     TransferRequest {
         request_id: String,
         remote_session: TransferSessionMessage,
@@ -129,6 +132,19 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 Command::done()
+            }
+            TransferEvent::TransferCanceled { session_id, .. } => {
+                let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
+                    return Command::done();
+                };
+
+                session.cancel();
+
+                let session = session.clone();
+                Command::new(|it| async move {
+                    let transfer_service = DiContainer::get_instance().get_transfer_service();
+                    transfer_service.cancel_transfer(session, it.clone()).await;
+                })
             }
             TransferEvent::StartTransfer { target_id } => {
                 let selected_resources = model.transfer.selected_resources.clone();
