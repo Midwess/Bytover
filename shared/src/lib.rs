@@ -125,7 +125,7 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
         Some(rt) => rt,
         None => {
             let rt = tokio::runtime::Builder::new_multi_thread()
-                .thread_name("bitbridge-worker")
+                .thread_name("bitbridge-native-worker")
                 .enable_all()
                 .build()
                 .unwrap();

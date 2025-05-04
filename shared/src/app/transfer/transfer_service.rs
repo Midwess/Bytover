@@ -4,7 +4,6 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, Tr
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::database::DatabaseOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -12,7 +11,7 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 
-use super::session::{TransferProgress, TransferSession, TransferType};
+use super::session::TransferSession;
 use super::target::TransferTarget;
 
 pub struct TransferService {}
@@ -78,18 +77,8 @@ impl TransferService {
             return;
         }
 
-        let order_id = DatabaseOperation::gen_id().into_future(cmd.clone()).await;
-
-        let mut transfer_session = TransferSession {
-            order_id,
-            transfer_progress: selected_resources
-                .iter()
-                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
-                .collect(),
-            resources: selected_resources,
-            transfer_type: TransferType::Send,
-            target: transfer_target.clone()
-        };
+        let transfer_target_id = transfer_target.id();
+        let mut transfer_session = TransferSession::send(selected_resources, transfer_target).await;
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session.clone()],
@@ -132,7 +121,7 @@ impl TransferService {
             removed: vec![]
         }));
 
-        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target.id());
+        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target_id);
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -233,16 +222,7 @@ impl TransferService {
             });
         }
 
-        let mut transfer_session = TransferSession {
-            order_id: remote_session.order_id,
-            transfer_progress: resources
-                .iter()
-                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
-                .collect(),
-            resources: resources.clone(),
-            transfer_type: TransferType::Receive,
-            target: TransferTarget::Nearby(peer)
-        };
+        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer)).await;
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session.clone()],
@@ -255,8 +235,7 @@ impl TransferService {
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest(
             peer_id,
-            resources,
-            transfer_session.order_id,
+            transfer_session.clone(),
             request_id,
             response
         ));

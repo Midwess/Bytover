@@ -6,7 +6,6 @@ use schema::devlog::bitbridge::peer_message_body::Response;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
@@ -17,7 +16,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     SendSession(TransferSession),
-    AnswerSessionRequest(u128, Vec<LocalResource>, u64, String, Response)
+    AnswerSessionRequest(u128, TransferSession, String, Response)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]

@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::mem;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use futures_util::future::join_all;
@@ -16,16 +17,15 @@ use schema::devlog::bitbridge::{
 };
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{broadcast, OnceCell};
+use tokio::sync::{broadcast, Mutex, OnceCell};
 use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
-use crate::app::file_system::file::LocalResource;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
+use crate::app::transfer::session::TransferSession;
 use crate::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
@@ -59,7 +59,8 @@ pub struct PeerCommunication {
     shell_runtime: Arc<dyn ShellRuntime>,
     data_channel_tx: broadcast::Sender<Arc<DataChannel>>,
     peer_event_request_id: OnceCell<u32>,
-    throughput_controller: Arc<ThroughputController>
+    throughput_controller: Arc<ThroughputController>,
+    active_sessions: Arc<Mutex<HashMap<u64, Weak<Mutex<TransferSession>>>>>
 }
 
 impl PeerCommunication {
@@ -108,7 +109,8 @@ impl PeerCommunication {
             connection,
             shell_runtime: shell_runtime.clone(),
             data_channel_tx,
-            throughput_controller
+            throughput_controller,
+            active_sessions: Arc::new(Mutex::new(HashMap::new()))
         };
 
         me.handle_data_channel();
@@ -146,12 +148,45 @@ impl PeerCommunication {
             let data_channel_tx = self.data_channel_tx.clone();
             let shell_runtime = self.shell_runtime.clone();
             let throughput_controller = self.throughput_controller.clone();
+            let active_sessions = self.active_sessions.clone();
             Box::new(move |d: Arc<webrtc::data_channel::RTCDataChannel>| {
+                let active_sessions = active_sessions.clone();
                 let data_channel_tx = data_channel_tx.clone();
                 let shell_runtime = shell_runtime.clone();
                 let throughput_controller = throughput_controller.clone();
                 Box::pin(async move {
-                    let data_channel = match DataChannel::from_channel(d, shell_runtime.clone(), throughput_controller.clone()).await {
+                    let active_sessions = active_sessions.lock().await;
+                    let Ok((resource_id, session_id)) = DataChannel::from_label(d.label()) else {
+                        return;
+                    };
+
+                    let Some(session) = active_sessions.get(&session_id).and_then(|s| s.upgrade()) else {
+                        log::warn!(target: "peer", "Session not found");
+                        return;
+                    };
+
+                    let mut session_guard = session.lock().await;
+
+                    if session_guard.is_completed() {
+                        log::warn!(target: "peer", "Session is completed");
+                        return;
+                    }
+
+                    let resource_progress = session_guard.resource_mut_progress(resource_id).expect("Progress not found");
+                    if resource_progress.is_completed() {
+                        log::warn!(target: "peer", "Resource is already completed");
+                        return;
+                    }
+
+                    drop(session_guard);
+                    let data_channel = match DataChannel::from_channel(
+                        d,
+                        shell_runtime.clone(),
+                        throughput_controller.clone(),
+                        Arc::downgrade(&session)
+                    )
+                    .await
+                    {
                         Ok(data_channel) => {
                             // If channel got lagged, it will be closed automatically
                             data_channel.auto_close(true);
@@ -171,10 +206,16 @@ impl PeerCommunication {
         });
     }
 
-    pub async fn send_session(&self, mut session: TransferSession, core_request_id: u32) -> Result<(), PeerErrors> {
+    pub async fn send_session(&self, session: TransferSession, core_request_id: u32) -> Result<(), PeerErrors> {
+        let session_id = session.order_id;
+        let session = Arc::new(Mutex::new(session));
+
+        self.active_sessions.lock().await.insert(session_id, Arc::downgrade(&session));
+
+        let session_guard = session.lock().await;
         let transfer_session = TransferSessionMessage {
-            order_id: session.order_id,
-            resources: join_all(session.resources.iter().map(|r| r.to_proto())).await.into_iter().collect()
+            order_id: session_guard.order_id,
+            resources: join_all(session_guard.resources.iter().map(|r| r.to_proto())).await.into_iter().collect()
         };
 
         log::info!(target: "peer", "Sending session to peer {:?}", self.peer.id());
@@ -186,7 +227,8 @@ impl PeerCommunication {
 
         let _ = self.connection.send::<TransferResponseMessage>(request).await??;
 
-        let resources = &mut session.resources;
+        drop(session_guard);
+
         loop {
             let data_channel = match timeout(Duration::from_secs(15), channel_subscription.recv()).await {
                 Ok(Ok(data_channel)) => {
@@ -215,39 +257,34 @@ impl PeerCommunication {
                 continue;
             }
 
-            let Some(found_index) = resources
-                .iter()
-                .position(|r| r.order_id == data_channel.resource_id && session.order_id == data_channel.session_id)
-            else {
-                continue;
-            };
-
-            let resource = resources.remove(found_index);
-            let order_id = resource.order_id;
             let shell_runtime = self.shell_runtime.clone();
-            let mut progress = TransferProgress::new(order_id, resource.size, TransferType::Send);
 
-            if let Err(e) = data_channel.start_upload(core_request_id, resource, &mut progress).await {
+            let upload_result = data_channel.start_upload(core_request_id).await;
+
+            let mut session_guard = session.lock().await;
+            let progress = session_guard.resource_mut_progress(data_channel.resource_id).expect("Progress not found");
+            if let Err(e) = upload_result {
                 log::error!(target: "peer", "Failed to send resource {:?}", e);
                 progress.fail(e.to_string());
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 )));
 
                 let _ = data_channel.close().await;
             } else {
-                progress.success();
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 )));
             }
 
-            if resources.is_empty() {
+            if session_guard.is_completed() {
                 break;
             }
         }
+
+        self.active_sessions.lock().await.remove(&session_id);
 
         Ok(())
     }
@@ -255,17 +292,21 @@ impl PeerCommunication {
     pub async fn answer_session_request(
         &self,
         core_request_id: u32,
-        mut out_resources: Vec<LocalResource>,
-        session_id: u64,
+        out_session: TransferSession,
         request_id: String,
         response: Response
     ) -> Result<(), PeerErrors> {
+        let session_id = out_session.order_id;
+        log::info!(target: "peer", "Answering session request {:?}", session_id);
+        let session = Arc::new(Mutex::new(out_session));
+        self.active_sessions.lock().await.insert(session_id, Arc::downgrade(&session.clone()));
         let msg_channel = self.connection.msg_channel.get().unwrap();
         let is_accepted = match response {
             Response::TransferResponse(_) => true,
             _ => false
         };
 
+        log::info!(target: "peer", "Sending response to peer {:?}", self.peer.id());
         let _ = msg_channel
             .send_and_forget(PeerMessageBody {
                 request_id,
@@ -279,55 +320,71 @@ impl PeerCommunication {
         }
 
         loop {
+            let session_guard = session.lock().await;
+            if session_guard.is_completed() {
+                break;
+            }
+
+            let Some(next_resource) = session_guard.get_next_download_resource() else {
+                log::info!(target: "peer", "No more resources to download");
+                break;
+            };
+
+            let order_id = next_resource.order_id;
+
+            drop(session_guard);
+
             let data_channel = DataChannel::stream_resource(
-                &out_resources[0],
-                session_id,
                 &self.connection,
                 self.shell_runtime.clone(),
-                self.throughput_controller.clone()
+                self.throughput_controller.clone(),
+                Arc::downgrade(&session),
+                order_id
             )
             .await?;
 
-            let Some(found_index) = out_resources
-                .iter()
-                .position(|r| r.order_id == data_channel.resource_id && session_id == data_channel.session_id)
-            else {
-                continue;
-            };
-
-            let out_resource = out_resources.remove(found_index);
             let shell_runtime = self.shell_runtime.clone();
-            let mut progress = TransferProgress::new(out_resource.order_id, out_resource.size, TransferType::Receive);
-            match data_channel.start_download(core_request_id, &out_resource, &mut progress).await {
+            let result = data_channel.start_download(core_request_id).await;
+            let mut session_guard = session.lock().await;
+            log::info!(target: "nearby", "Completed resource {:?}", order_id);
+            let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
+            match result {
                 Ok(_) => {
                     progress.success();
-                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
+                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                 }
                 Err(e) => {
                     progress.fail(e.to_string());
-                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress));
+                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
                 }
             };
 
-            let _ = data_channel.close().await;
+            drop(session_guard);
 
-            if out_resources.is_empty() {
-                break;
-            }
+            let _ = data_channel.close().await;
         }
+
+        self.active_sessions.lock().await.remove(&session_id);
 
         Ok(())
     }
 
     pub async fn stop_session(&self) {
-        // let mut active_data_channels = self.active_data_channels.lock().await;
-        // for data_channel in active_data_channels.iter_mut() {
-        //     data_channel.stop_transfer().await;
-        // }
+        let mut active_sessions = self.active_sessions.lock().await;
+        let mut removed_session_ids = Vec::new();
+        for (_, session) in active_sessions.iter_mut() {
+            if let Some(session) = session.upgrade() {
+                let mut session_guard = session.lock().await;
+                session_guard.cancel();
+                removed_session_ids.push(session_guard.order_id);
+            }
+        }
 
-        // active_data_channels.clear();
+        for session_id in removed_session_ids {
+            active_sessions.remove(&session_id);
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use chrono::Utc;
+use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
@@ -20,7 +21,8 @@ pub enum TransferSessionStatus {
     Initializing,
     InProgress { bytes_per_second: u64, percentage: f64 },
     Success,
-    Failed(String)
+    Failed(String),
+    Canceled
 }
 
 impl Display for TransferSessionStatus {
@@ -36,7 +38,8 @@ impl Display for TransferSessionStatus {
                 }
             }
             TransferSessionStatus::Success => write!(f, "Success"),
-            TransferSessionStatus::Failed(msg) => write!(f, "Failed {}", msg)
+            TransferSessionStatus::Failed(msg) => write!(f, "Failed {}", msg),
+            TransferSessionStatus::Canceled => write!(f, "Canceled")
         }
     }
 }
@@ -45,7 +48,7 @@ impl Display for TransferSessionStatus {
 pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
-    pub transfer_progress: Vec<TransferProgress>,
+    pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget
 }
@@ -72,7 +75,7 @@ impl TransferProgress {
             bytes_sec_counter: 0,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
-            status: TransferStatus::InProgress
+            status: TransferStatus::Pending
         }
     }
 
@@ -110,7 +113,7 @@ impl TransferProgress {
     }
 
     pub fn is_completed(&self) -> bool {
-        self.percentage() == 1.0
+        self.is_failed() || self.is_success() || self.is_canceled()
     }
 
     pub fn is_failed(&self) -> bool {
@@ -121,11 +124,23 @@ impl TransferProgress {
         matches!(self.status, TransferStatus::Success)
     }
 
+    pub fn is_canceled(&self) -> bool {
+        matches!(self.status, TransferStatus::Canceled)
+    }
+
     pub fn elapsed(&self) -> u64 {
         Utc::now().timestamp_millis() as u64 - self.start_time_utc_ms
     }
 
     pub fn update_progress(&mut self, bytes_count: u64) {
+        if self.status == TransferStatus::Pending {
+            self.status = TransferStatus::InProgress;
+        }
+
+        if self.status != TransferStatus::InProgress {
+            return;
+        }
+
         let elapsed = self.elapsed();
 
         self.total_bytes_counter += bytes_count;
@@ -138,25 +153,61 @@ impl TransferProgress {
         }
 
         self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
+
+        if self.percentage() == 1.0 {
+            self.success();
+        }
     }
 }
 
 #[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum TransferStatus {
-    Fail(String),
+    Pending,
     InProgress,
-    Success
+    Fail(String),
+    Success,
+    Canceled
 }
 
 impl TransferStatus {
     pub fn is_completed(&self) -> bool {
-        matches!(self, TransferStatus::Success | TransferStatus::Fail(_))
+        matches!(
+            self,
+            TransferStatus::Success | TransferStatus::Fail(_) | TransferStatus::Canceled
+        )
     }
 }
 
 impl TransferSession {
+    pub async fn answer(id: u64, mut out_resources: Vec<LocalResource>, target: TransferTarget) -> Self {
+        out_resources.sort_by(|a, b| a.size.cmp(&b.size));
+        Self {
+            order_id: id,
+            progress: out_resources
+                .iter()
+                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
+                .collect(),
+            resources: out_resources,
+            transfer_type: TransferType::Receive,
+            target
+        }
+    }
+
+    pub async fn send(resources: Vec<LocalResource>, target: TransferTarget) -> Self {
+        let mut resources = resources;
+        resources.sort_by(|a, b| a.size.cmp(&b.size));
+        Self {
+            order_id: gen_id().await,
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            resources,
+            transfer_type: TransferType::Send,
+            target
+        }
+    }
+
     pub fn add_resource(&mut self, resource: LocalResource) {
         self.resources.push(resource);
+        self.resources.sort_by(|a, b| a.size.cmp(&b.size));
     }
 
     pub fn peer_id(&self) -> Option<u128> {
@@ -167,21 +218,19 @@ impl TransferSession {
     }
 
     pub fn is_initializing(&self) -> bool {
-        self.transfer_progress
-            .iter()
-            .all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
+        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
-        if let Some(index) = self.transfer_progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
-            self.transfer_progress[index] = progress;
+        if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+            self.progress[index] = progress;
         } else {
-            self.transfer_progress.push(progress);
+            self.progress.push(progress);
         }
     }
 
     pub fn force_complete(&mut self, msg: String) {
-        self.transfer_progress.iter_mut().for_each(|it| {
+        self.progress.iter_mut().for_each(|it| {
             it.status = TransferStatus::Fail(msg.clone());
         });
     }
@@ -192,18 +241,41 @@ impl TransferSession {
             return 1.0;
         }
 
-        let total_bytes_sent = self.transfer_progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
+        let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
         total_bytes_sent as f64 / total_size as f64
     }
 
     pub fn bytes_per_second(&self) -> u64 {
-        self.transfer_progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
+        self.progress.iter().map(|it| it.bytes_per_second).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {
-        let resource_left = self.transfer_progress.iter().filter(|it| !it.status.is_completed()).count();
+        let resource_left = self.progress.iter().filter(|it| !it.status.is_completed()).count();
 
         resource_left == 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.progress.iter_mut().for_each(|it| {
+            if it.status == TransferStatus::InProgress {
+                it.status = TransferStatus::Canceled;
+            }
+        });
+    }
+
+    pub fn get_next_download_resource(&self) -> Option<&LocalResource> {
+        if self.transfer_type == TransferType::Send {
+            return None;
+        }
+
+        self.resources.iter().find(|resource| {
+            self.progress
+                .iter()
+                .find(|it| it.resource_order_id == resource.order_id)
+                .expect("Resource missing progress")
+                .status ==
+                TransferStatus::Pending
+        })
     }
 
     pub fn status(&self) -> TransferSessionStatus {
@@ -211,7 +283,15 @@ impl TransferSession {
             return TransferSessionStatus::Initializing;
         }
 
-        let is_in_progress = self.transfer_progress.iter().any(|it| it.status == TransferStatus::InProgress);
+        let is_canceled = self.progress.iter().any(|it| it.status == TransferStatus::Canceled);
+        if is_canceled {
+            return TransferSessionStatus::Canceled;
+        }
+
+        let is_in_progress = self
+            .progress
+            .iter()
+            .any(|it| it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending);
         if is_in_progress {
             return TransferSessionStatus::InProgress {
                 bytes_per_second: self.bytes_per_second(),
@@ -220,7 +300,7 @@ impl TransferSession {
         }
 
         let failed_messages = self
-            .transfer_progress
+            .progress
             .iter()
             .filter_map(|it| match &it.status {
                 TransferStatus::Fail(msg) => Some(msg.clone()),
@@ -233,5 +313,13 @@ impl TransferSession {
         }
 
         TransferSessionStatus::Success
+    }
+
+    pub fn resource_progress(&self, resource_id: u64) -> Option<&TransferProgress> {
+        self.progress.iter().find(|it| it.resource_order_id == resource_id)
+    }
+
+    pub fn resource_mut_progress(&mut self, resource_id: u64) -> Option<&mut TransferProgress> {
+        self.progress.iter_mut().find(|it| it.resource_order_id == resource_id)
     }
 }

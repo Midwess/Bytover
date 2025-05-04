@@ -1,18 +1,18 @@
-use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::TransferProgress;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::File;
 use futures_util::{SinkExt, Stream};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::spawn;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use webrtc::data_channel::RTCDataChannel;
@@ -36,6 +36,8 @@ pub enum DataChannelError {
     FileError(String),
     #[error("Resource not found")]
     ResourceNotFound,
+    #[error("Session canceled")]
+    SessionCanceled,
     #[error("Data channel is closed")]
     DataChannelClosed(String),
     #[error("Data corrupted")]
@@ -50,6 +52,7 @@ pub struct DataChannel {
     data_channel: Arc<RTCDataChannel>,
     shell_runtime: Arc<dyn ShellRuntime>,
     throughput_controller: Arc<ThroughputController>,
+    session: Weak<Mutex<TransferSession>>,
     pub resource_id: u64,
     pub session_id: u64,
     pub auto_close: AtomicBool
@@ -74,7 +77,8 @@ impl DataChannel {
     pub async fn from_channel(
         data_channel: Arc<RTCDataChannel>,
         shell_runtime: Arc<dyn ShellRuntime>,
-        throughput_controller: Arc<ThroughputController>
+        throughput_controller: Arc<ThroughputController>,
+        session: Weak<Mutex<TransferSession>>
     ) -> Result<Self, DataChannelError> {
         let label = data_channel.label().to_owned();
         let (resource_id, session_id) =
@@ -84,6 +88,7 @@ impl DataChannel {
             data_channel,
             shell_runtime,
             throughput_controller,
+            session,
             resource_id,
             session_id,
             auto_close: AtomicBool::new(false)
@@ -91,13 +96,18 @@ impl DataChannel {
     }
 
     pub async fn stream_resource(
-        local_resource: &LocalResource,
-        session_id: u64,
         connection: &ConnectionWebRtc,
         shell_runtime: Arc<dyn ShellRuntime>,
-        throughput_controller: Arc<ThroughputController>
+        throughput_controller: Arc<ThroughputController>,
+        session_ref: Weak<Mutex<TransferSession>>,
+        resource_id: u64
     ) -> Result<Self, DataChannelError> {
-        let label = DataChannel::data_label(local_resource.order_id, session_id);
+        let Some(session) = session_ref.clone().upgrade() else {
+            return Err(DataChannelError::SessionCanceled);
+        };
+
+        let session_id = session.lock().await.order_id;
+        let label = DataChannel::data_label(resource_id, session_id);
         let data_channel = connection
             .peer_connection
             .create_data_channel(label.as_str(), Some(ConnectionWebRtc::channel_config()))
@@ -121,7 +131,8 @@ impl DataChannel {
             data_channel,
             shell_runtime,
             throughput_controller,
-            resource_id: local_resource.order_id,
+            session: session_ref,
+            resource_id,
             session_id,
             auto_close: AtomicBool::new(false)
         })
@@ -135,17 +146,32 @@ impl DataChannel {
         let _ = self.data_channel.close().await;
     }
 
-    pub async fn start_download(
-        &self,
-        core_request_id: u32,
-        out_resource: &LocalResource,
-        progress: &mut TransferProgress
-    ) -> Result<(), DataChannelError> {
+    pub async fn is_canceled(&self) -> bool {
+        let Some(session) = self.session.upgrade() else {
+            return true;
+        };
+
+        let session = session.lock().await;
+        session.status() == TransferSessionStatus::Canceled
+    }
+
+    pub async fn start_download(&self, core_request_id: u32) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(300));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
 
-        let saved_path = match &out_resource.path {
+        let Some(session) = self.session.upgrade() else {
+            return Err(DataChannelError::SessionCanceled);
+        };
+
+        let session_guard = session.lock().await;
+        let resource = session_guard
+            .resources
+            .iter()
+            .find(|it| it.order_id == self.resource_id)
+            .expect("Resource not found");
+
+        let saved_path = match &resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
                 return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
@@ -155,8 +181,20 @@ impl DataChannel {
         let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let mut file = file.open().await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        log::info!(target: "nearby", "Start downloading file into: {}, size = {}", saved_path, progress.file_size);
+        log::info!(target: "nearby", "Start downloading file into: {}, size = {}", saved_path, resource.size);
+        drop(session_guard);
         let result = loop {
+            let Some(session) = self.session.upgrade() else {
+                return Err(DataChannelError::SessionCanceled);
+            };
+
+            let mut session_guard = session.lock().await;
+            let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
+            if progress.status.is_completed() {
+                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
+                return Err(DataChannelError::SessionCanceled);
+            }
+
             let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
                 Ok(Some(bytes)) => bytes,
                 Ok(None) => match progress.is_completed() {
@@ -188,6 +226,13 @@ impl DataChannel {
             }
         };
 
+        let Some(session) = self.session.upgrade() else {
+            return Err(DataChannelError::SessionCanceled);
+        };
+
+        let mut session_guard = session.lock().await;
+        let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
+
         if let Err(e) = result {
             return Err(e);
         } else if !progress.is_completed() {
@@ -197,12 +242,18 @@ impl DataChannel {
         Ok(())
     }
 
-    pub async fn start_upload(
-        &self,
-        core_request_id: u32,
-        resource: LocalResource,
-        progress: &mut TransferProgress
-    ) -> Result<(), DataChannelError> {
+    pub async fn start_upload(&self, core_request_id: u32) -> Result<(), DataChannelError> {
+        let Some(session) = self.session.upgrade() else {
+            return Err(DataChannelError::SessionCanceled);
+        };
+
+        let session_guard = session.lock().await;
+        let resource = session_guard
+            .resources
+            .iter()
+            .find(|it| it.order_id == self.resource_id)
+            .expect("Resource not found");
+
         let saved_path = match &resource.path {
             LocalResourcePath::LocalPath(file_path) => file_path.clone(),
             LocalResourcePath::PlatformIdentifier(_) => {
@@ -216,24 +267,26 @@ impl DataChannel {
         let file_size = resource.size;
         let mut cursor = file.cursor(0, 60 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
-        log::info!(target: "nearby", "Start uploading file: {}", saved_path);
+        drop(session_guard);
+
+        log::info!(target: "nearby", "Start uploading file: {saved_path} size = {file_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
-            if let Some(handle) = last_sent_handle {
-                let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+            let Some(session) = self.session.upgrade() else {
+                return Err(DataChannelError::SessionCanceled);
+            };
+
+            let mut session_guard = session.lock().await;
+            let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
+            if progress.status.is_completed() {
+                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
+                return Err(DataChannelError::SessionCanceled);
             }
 
             progress.update_progress(bytes.len() as u64);
+
             let data_channel = self.data_channel.clone();
             let throughput_controller = self.throughput_controller.clone();
-            last_sent_handle = Some(spawn(async move {
-                let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
-                if sent_bytes < bytes.len() {
-                    Err(DataChannelError::DataCorrupted)
-                } else {
-                    Ok(sent_bytes)
-                }
-            }));
 
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
@@ -241,9 +294,30 @@ impl DataChannel {
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 ))
                 .await;
+
+            drop(session_guard);
+
+            if let Some(handle) = last_sent_handle {
+                let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+            }
+
+            last_sent_handle = Some(spawn(async move {
+                let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
+                if sent_bytes < bytes.len() {
+                    log::warn!(target: "nearby", "The data sent less than data read");
+                    Err(DataChannelError::DataCorrupted)
+                } else {
+                    Ok(sent_bytes)
+                }
+            }));
         }
 
-        log::info!(target: "nearby", "Total sent: {} vs {}", progress.total_bytes_counter, file_size);
+        let Some(session) = self.session.upgrade() else {
+            return Err(DataChannelError::SessionCanceled);
+        };
+
+        let mut session_guard = session.lock().await;
+        let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
 
         if !progress.is_completed() {
             return Err(DataChannelError::DataCorrupted);

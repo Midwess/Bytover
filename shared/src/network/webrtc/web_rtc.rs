@@ -3,7 +3,6 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use core_services::logger::ThrottleLogger;
-use core_services::utils::number::ExponentialGrowth;
 use futures_util::lock::Mutex;
 use schema::devlog::rpc_signalling::server::{JoinMessage, Message};
 use thiserror::Error;
@@ -141,7 +140,6 @@ impl WebRtc {
         let signalling_client = self.signalling_client.clone();
 
         let scopes = self.scopes.clone();
-        let exponential_growth_delay = ExponentialGrowth::new(3, 0.1, 3, 35);
         let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
         *broadcast_handle = Some(spawn(async move {
             loop {
