@@ -106,7 +106,7 @@ impl ConnectionWebRtc {
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
         workdir: String
-    ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
+    ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
@@ -200,7 +200,7 @@ impl ConnectionWebRtc {
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
         workdir: String
-    ) -> Result<PeerCommunication, ConnectionWebRtcErrors> {
+    ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{}-p{}", my_id, peer_id);
         log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);

@@ -90,10 +90,9 @@ impl NearbyService {
         loop {
             let ip_address = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await;
             if let Ok(ip_address) = ip_address {
-                ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(
+                ctx.notify_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(
                     ip_address
-                ))))
-                .await;
+                ))));
             }
 
             ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;

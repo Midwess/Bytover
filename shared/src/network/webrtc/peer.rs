@@ -76,7 +76,7 @@ impl PeerCommunication {
         peer_id: u128,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>
-    ) -> Result<Self, PeerErrors> {
+    ) -> Result<Arc<Self>, PeerErrors> {
         let connection = Arc::new(connection);
         let peer = if current_peer.id() < peer_id {
             let introduce_request = IntroduceRequestMessage {
@@ -110,7 +110,7 @@ impl PeerCommunication {
         // Indicate that the maximum number of concurrent resources per peer is 16
         let (data_channel_tx, _) = broadcast::channel(16);
 
-        let me = Self {
+        let me = Arc::new(Self {
             peer_event_request_id: OnceCell::new(),
             mine: current_peer,
             peer,
@@ -120,7 +120,7 @@ impl PeerCommunication {
             throughput_controller,
             active_sessions: Arc::new(Mutex::new(HashMap::new())),
             keep_alive_handle: OnceCell::new()
-        };
+        });
 
         me.keep_alive();
         me.handle_data_channel();
@@ -128,22 +128,25 @@ impl PeerCommunication {
         Ok(me)
     }
 
-    pub fn keep_alive(&self) {
+    pub fn keep_alive(self: &Arc<Self>) {
         let connection = self.connection.clone();
         let active_sessions = self.active_sessions.clone();
         let throttle_logger = ThrottleLogger::new("keep_alive".to_string(), Duration::from_secs(15));
         let peer_id = self.peer.id();
 
-        // Spawn task for sending keep-alive requests
+        let self_ref = Arc::downgrade(self);
+        let self_reff = Arc::downgrade(self);
         let sender_handle = {
             let connection = connection.clone();
             let active_sessions = active_sessions.clone();
             let keep_alive_request = Request::KeepAlive(KeepAliveRequestMessage {});
-            let send_timeout = Some(Duration::from_secs(4));
+            // The send timeout is shorter, because we know there is no active data transfer from now
+            // but don't know if the others having any or not.
+            let send_timeout = Some(Duration::from_secs(2));
             let recv_timeout = Some(Duration::from_secs(4));
 
             spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(3));
+                let mut interval = tokio::time::interval(Duration::from_secs(2));
 
                 loop {
                     interval.tick().await;
@@ -179,11 +182,13 @@ impl PeerCommunication {
                     }
                 }
 
-                connection.close().await;
+                if let Some(self_ref) = self_ref.upgrade() {
+                    log::info!(target: "kepp-alive", "Closing connection to peer {:?}", peer_id);
+                    self_ref.close().await;
+                }
             })
         };
 
-        // Spawn task for handling incoming keep-alive requests
         let receiver_handle = {
             let connection = connection.clone();
 
@@ -206,12 +211,13 @@ impl PeerCommunication {
                     }
                 }
 
-                connection.close().await;
+                if let Some(self_ref) = self_reff.upgrade() {
+                    log::info!(target: "kepp-alive", "Closing connection to peer {:?}", peer_id);
+                    self_ref.close().await;
+                }
             })
         };
 
-        // Store the sender handle - we only need one handle to cancel both tasks
-        // since if either task exits, it will close the connection and cause the other to exit
         let _ = self.keep_alive_handle.set((sender_handle, receiver_handle));
     }
 
@@ -480,6 +486,21 @@ impl PeerCommunication {
         self.active_sessions.lock().await.remove(&session_id);
 
         Ok(())
+    }
+
+    pub async fn close(&self) {
+        let _ = self.connection.close().await;
+        let mut active_session_ids = vec![];
+        for (_, session) in self.active_sessions.lock().await.iter_mut() {
+            if let Some(session) = session.upgrade() {
+                active_session_ids.push(session.lock().await.order_id);
+            }
+        }
+
+        for session_id in active_session_ids {
+            log::info!(target: "peer", "Stopping session {:?}", session_id);
+            self.stop_session(session_id).await;
+        }
     }
 
     pub async fn stop_session(&self, session_id: u64) {

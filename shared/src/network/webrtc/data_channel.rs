@@ -158,8 +158,6 @@ impl DataChannel {
     pub async fn start_download(&self, core_request_id: u32) -> Result<(), DataChannelError> {
         let mut stream = RTCStreamChannel::new(self.data_channel.clone());
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
-
         let Some(session) = self.session.upgrade() else {
             return Err(DataChannelError::SessionCanceled);
         };
@@ -183,26 +181,17 @@ impl DataChannel {
 
         log::info!(target: "nearby", "Start downloading file into: {}, size = {}", saved_path, resource.size);
         drop(session_guard);
+
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
+
         let result = loop {
             let Some(session) = self.session.upgrade() else {
                 return Err(DataChannelError::SessionCanceled);
             };
 
-            let mut session_guard = session.lock().await;
-            let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
-            if progress.status.is_completed() {
-                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
-                return Err(DataChannelError::SessionCanceled);
-            }
-
             let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
                 Ok(Some(bytes)) => bytes,
-                Ok(None) => match progress.is_completed() {
-                    true => {
-                        break Ok(());
-                    }
-                    false => break Err(DataChannelError::DataCorrupted)
-                },
+                Ok(None) => break Err(DataChannelError::DataCorrupted),
                 Err(e) => break Err(e)
             };
 
@@ -212,8 +201,9 @@ impl DataChannel {
                 break Err(DataChannelError::DataCorrupted);
             }
 
+            let mut session_guard = session.lock().await;
+            let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
             progress.update_progress(written_bytes as u64);
-
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
@@ -221,7 +211,8 @@ impl DataChannel {
                 ))
                 .await;
 
-            if progress.is_completed() {
+            if progress.status.is_completed() {
+                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
                 break Ok(());
             }
         };
@@ -271,6 +262,7 @@ impl DataChannel {
 
         log::info!(target: "nearby", "Start uploading file: {saved_path} size = {file_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
+        let mut last_sent_bytes = 0;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
             let Some(session) = self.session.upgrade() else {
                 return Err(DataChannelError::SessionCanceled);
@@ -278,29 +270,32 @@ impl DataChannel {
 
             let mut session_guard = session.lock().await;
             let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
-            if progress.status.is_completed() {
-                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
-                return Err(DataChannelError::SessionCanceled);
+
+            if last_sent_bytes > 0 {
+                progress.update_progress(last_sent_bytes as u64);
+                let _ = progress_sender
+                    .send(MessageToShell::HandleResponse(
+                        core_request_id,
+                        CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                    ))
+                    .await;
             }
 
-            progress.update_progress(bytes.len() as u64);
-
-            let data_channel = self.data_channel.clone();
-            let throughput_controller = self.throughput_controller.clone();
-
-            let _ = progress_sender
-                .send(MessageToShell::HandleResponse(
-                    core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                ))
-                .await;
+            if progress.status.is_completed() {
+                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
+                break;
+            }
 
             drop(session_guard);
 
             if let Some(handle) = last_sent_handle {
-                let _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+                let sent_bytes = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+                last_sent_handle = None;
+                last_sent_bytes = sent_bytes;
             }
 
+            let throughput_controller = self.throughput_controller.clone();
+            let data_channel = self.data_channel.clone();
             last_sent_handle = Some(spawn(async move {
                 let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
                 if sent_bytes < bytes.len() {
@@ -312,12 +307,20 @@ impl DataChannel {
             }));
         }
 
+        if let Some(handle) = last_sent_handle {
+            let sent_bytes = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+            last_sent_bytes = sent_bytes
+        }
+
         let Some(session) = self.session.upgrade() else {
             return Err(DataChannelError::SessionCanceled);
         };
 
         let mut session_guard = session.lock().await;
         let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
+        if last_sent_bytes > 0 {
+            progress.update_progress(last_sent_bytes as u64);
+        }
 
         if !progress.is_completed() {
             return Err(DataChannelError::DataCorrupted);

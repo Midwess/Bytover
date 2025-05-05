@@ -338,7 +338,7 @@ impl WebRtc {
     pub async fn handle_connection(
         self: &Arc<Self>,
         core_request_id: u32,
-        connect_result: Result<PeerCommunication, ConnectionWebRtcErrors>,
+        connect_result: Result<Arc<PeerCommunication>, ConnectionWebRtcErrors>,
         peer_id: u128
     ) {
         match connect_result {
@@ -361,7 +361,7 @@ impl WebRtc {
                 let peer_id = connection.peer_id;
                 let current_connections = self.connections.lock().await;
                 let msg = CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connection.peer.clone()));
-                let _ = current_connections.get(&peer_id).unwrap().set(Arc::new(connection));
+                let _ = current_connections.get(&peer_id).unwrap().set(connection);
                 drop(current_connections);
                 self.shell_runtime()
                     .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))

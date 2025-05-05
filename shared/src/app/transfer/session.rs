@@ -163,7 +163,7 @@ impl TransferProgress {
     }
 
     pub fn bytes_per_second(&self) -> u64 {
-        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - 2000 {
+        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - 1000 {
             return 0;
         }
 
