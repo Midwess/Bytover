@@ -26,7 +26,7 @@ use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::transfer::file_selection_service::ResourceSelection;
-use shared::app::transfer::session::{TransferStatus, TransferType};
+use shared::app::transfer::session::{TransferSessionStatus, TransferStatus, TransferType};
 use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
@@ -90,6 +90,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferStatus>()?;
     gen.register_type::<TransferType>()?;
     gen.register_type::<Response>()?;
+    gen.register_type::<TransferSessionStatus>()?;
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;

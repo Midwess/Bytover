@@ -1,3 +1,12 @@
 [toolchain]
 channel = "nightly"
-components = ["rustfmt", "clippy"] 
+components = ["rustfmt", "rustc-dev", "clippy"]
+targets = [
+  "aarch64-apple-darwin",
+  "aarch64-apple-ios",
+  "aarch64-apple-ios-sim",
+  "aarch64-linux-android",
+  "wasm32-unknown-unknown",
+  "x86_64-apple-ios"
+]
+profile = "minimal"
