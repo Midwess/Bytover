@@ -162,8 +162,8 @@ impl TransferProgress {
         }
     }
 
-    pub fn bytes_per_second(&self) -> u64 {
-        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - 1000 {
+    pub fn speed(&self, interval: u64) -> u64 {
+        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - interval {
             return 0;
         }
 
@@ -256,14 +256,12 @@ impl TransferSession {
         total_bytes_sent as f64 / total_size as f64
     }
 
-    pub fn bytes_per_second(&self) -> u64 {
-        self.progress.iter().map(|it| it.bytes_per_second()).sum::<u64>()
+    pub fn speed(&self, interval: u64) -> u64 {
+        self.progress.iter().map(|it| it.speed(interval)).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {
-        let resource_left = self.progress.iter().filter(|it| !it.status.is_completed()).count();
-
-        resource_left == 0
+        self.progress.iter().all(|it| it.status.is_completed())
     }
 
     pub fn cancel(&mut self) {
@@ -305,7 +303,7 @@ impl TransferSession {
             .any(|it| it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending);
         if is_in_progress {
             return TransferSessionStatus::InProgress {
-                bytes_per_second: self.bytes_per_second(),
+                bytes_per_second: self.speed(1000),
                 percentage: self.total_progress()
             }
         }

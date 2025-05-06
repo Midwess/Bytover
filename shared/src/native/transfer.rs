@@ -38,7 +38,7 @@ impl TransferNative {
                 };
 
                 match connection.send_session(session, request_id).await {
-                    Ok(_) => CoreOperationOutput::Void,
+                    Ok(status) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(status)),
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())
                 }
             }
@@ -53,7 +53,7 @@ impl TransferNative {
                 log::info!(target: "transfer", "Answered session request: {:?}", result);
 
                 match result {
-                    Ok(_) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted),
+                    Ok(status) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(status)),
                     Err(error) => CoreOperationOutput::ConnectionError(error.into())
                 }
             }

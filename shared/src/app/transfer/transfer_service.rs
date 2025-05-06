@@ -162,6 +162,13 @@ impl TransferService {
 
                         cmd.notify_shell(CoreOperation::Render);
                     }
+                    TransferOperationOutput::TransferCompleted(status) => {
+                        if status == TransferSessionStatus::Canceled {
+                            transfer_session.cancel();
+                        }
+
+                        break;
+                    }
                     other => {
                         log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
                         break;
@@ -276,6 +283,14 @@ impl TransferService {
                         }));
 
                         cmd.notify_shell(CoreOperation::Render);
+                    }
+                    TransferOperationOutput::TransferCompleted(status) => {
+                        if status == TransferSessionStatus::Canceled {
+                            transfer_session.cancel();
+                        }
+
+                        log::info!(target: "transfer", "Transfer session completed with status {:?}", status);
+                        break;
                     }
                     _ => {
                         continue;

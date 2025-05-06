@@ -181,6 +181,13 @@ impl WebRtc {
         *broadcast_handle = Some(spawn(async move {
             let mut exponential_growth_delay = Self::broadcast_delay();
             loop {
+                let scopes = scopes_mutex.lock().await.clone();
+                if scopes.is_empty() {
+                    throttle_logger.log("No scopes to broadcast, skipping...".to_string()).await;
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+
                 let operation = tokio::select! {
                     op = broadcast_operation_receiver.recv() => op,
                     _ = sleep(Duration::from_secs(exponential_growth_delay.next() as u64)) => None,
@@ -195,7 +202,6 @@ impl WebRtc {
                     }
                 }
 
-                let scopes = scopes_mutex.lock().await.clone();
                 if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
                     log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
                     broadcast_operation_sender.send(BroadcastOperation::Restart).await.unwrap();

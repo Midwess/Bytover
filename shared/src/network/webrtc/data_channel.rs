@@ -1,7 +1,7 @@
 use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus, TransferStatus};
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::File;
@@ -256,13 +256,12 @@ impl DataChannel {
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
-        let mut cursor = file.cursor(0, 60 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut cursor = file.cursor(0, 63 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         drop(session_guard);
 
         log::info!(target: "nearby", "Start uploading file: {saved_path} size = {file_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
-        let mut last_sent_bytes = 0;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
             let Some(session) = self.session.upgrade() else {
                 return Err(DataChannelError::SessionCanceled);
@@ -271,27 +270,23 @@ impl DataChannel {
             let mut session_guard = session.lock().await;
             let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
 
-            if last_sent_bytes > 0 {
-                progress.update_progress(last_sent_bytes as u64);
-                let _ = progress_sender
-                    .send(MessageToShell::HandleResponse(
-                        core_request_id,
-                        CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                    ))
-                    .await;
+            if progress.status == TransferStatus::Canceled {
+                return Err(DataChannelError::SessionCanceled);
             }
 
-            if progress.status.is_completed() {
-                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
-                break;
-            }
+            progress.update_progress(bytes.len() as u64);
+            let _ = progress_sender
+                .send(MessageToShell::HandleResponse(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                ))
+                .await;
 
+            let is_completed = progress.status.is_completed();
             drop(session_guard);
 
-            if let Some(handle) = last_sent_handle {
-                let sent_bytes = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
-                last_sent_handle = None;
-                last_sent_bytes = sent_bytes;
+            if let Some(handle) = last_sent_handle.take() {
+                _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
             }
 
             let throughput_controller = self.throughput_controller.clone();
@@ -305,11 +300,14 @@ impl DataChannel {
                     Ok(sent_bytes)
                 }
             }));
+
+            if is_completed {
+                break;
+            }
         }
 
-        if let Some(handle) = last_sent_handle {
-            let sent_bytes = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
-            last_sent_bytes = sent_bytes
+        if let Some(handle) = last_sent_handle.take() {
+            _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
         }
 
         let Some(session) = self.session.upgrade() else {
@@ -318,9 +316,6 @@ impl DataChannel {
 
         let mut session_guard = session.lock().await;
         let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
-        if last_sent_bytes > 0 {
-            progress.update_progress(last_sent_bytes as u64);
-        }
 
         if !progress.is_completed() {
             return Err(DataChannelError::DataCorrupted);

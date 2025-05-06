@@ -30,7 +30,7 @@ use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::TransferSession;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime};
@@ -140,8 +140,9 @@ impl PeerCommunication {
             let connection = connection.clone();
             let active_sessions = active_sessions.clone();
             let keep_alive_request = Request::KeepAlive(KeepAliveRequestMessage {});
-            // The send timeout is shorter, because we know there is no active data transfer from now
-            // but don't know if the others having any or not.
+            // The keep alive message is very small, so the send timeout is shorter
+            // the receive timeout is longer, because when we send, we don't sure that the others received or not
+            // it might take longer time for them to response.
             let send_timeout = Some(Duration::from_secs(2));
             let recv_timeout = Some(Duration::from_secs(4));
 
@@ -156,7 +157,7 @@ impl PeerCommunication {
                     for (_, session) in active_sessions.lock().await.iter_mut() {
                         if let Some(session) = session.upgrade() {
                             let session_guard = session.lock().await;
-                            if session_guard.bytes_per_second() > 0 {
+                            if session_guard.speed(300) > 0 {
                                 should_skip = true;
                                 break;
                             }
@@ -268,11 +269,14 @@ impl PeerCommunication {
                 Box::pin(async move {
                     let active_sessions = active_sessions.lock().await;
                     let Ok((resource_id, session_id)) = DataChannel::from_label(d.label()) else {
+                        log::warn!(target: "peer", "Failed to parse data channel label");
+                        let _ = d.close().await;
                         return;
                     };
 
                     let Some(session) = active_sessions.get(&session_id).and_then(|s| s.upgrade()) else {
                         log::warn!(target: "peer", "Session not found");
+                        let _ = d.close().await;
                         return;
                     };
 
@@ -280,12 +284,14 @@ impl PeerCommunication {
 
                     if session_guard.is_completed() {
                         log::warn!(target: "peer", "Session is completed");
+                        let _ = d.close().await;
                         return;
                     }
 
                     let resource_progress = session_guard.resource_mut_progress(resource_id).expect("Progress not found");
                     if resource_progress.is_completed() {
                         log::warn!(target: "peer", "Resource is already completed");
+                        let _ = d.close().await;
                         return;
                     }
 
@@ -317,7 +323,7 @@ impl PeerCommunication {
         });
     }
 
-    pub async fn send_session(&self, session: TransferSession, core_request_id: u32) -> Result<(), PeerErrors> {
+    pub async fn send_session(&self, session: TransferSession, core_request_id: u32) -> Result<TransferSessionStatus, PeerErrors> {
         let session_id = session.order_id;
         let session = Arc::new(Mutex::new(session));
 
@@ -343,7 +349,7 @@ impl PeerCommunication {
         loop {
             let session_guard = session.lock().await;
             if session_guard.is_completed() {
-                break;
+                return Ok(session_guard.status());
             }
 
             drop(session_guard);
@@ -400,10 +406,6 @@ impl PeerCommunication {
                 )));
             }
         }
-
-        self.active_sessions.lock().await.remove(&session_id);
-
-        Ok(())
     }
 
     pub async fn answer_session_request(
@@ -412,7 +414,7 @@ impl PeerCommunication {
         out_session: TransferSession,
         request_id: String,
         response: Response
-    ) -> Result<(), PeerErrors> {
+    ) -> Result<TransferSessionStatus, PeerErrors> {
         let session_id = out_session.order_id;
         log::info!(target: "peer", "Answering session request {:?}", session_id);
         let session = Arc::new(Mutex::new(out_session));
@@ -433,18 +435,18 @@ impl PeerCommunication {
             .await;
 
         if !is_accepted {
-            return Ok(());
+            return Ok(TransferSessionStatus::Canceled);
         }
 
         loop {
             let session_guard = session.lock().await;
             if session_guard.is_completed() {
-                break;
+                return Ok(session_guard.status());
             }
 
             let Some(next_resource) = session_guard.get_next_download_resource() else {
                 log::info!(target: "peer", "No more resources to download");
-                break;
+                return Ok(session_guard.status());
             };
 
             let order_id = next_resource.order_id;
@@ -482,10 +484,6 @@ impl PeerCommunication {
 
             let _ = data_channel.close().await;
         }
-
-        self.active_sessions.lock().await.remove(&session_id);
-
-        Ok(())
     }
 
     pub async fn close(&self) {

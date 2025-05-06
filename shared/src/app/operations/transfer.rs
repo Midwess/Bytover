@@ -6,7 +6,7 @@ use schema::devlog::bitbridge::peer_message_body::Response;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::transfer::session::{TransferProgress, TransferSession};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
 
@@ -23,7 +23,7 @@ pub enum TransferOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperationOutput {
     TransferResourceProgressUpdate(TransferProgress),
-    TransferCompleted,
+    TransferCompleted(TransferSessionStatus),
     TransferCanceled
 }
 
