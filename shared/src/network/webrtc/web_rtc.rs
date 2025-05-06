@@ -188,6 +188,13 @@ impl WebRtc {
                     continue;
                 }
 
+                if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
+                    log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
+                    broadcast_operation_sender.send(BroadcastOperation::Restart).await.unwrap();
+                } else {
+                    throttle_logger.log("Broadcasting completed successfully".to_string()).await;
+                }
+
                 let operation = tokio::select! {
                     op = broadcast_operation_receiver.recv() => op,
                     _ = sleep(Duration::from_secs(exponential_growth_delay.next() as u64)) => None,
@@ -200,19 +207,9 @@ impl WebRtc {
                             exponential_growth_delay = Self::broadcast_delay();
                         }
                     }
-                }
-
-                if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
-                    log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
-                    broadcast_operation_sender.send(BroadcastOperation::Restart).await.unwrap();
-                } else {
-                    throttle_logger.log("Broadcasting completed successfully".to_string()).await;
-                }
+                } 
             }
         }));
-
-        // Make sure broadcast will start immediately
-        self.restart_broadcast().await;
 
         Ok(())
     }
