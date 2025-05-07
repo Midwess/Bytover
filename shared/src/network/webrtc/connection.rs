@@ -108,7 +108,7 @@ impl ConnectionWebRtc {
         workdir: String
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
-        let ns = format!("rtc-m{}-p{}", my_id, peer_id);
+        let ns = format!("rtc-m{my_id}-p{peer_id}");
         log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
         let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 
@@ -202,7 +202,7 @@ impl ConnectionWebRtc {
         workdir: String
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
-        let ns = format!("rtc-m{}-p{}", my_id, peer_id);
+        let ns = format!("rtc-m{my_id}-p{peer_id}");
         log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
         let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 

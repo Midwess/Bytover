@@ -30,7 +30,7 @@ impl InternetOperation {
         Command::request_from_shell(CoreOperation::Internet(InternetOperation::GetCurrentIpAddress)).map(|it| match it {
             CoreOperationOutput::Internet(InternetOperationOutput::GetCurrentIpAddress(ip)) => Ok(ip),
             CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error)) => Err(error),
-            _ => panic!("Mismatch in response type, expected GetCurrentIpAddress, got {:?}", it)
+            _ => panic!("Mismatch in response type, expected GetCurrentIpAddress, got {it:?}")
         })
     }
 }

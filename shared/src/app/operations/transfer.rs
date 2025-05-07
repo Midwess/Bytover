@@ -36,7 +36,7 @@ impl TransferOperation {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(session))).map(|it| match it {
             CoreOperationOutput::Void => Ok(()),
             CoreOperationOutput::ConnectionError(error) => Err(error),
-            _ => panic!("Mismatch in response type, expected Void, got {:?}", it)
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
         })
     }
 }

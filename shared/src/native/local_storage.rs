@@ -72,7 +72,7 @@ impl NativeLocalStorage {
                 LocalStorageOperationOutput::Get(Some(resource))
             }
             _ => {
-                panic!("Unsupported operation: {:?}", effect)
+                panic!("Unsupported operation: {effect:?}")
             }
         }
     }

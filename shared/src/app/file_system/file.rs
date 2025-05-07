@@ -48,7 +48,7 @@ impl LocalResource {
     pub fn read_identifier(identifier: String) -> Result<(u64, u64, String, u64), String> {
         let parts = identifier.split("-").collect::<Vec<&str>>();
         if parts.len() != 4 {
-            return Err(format!("Invalid identifier: {}", identifier));
+            return Err(format!("Invalid identifier: {identifier}"));
         }
 
         let original_filename = Self::ascii_to_filename(parts[2]);
@@ -98,8 +98,8 @@ impl LocalResource {
 impl LocalResourcePath {
     pub fn serialize(&self) -> String {
         match self {
-            LocalResourcePath::LocalPath(path) => format!("local://{}", path),
-            LocalResourcePath::PlatformIdentifier(identifier) => format!("platform://{}", identifier)
+            LocalResourcePath::LocalPath(path) => format!("local://{path}"),
+            LocalResourcePath::PlatformIdentifier(identifier) => format!("platform://{identifier}")
         }
     }
 
@@ -109,7 +109,7 @@ impl LocalResourcePath {
         } else if serialized.starts_with("platform://") {
             Ok(LocalResourcePath::PlatformIdentifier(serialized[10..].to_string()))
         } else {
-            Err(format!("Invalid local resource path: {}", serialized))
+            Err(format!("Invalid local resource path: {serialized}"))
         }
     }
 }

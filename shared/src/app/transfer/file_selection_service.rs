@@ -80,8 +80,8 @@ impl ResourceTransferSelectionService {
                             .into_future(ctx.clone())
                             .await
                     {
-                        let path = format!("thumbnails/{}.png", order_id);
-                        let absolute_path = format!("{}/{}", workdir, path);
+                        let path = format!("thumbnails/{order_id}.png");
+                        let absolute_path = format!("{workdir}/{path}");
                         let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
 
                         thumbnail_path = Some(LocalResourcePath::LocalPath(path));
@@ -116,6 +116,23 @@ impl ResourceTransferSelectionService {
         }));
 
         ctx.request_from_shell(CoreOperation::Render).await;
+    }
+
+    pub async fn update_resource_thumbnail(&self, ctx: AppCommandContext, mut resource: LocalResource, thumbnail_png_binary: Vec<u8>) {
+        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
+        let path = format!("{}/thumbnails/{}.png", workdir, resource.order_id);
+        let file = LocalStorageOperation::new_file(thumbnail_png_binary, path.clone()).into_future(ctx.clone()).await;
+        resource.thumbnail_path = Some(LocalResourcePath::LocalPath(path));
+        let updated_resource = LocalResourceDatabaseOperation::update(resource).into_future(ctx.clone()).await;
+        if let Some(updated_resource) = updated_resource {
+            ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                new: vec![],
+                removed: vec![],
+                updated: vec![updated_resource]
+            }));
+
+            ctx.request_from_shell(CoreOperation::Render).await;
+        }
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {

@@ -26,7 +26,8 @@ pub enum LocalResourceDatabaseOperation {
     Add(Vec<LocalResource>),
     Remove(u64),
     Find(LocalResourcePath),
-    FindAll
+    FindAll,
+    Update(LocalResource)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
@@ -34,7 +35,8 @@ pub enum LocalResourceDatabaseOperationOutput {
     Add(Vec<LocalResource>),
     Remove(Option<LocalResource>),
     Find(Option<LocalResource>),
-    FindAll(Vec<LocalResource>)
+    FindAll(Vec<LocalResource>),
+    Update(Option<LocalResource>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
@@ -85,7 +87,7 @@ impl DatabaseOperation {
     pub fn gen_id() -> AppRequestBuilder<impl Future<Output = u64>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::GenId())).map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::GenId(id)) => id,
-            _ => panic!("Invalid output expected GenId got {:?}", it)
+            _ => panic!("Invalid output expected GenId got {it:?}")
         })
     }
 }
@@ -97,7 +99,7 @@ impl SessionOperation {
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())) => {}
-            _ => panic!("Invalid output expected WriteToken got {:?}", it)
+            _ => panic!("Invalid output expected WriteToken got {it:?}")
         })
     }
 
@@ -107,14 +109,14 @@ impl SessionOperation {
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())) => (),
-            _ => panic!("Invalid output expected WriteUser got {:?}", it)
+            _ => panic!("Invalid output expected WriteUser got {it:?}")
         })
     }
 
     pub fn get_session() -> AppRequestBuilder<impl Future<Output = Option<Session>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::Session(SessionOperation::Get()))).map(|it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::Session(SessionOperationOutput::Get(session))) => session,
-            _ => panic!("Invalid output expected Get got {:?}", it)
+            _ => panic!("Invalid output expected Get got {it:?}")
         })
     }
 }
@@ -128,7 +130,7 @@ impl LocalResourceDatabaseOperation {
             CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Add(
                 resources
             ))) => resources,
-            _ => panic!("Invalid output expected Add got {:?}", it)
+            _ => panic!("Invalid output expected Add got {it:?}")
         })
     }
 
@@ -140,7 +142,7 @@ impl LocalResourceDatabaseOperation {
             CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Remove(
                 resource
             ))) => resource,
-            _ => panic!("Invalid output expected Remove got {:?}", it)
+            _ => panic!("Invalid output expected Remove got {it:?}")
         })
     }
 
@@ -152,7 +154,7 @@ impl LocalResourceDatabaseOperation {
             CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(
                 resource
             ))) => resource,
-            _ => panic!("Invalid output expected Find got {:?}", it)
+            _ => panic!("Invalid output expected Find got {it:?}")
         })
     }
 
@@ -164,7 +166,19 @@ impl LocalResourceDatabaseOperation {
             CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(
                 resources
             ))) => resources,
-            _ => panic!("Invalid output expected FindAll got {:?}", it)
+            _ => panic!("Invalid output expected FindAll got {it:?}")
+        })
+    }
+
+    pub fn update(resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::LocalResource(
+            LocalResourceDatabaseOperation::Update(resource)
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Update(
+                resource
+            ))) => resource,
+            _ => panic!("Invalid output expected Update got {it:?}")
         })
     }
 }

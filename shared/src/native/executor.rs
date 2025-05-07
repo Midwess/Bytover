@@ -60,7 +60,7 @@ impl NativeExecutor {
                 sleep(duration).await;
                 CoreOperationOutput::Delay()
             }
-            _ => panic!("Native executor doesn't support this effect {:?}", effect)
+            _ => panic!("Native executor doesn't support this effect {effect:?}")
         }
     }
 }

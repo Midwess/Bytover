@@ -97,7 +97,7 @@ impl NativeDatabase {
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
             }
             DatabaseOperation::GenId() => DatabaseOperationOutput::GenId(gen_id().await),
-            _ => panic!("Native database doesn't support this effect {:?}", effect)
+            _ => panic!("Native database doesn't support this effect {effect:?}")
         }
     }
 }

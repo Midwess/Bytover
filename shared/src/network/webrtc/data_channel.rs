@@ -60,7 +60,7 @@ pub struct DataChannel {
 
 impl DataChannel {
     pub fn data_label(resource_id: u64, session_id: u64) -> String {
-        format!("{}-{}", resource_id, session_id)
+        format!("{resource_id}-{session_id}")
     }
 
     pub fn from_label(label: &str) -> Result<(u64, u64), DataChannelError> {
@@ -121,8 +121,7 @@ impl DataChannel {
 
         let Ok(_) = timeout(Duration::from_secs(10), open_receiver).await else {
             return Err(DataChannelError::OpenDataChannelError(format!(
-                "Data channel {} is not open",
-                label
+                "Data channel {label} is not open"
             )));
         };
 
@@ -262,7 +261,7 @@ impl DataChannel {
 
         log::info!(target: "nearby", "Start uploading file: {saved_path} size = {file_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
-        while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{:?}", e)))? {
+        while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{e:?}")))? {
             let Some(session) = self.session.upgrade() else {
                 return Err(DataChannelError::SessionCanceled);
             };
@@ -392,7 +391,7 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    let _ = sender.send(Err(DataChannelError::DataChannelClosed(format!("{:?}", _err)))).await;
+                    let _ = sender.send(Err(DataChannelError::DataChannelClosed(format!("{_err:?}")))).await;
                 }
             })
         }));

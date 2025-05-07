@@ -4,16 +4,19 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use core_services::local_storage::file_system::File;
 use core_services::logger::ThrottleLogger;
 use futures_util::future::join_all;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
+    resource_thumbnail_message,
     CancelTransferSessionRequest,
     IntroduceRequestMessage,
     IntroduceResponseMessage,
     KeepAliveRequestMessage,
     PeerErrorsMessage,
     PeerMessageBody,
+    ResourceThumbnailMessage,
     TransferRequestMessage,
     TransferResponseMessage,
     TransferSessionMessage,
@@ -27,6 +30,7 @@ use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -47,12 +51,16 @@ pub enum PeerErrors {
     ResponseError(#[from] PeerErrorsMessage),
     #[error("No response from peer")]
     NoResponseFromPeer,
+    #[error("Failed to send session")]
+    FailedToSendSession(String),
     #[error("Error while receiving resource")]
     ErrorWhileReceivingResource(String),
     #[error("Error while sending resource")]
     ErrorWhileSendingResource(String),
     #[error("Channel error {:?}", .0)]
-    ChannelError(#[from] DataChannelError)
+    ChannelError(#[from] DataChannelError),
+    #[error("Failed to send resource thumbnail")]
+    FailedToSendResourceThumbnail(String)
 }
 
 // A higher level that utilize the WebRtc connection
@@ -198,7 +206,7 @@ impl PeerCommunication {
                     match connection.next_request().await {
                         Ok(request) => {
                             if let Request::KeepAlive(_) = request.message() {
-                                throttle_logger.log(format!("Received keep alive request from peer {:?}", peer_id)).await;
+                                throttle_logger.log(format!("Received keep alive request from peer {peer_id:?}")).await;
                                 if let Err(e) = request.resolve(Response::VoidResponse(VoidResponseMessage {})).await {
                                     log::error!(target: "peer", "Failed to resolve keep alive request {:?}", e);
                                     break;
@@ -242,6 +250,18 @@ impl PeerCommunication {
                         let response = CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest {
                             request_id: request.id.clone(),
                             session_id: cancel_request.session_id as u64
+                        });
+
+                        self.shell_runtime.clone()
+                            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
+                    }
+                    Request::ResourceThumbnailFullfill(msg) => {
+                        let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceThumbnail {
+                            resource_id: msg.resource_id as u64,
+                            thumbnail_png_binary: match msg.data.as_ref() {
+                                Some(resource_thumbnail_message::Data::Png(data)) => data.clone(),
+                                _ => return Ok(())
+                            }
                         });
 
                         self.shell_runtime.clone()
@@ -324,12 +344,48 @@ impl PeerCommunication {
     }
 
     pub async fn send_session(&self, session: TransferSession, core_request_id: u32) -> Result<TransferSessionStatus, PeerErrors> {
-        let session_id = session.order_id;
-        let session = Arc::new(Mutex::new(session));
+        let order_id = session.order_id;
+        let all_thumbnails_and_resource_ids = session
+            .resources
+            .iter()
+            .filter_map(|r| r.thumbnail_path.as_ref().map(|path| (r.order_id, path)))
+            .map(|(resource_id, path)| match path {
+                LocalResourcePath::LocalPath(path) => (resource_id, path.clone()),
+                LocalResourcePath::PlatformIdentifier(identifier) => (resource_id, identifier.clone())
+            })
+            .collect::<Vec<_>>();
 
-        self.active_sessions.lock().await.insert(session_id, Arc::downgrade(&session));
+        let session = Arc::new(Mutex::new(session));
+        let mut result = None;
+        tokio_scoped::scope(|scope| {
+            scope.spawn(async move {
+                for (resource_id, path) in all_thumbnails_and_resource_ids {
+                    if let Err(e) = self.send_resource_thumbnail(resource_id, path.as_str()).await {
+                        log::error!(target: "peer", "Failed to send resource thumbnail {:?}", e);
+                    }
+                }
+            });
+
+            let session = session.clone();
+            let result = &mut result;
+            scope.spawn(async move {
+                let _ = result.insert(self.send_session_resources(order_id, session.clone(), core_request_id).await);
+            });
+        });
+
+        result.unwrap_or(Err(PeerErrors::FailedToSendSession("Process not started".to_string())))
+    }
+
+    pub async fn send_session_resources(
+        &self,
+        order_id: u64,
+        session: Arc<Mutex<TransferSession>>,
+        core_request_id: u32
+    ) -> Result<TransferSessionStatus, PeerErrors> {
+        self.active_sessions.lock().await.insert(order_id, Arc::downgrade(&session));
 
         let session_guard = session.lock().await;
+
         let transfer_session = TransferSessionMessage {
             order_id: session_guard.order_id,
             resources: join_all(session_guard.resources.iter().map(|r| r.to_proto())).await.into_iter().collect()
@@ -499,6 +555,45 @@ impl PeerCommunication {
             log::info!(target: "peer", "Stopping session {:?}", session_id);
             self.stop_session(session_id).await;
         }
+    }
+
+    pub async fn send_resource_thumbnail(&self, resource_id: u64, file_path: &str) -> Result<(), PeerErrors> {
+        let max_file_size = 60 * 1024;
+        let thumbnail_send_timeout = Some(Duration::from_secs(5));
+        let thumbnail_recv_timeout = Some(Duration::from_secs(8));
+
+        let file = File::existing(file_path.to_string())
+            .await
+            .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to get file: {e:?}")))?;
+        let metadata = file
+            .metadata()
+            .await
+            .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to get metadata: {e:?}")))?;
+        if metadata.size > max_file_size {
+            return Err(PeerErrors::FailedToSendResourceThumbnail(
+                "Thumbnail must be less than 60KB".to_string()
+            ));
+        }
+
+        let buffer = file
+            .read()
+            .await
+            .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to read file: {e:?}")))?;
+        let msg = ResourceThumbnailMessage {
+            resource_id: resource_id as i64,
+            data: Some(resource_thumbnail_message::Data::Png(buffer))
+        };
+
+        let _ = self
+            .connection
+            .send::<VoidResponseMessage>(
+                Request::ResourceThumbnailFullfill(msg),
+                thumbnail_send_timeout,
+                thumbnail_recv_timeout
+            )
+            .await??;
+
+        Ok(())
     }
 
     pub async fn stop_session(&self, session_id: u64) {

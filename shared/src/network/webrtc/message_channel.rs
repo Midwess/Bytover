@@ -102,8 +102,8 @@ impl MessageChannel {
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 Box::pin(async move {
                     log::info!(target: "message-channel", "Connection error: {:?}", e);
-                    let _ = msg_request_broadcast.send(Err(format!("Channel error: {:?}", e)));
-                    let _ = msg_response_broadcast_cloned.send(Err(format!("Channel error: {:?}", e)));
+                    let _ = msg_request_broadcast.send(Err(format!("Channel error: {e:?}")));
+                    let _ = msg_response_broadcast_cloned.send(Err(format!("Channel error: {e:?}")));
                 })
             }));
         }
@@ -212,6 +212,7 @@ impl MessageChannel {
         };
 
         let bytes = Self::encode_msg(&message)?;
+
         let mut subscription = self.msg_response_broadcast.subscribe();
 
         let _ = timeout(
@@ -232,7 +233,7 @@ impl MessageChannel {
                     return Ok(Err(error));
                 }
 
-                return Err(ConnectionWebRtcErrors::ParseError(format!("Not a valid error code {:?}", e)));
+                return Err(ConnectionWebRtcErrors::ParseError(format!("Not a valid error code {e:?}")));
             }
 
             return Ok(Ok(response.try_into().map_err(ConnectionWebRtcErrors::ParseError)?));

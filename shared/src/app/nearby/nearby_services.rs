@@ -67,6 +67,18 @@ impl NearbyService {
 
                     ctx.notify_shell(CoreOperation::Render);
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceThumbnail {
+                    resource_id,
+                    thumbnail_png_binary
+                }) => {
+                    log::info!(target: "nearby", "Received resource thumbnail: {}", resource_id);
+                    let request = AppEvent::Transfer(TransferEvent::ReceivedResourceThumbnail {
+                        resource_id,
+                        thumbnail_png_binary
+                    });
+
+                    ctx.notify_shell(CoreOperation::Notified(request));
+                }
                 CoreOperationOutput::DeviceError(error) => {
                     log::error!(target: "nearby", "Device error: {:?}", error);
                     ctx.send_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
@@ -80,7 +92,7 @@ impl NearbyService {
                     break;
                 }
                 _ => {
-                    panic!("Unexpected output from nearby server, output: {:?}", output);
+                    panic!("Unexpected output from nearby server, output: {output:?}");
                 }
             }
         }
@@ -140,7 +152,7 @@ impl NearbyService {
                     continue;
                 }
                 _ => {
-                    panic!("Unexpected output from nearby server, output: {:?}", output);
+                    panic!("Unexpected output from nearby server, output: {output:?}");
                 }
             }
         }

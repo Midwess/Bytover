@@ -59,8 +59,7 @@ impl InternetConnection {
                     log::warn!(target: "internet-check", "Attempt {}/{}: Failed to bind UDP socket: {}", attempt, MAX_RETRIES, e);
                     if attempt == MAX_RETRIES {
                         return Err(NetworkError::Network(format!(
-                            "Failed to bind UDP socket after {} attempts: {}",
-                            MAX_RETRIES, e
+                            "Failed to bind UDP socket after {MAX_RETRIES} attempts: {e}"
                         )));
                     }
                     tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
@@ -76,8 +75,7 @@ impl InternetConnection {
                     log::warn!(target: "internet-check", "Attempt {}/{}: Failed to get public IP: {}", attempt, MAX_RETRIES, e);
                     if attempt == MAX_RETRIES {
                         return Err(NetworkError::Network(format!(
-                            "Failed to get public IP after {} attempts: {}",
-                            MAX_RETRIES, e
+                            "Failed to get public IP after {MAX_RETRIES} attempts: {e}"
                         )));
                     }
                     tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;

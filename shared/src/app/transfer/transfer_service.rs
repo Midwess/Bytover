@@ -175,12 +175,12 @@ impl TransferService {
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
-                    transfer_session.force_complete(format!("Connection error: {:?}", error));
+                    transfer_session.force_complete(format!("Connection error: {error:?}"));
                     log::error!(target: "transfer", "Connection error: {:?}", error);
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    transfer_session.force_complete(format!("Device error: {:?}", error));
+                    transfer_session.force_complete(format!("Device error: {error:?}"));
                     log::error!(target: "transfer", "Device error: {:?}", error);
                     break;
                 }
@@ -297,12 +297,12 @@ impl TransferService {
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
-                    transfer_session.force_complete(format!("Connection error: {:?}", error));
+                    transfer_session.force_complete(format!("Connection error: {error:?}"));
                     log::error!(target: "transfer", "Connection error: {:?}", error);
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    transfer_session.force_complete(format!("Device error: {:?}", error));
+                    transfer_session.force_complete(format!("Device error: {error:?}"));
                     log::error!(target: "transfer", "Device error: {:?}", error);
                     break;
                 }

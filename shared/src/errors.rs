@@ -71,12 +71,12 @@ impl From<WebRtcErrors> for NetworkError {
 
 impl From<ConnectionWebRtcErrors> for NetworkError {
     fn from(err: ConnectionWebRtcErrors) -> Self {
-        NetworkError::Network(format!("{:?}", err))
+        NetworkError::Network(format!("{err:?}"))
     }
 }
 
 impl From<PeerErrors> for NetworkError {
     fn from(err: PeerErrors) -> Self {
-        NetworkError::Network(format!("{:?}", err))
+        NetworkError::Network(format!("{err:?}"))
     }
 }

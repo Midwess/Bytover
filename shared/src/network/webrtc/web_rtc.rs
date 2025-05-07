@@ -207,7 +207,7 @@ impl WebRtc {
                             exponential_growth_delay = Self::broadcast_delay();
                         }
                     }
-                } 
+                }
             }
         }));
 

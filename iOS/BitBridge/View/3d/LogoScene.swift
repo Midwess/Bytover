@@ -113,9 +113,9 @@ struct LogoScene: UIViewRepresentable {
         
         sceneView.backgroundColor = .black.withAlphaComponent(0.0)
         sceneView.allowsCameraControl = false
-        sceneView.antialiasingMode = .none
+        sceneView.antialiasingMode = .multisampling4X
         sceneView.rendersContinuously = false
-        sceneView.preferredFramesPerSecond = 15
+        sceneView.preferredFramesPerSecond = 1
         sceneView.isPlaying = false
         
         // Store reference to sceneView in coordinator

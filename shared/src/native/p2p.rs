@@ -61,7 +61,7 @@ impl P2PNativeExecutor {
                 }
             }
             _ => {
-                panic!("Mistake, unknown operation: {:?}", effect);
+                panic!("Mistake, unknown operation: {effect:?}");
             }
         }
     }

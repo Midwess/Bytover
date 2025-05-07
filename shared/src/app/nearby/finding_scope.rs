@@ -23,7 +23,7 @@ impl FindingScope {
         let local_ip = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await?;
         let mut result = ctx.stream_from_shell(crate::app::operations::CoreOperation::InitNativeExecutor);
         while let Some(response) = result.next().await {
-            println!("response: {:?}", response);
+            println!("response: {response:?}");
         }
 
         Ok(Self::Local(local_ip))
@@ -137,9 +137,9 @@ impl FindingScope {
     pub fn as_string(&self) -> String {
         let gmt_offset = Self::get_gmt_offset();
         match self {
-            FindingScope::Global(content) => format!("public:{}", content),
-            FindingScope::Local(content) => format!("local:{}-gmt{}", content, gmt_offset),
-            FindingScope::Location(content) => format!("location:{}-gmt{}", content, gmt_offset)
+            FindingScope::Global(content) => format!("public:{content}"),
+            FindingScope::Local(content) => format!("local:{content}-gmt{gmt_offset}"),
+            FindingScope::Location(content) => format!("location:{content}-gmt{gmt_offset}")
         }
     }
 

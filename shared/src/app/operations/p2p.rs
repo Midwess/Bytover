@@ -32,6 +32,10 @@ pub enum P2POperationOutput {
         request_id: String,
         session_id: u64
     },
+    ReceivedResourceThumbnail {
+        resource_id: u64,
+        thumbnail_png_binary: Vec<u8>
+    },
     NearbyServerStopped
 }
 
@@ -44,7 +48,7 @@ impl P2POperation {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).map(|it| match it {
             CoreOperationOutput::Void => Ok(()),
             CoreOperationOutput::ConnectionError(e) => Err(e),
-            _ => panic!("Mismatch in response type, expected Void, got {:?}", it)
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
         })
     }
 }

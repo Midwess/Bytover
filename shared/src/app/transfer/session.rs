@@ -32,13 +32,13 @@ impl Display for TransferSessionStatus {
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 let kb_per_second = *bytes_per_second as f64 / 1024.0;
                 if kb_per_second < 100.0 {
-                    write!(f, "{:.1} KB/s", kb_per_second)
+                    write!(f, "{kb_per_second:.1} KB/s")
                 } else {
                     write!(f, "{:.1} MB/s", kb_per_second / 1024.0)
                 }
             }
             TransferSessionStatus::Success => write!(f, "Success"),
-            TransferSessionStatus::Failed(msg) => write!(f, "Failed {}", msg),
+            TransferSessionStatus::Failed(msg) => write!(f, "Failed {msg}"),
             TransferSessionStatus::Canceled => write!(f, "Canceled")
         }
     }
@@ -242,7 +242,9 @@ impl TransferSession {
 
     pub fn force_complete(&mut self, msg: String) {
         self.progress.iter_mut().for_each(|it| {
-            it.status = TransferStatus::Fail(msg.clone());
+            if it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending {
+                it.status = TransferStatus::Fail(msg.clone());
+            }
         });
     }
 
