@@ -70,10 +70,6 @@ pub enum TransferEvent {
     UpdateTransferTargets {
         new: Vec<TransferTarget>,
         removed: Vec<TransferTarget>
-    },
-    ReceivedResourceThumbnail {
-        resource_id: u64,
-        thumbnail_png_binary: Vec<u8>
     }
 }
 
@@ -224,21 +220,6 @@ impl AppModule<BitBridge> for TransferModule {
                 model.transfer.transfer_targets.extend(new);
                 model.transfer.transfer_targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
                 Command::done()
-            }
-            TransferEvent::ReceivedResourceThumbnail {
-                resource_id,
-                thumbnail_png_binary
-            } => {
-                let Some(resource) = model.transfer.selected_resources.iter().find(|it| it.order_id == resource_id).cloned() else {
-                    return Command::done();
-                };
-
-                Command::new(|it| async move {
-                    let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
-                    resource_transfer_selection_service
-                        .update_resource_thumbnail(it, resource, thumbnail_png_binary)
-                        .await;
-                })
             }
         }
     }

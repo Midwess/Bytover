@@ -42,13 +42,21 @@ impl TransferNative {
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())
                 }
             }
-            TransferOperation::AnswerSessionRequest(peer_id, transfer_session, peer_request_id, response) => {
+            TransferOperation::AnswerSessionRequest {
+                peer_id,
+                session,
+                peer_request_id,
+                response,
+                thumbnail_dir
+            } => {
                 let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
                 else {
                     return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
                 };
 
-                let result = connection.answer_session_request(request_id, transfer_session, peer_request_id, response).await;
+                let result = connection
+                    .answer_session_request(request_id, session, thumbnail_dir, peer_request_id, response)
+                    .await;
 
                 log::info!(target: "transfer", "Answered session request: {:?}", result);
 

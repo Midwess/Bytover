@@ -16,13 +16,20 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     SendSession(TransferSession),
-    AnswerSessionRequest(u128, TransferSession, String, Response),
+    AnswerSessionRequest {
+        thumbnail_dir: String,
+        peer_id: u128,
+        session: TransferSession,
+        peer_request_id: String,
+        response: Response
+    },
     CancelSession(u128, u64)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperationOutput {
     TransferResourceProgressUpdate(TransferProgress),
+    ResourceThumbnailFullfillment { resource_order_id: u64, path: String },
     TransferCompleted(TransferSessionStatus),
     TransferCanceled
 }

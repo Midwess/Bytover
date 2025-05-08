@@ -97,7 +97,7 @@ impl PeerCommunication {
             response.peer.into()
         } else {
             let mut peer_result = None;
-            while let Ok(request) = connection.next_request().await {
+            while let Ok(request) = connection.next_request(None).await {
                 if let Request::IntroduceRequest(introduction) = request.message() {
                     let peer: PeerEntity = introduction.mine.clone().into();
                     request
@@ -203,7 +203,7 @@ impl PeerCommunication {
 
             spawn(async move {
                 loop {
-                    match connection.next_request().await {
+                    match connection.next_request(None).await {
                         Ok(request) => {
                             if let Request::KeepAlive(_) = request.message() {
                                 throttle_logger.log(format!("Received keep alive request from peer {peer_id:?}")).await;
@@ -234,7 +234,7 @@ impl PeerCommunication {
         let _ = self.peer_event_request_id.set(core_request_id);
 
         select! {
-            request = self.connection.next_request() => {
+            request = self.connection.next_request(None) => {
                 let request = request?;
                 match request.message() {
                     Request::TransferRequest(transfer_request) => {
@@ -250,18 +250,6 @@ impl PeerCommunication {
                         let response = CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest {
                             request_id: request.id.clone(),
                             session_id: cancel_request.session_id as u64
-                        });
-
-                        self.shell_runtime.clone()
-                            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
-                    }
-                    Request::ResourceThumbnailFullfill(msg) => {
-                        let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceThumbnail {
-                            resource_id: msg.resource_id as u64,
-                            thumbnail_png_binary: match msg.data.as_ref() {
-                                Some(resource_thumbnail_message::Data::Png(data)) => data.clone(),
-                                _ => return Ok(())
-                            }
                         });
 
                         self.shell_runtime.clone()
@@ -356,20 +344,33 @@ impl PeerCommunication {
             .collect::<Vec<_>>();
 
         let session = Arc::new(Mutex::new(session));
+        let weak_session = Arc::downgrade(&session);
+        self.active_sessions.lock().await.insert(order_id, weak_session.clone());
         let mut result = None;
         tokio_scoped::scope(|scope| {
+            let session_guard = weak_session.clone();
             scope.spawn(async move {
                 for (resource_id, path) in all_thumbnails_and_resource_ids {
+                    let Some(session_guard) = session_guard.upgrade() else {
+                        log::warn!(target: "peer", "Session is already closed");
+                        return;
+                    };
+
+                    if session_guard.lock().await.is_completed() {
+                        log::warn!(target: "peer", "Session is already completed");
+                        return;
+                    }
+
                     if let Err(e) = self.send_resource_thumbnail(resource_id, path.as_str()).await {
                         log::error!(target: "peer", "Failed to send resource thumbnail {:?}", e);
                     }
                 }
             });
 
-            let session = session.clone();
             let result = &mut result;
-            scope.spawn(async move {
-                let _ = result.insert(self.send_session_resources(order_id, session.clone(), core_request_id).await);
+            scope.spawn(async {
+                *result = Some(self.send_session_resources(session.clone(), core_request_id).await);
+                self.active_sessions.lock().await.remove(&order_id);
             });
         });
 
@@ -378,12 +379,9 @@ impl PeerCommunication {
 
     pub async fn send_session_resources(
         &self,
-        order_id: u64,
         session: Arc<Mutex<TransferSession>>,
         core_request_id: u32
     ) -> Result<TransferSessionStatus, PeerErrors> {
-        self.active_sessions.lock().await.insert(order_id, Arc::downgrade(&session));
-
         let session_guard = session.lock().await;
 
         let transfer_session = TransferSessionMessage {
@@ -417,11 +415,13 @@ impl PeerCommunication {
                     data_channel.auto_close(false);
                     data_channel
                 }
-                Err(_) => {
+                Err(e) => {
+                    session.lock().await.force_complete("No response from peer within timeout".to_string());
                     return Err(PeerErrors::NoResponseFromPeer);
                 }
                 Ok(Err(e)) => match e {
                     RecvError::Closed => {
+                        session.lock().await.force_complete("No response from peer, channel closed".to_string());
                         return Err(PeerErrors::NoResponseFromPeer);
                     }
                     RecvError::Lagged(e) => {
@@ -468,6 +468,7 @@ impl PeerCommunication {
         &self,
         core_request_id: u32,
         out_session: TransferSession,
+        thumbnail_dir: String,
         request_id: String,
         response: Response
     ) -> Result<TransferSessionStatus, PeerErrors> {
@@ -494,52 +495,118 @@ impl PeerCommunication {
             return Ok(TransferSessionStatus::Canceled);
         }
 
-        loop {
-            let session_guard = session.lock().await;
-            if session_guard.is_completed() {
-                return Ok(session_guard.status());
-            }
+        let mut send_result: Option<Result<TransferSessionStatus, PeerErrors>> = None;
 
-            let Some(next_resource) = session_guard.get_next_download_resource() else {
-                log::info!(target: "peer", "No more resources to download");
-                return Ok(session_guard.status());
-            };
+        tokio_scoped::scope(|scope| {
+            let send_result = &mut send_result;
+            let session_guard = Arc::downgrade(&session);
+            scope.spawn(async move {
+                while let Ok(request) = self.next_request(Some(Duration::from_secs(15))).await {
+                    let Some(session_guard) = session_guard.upgrade() else {
+                        log::warn!(target: "peer", "Session is already closed");
+                        break;
+                    };
 
-            let order_id = next_resource.order_id;
+                    if session_guard.lock().await.is_completed() {
+                        break;
+                    }
 
-            drop(session_guard);
+                    let message = request.take_message();
+                    match request.resolve(Response::VoidResponse(VoidResponseMessage {})).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::error!(target: "peer", "Failed to resolve request {:?}", e);
+                            continue;
+                        }
+                    };
 
-            let data_channel = DataChannel::stream_resource(
-                &self.connection,
-                self.shell_runtime.clone(),
-                self.throughput_controller.clone(),
-                Arc::downgrade(&session),
-                order_id
-            )
-            .await?;
+                    if let Request::ResourceThumbnailFullfill(thumbnail) = message {
+                        if let Some(resource_thumbnail_message::Data::Png(data)) = thumbnail.data {
+                            let saved_path = format!("{}/{}.png", thumbnail_dir, thumbnail.resource_id);
+                            match File::new(Some(data), saved_path.clone()).await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    log::error!(target: "peer", "Failed to save thumbnail {:?}", e);
+                                    continue;
+                                }
+                            };
 
-            let shell_runtime = self.shell_runtime.clone();
-            let result = data_channel.start_download(core_request_id).await;
-            let mut session_guard = session.lock().await;
-            log::info!(target: "nearby", "Completed resource {:?}", order_id);
-            let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
-            match result {
-                Ok(_) => {
-                    progress.success();
-                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                    shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                            let msg = CoreOperationOutput::Transfer(TransferOperationOutput::ResourceThumbnailFullfillment {
+                                resource_order_id: thumbnail.resource_id as u64,
+                                path: saved_path
+                            });
+                            let _ =
+                                self.shell_runtime.msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                        }
+                    }
                 }
-                Err(e) => {
-                    progress.fail(e.to_string());
-                    let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                    shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
-                }
-            };
+            });
 
-            drop(session_guard);
+            scope.spawn(async {
+                let result = loop {
+                    let session_guard = session.lock().await;
+                    if session_guard.is_completed() {
+                        break Ok(session_guard.status());
+                    }
 
-            let _ = data_channel.close().await;
-        }
+                    let Some(next_resource) = session_guard.get_next_download_resource() else {
+                        log::info!(target: "peer", "No more resources to download");
+                        break Ok(session_guard.status());
+                    };
+
+                    let order_id = next_resource.order_id;
+
+                    drop(session_guard);
+
+                    let data_channel = match DataChannel::stream_resource(
+                        &self.connection,
+                        self.shell_runtime.clone(),
+                        self.throughput_controller.clone(),
+                        Arc::downgrade(&session),
+                        order_id
+                    )
+                    .await
+                    {
+                        Ok(data_channel) => data_channel,
+                        Err(e) => {
+                            session.lock().await.force_complete(format!("Failed to stream resource: {e:?}"));
+                            break Err(e.into());
+                        }
+                    };
+
+                    let shell_runtime = self.shell_runtime.clone();
+                    let result = data_channel.start_download(core_request_id).await;
+                    let mut session_guard = session.lock().await;
+                    log::info!(target: "nearby", "Completed resource {:?}", order_id);
+                    let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
+                    match result {
+                        Ok(_) => {
+                            progress.success();
+                            let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
+                                progress.clone()
+                            ));
+                            shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                        }
+                        Err(e) => {
+                            progress.fail(e.to_string());
+                            let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(
+                                progress.clone()
+                            ));
+                            shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                        }
+                    };
+
+                    drop(session_guard);
+
+                    let _ = data_channel.close().await;
+                };
+
+                self.active_sessions.lock().await.remove(&session_id);
+                let _ = send_result.insert(result);
+            });
+        });
+
+        send_result.unwrap_or(Err(PeerErrors::FailedToSendSession("Process not started".to_string())))
     }
 
     pub async fn close(&self) {

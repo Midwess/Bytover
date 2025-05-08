@@ -169,6 +169,9 @@ impl TransferService {
 
                         break;
                     }
+                    TransferOperationOutput::ResourceThumbnailFullfillment { resource_order_id, path } => {
+                        continue;
+                    }
                     other => {
                         log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
                         break;
@@ -214,6 +217,7 @@ impl TransferService {
         let peer_id = peer.id();
         let mut resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
+        let thumbnail_dir = format!("{workdir}/thumbnails");
         for resource_request in remote_session.resources {
             let thumbnail_path = match resource_request.thumbnail_png {
                 Some(thumbnail_png) => {
@@ -255,12 +259,13 @@ impl TransferService {
         cmd.notify_shell(CoreOperation::Render);
 
         let response = Response::TransferResponse(TransferResponseMessage {});
-        let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest(
+        let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
+            thumbnail_dir,
             peer_id,
-            transfer_session.clone(),
-            request_id,
+            session: transfer_session.clone(),
+            peer_request_id: request_id,
             response
-        ));
+        });
 
         let mut stream = cmd.stream_from_shell(response);
         while let Some(transfer_output) = stream.next().await {
@@ -280,6 +285,20 @@ impl TransferService {
                             new: vec![],
                             removed: vec![],
                             updated: vec![transfer_session.clone()]
+                        }));
+
+                        cmd.notify_shell(CoreOperation::Render);
+                    }
+                    TransferOperationOutput::ResourceThumbnailFullfillment { resource_order_id, path } => {
+                        let Some(resource) = transfer_session.resources.iter_mut().find(|it| it.order_id == resource_order_id) else {
+                            continue;
+                        };
+
+                        resource.thumbnail_path = Some(LocalResourcePath::LocalPath(path));
+                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                            new: vec![],
+                            removed: vec![],
+                            updated: vec![resource.clone()]
                         }));
 
                         cmd.notify_shell(CoreOperation::Render);

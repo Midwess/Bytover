@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,14 +19,14 @@ use super::connection::ConnectionWebRtcErrors;
 use super::throughput::ThroughputController;
 
 pub struct PeerRequest {
-    request: Request,
+    request: Arc<Request>,
     pub id: String,
     is_resolved: bool,
     msg_channel: Arc<RTCDataChannel>
 }
 
 impl PeerRequest {
-    pub fn new(request: Request, id: String, msg_channel: Arc<RTCDataChannel>) -> Self {
+    pub fn new(request: Arc<Request>, id: String, msg_channel: Arc<RTCDataChannel>) -> Self {
         Self {
             request,
             id,
@@ -37,6 +37,10 @@ impl PeerRequest {
 
     pub fn message(&self) -> &Request {
         &self.request
+    }
+
+    pub fn take_message(&self) -> Request {
+        self.request.deref().clone()
     }
 
     pub async fn resolve(mut self, reponse: Response) -> Result<(), ConnectionWebRtcErrors> {
@@ -62,17 +66,11 @@ impl Deref for PeerRequest {
     }
 }
 
-impl DerefMut for PeerRequest {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.request
-    }
-}
-
 #[derive(Clone)]
 pub struct MessageChannel {
     msg_channel: Arc<RTCDataChannel>,
-    msg_response_broadcast: broadcast::Sender<Result<(String, Response), String>>,
-    msg_request_broadcast: broadcast::Sender<Result<(String, Request), String>>,
+    msg_response_broadcast: broadcast::Sender<Result<(String, Arc<Response>), String>>,
+    msg_request_broadcast: broadcast::Sender<Result<(String, Arc<Request>), String>>,
     throughput_controller: Arc<ThroughputController>
 }
 
@@ -119,6 +117,7 @@ impl MessageChannel {
             };
 
             if let Some(response) = msg.response {
+                let response = Arc::new(response);
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 return Box::pin(async move {
                     let _ = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
@@ -129,6 +128,7 @@ impl MessageChannel {
 
             if let Some(request) = msg.request {
                 let msg_request_broadcast = msg_request_broadcast_cloned.clone();
+                let request = Arc::new(request);
                 return Box::pin(async move {
                     let result = retry!(retries = 10, delay = Duration::from_millis(50), |_e: &SendError<_>| true, {
                         msg_request_broadcast.send(Ok((msg.request_id.clone(), request.clone())))
@@ -180,9 +180,12 @@ impl MessageChannel {
         let _ = self.msg_channel.close().await;
     }
 
-    pub async fn next_request(&self) -> Result<PeerRequest, ConnectionWebRtcErrors> {
+    pub async fn next_request(&self, timeout: Option<Duration>) -> Result<PeerRequest, ConnectionWebRtcErrors> {
         let mut subscription = self.msg_request_broadcast.subscribe();
-        let result = subscription.recv().await;
+        let result = match timeout {
+            Some(t) => tokio::time::timeout(t, subscription.recv()).await?,
+            None => subscription.recv().await
+        };
 
         match result {
             Ok(Ok((request_id, request))) => Ok(PeerRequest::new(request, request_id, self.msg_channel.clone())),
@@ -224,6 +227,7 @@ impl MessageChannel {
         while let Ok(Ok((response_id, response))) =
             timeout(recv_timeout.unwrap_or(Duration::from_secs(300)), subscription.recv()).await?
         {
+            let response = (*response).clone();
             if response_id != request_id {
                 continue;
             }

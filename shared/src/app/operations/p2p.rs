@@ -32,10 +32,6 @@ pub enum P2POperationOutput {
         request_id: String,
         session_id: u64
     },
-    ReceivedResourceThumbnail {
-        resource_id: u64,
-        thumbnail_png_binary: Vec<u8>
-    },
     NearbyServerStopped
 }
 

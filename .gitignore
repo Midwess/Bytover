@@ -14,3 +14,4 @@ captures
 .cxx
 local.properties
 .bin
+rustc-ice-*.txt
