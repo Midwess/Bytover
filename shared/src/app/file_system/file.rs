@@ -20,8 +20,39 @@ pub struct LocalResource {
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
 pub enum LocalResourcePath {
-    LocalPath(String),
-    PlatformIdentifier(String)
+    // Relative from the workdir of application
+    RelativePath(String),
+    // Only the platform know how to get the absolute path
+    PlatformIdentifier(String),
+    // Absolute path on the device
+    AbsolutePath(String)
+}
+
+impl LocalResourcePath {
+    pub fn disk_path(&self) -> Option<String> {
+        match self {
+            LocalResourcePath::AbsolutePath(path) => Some(path.clone()),
+            _ => None
+        }
+    }
+
+    pub fn from_absolute_to_relative(path: String, workdir: String) -> Self {
+        let relative_path = path.replace(&workdir, "");
+        LocalResourcePath::RelativePath(relative_path)
+    }
+
+    pub fn from_relative_to_absolute(path: String, workdir: String) -> Self {
+        let absolute_path = format!("{workdir}/{path}");
+        LocalResourcePath::AbsolutePath(absolute_path)
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            LocalResourcePath::RelativePath(path) => path.clone(),
+            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone(),
+            LocalResourcePath::AbsolutePath(path) => path.clone()
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
@@ -36,8 +67,9 @@ pub enum ResourceType {
 impl LocalResource {
     pub fn identifer(&self, session_id: u64) -> String {
         let path = match &self.path {
-            LocalResourcePath::LocalPath(path) => path.clone(),
-            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone()
+            LocalResourcePath::RelativePath(path) => path.clone(),
+            LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone(),
+            LocalResourcePath::AbsolutePath(path) => path.clone()
         };
 
         let file_name = path.split("/").last().unwrap_or("").to_string();
@@ -92,24 +124,5 @@ impl LocalResource {
         }
 
         is_changed
-    }
-}
-
-impl LocalResourcePath {
-    pub fn serialize(&self) -> String {
-        match self {
-            LocalResourcePath::LocalPath(path) => format!("local://{path}"),
-            LocalResourcePath::PlatformIdentifier(identifier) => format!("platform://{identifier}")
-        }
-    }
-
-    pub fn deserialize(serialized: &str) -> Result<Self, String> {
-        if serialized.starts_with("local://") {
-            Ok(LocalResourcePath::LocalPath(serialized[7..].to_string()))
-        } else if serialized.starts_with("platform://") {
-            Ok(LocalResourcePath::PlatformIdentifier(serialized[10..].to_string()))
-        } else {
-            Err(format!("Invalid local resource path: {serialized}"))
-        }
     }
 }

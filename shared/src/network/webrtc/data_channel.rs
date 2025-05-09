@@ -1,4 +1,3 @@
-use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus, TransferStatus};
@@ -168,11 +167,8 @@ impl DataChannel {
             .find(|it| it.order_id == self.resource_id)
             .expect("Resource not found");
 
-        let saved_path = match &resource.path {
-            LocalResourcePath::LocalPath(file_path) => file_path.clone(),
-            LocalResourcePath::PlatformIdentifier(_) => {
-                return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
-            }
+        let Some(saved_path) = resource.path.disk_path() else {
+            return Err(DataChannelError::FileError("Only support absolute path".to_string()))
         };
 
         let file = File::new(None, saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
@@ -244,11 +240,8 @@ impl DataChannel {
             .find(|it| it.order_id == self.resource_id)
             .expect("Resource not found");
 
-        let saved_path = match &resource.path {
-            LocalResourcePath::LocalPath(file_path) => file_path.clone(),
-            LocalResourcePath::PlatformIdentifier(_) => {
-                return Err(DataChannelError::FileError("Platform identifier is not supported".to_string()))
-            }
+        let Some(saved_path) = resource.path.disk_path() else {
+            return Err(DataChannelError::FileError("Only support absolute path".to_string()))
         };
 
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));

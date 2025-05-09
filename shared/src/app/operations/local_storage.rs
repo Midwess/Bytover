@@ -14,11 +14,9 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
-    IsFileExists(LocalResourcePath),
+    IsFileExists { absolute_path: String },
     GetAbsolutePath(LocalResourcePath),
-    LoadFileSizeFromPlatformIdentifier(String),
-    LoadFileNameFromPlatformIdentifier(String),
-    LoadFileThumbnailPngFromPlatformIdentifier(String),
+    LoadFileThumbnailPng(LocalResourcePath),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
     Copy { source: String, destination: String },
@@ -30,13 +28,11 @@ pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     IsFileExists(bool),
     Get(Option<LocalResource>),
-    GetAbsolutePath(Option<String>),
+    GetAbsolutePath(String),
     NewFile(LocalResource),
     Copy(LocalResource),
     Zip(LocalResource),
-    LoadFileSizeFromPlatformIdentifier(u64),
-    LoadFileNameFromPlatformIdentifier(String),
-    LoadFileThumbnailPngFromPlatformIdentifier(Option<Vec<u8>>)
+    LoadFileThumbnailPng(Option<Vec<u8>>)
 }
 
 impl Operation for LocalStorageOperation {
@@ -82,41 +78,16 @@ impl LocalStorageOperation {
         })
     }
 
-    pub fn load_file_size_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = u64>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(
-            LocalStorageOperation::LoadFileSizeFromPlatformIdentifier(identifier)
-        ))
-        .map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileSizeFromPlatformIdentifier(size)) => size,
-            _ => panic!("Mismatch in response type, expected LoadFileSizeFromPlatformIdentifier, got {it:?}")
-        })
-    }
-
-    pub fn load_file_name_from_platform_identifier(identifier: String) -> AppRequestBuilder<impl Future<Output = String>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(
-            LocalStorageOperation::LoadFileNameFromPlatformIdentifier(identifier)
-        ))
-        .map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileNameFromPlatformIdentifier(name)) => name,
-            _ => panic!("Mismatch in response type, expected LoadFileNameFromPlatformIdentifier, got {it:?}")
-        })
-    }
-
-    pub fn load_file_thumbnail_png_from_platform_identifier(
-        identifier: String
-    ) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(
-            LocalStorageOperation::LoadFileThumbnailPngFromPlatformIdentifier(identifier)
-        ))
-        .map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileThumbnailPngFromPlatformIdentifier(thumbnail)) => {
-                thumbnail
+    pub fn load_file_thumbnail_png(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::LoadFileThumbnailPng(path))).map(
+            |it| match it {
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::LoadFileThumbnailPng(thumbnail)) => thumbnail,
+                _ => panic!("Mismatch in response type, expected LoadFileThumbnailPng, got {it:?}")
             }
-            _ => panic!("Mismatch in response type, expected LoadFileThumbnailPngFromPlatformIdentifier, got {it:?}")
-        })
+        )
     }
 
-    pub fn get_absolute_path(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<String>>> {
+    pub fn get_absolute_path(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = String>> {
         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetAbsolutePath(path))).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetAbsolutePath(path)) => path,
             _ => panic!("Mismatch in response type, expected GetAbsolutePath, got {it:?}")
@@ -124,9 +95,15 @@ impl LocalStorageOperation {
     }
 
     pub fn is_file_exists(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::IsFileExists(path))).map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::IsFileExists(exists)) => exists,
-            _ => panic!("Mismatch in response type, expected IsFileExists, got {it:?}")
-        })
+        Self::get_absolute_path(path)
+            .then_request(|it| {
+                Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::IsFileExists {
+                    absolute_path: it
+                }))
+            })
+            .map(|it| match it {
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::IsFileExists(exists)) => exists,
+                _ => panic!("Mismatch in response type, expected IsFileExists, got {it:?}")
+            })
     }
 }

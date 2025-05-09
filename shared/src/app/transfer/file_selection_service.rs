@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::file::{LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::database::{DatabaseOperation, LocalResourceDatabaseOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
@@ -49,55 +49,32 @@ impl ResourceTransferSelectionService {
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
 
         while let Some(selection) = selections.pop() {
-            log::info!(target: "transfer", "Add resource: {:?}", selection);
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
                 continue;
             }
 
             let order_id = DatabaseOperation::gen_id().into_future(ctx.clone()).await;
-            let local_resource = match selection.path {
-                LocalResourcePath::LocalPath(path) => {
-                    let resource = LocalStorageOperation::get(path).into_future(ctx.clone()).await;
-                    if resource.is_none() {
-                        panic!("Resource not found")
-                    }
+            let disk_path = LocalStorageOperation::get_absolute_path(selection.path.clone()).into_future(ctx.clone()).await;
 
-                    resource.unwrap()
-                }
-                LocalResourcePath::PlatformIdentifier(identifier) => {
-                    let file_size = LocalStorageOperation::load_file_size_from_platform_identifier(identifier.clone())
-                        .into_future(ctx.clone())
-                        .await;
-
-                    let file_name = LocalStorageOperation::load_file_name_from_platform_identifier(identifier.clone())
-                        .into_future(ctx.clone())
-                        .await;
-
-                    let mut thumbnail_path = None;
-                    if let Some(thumbnail_png) =
-                        LocalStorageOperation::load_file_thumbnail_png_from_platform_identifier(identifier.clone())
-                            .into_future(ctx.clone())
-                            .await
-                    {
-                        let path = format!("thumbnails/{order_id}.png");
-                        let absolute_path = format!("{workdir}/{path}");
-                        let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path).into_future(ctx.clone()).await;
-
-                        thumbnail_path = Some(LocalResourcePath::LocalPath(path));
-                    }
-
-                    LocalResource {
-                        order_id,
-                        name: file_name,
-                        size: file_size,
-                        path: LocalResourcePath::PlatformIdentifier(identifier),
-                        thumbnail_path,
-                        r#type: selection.r#type,
-                        is_valid: true
-                    }
-                }
+            let Some(mut local_resource) = LocalStorageOperation::get(disk_path).into_future(ctx.clone()).await else {
+                log::error!(target: "transfer", "Failed to get resource: {:?}", selection.path);
+                continue;
             };
+
+            // Keep the original path from the platform
+            local_resource.path = selection.path.clone();
+
+            if let Some(thumbnail_png) = LocalStorageOperation::load_file_thumbnail_png(selection.path.clone())
+                .into_future(ctx.clone())
+                .await
+            {
+                let path = format!("thumbnails/{order_id}.png");
+                let absolute_path = format!("{workdir}/{path}");
+                let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path.clone()).into_future(ctx.clone()).await;
+
+                local_resource.thumbnail_path = Some(LocalResourcePath::RelativePath(path));
+            }
 
             let new_resources = LocalResourceDatabaseOperation::add(vec![local_resource]).into_future(ctx.clone()).await;
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
@@ -116,23 +93,6 @@ impl ResourceTransferSelectionService {
         }));
 
         ctx.request_from_shell(CoreOperation::Render).await;
-    }
-
-    pub async fn update_resource_thumbnail(&self, ctx: AppCommandContext, mut resource: LocalResource, thumbnail_png_binary: Vec<u8>) {
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
-        let path = format!("{}/thumbnails/{}.png", workdir, resource.order_id);
-        let file = LocalStorageOperation::new_file(thumbnail_png_binary, path.clone()).into_future(ctx.clone()).await;
-        resource.thumbnail_path = Some(LocalResourcePath::LocalPath(path));
-        let updated_resource = LocalResourceDatabaseOperation::update(resource).into_future(ctx.clone()).await;
-        if let Some(updated_resource) = updated_resource {
-            ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-                new: vec![],
-                removed: vec![],
-                updated: vec![updated_resource]
-            }));
-
-            ctx.request_from_shell(CoreOperation::Render).await;
-        }
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {

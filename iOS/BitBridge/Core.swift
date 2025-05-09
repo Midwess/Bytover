@@ -118,36 +118,27 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
         case .appCapabilities(.webView(.openUrl(let url))):
             openURL(URL(string: url)!)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.webView( WebViewOperationOutput.openUrl).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.webView(WebViewOperationOutput.openUrl).bincodeSerialize()))
+        case .appCapabilities(.localStorage(.loadFileThumbnailPng(let localStoragePath))):
+            switch localStoragePath {
+            case .platformIdentifier(let phAssetIdentifier):
+                let thumbnail = await self.getThumbnailData(for: phAssetIdentifier)
+                return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
+            default:
+                let errorMessage = "Loading thumbnail for non-platform identifier paths is unsupported"
+                return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(nil)).bincodeSerialize()))
+            }
         case .appCapabilities(.localStorage(.getWorkDirPath)):
             let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(documentDirectory.path)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.loadFileSizeFromPlatformIdentifier(let identifier))):
-            let fileSize = await self.getFileSize(item_identifier: identifier)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileSizeFromPlatformIdentifier(fileSize)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.isFileExists(.localPath(let localPath)))):
-            let fileManager = FileManager.default
-            let exists = fileManager.fileExists(atPath: localPath)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.isFileExists(exists)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.isFileExists(.platformIdentifier(let identifier)))):
-            let options = PHFetchOptions()
-            options.fetchLimit = 1
-            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
-            let exists = fetchResult.firstObject != nil
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.isFileExists(exists)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.loadFileNameFromPlatformIdentifier(let identifier))):
-            let fileName = await self.getFileName(item_identifier: identifier)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileNameFromPlatformIdentifier(fileName)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.loadFileThumbnailPngFromPlatformIdentifier(let identifier))):
-            let fileThumbnailData = await self.getThumbnailData(for: identifier)
-            let response = CoreOperationOutput.localStorage(LocalStorageOperationOutput.loadFileThumbnailPngFromPlatformIdentifier(fileThumbnailData?.bytes))
-            return handleResponse(request.id, try! Data(response.bincodeSerialize()))
         case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
             let absolutePath = switch path {
-            case .localPath(let absolute):
+            case .absolutePath(let absolute):
                 absolute
             case .platformIdentifier(let identifier):
                 await PHAsset.getCachedAsset(identifier: identifier)?.fileUrl?.path() ?? ""
+            case .relativePath(let relative):
+                getDocumentsDirectory().appendingPathComponent(relative).path()
             };
             
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
@@ -387,9 +378,8 @@ extension Data {
 }
 
 extension UIImage {
-    static func fromRelativePath(_ path: String) -> UIImage? {
-        let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return UIImage(contentsOfFile: documentDirectory.path.appending("/").appending(path))
+    static func fromAbsolutePath(_ path: String) -> UIImage? {
+        return UIImage(contentsOfFile: path)
     }
     
     static func fromURL(_ url: URL) -> UIImage? {
@@ -398,22 +388,25 @@ extension UIImage {
     }
 }
 
-extension LocalResourcePath {
-    func asString() -> String {
-        switch self {
-        case .localPath(let path): return path
-        case .platformIdentifier(let identifier): return identifier
-        }
-    }
-}
-
 extension Image {
-    static func fromRelativePath(_ path: LocalResourcePath) -> Image? {
-        if let uiImage = UIImage.fromRelativePath(path.asString()) {
+    static func fromPath(_ path: LocalResourcePath) async -> Image? {
+        switch path {
+        case .absolutePath(let path):
+            guard let uiImage = UIImage.fromAbsolutePath(path) else { return nil }
+            return Image(uiImage: uiImage)
+        case .relativePath(let path):
+            let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let fullPath = documentsDirectory.appendingPathComponent(path).path
+            guard let uiImage = UIImage.fromAbsolutePath(fullPath) else { return nil }
+            return Image(uiImage: uiImage)
+        case .platformIdentifier(let identifier):
+            guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
+                  let fileUrl = cachedAsset.fileUrl,
+                  let uiImage = UIImage.fromURL(fileUrl) else {
+                return nil
+            }
             return Image(uiImage: uiImage)
         }
-        
-        return nil
     }
 }
 

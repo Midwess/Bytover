@@ -13,6 +13,7 @@ struct ResourceImage: View {
     var resource: SelectedResourceViewModel
     @EnvironmentObject private var core: Core
     @State var isVisible = false
+    @State private var thumbnailImage: Image?
     
     func getDefaultThumbnail() -> some View {
         switch resource.type {
@@ -52,10 +53,16 @@ struct ResourceImage: View {
     func getThumbnail() -> some View {
         if isVisible {
             if let thumbnail_path = resource.thumbnail_path {
-                if let thumbnail_image = Image.fromRelativePath(thumbnail_path) {
-                    return AnyView(thumbnail_image.resizable()
+                if let image = thumbnailImage {
+                    return AnyView(image.resizable()
                         .scaledToFill()
-                        .frame(width: 48, height: 48).cornerRadius(14))
+                        .frame(width: 48, height: 48)
+                        .cornerRadius(14))
+                } else {
+                    // Load the image asynchronously
+                    Task {
+                        thumbnailImage = await Image.fromPath(thumbnail_path)
+                    }
                 }
             }
         }

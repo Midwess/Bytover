@@ -104,27 +104,26 @@ impl TransferService {
         cmd.notify_shell(CoreOperation::Render);
 
         for resource in transfer_session.resources.iter_mut() {
-            resource.path = match LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await {
-                Some(path) => LocalResourcePath::LocalPath(path),
-                None => {
-                    resource.is_valid = false;
-                    cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-                        new: vec![],
-                        removed: vec![],
-                        updated: vec![resource.clone()]
-                    }));
+            resource.is_valid = LocalStorageOperation::is_file_exists(resource.path.clone()).into_future(cmd.clone()).await;
+            if !resource.is_valid {
+                cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                    new: vec![],
+                    removed: vec![],
+                    updated: vec![resource.clone()]
+                }));
 
-                    cmd.notify_shell(CoreOperation::Render);
-                    continue;
-                }
-            };
+                cmd.notify_shell(CoreOperation::Render);
+                continue;
+            }
 
-            resource.thumbnail_path = match resource.thumbnail_path.clone() {
-                Some(path) => LocalStorageOperation::get_absolute_path(path)
-                    .into_future(cmd.clone())
-                    .await
-                    .map(LocalResourcePath::LocalPath),
-                _ => None
+            resource.path = LocalResourcePath::AbsolutePath(
+                LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await
+            );
+            resource.thumbnail_path = match &resource.thumbnail_path {
+                Some(path) => Some(LocalResourcePath::AbsolutePath(
+                    LocalStorageOperation::get_absolute_path(path.clone()).into_future(cmd.clone()).await
+                )),
+                None => None
             };
         }
 
@@ -169,7 +168,7 @@ impl TransferService {
 
                         break;
                     }
-                    TransferOperationOutput::ResourceThumbnailFullfillment { resource_order_id, path } => {
+                    TransferOperationOutput::ResourceThumbnailFullfillment { .. } => {
                         continue;
                     }
                     other => {
@@ -219,26 +218,17 @@ impl TransferService {
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
         let thumbnail_dir = format!("{workdir}/thumbnails");
         for resource_request in remote_session.resources {
-            let thumbnail_path = match resource_request.thumbnail_png {
-                Some(thumbnail_png) => {
-                    let thumbnail_path = format!("{}/thumbnails/{}.png", workdir, resource_request.order_id);
-                    Some(
-                        LocalStorageOperation::new_file(thumbnail_png, thumbnail_path.clone())
-                            .into_future(cmd.clone())
-                            .await
-                            .path
-                    )
-                }
-                None => None
-            };
-
             resources.push(LocalResource {
                 is_valid: true,
-                path: LocalResourcePath::LocalPath(format!(
-                    "{}/sessions/{}/{}/{}",
-                    workdir, remote_session.order_id, resource_request.order_id, resource_request.name
-                )),
-                thumbnail_path,
+                path: LocalResourcePath::AbsolutePath(
+                    LocalStorageOperation::get_absolute_path(LocalResourcePath::RelativePath(format!(
+                        "sessions/{}/{}/{}",
+                        remote_session.order_id, resource_request.order_id, resource_request.name
+                    )))
+                    .into_future(cmd.clone())
+                    .await
+                ),
+                thumbnail_path: None,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::Other)
                 ),
@@ -294,7 +284,7 @@ impl TransferService {
                             continue;
                         };
 
-                        resource.thumbnail_path = Some(LocalResourcePath::LocalPath(path));
+                        resource.thumbnail_path = Some(LocalResourcePath::from_absolute_to_relative(path, workdir.clone()));
                         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                             new: vec![],
                             removed: vec![],

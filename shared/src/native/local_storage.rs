@@ -16,7 +16,7 @@ impl NativeLocalStorage {
                     order_id: gen_id().await,
                     name: created_file.name,
                     size: metadata.size,
-                    path: LocalResourcePath::LocalPath(created_file.path.to_string_lossy().to_string()),
+                    path: LocalResourcePath::AbsolutePath(created_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
                     r#type: ResourceType::File,
                     is_valid: true
@@ -32,7 +32,7 @@ impl NativeLocalStorage {
                     order_id: gen_id().await,
                     name: new_file.name,
                     size: metadata.size,
-                    path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
+                    path: LocalResourcePath::AbsolutePath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
                     r#type: ResourceType::File,
                     is_valid: true
@@ -48,7 +48,7 @@ impl NativeLocalStorage {
                     order_id: gen_id().await,
                     name: new_file.name,
                     size: metadata.size,
-                    path: LocalResourcePath::LocalPath(new_file.path.to_string_lossy().to_string()),
+                    path: LocalResourcePath::AbsolutePath(new_file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
                     r#type: ResourceType::File,
                     is_valid: true
@@ -63,13 +63,17 @@ impl NativeLocalStorage {
                     order_id: gen_id().await,
                     name: file.name.clone(),
                     size: metadata.size,
-                    path: LocalResourcePath::LocalPath(file.path.to_string_lossy().to_string()),
+                    path: LocalResourcePath::AbsolutePath(file.path.to_string_lossy().to_string()),
                     thumbnail_path: None,
                     r#type: ResourceType::File,
                     is_valid: true
                 };
 
                 LocalStorageOperationOutput::Get(Some(resource))
+            }
+            LocalStorageOperation::IsFileExists { absolute_path } => {
+                let file = File::existing(absolute_path).await;
+                LocalStorageOperationOutput::IsFileExists(file.is_ok())
             }
             _ => {
                 panic!("Unsupported operation: {effect:?}")

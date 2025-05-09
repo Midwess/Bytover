@@ -30,7 +30,6 @@ use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
-use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -337,11 +336,10 @@ impl PeerCommunication {
             .resources
             .iter()
             .filter_map(|r| r.thumbnail_path.as_ref().map(|path| (r.order_id, path)))
-            .map(|(resource_id, path)| match path {
-                LocalResourcePath::LocalPath(path) => (resource_id, path.clone()),
-                LocalResourcePath::PlatformIdentifier(identifier) => (resource_id, identifier.clone())
-            })
+            .filter_map(|(resource_id, path)| path.disk_path().map(|path| (resource_id, path)))
             .collect::<Vec<_>>();
+
+        log::info!(target: "peer", "Sending thumbnails for session {:?}", all_thumbnails_and_resource_ids);
 
         let session = Arc::new(Mutex::new(session));
         let weak_session = Arc::downgrade(&session);
@@ -364,6 +362,8 @@ impl PeerCommunication {
                     if let Err(e) = self.send_resource_thumbnail(resource_id, path.as_str()).await {
                         log::error!(target: "peer", "Failed to send resource thumbnail {:?}", e);
                     }
+
+                    log::info!(target: "peer", "Sent resource thumbnail {:?}", resource_id);
                 }
             });
 
@@ -535,8 +535,10 @@ impl PeerCommunication {
                                 resource_order_id: thumbnail.resource_id as u64,
                                 path: saved_path
                             });
-                            let _ =
-                                self.shell_runtime.msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)));
+                            let _ = self
+                                .shell_runtime
+                                .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                                .await;
                         }
                     }
                 }
@@ -646,6 +648,7 @@ impl PeerCommunication {
             .read()
             .await
             .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to read file: {e:?}")))?;
+        log::info!(target: "peer", "Sent resource thumbnail {:?} size {}", resource_id, buffer.len());
         let msg = ResourceThumbnailMessage {
             resource_id: resource_id as i64,
             data: Some(resource_thumbnail_message::Data::Png(buffer))
@@ -659,6 +662,8 @@ impl PeerCommunication {
                 thumbnail_recv_timeout
             )
             .await??;
+
+        log::info!(target: "peer", "Sent resource thumbnail {:?}", resource_id);
 
         Ok(())
     }
