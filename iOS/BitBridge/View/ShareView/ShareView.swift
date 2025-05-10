@@ -24,7 +24,7 @@ public struct ShareView: View {
             StunningBackgroundGradient()
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    LogoScene(gltfFileName: "Rocket", logoScale: 1.4)
+                    LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
                             .opacity(0.5)

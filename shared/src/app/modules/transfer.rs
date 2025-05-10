@@ -7,6 +7,7 @@ use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::peer::PeerViewModel;
+use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
@@ -29,7 +30,8 @@ pub struct TransferViewModel {
     selected_resources: Vec<SelectedResourceViewModel>,
     is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
-    nearby_peers: Vec<PeerViewModel>
+    nearby_peers: Vec<PeerViewModel>,
+    received_sessions: Vec<ReceiveSessionViewModel>
 }
 
 #[derive(Default)]
@@ -229,6 +231,48 @@ impl AppModule<BitBridge> for TransferModule {
             is_loading_selected_resources: model.transfer.is_loading_selected_resources,
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
             transfer_method_selection: model.transfer.transfer_method_selection.clone(),
+            received_sessions: model.transfer.transfer_sessions
+                .iter()
+                .filter(|it| it.transfer_type == TransferType::Receive)
+                .filter_map(|it| {
+                    let Some(peer) = model.transfer.transfer_targets
+                        .iter()
+                        .filter_map(|target| match target {
+                            TransferTarget::Nearby(peer) => Some(peer),
+                            _ => None
+                        })
+                        .find(|peer| peer.id() == it.peer_id().unwrap_or_default())
+                        .cloned()
+                    else {
+                        return None;
+                    };
+
+                    let resources = it.resources.iter().filter_map(|resource| {
+                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                            return None;
+                        };
+
+                        Some(ReceiveResourceViewModel {
+                            id: resource.order_id,
+                            name: resource.name.clone(),
+                            display_size: format!("{:.2} GB", resource.size as f64 / 1024.0 / 1024.0 / 1024.0),
+                            thumbnail: resource.thumbnail_path.clone(),
+                            is_completed: progress.status.is_completed(),
+                        })
+                    }).collect();
+
+                    Some(ReceiveSessionViewModel {
+                        id: it.order_id,
+                        peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
+                        peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
+                        peer_description: "Nearby".to_owned(),
+                        is_completed: it.is_completed(),
+                        is_in_progress: !it.is_completed(),
+                        display_download_speed: format!("{:.2} MB/s", it.speed(1000)),
+                        progress: it.total_progress(),
+                        resources,
+                    })
+                }).collect(),
             nearby_peers: model
                 .transfer
                 .transfer_targets

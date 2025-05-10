@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use futures_util::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, OnceCell};
 use tokio::task::yield_now;
@@ -91,11 +91,28 @@ impl ThroughputController {
 
     async fn send_by_channel(&self, channel: Weak<RTCDataChannel>, bytes: &Bytes) -> Result<usize, DataChannelError> {
         if let Some(channel) = channel.upgrade() {
-            let sent_bytes = timeout(self.send_timeout, channel.send(bytes))
-                .await
-                .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
-            self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
-            Ok(sent_bytes)
+            const CHUNK_SIZE: usize = 63 * 1024;
+            let mut total_sent = 0;
+            
+            if bytes.len() <= CHUNK_SIZE {
+                let sent_bytes = timeout(self.send_timeout, channel.send(bytes))
+                    .await
+                    .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
+                self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
+                total_sent = sent_bytes;
+            } else {
+                let chunks = bytes.chunks(CHUNK_SIZE);
+                let mut remaining_chunks = chunks.collect::<Vec<_>>();
+                while let Some(chunk) = remaining_chunks.pop() {
+                    let sent_bytes = timeout(self.send_timeout, channel.send(&Bytes::from(chunk.to_vec())))
+                        .await
+                        .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
+                    self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
+                    total_sent += sent_bytes;
+                }
+            }
+            
+            Ok(total_sent)
         } else {
             Err(DataChannelError::DataChannelClosed("Channel already deallocated".to_string()))
         }

@@ -248,7 +248,7 @@ impl DataChannel {
 
         let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
         let file_size = resource.size;
-        let mut cursor = file.cursor(0, 63 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut cursor = file.cursor(0, 512 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
 
         drop(session_guard);
 

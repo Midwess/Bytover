@@ -12,7 +12,7 @@ import GLTFSceneKit
 
 struct LogoScene: UIViewRepresentable {
     public let gltfFileName: String
-    public var logoScale: Float = 1.1
+    public var logoScale: Float = 1.4
     public var rotation: SCNVector4?
 
     class Coordinator: NSObject {

@@ -360,7 +360,12 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        x.transfer = .init(TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: []));
+        let avatarViewModel = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
+        let receive_session = ReceiveSessionViewModel(id: 1, peer_avatar: avatarViewModel, peer_name: "Tien Dang", peer_description: "nearby", resources: [
+            ReceiveResourceViewModel(id: 1, name: "ScreenShot.png", display_size: "2.0MB", thumbnail: .none, is_completed: false)
+        ], is_completed: false, is_in_progress: true, display_download_speed: "2.0 MB/s", progress: 0.8)
+        
+        x.transfer = .init(TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: [], received_sessions: [receive_session]));
         x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image, is_valid: false));
         x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder, is_valid: true));
         return x
