@@ -230,7 +230,7 @@ impl TransferService {
                 ),
                 thumbnail_path: None,
                 r#type: ResourceType::from(
-                    ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::Other)
+                    ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
                 ),
                 name: resource_request.name,
                 size: resource_request.size as u64,

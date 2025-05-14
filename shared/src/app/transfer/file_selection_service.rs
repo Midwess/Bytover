@@ -65,6 +65,9 @@ impl ResourceTransferSelectionService {
             // Keep the original path from the platform
             local_resource.path = selection.path.clone();
 
+            // TODO
+            local_resource.r#type = selection.r#type.clone();
+
             if let Some(thumbnail_png) = LocalStorageOperation::load_file_thumbnail_png(selection.path.clone())
                 .into_future(ctx.clone())
                 .await

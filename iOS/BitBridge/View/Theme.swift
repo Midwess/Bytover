@@ -21,6 +21,7 @@ enum Theme: String {
     case GreenSecondary
     case BluePrimary
     case PrimaryText
+    case SecondaryText
     case SeaTertiary
     case BlueViolet
     case Orange
@@ -32,7 +33,7 @@ enum Theme: String {
     case BlueSky
     case FileColor
     case DocumentColor
-    case FolderColor
+    case PrimaryBackground
     case Gray
     
     static var gradientHeading: LinearGradient {
@@ -222,12 +223,18 @@ struct FontTheme {
 
 enum SpaceTheme {
     case screen
+    case item
+    case cohesive
     
     var value: CGFloat {
         get {
             switch self {
-                case .screen:
-                    return 20
+            case .screen:
+                return 25
+            case .item:
+                return 15
+            case .cohesive:
+                return 8
             }
         }
     }

@@ -33,7 +33,6 @@ public struct ShareView: View {
                         )
                     
                     Text("Your dashboard")
-                        .padding(.horizontal, 20)
                         .multilineTextAlignment(.center)
                         .modifier(Heading2())
                     
@@ -50,7 +49,8 @@ public struct ShareView: View {
                     
                     ForEach(selectedResources, id: \.self.order_id) { item in
                         SelectedResourceItem(resource: item)
-                            .padding(.horizontal, 15)
+                            .padding(.top, SpaceTheme.item.value)
+                            .padding(.horizontal, SpaceTheme.screen.value)
                             .id(item.order_id)
                     }
                     

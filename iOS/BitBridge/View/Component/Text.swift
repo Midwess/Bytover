@@ -49,7 +49,7 @@ struct H1Heading: ViewModifier {
 struct Label1: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(FontTheme.Label1)
+            .font(FontTheme.Body2)
             .fontWeight(.bold)
     }
 }
@@ -58,6 +58,14 @@ struct Label2: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(FontTheme.Label2)
+    }
+}
+
+struct Caption: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(FontTheme.Label1)
+            .fontWeight(.bold)
     }
 }
 

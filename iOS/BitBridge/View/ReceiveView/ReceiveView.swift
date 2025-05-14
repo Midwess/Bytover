@@ -20,8 +20,9 @@ struct ReceiveView: View {
     var body: some View {
         ZStack {
             StunningBackgroundGradient()
+                .opacity(0.4)
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(pinnedViews: [.sectionHeaders]) {
                     LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
@@ -46,27 +47,33 @@ struct ReceiveView: View {
                                 .scaleEffect(1.6)
                                 .confirmationDialog(
                                     "Options", isPresented: $isShowingOptionAll) {
-                                        Button("Remove") {
-                                            Task {
-                                                
-                                            }
-                                        }
-                                        Button("Open") {
-                                        }
+                                        Button("Select") {}
                                     }
                         }
                         .frame(minWidth: 35, alignment: .trailing)
                     }
-                    .padding(.all, 5)
+                    .padding(.horizontal, SpaceTheme.item.value)
                     
-                    VStack {
-                        ForEach(self.receiveSessions, id: \.self.id) { item in
-                            ReceiveSessionView(session: item)
-                        }
+                    ForEach(self.receiveSessions, id: \.self.id) { item in
+                        ReceiveSessionHeaderView(session: item)
+                            .background(Rectangle()
+                                .fill(Theme.BlackBase.color)
+                                .blur(radius: 10)
+                            )
+                            .zIndex(2)
+                        
+                        ReceiveSessionBodyView(session: item)
+                            .zIndex(1)
+                        
+                        Spacer()
+                            .frame(width: 10, height: 20)
                     }
+                    .padding(.horizontal, SpaceTheme.screen.value)
+                    .padding(.top, SpaceTheme.item.value)
                 }
             }
         }
+        .background(Theme.BlackBase.color)
         .onReceive(self.core.transfer, perform: { value in
             let receivedSessions = value?.received_sessions ?? [];
             

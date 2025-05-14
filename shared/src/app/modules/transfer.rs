@@ -1,4 +1,4 @@
-use crate::app::file_system::file::LocalResource;
+use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
@@ -7,7 +7,7 @@ use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
+use crate::app::view_models::receive_session::{FileReceiveResourceViewModel, ImageReceiveResourceViewModel, ReceiveSessionViewModel, VideoReceiveResourceViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
@@ -247,16 +247,47 @@ impl AppModule<BitBridge> for TransferModule {
                         return None;
                     };
 
-                    let resources = it.resources.iter().filter_map(|resource| {
+                    let image_resources = it.resources.iter().filter_map(|resource| {
+                        if resource.r#type != ResourceType::Image {
+                            return None;
+                        }
+
                         let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
                             return None;
                         };
 
-                        Some(ReceiveResourceViewModel {
-                            id: resource.order_id,
-                            name: resource.name.clone(),
-                            display_size: format!("{:.2} GB", resource.size as f64 / 1024.0 / 1024.0 / 1024.0),
-                            thumbnail: resource.thumbnail_path.clone(),
+                        Some(ImageReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            is_completed: progress.status.is_completed(),
+                        })
+                    }).collect();
+
+                    let video_resources = it.resources.iter().filter_map(|resource| {
+                        if resource.r#type != ResourceType::Video {
+                            return None;
+                        }
+
+                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                            return None;
+                        };
+
+                        Some(VideoReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            is_completed: progress.status.is_completed(),
+                        })
+                    }).collect();
+
+                    let file_resources = it.resources.iter().filter_map(|resource| {
+                        if resource.r#type != ResourceType::File {
+                            return None;
+                        }
+
+                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                            return None;
+                        };
+
+                        Some(FileReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
                             is_completed: progress.status.is_completed(),
                         })
                     }).collect();
@@ -270,7 +301,9 @@ impl AppModule<BitBridge> for TransferModule {
                         is_in_progress: !it.is_completed(),
                         display_download_speed: format!("{:.2} MB/s", it.speed(1000)),
                         progress: it.total_progress(),
-                        resources,
+                        image_resources,
+                        video_resources,
+                        file_resources,
                     })
                 }).collect(),
             nearby_peers: model

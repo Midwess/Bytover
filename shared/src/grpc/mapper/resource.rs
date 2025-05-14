@@ -7,8 +7,6 @@ impl LocalResource {
             ResourceType::Image => ResourceTypeMessage::Image,
             ResourceType::Video => ResourceTypeMessage::Video,
             ResourceType::File => ResourceTypeMessage::File,
-            ResourceType::Folder => ResourceTypeMessage::Folder,
-            ResourceType::Other => ResourceTypeMessage::Other
         };
 
         ResourceMessage {
@@ -27,8 +25,6 @@ impl From<ResourceTypeMessage> for ResourceType {
             ResourceTypeMessage::Image => ResourceType::Image,
             ResourceTypeMessage::Video => ResourceType::Video,
             ResourceTypeMessage::File => ResourceType::File,
-            ResourceTypeMessage::Folder => ResourceType::Folder,
-            ResourceTypeMessage::Other => ResourceType::Other
         }
     }
 }

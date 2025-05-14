@@ -11,41 +11,32 @@ import SharedTypes
 
 struct ResourceImage: View {
     var resource: SelectedResourceViewModel
+    var width: CGFloat = 48
+    var height: CGFloat = 48
+    var radius: CGFloat? = nil
     @EnvironmentObject private var core: Core
     @State var isVisible = false
     @State private var thumbnailImage: Image?
     
-    func getDefaultThumbnail() -> some View {
-        switch resource.type {
+    static func getDefaultThumbnail(_ type: ResourceType) -> some View {
+        switch type {
         case .file:
             return AnyView(
                 ImageAsset.File.image
                     .resizable()
-                    .frame(width: 32, height: 32)
-            )
-        case .folder:
-            return AnyView(
-                ImageAsset.Folder.image
-                    .resizable()
-                    .frame(width: 32, height: 32)
+                    .scaledToFit()
             )
         case .image:
             return AnyView(
                 ImageAsset.FileImage.image
                     .resizable()
-                    .frame(width: 32, height: 32)
+                    .scaledToFit()
             )
         case .video:
             return AnyView(
                 ImageAsset.CameraVideo.image
                     .resizable()
-                    .frame(width: 32, height: 32)
-            )
-        case .other:
-            return AnyView(
-                ImageAsset.File.image
-                    .resizable()
-                    .frame(width: 32, height: 32)
+                    .scaledToFit()
             )
         }
     }
@@ -55,9 +46,8 @@ struct ResourceImage: View {
             if let thumbnail_path = resource.thumbnail_path {
                 if let image = thumbnailImage {
                     return AnyView(image.resizable()
-                        .scaledToFill()
-                        .frame(width: 48, height: 48)
-                        .cornerRadius(14))
+                        .frame(width: width, height: height)
+                        .cornerRadius(radius ?? ((width + height) / 2) * 0.3))
                 } else {
                     // Load the image asynchronously
                     Task {
@@ -69,21 +59,20 @@ struct ResourceImage: View {
         
         return AnyView(ZStack {
             Rectangle()
-                .frame(width: 48, height: 48)
-                .cornerRadius(14)
+                .frame(width: width, height: height)
+                .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
                 .foregroundStyle(getColor())
-            getDefaultThumbnail()
-                .frame(width: 32, height: 32)
+            ResourceImage.getDefaultThumbnail(resource.type)
+                .padding(((width + height) / 2) * 0.1)
+                .frame(width: width, height: height)
         })
     }
     
     func getColor() -> Color {
         switch resource.type {
         case .file: return Theme.FileColor.color
-        case .folder: return Theme.FolderColor.color
         case .image: return Theme.DocumentColor.color
         case .video: return Theme.DocumentColor.color
-        case .other: return Theme.DocumentColor.color
         }
     }
     
@@ -154,8 +143,6 @@ struct SelectedResourceItem: View {
             .frame(minWidth: 35, alignment: .trailing)
         }
         .opacity(resource.is_valid ? 1 : 0.5)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
         .background(.gray.opacity(0.0))
         .clipShape(RoundedRectangle(cornerRadius: 15))
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.0), lineWidth: 1))

@@ -360,17 +360,208 @@ class CoreMock: Core {
     
     static func withSelectedFileTransfers() -> Core {
         let x = CoreMock() as Core;
-        let avatarViewModel = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
-        let receive_session = ReceiveSessionViewModel(id: 1, peer_avatar: avatarViewModel, peer_name: "Tien Dang", peer_description: "nearby", resources: [
-            ReceiveResourceViewModel(id: 1, name: "ScreenShot.png", display_size: "2.0MB", thumbnail: .none, is_completed: false)
-        ], is_completed: false, is_in_progress: true, display_download_speed: "2.0 MB/s", progress: 0.8)
         
-        x.transfer = .init(TransferViewModel(selected_resources: [], is_loading_selected_resources: false, transfer_method_selection: .device, nearby_peers: [], received_sessions: [receive_session]));
+        // Create avatar view models for different peers
+        let bearAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
+        let foxAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Fox.png?r=221&g=155&b=104", dominant_color_r: 221, dominant_color_g: 155, dominant_color_b: 104)
+        let wolfAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Wolf.png?r=128&g=128&b=128", dominant_color_r: 128, dominant_color_g: 128, dominant_color_b: 128)
+        let lionAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Lion.png?r=193&g=154&b=107", dominant_color_r: 193, dominant_color_g: 154, dominant_color_b: 107)
+        let tigerAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Tiger.png?r=212&g=142&b=85", dominant_color_r: 212, dominant_color_g: 142, dominant_color_b: 85)
+        let pandaAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Panda.png?r=40&g=40&b=40", dominant_color_r: 40, dominant_color_g: 40, dominant_color_b: 40)
+        
+        // Create resource view models
+        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", thumbnail_path: nil, type: .image, is_valid: true)
+        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", thumbnail_path: nil, type: .image, is_valid: true)
+        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Presentation.pptx", size_gb: 0, size_mb: 12.7, display_path: "/Documents/Presentation.pptx", thumbnail_path: LocalResourcePath.absolutePath(""), type: .file, is_valid: true)
+        let resource4 = SelectedResourceViewModel(order_id: 4, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", thumbnail_path: nil, type: .video, is_valid: true)
+        let resource5 = SelectedResourceViewModel(order_id: 5, name: "Archive.zip", size_gb: 0, size_mb: 45, display_path: "/Downloads/Archive.zip", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource6 = SelectedResourceViewModel(order_id: 6, name: "Image1.jpg", size_gb: 0, size_mb: 3.2, display_path: "/Photos/Image1.jpg", thumbnail_path: nil, type: .image, is_valid: true)
+        let resource7 = SelectedResourceViewModel(order_id: 7, name: "Image2.jpg", size_gb: 0, size_mb: 2.8, display_path: "/Photos/Image2.jpg", thumbnail_path: nil, type: .image, is_valid: true)
+        let resource8 = SelectedResourceViewModel(order_id: 8, name: "Image3.jpg", size_gb: 0, size_mb: 4.1, display_path: "/Photos/Image3.jpg", thumbnail_path: nil, type: .image, is_valid: true)
+        let resource9 = SelectedResourceViewModel(order_id: 9, name: "Project.zip", size_gb: 0, size_mb: 78, display_path: "/Projects/Project.zip", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource10 = SelectedResourceViewModel(order_id: 10, name: "Music.mp3", size_gb: 0, size_mb: 8.5, display_path: "/Music/Music.mp3", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource11 = SelectedResourceViewModel(order_id: 11, name: "Report.docx", size_gb: 0, size_mb: 1.2, display_path: "/Documents/Report.docx", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource12 = SelectedResourceViewModel(order_id: 12, name: "Spreadsheet.xlsx", size_gb: 0, size_mb: 3.7, display_path: "/Documents/Spreadsheet.xlsx", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource13 = SelectedResourceViewModel(order_id: 13, name: "Backup.tar", size_gb: 0.32, size_mb: 320, display_path: "/Backups/Backup.tar", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource14 = SelectedResourceViewModel(order_id: 14, name: "Notes.txt", size_gb: 0, size_mb: 0.045, display_path: "/Documents/Notes.txt", thumbnail_path: nil, type: .video, is_valid: true)
+        let resource15 = SelectedResourceViewModel(order_id: 15, name: "Config.json", size_gb: 0, size_mb: 0.012, display_path: "/Settings/Config.json", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource16 = SelectedResourceViewModel(order_id: 16, name: "Script.sh", size_gb: 0, size_mb: 0.008, display_path: "/Scripts/Script.sh", thumbnail_path: nil, type: .file, is_valid: true)
+        let resource17 = SelectedResourceViewModel(order_id: 17, name: "Photo_album.zip", size_gb: 0.156, size_mb: 156, display_path: "/Photos/Photo_album.zip", thumbnail_path: nil, type: .file, is_valid: true)
+        
+        // Create 11 receive sessions with different properties
+        let receive_session1 = ReceiveSessionViewModel(
+            id: 1, 
+            peer_avatar: bearAvatar, 
+            peer_name: "Tien Dang", 
+            peer_description: "nearby", 
+            image_resources: [
+                ImageReceiveResourceViewModel(model: resource1, is_completed: false)
+            ], 
+            video_resources: [], 
+            file_resources: [],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "2.0 MB/s", 
+            progress: 0.8
+        )
+        
+        let receive_session2 = ReceiveSessionViewModel(
+            id: 2, 
+            peer_avatar: foxAvatar, 
+            peer_name: "Alex Smith", 
+            peer_description: "nearby", 
+            image_resources: [
+                ImageReceiveResourceViewModel(model: resource2, is_completed: true)
+            ], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource3, is_completed: false)
+            ],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "1.5 MB/s", 
+            progress: 0.45
+        )
+        
+        let receive_session5 = ReceiveSessionViewModel(
+            id: 5, 
+            peer_avatar: tigerAvatar, 
+            peer_name: "Sarah Johnson", 
+            peer_description: "nearby", 
+            image_resources: [
+                ImageReceiveResourceViewModel(model: resource6, is_completed: true),
+                ImageReceiveResourceViewModel(model: resource6, is_completed: true),
+                ImageReceiveResourceViewModel(model: resource6, is_completed: true),
+                ImageReceiveResourceViewModel(model: resource7, is_completed: true),
+                ImageReceiveResourceViewModel(model: resource8, is_completed: true),
+                ImageReceiveResourceViewModel(model: resource8, is_completed: true),
+            ],
+            video_resources: [], 
+            file_resources: [],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "950 KB/s", 
+            progress: 0.67
+        )
+        
+        let receive_session6 = ReceiveSessionViewModel(
+            id: 6, 
+            peer_avatar: pandaAvatar, 
+            peer_name: "David Wilson", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource9, is_completed: false)
+            ],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "2.8 MB/s", 
+            progress: 0.35
+        )
+        
+        let receive_session7 = ReceiveSessionViewModel(
+            id: 7, 
+            peer_avatar: bearAvatar, 
+            peer_name: "Emily Brown", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource10, is_completed: true)
+            ],
+            is_completed: true, 
+            is_in_progress: false, 
+            display_download_speed: "0 KB/s", 
+            progress: 1.0
+        )
+        
+        let receive_session8 = ReceiveSessionViewModel(
+            id: 8, 
+            peer_avatar: foxAvatar, 
+            peer_name: "Michael Taylor", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource11, is_completed: false),
+                FileReceiveResourceViewModel(model: resource12, is_completed: false)
+            ],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "1.1 MB/s", 
+            progress: 0.22
+        )
+        
+        let receive_session9 = ReceiveSessionViewModel(
+            id: 9, 
+            peer_avatar: wolfAvatar, 
+            peer_name: "Jessica Martinez", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource13, is_completed: false)
+            ],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "4.5 MB/s", 
+            progress: 0.05
+        )
+        
+        let receive_session10 = ReceiveSessionViewModel(
+            id: 10, 
+            peer_avatar: lionAvatar, 
+            peer_name: "Daniel Anderson", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [
+                VideoReceiveResourceViewModel(model: resource14, is_completed: true)
+            ], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource15, is_completed: true),
+                FileReceiveResourceViewModel(model: resource16, is_completed: true)
+            ],
+            is_completed: true, 
+            is_in_progress: false, 
+            display_download_speed: "0 KB/s", 
+            progress: 1.0
+        )
+        
+        let receive_session11 = ReceiveSessionViewModel(
+            id: 11, 
+            peer_avatar: tigerAvatar, 
+            peer_name: "Olivia Wilson", 
+            peer_description: "nearby", 
+            image_resources: [], 
+            video_resources: [], 
+            file_resources: [
+                FileReceiveResourceViewModel(model: resource17, is_completed: false)
+            ],
+            is_completed: false, 
+            is_in_progress: true, 
+            display_download_speed: "3.7 MB/s", 
+            progress: 0.58
+        )
+        
+        // Initialize the transfer view model with all receive sessions
+        x.transfer = .init(TransferViewModel(
+            selected_resources: [], 
+            is_loading_selected_resources: false, 
+            transfer_method_selection: .device, 
+            nearby_peers: [], 
+            received_sessions: [
+                receive_session1, receive_session2, receive_session5,
+                receive_session6, receive_session7, receive_session8, receive_session9, receive_session10, receive_session11
+            ]
+        ));
+        
+        // Add selected resources
         x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image, is_valid: false));
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .folder, is_valid: true));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .file, is_valid: true));
+        
         return x
     }
-    
     override func update(_ event: AppEvent) async {}
     
     override func update_view(_ model: AppViewModel) {}

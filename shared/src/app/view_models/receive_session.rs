@@ -1,18 +1,26 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
-use crate::app::file_system::file::LocalResourcePath;
+use super::{avatar::AvatarViewModel, selected_resource::SelectedResourceViewModel};
 
-use super::avatar::AvatarViewModel;
-
-#[derive(Clone, Record, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ReceiveResourceViewModel {
-    pub id: u64,
-    pub name: String,
-    pub display_size: String,
-    pub thumbnail: Option<LocalResourcePath>,
+#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ImageReceiveResourceViewModel {
+    pub model: SelectedResourceViewModel,
     pub is_completed: bool
 }
+
+#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VideoReceiveResourceViewModel {
+    pub model: SelectedResourceViewModel,
+    pub is_completed: bool
+}
+
+#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FileReceiveResourceViewModel {
+    pub model: SelectedResourceViewModel,
+    pub is_completed: bool
+}
+
 
 #[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveSessionViewModel {
@@ -20,7 +28,9 @@ pub struct ReceiveSessionViewModel {
     pub peer_avatar: AvatarViewModel,
     pub peer_name: String,
     pub peer_description: String,
-    pub resources: Vec<ReceiveResourceViewModel>,
+    pub image_resources: Vec<ImageReceiveResourceViewModel>,
+    pub video_resources: Vec<VideoReceiveResourceViewModel>,
+    pub file_resources: Vec<FileReceiveResourceViewModel>,
     pub is_completed: bool,
     pub is_in_progress: bool,
     pub display_download_speed: String,
