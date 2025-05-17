@@ -64,7 +64,7 @@ impl ThroughputController {
                 let sent_rx = sent_rx.clone();
                 scope.spawn(async move {
                     while let Some(request) = sent_rx.lock().await.recv().await {
-                        let result = self.send_by_channel(request.channel, &request.bytes).await;
+                        let result = self.send_by_channel(request.channel, request.bytes).await;
                         if let Err(err) = request.tx.send(result) {
                             log::warn!(target: "throughput-controller", "Failed to send result to the channel: {:?}", err);
                         }
@@ -89,27 +89,22 @@ impl ThroughputController {
         let _ = self.received_broadcast.send(());
     }
 
-    async fn send_by_channel(&self, channel: Weak<RTCDataChannel>, bytes: &Bytes) -> Result<usize, DataChannelError> {
+    async fn send_by_channel(&self, channel: Weak<RTCDataChannel>, bytes: Bytes) -> Result<usize, DataChannelError> {
         if let Some(channel) = channel.upgrade() {
             const CHUNK_SIZE: usize = 63 * 1024;
             let mut total_sent = 0;
+            let mut remaining_bytes = bytes;
             
-            if bytes.len() <= CHUNK_SIZE {
-                let sent_bytes = timeout(self.send_timeout, channel.send(bytes))
+            while !remaining_bytes.is_empty() {
+                let chunk_size = remaining_bytes.len().min(CHUNK_SIZE);
+                let chunk = remaining_bytes.split_to(chunk_size);
+                
+                let sent_bytes = timeout(self.send_timeout, channel.send(&chunk))
                     .await
                     .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
+                
                 self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
-                total_sent = sent_bytes;
-            } else {
-                let chunks = bytes.chunks(CHUNK_SIZE);
-                let mut remaining_chunks = chunks.collect::<Vec<_>>();
-                while let Some(chunk) = remaining_chunks.pop() {
-                    let sent_bytes = timeout(self.send_timeout, channel.send(&Bytes::from(chunk.to_vec())))
-                        .await
-                        .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
-                    self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
-                    total_sent += sent_bytes;
-                }
+                total_sent += sent_bytes;
             }
             
             Ok(total_sent)
