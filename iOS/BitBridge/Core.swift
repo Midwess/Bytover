@@ -121,8 +121,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.webView(WebViewOperationOutput.openUrl).bincodeSerialize()))
         case .appCapabilities(.localStorage(.loadFileThumbnailPng(let localStoragePath))):
             switch localStoragePath {
-            case .platformIdentifier(let phAssetIdentifier):
-                let thumbnail = await self.getThumbnailData(for: phAssetIdentifier)
+            case .platformIdentifier(let identifier):
+                let thumbnail = await self.getThumbnailData(for: identifier)
                 return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
             default:
                 let errorMessage = "Loading thumbnail for non-platform identifier paths is unsupported"
@@ -136,7 +136,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             case .absolutePath(let absolute):
                 absolute
             case .platformIdentifier(let identifier):
-                await PHAsset.getCachedAsset(identifier: identifier)?.fileUrl?.path() ?? ""
+                await getAbsoluteUrl(from: identifier) ?? ""
             case .relativePath(let relative):
                 getDocumentsDirectory().appendingPathComponent(relative).path()
             };
@@ -201,6 +201,58 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             await self._handleResponse(id, response)
         }
     }
+
+    func getAbsoluteUrl(from platformIdentifier: String) async -> String? {
+        let type = platformIdentifier.split(separator: "://").first?.description ?? ""
+        switch type {
+        case "bookmark":
+            let bookmarkString = String(platformIdentifier.dropFirst("bookmark://".count))
+            guard let bookmarkData = Data(base64Encoded: bookmarkString) else {
+                return nil
+            }
+            
+            var isStale = false
+            do {
+                let url = try URL(resolvingBookmarkData: bookmarkData, relativeTo: nil, bookmarkDataIsStale: &isStale)
+                if isStale {
+                    return nil
+                }
+                
+                return url.path()
+            } catch {
+                return nil
+            }
+        case "phasset":
+            let identifier = platformIdentifier.dropFirst("phasset://".count)
+            return await PHAsset.getCachedAsset(identifier: String(identifier))?.fileUrl?.path() ?? ""
+        default:
+            return nil
+        }
+    }
+    
+    func onFileSelected(urls: [URL]) async {
+        await self.update(.transfer(.beginLoadingResources))
+        for url in urls {
+            url.startAccessingSecurityScopedResource()
+            
+            guard let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil) else {
+                continue
+            }
+            
+            let bookmarkString = bookmarkData.base64EncodedString()
+            let bookmarkUrl = "bookmark://" + bookmarkString
+            
+            let resourceSelection = ResourceSelection(
+                path: .platformIdentifier(bookmarkUrl),
+                type: .file
+            )
+            
+            url.stopAccessingSecurityScopedResource()
+            await self.update(.transfer(.addResources([resourceSelection])))
+        }
+        
+        await self.update(.transfer(.endLoadingResources))
+    }
     
     func onMediasChanged() async {
         await self.update(.transfer(.beginLoadingResources))
@@ -225,7 +277,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             }()
             
             let resourceSelection = ResourceSelection(
-                path: .platformIdentifier(identifier),
+                path: .platformIdentifier("phasset://\(identifier)"),
                 type: resourceType
             )
             
@@ -251,6 +303,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
     
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 128, height: 128)) async -> Data? {
+        let itemIdentifier = itemIdentifier.split(separator: "://").last!.description;
         guard let asset_cached = await PHAsset.getCachedAsset(identifier: itemIdentifier) else {
             return nil
         }

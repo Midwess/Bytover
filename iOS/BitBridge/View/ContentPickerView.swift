@@ -13,6 +13,7 @@ import SharedTypes
 struct ContentPickerView: View {
     @State private var isShowingConfirmationDialog = false
     @State private var isShowingPhotosPicker = false
+    @State private var isShowingFilePicker = false
     @State private var selectedResources: [SelectedResourceViewModel] = []
     
     @EnvironmentObject private var core: Core
@@ -51,13 +52,26 @@ struct ContentPickerView: View {
                             self.isShowingPhotosPicker = true
                         }
                         Button("Files") {
-                            
+                            self.isShowingFilePicker = true
                         }
                         Button(action: {}) {
                             Text("Can not find what you're looking for? 🤷‍♂️")
                         }
                     }
             }
+            .fileImporter(isPresented: $isShowingFilePicker, allowedContentTypes: [.item, .folder, .directory, .compositeContent, .content],
+                allowsMultipleSelection: true,
+                onCompletion: {
+                result in
+                switch result {
+                case .success(let urls):
+                    Task {
+                        await core.onFileSelected(urls: urls)
+                    }
+                case .failure(let error):
+                    core.toastMessage.value = "Failed to select files"
+                }
+            })
             .photosPicker(isPresented: $isShowingPhotosPicker,
                           selection: $core.selectedMediaItems,
                           selectionBehavior: .ordered,
