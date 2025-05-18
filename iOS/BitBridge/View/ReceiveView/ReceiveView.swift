@@ -52,17 +52,20 @@ struct ReceiveView: View {
                     .padding(.horizontal, SpaceTheme.item.value)
                     
                     ForEach(self.receiveSessions, id: \.self.id) { item in
-                        ReceiveSessionHeaderView(session: item)
-                            .zIndex(2)
-                        
-                        ReceiveSessionBodyView(session: item)
-                            .zIndex(1)
+                        VStack(spacing: SpaceTheme.item.value) {
+                            ReceiveSessionHeaderView(session: item)
+                                .zIndex(2)
+                            
+                            ReceiveSessionBodyView(session: item)
+                                .zIndex(1)
+                        }
                     }
                     .padding(.horizontal, SpaceTheme.screen.value)
                     .padding(.top, SpaceTheme.item.value)
+                    Spacer().frame(height: 130)
                 }
             }
-            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
+            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))
             .padding(.bottom, SpaceTheme.screen.value)
             
         }
