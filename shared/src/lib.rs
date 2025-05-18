@@ -140,7 +140,7 @@ impl NativeProcessor {
     pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
-        let native_executor: NativeExecutor = di_container.get_native_executor(shell.clone());
+        let native_executor: NativeExecutor = di_container.get_native_executor();
 
         Self {
             shell: shell.clone(),

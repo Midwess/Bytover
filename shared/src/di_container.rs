@@ -135,7 +135,7 @@ impl DiContainer {
         }
     }
 
-    pub fn get_native_executor(&self, shell_runtime: Arc<dyn ShellRuntime>) -> NativeExecutor {
+    pub fn get_native_executor(&self) -> NativeExecutor {
         let web_rtc = Arc::new(WebRtc::new(self.workdir.get().unwrap().clone()));
         NativeExecutor {
             rpc: NativeRpc {},
