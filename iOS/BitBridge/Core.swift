@@ -588,17 +588,24 @@ extension Image {
     static func fromPath(_ path: LocalResourcePath) async -> Image? {
         switch path {
         case .absolutePath(let path):
-            guard let uiImage = UIImage.fromAbsolutePath(path) else { return nil }
+            guard let uiImage = UIImage.fromAbsolutePath(path) else {
+                print("There is no image at \(path)")
+                return nil
+            }
             return Image(uiImage: uiImage)
         case .relativePath(let path):
             let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             let fullPath = documentsDirectory.appendingPathComponent(path).path
-            guard let uiImage = UIImage.fromAbsolutePath(fullPath) else { return nil }
+            guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
+                print("There is no image at \(path)")
+                return nil
+            }
             return Image(uiImage: uiImage)
         case .platformIdentifier(let identifier):
             guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
                   let fileUrl = cachedAsset.fileUrl,
                   let uiImage = UIImage.fromURL(fileUrl) else {
+                print("There is no image at \(path)")
                 return nil
             }
             return Image(uiImage: uiImage)

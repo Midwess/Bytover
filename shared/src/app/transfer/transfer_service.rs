@@ -285,6 +285,7 @@ impl TransferService {
                         };
 
                         resource.thumbnail_path = Some(LocalResourcePath::from_absolute_to_relative(path, workdir.clone()));
+                        log::info!(target: "transfer", "Resource {:?} thumbnail path: {:?}", resource_order_id, resource.thumbnail_path);
                         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                             new: vec![],
                             removed: vec![],

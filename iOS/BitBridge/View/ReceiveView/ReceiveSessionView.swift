@@ -10,18 +10,32 @@ import SwiftUI
 import SharedTypes
 
 struct ImageReceiveResourceView: View {
+    var session_id: UInt64
     @State var localResource: ImageReceiveResourceViewModel
     @State var isShowingMoreDialog: Bool = false
     @Environment(\.screenSize) private var screenSize
+    @EnvironmentObject private var core: Core
+    
     
     var body: some View {
         HStack {
-            Image("sample3")
-                .resizable()
-                .frame(width: 90, height: 110)
-                .cornerRadius(20)
-                .scaledToFill()
+            ResourceImage(resource: localResource.model, width: 90, height: 110, radius: 20)
         }
+        .onReceive(core.transfer, perform: { value in
+            guard let session = value?.received_sessions.first(where: { item in item.id == session_id}) else {
+                return
+            }
+            
+            guard let resource = session.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                return;
+            }
+            
+            let thumbnailChanges = resource.model.thumbnail_path != self.localResource.model.thumbnail_path
+            
+            if thumbnailChanges {
+                self.localResource = resource
+            }
+        })
     }
 }
 
@@ -104,13 +118,13 @@ struct ReceiveSessionBodyView: View {
                     ScrollView(.horizontal) {
                         LazyHGrid(rows: flexibleColumn, spacing: 10) {
                             ForEach(self.session.image_resources, id: \.model.order_id) { item in
-                                ImageReceiveResourceView(localResource: item)
+                                ImageReceiveResourceView(session_id: self.session.id, localResource: item)
                             }
                         }
                     }
                 }
             }
-
+            
             if self.session.file_resources.count > 0 {
                 VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
                     Text("\(self.session.file_resources.count) File\(self.session.file_resources.count > 1 ? "s" : "")")
@@ -128,6 +142,19 @@ struct ReceiveSessionBodyView: View {
             
             Divider()
         }
+        .onReceive(self.core.transfer, perform: { value in
+            guard let receivedSession = value!.received_sessions.first(
+                where: {session in session.id == self.session.id}) else {
+                return
+            }
+            
+            let numberOfFilesChanges = receivedSession.file_resources.count != self.session.file_resources.count
+            let numberOfImagesChanges = receivedSession.image_resources.count != self.session.image_resources.count;
+            
+            if numberOfFilesChanges || numberOfImagesChanges {
+                self.session = receivedSession
+            }
+        })
     }
 }
 
@@ -167,6 +194,18 @@ struct ReceiveSessionHeaderView: View {
                 }
             }
         }
+        .onReceive(self.core.transfer, perform: { value in
+            guard let receivedSession = value!.received_sessions.first(
+                where: {session in session.id == self.session.id}) else {
+                return
+            }
+            
+            let progressChanges = receivedSession.progress != self.session.progress;
+            
+            if progressChanges {
+                self.session = receivedSession
+            }
+        })
     }
 }
 

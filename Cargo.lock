@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "affinitypool"
 version = "0.3.1"
-source = "git+https://github.com/surrealdb/affinitypool.git#b2e347018c2f78b160e390154129cd8c5f166d32"
+source = "git+https://github.com/dev-logs/affinitypool.git#b2e347018c2f78b160e390154129cd8c5f166d32"
 dependencies = [
  "async-channel",
  "num_cpus",
@@ -7480,13 +7480,12 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "2.5.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27c03817464f64e23f6f37574b4fdc8cf65925b5bfd2b0f2aedf959791941f88"
+checksum = "12598812502ed0105f607f941c386f43d441e00148fce9dec3ca5ffb0bde9308"
 dependencies = [
  "arbitrary",
  "crc32fast",
- "crossbeam-utils",
  "indexmap 2.7.1",
  "memchr",
 ]

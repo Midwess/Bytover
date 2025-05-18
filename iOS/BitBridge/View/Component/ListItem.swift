@@ -15,7 +15,6 @@ struct ResourceImage: View {
     var height: CGFloat = 48
     var radius: CGFloat? = nil
     @EnvironmentObject private var core: Core
-    @State var isVisible = false
     @State private var thumbnailImage: Image?
     
     static func getDefaultThumbnail(_ type: ResourceType) -> some View {
@@ -42,17 +41,16 @@ struct ResourceImage: View {
     }
     
     func getThumbnail() -> some View {
-        if isVisible {
-            if let thumbnail_path = resource.thumbnail_path {
-                if let image = thumbnailImage {
-                    return AnyView(image.resizable()
-                        .frame(width: width, height: height)
-                        .cornerRadius(radius ?? ((width + height) / 2) * 0.3))
-                } else {
-                    // Load the image asynchronously
-                    Task {
-                        thumbnailImage = await Image.fromPath(thumbnail_path)
-                    }
+        print("Render thumbnail \(resource.thumbnail_path)")
+        if let thumbnail_path = resource.thumbnail_path {
+            if let image = thumbnailImage {
+                return AnyView(image.resizable()
+                    .frame(width: width, height: height)
+                    .cornerRadius(radius ?? ((width + height) / 2) * 0.3))
+            } else {
+                // Load the image asynchronously
+                Task {
+                    thumbnailImage = await Image.fromPath(thumbnail_path)
                 }
             }
         }
@@ -77,15 +75,7 @@ struct ResourceImage: View {
     }
     
     var body: some View {
-        ZStack {
-            getThumbnail()
-        }
-        .onAppear {
-            isVisible = true
-        }
-        .onDisappear {
-            isVisible = false
-        }
+        getThumbnail()
     }
 }
 
