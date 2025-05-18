@@ -11,6 +11,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var core: Core
     @State private var selectedTab: Int = 1
+    @State private var previousTab: Int = 1
     
     init() {
         UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor
@@ -18,29 +19,45 @@ struct HomeView: View {
     }
     
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ShareView()
-                .tabItem {
-                    ButtonNavigation(icon: ImageAsset.GlobeEmpty.image, icon_selected: ImageAsset.GlobeFull.image, isSelected: selectedTab == 1)
+        ZStack {
+            StunningBackgroundGradient()
+            VStack(spacing: 0) {
+                TabView(selection: $selectedTab) {
+                    ShareView()
+                        .tag(1)
+                    ReceiveView()
+                        .tag(2)
+                    SettingView()
+                        .tag(3)
+                    SettingView()
+                        .tag(4)
                 }
-                .tag(1)
-            ReceiveView()
-                .tabItem {
-                    ButtonNavigation(icon: ImageAsset.MailReceiveEmpty.image, icon_selected: ImageAsset.MailReceiveFull.image, isSelected: selectedTab == 2)
-                }
-                .tag(2)
-           SettingView()
-                .tabItem {
-                    ButtonNavigation(icon: ImageAsset.PuzzelEmpty.image, icon_selected: ImageAsset.PuzzelFull.image, isSelected: selectedTab == 3)
-                }
-                .tag(3)
-            SettingView()
-                .tabItem {
-                    ButtonNavigation(icon: ImageAsset.SettingEmpty.image, icon_selected: ImageAsset.SettingFull.image, isSelected: selectedTab == 4)
-                }
-                .tag(4)
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                .animation(.easeInOut, value: selectedTab)
+                CustomTabBar(selection: Binding(
+                    get: { selectedTab },
+                    set: { newValue in
+                        withAnimation(.easeInOut) {
+                            // Determine slide direction based on tab order
+                            let slideDirection = if newValue > previousTab {
+                                Edge.trailing
+                            } else if newValue < previousTab {
+                                Edge.leading
+                            } else {
+                                Edge.leading
+                            }
+                            
+                            // Apply transition based on direction
+                            withAnimation(.easeInOut) {
+                                selectedTab = newValue
+                            }
+                            previousTab = newValue
+                        }
+                    }
+                ))
+            }
         }
-        .toolbarBackground(.background, for: .navigationBar)
+        .ignoresSafeArea()
         .accentColor(Theme.LightViolet.color)
     }
 }

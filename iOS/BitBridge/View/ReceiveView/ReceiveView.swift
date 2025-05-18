@@ -19,10 +19,8 @@ struct ReceiveView: View {
     
     var body: some View {
         ZStack {
-            StunningBackgroundGradient()
-                .opacity(0.4)
             ScrollView {
-                LazyVStack(pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: SpaceTheme.item.value, pinnedViews: [.sectionHeaders]) {
                     LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
@@ -36,7 +34,6 @@ struct ReceiveView: View {
                         .multilineTextAlignment(.center)
                         .modifier(Heading2())
                     
-                    Spacer().frame(height: 10)
                     UpgradePremiumButton()
                     
                     HStack(alignment: .center) {
@@ -56,24 +53,19 @@ struct ReceiveView: View {
                     
                     ForEach(self.receiveSessions, id: \.self.id) { item in
                         ReceiveSessionHeaderView(session: item)
-                            .background(Rectangle()
-                                .fill(Theme.BlackBase.color)
-                                .blur(radius: 10)
-                            )
                             .zIndex(2)
                         
                         ReceiveSessionBodyView(session: item)
                             .zIndex(1)
-                        
-                        Spacer()
-                            .frame(width: 10, height: 20)
                     }
                     .padding(.horizontal, SpaceTheme.screen.value)
                     .padding(.top, SpaceTheme.item.value)
                 }
             }
+            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
+            .padding(.bottom, SpaceTheme.screen.value)
+            
         }
-        .background(Theme.BlackBase.color)
         .onReceive(self.core.transfer, perform: { value in
             let receivedSessions = value?.received_sessions ?? [];
             

@@ -21,9 +21,8 @@ public struct ShareView: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            StunningBackgroundGradient()
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: SpaceTheme.item.value) {
                     LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
                         .frame(width: screenSize.width, height: 100)
                         .overlay(Theme.gradientHeading
@@ -36,8 +35,6 @@ public struct ShareView: View {
                         .multilineTextAlignment(.center)
                         .modifier(Heading2())
                     
-                    Spacer().frame(height: 10)
-                    
                     UpgradePremiumButton()
                     
                     if selectedResources.isEmpty {
@@ -47,11 +44,13 @@ public struct ShareView: View {
                     ContentPickerView()
                         .padding(.trailing, SpaceTheme.screen.value - 10)
                     
-                    ForEach(selectedResources, id: \.self.order_id) { item in
-                        SelectedResourceItem(resource: item)
-                            .padding(.top, SpaceTheme.item.value)
-                            .padding(.horizontal, SpaceTheme.screen.value)
-                            .id(item.order_id)
+                    LazyVStack {
+                        ForEach(selectedResources, id: \.self.order_id) { item in
+                            SelectedResourceItem(resource: item)
+                                .padding(.top, SpaceTheme.item.value)
+                                .padding(.horizontal, SpaceTheme.screen.value)
+                                .id(item.order_id)
+                        }
                     }
                     
                     if isLoadingSelectedResource {
@@ -69,10 +68,10 @@ public struct ShareView: View {
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             .padding(.top, safeAreaInsets.top)
-            .padding(.bottom, 150)
+            .padding(.bottom, SpaceTheme.screen.value + 60)
             
-            ShareButton(width: 230)
-                .padding(.bottom, safeAreaInsets.bottom + 16)
+            ShareButton(width: 220)
+                .offset(y: SpaceTheme.screen.value)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
         .ignoresSafeArea()

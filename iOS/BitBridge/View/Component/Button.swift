@@ -114,29 +114,6 @@ struct Button_Preview: PreviewProvider {
     }
 }
 
-struct ButtonNavigation: View {
-    var icon: Image
-    var icon_selected: Image
-    var isSelected: Bool
-    
-    // Add a default value for isSelected to maintain backward compatibility
-    init(icon: Image, icon_selected: Image, isSelected: Bool = false) {
-        self.icon = icon
-        self.icon_selected = icon_selected
-        self.isSelected = isSelected
-    }
-    
-    var body: some View {
-        VStack {
-            // Use the selected icon when isSelected is true
-            (isSelected ? icon_selected : icon)
-                .resizable()
-                .frame(width: 20, height: 20)
-                .foregroundStyle(.white)
-        }
-    }
-}
-
 struct CircleWaveEffect: ViewModifier {
     @State private var animationPhase: CGFloat = 0
     @State private var timer: Timer?
@@ -229,10 +206,6 @@ struct ShareButton: View {
             .ignoresSafeArea()
         )
     }
-}
-
-#Preview("Bottom navigation") {
-    ButtonNavigation(icon: Image(systemName: "plus"), icon_selected: Image("plus.fill"), isSelected: false)
 }
 
 #Preview("Premium button") {
