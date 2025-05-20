@@ -17,7 +17,8 @@ import PhotosUI
 import Photos
 import AVFoundation
 import CoreLocation
-import Combine;
+import Combine
+import QuickLookThumbnailing
 
 final class SingleWaiter<T> {
     private var continuation: CheckedContinuation<T, Never>?
@@ -303,36 +304,69 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
     
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 128, height: 128)) async -> Data? {
-        let itemIdentifier = itemIdentifier.split(separator: "://").last!.description;
-        guard let asset_cached = await PHAsset.getCachedAsset(identifier: itemIdentifier) else {
-            return nil
-        }
-        
-        if asset_cached.asset.mediaType == .video {
-            return await getVideoThumbnailData(for: itemIdentifier, size: size)
-        }
-        
-        let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.resizeMode = .exact
-        options.isNetworkAccessAllowed = true
-        options.deliveryMode = .fastFormat
-        options.isSynchronous = false
-        
-        return await withCheckedContinuation { continuation in
-            manager.requestImage(
-                for: asset_cached.asset,
-                targetSize: size,
-                contentMode: .aspectFit,
-                options: options
-            ) { image, info in
-                if let image = image, let pngData = image.pngData() {
-                    continuation.resume(returning: pngData)
-                } else {
-                    continuation.resume(returning: nil)
+        // Handle different identifier types
+        if itemIdentifier.starts(with: "phasset://") {
+            let assetId = itemIdentifier.split(separator: "://").last!.description
+            guard let asset_cached = await PHAsset.getCachedAsset(identifier: assetId) else {
+                return nil
+            }
+            
+            if asset_cached.asset.mediaType == .video {
+                return await getVideoThumbnailData(for: assetId, size: size)
+            }
+            
+            let manager = PHImageManager.default()
+            let options = PHImageRequestOptions()
+            options.resizeMode = .exact
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .fastFormat
+            options.isSynchronous = false
+            
+            return await withCheckedContinuation { continuation in
+                manager.requestImage(
+                    for: asset_cached.asset,
+                    targetSize: size,
+                    contentMode: .aspectFit,
+                    options: options
+                ) { image, info in
+                    if let image = image, let pngData = image.pngData() {
+                        continuation.resume(returning: pngData)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
                 }
             }
         }
+        else if itemIdentifier.starts(with: "bookmark://") {
+            guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
+                print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
+                return nil
+            }
+            
+            let url = URL(fileURLWithPath: absolutePath)
+
+            let scale = UIScreen.main.scale
+            let thumbnailSize = CGSize(width: size.width * scale, height: size.height * scale)
+            let request = QLThumbnailGenerator.Request(
+                fileAt: url,
+                size: thumbnailSize,
+                scale: scale,
+                representationTypes: .thumbnail
+            )
+            
+            return await withCheckedContinuation { continuation in
+                QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, error in
+                    if let thumbnail = thumbnail, let pngData = thumbnail.uiImage.pngData() {
+                        continuation.resume(returning: pngData)
+                    } else {
+                        print("Failed to generate thumbnail: \(error?.localizedDescription ?? "unknown error")")
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+        }
+        
+        return nil
     }
 
     func checkLocationAuthorization() {
