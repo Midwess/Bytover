@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use futures_util::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, OnceCell};
 use tokio::task::yield_now;
@@ -94,19 +94,19 @@ impl ThroughputController {
             const CHUNK_SIZE: usize = 63 * 1024;
             let mut total_sent = 0;
             let mut remaining_bytes = bytes;
-            
+
             while !remaining_bytes.is_empty() {
                 let chunk_size = remaining_bytes.len().min(CHUNK_SIZE);
                 let chunk = remaining_bytes.split_to(chunk_size);
-                
+
                 let sent_bytes = timeout(self.send_timeout, channel.send(&chunk))
                     .await
                     .map_err(|_| DataChannelError::Timeout(self.send_timeout))??;
-                
+
                 self.wait_buffer(Arc::downgrade(&channel), sent_bytes).await;
                 total_sent += sent_bytes;
             }
-            
+
             Ok(total_sent)
         } else {
             Err(DataChannelError::DataChannelClosed("Channel already deallocated".to_string()))

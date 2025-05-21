@@ -36,6 +36,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
+use crate::network::webrtc::message_channel::PeerRequest;
 use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
@@ -500,7 +501,9 @@ impl PeerCommunication {
         tokio_scoped::scope(|scope| {
             let send_result = &mut send_result;
             let session_guard = Arc::downgrade(&session);
+
             scope.spawn(async move {
+                let mut resolving_thumbnail_files = HashMap::new();
                 while let Ok(request) = self.next_request(Some(Duration::from_secs(15))).await {
                     let Some(session_guard) = session_guard.upgrade() else {
                         log::warn!(target: "peer", "Session is already closed");
@@ -523,22 +526,43 @@ impl PeerCommunication {
                     if let Request::ResourceThumbnailFullfill(thumbnail) = message {
                         if let Some(resource_thumbnail_message::Data::Png(data)) = thumbnail.data {
                             let saved_path = format!("{}/{}.png", thumbnail_dir, thumbnail.resource_id);
-                            match File::new(Some(data), saved_path.clone()).await {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    log::error!(target: "peer", "Failed to save thumbnail {:?}", e);
-                                    continue;
+                            let file = match resolving_thumbnail_files.get_mut(&thumbnail.resource_id) {
+                                Some(file) => file,
+                                None => {
+                                    if let Ok(existing) = File::existing(saved_path.clone()).await {
+                                        existing.delete().await;
+                                    }
+
+                                    let Ok(new_file) = File::new(None, saved_path.clone()).await else {
+                                        log::info!(target: "peer", "Failed to process thumbnail, cannot create new file");
+                                        continue;
+                                    };
+
+                                    resolving_thumbnail_files.insert(thumbnail.resource_id, new_file);
+                                    resolving_thumbnail_files.get_mut(&thumbnail.resource_id).unwrap()
                                 }
                             };
+
+                            let data_len = data.len();
+                            file.write(data).await;
 
                             let msg = CoreOperationOutput::Transfer(TransferOperationOutput::ResourceThumbnailFullfillment {
                                 resource_order_id: thumbnail.resource_id as u64,
                                 path: saved_path
                             });
-                            let _ = self
-                                .shell_runtime
-                                .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
-                                .await;
+
+                            log::info!(
+                                target: "peer",
+                                "Processing thumbnail for resource {} size = {} bytes is_completed = {}",
+                                thumbnail.resource_id, data_len, thumbnail.is_thumbnail_completed
+                            );
+
+                            if thumbnail.is_thumbnail_completed {
+                                let _ = self
+                                    .shell_runtime
+                                    .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                                    .await;
+                            }
                         }
                     }
                 }
@@ -627,43 +651,70 @@ impl PeerCommunication {
     }
 
     pub async fn send_resource_thumbnail(&self, resource_id: u64, file_path: &str) -> Result<(), PeerErrors> {
-        let max_file_size = 60 * 1024;
+        let max_chunk_size = 63 * 1024 - std::mem::size_of::<PeerRequest>();
         let thumbnail_send_timeout = Some(Duration::from_secs(5));
         let thumbnail_recv_timeout = Some(Duration::from_secs(8));
 
         let file = File::existing(file_path.to_string())
             .await
             .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to get file: {e:?}")))?;
-        let metadata = file
-            .metadata()
-            .await
-            .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to get metadata: {e:?}")))?;
-        if metadata.size > max_file_size {
-            return Err(PeerErrors::FailedToSendResourceThumbnail(
-                "Thumbnail must be less than 60KB".to_string()
-            ));
-        }
 
         let buffer = file
             .read()
             .await
             .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to read file: {e:?}")))?;
-        log::info!(target: "peer", "Sent resource thumbnail {:?} size {}", resource_id, buffer.len());
-        let msg = ResourceThumbnailMessage {
-            resource_id: resource_id as i64,
-            data: Some(resource_thumbnail_message::Data::Png(buffer))
-        };
 
-        let _ = self
-            .connection
-            .send::<VoidResponseMessage>(
-                Request::ResourceThumbnailFullfill(msg),
-                thumbnail_send_timeout,
-                thumbnail_recv_timeout
-            )
-            .await??;
+        log::info!(target: "peer", "Sending resource thumbnail {:?} size {}", resource_id, buffer.len());
 
-        log::info!(target: "peer", "Sent resource thumbnail {:?}", resource_id);
+        if buffer.len() <= max_chunk_size {
+            let msg = ResourceThumbnailMessage {
+                resource_id: resource_id as i64,
+                is_thumbnail_completed: true,
+                data: Some(resource_thumbnail_message::Data::Png(buffer))
+            };
+
+            let _ = self
+                .connection
+                .send::<VoidResponseMessage>(
+                    Request::ResourceThumbnailFullfill(msg),
+                    thumbnail_send_timeout,
+                    thumbnail_recv_timeout
+                )
+                .await??;
+        } else {
+            // Split the thumbnail into chunks
+            let chunks = buffer.chunks(max_chunk_size);
+            let len = chunks.len();
+            for (i, chunk) in chunks.enumerate() {
+                let is_last_chunk = i == len - 1;
+
+                let msg = ResourceThumbnailMessage {
+                    resource_id: resource_id as i64,
+                    is_thumbnail_completed: is_last_chunk,
+                    data: Some(resource_thumbnail_message::Data::Png(chunk.to_vec()))
+                };
+
+                let _ = self
+                    .connection
+                    .send::<VoidResponseMessage>(
+                        Request::ResourceThumbnailFullfill(msg),
+                        thumbnail_send_timeout,
+                        thumbnail_recv_timeout
+                    )
+                    .await??;
+
+                log::info!(
+                    target: "peer",
+                    "Sent resource thumbnail chunk {}/{} for resource {:?}, size {}",
+                    i + 1,
+                    buffer.chunks(max_chunk_size).len(),
+                    resource_id,
+                    chunk.len()
+                );
+            }
+        }
+
+        log::info!(target: "peer", "Completed sending resource thumbnail {:?}", resource_id);
 
         Ok(())
     }

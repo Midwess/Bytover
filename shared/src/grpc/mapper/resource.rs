@@ -6,7 +6,7 @@ impl LocalResource {
         let proto_type = match self.r#type {
             ResourceType::Image => ResourceTypeMessage::Image,
             ResourceType::Video => ResourceTypeMessage::Video,
-            ResourceType::File => ResourceTypeMessage::File,
+            ResourceType::File => ResourceTypeMessage::File
         };
 
         ResourceMessage {
@@ -24,7 +24,7 @@ impl From<ResourceTypeMessage> for ResourceType {
         match value {
             ResourceTypeMessage::Image => ResourceType::Image,
             ResourceTypeMessage::Video => ResourceType::Video,
-            ResourceTypeMessage::File => ResourceType::File,
+            ResourceTypeMessage::File => ResourceType::File
         }
     }
 }

@@ -7,7 +7,12 @@ use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::view_models::receive_session::{FileReceiveResourceViewModel, ImageReceiveResourceViewModel, ReceiveSessionViewModel, VideoReceiveResourceViewModel};
+use crate::app::view_models::receive_session::{
+    FileReceiveResourceViewModel,
+    ImageReceiveResourceViewModel,
+    ReceiveSessionViewModel,
+    VideoReceiveResourceViewModel
+};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::di_container::DiContainer;
@@ -231,11 +236,15 @@ impl AppModule<BitBridge> for TransferModule {
             is_loading_selected_resources: model.transfer.is_loading_selected_resources,
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
             transfer_method_selection: model.transfer.transfer_method_selection.clone(),
-            received_sessions: model.transfer.transfer_sessions
+            received_sessions: model
+                .transfer
+                .transfer_sessions
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-                    let Some(peer) = model.transfer.transfer_targets
+                    let Some(peer) = model
+                        .transfer
+                        .transfer_targets
                         .iter()
                         .filter_map(|target| match target {
                             TransferTarget::Nearby(peer) => Some(peer),
@@ -247,50 +256,62 @@ impl AppModule<BitBridge> for TransferModule {
                         return None;
                     };
 
-                    let image_resources = it.resources.iter().filter_map(|resource| {
-                        if resource.r#type != ResourceType::Image {
-                            return None;
-                        }
+                    let image_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::Image {
+                                return None;
+                            }
 
-                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
-                            return None;
-                        };
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
 
-                        Some(ImageReceiveResourceViewModel {
-                            model: SelectedResourceViewModel::from(resource),
-                            is_completed: progress.status.is_completed(),
+                            Some(ImageReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                is_completed: progress.status.is_completed()
+                            })
                         })
-                    }).collect();
+                        .collect();
 
-                    let video_resources = it.resources.iter().filter_map(|resource| {
-                        if resource.r#type != ResourceType::Video {
-                            return None;
-                        }
+                    let video_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::Video {
+                                return None;
+                            }
 
-                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
-                            return None;
-                        };
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
 
-                        Some(VideoReceiveResourceViewModel {
-                            model: SelectedResourceViewModel::from(resource),
-                            is_completed: progress.status.is_completed(),
+                            Some(VideoReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                is_completed: progress.status.is_completed()
+                            })
                         })
-                    }).collect();
+                        .collect();
 
-                    let file_resources = it.resources.iter().filter_map(|resource| {
-                        if resource.r#type != ResourceType::File {
-                            return None;
-                        }
+                    let file_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::File {
+                                return None;
+                            }
 
-                        let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
-                            return None;
-                        };
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
 
-                        Some(FileReceiveResourceViewModel {
-                            model: SelectedResourceViewModel::from(resource),
-                            is_completed: progress.status.is_completed(),
+                            Some(FileReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                is_completed: progress.status.is_completed()
+                            })
                         })
-                    }).collect();
+                        .collect();
 
                     Some(ReceiveSessionViewModel {
                         id: it.order_id,
@@ -303,9 +324,10 @@ impl AppModule<BitBridge> for TransferModule {
                         progress: it.total_progress(),
                         image_resources,
                         video_resources,
-                        file_resources,
+                        file_resources
                     })
-                }).collect(),
+                })
+                .collect(),
             nearby_peers: model
                 .transfer
                 .transfer_targets

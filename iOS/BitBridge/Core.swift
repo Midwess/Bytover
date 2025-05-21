@@ -303,8 +303,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         return paths[0]
     }
     
-    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 128, height: 128)) async -> Data? {
-        // Handle different identifier types
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 1024, height: 1024)) async -> Data? {
         if itemIdentifier.starts(with: "phasset://") {
             let assetId = itemIdentifier.split(separator: "://").last!.description
             guard let asset_cached = await PHAsset.getCachedAsset(identifier: assetId) else {
@@ -345,8 +344,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             
             let url = URL(fileURLWithPath: absolutePath)
 
-            let scale = UIScreen.main.scale
-            let thumbnailSize = CGSize(width: size.width * scale, height: size.height * scale)
+            let scale = 1.0
+            let thumbnailSize = CGSize(width: size.width, height: size.height)
             let request = QLThumbnailGenerator.Request(
                 fileAt: url,
                 size: thumbnailSize,

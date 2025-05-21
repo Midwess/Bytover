@@ -13,6 +13,7 @@ use crate::app::authentication::service::AuthenticationService;
 use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
+use crate::get_tokio_rt;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
@@ -24,7 +25,6 @@ use crate::network::webrtc::web_rtc::WebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
-use crate::{get_tokio_rt, ShellRuntime};
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 

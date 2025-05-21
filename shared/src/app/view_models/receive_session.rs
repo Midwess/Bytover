@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
-use super::{avatar::AvatarViewModel, selected_resource::SelectedResourceViewModel};
+use super::avatar::AvatarViewModel;
+use super::selected_resource::SelectedResourceViewModel;
 
 #[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageReceiveResourceViewModel {
@@ -20,7 +21,6 @@ pub struct FileReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub is_completed: bool
 }
-
 
 #[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveSessionViewModel {
