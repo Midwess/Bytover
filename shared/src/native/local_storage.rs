@@ -75,6 +75,23 @@ impl NativeLocalStorage {
                 let file = File::existing(absolute_path).await;
                 LocalStorageOperationOutput::IsFileExists(file.is_ok())
             }
+            LocalStorageOperation::GetResourceType { absolute_path } => {
+                let file_result = File::existing(&absolute_path).await;
+                
+                if let Ok(file) = file_result {
+                    let metadata = file.metadata().await;
+                    
+                    if let Ok(metadata) = metadata {
+                        if metadata.is_dir {
+                            return LocalStorageOperationOutput::GetResourceType(Some(ResourceType::Folder));
+                        } else {
+                            return LocalStorageOperationOutput::GetResourceType(Some(ResourceType::File));
+                        }
+                    }
+                }
+                
+                LocalStorageOperationOutput::GetResourceType(None)
+            }
             _ => {
                 panic!("Unsupported operation: {effect:?}")
             }

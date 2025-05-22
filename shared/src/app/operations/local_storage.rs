@@ -5,7 +5,7 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -15,6 +15,7 @@ use super::{CoreOperation, CoreOperationOutput};
 pub enum LocalStorageOperation {
     GetWorkDirPath,
     IsFileExists { absolute_path: String },
+    GetResourceType { absolute_path: String },
     GetAbsolutePath(LocalResourcePath),
     LoadFileThumbnailPng(LocalResourcePath),
     Get { path: String },
@@ -27,6 +28,7 @@ pub enum LocalStorageOperation {
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     IsFileExists(bool),
+    GetResourceType(Option<ResourceType>),
     Get(Option<LocalResource>),
     GetAbsolutePath(String),
     NewFile(LocalResource),
@@ -104,6 +106,19 @@ impl LocalStorageOperation {
             .map(|it| match it {
                 CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::IsFileExists(exists)) => exists,
                 _ => panic!("Mismatch in response type, expected IsFileExists, got {it:?}")
+            })
+    }
+
+    pub fn get_resource_type(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<ResourceType>>> {
+        Self::get_absolute_path(path)
+            .then_request(|absolute_path| {
+                Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetResourceType {
+                    absolute_path
+                }))
+            })
+            .map(|it| match it {
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetResourceType(resource_type)) => resource_type,
+                _ => panic!("Mismatch in response type, expected GetResourceType, got {it:?}")
             })
     }
 }

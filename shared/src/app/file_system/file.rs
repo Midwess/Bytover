@@ -59,7 +59,8 @@ impl LocalResourcePath {
 pub enum ResourceType {
     Image,
     Video,
-    File
+    File,
+    Folder
 }
 
 impl LocalResource {

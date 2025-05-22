@@ -11,8 +11,10 @@ use crate::app::{AppCommandContext, AppEvent};
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
-    pub r#type: ResourceType
+    // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File
+    pub r#type: Option<ResourceType>
 }
+
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
@@ -65,8 +67,23 @@ impl ResourceTransferSelectionService {
             // Keep the original path from the platform
             local_resource.path = selection.path.clone();
 
-            // TODO
-            local_resource.r#type = selection.r#type.clone();
+            local_resource.r#type = match selection.r#type.clone() {
+                Some(r#type) => r#type,
+                None => {
+                    match LocalStorageOperation::get_resource_type(selection.path.clone())
+                        .into_future(ctx.clone())
+                        .await
+                    {
+                        Some(resource_type) => {
+                            resource_type
+                        },
+                        None => {
+                            log::error!(target: "transfer", "Faled to get resource type, the file might no longer exist");
+                            continue;
+                        }
+                    }
+                }
+            };
 
             if let Some(thumbnail_png) = LocalStorageOperation::load_file_thumbnail_png(selection.path.clone())
                 .into_future(ctx.clone())

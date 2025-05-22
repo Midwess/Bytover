@@ -245,7 +245,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             
             let resourceSelection = ResourceSelection(
                 path: .platformIdentifier(bookmarkUrl),
-                type: .file
+                type: nil
             )
             
             url.stopAccessingSecurityScopedResource()
