@@ -5,3 +5,6 @@ ffmt:
 
 gen:
 	cargo build -p shared_types
+
+gsu:
+	git submodule update --init --recursive
