@@ -15,4 +15,5 @@ captures
 local.properties
 .bin
 rustc-ice-*.txt
-**/UserInterfaceState.xcuserstate
+**/*.xcodeproj/xcuserdata/
+**/*.xcworkspace/xcuserdata/
