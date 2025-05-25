@@ -37,6 +37,12 @@ struct ResourceImage: View {
                     .resizable()
                     .scaledToFit()
             )
+        case .folder:
+            return AnyView(
+                ImageAsset.Folder.image
+                    .resizable()
+                    .scaledToFit()
+            )
         }
     }
     
@@ -71,6 +77,7 @@ struct ResourceImage: View {
         case .file: return Theme.FileColor.color
         case .image: return Theme.DocumentColor.color
         case .video: return Theme.DocumentColor.color
+        case .folder: return Theme.Navy.color
         }
     }
     

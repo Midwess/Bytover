@@ -69,18 +69,11 @@ impl ResourceTransferSelectionService {
 
             local_resource.r#type = match selection.r#type.clone() {
                 Some(r#type) => r#type,
-                None => {
-                    match LocalStorageOperation::get_resource_type(selection.path.clone())
-                        .into_future(ctx.clone())
-                        .await
-                    {
-                        Some(resource_type) => {
-                            resource_type
-                        },
-                        None => {
-                            log::error!(target: "transfer", "Faled to get resource type, the file might no longer exist");
-                            continue;
-                        }
+                None => match LocalStorageOperation::get_resource_type(selection.path.clone()).into_future(ctx.clone()).await {
+                    Some(resource_type) => resource_type,
+                    None => {
+                        log::error!(target: "transfer", "Faled to get resource type, the file might no longer exist");
+                        continue;
                     }
                 }
             };

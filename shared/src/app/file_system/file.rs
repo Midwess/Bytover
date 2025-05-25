@@ -6,7 +6,7 @@ use crate::app::operations::database::LocalResourceDatabaseOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::AppCommandContext;
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
 pub struct LocalResource {
     pub order_id: u64,
     pub name: String,

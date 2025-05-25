@@ -11,7 +11,7 @@ use crate::app::AppRequestBuilder;
 use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
     IsFileExists { absolute_path: String },
@@ -20,11 +20,10 @@ pub enum LocalStorageOperation {
     LoadFileThumbnailPng(LocalResourcePath),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
-    Copy { source: String, destination: String },
-    Zip { source: String, destination: String }
+    Copy { source: String, destination: String }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperationOutput {
     WorkDirPath(String),
     IsFileExists(bool),
@@ -33,7 +32,6 @@ pub enum LocalStorageOperationOutput {
     GetAbsolutePath(String),
     NewFile(LocalResource),
     Copy(LocalResource),
-    Zip(LocalResource),
     LoadFileThumbnailPng(Option<Vec<u8>>)
 }
 
@@ -63,14 +61,6 @@ impl LocalStorageOperation {
                 _ => panic!("Mismatch in response type, expected Copy, got {it:?}")
             }
         )
-    }
-
-    pub fn zip(source: String, destination: String) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Zip { source, destination })).map(|it| match it
-        {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Zip(resource)) => resource,
-            _ => panic!("Mismatch in response type, expected Zip, got {it:?}")
-        })
     }
 
     pub fn get(path: String) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {

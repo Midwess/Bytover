@@ -13,7 +13,7 @@ use crate::entities::user::User;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum DatabaseOperation {
     GenId(),
     Session(SessionOperation),
@@ -21,7 +21,7 @@ pub enum DatabaseOperation {
     LocalResource(LocalResourceDatabaseOperation)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalResourceDatabaseOperation {
     Add(Vec<LocalResource>),
     Remove(u64),
@@ -30,7 +30,7 @@ pub enum LocalResourceDatabaseOperation {
     Update(LocalResource)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalResourceDatabaseOperationOutput {
     Add(Vec<LocalResource>),
     Remove(Option<LocalResource>),
@@ -39,7 +39,7 @@ pub enum LocalResourceDatabaseOperationOutput {
     Update(Option<LocalResource>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum UserDatabaseOperation {
     Save(User)
 }
@@ -48,12 +48,12 @@ impl Operation for UserDatabaseOperation {
     type Output = UserDatabaseOperationOutput;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum UserDatabaseOperationOutput {
     Save()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum SessionOperation {
     WriteToken(Token),
     WriteUser(User),
@@ -64,14 +64,14 @@ impl Operation for SessionOperation {
     type Output = SessionOperationOutput;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum SessionOperationOutput {
     WriteToken(),
     WriteUser(),
     Get(Option<Session>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum DatabaseOperationOutput {
     Session(SessionOperationOutput),
     User(UserDatabaseOperationOutput),

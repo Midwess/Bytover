@@ -32,7 +32,7 @@ edition = "2021"
 anyhow = "1.0.97"
 crux_core = "0.14.0"
 serde = { version = "1.0.217", default-features = false }
-surrealdb = {version="2.3.1", default-features = false}
+surrealdb = {version="2.3.3", default-features = false}
 thiserror = { version = "2.0.12", default-features = false }
 serde_derive = { version = "1.0.203", default-features = false }
 serde_json = { version = "1.0.117", default-features = false }
@@ -67,6 +67,8 @@ bytes = "1.10.1"
 debounced = "0.2.0"
 futures-channel = "0.3.31"
 ulid = "1.2.1"
+flate2 = "1.1.1"
+tar = { git = "https://github.com/dev-logs/tar-rs.git" }
 
 [patch.crates-io]
 affinitypool = { git = "https://github.com/dev-logs/affinitypool.git", version = "0.3.1" }

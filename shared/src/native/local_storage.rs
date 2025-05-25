@@ -40,22 +40,6 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::Copy(resource)
             }
-            LocalStorageOperation::Zip { source, destination } => {
-                let created_file = File::new(None, source).await.unwrap();
-                let new_file = created_file.zip(destination).await.unwrap();
-                let metadata = new_file.metadata().await.unwrap();
-                let resource = LocalResource {
-                    order_id: gen_id().await,
-                    name: new_file.name,
-                    size: metadata.size,
-                    path: LocalResourcePath::AbsolutePath(new_file.path.to_string_lossy().to_string()),
-                    thumbnail_path: None,
-                    r#type: ResourceType::File,
-                    is_valid: true
-                };
-
-                LocalStorageOperationOutput::Zip(resource)
-            }
             LocalStorageOperation::Get { path } => {
                 let file = File::new(None, path).await.unwrap();
                 let metadata = file.metadata().await.unwrap();
@@ -77,10 +61,10 @@ impl NativeLocalStorage {
             }
             LocalStorageOperation::GetResourceType { absolute_path } => {
                 let file_result = File::existing(&absolute_path).await;
-                
+
                 if let Ok(file) = file_result {
                     let metadata = file.metadata().await;
-                    
+
                     if let Ok(metadata) = metadata {
                         if metadata.is_dir {
                             return LocalStorageOperationOutput::GetResourceType(Some(ResourceType::Folder));
@@ -89,7 +73,7 @@ impl NativeLocalStorage {
                         }
                     }
                 }
-                
+
                 LocalStorageOperationOutput::GetResourceType(None)
             }
             _ => {
