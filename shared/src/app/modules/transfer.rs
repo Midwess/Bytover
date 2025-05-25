@@ -298,7 +298,7 @@ impl AppModule<BitBridge> for TransferModule {
                         .resources
                         .iter()
                         .filter_map(|resource| {
-                            if resource.r#type != ResourceType::File {
+                            if resource.r#type != ResourceType::File && resource.r#type != ResourceType::Folder {
                                 return None;
                             }
 

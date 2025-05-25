@@ -1,4 +1,6 @@
-use core_services::local_storage::file_system::File;
+use std::path::PathBuf;
+
+use core_services::local_storage::file_system::{File, Folder};
 use devlog_sdk::distributed_id::gen_id;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
@@ -41,6 +43,25 @@ impl NativeLocalStorage {
                 LocalStorageOperationOutput::Copy(resource)
             }
             LocalStorageOperation::Get { path } => {
+                let path_buf = PathBuf::from(path.clone());
+                if path_buf.is_dir() {
+                    let folder = Folder::new(path_buf).await.unwrap();
+                    let resource = LocalResource {
+                        order_id: gen_id().await,
+                        name: folder.name.clone(),
+                        size: folder.calculate_total_size().await.unwrap_or_default(),
+                        path: LocalResourcePath::AbsolutePath(folder.path.to_string_lossy().to_string()),
+                        thumbnail_path: None,
+                        r#type: ResourceType::Folder,
+                        is_valid: true
+                    };
+
+                    return LocalStorageOperationOutput::Get(Some(resource));
+                }
+                else if path_buf.is_symlink() {
+                    return LocalStorageOperationOutput::Get(None);
+                }
+
                 let file = File::new(None, path).await.unwrap();
                 let metadata = file.metadata().await.unwrap();
                 let resource = LocalResource {

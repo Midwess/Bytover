@@ -1,9 +1,10 @@
+use crate::app::file_system::file::ResourceType;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus, TransferStatus};
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
-use core_services::local_storage::file_system::File;
+use core_services::local_storage::file_system::{File, Folder};
 use futures_util::{SinkExt, Stream};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -246,15 +247,20 @@ impl DataChannel {
 
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
 
-        let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-        let file_size = resource.size;
+        let unreliable_size = resource.size;
         // The larger the buffer size, the more cpu efficient the upload
         // But it will cause the memory usage increase
-        let mut cursor = file.cursor(0, 1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+        let mut cursor = if resource.r#type == ResourceType::Folder {
+            let folder = Folder::new(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            folder.cursor(1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
+        } else {
+            let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            file.cursor(0, 1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
+        };
 
         drop(session_guard);
 
-        log::info!(target: "nearby", "Start uploading file: {saved_path} size = {file_size}");
+        log::info!(target: "nearby", "Start uploading file: {saved_path} size = {unreliable_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{e:?}")))? {
             let Some(session) = self.session.upgrade() else {
