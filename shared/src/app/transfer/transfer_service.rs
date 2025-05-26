@@ -125,6 +125,10 @@ impl TransferService {
                 )),
                 None => None
             };
+
+            if resource.r#type == ResourceType::Folder {
+                resource.name = format!("{}.tar", resource.name);
+            }
         }
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));

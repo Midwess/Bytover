@@ -37,15 +37,11 @@ impl WorkDir {
     }
 
     pub fn resources(&self, session_id: u64, path: String) -> String {
-        PathBuf::from(&self.public_path)
-            .join(format!("session-{session_id}"))
-            .join(self.resources_relative(path))
-            .to_string_lossy()
-            .to_string()
+        PathBuf::from(&self.public_path).join(self.resources_relative(session_id, path)).to_string_lossy().to_string()
     }
 
-    pub fn resources_relative(&self, path: String) -> String {
-        PathBuf::from("resources").join(Self::normalize_path(path)).to_string_lossy().to_string()
+    pub fn resources_relative(&self, session_id: u64, path: String) -> String {
+        PathBuf::from(format!("session-{session_id}")).join(Self::normalize_path(path)).to_string_lossy().to_string()
     }
 
     pub fn to_relative(&self, path: String) -> String {

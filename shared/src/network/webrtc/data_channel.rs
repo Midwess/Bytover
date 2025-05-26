@@ -231,33 +231,34 @@ impl DataChannel {
             return Err(DataChannelError::SessionCanceled);
         };
 
-        let session_guard = session.lock().await;
+        let mut session_guard = session.lock().await;
         let resource = session_guard
             .resources
             .iter()
             .find(|it| it.order_id == self.resource_id)
             .expect("Resource not found");
 
-        let Some(saved_path) = resource.path.disk_path() else {
+        let Some(resource_path) = resource.path.disk_path() else {
             return Err(DataChannelError::FileError("Only support absolute path".to_string()))
         };
 
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
 
-        let unreliable_size = resource.size;
         // The larger the buffer size, the more cpu efficient the upload
         // But it will cause the memory usage increase
+        let unreliable_size = resource.size;
         let mut cursor = if resource.r#type == ResourceType::Folder {
-            let folder = Folder::new(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            // Update the file name to include .tar as the extension
+            let folder = Folder::new(resource_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
             folder.cursor(1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
         } else {
-            let file = File::existing(saved_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            let file = File::existing(resource_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
             file.cursor(0, 1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
         };
 
         drop(session_guard);
 
-        log::info!(target: "nearby", "Start uploading file: {saved_path} size = {unreliable_size}");
+        log::info!(target: "nearby", "Start uploading file: {resource_path} size = {unreliable_size}");
         let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{e:?}")))? {
             let Some(session) = self.session.upgrade() else {
