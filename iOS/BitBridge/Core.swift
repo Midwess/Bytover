@@ -130,16 +130,15 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(nil)).bincodeSerialize()))
             }
         case .appCapabilities(.localStorage(.getWorkDirPath)):
-            let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(documentDirectory.path)).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(WorkDir(private_path: getDocumentsDirectory(isPrivate: true).path, public_path: getDocumentsDirectory(isPrivate: false).path))).bincodeSerialize()))
         case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
             let absolutePath = switch path {
             case .absolutePath(let absolute):
                 absolute
             case .platformIdentifier(let identifier):
                 await getAbsoluteUrl(from: identifier) ?? ""
-            case .relativePath(let relative):
-                getDocumentsDirectory().appendingPathComponent(relative).path()
+            case .relativePath(let relative, let isPrivate):
+                getDocumentsDirectory(isPrivate: isPrivate).appendingPathComponent(relative).path()
             };
             
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
@@ -297,10 +296,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         return await PHAsset.getCachedAsset(identifier: item_identifier)?.fileName ?? ""
     }
     
-    func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+    func getDocumentsDirectory(isPrivate: Bool) -> URL {
+        let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first;
+        let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first;
         
-        return paths[0]
+        return isPrivate ? privatePath! : publicPath!
     }
     
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 1024, height: 1024)) async -> Data? {
@@ -671,7 +671,7 @@ extension UIImage {
 }
 
 extension Image {
-    static func fromPath(_ path: LocalResourcePath) async -> Image? {
+    static func fromPath(_ path: LocalResourcePath, core: Core) async -> Image? {
         switch path {
         case .absolutePath(let path):
             guard let uiImage = UIImage.fromAbsolutePath(path) else {
@@ -679,9 +679,9 @@ extension Image {
                 return nil
             }
             return Image(uiImage: uiImage)
-        case .relativePath(let path):
-            let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let fullPath = documentsDirectory.appendingPathComponent(path).path
+        case .relativePath(let path, let isPrivate):
+            let workdir = await core.getDocumentsDirectory(isPrivate: isPrivate)
+            let fullPath = workdir.appendingPathComponent(path).path
             guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
                 print("There is no image at \(path)")
                 return nil

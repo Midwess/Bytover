@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::workdir::WorkDir;
 use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -25,7 +26,7 @@ pub enum LocalStorageOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperationOutput {
-    WorkDirPath(String),
+    WorkDirPath(WorkDir),
     IsFileExists(bool),
     GetResourceType(Option<ResourceType>),
     Get(Option<LocalResource>),
@@ -40,7 +41,7 @@ impl Operation for LocalStorageOperation {
 }
 
 impl LocalStorageOperation {
-    pub fn get_work_dir_path_cmd() -> AppRequestBuilder<impl Future<Output = String>> {
+    pub fn get_work_dir_path_cmd() -> AppRequestBuilder<impl Future<Output = WorkDir>> {
         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetWorkDirPath)).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::WorkDirPath(path)) => path,
             _ => panic!("Mismatch in response type, expected WorkDirPath, got {it:?}")

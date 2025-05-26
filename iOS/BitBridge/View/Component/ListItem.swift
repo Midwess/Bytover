@@ -55,7 +55,7 @@ struct ResourceImage: View {
             } else {
                 // Load the image asynchronously
                 Task {
-                    thumbnailImage = await Image.fromPath(thumbnail_path)
+                    thumbnailImage = await Image.fromPath(thumbnail_path, core: core)
                 }
             }
         }

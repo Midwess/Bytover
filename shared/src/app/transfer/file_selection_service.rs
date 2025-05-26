@@ -82,11 +82,13 @@ impl ResourceTransferSelectionService {
                 .into_future(ctx.clone())
                 .await
             {
-                let path = format!("thumbnails/{order_id}.png");
-                let absolute_path = format!("{workdir}/{path}");
+                let absolute_path = workdir.thumbnails(format!("{order_id}.png"));
                 let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path.clone()).into_future(ctx.clone()).await;
 
-                local_resource.thumbnail_path = Some(LocalResourcePath::RelativePath(path));
+                local_resource.thumbnail_path = Some(LocalResourcePath::RelativePath {
+                    path: workdir.to_relative(absolute_path),
+                    is_private: true
+                });
             }
 
             let new_resources = LocalResourceDatabaseOperation::add(vec![local_resource]).into_future(ctx.clone()).await;

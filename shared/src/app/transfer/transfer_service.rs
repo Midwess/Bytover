@@ -216,23 +216,16 @@ impl TransferService {
         let peer_id = peer.id();
         let mut resources = vec![];
         let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        let thumbnail_dir = format!("{workdir}/thumbnails");
+        let thumbnail_dir = workdir.thumbnails("".to_string());
         for resource_request in remote_session.resources {
             resources.push(LocalResource {
                 is_valid: true,
-                path: LocalResourcePath::AbsolutePath(
-                    LocalStorageOperation::get_absolute_path(LocalResourcePath::RelativePath(format!(
-                        "sessions/{}/{}/{}",
-                        remote_session.order_id, resource_request.order_id, resource_request.name
-                    )))
-                    .into_future(cmd.clone())
-                    .await
-                ),
+                path: LocalResourcePath::AbsolutePath(workdir.resources(remote_session.order_id, resource_request.name.clone())),
                 thumbnail_path: None,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
                 ),
-                name: resource_request.name,
+                name: resource_request.name.clone(),
                 size: resource_request.size as u64,
                 order_id: resource_request.order_id as u64
             });
@@ -284,7 +277,11 @@ impl TransferService {
                             continue;
                         };
 
-                        resource.thumbnail_path = Some(LocalResourcePath::from_absolute_to_relative(path, workdir.clone()));
+                        resource.thumbnail_path = Some(LocalResourcePath::RelativePath {
+                            path: workdir.to_relative(path),
+                            is_private: true
+                        });
+
                         log::info!(
                             target: "transfer", "Resource {:?} thumbnail path: {:?}",
                             resource_order_id, resource.thumbnail_path);
