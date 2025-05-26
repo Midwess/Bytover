@@ -156,10 +156,6 @@ struct ShareButton: View {
     @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
-        if scenePhase == .background {
-            return AnyView(EmptyView())
-        }
-        
         return AnyView(ZStack {
             Circle()
                 .fill(Theme.GreenSecondary.color.opacity(0.7))

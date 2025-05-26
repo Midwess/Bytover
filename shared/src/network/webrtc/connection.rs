@@ -80,15 +80,13 @@ impl ConnectionWebRtc {
         }
     }
 
-    // This configuration is much longer than the default ones
-    // I assume that, this configuration is more suitable for rule of battery life on Android and iOS
     pub fn setting_engine() -> SettingEngine {
         let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
 
         setting_engine.set_ice_timeouts(
-            Some(Duration::from_secs(45)),
-            Some(Duration::from_secs(90)),
-            Some(Duration::from_secs(15))
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(15)),
+            Some(Duration::from_secs(2))
         );
 
         setting_engine
@@ -406,9 +404,8 @@ impl ConnectionWebRtc {
             let callback = callback.clone();
             let msg_channel = msg_channel.clone();
             Box::pin(async move {
-                if state == RTCPeerConnectionState::Disconnected ||
-                    state == RTCPeerConnectionState::Failed ||
-                    state == RTCPeerConnectionState::Closed
+                if state == RTCPeerConnectionState::Failed ||
+                   state == RTCPeerConnectionState::Closed
                 {
                     if let Some(msg_channel) = msg_channel {
                         let _ = msg_channel.close().await;
