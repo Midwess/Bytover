@@ -530,7 +530,7 @@ impl PeerCommunication {
                                 Some(file) => file,
                                 None => {
                                     if let Ok(existing) = File::existing(saved_path.clone()).await {
-                                        existing.delete().await;
+                                        let _ = existing.delete().await;
                                     }
 
                                     let Ok(new_file) = File::new(None, saved_path.clone()).await else {

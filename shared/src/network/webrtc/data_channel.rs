@@ -338,7 +338,7 @@ impl DataChannel {
                         break;
                     }
 
-                    let sleep_duration = ((buffered as u64) / 100).clamp(10, 500);
+                    let sleep_duration = ((buffered as u64) / 5120).clamp(10, 500);
                     tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
                 }
             })

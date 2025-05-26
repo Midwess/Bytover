@@ -81,6 +81,8 @@ impl ThroughputController {
                 return;
             }
 
+            let sleep_duration = ((current_buffer as u64) / 10240).clamp(1, 10);
+            tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
             yield_now().await;
         }
     }
