@@ -47,7 +47,6 @@ struct ResourceImage: View {
     }
     
     func getThumbnail() -> some View {
-        print("Render thumbnail \(resource.thumbnail_path)")
         if let thumbnail_path = resource.thumbnail_path {
             if let image = thumbnailImage {
                 return AnyView(image.resizable()

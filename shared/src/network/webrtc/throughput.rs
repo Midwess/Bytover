@@ -109,13 +109,15 @@ impl ThroughputController {
 
             Ok(total_sent)
         } else {
-            Err(DataChannelError::DataChannelClosed("Channel already deallocated".to_string()))
+            Err(DataChannelError::DataChannelCorrupted(
+                "Channel already deallocated".to_string()
+            ))
         }
     }
 
     pub async fn send(&self, channel: Weak<RTCDataChannel>, bytes: &Bytes) -> Result<usize, DataChannelError> {
         let Some(sent_tx) = self.sent_queue.get() else {
-            return Err(DataChannelError::DataChannelClosed(
+            return Err(DataChannelError::DataChannelCorrupted(
                 "The throughput controller is not started".to_string()
             ));
         };
@@ -142,7 +144,7 @@ impl ThroughputController {
 
             tokio::select! {
                 result = stream.next() => {
-                    if let Some(Ok(result)) = result {
+                    if let Some(Ok(Some(result))) = result {
                         self.on_received();
                         return Ok(Some(result));
                     }
@@ -151,7 +153,11 @@ impl ThroughputController {
                         return Err(error);
                     }
 
-                    return Ok(None);
+                    if let Some(Ok(None)) = result {
+                        return Ok(None);
+                    }
+
+                    return Err(DataChannelError::DataChannelCorrupted("The data channel is closed".to_string()));
                 },
                 _ = &mut sleep_task => {
                     return Err(DataChannelError::Timeout(self.received_timeout));

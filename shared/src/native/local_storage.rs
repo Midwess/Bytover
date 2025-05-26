@@ -57,8 +57,7 @@ impl NativeLocalStorage {
                     };
 
                     return LocalStorageOperationOutput::Get(Some(resource));
-                }
-                else if path_buf.is_symlink() {
+                } else if path_buf.is_symlink() {
                     return LocalStorageOperationOutput::Get(None);
                 }
 

@@ -130,7 +130,7 @@ impl PeerCommunication {
             keep_alive_handle: OnceCell::new()
         });
 
-        me.keep_alive();
+        // me.keep_alive();
         me.handle_data_channel();
 
         Ok(me)
@@ -454,14 +454,14 @@ impl PeerCommunication {
                 )));
 
                 drop(session_guard);
-
-                let _ = data_channel.close().await;
             } else {
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 )));
             }
+
+            let _graceful_close_in_bg = data_channel.graceful_close();
         }
     }
 
@@ -544,7 +544,7 @@ impl PeerCommunication {
                             };
 
                             let data_len = data.len();
-                            file.write(data).await;
+                            let _ = file.write(data).await;
 
                             let msg = CoreOperationOutput::Transfer(TransferOperationOutput::ResourceThumbnailFullfillment {
                                 resource_order_id: thumbnail.resource_id as u64,
@@ -624,7 +624,7 @@ impl PeerCommunication {
 
                     drop(session_guard);
 
-                    let _ = data_channel.close().await;
+                    let _ignore = data_channel.close().await;
                 };
 
                 self.active_sessions.lock().await.remove(&session_id);

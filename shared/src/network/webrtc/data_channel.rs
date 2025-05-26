@@ -14,7 +14,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::spawn;
 use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
+use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 use webrtc::data_channel::RTCDataChannel;
 
 use super::connection::ConnectionWebRtc;
@@ -39,9 +40,9 @@ pub enum DataChannelError {
     #[error("Session canceled")]
     SessionCanceled,
     #[error("Data channel is closed")]
-    DataChannelClosed(String),
-    #[error("Data corrupted")]
-    DataCorrupted,
+    DataChannelClosed,
+    #[error("Data channel corrupted")]
+    DataChannelCorrupted(String),
     #[error("Timeout")]
     Timeout(Duration),
     #[error("The throughput controller error")]
@@ -187,15 +188,14 @@ impl DataChannel {
 
             let next_bytes = match self.throughput_controller.next_bytes(&mut stream).await {
                 Ok(Some(bytes)) => bytes,
-                Ok(None) => break Err(DataChannelError::DataCorrupted),
+                Ok(None) => {
+                    break Ok(());
+                }
                 Err(e) => break Err(e)
             };
 
-            let written_bytes = file.write(&next_bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
-
-            if written_bytes < next_bytes.len() {
-                break Err(DataChannelError::DataCorrupted);
-            }
+            file.write_all(&next_bytes).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            let written_bytes = next_bytes.len();
 
             let mut session_guard = session.lock().await;
             let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
@@ -206,11 +206,6 @@ impl DataChannel {
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                 ))
                 .await;
-
-            if progress.status.is_completed() {
-                log::info!(target: "nearby", "Resource {:?} is already completed with status {:?}", self.resource_id, progress.status);
-                break Ok(());
-            }
         };
 
         let Some(session) = self.session.upgrade() else {
@@ -223,7 +218,9 @@ impl DataChannel {
         if let Err(e) = result {
             return Err(e);
         } else if !progress.is_completed() {
-            return Err(DataChannelError::DataCorrupted);
+            return Err(DataChannelError::DataChannelCorrupted(
+                "The resource is not completed".to_string()
+            ));
         }
 
         Ok(())
@@ -282,11 +279,10 @@ impl DataChannel {
                 ))
                 .await;
 
-            let is_completed = progress.status.is_completed();
             drop(session_guard);
 
             if let Some(handle) = last_sent_handle.take() {
-                _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+                _ = handle.await.map_err(|it| DataChannelError::DataChannelCorrupted(it.to_string()))??;
             }
 
             let throughput_controller = self.throughput_controller.clone();
@@ -294,20 +290,17 @@ impl DataChannel {
             last_sent_handle = Some(spawn(async move {
                 let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
                 if sent_bytes < bytes.len() {
-                    log::warn!(target: "nearby", "The data sent less than data read");
-                    Err(DataChannelError::DataCorrupted)
+                    Err(DataChannelError::DataChannelCorrupted(
+                        "The data sent less than data read".to_string()
+                    ))
                 } else {
                     Ok(sent_bytes)
                 }
             }));
-
-            if is_completed {
-                break;
-            }
         }
 
         if let Some(handle) = last_sent_handle.take() {
-            _ = handle.await.map_err(|_| DataChannelError::DataCorrupted)??;
+            _ = handle.await.map_err(|it| DataChannelError::DataChannelCorrupted(it.to_string()))??;
         }
 
         let Some(session) = self.session.upgrade() else {
@@ -318,10 +311,47 @@ impl DataChannel {
         let progress = session_guard.resource_mut_progress(self.resource_id).expect("Progress not found");
 
         if !progress.is_completed() {
-            return Err(DataChannelError::DataCorrupted);
+            return Err(DataChannelError::DataChannelCorrupted(
+                "The resource is not completed".to_string()
+            ));
         }
 
         Ok(())
+    }
+
+    pub fn graceful_close(self: &Arc<Self>) -> JoinHandle<()> {
+        let this = self.clone();
+        spawn(async move {
+            let elapsed = Instant::now();
+            log::info!(target: "nearby", "Gracefully closing data channel: {}", this.data_channel.label());
+            let _ = timeout(Duration::from_secs(10), async {
+                loop {
+                    if matches!(
+                        this.data_channel.ready_state(),
+                        RTCDataChannelState::Closed | RTCDataChannelState::Closing
+                    ) {
+                        return;
+                    }
+
+                    let buffered = this.data_channel.buffered_amount().await;
+                    if buffered == 0 {
+                        break;
+                    }
+
+                    let sleep_duration = ((buffered as u64) / 100).clamp(10, 500);
+                    tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
+                }
+            })
+            .await;
+
+            let _ = this.close().await;
+            log::info!(
+                target: "nearby",
+                "Gracefully closed data channel: {} in {}ms",
+                this.data_channel.label(),
+                elapsed.elapsed().as_millis()
+            );
+        })
     }
 }
 
@@ -347,13 +377,13 @@ impl Deref for DataChannel {
 }
 
 pub struct RTCStreamChannel {
-    receiver: mpsc::Receiver<Result<Vec<u8>, DataChannelError>>,
-    sender: Arc<mpsc::Sender<Result<Vec<u8>, DataChannelError>>>,
+    receiver: mpsc::Receiver<Result<Option<Vec<u8>>, DataChannelError>>,
+    sender: Arc<mpsc::Sender<Result<Option<Vec<u8>>, DataChannelError>>>,
     data_channel: Arc<RTCDataChannel>
 }
 
 impl Stream for RTCStreamChannel {
-    type Item = Result<Vec<u8>, DataChannelError>;
+    type Item = Result<Option<Vec<u8>>, DataChannelError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.receiver.poll_recv(cx)
@@ -362,7 +392,7 @@ impl Stream for RTCStreamChannel {
 
 impl RTCStreamChannel {
     pub fn new(data_channel: Arc<RTCDataChannel>) -> Self {
-        let (message_sender, message_receiver) = mpsc::channel::<Result<Vec<u8>, DataChannelError>>(2048);
+        let (message_sender, message_receiver) = mpsc::channel::<Result<Option<Vec<u8>>, DataChannelError>>(2048);
         let message_sender = Arc::new(message_sender).clone();
 
         let maybe_sender = Arc::downgrade(&message_sender);
@@ -370,7 +400,7 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    if let Err(e) = sender.send(Ok(message.data.to_vec())).await {
+                    if let Err(e) = sender.send(Ok(Some(message.data.to_vec()))).await {
                         log::error!(target: "nearby", "Failed to send message: {:?}", e);
                     }
                 }
@@ -382,7 +412,7 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    let _ = sender.send(Err(DataChannelError::DataChannelClosed("The channel is closed".to_owned()))).await;
+                    let _ = sender.send(Ok(None)).await;
                 }
             })
         }));
@@ -392,7 +422,7 @@ impl RTCStreamChannel {
             let maybe_sender = maybe_sender.clone();
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
-                    let _ = sender.send(Err(DataChannelError::DataChannelClosed(format!("{_err:?}")))).await;
+                    let _ = sender.send(Err(DataChannelError::DataChannelCorrupted(format!("{_err:?}")))).await;
                 }
             })
         }));

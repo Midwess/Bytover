@@ -16,7 +16,6 @@ struct ImageReceiveResourceView: View {
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
     
-    
     var body: some View {
         HStack {
             ResourceImage(resource: localResource.model, width: 90, height: 110, radius: 20)
