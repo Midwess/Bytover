@@ -655,7 +655,7 @@ impl PeerCommunication {
         let thumbnail_send_timeout = Some(Duration::from_secs(5));
         let thumbnail_recv_timeout = Some(Duration::from_secs(8));
 
-        let file = File::existing(file_path.to_string())
+        let file = File::existing(file_path.to_owned())
             .await
             .map_err(|e| PeerErrors::FailedToSendResourceThumbnail(format!("Failed to get file: {e:?}")))?;
 

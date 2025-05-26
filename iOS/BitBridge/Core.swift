@@ -138,7 +138,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             case .platformIdentifier(let identifier):
                 await getAbsoluteUrl(from: identifier) ?? ""
             case .relativePath(let relative, let isPrivate):
-                getDocumentsDirectory(isPrivate: isPrivate).appendingPathComponent(relative).path()
+                getDocumentsDirectory(isPrivate: isPrivate).appendingPathComponent(relative).path
             };
             
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
@@ -218,13 +218,13 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     return nil
                 }
                 
-                return url.path()
+                return url.path
             } catch {
                 return nil
             }
         case "phasset":
             let identifier = platformIdentifier.dropFirst("phasset://".count)
-            return await PHAsset.getCachedAsset(identifier: String(identifier))?.fileUrl?.path() ?? ""
+            return await PHAsset.getCachedAsset(identifier: String(identifier))?.fileUrl?.path ?? ""
         default:
             return nil
         }
@@ -234,19 +234,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         await self.update(.transfer(.beginLoadingResources))
         for url in urls {
             url.startAccessingSecurityScopedResource()
-            
+
             guard let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil) else {
                 continue
             }
-            
+
             let bookmarkString = bookmarkData.base64EncodedString()
             let bookmarkUrl = "bookmark://" + bookmarkString
-            
+
             let resourceSelection = ResourceSelection(
                 path: .platformIdentifier(bookmarkUrl),
                 type: nil
             )
-            
+
             url.stopAccessingSecurityScopedResource()
             await self.update(.transfer(.addResources([resourceSelection])))
         }
@@ -286,6 +286,9 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         
         await self.update(.transfer(.endLoadingResources))
         self.selectedMediaItems.removeAll()
+    }
+    
+    func open(path: LocalResourcePath) {
     }
     
     func getFileSize(item_identifier: String) async -> UInt64 {

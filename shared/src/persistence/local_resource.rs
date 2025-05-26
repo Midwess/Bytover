@@ -16,7 +16,7 @@ use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceTy
 #[derive(Clone)]
 pub struct LocalResourceId {
     pub r#type: Option<ResourceType>,
-    pub order_id: Option<u64>
+    pub order_id: Option<u64>,
 }
 
 impl SurrealSerializer for LocalResourceId {

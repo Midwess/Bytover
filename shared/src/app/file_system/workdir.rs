@@ -60,6 +60,6 @@ impl WorkDir {
 
     // Helper method to normalize paths once during construction
     fn normalize_path(path: String) -> String {
-        PathBuf::from(path).to_string_lossy().to_string()
+        PathBuf::from(path).as_os_str().to_string_lossy().to_string()
     }
 }

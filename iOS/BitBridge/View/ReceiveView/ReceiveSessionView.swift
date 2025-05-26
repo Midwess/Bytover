@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import SharedTypes
+import QuickLook
 
 struct ImageReceiveResourceView: View {
     var session_id: UInt64
@@ -16,9 +17,16 @@ struct ImageReceiveResourceView: View {
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
     
+    @State
+    var url: URL?
+    
     var body: some View {
         HStack {
             ResourceImage(resource: localResource.model, width: 90, height: 110, radius: 20)
+                .onTapGesture {_ in
+                    url = URL(fileURLWithPath: localResource.model.display_path)
+                }
+                .quickLookPreview($url)
         }
         .onReceive(core.transfer, perform: { value in
             guard let session = value?.received_sessions.first(where: { item in item.id == session_id}) else {
