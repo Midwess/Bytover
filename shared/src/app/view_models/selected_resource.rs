@@ -10,6 +10,7 @@ pub struct SelectedResourceViewModel {
     pub size_gb: f64,
     pub size_mb: f64,
     pub display_path: String,
+    pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
     pub is_valid: bool
@@ -22,7 +23,15 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             name: resource.name.clone(),
             size_gb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
             size_mb: 0.0,
-            display_path: resource.path.as_string(),
+            display_path: {
+                let path_string = resource.path.as_string();
+                if path_string.contains("://") {
+                    path_string.split("://").last().unwrap_or(&path_string).to_string()
+                } else {
+                    path_string
+                }
+            },
+            path: resource.path.clone(),
             thumbnail_path: resource.thumbnail_path.clone(),
             r#type: resource.r#type.clone(),
             is_valid: resource.is_valid

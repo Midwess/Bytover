@@ -16,7 +16,7 @@ use shared::app::operations::database::{
     LocalResourceDatabaseOperation,
     LocalResourceDatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput
+    SessionOperationOutput, TransferSessionOperation, TransferSessionOperationOutput
 };
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput};
@@ -71,6 +71,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferOperationOutput>()?;
     gen.register_type::<LocalResourceDatabaseOperation>()?;
     gen.register_type::<LocalResourceDatabaseOperationOutput>()?;
+    gen.register_type::<TransferSessionOperation>()?;
+    gen.register_type::<TransferSessionOperationOutput>()?;
     gen.register_type::<InternetOperation>()?;
     gen.register_type::<InternetOperationOutput>()?;
     gen.register_type::<DeviceOperation>()?;

@@ -7,15 +7,17 @@ use crate::app::operations::database::{
     LocalResourceDatabaseOperation,
     LocalResourceDatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput
+    SessionOperationOutput, TransferSessionOperation, TransferSessionOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
 use crate::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
 use crate::persistence::session::{SessionId, SessionRepository};
+use crate::persistence::transfer_session::{TransferSessionId, TransferSessionRepository};
 
 pub struct NativeDatabase {
     pub session_repository: SessionRepository,
-    pub local_resource_repository: LocalResourceRepository
+    pub local_resource_repository: LocalResourceRepository,
+    pub transfer_session_repository: TransferSessionRepository
 }
 
 impl NativeDatabase {
@@ -97,6 +99,49 @@ impl NativeDatabase {
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
             }
             DatabaseOperation::GenId() => DatabaseOperationOutput::GenId(gen_id().await),
+            DatabaseOperation::TransferSession(TransferSessionOperation::Save(session)) => {
+                let result = self.transfer_session_repository.save_session(session).await;
+                match result {
+                    Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(Some(session))),
+                    Err(err) => {
+                        log::error!("Failed to save transfer session: {:?}", err);
+                        DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(None))
+                    }
+                }
+            }
+            DatabaseOperation::TransferSession(TransferSessionOperation::GetAll(id)) => {
+                let result = self.transfer_session_repository.find_all(Some(&id), None, None).await;
+                match result {
+                    Ok(sessions) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
+                    Err(err) => {
+                        log::error!("Failed to get all transfer sessions: {:?}", err);
+                        DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(vec![]))
+                    }
+                }
+            }
+            DatabaseOperation::TransferSession(TransferSessionOperation::UpdateProgresses(order_id, progresses)) => {
+                let result = self.transfer_session_repository.update_progresses(order_id, progresses).await;
+                match result {
+                    Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(session)),
+                    Err(err) => {
+                        log::error!("Failed to update transfer session: {:?}", err);
+                        DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(None))
+                    }
+                }
+            }
+            DatabaseOperation::TransferSession(TransferSessionOperation::Remove(order_id)) => {
+                let result = self.transfer_session_repository.delete_one(&TransferSessionId {
+                    order_id: Some(order_id),
+                    ..Default::default()
+                }).await;
+                match result {
+                    Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(Some(session))),
+                    Err(err) => {
+                        log::error!("Failed to remove transfer session: {:?}", err);
+                        DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(None))
+                    }
+                }
+            }
             _ => panic!("Native database doesn't support this effect {effect:?}")
         }
     }

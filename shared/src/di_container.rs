@@ -25,6 +25,7 @@ use crate::network::webrtc::web_rtc::WebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
 use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
+use crate::persistence::transfer_session::TransferSessionRepository;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -135,13 +136,23 @@ impl DiContainer {
         }
     }
 
+    pub fn get_transfer_session_repository(&self) -> TransferSessionRepository {
+        TransferSessionRepository {
+            db: PoolRequestBuilder::new()
+                .retrieving_timeout(Duration::from_secs(30))
+                .pool(self.db.get().unwrap().clone())
+                .build()
+        }
+    }
+
     pub fn get_native_executor(&self) -> NativeExecutor {
         let web_rtc = Arc::new(WebRtc::new(self.workdir.get().unwrap().clone()));
         NativeExecutor {
             rpc: NativeRpc {},
             database: NativeDatabase {
                 session_repository: self.get_session_repository(),
-                local_resource_repository: self.get_local_resource_repository()
+                local_resource_repository: self.get_local_resource_repository(),
+                transfer_session_repository: self.get_transfer_session_repository()
             },
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {

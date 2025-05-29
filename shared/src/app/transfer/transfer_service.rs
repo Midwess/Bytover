@@ -4,6 +4,7 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, Tr
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
+use crate::app::operations::database::{DatabaseOperation, TransferSessionOperation};
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -11,8 +12,9 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
+use crate::persistence::transfer_session::TransferSessionId;
 
-use super::session::TransferSession;
+use super::session::{TransferSession, TransferType};
 use super::target::TransferTarget;
 
 pub struct TransferService {}
@@ -26,6 +28,23 @@ impl Default for TransferService {
 impl TransferService {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
+        let receive_session_id = TransferSessionId {
+            transfer_type: Some(TransferType::Receive),
+            ..Default::default()
+        };
+
+        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
+
+        let receive_sessions = TransferSessionOperation::get_all(receive_session_id, workdir).into_future(cmd.clone()).await;
+
+        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            new: receive_sessions,
+            removed: vec![],
+            updated: vec![]
+        }));
     }
 
     pub async fn cancel_transfer(&self, transfer_session: TransferSession, cmd: AppCommandContext) -> bool {
@@ -255,10 +274,17 @@ impl TransferService {
         });
 
         let mut stream = cmd.stream_from_shell(response);
+        let mut is_saved_session = false;
         while let Some(transfer_output) = stream.next().await {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
+                        // During the first time we receive a progress, we save the session, it is benefit for restoring failed
+                        if !is_saved_session {
+                            is_saved_session = true;
+                            TransferSessionOperation::save(transfer_session.clone(), &workdir).into_future(cmd.clone()).await;
+                        }
+
                         if progress.status.is_completed() {
                             log::info!(
                                 target: "transfer",
@@ -329,5 +355,18 @@ impl TransferService {
                 break;
             }
         }
+
+        if matches!(transfer_session.status(), TransferSessionStatus::Canceled) {
+            DialogOperation::toast("Transfer session canceled".to_string());
+            cmd.clone().request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+                TransferSessionOperation::Remove(transfer_session.order_id)
+            ))).await;
+        } else {
+            cmd.request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+                TransferSessionOperation::UpdateProgresses(transfer_session.order_id, transfer_session.progress)
+            ))).await;
+        }
+
+        cmd.notify_shell(CoreOperation::Render);
     }
 }

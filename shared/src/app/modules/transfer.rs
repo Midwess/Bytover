@@ -93,8 +93,10 @@ impl AppModule<BitBridge> for TransferModule {
         match event {
             TransferEvent::Launch() => {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
+                let transfer_service = DiContainer::get_instance().get_transfer_service();
                 Command::new(|it| async move {
-                    resource_transfer_selection_service.load_resources(it).await;
+                    resource_transfer_selection_service.load_resources(it.clone()).await;
+                    transfer_service.load_transfer_sessions(it).await;
                 })
             }
             TransferEvent::BeginLoadingResources() => {

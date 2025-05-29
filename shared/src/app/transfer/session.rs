@@ -57,10 +57,19 @@ pub struct TransferSession {
 pub struct TransferProgress {
     pub resource_order_id: u64,
     pub file_size: u64,
-    pub total_bytes_counter: u64,
+    #[surreal_derive(skip_serializing)]
+    #[surreal_derive(default)]
+    total_bytes_counter: u64,
+    #[surreal_derive(skip_serializing)]
+    #[surreal_derive(default)]
     bytes_per_second: u64,
+    #[surreal_derive(skip_serializing)]
+    #[surreal_derive(default)]
     start_time_utc_ms: u64,
+    #[surreal_derive(skip_serializing)]
+    #[surreal_derive(default)]
     bytes_sec_counter: u64,
+    #[surreal_derive(skip_serializing)]
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
     pub status: TransferStatus

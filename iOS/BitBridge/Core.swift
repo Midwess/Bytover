@@ -459,24 +459,24 @@ class CoreMock: Core {
         let pandaAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Panda.png?r=40&g=40&b=40", dominant_color_r: 40, dominant_color_g: 40, dominant_color_b: 40)
         
         // Create resource view models
-        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", thumbnail_path: nil, type: .image, is_valid: true)
-        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", thumbnail_path: nil, type: .image, is_valid: true)
-        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Presentation.pptx", size_gb: 0, size_mb: 12.7, display_path: "/Documents/Presentation.pptx", thumbnail_path: LocalResourcePath.absolutePath(""), type: .file, is_valid: true)
-        let resource4 = SelectedResourceViewModel(order_id: 4, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", thumbnail_path: nil, type: .video, is_valid: true)
-        let resource5 = SelectedResourceViewModel(order_id: 5, name: "Archive.zip", size_gb: 0, size_mb: 45, display_path: "/Downloads/Archive.zip", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource6 = SelectedResourceViewModel(order_id: 6, name: "Image1.jpg", size_gb: 0, size_mb: 3.2, display_path: "/Photos/Image1.jpg", thumbnail_path: nil, type: .image, is_valid: true)
-        let resource7 = SelectedResourceViewModel(order_id: 7, name: "Image2.jpg", size_gb: 0, size_mb: 2.8, display_path: "/Photos/Image2.jpg", thumbnail_path: nil, type: .image, is_valid: true)
-        let resource8 = SelectedResourceViewModel(order_id: 8, name: "Image3.jpg", size_gb: 0, size_mb: 4.1, display_path: "/Photos/Image3.jpg", thumbnail_path: nil, type: .image, is_valid: true)
-        let resource9 = SelectedResourceViewModel(order_id: 9, name: "Project.zip", size_gb: 0, size_mb: 78, display_path: "/Projects/Project.zip", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource10 = SelectedResourceViewModel(order_id: 10, name: "Music.mp3", size_gb: 0, size_mb: 8.5, display_path: "/Music/Music.mp3", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource11 = SelectedResourceViewModel(order_id: 11, name: "Report.docx", size_gb: 0, size_mb: 1.2, display_path: "/Documents/Report.docx", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource12 = SelectedResourceViewModel(order_id: 12, name: "Spreadsheet.xlsx", size_gb: 0, size_mb: 3.7, display_path: "/Documents/Spreadsheet.xlsx", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource13 = SelectedResourceViewModel(order_id: 13, name: "Backup.tar", size_gb: 0.32, size_mb: 320, display_path: "/Backups/Backup.tar", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource14 = SelectedResourceViewModel(order_id: 14, name: "Notes.txt", size_gb: 0, size_mb: 0.045, display_path: "/Documents/Notes.txt", thumbnail_path: nil, type: .video, is_valid: true)
-        let resource15 = SelectedResourceViewModel(order_id: 15, name: "Config.json", size_gb: 0, size_mb: 0.012, display_path: "/Settings/Config.json", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource16 = SelectedResourceViewModel(order_id: 16, name: "Script.sh", size_gb: 0, size_mb: 0.008, display_path: "/Scripts/Script.sh", thumbnail_path: nil, type: .file, is_valid: true)
-        let resource17 = SelectedResourceViewModel(order_id: 17, name: "Photo_album.zip", size_gb: 0.156, size_mb: 156, display_path: "/Photos/Photo_album.zip", thumbnail_path: nil, type: .file, is_valid: true)
-        
+        let path = LocalResourcePath.absolutePath("");
+        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", path: path, thumbnail_path: nil, type: .image, is_valid: true)
+        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", path: path, thumbnail_path: nil, type: .image, is_valid: true)
+        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Presentation.pptx", size_gb: 0, size_mb: 12.7, display_path: "/Documents/Presentation.pptx", path: path, thumbnail_path: LocalResourcePath.absolutePath(""), type: .file, is_valid: true)
+        let resource4 = SelectedResourceViewModel(order_id: 4, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", path: path, thumbnail_path: nil, type: .video, is_valid: true)
+        let resource5 = SelectedResourceViewModel(order_id: 5, name: "Archive.zip", size_gb: 0, size_mb: 45, display_path: "/Downloads/Archive.zip", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource6 = SelectedResourceViewModel(order_id: 6, name: "Image1.jpg", size_gb: 0, size_mb: 3.2, display_path: "/Photos/Image1.jpg", path: path, thumbnail_path: nil, type: .image, is_valid: true)
+        let resource7 = SelectedResourceViewModel(order_id: 7, name: "Image2.jpg", size_gb: 0, size_mb: 2.8, display_path: "/Photos/Image2.jpg", path: path, thumbnail_path: nil, type: .image, is_valid: true)
+        let resource8 = SelectedResourceViewModel(order_id: 8, name: "Image3.jpg", size_gb: 0, size_mb: 4.1, display_path: "/Photos/Image3.jpg", path: path, thumbnail_path: nil, type: .image, is_valid: true)
+        let resource9 = SelectedResourceViewModel(order_id: 9, name: "Project.zip", size_gb: 0, size_mb: 78, display_path: "/Projects/Project.zip", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource10 = SelectedResourceViewModel(order_id: 10, name: "Music.mp3", size_gb: 0, size_mb: 8.5, display_path: "/Music/Music.mp3", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource11 = SelectedResourceViewModel(order_id: 11, name: "Report.docx", size_gb: 0, size_mb: 1.2, display_path: "/Documents/Report.docx", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource12 = SelectedResourceViewModel(order_id: 12, name: "Spreadsheet.xlsx", size_gb: 0, size_mb: 3.7, display_path: "/Documents/Spreadsheet.xlsx", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource13 = SelectedResourceViewModel(order_id: 13, name: "Backup.tar", size_gb: 0.32, size_mb: 320, display_path: "/Backups/Backup.tar", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource14 = SelectedResourceViewModel(order_id: 14, name: "Notes.txt", size_gb: 0, size_mb: 0.045, display_path: "/Documents/Notes.txt", path: path, thumbnail_path: nil, type: .video, is_valid: true)
+        let resource15 = SelectedResourceViewModel(order_id: 15, name: "Config.json", size_gb: 0, size_mb: 0.012, display_path: "/Settings/Config.json", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource16 = SelectedResourceViewModel(order_id: 16, name: "Script.sh", size_gb: 0, size_mb: 0.008, display_path: "/Scripts/Script.sh", path: path, thumbnail_path: nil, type: .file, is_valid: true)
+        let resource17 = SelectedResourceViewModel(order_id: 17, name: "Photo_album.zip", size_gb: 0.156, size_mb: 156, display_path: "/Photos/Photo_album.zip", path: path, thumbnail_path: nil, type: .file, is_valid: true)
         // Create 11 receive sessions with different properties
         let receive_session1 = ReceiveSessionViewModel(
             id: 1, 
@@ -646,8 +646,8 @@ class CoreMock: Core {
         ));
         
         // Add selected resources
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", thumbnail_path: nil, type: .image, is_valid: false));
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", thumbnail_path: nil, type: .file, is_valid: true));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image, is_valid: false));
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file, is_valid: true));
         
         return x
     }

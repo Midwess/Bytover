@@ -6,10 +6,13 @@ use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::file_system::workdir::WorkDir;
+use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::user::User;
+use crate::persistence::transfer_session::TransferSessionId;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -18,7 +21,8 @@ pub enum DatabaseOperation {
     GenId(),
     Session(SessionOperation),
     User(UserDatabaseOperation),
-    LocalResource(LocalResourceDatabaseOperation)
+    LocalResource(LocalResourceDatabaseOperation),
+    TransferSession(TransferSessionOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -72,11 +76,32 @@ pub enum SessionOperationOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+pub enum TransferSessionOperation {
+    Save(TransferSession),
+    UpdateProgresses(u64, Vec<TransferProgress>),
+    Remove(u64),
+    GetAll(TransferSessionId)
+}
+
+impl Operation for TransferSessionOperation {
+    type Output = TransferSessionOperationOutput;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+pub enum TransferSessionOperationOutput {
+    Save(Option<TransferSession>),
+    UpdateProgresses(Option<TransferSession>),
+    Remove(Option<TransferSession>),
+    GetAll(Vec<TransferSession>)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum DatabaseOperationOutput {
     Session(SessionOperationOutput),
     User(UserDatabaseOperationOutput),
     LocalResource(LocalResourceDatabaseOperationOutput),
-    GenId(u64)
+    GenId(u64),
+    TransferSession(TransferSessionOperationOutput)
 }
 
 impl Operation for DatabaseOperation {
@@ -181,4 +206,61 @@ impl LocalResourceDatabaseOperation {
             _ => panic!("Invalid output expected Update got {it:?}")
         })
     }
+}
+
+impl TransferSessionOperation {
+    pub fn save(mut session: TransferSession, workdir: &WorkDir) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+        session.resources.iter_mut().for_each(|resource| {
+            resource.path = workdir.to_relative_path(&resource.path);
+            resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_relative_path(path));
+        });
+
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionOperation::Save(session)
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(
+                session
+            ))) => session,
+            _ => panic!("Invalid output expected Save got {it:?}")
+        })
+    }
+
+    pub fn update_progresses(order_id: u64, progresses: Vec<TransferProgress>) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionOperation::UpdateProgresses(order_id, progresses)
+        ))).map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(
+                session
+            ))) => session,
+            _ => panic!("Invalid output expected UpdateProgresses got {it:?}")
+        })
+    }
+
+    pub fn get_all(id: TransferSessionId, workdir: WorkDir) -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionOperation::GetAll(id)
+        ))).map(move |it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(mut sessions))) => {
+                sessions.iter_mut().for_each(|session| {
+                    session.resources.iter_mut().for_each(|resource| {
+                        resource.path = workdir.to_absolute_path(&resource.path);
+                        resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_absolute_path(path));
+                    });
+                });
+
+                sessions
+            }
+            _ => panic!("Invalid output expected GetAll got {it:?}")
+        })
+    }
+
+    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionOperation::Remove(id)
+        ))).map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(session))) => session,
+            _ => panic!("Invalid output expected Remove got {it:?}")
+        })
+    }   
 }
