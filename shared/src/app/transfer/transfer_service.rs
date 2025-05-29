@@ -70,11 +70,10 @@ impl TransferService {
 
         log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
-        cmd.request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(
-            transfer_session.peer_id().unwrap(),
-            transfer_session.order_id
-        )))
-        .await;
+        if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id).into_future(cmd.clone()).await {
+            log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
+            return false;
+        }
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],

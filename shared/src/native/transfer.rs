@@ -66,6 +66,7 @@ impl TransferNative {
                 }
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
+                log::info!(target: "native", "Cancelling session: {:?}", session_id);
                 let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
                 else {
                     return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());

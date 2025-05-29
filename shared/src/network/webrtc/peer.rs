@@ -395,11 +395,11 @@ impl PeerCommunication {
             session: transfer_session.clone()
         });
 
+        drop(session_guard);
+
         let mut channel_subscription = self.data_channel_tx.subscribe();
 
         let _ = self.connection.send::<TransferResponseMessage>(request, None, None).await??;
-
-        drop(session_guard);
 
         loop {
             let session_guard = session.lock().await;
@@ -727,6 +727,7 @@ impl PeerCommunication {
             });
 
             let mut session_guard = session.lock().await;
+            log::info!(target: "peer", "Stopping session: {:?}", session_id);
             let _ = self.connection.send_request_and_forget(request);
             session_guard.cancel();
         }

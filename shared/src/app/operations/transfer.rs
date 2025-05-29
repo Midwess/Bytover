@@ -46,4 +46,12 @@ impl TransferOperation {
             _ => panic!("Mismatch in response type, expected Void, got {it:?}")
         })
     }
+
+    pub fn cancel_session(peer_id: u128, session_id: u64) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(peer_id, session_id))).map(|it| match it {
+            CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled) => Ok(()),
+            CoreOperationOutput::ConnectionError(error) => Err(error),
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+        })
+    }
 }
