@@ -1,8 +1,10 @@
-use crate::app::file_system::file::{LocalResource, ResourceType};
+use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
+use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
-use crate::app::transfer::session::{TransferSession, TransferType};
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus, TransferType};
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
@@ -14,7 +16,7 @@ use crate::app::view_models::receive_session::{
     VideoReceiveResourceViewModel
 };
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
@@ -52,8 +54,17 @@ pub enum TransferEvent {
     EndLoadingResources(),
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
+    OpenSession {
+        session_id: u64
+    },
+    DeleteSession {
+        session_id: u64
+    },
     StartTransfer {
         target_id: String
+    },
+    CancelTransfer {
+        session_id: u64
     },
     TransferCanceled {
         session_id: u64
@@ -77,6 +88,13 @@ pub enum TransferEvent {
     UpdateTransferTargets {
         new: Vec<TransferTarget>,
         removed: Vec<TransferTarget>
+    },
+    OpenSessionResource {
+        session_id: u64,
+        resource_id: u64
+    },
+    OpenSelectedResource {
+        resource_id: u64
     }
 }
 
@@ -120,6 +138,52 @@ impl AppModule<BitBridge> for TransferModule {
                 let resource_transfer_selection_service = DiContainer::get_instance().get_resource_transfer_selection_service();
                 resource_transfer_selection_service.remove_resource(it, id).await;
             }),
+            TransferEvent::CancelTransfer { session_id } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+                    return Command::new(|it| async move {
+                        DialogOperation::toast("Session not found".to_string()).into_future(it.clone()).await;
+                    });
+                };
+
+                if session.is_completed() {
+                    return Command::new(|it| async move {
+                        DialogOperation::toast("Session is already completed".to_string()).into_future(it.clone()).await;
+                    });
+                }
+
+                Command::new(|it| async move {
+                    let confirmation = DialogOperation::alert(AlertDialog::confirmation(
+                        "Cancel the transfer ?".to_string(),
+                        "Yes".to_string(),
+                        Some("No".to_string())
+                    ))
+                    .into_future(it.clone())
+                    .await;
+
+                    if !confirmation {
+                        return;
+                    }
+
+                    let transfer_service = DiContainer::get_instance().get_transfer_service();
+                    transfer_service.delete_session(session, it.clone()).await;
+                })
+            },
+            TransferEvent::DeleteSession { session_id } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+                    return Command::done();
+                };
+
+                if !session.is_completed() {
+                    return Command::new(|it| async move {
+                        DialogOperation::toast("Session is still in progress".to_string()).into_future(it.clone()).await;
+                    });
+                }
+
+                return Command::new(|it| async move {
+                    let transfer_service = DiContainer::get_instance().get_transfer_service();
+                    transfer_service.delete_session(session, it.clone()).await;
+                });
+            },
             TransferEvent::UpdateResourcesModel { new, removed, updated } => {
                 for new in new {
                     if model.transfer.selected_resources.iter().any(|it| it.order_id == new.order_id) {
@@ -152,7 +216,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let session = session.clone();
                 Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
-                    transfer_service.cancel_transfer(session, it.clone()).await;
+                    transfer_service.delete_session(session, it.clone()).await;
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
@@ -167,23 +231,13 @@ impl AppModule<BitBridge> for TransferModule {
                     .transfer_sessions
                     .iter()
                     .filter(|it| it.transfer_type == TransferType::Send)
-                    .find(|it| {
-                        if it.is_completed() {
-                            return false;
-                        }
-
-                        if let TransferTarget::Nearby(peer) = &target {
-                            it.peer_id() == Some(peer.id()) && it.transfer_type == TransferType::Send
-                        } else {
-                            false
-                        }
-                    })
+                    .find(|it| it.peer_id().map(|id| id.to_string()) == Some(target.id()))
                     .cloned();
 
-                Command::new(async |it| {
+                Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     if let Some(duplicated_session) = duplicated_session {
-                        transfer_service.cancel_transfer(duplicated_session.clone(), it.clone()).await;
+                        it.send_event(AppEvent::Transfer(TransferEvent::CancelTransfer { session_id: duplicated_session.order_id }));
                         return;
                     }
 
@@ -229,6 +283,56 @@ impl AppModule<BitBridge> for TransferModule {
                 model.transfer.transfer_targets.extend(new);
                 model.transfer.transfer_targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
                 Command::done()
+            }
+            TransferEvent::OpenSessionResource { session_id, resource_id } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id) else {
+                    return Command::done();
+                };
+
+                let Some(resource) = session.resources.iter().find(|it| it.order_id == resource_id) else {
+                    return Command::done();
+                };
+
+                let resource_path = resource.path.clone();
+                return Command::new(move |it| async move {
+                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
+                    let path = workdir.to_absolute_path(&resource_path);
+                    let _ = LocalStorageOperation::open(path).into_future(it.clone()).await;
+                })
+            }
+            TransferEvent::OpenSession { session_id } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id) else {
+                    return Command::done();
+                };
+
+                if session.transfer_type == TransferType::Send {
+                    return Command::done();
+                }
+
+                if !session.is_completed() {
+                    return Command::new(|it| async move {
+                        DialogOperation::toast("Session is not completed".to_string()).into_future(it.clone()).await;
+                    });
+                }
+
+                let session_id = session.order_id;
+                Command::new(|it| async move {
+                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
+                    let path = workdir.session_folder(session_id);
+                    let _ = LocalStorageOperation::open(LocalResourcePath::AbsolutePath(path)).into_future(it.clone()).await;
+                })
+            }
+            TransferEvent::OpenSelectedResource { resource_id } => {
+                let Some(resource) = model.transfer.selected_resources.iter().find(|it| it.order_id == resource_id) else {
+                    return Command::done();
+                };
+
+                let resource_path = resource.path.clone();
+                return Command::new(move |it| async move {
+                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
+                    let path = workdir.to_absolute_path(&resource_path);
+                    let _ = LocalStorageOperation::open(path).into_future(it.clone()).await;
+                })
             }
         }
     }

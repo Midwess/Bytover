@@ -5,6 +5,7 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, Tr
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::database::{DatabaseOperation, TransferSessionOperation};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -47,33 +48,18 @@ impl TransferService {
         }));
     }
 
-    pub async fn cancel_transfer(&self, transfer_session: TransferSession, cmd: AppCommandContext) -> bool {
-        let status = transfer_session.status();
-        if matches!(status, TransferSessionStatus::Failed(_) | TransferSessionStatus::Success) {
-            return false;
-        }
+    pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
+        if !transfer_session.is_completed() {
+            log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
-        // If not canceled, ask for confirmation
-        if transfer_session.status() != TransferSessionStatus::Canceled {
-            let confirmation = DialogOperation::alert(AlertDialog::confirmation(
-                "Cancel the transfer ?".to_string(),
-                "Yes".to_string(),
-                Some("No".to_string())
-            ))
-            .into_future(cmd.clone())
-            .await;
-
-            if !confirmation {
-                return false;
+            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id).into_future(cmd.clone()).await {
+                log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
             }
         }
 
-        log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
-
-        if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id).into_future(cmd.clone()).await {
-            log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
-            return false;
-        }
+        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
+        let path = workdir.session_folder(transfer_session.order_id);
+        let _ = LocalStorageOperation::delete(LocalResourcePath::AbsolutePath(path)).into_future(cmd.clone()).await;
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],
@@ -82,8 +68,6 @@ impl TransferService {
         }));
 
         cmd.notify_shell(CoreOperation::Render);
-
-        true
     }
 
     pub async fn transfer(&self, mut selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {

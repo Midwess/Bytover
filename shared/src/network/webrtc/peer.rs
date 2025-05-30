@@ -489,8 +489,7 @@ impl PeerCommunication {
                 request_id,
                 request: None,
                 response: Some(response)
-            })?
-            .await;
+            })?;
 
         if !is_accepted {
             return Ok(TransferSessionStatus::Canceled);
@@ -524,12 +523,14 @@ impl PeerCommunication {
                     };
 
                     if let Request::ResourceThumbnailFullfill(thumbnail) = message {
+                        log::info!(target: "peer", "Received thumbnail for resource {:?}", thumbnail.resource_id);
                         if let Some(resource_thumbnail_message::Data::Png(data)) = thumbnail.data {
                             let saved_path = format!("{}/{}.png", thumbnail_dir, thumbnail.resource_id);
                             let file = match resolving_thumbnail_files.get_mut(&thumbnail.resource_id) {
                                 Some(file) => file,
                                 None => {
                                     if let Ok(existing) = File::existing(saved_path.clone()).await {
+                                        log::info!(target: "peer", "Deleting existing thumbnail file");
                                         let _ = existing.delete().await;
                                     }
 

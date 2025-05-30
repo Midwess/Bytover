@@ -1,5 +1,3 @@
-//
-//  Core.swift
 //  BitBridge
 //
 //  Created by Dang Minh Tien on 12/2/25.
@@ -41,6 +39,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
+    var quicklook_url: CurrentValueSubject<URL?, Never> = .init(nil)
+    
     @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     var alert: CurrentValueSubject<(AlertDialog, SingleWaiter<Bool>)?, Never> = .init(nil)
@@ -129,8 +129,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 let errorMessage = "Loading thumbnail for non-platform identifier paths is unsupported"
                 return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(nil)).bincodeSerialize()))
             }
+        case .appCapabilities(.localStorage(.open(let path))):
+            await self.open(path: path)
+            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.localStorage(.getWorkDirPath)):
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage( LocalStorageOperationOutput.workDirPath(WorkDir(private_path: getDocumentsDirectory(isPrivate: true).path, public_path: getDocumentsDirectory(isPrivate: false).path))).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.workDirPath(WorkDir(private_path: getDocumentsDirectory(isPrivate: true).path, public_path: getDocumentsDirectory(isPrivate: false).path))).bincodeSerialize()))
         case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
             let absolutePath = switch path {
             case .absolutePath(let absolute):
@@ -259,10 +262,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
             
-            guard let asset = await PHAsset.getCachedAsset(identifier: identifier)?.asset else {
+            guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
                 continue;
             }
             
+            let asset = assetCached.asset
             let asset_type = asset.mediaType
             
             let resourceType: ResourceType = {
@@ -276,8 +280,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 }
             }()
             
+            let phassetUrl = "phasset://" + identifier
+            
             let resourceSelection = ResourceSelection(
-                path: .platformIdentifier("phasset://\(identifier)"),
+                path: .platformIdentifier(phassetUrl),
                 type: resourceType
             )
             
@@ -288,7 +294,22 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         self.selectedMediaItems.removeAll()
     }
     
-    func open(path: LocalResourcePath) {
+    func open(path: LocalResourcePath) async {
+        switch path {
+        case .absolutePath(let absolutePath):
+            let url = URL(fileURLWithPath: absolutePath)
+            self.quicklook_url.value = url
+            
+        case .platformIdentifier(let identifier):
+            guard let absolutePath = await getAbsoluteUrl(from: identifier) else { return }
+            let url = URL(fileURLWithPath: absolutePath)
+            self.quicklook_url.send(url)
+            
+        case .relativePath(let relativePath, let isPrivate):
+            let baseURL = getDocumentsDirectory(isPrivate: isPrivate)
+            let url = baseURL.appendingPathComponent(relativePath)
+            self.quicklook_url.value = url
+        }
     }
     
     func getFileSize(item_identifier: String) async -> UInt64 {

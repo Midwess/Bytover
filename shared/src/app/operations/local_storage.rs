@@ -21,7 +21,9 @@ pub enum LocalStorageOperation {
     LoadFileThumbnailPng(LocalResourcePath),
     Get { path: String },
     NewFile { bytes: Vec<u8>, path: String },
-    Copy { source: String, destination: String }
+    Copy { source: String, destination: String },
+    Open { path: LocalResourcePath },
+    Delete { path: LocalResourcePath }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -33,7 +35,8 @@ pub enum LocalStorageOperationOutput {
     GetAbsolutePath(String),
     NewFile(LocalResource),
     Copy(LocalResource),
-    LoadFileThumbnailPng(Option<Vec<u8>>)
+    LoadFileThumbnailPng(Option<Vec<u8>>),
+    Delete(bool)
 }
 
 impl Operation for LocalStorageOperation {
@@ -111,5 +114,19 @@ impl LocalStorageOperation {
                 CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetResourceType(resource_type)) => resource_type,
                 _ => panic!("Mismatch in response type, expected GetResourceType, got {it:?}")
             })
+    }
+
+    pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Open { path })).map(|it| match it {
+            CoreOperationOutput::Void => (),
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+        })
+    }
+
+    pub fn delete(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = bool>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::Delete { path })).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Delete(deleted)) => deleted,
+            _ => panic!("Mismatch in response type, expected Delete, got {it:?}")
+        })
     }
 }

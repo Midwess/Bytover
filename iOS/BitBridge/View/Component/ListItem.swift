@@ -132,11 +132,15 @@ struct SelectedResourceItem: View {
                                     await core.update(.transfer(.removeResource(resource.order_id)))
                                 }
                             }
-                            Button("Open") {
-                            }
                         }
             }
             .frame(minWidth: 35, alignment: .trailing)
+        }
+        .onTapGesture {
+            print("Open")
+            Task {
+                await core.update(.transfer(.openSelectedResource(resource_id: resource.order_id)))
+            }
         }
         .opacity(resource.is_valid ? 1 : 0.5)
         .background(.gray.opacity(0.0))

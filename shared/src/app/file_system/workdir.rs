@@ -42,6 +42,10 @@ impl WorkDir {
         PathBuf::from(&self.public_path).join(self.resources_relative(session_id, path)).to_string_lossy().to_string()
     }
 
+    pub fn session_folder(&self, session_id: u64) -> String {
+        PathBuf::from(&self.public_path).join(format!("session-{session_id}")).to_string_lossy().to_string()
+    }
+
     pub fn resources_relative(&self, session_id: u64, path: String) -> String {
         PathBuf::from(format!("session-{session_id}")).join(Self::normalize_path(path)).to_string_lossy().to_string()
     }

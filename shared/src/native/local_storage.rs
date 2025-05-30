@@ -96,6 +96,26 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::GetResourceType(None)
             }
+            LocalStorageOperation::Delete { path } => {
+                let LocalResourcePath::AbsolutePath(path) = path else {
+                    return LocalStorageOperationOutput::Delete(false);
+                };
+
+                let path_buf = PathBuf::from(path);
+                if path_buf.is_dir() {
+                    let folder = Folder::new(path_buf).await.unwrap();
+                    let is_deleted = folder.delete().await.is_ok();
+                    return LocalStorageOperationOutput::Delete(is_deleted);
+                } else if path_buf.is_file() {
+                    let file = File::existing(path_buf).await;
+                    if let Ok(file) = file {
+                        let is_deleted = file.delete().await.is_ok();
+                        return LocalStorageOperationOutput::Delete(is_deleted);
+                    }
+                }
+
+                LocalStorageOperationOutput::Delete(false)
+            }
             _ => {
                 panic!("Unsupported operation: {effect:?}")
             }
