@@ -39,7 +39,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
-    var quicklook_url: CurrentValueSubject<URL?, Never> = .init(nil)
+    var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     
     @Published var isSignedIn = true
     @Published var selectedMediaItems: [PhotosPickerItem] = []
@@ -227,6 +227,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             }
         case "phasset":
             let identifier = platformIdentifier.dropFirst("phasset://".count)
+           
             return await PHAsset.getCachedAsset(identifier: String(identifier))?.fileUrl?.path ?? ""
         default:
             return nil
@@ -262,9 +263,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         for item in self.selectedMediaItems {
             guard let identifier = item.itemIdentifier else { continue }
             
+            let startTime = CFAbsoluteTimeGetCurrent()
             guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
                 continue;
             }
+            let executionTime = CFAbsoluteTimeGetCurrent() - startTime
+            print("getCachedAsset execution time: \(executionTime) seconds")
             
             let asset = assetCached.asset
             let asset_type = asset.mediaType
@@ -295,21 +299,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
     
     func open(path: LocalResourcePath) async {
-        switch path {
-        case .absolutePath(let absolutePath):
-            let url = URL(fileURLWithPath: absolutePath)
-            self.quicklook_url.value = url
-            
-        case .platformIdentifier(let identifier):
-            guard let absolutePath = await getAbsoluteUrl(from: identifier) else { return }
-            let url = URL(fileURLWithPath: absolutePath)
-            self.quicklook_url.send(url)
-            
-        case .relativePath(let relativePath, let isPrivate):
-            let baseURL = getDocumentsDirectory(isPrivate: isPrivate)
-            let url = baseURL.appendingPathComponent(relativePath)
-            self.quicklook_url.value = url
-        }
+        quicklook_path.value = path
     }
     
     func getFileSize(item_identifier: String) async -> UInt64 {
@@ -762,7 +752,7 @@ class AssetCache {
 }
 
 extension PHAsset {
-    static func getCachedAsset(identifier: String) async -> PHAssetCached? {
+    static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }
@@ -772,15 +762,20 @@ extension PHAsset {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
         guard let asset = fetchResult.firstObject,
               let resource = PHAssetResource.assetResources(for: asset).first else {
-            return nil
+                return nil
         }
         
         let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
         
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let url = includeUrl ? await asset.getAbsoluteURL() : nil
+        let executionTime = CFAbsoluteTimeGetCurrent() - startTime
+        print("getAbsoluteURL execution time: \(executionTime) seconds")
+        
         let cached = PHAssetCached(
             fileName: resource.originalFilename,
             fileSize: UInt64(fileSize),
-            fileUrl: await asset.getAbsoluteURL(),
+            fileUrl: url,
             asset: asset
         )
         

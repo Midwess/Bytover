@@ -11,6 +11,7 @@ import SharedTypes
 
 struct ContentView: View {
     @EnvironmentObject var core: Core
+    @State var quicklook_path: LocalResourcePath? = nil
     
     var body: some View {
         ZStack {
@@ -18,7 +19,11 @@ struct ContentView: View {
                 .navigate(to: HomeView(), when: $core.isSignedIn)
                 .overlay(FadingBackground())
             Alert()
+            QuickLookSheet(path: $quicklook_path)
         }
+        .onReceive(core.quicklook_path, perform: {value in
+            quicklook_path = value
+        })
     }
 }
 struct CounterView_Previews: PreviewProvider {
