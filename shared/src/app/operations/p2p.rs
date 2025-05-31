@@ -6,6 +6,7 @@ use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
@@ -32,7 +33,12 @@ pub enum P2POperationOutput {
         request_id: String,
         session_id: u64
     },
-    NearbyServerStopped
+    NearbyServerStopped,
+    ThumbnailFullfillment {
+        session_id: u64,
+        resource_id: u64,
+        path: LocalResourcePath
+    }
 }
 
 impl Operation for P2POperation {

@@ -39,7 +39,10 @@ impl WorkDir {
     }
 
     pub fn resources(&self, session_id: u64, path: String) -> String {
-        PathBuf::from(&self.public_path).join(self.resources_relative(session_id, path)).to_string_lossy().to_string()
+        PathBuf::from(&self.public_path)
+            .join(self.resources_relative(session_id, path))
+            .to_string_lossy()
+            .to_string()
     }
 
     pub fn session_folder(&self, session_id: u64) -> String {
@@ -47,18 +50,19 @@ impl WorkDir {
     }
 
     pub fn resources_relative(&self, session_id: u64, path: String) -> String {
-        PathBuf::from(format!("session-{session_id}")).join(Self::normalize_path(path)).to_string_lossy().to_string()
+        PathBuf::from(format!("session-{session_id}"))
+            .join(Self::normalize_path(path))
+            .to_string_lossy()
+            .to_string()
     }
 
     pub fn to_absolute_path(&self, path: &LocalResourcePath) -> LocalResourcePath {
         match path {
-            LocalResourcePath::RelativePath { path, is_private } => {
-                LocalResourcePath::AbsolutePath(if *is_private {
-                    PathBuf::from(&self.private_path).join(path).to_string_lossy().to_string()
-                } else {
-                    PathBuf::from(&self.public_path).join(path).to_string_lossy().to_string()
-                })
-            }
+            LocalResourcePath::RelativePath { path, is_private } => LocalResourcePath::AbsolutePath(if *is_private {
+                PathBuf::from(&self.private_path).join(path).to_string_lossy().to_string()
+            } else {
+                PathBuf::from(&self.public_path).join(path).to_string_lossy().to_string()
+            }),
             LocalResourcePath::AbsolutePath(path) => LocalResourcePath::AbsolutePath(path.clone()),
             LocalResourcePath::PlatformIdentifier(path) => LocalResourcePath::PlatformIdentifier(path.clone())
         }
@@ -69,7 +73,10 @@ impl WorkDir {
             LocalResourcePath::AbsolutePath(path) => {
                 let is_private = path.starts_with(&self.private_path);
                 let relative = self.to_relative(path.clone());
-                LocalResourcePath::RelativePath { path: relative, is_private }
+                LocalResourcePath::RelativePath {
+                    path: relative,
+                    is_private
+                }
             }
             _ => path.clone()
         }

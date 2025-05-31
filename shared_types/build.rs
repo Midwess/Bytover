@@ -16,7 +16,9 @@ use shared::app::operations::database::{
     LocalResourceDatabaseOperation,
     LocalResourceDatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput, TransferSessionOperation, TransferSessionOperationOutput
+    SessionOperationOutput,
+    TransferSessionOperation,
+    TransferSessionOperationOutput
 };
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput};

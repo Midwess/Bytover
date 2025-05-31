@@ -80,7 +80,8 @@ pub enum TransferSessionOperation {
     Save(TransferSession),
     UpdateProgresses(u64, Vec<TransferProgress>),
     Remove(u64),
-    GetAll(TransferSessionId)
+    GetAll(TransferSessionId),
+    UpdateResource { session_id: u64, resource: LocalResource }
 }
 
 impl Operation for TransferSessionOperation {
@@ -92,7 +93,8 @@ pub enum TransferSessionOperationOutput {
     Save(Option<TransferSession>),
     UpdateProgresses(Option<TransferSession>),
     Remove(Option<TransferSession>),
-    GetAll(Vec<TransferSession>)
+    GetAll(Vec<TransferSession>),
+    UpdateResource(Option<TransferSession>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -219,29 +221,55 @@ impl TransferSessionOperation {
             TransferSessionOperation::Save(session)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(session))) => {
                 session
-            ))) => session,
+            }
             _ => panic!("Invalid output expected Save got {it:?}")
         })
     }
 
-    pub fn update_progresses(order_id: u64, progresses: Vec<TransferProgress>) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+    pub fn update_progresses(
+        order_id: u64,
+        progresses: Vec<TransferProgress>
+    ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::UpdateProgresses(order_id, progresses)
-        ))).map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(
-                session
-            ))) => session,
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
+                TransferSessionOperationOutput::UpdateProgresses(session)
+            )) => session,
             _ => panic!("Invalid output expected UpdateProgresses got {it:?}")
+        })
+    }
+
+    pub fn update_resource(
+        session_id: u64,
+        mut resource: LocalResource,
+        workdir: &WorkDir
+    ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
+        resource.path = workdir.to_relative_path(&resource.path);
+        resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_relative_path(path));
+
+        Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
+            TransferSessionOperation::UpdateResource { session_id, resource }
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(
+                TransferSessionOperationOutput::UpdateResource(session)
+            )) => session,
+            _ => panic!("Invalid output expected UpdateResource got {it:?}")
         })
     }
 
     pub fn get_all(id: TransferSessionId, workdir: WorkDir) -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::GetAll(id)
-        ))).map(move |it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(mut sessions))) => {
+        )))
+        .map(move |it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(
+                mut sessions
+            ))) => {
                 sessions.iter_mut().for_each(|session| {
                     session.resources.iter_mut().for_each(|resource| {
                         resource.path = workdir.to_absolute_path(&resource.path);
@@ -258,9 +286,12 @@ impl TransferSessionOperation {
     pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::Remove(id)
-        ))).map(|it| match it {
-            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(session))) => session,
+        )))
+        .map(|it| match it {
+            CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(
+                session
+            ))) => session,
             _ => panic!("Invalid output expected Remove got {it:?}")
         })
-    }   
+    }
 }

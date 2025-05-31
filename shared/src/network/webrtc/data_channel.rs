@@ -231,7 +231,7 @@ impl DataChannel {
             return Err(DataChannelError::SessionCanceled);
         };
 
-        let mut session_guard = session.lock().await;
+        let session_guard = session.lock().await;
         let resource = session_guard
             .resources
             .iter()
@@ -252,7 +252,9 @@ impl DataChannel {
             let folder = Folder::new(resource_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
             folder.cursor(1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
         } else {
-            let file = File::existing(resource_path.clone()).await.map_err(|e| DataChannelError::FileError(e.to_string()))?;
+            let file = File::existing(resource_path.clone())
+                .await
+                .map_err(|e| DataChannelError::FileError(e.to_string()))?;
             file.cursor(0, 1024 * 1024).await.map_err(|e| DataChannelError::FileError(e.to_string()))?
         };
 

@@ -2,7 +2,7 @@ use crate::app::file_system::file::{LocalResource, ResourceType};
 use schema::devlog::bitbridge::{ResourceMessage, ResourceTypeMessage};
 
 impl LocalResource {
-    pub async fn to_proto(&self) -> ResourceMessage {
+    pub fn to_proto(&self) -> ResourceMessage {
         let proto_type = match self.r#type {
             ResourceType::Image => ResourceTypeMessage::Image,
             ResourceType::Video => ResourceTypeMessage::Video,

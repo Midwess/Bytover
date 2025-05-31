@@ -10,6 +10,7 @@ use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
 use crate::app::authentication::service::AuthenticationService;
+use crate::app::file_system::workdir::WorkDir;
 use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
@@ -33,7 +34,7 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Surreal<Any>>>>,
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>,
-    workdir: OnceCell<String>,
+    workdir: OnceCell<WorkDir>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>
@@ -92,11 +93,11 @@ impl DiContainer {
         }
     }
 
-    pub fn init(&self, work_dir_path: String) {
-        let _ = self.workdir.set(work_dir_path.clone());
+    pub fn init(&self, work_dir: WorkDir) {
+        let _ = self.workdir.set(work_dir.clone());
         scoped(get_tokio_rt().handle()).scope(move |scope| {
             scope.spawn(async move {
-                let db_path = format!("{}/{}", work_dir_path, "surrealdb.db");
+                let db_path = work_dir.database();
                 log::info!(target: "environment", "Connecting to local database at {}", db_path);
                 let local_db: Box<dyn PoolResourceProvider<Surreal<Any>>> = Box::new(SurrealDbConnectionProvider {
                     connection: SurrealDbLocalConnectionInfo { db_path: db_path.clone() }

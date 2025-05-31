@@ -104,6 +104,7 @@ impl TransferProgress {
 
     pub fn success(&mut self) {
         self.complete();
+        self.total_bytes_counter = self.file_size;
         self.status = TransferStatus::Success;
     }
 
@@ -199,7 +200,7 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub async fn answer(id: u64, mut out_resources: Vec<LocalResource>, target: TransferTarget) -> Self {
+    pub fn answer(id: u64, mut out_resources: Vec<LocalResource>, target: TransferTarget) -> Self {
         out_resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
             order_id: id,
@@ -312,6 +313,7 @@ impl TransferSession {
             .progress
             .iter()
             .any(|it| it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending);
+
         if is_in_progress {
             return TransferSessionStatus::InProgress {
                 bytes_per_second: self.speed(1000),

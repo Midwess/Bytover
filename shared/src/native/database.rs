@@ -7,7 +7,9 @@ use crate::app::operations::database::{
     LocalResourceDatabaseOperation,
     LocalResourceDatabaseOperationOutput,
     SessionOperation,
-    SessionOperationOutput, TransferSessionOperation, TransferSessionOperationOutput
+    SessionOperationOutput,
+    TransferSessionOperation,
+    TransferSessionOperationOutput
 };
 use crate::entities::session::{Session, SessionType};
 use crate::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
@@ -130,15 +132,33 @@ impl NativeDatabase {
                 }
             }
             DatabaseOperation::TransferSession(TransferSessionOperation::Remove(order_id)) => {
-                let result = self.transfer_session_repository.delete_one(&TransferSessionId {
-                    order_id: Some(order_id),
-                    ..Default::default()
-                }).await;
+                let result = self
+                    .transfer_session_repository
+                    .delete_one(&TransferSessionId {
+                        order_id: Some(order_id),
+                        ..Default::default()
+                    })
+                    .await;
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(Some(session))),
                     Err(err) => {
                         log::error!("Failed to remove transfer session: {:?}", err);
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(None))
+                    }
+                }
+            }
+            DatabaseOperation::TransferSession(TransferSessionOperation::UpdateResource { session_id, resource }) => {
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    ..Default::default()
+                };
+
+                let result = self.transfer_session_repository.update_resource(id, resource).await;
+                match result {
+                    Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(session)),
+                    Err(err) => {
+                        log::error!("Failed to update transfer session: {:?}", err);
+                        DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(None))
                     }
                 }
             }

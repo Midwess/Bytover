@@ -136,6 +136,19 @@ impl NearbyService {
                     log::error!(target: ns.as_str(), "Device error: {:?}", error);
                     break;
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::ThumbnailFullfillment {
+                    session_id,
+                    resource_id,
+                    path
+                }) => {
+                    log::info!(target: ns.as_str(), "Received thumbnail fullfillment from peer: {}", peer.id);
+                    let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
+                        session_id,
+                        resource_id,
+                        path: path.clone()
+                    });
+                    ctx.notify_shell(CoreOperation::Notified(request));
+                }
                 CoreOperationOutput::Void => {
                     continue;
                 }

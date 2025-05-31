@@ -1,3 +1,4 @@
+use crate::app::file_system::workdir::WorkDir;
 use crate::app::modules::AppModule;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
@@ -13,7 +14,8 @@ use super::nearby::NearbyEvent;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
-    pub device: Option<DeviceInfo>
+    pub device: Option<DeviceInfo>,
+    pub workdir: Option<WorkDir>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -24,7 +26,8 @@ pub struct EnvironmentModule {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum EnvironmentEvent {
-    AppLaunched
+    AppLaunched,
+    UpdateWorkDir { workdir: WorkDir }
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -34,7 +37,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
     fn update(
         &self,
         event: Self::Event,
-        _model: &mut AppModel,
+        model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
@@ -42,15 +45,22 @@ impl AppModule<BitBridge> for EnvironmentModule {
                 logger::setup();
                 init_scoped_id_generator("BitBridge".to_string());
                 Command::new(|ctx| async move {
-                    let workdir_path = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
+                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
                     let di_container = DiContainer::get_instance();
-                    di_container.init(workdir_path.database());
+                    di_container.init(workdir.clone());
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
                     // di_container.get_authentication_service().update_signin_session(ctx).await;
                     log::info!(target: "nearby", "Starting");
+                    ctx.notify_shell(CoreOperation::Notified(AppEvent::Environment(
+                        EnvironmentEvent::UpdateWorkDir { workdir }
+                    )));
                     ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::Launch()))).await;
                 })
                 .then(Command::done())
+            }
+            EnvironmentEvent::UpdateWorkDir { workdir } => {
+                model.environment.workdir = Some(workdir);
+                Command::done()
             }
         }
     }

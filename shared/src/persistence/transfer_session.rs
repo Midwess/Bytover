@@ -14,18 +14,22 @@ use surrealdb::sql::{Thing, Value};
 use surrealdb::Surreal;
 use uniffi::Record;
 
+use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
-use crate::app::transfer::target::TransferTarget;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Record)]
 pub struct TransferSessionId {
     pub transfer_type: Option<TransferType>,
-    pub order_id: Option<u64>,
+    pub order_id: Option<u64>
 }
 
 impl SurrealSerializer for TransferSessionId {
     fn serialize(self) -> Value {
-        vec![self.transfer_type.serialize(), self.order_id.serialize()].serialize()
+        vec![
+            self.transfer_type.serialize(),
+            self.order_id.serialize(),
+        ]
+        .serialize()
     }
 }
 
@@ -92,10 +96,12 @@ impl TransferSessionRepository {
     }
 
     pub async fn update_progresses(&self, order_id: u64, progresses: Vec<TransferProgress>) -> Resolve<Option<TransferSession>> {
-        let session = self.find_one(&TransferSessionId {
-            order_id: Some(order_id),
-            ..Default::default()
-        }).await?;
+        let session = self
+            .find_one(&TransferSessionId {
+                order_id: Some(order_id),
+                ..Default::default()
+            })
+            .await?;
 
         if let Some(session) = session {
             let mut session = session;
@@ -114,5 +120,21 @@ impl TransferSessionRepository {
             .await?
             .take(RPath::from(0))?;
         Ok(result)
+    }
+
+    pub async fn update_resource(&self, session_id: TransferSessionId, resource: LocalResource) -> Resolve<Option<TransferSession>> {
+        let session = self.find_one(&session_id).await?;
+        if let Some(mut session) = session {
+            // Find the resource by order_id and update it
+            if let Some(existing_resource) = session.resources.iter_mut().find(|r| r.order_id == resource.order_id) {
+                *existing_resource = resource;
+            }
+
+            log::info!(target: "transfer", "Update resource in database");
+            let result = self.update_one(session).await?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 }

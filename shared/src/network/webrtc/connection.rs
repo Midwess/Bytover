@@ -19,6 +19,7 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
+use crate::app::file_system::workdir::WorkDir;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crate::network::webrtc::message_channel::MessageChannel;
@@ -43,8 +44,10 @@ pub enum ConnectionWebRtcErrors {
     ConnectionCorrupted,
     #[error("failed to parse response {:?}", .0)]
     ParseError(String),
-    #[error("Request timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("Send request timeout")]
+    SendTimeout(tokio::time::error::Elapsed),
+    #[error("Receive request timeout")]
+    ReceiveTimeout(tokio::time::error::Elapsed),
     #[error("Connection not found")]
     ConnectionNotFound,
     #[error("Upgrade to peer communication, will retry it a few secs")]
@@ -60,7 +63,7 @@ pub struct ConnectionWebRtc {
     pub signalling_client: Arc<RtcsSignalling>,
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
-    pub workdir: String,
+    pub workdir: WorkDir,
     pub ns: String,
     pub throughput_controller: Arc<ThroughputController>
 }
@@ -103,7 +106,7 @@ impl ConnectionWebRtc {
         signalling_client: Arc<RtcsSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
-        workdir: String
+        workdir: WorkDir
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
@@ -177,7 +180,7 @@ impl ConnectionWebRtc {
                 let _ = me.msg_channel.set(msg_channel);
                 let throughput_controller = me.throughput_controller.clone();
                 Ok(
-                    PeerCommunication::upgrade(me, current, peer_id, shell_runtime, throughput_controller)
+                    PeerCommunication::upgrade(workdir.clone(), me, current, peer_id, shell_runtime, throughput_controller)
                         .await
                         .unwrap()
                 )
@@ -197,7 +200,7 @@ impl ConnectionWebRtc {
         signalling_client: Arc<RtcsSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
-        workdir: String
+        workdir: WorkDir
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
@@ -279,7 +282,7 @@ impl ConnectionWebRtc {
                 let _ = me.msg_channel.set(msg_channel);
                 let throughput_controller = me.throughput_controller.clone();
                 Ok(
-                    PeerCommunication::upgrade(me, current, peer_id, shell_runtime, throughput_controller)
+                    PeerCommunication::upgrade(workdir.clone(), me, current, peer_id, shell_runtime, throughput_controller)
                         .await
                         .map_err(Box::new)?
                 )
@@ -404,9 +407,7 @@ impl ConnectionWebRtc {
             let callback = callback.clone();
             let msg_channel = msg_channel.clone();
             Box::pin(async move {
-                if state == RTCPeerConnectionState::Failed ||
-                   state == RTCPeerConnectionState::Closed
-                {
+                if state == RTCPeerConnectionState::Failed || state == RTCPeerConnectionState::Closed {
                     if let Some(msg_channel) = msg_channel {
                         let _ = msg_channel.close().await;
                     }

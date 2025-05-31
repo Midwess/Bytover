@@ -54,9 +54,7 @@ impl TransferNative {
                     return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
                 };
 
-                let result = connection
-                    .answer_session_request(request_id, session, thumbnail_dir, peer_request_id, response)
-                    .await;
+                let result = connection.answer_session_request(request_id, session, peer_request_id, response).await;
 
                 log::info!(target: "transfer", "Answered session request: {:?}", result);
 

@@ -167,13 +167,13 @@ struct ReceiveSessionHeaderView: View {
                 Text(session.peer_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
-                Text("18:05 2025-09-12")
+                Text(session.display_datetime)
                     .modifier(Label2())
             }
             Spacer()
             if session.is_in_progress {
                 ZStack(alignment: .trailing) {
-                    Text("00000.0 MB/s")
+                    Text("0000000.0 MB/s")
                         .modifier(Label2())
                         .opacity(0)
                     HStack(spacing: SpaceTheme.cohesive.value) {
@@ -186,33 +186,26 @@ struct ReceiveSessionHeaderView: View {
                             .foregroundColor(Theme.BluePrimary.color)
                         CircularProgressView(progress: session.progress)
                             .frame(width: 30, height: 30)
-                    }
-                }
-                
-                Button(action: {isShowingMoreDialog = true}) {
-                    ImageAsset.More.image
-                        .scaleEffect(1.6)
-                        .confirmationDialog(
-                            "\(session.peer_name)",
-                            isPresented: self.$isShowingMoreDialog) {
-                                Button("Cancel") {
-                                    Task {
-                                        await core.update(.transfer(.cancelTransfer(session_id: session.id)))
-                                    }
+                            .onTapGesture { action in
+                                Task {
+                                    await core.update(.transfer(.cancelTransfer(session_id: session.id)))
                                 }
                             }
+                    }
                 }
-                .frame(minWidth: 35, alignment: .trailing)
             }
             else {
                 ImageAsset.More.image
                     .scaleEffect(1.6)
+                    .onTapGesture {
+                        isShowingMoreDialog = true
+                    }
                     .confirmationDialog(
                         "\(session.peer_name)",
                         isPresented: self.$isShowingMoreDialog) {
                             Button("Remove") {
                                 Task {
-                                    await core.update(.transfer(.cancelTransfer(session_id: session.id)))
+                                    await core.update(.transfer(.deleteSession(session_id: session.id)))
                                 }
                             }
                             Button("Open") {

@@ -1,12 +1,12 @@
 use futures_util::StreamExt;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
+use surreal_devl::surreal_id::SurrealId;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::database::{DatabaseOperation, TransferSessionOperation};
-use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::database::TransferSessionOperation;
+use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
@@ -43,16 +43,20 @@ impl TransferService {
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: receive_sessions,
-            removed: vec![],
-            updated: vec![]
+            removed: vec![]
         }));
+
+        cmd.notify_shell(CoreOperation::Render);
     }
 
     pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
             log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
-            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id).into_future(cmd.clone()).await {
+            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id)
+                .into_future(cmd.clone())
+                .await
+            {
                 log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
             }
         }
@@ -63,8 +67,7 @@ impl TransferService {
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],
-            removed: vec![transfer_session.clone()],
-            updated: vec![]
+            removed: vec![transfer_session.order_id]
         }));
 
         cmd.notify_shell(CoreOperation::Render);
@@ -97,14 +100,6 @@ impl TransferService {
         let transfer_target_id = transfer_target.id();
         let mut transfer_session = TransferSession::send(selected_resources, transfer_target).await;
 
-        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            new: vec![transfer_session.clone()],
-            updated: vec![],
-            removed: vec![]
-        }));
-
-        cmd.notify_shell(CoreOperation::Render);
-
         for resource in transfer_session.resources.iter_mut() {
             resource.is_valid = LocalStorageOperation::is_file_exists(resource.path.clone()).into_future(cmd.clone()).await;
             if !resource.is_valid {
@@ -136,10 +131,11 @@ impl TransferService {
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            new: vec![],
-            updated: vec![transfer_session.clone()],
+            new: vec![transfer_session.clone()],
             removed: vec![]
         }));
+
+        cmd.notify_shell(CoreOperation::Render);
 
         log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target_id);
 
@@ -158,11 +154,10 @@ impl TransferService {
                                 progress.resource_order_id, progress.status);
                         }
 
-                        transfer_session.update_progress(progress);
-                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-                            new: vec![],
-                            removed: vec![],
-                            updated: vec![transfer_session.clone()]
+                        transfer_session.update_progress(progress.clone());
+                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
+                            session_id: transfer_session.order_id,
+                            progresses: vec![progress]
                         }));
 
                         cmd.notify_shell(CoreOperation::Render);
@@ -173,9 +168,6 @@ impl TransferService {
                         }
 
                         break;
-                    }
-                    TransferOperationOutput::ResourceThumbnailFullfillment { .. } => {
-                        continue;
                     }
                     other => {
                         log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
@@ -206,8 +198,7 @@ impl TransferService {
 
         cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![],
-            removed: vec![transfer_session.clone()],
-            updated: vec![]
+            removed: vec![transfer_session.order_id]
         }));
 
         cmd.notify_shell(CoreOperation::Render);
@@ -237,15 +228,14 @@ impl TransferService {
             });
         }
 
-        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer)).await;
+        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
-        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+        let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             new: vec![transfer_session.clone()],
-            removed: vec![],
-            updated: vec![]
-        }));
+            removed: vec![]
+        });
 
-        cmd.notify_shell(CoreOperation::Render);
+        cmd.notify_shell(CoreOperation::Notified(event));
 
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
@@ -257,17 +247,10 @@ impl TransferService {
         });
 
         let mut stream = cmd.stream_from_shell(response);
-        let mut is_saved_session = false;
         while let Some(transfer_output) = stream.next().await {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        // During the first time we receive a progress, we save the session, it is benefit for restoring failed
-                        if !is_saved_session {
-                            is_saved_session = true;
-                            TransferSessionOperation::save(transfer_session.clone(), &workdir).into_future(cmd.clone()).await;
-                        }
-
                         if progress.status.is_completed() {
                             log::info!(
                                 target: "transfer",
@@ -276,42 +259,18 @@ impl TransferService {
                             );
                         }
 
-                        transfer_session.update_progress(progress);
-                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-                            new: vec![],
-                            removed: vec![],
-                            updated: vec![transfer_session.clone()]
+                        transfer_session.update_progress(progress.clone());
+                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
+                            session_id: transfer_session.order_id,
+                            progresses: vec![progress]
                         }));
-
-                        cmd.notify_shell(CoreOperation::Render);
-                    }
-                    TransferOperationOutput::ResourceThumbnailFullfillment { resource_order_id, path } => {
-                        let Some(resource) = transfer_session.resources.iter_mut().find(|it| it.order_id == resource_order_id) else {
-                            continue;
-                        };
-
-                        resource.thumbnail_path = Some(LocalResourcePath::RelativePath {
-                            path: workdir.to_relative(path),
-                            is_private: true
-                        });
-
-                        log::info!(
-                            target: "transfer", "Resource {:?} thumbnail path: {:?}",
-                            resource_order_id, resource.thumbnail_path);
-                        cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-                            new: vec![],
-                            removed: vec![],
-                            updated: vec![resource.clone()]
-                        }));
-
-                        cmd.notify_shell(CoreOperation::Render);
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if status == TransferSessionStatus::Canceled {
                             transfer_session.cancel();
                         }
 
-                        log::info!(target: "transfer", "Transfer session completed with status {:?}", status);
+                        log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
                         break;
                     }
                     _ => {
@@ -341,15 +300,17 @@ impl TransferService {
 
         if matches!(transfer_session.status(), TransferSessionStatus::Canceled) {
             DialogOperation::toast("Transfer session canceled".to_string());
-            cmd.clone().request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-                TransferSessionOperation::Remove(transfer_session.order_id)
-            ))).await;
-        } else {
-            cmd.request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-                TransferSessionOperation::UpdateProgresses(transfer_session.order_id, transfer_session.progress)
-            ))).await;
-        }
 
-        cmd.notify_shell(CoreOperation::Render);
+            cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+                new: vec![],
+                removed: vec![transfer_session.order_id]
+            }));
+        } else {
+            let progresses = transfer_session.progress.clone();
+            cmd.send_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
+                session_id: transfer_session.order_id,
+                progresses
+            }));
+        }
     }
 }

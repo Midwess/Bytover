@@ -183,7 +183,7 @@ impl MessageChannel {
     pub async fn next_request(&self, timeout: Option<Duration>) -> Result<PeerRequest, ConnectionWebRtcErrors> {
         let mut subscription = self.msg_request_broadcast.subscribe();
         let result = match timeout {
-            Some(t) => tokio::time::timeout(t, subscription.recv()).await?,
+            Some(t) => tokio::time::timeout(t, subscription.recv()).await.map_err(ConnectionWebRtcErrors::ReceiveTimeout)?,
             None => subscription.recv().await
         };
 
@@ -219,13 +219,15 @@ impl MessageChannel {
         let mut subscription = self.msg_response_broadcast.subscribe();
 
         let _ = timeout(
-            send_timeout.unwrap_or(Duration::from_secs(90)),
+            send_timeout.unwrap_or(Duration::from_secs(10)),
             self.throughput_controller.send(Arc::downgrade(&self.msg_channel), &bytes.into())
         )
-        .await?;
+        .await
+        .map_err(ConnectionWebRtcErrors::SendTimeout)?;
 
-        while let Ok(Ok((response_id, response))) =
-            timeout(recv_timeout.unwrap_or(Duration::from_secs(300)), subscription.recv()).await?
+        while let Ok(Ok((response_id, response))) = timeout(recv_timeout.unwrap_or(Duration::from_secs(30)), subscription.recv())
+            .await
+            .map_err(ConnectionWebRtcErrors::ReceiveTimeout)?
         {
             let response = (*response).clone();
             if response_id != request_id {

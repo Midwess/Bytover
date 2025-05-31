@@ -1,10 +1,11 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
+use crate::app::operations::database::TransferSessionOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus, TransferType};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
@@ -20,6 +21,7 @@ use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
+use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 
@@ -77,8 +79,7 @@ pub enum TransferEvent {
     // Event from core
     UpdateTransferSessions {
         new: Vec<TransferSession>,
-        removed: Vec<TransferSession>,
-        updated: Vec<TransferSession>
+        removed: Vec<u64>
     },
     UpdateResourcesModel {
         new: Vec<LocalResource>,
@@ -95,6 +96,15 @@ pub enum TransferEvent {
     },
     OpenSelectedResource {
         resource_id: u64
+    },
+    SessionResourceThumbnailFullfillment {
+        session_id: u64,
+        resource_id: u64,
+        path: LocalResourcePath
+    },
+    UpdateResourceTransferProgresses {
+        session_id: u64,
+        progresses: Vec<TransferProgress>
     }
 }
 
@@ -167,7 +177,7 @@ impl AppModule<BitBridge> for TransferModule {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     transfer_service.delete_session(session, it.clone()).await;
                 })
-            },
+            }
             TransferEvent::DeleteSession { session_id } => {
                 let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
                     return Command::done();
@@ -179,11 +189,11 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 }
 
-                return Command::new(|it| async move {
+                Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     transfer_service.delete_session(session, it.clone()).await;
-                });
-            },
+                })
+            }
             TransferEvent::UpdateResourcesModel { new, removed, updated } => {
                 for new in new {
                     if model.transfer.selected_resources.iter().any(|it| it.order_id == new.order_id) {
@@ -237,7 +247,9 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     if let Some(duplicated_session) = duplicated_session {
-                        it.send_event(AppEvent::Transfer(TransferEvent::CancelTransfer { session_id: duplicated_session.order_id }));
+                        it.send_event(AppEvent::Transfer(TransferEvent::CancelTransfer {
+                            session_id: duplicated_session.order_id
+                        }));
                         return;
                     }
 
@@ -255,29 +267,36 @@ impl AppModule<BitBridge> for TransferModule {
                     log::info!(target: "transfer", "Done download, shell should done");
                 })
             }
-            TransferEvent::UpdateTransferSessions { new, removed, updated } => {
+            TransferEvent::UpdateTransferSessions { new, removed } => {
+                let mut command = Command::done();
+
                 for new in new {
                     if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id) {
                         continue;
                     }
 
-                    model.transfer.transfer_sessions.push(new);
-                }
-
-                model
-                    .transfer
-                    .transfer_sessions
-                    .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
-
-                for updated in updated {
-                    if let Some(index) = model.transfer.transfer_sessions.iter().position(|it| it.order_id == updated.order_id) {
-                        model.transfer.transfer_sessions[index] = updated;
+                    if new.transfer_type == TransferType::Receive {
+                        let new = new.clone();
+                        let workdir = model.environment.workdir.clone().unwrap();
+                        command = command.and(Command::new(|it| async move {
+                            TransferSessionOperation::save(new, &workdir).into_future(it.clone()).await;
+                        }));
                     }
+
+                    model.transfer.transfer_sessions.push(new.clone());
                 }
 
-                Command::new(|it| async move {
+                model.transfer.transfer_sessions.retain(|it| !removed.contains(&it.order_id));
+
+                for removed in removed {
+                    command = command.and(Command::new(|it| async move {
+                        TransferSessionOperation::remove(removed).into_future(it.clone()).await;
+                    }));
+                }
+
+                command.and(Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
-                })
+                }))
             }
             TransferEvent::UpdateTransferTargets { new, removed } => {
                 model.transfer.transfer_targets.extend(new);
@@ -294,8 +313,8 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let resource_path = resource.path.clone();
-                return Command::new(move |it| async move {
-                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
+                let workdir = model.environment.workdir.clone().unwrap();
+                Command::new(move |it| async move {
                     let path = workdir.to_absolute_path(&resource_path);
                     let _ = LocalStorageOperation::open(path).into_future(it.clone()).await;
                 })
@@ -316,8 +335,8 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 let session_id = session.order_id;
+                let workdir = model.environment.workdir.clone().unwrap();
                 Command::new(|it| async move {
-                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
                     let path = workdir.session_folder(session_id);
                     let _ = LocalStorageOperation::open(LocalResourcePath::AbsolutePath(path)).into_future(it.clone()).await;
                 })
@@ -328,10 +347,58 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let resource_path = resource.path.clone();
-                return Command::new(move |it| async move {
-                    let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(it.clone()).await;
+                let workdir = model.environment.workdir.clone().unwrap();
+                Command::new(move |it| async move {
                     let path = workdir.to_absolute_path(&resource_path);
                     let _ = LocalStorageOperation::open(path).into_future(it.clone()).await;
+                })
+            }
+            TransferEvent::SessionResourceThumbnailFullfillment {
+                session_id,
+                resource_id,
+                path
+            } => {
+                let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
+                    return Command::done();
+                };
+
+                let resource = session.resources.iter_mut().find(|it| it.order_id == resource_id);
+                if let Some(resource) = resource {
+                    resource.thumbnail_path = Some(path.clone());
+                    let resource = resource.clone();
+                    let workdir = model.environment.workdir.clone().unwrap();
+                    return Command::new(|it| async move {
+                        log::info!(target: "transfer", "Update resource thumbnail path in database {:?}", path);
+                        TransferSessionOperation::update_resource(session_id, resource, &workdir)
+                            .into_future(it.clone())
+                            .await;
+                        it.notify_shell(CoreOperation::Render);
+                    });
+                }
+
+                Command::done()
+            }
+            TransferEvent::UpdateResourceTransferProgresses { session_id, progresses } => {
+                let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
+                    return Command::done();
+                };
+
+                for progress in progresses {
+                    if let Some(index) = session.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+                        session.progress[index] = progress;
+                    }
+                }
+
+                if session.is_completed() {
+                    let progresses = session.progress.clone();
+                    return Command::new(|it| async move {
+                        TransferSessionOperation::update_progresses(session_id, progresses).into_future(it.clone()).await;
+                        it.notify_shell(CoreOperation::Render);
+                    });
+                }
+
+                Command::new(|it| async move {
+                    it.notify_shell(CoreOperation::Render);
                 })
             }
         }
@@ -426,11 +493,15 @@ impl AppModule<BitBridge> for TransferModule {
                         peer_description: "Nearby".to_owned(),
                         is_completed: it.is_completed(),
                         is_in_progress: !it.is_completed(),
-                        display_download_speed: format!("{:.2} MB/s", it.speed(1000)),
+                        display_download_speed: it.status().to_string(),
                         progress: it.total_progress(),
                         image_resources,
                         video_resources,
-                        file_resources
+                        file_resources,
+                        display_datetime: id_to_datetime(it.order_id)
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
                     })
                 })
                 .collect(),

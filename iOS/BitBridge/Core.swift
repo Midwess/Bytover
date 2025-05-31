@@ -502,7 +502,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "2.0 MB/s", 
-            progress: 0.8
+            progress: 0.8,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session2 = ReceiveSessionViewModel(
@@ -520,7 +521,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "1.5 MB/s", 
-            progress: 0.45
+            progress: 0.45,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session5 = ReceiveSessionViewModel(
@@ -541,7 +543,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "950 KB/s", 
-            progress: 0.67
+            progress: 0.67,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session6 = ReceiveSessionViewModel(
@@ -557,7 +560,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "2.8 MB/s", 
-            progress: 0.35
+            progress: 0.35,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session7 = ReceiveSessionViewModel(
@@ -573,7 +577,8 @@ class CoreMock: Core {
             is_completed: true, 
             is_in_progress: false, 
             display_download_speed: "0 KB/s", 
-            progress: 1.0
+            progress: 1.0,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session8 = ReceiveSessionViewModel(
@@ -590,7 +595,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "1.1 MB/s", 
-            progress: 0.22
+            progress: 0.22,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session9 = ReceiveSessionViewModel(
@@ -606,7 +612,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "4.5 MB/s", 
-            progress: 0.05
+            progress: 0.05,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session10 = ReceiveSessionViewModel(
@@ -625,7 +632,8 @@ class CoreMock: Core {
             is_completed: true, 
             is_in_progress: false, 
             display_download_speed: "0 KB/s", 
-            progress: 1.0
+            progress: 1.0,
+            display_datetime: "2025-08-22 12:44"
         )
         
         let receive_session11 = ReceiveSessionViewModel(
@@ -641,7 +649,8 @@ class CoreMock: Core {
             is_completed: false, 
             is_in_progress: true, 
             display_download_speed: "3.7 MB/s", 
-            progress: 0.58
+            progress: 0.58,
+            display_datetime: "2025-08-22 12:44"
         )
         
         // Initialize the transfer view model with all receive sessions

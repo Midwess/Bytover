@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
+use crate::app::file_system::workdir::WorkDir;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -49,15 +50,9 @@ pub struct WebRtc {
     signalling_client: OnceCell<Arc<RtcsSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
-    workdir: String,
     throughput_controller: Arc<ThroughputController>,
-    broadcast_operation_sender: OnceCell<mpsc::Sender<BroadcastOperation>>
-}
-
-impl Default for WebRtc {
-    fn default() -> Self {
-        Self::new(String::new())
-    }
+    broadcast_operation_sender: OnceCell<mpsc::Sender<BroadcastOperation>>,
+    workdir: WorkDir
 }
 
 impl WebRtc {
@@ -65,7 +60,7 @@ impl WebRtc {
         Arc::new(ThroughputController::new(8 * 1024 * 1024, Duration::from_secs(10), 2))
     }
 
-    pub fn new(workdir: String) -> Self {
+    pub fn new(workdir: WorkDir) -> Self {
         Self {
             peer: OnceCell::new(),
             shell_runtime: OnceCell::new(),
@@ -74,9 +69,9 @@ impl WebRtc {
             connections: Mutex::new(HashMap::new()),
             signalling_client: OnceCell::new(),
             handle_signalling_message_join: Arc::new(Mutex::new(None)),
-            workdir,
             throughput_controller: Self::throughput_controller(),
-            broadcast_operation_sender: OnceCell::new()
+            broadcast_operation_sender: OnceCell::new(),
+            workdir
         }
     }
 
