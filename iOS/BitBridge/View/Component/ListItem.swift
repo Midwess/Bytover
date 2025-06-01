@@ -14,66 +14,38 @@ struct ResourceImage: View {
     var width: CGFloat = 48
     var height: CGFloat = 48
     var radius: CGFloat? = nil
+    var backgroundColor: Bool = true
+
     @EnvironmentObject private var core: Core
     @State private var thumbnailImage: Image?
     
-    static func getDefaultThumbnail(_ type: ResourceType) -> some View {
-        switch type {
-        case .file:
-            return AnyView(
-                ImageAsset.File.image
-                    .resizable()
-                    .scaledToFit()
-            )
-        case .image:
-            return AnyView(
-                ImageAsset.FileImage.image
-                    .resizable()
-                    .scaledToFit()
-            )
-        case .video:
-            return AnyView(
-                ImageAsset.CameraVideo.image
-                    .resizable()
-                    .scaledToFit()
-            )
-        case .folder:
-            return AnyView(
-                ImageAsset.Folder.image
-                    .resizable()
-                    .scaledToFit()
-            )
-        }
-    }
-    
-    func getThumbnail() -> some View {
-        if let thumbnail_path = resource.thumbnail_path {
-            if let image = thumbnailImage {
-                return AnyView(image
+    var body: some View {
+        ZStack {
+            if let thumbnailImage = thumbnailImage {
+                thumbnailImage
                     .resizable()
                     .scaledToFill()
                     .frame(width: width, height: height)
-                    .cornerRadius(radius ?? ((width + height) / 2) * 0.3))
+                    .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
             } else {
-                // Load the image asynchronously
-                Task {
-                    thumbnailImage = await Image.fromPath(thumbnail_path, core: core)
-                }
+                Rectangle()
+                    .frame(width: width, height: height)
+                    .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
+                    .foregroundStyle(getColor())
+                ResourceImage.getDefaultThumbnail(resource.type)
+                    .padding(width != .infinity && height != .infinity ? ((width + height) / 2) * 0.1 : 0)
+                    .frame(width: width, height: height)
             }
         }
-        
-        return AnyView(ZStack {
-            Rectangle()
-                .frame(width: width, height: height)
-                .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
-                .foregroundStyle(getColor())
-            ResourceImage.getDefaultThumbnail(resource.type)
-                .padding(width != .infinity && height != .infinity ? ((width + height) / 2) * 0.1 : 0)
-                .frame(width: width, height: height)
-        })
+        .task {
+            await loadThumbnail()
+        }
     }
     
     func getColor() -> Color {
+        if !backgroundColor {
+            return .clear
+        }
         switch resource.type {
         case .file: return Theme.FileColor.color
         case .image: return Theme.DocumentColor.color
@@ -81,9 +53,26 @@ struct ResourceImage: View {
         case .folder: return Theme.Navy.color
         }
     }
-    
-    var body: some View {
-        getThumbnail()
+
+    static func getDefaultThumbnail(_ type: ResourceType) -> some View {
+        switch type {
+        case .file:
+            return AnyView(ImageAsset.File.image.resizable().scaledToFit())
+        case .image:
+            return AnyView(ImageAsset.FileImage.image.resizable().scaledToFit())
+        case .video:
+            return AnyView(ImageAsset.CameraVideo.image.resizable().scaledToFit())
+        case .folder:
+            return AnyView(ImageAsset.Folder.image.resizable().scaledToFit())
+        }
+    }
+
+    private func loadThumbnail() async {
+        guard thumbnailImage == nil, let thumbnail_path = resource.thumbnail_path else { return }
+        print("Loading thumbnail for \(thumbnail_path)")
+        let loadedImage = await Image.fromPath(thumbnail_path, core: core)
+        print("Thumbnail loaded \(loadedImage)")
+        thumbnailImage = loadedImage
     }
 }
 

@@ -54,8 +54,7 @@ struct FileReceiveResourceView: View {
 
     var body: some View {
         HStack {
-            ResourceImage.getDefaultThumbnail(localResource.model.type)
-                .padding(.all, 10)
+            ResourceImage(resource: localResource.model, backgroundColor: false)
                 .background(
                     RoundedRectangle(cornerRadius: 15)
                         .fill(Theme.PrimaryText.color.opacity(0.05))

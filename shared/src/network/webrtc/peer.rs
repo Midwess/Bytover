@@ -166,7 +166,7 @@ impl PeerCommunication {
                             let current_index = thumbnail_message.current_index;
                             let data_length = thumbnail_message.data_length;
                             let shell_runtime = self.shell_runtime.clone();
-                            let thumbnail_path = self.work_dir.thumbnails(resource_id.to_string());
+                            let thumbnail_path = self.work_dir.thumbnails(format!("{}.png", resource_id));
                             let session_id = thumbnail_message.session_id as u64;
                             let workdir = self.work_dir.clone();
 
@@ -200,7 +200,7 @@ impl PeerCommunication {
 
                                 // Check if this is the last chunk
                                 let chunk_size = data.len() as i64;
-                                if current_index + chunk_size >= data_length {
+                                if current_index + chunk_size >= data_length - 1 {
                                     let msg = CoreOperationOutput::P2P(P2POperationOutput::ThumbnailFullfillment {
                                         session_id,
                                         resource_id: resource_id as u64,
@@ -589,12 +589,13 @@ impl PeerCommunication {
         } else {
             // Split the thumbnail into chunks
             let chunks = buffer.chunks(max_chunk_size);
+            let mut current_index = 0;
             for (i, chunk) in chunks.enumerate() {
                 let msg = ResourceThumbnailMessage {
                     session_id: session_id as i64,
                     resource_id: resource_id as i64,
                     data_length: buffer.len() as i64,
-                    current_index: i as i64,
+                    current_index: current_index as i64,
                     data: Some(resource_thumbnail_message::Data::Png(chunk.to_vec()))
                 };
 
@@ -615,6 +616,8 @@ impl PeerCommunication {
                     resource_id,
                     chunk.len()
                 );
+
+                current_index += chunk.len();
             }
         }
 
