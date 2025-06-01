@@ -18,6 +18,12 @@ pub struct EnvironmentModel {
     pub workdir: Option<WorkDir>
 }
 
+impl EnvironmentModel {
+    pub fn get_workdir(&self) -> &WorkDir {
+        self.workdir.as_ref().unwrap()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct EnvironmentViewModel {}
 

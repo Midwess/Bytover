@@ -155,8 +155,9 @@ struct ReceiveSessionBodyView: View {
 
 struct ReceiveSessionHeaderView: View {
     @EnvironmentObject var core: Core
-    @State var isShowingMoreDialog: Bool = false
     @State var session: ReceiveSessionViewModel
+    @Binding var isShowMoreOption: Bool
+    @Binding var selectedItem: ReceiveSessionViewModel?
     
     var body: some View {
         HStack(alignment: .center, spacing: SpaceTheme.cohesive.value) {
@@ -195,26 +196,7 @@ struct ReceiveSessionHeaderView: View {
                 }
             }
             else {
-                ImageAsset.More.image
-                    .scaleEffect(1.6)
-                    .onTapGesture {
-                        isShowingMoreDialog = true
-                    }
-                    .confirmationDialog(
-                        "\(session.peer_name)",
-                        isPresented: self.$isShowingMoreDialog) {
-                            Button("Remove") {
-                                Task {
-                                    await core.update(.transfer(.deleteSession(session_id: session.id)))
-                                }
-                            }
-                            Button("Open") {
-                                Task {
-                                    await core.update(.transfer(.openSession(session_id: session.id)))
-                                }
-                            }
-                        }
-                        .frame(minWidth: 35, alignment: .trailing)
+                MoreOptionButton<ReceiveSessionViewModel>(state: $isShowMoreOption, item: session, selectedItem: $selectedItem)
             }
         }
         .onReceive(self.core.transfer, perform: { value in

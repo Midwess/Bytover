@@ -1,6 +1,7 @@
+use crate::app::core_utils::CoreCommandUtils;
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
-use crate::app::operations::database::TransferSessionOperation;
+use crate::app::operations::database::{LocalResourceDatabaseOperation, TransferSessionOperation};
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
@@ -78,10 +79,15 @@ pub enum TransferEvent {
     },
     // Event from core
     UpdateTransferSessions {
+        // Loaded from database
+        loaded: Vec<TransferSession>,
+        // New sessions
         new: Vec<TransferSession>,
+        // Removed sessions
         removed: Vec<u64>
     },
     UpdateResourcesModel {
+        loaded: Vec<LocalResource>,
         new: Vec<LocalResource>,
         removed: Vec<LocalResource>,
         updated: Vec<LocalResource>
@@ -194,13 +200,35 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.delete_session(session, it.clone()).await;
                 })
             }
-            TransferEvent::UpdateResourcesModel { new, removed, updated } => {
-                for new in new {
+            TransferEvent::UpdateResourcesModel {
+                loaded,
+                new,
+                removed,
+                updated
+            } => {
+                let mut command = Command::empty();
+
+                for loaded in loaded {
+                    if model.transfer.selected_resources.iter().any(|it| it.order_id == loaded.order_id) {
+                        continue;
+                    }
+
+                    model.transfer.selected_resources.push(loaded);
+                }
+
+                for new in new.iter() {
                     if model.transfer.selected_resources.iter().any(|it| it.order_id == new.order_id) {
                         continue;
                     }
 
-                    model.transfer.selected_resources.push(new);
+                    model.transfer.selected_resources.push(new.clone());
+                }
+
+                if !new.is_empty() {
+                    let new = new.clone();
+                    command = command.and(Command::new(|it| async move {
+                        LocalResourceDatabaseOperation::add(new).into_future(it.clone()).await;
+                    }));
                 }
 
                 model
@@ -214,7 +242,9 @@ impl AppModule<BitBridge> for TransferModule {
                     }
                 }
 
-                Command::done()
+                model.transfer.selected_resources.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+
+                command.then_render()
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
@@ -267,8 +297,16 @@ impl AppModule<BitBridge> for TransferModule {
                     log::info!(target: "transfer", "Done download, shell should done");
                 })
             }
-            TransferEvent::UpdateTransferSessions { new, removed } => {
-                let mut command = Command::done();
+            TransferEvent::UpdateTransferSessions { loaded, new, removed } => {
+                let mut command = Command::new(|_| async move {});
+
+                for loaded in loaded {
+                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == loaded.order_id) {
+                        continue;
+                    }
+
+                    model.transfer.transfer_sessions.push(loaded);
+                }
 
                 for new in new {
                     if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id) {
@@ -277,13 +315,13 @@ impl AppModule<BitBridge> for TransferModule {
 
                     if new.transfer_type == TransferType::Receive {
                         let new = new.clone();
-                        let workdir = model.environment.workdir.clone().unwrap();
+                        let workdir = model.environment.get_workdir().clone();
                         command = command.and(Command::new(|it| async move {
                             TransferSessionOperation::save(new, &workdir).into_future(it.clone()).await;
                         }));
                     }
 
-                    model.transfer.transfer_sessions.push(new.clone());
+                    model.transfer.transfer_sessions.push(new);
                 }
 
                 model.transfer.transfer_sessions.retain(|it| !removed.contains(&it.order_id));
@@ -294,9 +332,8 @@ impl AppModule<BitBridge> for TransferModule {
                     }));
                 }
 
-                command.and(Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                }))
+                model.transfer.transfer_sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+                command.then_render()
             }
             TransferEvent::UpdateTransferTargets { new, removed } => {
                 model.transfer.transfer_targets.extend(new);
@@ -368,12 +405,11 @@ impl AppModule<BitBridge> for TransferModule {
                     let resource = resource.clone();
                     let workdir = model.environment.workdir.clone().unwrap();
                     return Command::new(|it| async move {
-                        log::info!(target: "transfer", "Update resource thumbnail path in database {:?}", path);
                         TransferSessionOperation::update_resource(session_id, resource, &workdir)
                             .into_future(it.clone())
                             .await;
-                        it.notify_shell(CoreOperation::Render);
-                    });
+                    })
+                    .then_render();
                 }
 
                 Command::done()
@@ -415,17 +451,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-                    let Some(peer) = model
-                        .transfer
-                        .transfer_targets
-                        .iter()
-                        .filter_map(|target| match target {
-                            TransferTarget::Nearby(peer) => Some(peer),
-                            _ => None
-                        })
-                        .find(|peer| peer.id() == it.peer_id().unwrap_or_default())
-                        .cloned()
-                    else {
+                    let Some(peer) = it.peer() else {
                         return None;
                     };
 

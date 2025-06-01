@@ -7,6 +7,7 @@ use surreal_derive_plus::SurrealDerive;
 use uniffi::{Enum, Record};
 
 use crate::app::file_system::file::LocalResource;
+use crate::entities::peer::Peer;
 
 use super::target::TransferTarget;
 
@@ -234,6 +235,13 @@ impl TransferSession {
     pub fn peer_id(&self) -> Option<u128> {
         match &self.target {
             TransferTarget::Nearby(peer) => Some(peer.id()),
+            _ => None
+        }
+    }
+
+    pub fn peer(&self) -> Option<&Peer> {
+        match &self.target {
+            TransferTarget::Nearby(peer) => Some(peer),
             _ => None
         }
     }

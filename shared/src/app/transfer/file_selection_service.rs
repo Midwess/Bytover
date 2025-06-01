@@ -22,7 +22,8 @@ impl ResourceTransferSelectionService {
         let mut resources = LocalResourceDatabaseOperation::find_all().into_future(ctx.clone()).await;
 
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-            new: resources.clone(),
+            loaded: resources.clone(),
+            new: vec![],
             removed: vec![],
             updated: vec![]
         }));
@@ -38,6 +39,7 @@ impl ResourceTransferSelectionService {
 
         if !updated_resources.is_empty() {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                loaded: vec![],
                 new: vec![],
                 removed: vec![],
                 updated: updated_resources
@@ -93,33 +95,30 @@ impl ResourceTransferSelectionService {
 
             let new_resources = LocalResourceDatabaseOperation::add(vec![local_resource]).into_future(ctx.clone()).await;
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                loaded: vec![],
                 new: new_resources,
                 removed: vec![],
                 updated: vec![]
             }));
-
-            ctx.request_from_shell(CoreOperation::Render).await;
         }
 
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+            loaded: vec![],
             new: vec![],
             removed: vec![],
             updated: vec![]
         }));
-
-        ctx.request_from_shell(CoreOperation::Render).await;
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {
         let removed_resource = LocalResourceDatabaseOperation::remove(id).into_future(ctx.clone()).await;
         if let Some(removed_resource) = removed_resource {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
+                loaded: vec![],
                 new: vec![],
                 removed: vec![removed_resource],
                 updated: vec![]
             }));
         }
-
-        ctx.request_from_shell(CoreOperation::Render).await;
     }
 }

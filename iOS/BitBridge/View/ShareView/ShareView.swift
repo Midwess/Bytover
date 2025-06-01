@@ -15,6 +15,8 @@ public struct ShareView: View {
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject var core: Core
     @State private var selectedResources: [SelectedResourceViewModel] = []
+    @State private var selectedResource: SelectedResourceViewModel? = nil
+    @State private var isShowResourceOption = false
     @State private var isLoadingSelectedResource = false
     @State private var startTime = Date.now
     @State private var showShareModal = false
@@ -46,7 +48,7 @@ public struct ShareView: View {
                     
                     LazyVStack {
                         ForEach(selectedResources, id: \.self.order_id) { item in
-                            SelectedResourceItem(resource: item)
+                            SelectedResourceItem(resource: item, isShowMoreOption: $isShowResourceOption, selectedItem: $selectedResource)
                                 .padding(.top, SpaceTheme.item.value)
                                 .padding(.horizontal, SpaceTheme.screen.value)
                                 .id(item.order_id)
@@ -74,6 +76,15 @@ public struct ShareView: View {
                 .offset(y: SpaceTheme.screen.value)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
+        .confirmationDialog(
+            selectedResource?.name ?? "Resource",
+            isPresented: $isShowResourceOption) {
+                Button("Remove", role: .destructive) {
+                    Task {
+                        await core.update(.transfer(.removeResource(selectedResource?.order_id ?? 0)))
+                    }
+                }
+            }
         .ignoresSafeArea()
         .task {
             await core.update(.transfer(.launch))

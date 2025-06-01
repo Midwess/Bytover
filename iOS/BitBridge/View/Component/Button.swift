@@ -68,6 +68,23 @@ struct PrimaryButton: View {
     }
 }
 
+struct MoreOptionButton<T>: View {
+    @Binding var state: Bool
+    var item: T? = nil
+    @Binding var selectedItem: T?
+    
+    var body: some View {
+        Button(action: {
+            state = true
+            selectedItem = item
+        }) {
+            ImageAsset.More.image
+                .foregroundColor(Theme.PrimaryText.color)
+                .scaleEffect(1.6)
+        }
+    }
+}
+
 struct UpgradePremiumButton: View {
     var body: some View {
         Button(action: {}) {

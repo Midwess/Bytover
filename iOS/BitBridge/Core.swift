@@ -260,38 +260,46 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     
     func onMediasChanged() async {
         await self.update(.transfer(.beginLoadingResources))
-        for item in self.selectedMediaItems {
-            guard let identifier = item.itemIdentifier else { continue }
+        let items = Array(self.selectedMediaItems)
+        let chunkSize = 5
+        
+        for i in stride(from: 0, to: items.count, by: chunkSize) {
+            let chunk = Array(items[i..<min(i + chunkSize, items.count)])
             
-            let startTime = CFAbsoluteTimeGetCurrent()
-            guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
-                continue;
-            }
-            let executionTime = CFAbsoluteTimeGetCurrent() - startTime
-            print("getCachedAsset execution time: \(executionTime) seconds")
-            
-            let asset = assetCached.asset
-            let asset_type = asset.mediaType
-            
-            let resourceType: ResourceType = {
-                switch asset_type {
-                case .image:
-                    return .image
-                case .video:
-                    return .video
-                default:
-                    return .file
+            await withTaskGroup(of: Void.self) { group in
+                for item in chunk {
+                    group.addTask {
+                        guard let identifier = item.itemIdentifier else { return }
+                        
+                        guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
+                            return
+                        }
+                        
+                        let asset = assetCached.asset
+                        let asset_type = asset.mediaType
+                        
+                        let resourceType: ResourceType = {
+                            switch asset_type {
+                            case .image:
+                                return .image
+                            case .video:
+                                return .video
+                            default:
+                                return .file
+                            }
+                        }()
+                        
+                        let phassetUrl = "phasset://" + identifier
+                        
+                        let resourceSelection = ResourceSelection(
+                            path: .platformIdentifier(phassetUrl),
+                            type: resourceType
+                        )
+                        
+                        await self.update(.transfer(.addResources([resourceSelection])))
+                    }
                 }
-            }()
-            
-            let phassetUrl = "phasset://" + identifier
-            
-            let resourceSelection = ResourceSelection(
-                path: .platformIdentifier(phassetUrl),
-                type: resourceType
-            )
-            
-            await self.update(.transfer(.addResources([resourceSelection])))
+            }
         }
         
         await self.update(.transfer(.endLoadingResources))
@@ -776,11 +784,7 @@ extension PHAsset {
         
         let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
         
-        let startTime = CFAbsoluteTimeGetCurrent()
         let url = includeUrl ? await asset.getAbsoluteURL() : nil
-        let executionTime = CFAbsoluteTimeGetCurrent() - startTime
-        print("getAbsoluteURL execution time: \(executionTime) seconds")
-        
         let cached = PHAssetCached(
             fileName: resource.originalFilename,
             fileSize: UInt64(fileSize),

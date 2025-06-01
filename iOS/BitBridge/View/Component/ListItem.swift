@@ -87,7 +87,8 @@ struct ResourceImage: View {
 
 struct SelectedResourceItem: View {
     @State var resource: SelectedResourceViewModel
-    @State var isShowingMoreDialog: Bool = false
+    @Binding var isShowMoreOption: Bool
+    @Binding var selectedItem: SelectedResourceViewModel?
     @State private var isVisible: Bool = false
     @EnvironmentObject var core: Core
     
@@ -121,23 +122,9 @@ struct SelectedResourceItem: View {
                         .modifier(Label1())
                 }
             }
-            Button(action: {isShowingMoreDialog = true}) {
-                ImageAsset.More.image
-                    .scaleEffect(1.6)
-                    .confirmationDialog(
-                        "\(resource.name)",
-                        isPresented: self.$isShowingMoreDialog) {
-                            Button("Remove") {
-                                Task {
-                                    await core.update(.transfer(.removeResource(resource.order_id)))
-                                }
-                            }
-                        }
-            }
-            .frame(minWidth: 35, alignment: .trailing)
+            MoreOptionButton<SelectedResourceViewModel>(state: $isShowMoreOption, item: resource, selectedItem: $selectedItem)
         }
         .onTapGesture {
-            print("Open")
             Task {
                 await core.update(.transfer(.openSelectedResource(resource_id: resource.order_id)))
             }
@@ -158,12 +145,5 @@ struct SelectedResourceItem: View {
                 self.resource = newResource
             }
         })
-    }
-}
-
-#Preview {
-    ZStack {
-        SelectedResourceItem(resource: CoreMock.withSelectedFileTransfers().transfer.value!.selected_resources[0])
-            .padding()
     }
 }

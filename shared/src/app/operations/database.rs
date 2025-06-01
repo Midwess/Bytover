@@ -262,23 +262,14 @@ impl TransferSessionOperation {
         })
     }
 
-    pub fn get_all(id: TransferSessionId, workdir: WorkDir) -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
+    pub fn get_all(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::GetAll(id)
         )))
         .map(move |it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(
-                mut sessions
-            ))) => {
-                sessions.iter_mut().for_each(|session| {
-                    session.resources.iter_mut().for_each(|resource| {
-                        resource.path = workdir.to_absolute_path(&resource.path);
-                        resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_absolute_path(path));
-                    });
-                });
-
                 sessions
-            }
+            ))) => sessions,
             _ => panic!("Invalid output expected GetAll got {it:?}")
         })
     }

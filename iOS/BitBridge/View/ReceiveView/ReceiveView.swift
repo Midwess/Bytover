@@ -15,7 +15,8 @@ struct ReceiveView: View {
     @EnvironmentObject private var core: Core
     
     @State var receiveSessions: [ReceiveSessionViewModel] = []
-    @State var isShowingOptionAll = false
+    @State var selectedItem: ReceiveSessionViewModel?
+    @State var isShowItemOption = false
     
     var body: some View {
         ZStack {
@@ -36,37 +37,32 @@ struct ReceiveView: View {
                     
                     UpgradePremiumButton()
                     
-                    HStack(alignment: .center) {
-                        Spacer()
-                        Button(action: { isShowingOptionAll = true }) {
-                            ImageAsset.More.image
-                                .foregroundColor(Theme.PrimaryText.color)
-                                .scaleEffect(1.6)
-                                .confirmationDialog(
-                                    "Options", isPresented: $isShowingOptionAll) {
-                                        Button("Select") {}
-                                    }
-                        }
-                        .frame(minWidth: 35, alignment: .trailing)
-                    }
-                    .padding(.horizontal, SpaceTheme.item.value)
-                    
                     ForEach(self.receiveSessions, id: \.self.id) { item in
-                        VStack(spacing: SpaceTheme.item.value) {
-                            ReceiveSessionHeaderView(session: item)
-                                .zIndex(2)
-                            
-                            ReceiveSessionBodyView(session: item)
-                                .zIndex(1)
-                        }
+                        ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
+                        ReceiveSessionBodyView(session: item)
                     }
                     .padding(.horizontal, SpaceTheme.screen.value)
                     .padding(.top, SpaceTheme.item.value)
+                    
                     Spacer().frame(height: 130)
                 }
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))
             .padding(.bottom, SpaceTheme.screen.value)
+            
+        }
+        .confirmationDialog(selectedItem?.peer_name ?? "Session", isPresented: $isShowItemOption) {
+            Button("Open") {
+                Task {
+                    await core.update(.transfer(.openSession(session_id: selectedItem?.id ?? 0)))
+                }
+            }
+           
+            Button("Delete", role: .destructive) {
+                Task {
+                    await core.update(.transfer(.deleteSession(session_id: selectedItem?.id ?? 0)))
+                }
+            }
             
         }
         .onReceive(self.core.transfer, perform: { value in

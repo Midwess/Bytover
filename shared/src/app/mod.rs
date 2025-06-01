@@ -1,4 +1,5 @@
 pub mod authentication;
+pub mod core_utils;
 pub mod file_system;
 pub mod modules;
 pub mod nearby;
