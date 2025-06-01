@@ -17,27 +17,29 @@ struct ImageReceiveResourceView: View {
     @EnvironmentObject private var core: Core
     
     var body: some View {
-        HStack {
-            ResourceImage(resource: localResource.model, width: 90, height: 110, radius: 20)
-        }
-        .onReceive(core.transfer, perform: { value in
-            guard let session = value?.received_sessions.first(where: { item in item.id == session_id}) else {
-                return
+        GeometryReader { geometry in
+            HStack {
+                ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
             }
-            
-            guard let resource = session.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
-                return;
-            }
-            
-            let thumbnailChanges = resource.model.thumbnail_path != self.localResource.model.thumbnail_path
-            
-            if thumbnailChanges {
-                self.localResource = resource
-            }
-        })
-        .onTapGesture {
-            Task {
-                await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+            .onReceive(core.transfer, perform: { value in
+                guard let session = value?.received_sessions.first(where: { item in item.id == session_id}) else {
+                    return
+                }
+                
+                guard let resource = session.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                    return;
+                }
+                
+                let thumbnailChanges = resource.model.thumbnail_path != self.localResource.model.thumbnail_path
+                
+                if thumbnailChanges {
+                    self.localResource = resource
+                }
+            })
+            .onTapGesture {
+                Task {
+                    await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+                }
             }
         }
     }
@@ -98,11 +100,18 @@ struct FileReceiveResourceView: View {
 struct ReceiveSessionBodyView: View {
     @EnvironmentObject var core: Core
     @State var session: ReceiveSessionViewModel
-    
+    @Environment(\.screenSize) private var screenSize
+
     private let flexibleColumn = [
-        GridItem(.adaptive(minimum: 120)),
+        GridItem(.flexible(minimum: 70)),
     ]
     
+    
+    private let flexibleColumn2 = [
+        GridItem(.flexible(minimum: 70)),
+        GridItem(.flexible(minimum: 70)),
+    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if self.session.image_resources.count > 0 {
@@ -111,9 +120,12 @@ struct ReceiveSessionBodyView: View {
                         .modifier(Caption())
                         .foregroundColor(Theme.PrimaryText.color)
                     ScrollView(.horizontal) {
-                        LazyHGrid(rows: flexibleColumn, spacing: 10) {
+                        let width = ((screenSize.width - 80) / CGFloat(min(self.session.image_resources.count, 3))).rounded();
+                        let height = min(width * 1.3, 140);
+                        LazyHGrid(rows: [GridItem(.flexible(minimum: 140))], spacing: 10) {
                             ForEach(self.session.image_resources, id: \.model.order_id) { item in
                                 ImageReceiveResourceView(session_id: self.session.id, localResource: item)
+                                    .frame(width: width, height: height)
                             }
                         }
                     }
@@ -126,7 +138,7 @@ struct ReceiveSessionBodyView: View {
                         .modifier(Caption())
                         .foregroundColor(Theme.PrimaryText.color)
                     ScrollView(.horizontal) {
-                        LazyHGrid(rows: flexibleColumn) {
+                        LazyHGrid(rows: self.session.file_resources.count > 3 ? flexibleColumn2 : flexibleColumn, spacing: 10) {
                             ForEach(self.session.file_resources, id: \.model.order_id) { item in
                                 FileReceiveResourceView(sessionId: session.id, localResource: item)
                             }

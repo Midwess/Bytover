@@ -49,7 +49,9 @@ struct ResourceImage: View {
     func getThumbnail() -> some View {
         if let thumbnail_path = resource.thumbnail_path {
             if let image = thumbnailImage {
-                return AnyView(image.resizable()
+                return AnyView(image
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: width, height: height)
                     .cornerRadius(radius ?? ((width + height) / 2) * 0.3))
             } else {
@@ -66,7 +68,7 @@ struct ResourceImage: View {
                 .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
                 .foregroundStyle(getColor())
             ResourceImage.getDefaultThumbnail(resource.type)
-                .padding(((width + height) / 2) * 0.1)
+                .padding(width != .infinity && height != .infinity ? ((width + height) / 2) * 0.1 : 0)
                 .frame(width: width, height: height)
         })
     }

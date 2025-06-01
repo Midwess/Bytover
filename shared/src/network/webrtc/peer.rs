@@ -554,7 +554,7 @@ impl PeerCommunication {
     }
 
     pub async fn send_resource_thumbnail(&self, session_id: u64, resource_id: u64, file_path: &str) -> Result<(), PeerErrors> {
-        let max_chunk_size = 63 * 1024 - std::mem::size_of::<PeerRequest>();
+        let max_chunk_size = 60 * 1024 - std::mem::size_of::<PeerRequest>();
         let thumbnail_send_timeout = Some(Duration::from_secs(5));
         let thumbnail_recv_timeout = Some(Duration::from_secs(8));
 

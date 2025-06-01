@@ -18,7 +18,7 @@ struct PeopleShareItem: View {
             Avartar(avatar: peer.avatar)
                 .frame(width: 42, height: 42)
                 .padding(.trailing, 12)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(peer.display_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
@@ -29,7 +29,7 @@ struct PeopleShareItem: View {
                     
                     if let uploadSpeed = peer.display_upload_speed {
                         ZStack(alignment: .leading) {
-                            Text("00000.0 MB/s")
+                            Text("0000000.0 MB/s")
                                 .font(.caption)
                                 .opacity(0)
                             HStack {

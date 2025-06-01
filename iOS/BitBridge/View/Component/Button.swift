@@ -134,7 +134,7 @@ struct Button_Preview: PreviewProvider {
 struct CircleWaveEffect: ViewModifier {
     @State private var animationPhase: CGFloat = 0
     @State private var timer: Timer?
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var isActive: Bool = false
 
     func body(content: Content) -> some View {
         content
@@ -146,40 +146,52 @@ struct CircleWaveEffect: ViewModifier {
                             .color(Theme.BluePrimary.color),
                             .float(animationPhase * 0.4)
                         ),
-                        isEnabled: timer?.isValid ?? false
+                        isEnabled: isActive
                     )
             }
             .onAppear {
-                animationPhase = 0
-                timer = Timer.scheduledTimer(withTimeInterval: 1/12, repeats: true) { _ in
-                    animationPhase += 1/12
-                }
+                startAnimation()
             }
             .onDisappear {
-                animationPhase = 0
-                timer?.invalidate()
-                timer = nil
+                stopAnimation()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                startAnimation()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                stopAnimation()
+            }
+    }
+    
+    private func startAnimation() {
+        guard timer == nil else { return }
+        isActive = true
+        timer = Timer.scheduledTimer(withTimeInterval: 1/14, repeats: true) { _ in
+            animationPhase += 1/14
+        }
+    }
+    
+    private func stopAnimation() {
+        timer?.invalidate()
+        timer = nil
+        isActive = false
     }
 }
 
 struct ShareButton: View {
     let width: CGFloat
 
-    @State private var startTime = Date.now
     @State private var showShareModal = false
     @State private var shareModalContentHeight = CGFloat(0)
     @Environment(\.isPressed) private var isPressed
-    @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
         return AnyView(ZStack {
             Circle()
-                .fill(Theme.GreenSecondary.color.opacity(0.7))
+                .fill(Theme.GreenSecondary.color.opacity(0.8))
                 .modifier(CircleWaveEffect())
             Button(action: {
                 Task {
-                    try await Task.sleep(for: .milliseconds(200))
                     showShareModal = true
                 }
             }) {

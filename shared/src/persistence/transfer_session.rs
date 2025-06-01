@@ -125,8 +125,11 @@ impl TransferSessionRepository {
     pub async fn update_resource(&self, session_id: TransferSessionId, resource: LocalResource) -> Resolve<Option<TransferSession>> {
         let db = self.get_db().await;
         let order_id = resource.order_id;
-        let result = db.query(surreal_quote!(r##"
-            UPDATE transfer_session:#val(&session_id) SET resources[WHERE order_id = #val(&order_id)] = #val(&resource)"##))
+        let result = db
+            .query(surreal_quote!(
+                r##"
+            UPDATE transfer_session:#val(&session_id) SET resources[WHERE order_id = #val(&order_id)] = #val(&resource)"##
+            ))
             .await?
             .take(RPath::from(0))?;
         Ok(result)
