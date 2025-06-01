@@ -21,6 +21,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::di_container::DiContainer;
 use crate::entities::peer::Peer;
+use crate::persistence::transfer_session::TransferSessionId;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
@@ -399,12 +400,18 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
+                let transfer_type = session.transfer_type.clone();
                 let resource = session.resources.iter_mut().find(|it| it.order_id == resource_id);
                 if let Some(resource) = resource {
                     resource.thumbnail_path = Some(path.clone());
                     let resource = resource.clone();
                     let workdir = model.environment.workdir.clone().unwrap();
                     return Command::new(|it| async move {
+                        let session_id = TransferSessionId {
+                            order_id: Some(session_id),
+                            transfer_type: Some(transfer_type)
+                        };
+
                         TransferSessionOperation::update_resource(session_id, resource, &workdir)
                             .into_future(it.clone())
                             .await;

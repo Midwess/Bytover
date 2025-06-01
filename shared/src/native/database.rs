@@ -148,12 +148,8 @@ impl NativeDatabase {
                 }
             }
             DatabaseOperation::TransferSession(TransferSessionOperation::UpdateResource { session_id, resource }) => {
-                let id = TransferSessionId {
-                    order_id: Some(session_id),
-                    ..Default::default()
-                };
+                let result = self.transfer_session_repository.update_resource(session_id, resource).await;
 
-                let result = self.transfer_session_repository.update_resource(id, resource).await;
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(session)),
                     Err(err) => {

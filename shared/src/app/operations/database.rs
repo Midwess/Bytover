@@ -81,7 +81,7 @@ pub enum TransferSessionOperation {
     UpdateProgresses(u64, Vec<TransferProgress>),
     Remove(u64),
     GetAll(TransferSessionId),
-    UpdateResource { session_id: u64, resource: LocalResource }
+    UpdateResource { session_id: TransferSessionId, resource: LocalResource }
 }
 
 impl Operation for TransferSessionOperation {
@@ -244,7 +244,7 @@ impl TransferSessionOperation {
     }
 
     pub fn update_resource(
-        session_id: u64,
+        session_id: TransferSessionId,
         mut resource: LocalResource,
         workdir: &WorkDir
     ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {

@@ -123,18 +123,12 @@ impl TransferSessionRepository {
     }
 
     pub async fn update_resource(&self, session_id: TransferSessionId, resource: LocalResource) -> Resolve<Option<TransferSession>> {
-        let session = self.find_one(&session_id).await?;
-        if let Some(mut session) = session {
-            // Find the resource by order_id and update it
-            if let Some(existing_resource) = session.resources.iter_mut().find(|r| r.order_id == resource.order_id) {
-                *existing_resource = resource;
-            }
-
-            log::info!(target: "transfer", "Update resource in database");
-            let result = self.update_one(session).await?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
+        let db = self.get_db().await;
+        let order_id = resource.order_id;
+        let result = db.query(surreal_quote!(r##"
+            UPDATE transfer_session:#val(&session_id) SET resources[WHERE order_id = #val(&order_id)] = #val(&resource)"##))
+            .await?
+            .take(RPath::from(0))?;
+        Ok(result)
     }
 }
