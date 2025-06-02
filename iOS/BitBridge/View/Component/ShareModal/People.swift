@@ -112,9 +112,9 @@ struct PeopleShareView: View {
                 .scrollIndicators(.hidden)
             }
         }
-        .onReceive(self.core.transfer, perform: { value in
-            if value?.nearby_peers.count ?? 0 != nearbyPeers.count {
-                nearbyPeers = value?.nearby_peers ?? []
+        .onAppearAndReceive(self.core.nearby, perform: { value in
+            if value?.peers.count ?? 0 != nearbyPeers.count {
+                nearbyPeers = value?.peers ?? []
             }
         })
     }

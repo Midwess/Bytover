@@ -37,8 +37,12 @@ struct ResourceImage: View {
                     .frame(width: width, height: height)
             }
         }
-        .task {
-            await loadThumbnail()
+        .onAppearOrChange(of: resource.thumbnail_path) { oldValue, newValue in
+            Task {
+                if (oldValue != newValue) {
+                    await loadThumbnail()
+                }
+            }
         }
     }
     

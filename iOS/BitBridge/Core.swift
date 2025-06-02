@@ -703,6 +703,7 @@ extension UIImage {
 
 extension Image {
     static func fromPath(_ path: LocalResourcePath, core: Core) async -> Image? {
+        print("Loading thumbnail for \(path)")
         switch path {
         case .absolutePath(let path):
             guard let uiImage = UIImage.fromAbsolutePath(path) else {
@@ -849,5 +850,36 @@ extension PHAsset {
                 continuation.resume(returning: url)
             }
         }
+    }
+}
+extension View {
+    func onAppearAndReceive<P: Publisher>(
+        _ publisher: P,
+        defaultValue: P.Output? = nil,
+        perform action: @escaping (P.Output) -> Void
+    ) -> some View where P.Failure == Never {
+        self
+            .onAppear {
+                if let defaultValue = defaultValue {
+                    action(defaultValue)
+                }
+                else if let currentValue = publisher as? CurrentValueSubject<P.Output, Never> {
+                    currentValue.send(currentValue.value)
+                }
+            }
+            .onReceive(publisher, perform: action)
+    }
+    
+    func onAppearOrChange<V: Equatable>(
+        of value: V,
+        perform action: @escaping (V?, V) -> Void
+    ) -> some View {
+        self
+            .onAppear {
+                action(nil, value)
+            }
+            .onChange(of: value) { oldValue, newValue in
+                action(oldValue, newValue)
+            }
     }
 }

@@ -41,6 +41,15 @@ struct ImageReceiveResourceView: View {
                     await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
                 }
             }
+            .onAppearAndReceive(core.transfer, perform: { value in
+                guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                    return;
+                }
+                
+                if itemValue != self.localResource {
+                    self.localResource = itemValue
+                }
+            })
         }
     }
 }
@@ -93,6 +102,15 @@ struct FileReceiveResourceView: View {
                 await core.update(.transfer(.openSessionResource(session_id: sessionId, resource_id: localResource.model.order_id)))
             }
         }
+        .onAppearAndReceive(core.transfer, perform: { value in
+            guard let itemValue = value!.received_sessions.first(where: { item in item.id == sessionId})?.file_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                return;
+            }
+            
+            if itemValue != self.localResource {
+                self.localResource = itemValue
+            }
+        })
     }
 }
 
@@ -154,10 +172,7 @@ struct ReceiveSessionBodyView: View {
                 return
             }
             
-            let numberOfFilesChanges = receivedSession.file_resources.count != self.session.file_resources.count
-            let numberOfImagesChanges = receivedSession.image_resources.count != self.session.image_resources.count;
-            
-            if numberOfFilesChanges || numberOfImagesChanges {
+            if receivedSession.file_resources.count != self.session.file_resources.count || receivedSession.image_resources.count != self.session.image_resources.count || receivedSession.video_resources.count != self.session.video_resources.count {
                 self.session = receivedSession
             }
         })
@@ -216,9 +231,15 @@ struct ReceiveSessionHeaderView: View {
                 return
             }
             
-            let progressChanges = receivedSession.progress != self.session.progress;
+            if receivedSession.progress != self.session.progress {
+                self.session = receivedSession
+            }
             
-            if progressChanges {
+            if receivedSession.is_in_progress != self.session.is_in_progress && receivedSession.is_completed != self.session.is_completed {
+                self.session = receivedSession
+            }
+            
+            if (receivedSession.display_download_speed != self.session.display_download_speed) {
                 self.session = receivedSession
             }
         })
