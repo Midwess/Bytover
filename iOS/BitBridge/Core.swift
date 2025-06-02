@@ -325,7 +325,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         return isPrivate ? privatePath! : publicPath!
     }
     
-    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 1024, height: 1024)) async -> Data? {
+    func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 256, height: 256)) async -> Data? {
         if itemIdentifier.starts(with: "phasset://") {
             let assetId = itemIdentifier.split(separator: "://").last!.description
             guard let asset_cached = await PHAsset.getCachedAsset(identifier: assetId) else {
@@ -338,7 +338,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             
             let manager = PHImageManager.default()
             let options = PHImageRequestOptions()
-            options.resizeMode = .exact
+            options.resizeMode = .fast
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .fastFormat
             options.isSynchronous = false
@@ -457,6 +457,205 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         } else {
             return nil
         }
+    }
+}
+
+extension Data {
+    var bytes: [UInt8] {
+        return [UInt8](self)
+    }
+}
+
+extension UIImage {
+    static func fromAbsolutePath(_ path: String) -> UIImage? {
+        return UIImage(contentsOfFile: path)
+    }
+    
+    static func fromURL(_ url: URL) -> UIImage? {
+        guard url.isFileURL else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+}
+
+extension Image {
+    static func fromPath(_ path: LocalResourcePath, core: Core) async -> Image? {
+        switch path {
+        case .absolutePath(let path):
+            guard let uiImage = UIImage.fromAbsolutePath(path) else {
+                print("There is no image at \(path)")
+                return nil
+            }
+            return Image(uiImage: uiImage)
+        case .relativePath(let path, let isPrivate):
+            let workdir = await core.getDocumentsDirectory(isPrivate: isPrivate)
+            let fullPath = workdir.appendingPathComponent(path).path
+            guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
+                print("There is no image at \(path)")
+                return nil
+            }
+            return Image(uiImage: uiImage)
+        case .platformIdentifier(let identifier):
+            guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
+                  let fileUrl = cachedAsset.fileUrl,
+                  let uiImage = UIImage.fromURL(fileUrl) else {
+                print("There is no image at \(path)")
+                return nil
+            }
+            return Image(uiImage: uiImage)
+        }
+    }
+}
+
+class PHAssetCached {
+    var fileSize: UInt64
+    var fileName: String
+    var fileUrl: URL?
+    var asset: PHAsset
+    
+    init(fileName: String, fileSize: UInt64, fileUrl: URL?, asset: PHAsset) {
+        self.fileName = fileName
+        self.fileSize = fileSize
+        self.fileUrl = fileUrl
+        self.asset = asset
+    }
+}
+
+class AssetCache {
+    static var shared = AssetCache()
+    private var cache: [String: PHAssetCached] = [:]
+    private let queue = DispatchQueue(label: "com.bitbridge.assetcache")
+    
+    func get(identifier: String) -> PHAssetCached? {
+        queue.sync {
+            return cache[identifier]
+        }
+    }
+    
+    func set(identifier: String, asset: PHAssetCached) {
+        queue.sync {
+            cache[identifier] = asset
+        }
+    }
+    
+    func clear() {
+        queue.sync {
+            cache.removeAll()
+        }
+    }
+}
+
+extension PHAsset {
+    static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
+        if let cached = AssetCache.shared.get(identifier: identifier) {
+            return cached
+        }
+        
+        let options = PHFetchOptions()
+        options.fetchLimit = 1
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
+        guard let asset = fetchResult.firstObject,
+              let resource = PHAssetResource.assetResources(for: asset).first else {
+                return nil
+        }
+        
+        let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
+        
+        let url = includeUrl ? await asset.getAbsoluteURL() : nil
+        let cached = PHAssetCached(
+            fileName: resource.originalFilename,
+            fileSize: UInt64(fileSize),
+            fileUrl: url,
+            asset: asset
+        )
+        
+        AssetCache.shared.set(identifier: identifier, asset: cached)
+        return cached
+    }
+    
+    func getAbsoluteURL(completionHandler: @escaping (URL?) -> Void) {
+        switch self.mediaType {
+        case .image:
+            let options = PHContentEditingInputRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.canHandleAdjustmentData = { _ in return false }
+            
+            self.requestContentEditingInput(with: options) { (contentEditingInput, _) in
+                completionHandler(contentEditingInput?.fullSizeImageURL)
+            }
+            
+        case .video:
+            let options = PHVideoRequestOptions()
+            options.version = .original
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .highQualityFormat
+            
+            PHImageManager.default().requestAVAsset(forVideo: self, options: options) { (asset, _, _) in
+                if let urlAsset = asset as? AVURLAsset {
+                    completionHandler(urlAsset.url)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+            
+        default:
+            let resources = PHAssetResource.assetResources(for: self)
+            if let resource = resources.first {
+                let tempDirURL = FileManager.default.temporaryDirectory
+                let fileName = resource.originalFilename
+                let localURL = tempDirURL.appendingPathComponent(fileName)
+                
+                try? FileManager.default.removeItem(at: localURL)
+                
+                PHAssetResourceManager.default().writeData(for: resource, toFile: localURL, options: nil) { (error) in
+                    if error == nil {
+                        completionHandler(localURL)
+                    } else {
+                        completionHandler(nil)
+                    }
+                }
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
+    
+    func getAbsoluteURL() async -> URL? {
+        return await withCheckedContinuation { continuation in
+            getAbsoluteURL { url in
+                continuation.resume(returning: url)
+            }
+        }
+    }
+}
+extension View {
+    func onAppearAndReceive<P: Publisher>(
+        _ publisher: P,
+        defaultValue: P.Output? = nil,
+        perform action: @escaping (P.Output) -> Void
+    ) -> some View where P.Failure == Never {
+        self
+            .onAppear {
+                if let defaultValue = defaultValue {
+                    action(defaultValue)
+                }
+                else if let currentValue = publisher as? CurrentValueSubject<P.Output, Never> {
+                    currentValue.send(currentValue.value)
+                }
+            }
+            .onReceive(publisher, perform: action)
+    }
+    
+    func onAppearOrChange<V: Equatable>(
+        of value: V,
+        perform action: @escaping (V?, V) -> Void
+    ) -> some View {
+        self
+            .onAppear {
+                action(nil, value)
+            }
+            .onChange(of: value) { oldValue, newValue in
+                action(oldValue, newValue)
+            }
     }
 }
 
@@ -684,202 +883,3 @@ class CoreMock: Core {
     override func update_view(_ model: AppViewModel) {}
 }
 
-extension Data {
-    var bytes: [UInt8] {
-        return [UInt8](self)
-    }
-}
-
-extension UIImage {
-    static func fromAbsolutePath(_ path: String) -> UIImage? {
-        return UIImage(contentsOfFile: path)
-    }
-    
-    static func fromURL(_ url: URL) -> UIImage? {
-        guard url.isFileURL else { return nil }
-        return UIImage(contentsOfFile: url.path)
-    }
-}
-
-extension Image {
-    static func fromPath(_ path: LocalResourcePath, core: Core) async -> Image? {
-        print("Loading thumbnail for \(path)")
-        switch path {
-        case .absolutePath(let path):
-            guard let uiImage = UIImage.fromAbsolutePath(path) else {
-                print("There is no image at \(path)")
-                return nil
-            }
-            return Image(uiImage: uiImage)
-        case .relativePath(let path, let isPrivate):
-            let workdir = await core.getDocumentsDirectory(isPrivate: isPrivate)
-            let fullPath = workdir.appendingPathComponent(path).path
-            guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
-                print("There is no image at \(path)")
-                return nil
-            }
-            return Image(uiImage: uiImage)
-        case .platformIdentifier(let identifier):
-            guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
-                  let fileUrl = cachedAsset.fileUrl,
-                  let uiImage = UIImage.fromURL(fileUrl) else {
-                print("There is no image at \(path)")
-                return nil
-            }
-            return Image(uiImage: uiImage)
-        }
-    }
-}
-
-class PHAssetCached {
-    var fileSize: UInt64
-    var fileName: String
-    var fileUrl: URL?
-    var asset: PHAsset
-    
-    init(fileName: String, fileSize: UInt64, fileUrl: URL?, asset: PHAsset) {
-        self.fileName = fileName
-        self.fileSize = fileSize
-        self.fileUrl = fileUrl
-        self.asset = asset
-    }
-}
-
-class AssetCache {
-    static var shared = AssetCache()
-    private var cache: [String: PHAssetCached] = [:]
-    private let queue = DispatchQueue(label: "com.bitbridge.assetcache")
-    
-    func get(identifier: String) -> PHAssetCached? {
-        queue.sync {
-            return cache[identifier]
-        }
-    }
-    
-    func set(identifier: String, asset: PHAssetCached) {
-        queue.sync {
-            cache[identifier] = asset
-        }
-    }
-    
-    func clear() {
-        queue.sync {
-            cache.removeAll()
-        }
-    }
-}
-
-extension PHAsset {
-    static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
-        if let cached = AssetCache.shared.get(identifier: identifier) {
-            return cached
-        }
-        
-        let options = PHFetchOptions()
-        options.fetchLimit = 1
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
-        guard let asset = fetchResult.firstObject,
-              let resource = PHAssetResource.assetResources(for: asset).first else {
-                return nil
-        }
-        
-        let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
-        
-        let url = includeUrl ? await asset.getAbsoluteURL() : nil
-        let cached = PHAssetCached(
-            fileName: resource.originalFilename,
-            fileSize: UInt64(fileSize),
-            fileUrl: url,
-            asset: asset
-        )
-        
-        AssetCache.shared.set(identifier: identifier, asset: cached)
-        return cached
-    }
-    
-    func getAbsoluteURL(completionHandler: @escaping (URL?) -> Void) {
-        switch self.mediaType {
-        case .image:
-            let options = PHContentEditingInputRequestOptions()
-            options.isNetworkAccessAllowed = true
-            options.canHandleAdjustmentData = { _ in return false }
-            
-            self.requestContentEditingInput(with: options) { (contentEditingInput, _) in
-                completionHandler(contentEditingInput?.fullSizeImageURL)
-            }
-            
-        case .video:
-            let options = PHVideoRequestOptions()
-            options.version = .original
-            options.isNetworkAccessAllowed = true
-            options.deliveryMode = .highQualityFormat
-            
-            PHImageManager.default().requestAVAsset(forVideo: self, options: options) { (asset, _, _) in
-                if let urlAsset = asset as? AVURLAsset {
-                    completionHandler(urlAsset.url)
-                } else {
-                    completionHandler(nil)
-                }
-            }
-            
-        default:
-            let resources = PHAssetResource.assetResources(for: self)
-            if let resource = resources.first {
-                let tempDirURL = FileManager.default.temporaryDirectory
-                let fileName = resource.originalFilename
-                let localURL = tempDirURL.appendingPathComponent(fileName)
-                
-                try? FileManager.default.removeItem(at: localURL)
-                
-                PHAssetResourceManager.default().writeData(for: resource, toFile: localURL, options: nil) { (error) in
-                    if error == nil {
-                        completionHandler(localURL)
-                    } else {
-                        completionHandler(nil)
-                    }
-                }
-            } else {
-                completionHandler(nil)
-            }
-        }
-    }
-    
-    func getAbsoluteURL() async -> URL? {
-        return await withCheckedContinuation { continuation in
-            getAbsoluteURL { url in
-                continuation.resume(returning: url)
-            }
-        }
-    }
-}
-extension View {
-    func onAppearAndReceive<P: Publisher>(
-        _ publisher: P,
-        defaultValue: P.Output? = nil,
-        perform action: @escaping (P.Output) -> Void
-    ) -> some View where P.Failure == Never {
-        self
-            .onAppear {
-                if let defaultValue = defaultValue {
-                    action(defaultValue)
-                }
-                else if let currentValue = publisher as? CurrentValueSubject<P.Output, Never> {
-                    currentValue.send(currentValue.value)
-                }
-            }
-            .onReceive(publisher, perform: action)
-    }
-    
-    func onAppearOrChange<V: Equatable>(
-        of value: V,
-        perform action: @escaping (V?, V) -> Void
-    ) -> some View {
-        self
-            .onAppear {
-                action(nil, value)
-            }
-            .onChange(of: value) { oldValue, newValue in
-                action(oldValue, newValue)
-            }
-    }
-}
