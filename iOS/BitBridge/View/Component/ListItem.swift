@@ -99,9 +99,7 @@ struct ResourceImage: View {
 
     private func loadThumbnail() async {
         guard thumbnailImage == nil, let thumbnail_path = resource.thumbnail_path else { return }
-        print("Loading thumbnail for \(thumbnail_path)")
         let loadedImage = await Image.fromPath(thumbnail_path, core: core)
-        print("Thumbnail loaded \(loadedImage)")
         thumbnailImage = loadedImage
     }
 }

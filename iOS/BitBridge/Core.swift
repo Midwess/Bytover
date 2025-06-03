@@ -409,7 +409,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
             Task {
-                print("on location updated")
                 await self.update(.nearby(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
                 
                 manager.stopUpdatingLocation()

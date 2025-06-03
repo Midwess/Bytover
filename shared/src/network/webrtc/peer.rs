@@ -160,7 +160,6 @@ impl PeerCommunication {
                             .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
                     }
                     Request::ResourceThumbnailFullfill(mut thumbnail_message) => {
-                        log::info!(target: "peer", "Received thumbnail for resource {:?}", thumbnail_message.resource_id);
                         if let Some(resource_thumbnail_message::Data::Png(data)) = thumbnail_message.data.take() {
                             let resource_id = thumbnail_message.resource_id;
                             let current_index = thumbnail_message.current_index;

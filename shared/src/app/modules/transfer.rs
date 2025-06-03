@@ -6,7 +6,7 @@ use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::ResourceSelection;
-use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferStatus, TransferType};
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
@@ -349,6 +349,14 @@ impl AppModule<BitBridge> for TransferModule {
                 let Some(resource) = session.resources.iter().find(|it| it.order_id == resource_id) else {
                     return Command::done();
                 };
+
+                let Some(transfer_progress) = session.progress.iter().find(|it| it.resource_order_id == resource_id) else {
+                    return Command::done();
+                };
+
+                if !matches!(transfer_progress.status, TransferStatus::Success) {
+                    return Command::done();
+                }
 
                 let resource_path = resource.path.clone();
                 let workdir = model.environment.workdir.clone().unwrap();

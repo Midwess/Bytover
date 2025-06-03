@@ -114,7 +114,6 @@ impl AppModule<BitBridge> for NearbyModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        log::info!(target: "core", "Viewing nearby model {:?}", model.nearby.peers.len());
         Self::ViewModel {
             me: model.nearby.me.as_ref().map(PeerViewModel::from),
             peers: model.nearby.peers.iter().map(PeerViewModel::from).collect()

@@ -18,8 +18,17 @@ struct ImageReceiveResourceView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack {
-                ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
+            ZStack {
+                HStack {
+                    ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
+                }
+                
+                if !localResource.is_completed {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
+                        .scaleEffect(1.5)
+                        .background(Theme.BlackBase.color.blur(radius: 20))
+                }
             }
             .onTapGesture {
                 Task {
@@ -48,8 +57,17 @@ struct VideoReceiveResourceView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack {
-                ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
+            ZStack {
+                HStack {
+                    ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
+                }
+                
+                if !localResource.is_completed {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
+                        .scaleEffect(1.5)
+                        .background(Theme.BlackBase.color.blur(radius: 20))
+                }
             }
             .onTapGesture {
                 Task {
@@ -77,32 +95,41 @@ struct FileReceiveResourceView: View {
     @EnvironmentObject private var core: Core
 
     var body: some View {
-        HStack {
-            ResourceImage(resource: localResource.model, backgroundColor: false)
-                .background(
-                    RoundedRectangle(cornerRadius: 15)
-                        .fill(Theme.PrimaryText.color.opacity(0.05))
-                )
-            VStack(alignment: .leading, spacing: 5) {
-                Text(localResource.model.name)
-                    .modifier(Label1())
+        ZStack {
+            HStack {
+                ResourceImage(resource: localResource.model, backgroundColor: false)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15)
+                            .fill(Theme.PrimaryText.color.opacity(0.05))
+                    )
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(localResource.model.name)
+                        .modifier(Label1())
+                    
+                    Text(localResource.model.display_path)
+                        .modifier(Label3())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .opacity(0.7)
+                }
+                .padding(.trailing, SpaceTheme.item.value)
                 
-                Text(localResource.model.display_path)
-                    .modifier(Label3())
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .opacity(0.7)
+                Spacer()
+                if localResource.model.size_mb > 0 {
+                    Text("\(String(localResource.model.size_mb)) MB")
+                        .modifier(Label1())
+                }
+                else if localResource.model.size_gb > 0 {
+                    Text("\(String(localResource.model.size_gb)) GB")
+                        .modifier(Label1())
+                }
             }
-            .padding(.trailing, SpaceTheme.item.value)
             
-            Spacer()
-            if localResource.model.size_mb > 0 {
-                Text("\(String(localResource.model.size_mb)) MB")
-                    .modifier(Label1())
-            }
-            else if localResource.model.size_gb > 0 {
-                Text("\(String(localResource.model.size_gb)) GB")
-                    .modifier(Label1())
+            if !localResource.is_completed {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
+                    .scaleEffect(1.5)
+                    .background(Theme.BlackBase.color.blur(radius: 20))
             }
         }
         .frame(idealWidth: screenSize.width - 80, maxWidth: 320, idealHeight: 45)
