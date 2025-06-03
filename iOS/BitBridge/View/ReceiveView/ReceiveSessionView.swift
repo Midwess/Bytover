@@ -11,17 +11,22 @@ import SharedTypes
 
 struct ImageReceiveResourceView: View {
     var session_id: UInt64
+    var width: CGFloat
+    var height: CGFloat
     @State var localResource: ImageReceiveResourceViewModel
     @State var isShowingMoreDialog: Bool = false
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
     
     var body: some View {
-        GeometryReader { geometry in
+        Button(action: {
+            Task {
+                await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+            }
+        }) {
             ZStack {
-                HStack {
-                    ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
-                }
+                ResourceImage(resource: localResource.model, width: width, height: height, radius: 20)
+                
                 
                 if !localResource.is_completed {
                     ProgressView()
@@ -30,37 +35,37 @@ struct ImageReceiveResourceView: View {
                         .background(Theme.BlackBase.color.blur(radius: 20))
                 }
             }
-            .onTapGesture {
-                Task {
-                    await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
-                }
-            }
-            .onAppearAndReceive(core.transfer, perform: { value in
-                guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
-                    return;
-                }
-                
-                if itemValue != self.localResource {
-                    self.localResource = itemValue
-                }
-            })
         }
+        .onAppearAndReceive(core.transfer, perform: { value in
+            guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                return;
+            }
+            
+            if itemValue != self.localResource {
+                self.localResource = itemValue
+            }
+        })
+        .frame(width: width, height: height)
     }
 }
 
 struct VideoReceiveResourceView: View {
     var session_id: UInt64
+    var width: CGFloat
+    var height: CGFloat
     @State var localResource: VideoReceiveResourceViewModel
     @State var isShowingMoreDialog: Bool = false
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
     
     var body: some View {
-        GeometryReader { geometry in
+        Button(action: {
+            Task {
+                await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+            }
+        }) {
             ZStack {
-                HStack {
-                    ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
-                }
+                ResourceImage(resource: localResource.model, width: width, height: height, radius: 20)
                 
                 if !localResource.is_completed {
                     ProgressView()
@@ -69,21 +74,17 @@ struct VideoReceiveResourceView: View {
                         .background(Theme.BlackBase.color.blur(radius: 20))
                 }
             }
-            .onTapGesture {
-                Task {
-                    await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
-                }
-            }
-            .onAppearAndReceive(core.transfer, perform: { value in
-                guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.video_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
-                    return;
-                }
-                
-                if itemValue != self.localResource {
-                    self.localResource = itemValue
-                }
-            })
         }
+        .frame(width: width, height: height)
+        .onAppearAndReceive(core.transfer, perform: { value in
+            guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.video_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                return;
+            }
+            
+            if itemValue != self.localResource {
+                self.localResource = itemValue
+            }
+        })
     }
 }
 
@@ -95,54 +96,55 @@ struct FileReceiveResourceView: View {
     @EnvironmentObject private var core: Core
 
     var body: some View {
-        ZStack {
-            HStack {
-                ResourceImage(resource: localResource.model, backgroundColor: false)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15)
-                            .fill(Theme.PrimaryText.color.opacity(0.05))
-                    )
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(localResource.model.name)
-                        .modifier(Label1())
-                    
-                    Text(localResource.model.display_path)
-                        .modifier(Label3())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .opacity(0.7)
-                }
-                .padding(.trailing, SpaceTheme.item.value)
-                
-                Spacer()
-                if localResource.model.size_mb > 0 {
-                    Text("\(String(localResource.model.size_mb)) MB")
-                        .modifier(Label1())
-                }
-                else if localResource.model.size_gb > 0 {
-                    Text("\(String(localResource.model.size_gb)) GB")
-                        .modifier(Label1())
-                }
-            }
-            
-            if !localResource.is_completed {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
-                    .scaleEffect(1.5)
-                    .background(Theme.BlackBase.color.blur(radius: 20))
-            }
-        }
-        .frame(idealWidth: screenSize.width - 80, maxWidth: 320, idealHeight: 45)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Theme.PrimaryText.color.opacity(0.1))
-        )
-        .onTapGesture {
+        Button(action: {
             Task {
                 await core.update(.transfer(.openSessionResource(session_id: sessionId, resource_id: localResource.model.order_id)))
             }
+        }) {
+            ZStack {
+                HStack {
+                    ResourceImage(resource: localResource.model, backgroundColor: false)
+                        .background(
+                            RoundedRectangle(cornerRadius: 15)
+                                .fill(Theme.PrimaryText.color.opacity(0.05))
+                        )
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localResource.model.name)
+                            .modifier(Label1())
+                        
+                        Text(localResource.model.display_path)
+                            .modifier(Label3())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .opacity(0.7)
+                    }
+                    .padding(.trailing, SpaceTheme.item.value)
+                    
+                    Spacer()
+                    if localResource.model.size_mb > 0 {
+                        Text("\(String(localResource.model.size_mb)) MB")
+                            .modifier(Label1())
+                    }
+                    else if localResource.model.size_gb > 0 {
+                        Text("\(String(localResource.model.size_gb)) GB")
+                            .modifier(Label1())
+                    }
+                }
+                
+                if !localResource.is_completed {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
+                        .scaleEffect(1.5)
+                        .background(Theme.BlackBase.color.blur(radius: 20))
+                }
+            }
+            .frame(idealWidth: screenSize.width - 80, maxWidth: 320, idealHeight: 45)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Theme.PrimaryText.color.opacity(0.1))
+            )
         }
         .onAppearAndReceive(core.transfer, perform: { value in
             guard let itemValue = value!.received_sessions.first(where: { item in item.id == sessionId})?.file_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
@@ -189,15 +191,15 @@ struct ReceiveSessionBodyView: View {
                         }
                     }
                     ScrollView(.horizontal) {
-                        let width = ((screenSize.width - SpaceTheme.screen.value * 2.1) / CGFloat(min(mediaCount, 3))).rounded();
+                        let width = ((screenSize.width - SpaceTheme.screen.value * 2) / CGFloat(min(mediaCount, 3)) - 10).rounded();
                         let height = min(width * 1.3, 140);
                         LazyHGrid(rows: [GridItem(.flexible(minimum: 140))], spacing: 10) {
                             ForEach(self.session.video_resources, id: \.model.order_id) { item in
-                                VideoReceiveResourceView(session_id: self.session.id, localResource: item)
+                                VideoReceiveResourceView(session_id: self.session.id, width: width, height: height, localResource: item)
                                     .frame(width: width, height: height)
                             }
                             ForEach(self.session.image_resources, id: \.model.order_id) { item in
-                                ImageReceiveResourceView(session_id: self.session.id, localResource: item)
+                                ImageReceiveResourceView(session_id: self.session.id, width: width, height: height, localResource: item)
                                     .frame(width: width, height: height)
                             }
                         }
@@ -228,6 +230,7 @@ struct ReceiveSessionBodyView: View {
                 return
             }
             
+            print("Display \(receivedSession.image_resources.map(\.model.order_id))")
             if receivedSession.file_resources.count != self.session.file_resources.count || receivedSession.image_resources.count != self.session.image_resources.count || receivedSession.video_resources.count != self.session.video_resources.count {
                 self.session = receivedSession
             }
