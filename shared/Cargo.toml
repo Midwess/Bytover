@@ -52,7 +52,8 @@ lib = [
     "bytes",
     "ulid",
     "flate2",
-    "tar"
+    "tar",
+    "mime_guess"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -97,6 +98,7 @@ anyhow = { workspace = true }
 ulid = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
+mime_guess = { workspace = true, optional = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

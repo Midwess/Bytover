@@ -36,6 +36,32 @@ struct ResourceImage: View {
                     .padding(width != .infinity && height != .infinity ? ((width + height) / 2) * 0.1 : 0)
                     .frame(width: width, height: height)
             }
+            
+            // Video overlay icon
+            if resource.type == .video {
+                VStack {
+                    HStack {
+                        Spacer()
+                        VStack {
+                            Spacer()
+                            ZStack {
+                                Circle()
+                                    .fill(Theme.BlackBase.color)
+                                    .blur(radius: min(width, height) * 0.16)
+                                    .frame(width: min(width, height) * 0.2, height: min(width, height) * 0.2)
+                                ImageAsset.CameraVideoSolid.image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundColor(Theme.PrimaryText.color.opacity(0.82))
+                                    .padding(min(width, height) * 0.1)
+                            }
+                            .frame(width: min(width, height) * 0.40, height: min(width, height) * 0.40)
+                        }
+                    }
+                }
+                .frame(width: width, height: height)
+                .padding(4)
+            }
         }
         .onAppearOrChange(of: resource.thumbnail_path) { oldValue, newValue in
             Task {

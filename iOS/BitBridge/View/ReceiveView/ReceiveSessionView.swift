@@ -21,21 +21,6 @@ struct ImageReceiveResourceView: View {
             HStack {
                 ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
             }
-            .onReceive(core.transfer, perform: { value in
-                guard let session = value?.received_sessions.first(where: { item in item.id == session_id}) else {
-                    return
-                }
-                
-                guard let resource = session.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
-                    return;
-                }
-                
-                let thumbnailChanges = resource.model.thumbnail_path != self.localResource.model.thumbnail_path
-                
-                if thumbnailChanges {
-                    self.localResource = resource
-                }
-            })
             .onTapGesture {
                 Task {
                     await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
@@ -43,6 +28,36 @@ struct ImageReceiveResourceView: View {
             }
             .onAppearAndReceive(core.transfer, perform: { value in
                 guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+                    return;
+                }
+                
+                if itemValue != self.localResource {
+                    self.localResource = itemValue
+                }
+            })
+        }
+    }
+}
+
+struct VideoReceiveResourceView: View {
+    var session_id: UInt64
+    @State var localResource: VideoReceiveResourceViewModel
+    @State var isShowingMoreDialog: Bool = false
+    @Environment(\.screenSize) private var screenSize
+    @EnvironmentObject private var core: Core
+    
+    var body: some View {
+        GeometryReader { geometry in
+            HStack {
+                ResourceImage(resource: localResource.model, width: geometry.size.width, height: geometry.size.height, radius: 20)
+            }
+            .onTapGesture {
+                Task {
+                    await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+                }
+            }
+            .onAppearAndReceive(core.transfer, perform: { value in
+                guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.video_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
                     return;
                 }
                 
@@ -131,15 +146,29 @@ struct ReceiveSessionBodyView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if self.session.image_resources.count > 0 {
+            let mediaCount = self.session.image_resources.count + self.session.video_resources.count;
+            if mediaCount > 0 {
                 VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
-                    Text("\(self.session.image_resources.count) Image\(self.session.image_resources.count > 1 ? "s" : "")")
-                        .modifier(Caption())
-                        .foregroundColor(Theme.PrimaryText.color)
+                    HStack(spacing: 8) {
+                        if self.session.video_resources.count > 0 {
+                            Text("\(self.session.video_resources.count) Video\(self.session.video_resources.count > 1 ? "s" : "")")
+                                .modifier(Caption())
+                                .foregroundColor(Theme.PrimaryText.color)
+                        }
+                        if self.session.image_resources.count > 0 {
+                            Text("\(self.session.image_resources.count) Image\(self.session.image_resources.count > 1 ? "s" : "")")
+                                .modifier(Caption())
+                                .foregroundColor(Theme.PrimaryText.color)
+                        }
+                    }
                     ScrollView(.horizontal) {
-                        let width = ((screenSize.width - 80) / CGFloat(min(self.session.image_resources.count, 3))).rounded();
+                        let width = ((screenSize.width - 80) / CGFloat(min(mediaCount, 3))).rounded();
                         let height = min(width * 1.3, 140);
                         LazyHGrid(rows: [GridItem(.flexible(minimum: 140))], spacing: 10) {
+                            ForEach(self.session.video_resources, id: \.model.order_id) { item in
+                                VideoReceiveResourceView(session_id: self.session.id, localResource: item)
+                                    .frame(width: width, height: height)
+                            }
                             ForEach(self.session.image_resources, id: \.model.order_id) { item in
                                 ImageReceiveResourceView(session_id: self.session.id, localResource: item)
                                     .frame(width: width, height: height)

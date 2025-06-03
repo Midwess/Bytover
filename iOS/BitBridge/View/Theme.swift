@@ -136,6 +136,7 @@ enum ImageAsset: String {
     case File
     case FilePdf
     case CameraVideo
+    case CameraVideoSolid
     case FileImage
     case MailReceiveEmpty
     case MailReceiveFull
