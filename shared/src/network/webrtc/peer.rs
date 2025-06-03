@@ -166,7 +166,7 @@ impl PeerCommunication {
                             let current_index = thumbnail_message.current_index;
                             let data_length = thumbnail_message.data_length;
                             let shell_runtime = self.shell_runtime.clone();
-                            let thumbnail_path = self.work_dir.thumbnails(format!("{}.png", resource_id));
+                            let thumbnail_path = self.work_dir.thumbnails(format!("{resource_id}.png"));
                             let session_id = thumbnail_message.session_id as u64;
                             let workdir = self.work_dir.clone();
 

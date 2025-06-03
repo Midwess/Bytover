@@ -162,7 +162,7 @@ struct ReceiveSessionBodyView: View {
                         }
                     }
                     ScrollView(.horizontal) {
-                        let width = ((screenSize.width - 80) / CGFloat(min(mediaCount, 3))).rounded();
+                        let width = ((screenSize.width - SpaceTheme.screen.value * 2.1) / CGFloat(min(mediaCount, 3))).rounded();
                         let height = min(width * 1.3, 140);
                         LazyHGrid(rows: [GridItem(.flexible(minimum: 140))], spacing: 10) {
                             ForEach(self.session.video_resources, id: \.model.order_id) { item in

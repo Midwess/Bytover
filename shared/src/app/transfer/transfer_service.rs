@@ -15,7 +15,7 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::persistence::transfer_session::TransferSessionId;
 
-use super::session::{TransferSession, TransferType};
+use super::session::{TransferSession, TransferStatus, TransferType};
 use super::target::TransferTarget;
 
 pub struct TransferService {}
@@ -253,6 +253,21 @@ impl TransferService {
                                 "Resource {:?} completed with status {:?}",
                                 progress.resource_order_id, progress.status
                             );
+                        }
+
+                        if matches!(progress.status, TransferStatus::Success) {
+                            if let Some(resource) =
+                                transfer_session.resources.iter_mut().find(|it| it.order_id == progress.resource_order_id)
+                            {
+                                if resource.r#type == ResourceType::Image && resource.thumbnail_path.is_none() {
+                                    resource.thumbnail_path = Some(resource.path.clone());
+                                    cmd.notify_event(AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
+                                        session_id: transfer_session.order_id,
+                                        resource_id: progress.resource_order_id,
+                                        path: resource.path.clone()
+                                    }));
+                                }
+                            }
                         }
 
                         transfer_session.update_progress(progress.clone());

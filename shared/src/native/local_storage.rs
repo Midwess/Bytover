@@ -88,8 +88,7 @@ impl NativeLocalStorage {
                     if let Ok(metadata) = metadata {
                         if metadata.is_dir {
                             return LocalStorageOperationOutput::GetResourceType(Some(ResourceType::Folder));
-                        }
-                        else {
+                        } else {
                             let mime_type = mime_guess::from_path(&file.path).first_or_octet_stream();
                             let resource_type = if mime_type.type_() == mime_guess::mime::IMAGE {
                                 ResourceType::Image
