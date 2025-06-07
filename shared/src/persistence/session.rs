@@ -1,15 +1,14 @@
 use crate::entities::session::{Session, SessionType};
+use core_services::db::remote_surrealdb::SurrealDbConnection;
 use core_services::db::repository::abstraction::id::DbId;
-use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
+use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::SurrealResponseError;
-use surrealdb::engine::any::Any;
 use surrealdb::sql::{Thing, Value};
-use surrealdb::Surreal;
 
 #[derive(Clone)]
 pub struct SessionId {
@@ -66,12 +65,12 @@ impl DbId for SessionId {
 }
 
 pub struct SessionRepository {
-    pub db: PoolRequest<Surreal<Any>>
+    pub db: PoolRequest<SurrealDbConnection>
 }
 
 #[async_trait::async_trait]
-impl LocalSurrealDbRepository<Session, SessionId> for SessionRepository {
-    async fn get_db(&self) -> PoolResponse<Surreal<Any>> {
+impl SurrealDbRepository<Session, SessionId> for SessionRepository {
+    async fn get_db(&self) -> PoolResponse<SurrealDbConnection> {
         self.db.retrieve().await.unwrap()
     }
 }

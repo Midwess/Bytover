@@ -216,8 +216,10 @@ impl WebRtc {
         while let Ok(message) = subscription.recv().await {
             let my_id = self.id();
             let peer_id = message.from_id_number();
+            log::info!(target: "broadcast", "Received message from {peer_id}");
             if let Some(to_id) = message.to_id_number() {
                 if to_id != my_id {
+                    log::info!(target: "broadcast", "Message is not for me, skipping");
                     continue;
                 }
             }
@@ -229,6 +231,7 @@ impl WebRtc {
 
             if message.join.is_some() {
                 if peer_id <= my_id {
+                    log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject join", peer_id, my_id);
                     continue;
                 }
 

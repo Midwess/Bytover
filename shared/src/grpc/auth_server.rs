@@ -1,4 +1,4 @@
-use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
+use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};

@@ -230,7 +230,6 @@ struct ReceiveSessionBodyView: View {
                 return
             }
             
-            print("Display \(receivedSession.image_resources.map(\.model.order_id))")
             if receivedSession.file_resources.count != self.session.file_resources.count || receivedSession.image_resources.count != self.session.image_resources.count || receivedSession.video_resources.count != self.session.video_resources.count {
                 self.session = receivedSession
             }

@@ -69,7 +69,7 @@ ulid = "1.2.1"
 flate2 = "1.1.1"
 tar = { git = "https://github.com/dev-logs/tar-rs.git" }
 mime_guess = "2.0.5"
-
+aws-smithy-async = "1.2.5"
 [patch.crates-io]
 affinitypool = { git = "https://github.com/dev-logs/affinitypool.git", version = "0.3.1" }
 

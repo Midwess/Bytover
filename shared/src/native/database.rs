@@ -1,4 +1,4 @@
-use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
+use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use devlog_sdk::distributed_id::gen_id;
 
 use crate::app::operations::database::{

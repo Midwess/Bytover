@@ -2,10 +2,9 @@ use core::panic;
 use std::sync::Arc;
 use std::time::Duration;
 
+use core_services::db::remote_surrealdb::SurrealDbConnection;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
-use surrealdb::engine::any::Any;
-use surrealdb::Surreal;
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
@@ -31,7 +30,7 @@ use crate::persistence::transfer_session::TransferSessionRepository;
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
-    db: OnceCell<Arc<PoolAllocator<Surreal<Any>>>>,
+    db: OnceCell<Arc<PoolAllocator<SurrealDbConnection>>>,
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>,
     workdir: OnceCell<WorkDir>,
@@ -99,18 +98,18 @@ impl DiContainer {
             scope.spawn(async move {
                 let db_path = work_dir.database();
                 log::info!(target: "environment", "Connecting to local database at {}", db_path);
-                let local_db: Box<dyn PoolResourceProvider<Surreal<Any>>> = Box::new(SurrealDbConnectionProvider {
+                let local_db: Box<dyn PoolResourceProvider<SurrealDbConnection>> = Box::new(SurrealDbConnectionProvider {
                     connection: SurrealDbLocalConnectionInfo { db_path: db_path.clone() }
                 });
 
-                let _ = self.db.set(
-                    PoolBuilder::new(local_db)
-                        .max_pool_size(1)
-                        .min_pool_size(0)
-                        .resource_idle_timeout(Duration::from_secs(5))
-                        .build()
-                        .await
-                );
+                let pool = PoolBuilder::new(local_db)
+                    .max_pool_size(1)
+                    .min_pool_size(0)
+                    .resource_idle_timeout(Duration::from_secs(5))
+                    .build()
+                    .await;
+
+                let _ = self.db.set(pool);
 
                 log::info!(target: "native", "Initializing authentication server");
                 let server = AuthServer::new(self.get_session_repository()).await;

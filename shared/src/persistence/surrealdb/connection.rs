@@ -1,6 +1,6 @@
+use core_services::db::remote_surrealdb::SurrealDbConnection;
 use core_services::utils::pool::allocator::PoolResourceProvider;
-use surrealdb::engine::any::{self, Any};
-use surrealdb::Surreal;
+use surrealdb::engine::any::{self};
 
 #[derive(Debug, Clone)]
 pub struct SurrealDbLocalConnectionInfo {
@@ -13,14 +13,14 @@ pub struct SurrealDbConnectionProvider {
 }
 
 #[async_trait::async_trait]
-impl PoolResourceProvider<Surreal<Any>> for SurrealDbConnectionProvider {
-    async fn new(&self) -> Surreal<Any>
+impl PoolResourceProvider<SurrealDbConnection> for SurrealDbConnectionProvider {
+    async fn new(&self) -> SurrealDbConnection
     where
         Self: 'async_trait
     {
         let surreal_kv_path = format!("surrealkv://{}", self.connection.db_path);
         let conn = any::connect(surreal_kv_path).with_capacity(1).await.unwrap();
         conn.use_ns("main").use_db("main").await.unwrap();
-        conn
+        SurrealDbConnection { connection: conn }
     }
 }

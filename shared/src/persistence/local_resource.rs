@@ -1,5 +1,6 @@
+use core_services::db::remote_surrealdb::SurrealDbConnection;
 use core_services::db::repository::abstraction::id::DbId;
-use core_services::db::repository::abstraction::local_repository::LocalSurrealDbRepository;
+use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
@@ -7,9 +8,7 @@ use surreal_derive_plus::surreal_quote;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::{RPath, SurrealResponseError};
-use surrealdb::engine::any::Any;
 use surrealdb::sql::{Thing, Value};
-use surrealdb::Surreal;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
@@ -75,12 +74,12 @@ impl DbId for LocalResourceId {
 }
 
 pub struct LocalResourceRepository {
-    pub db: PoolRequest<Surreal<Any>>
+    pub db: PoolRequest<SurrealDbConnection>
 }
 
 #[async_trait::async_trait]
-impl LocalSurrealDbRepository<LocalResource, LocalResourceId> for LocalResourceRepository {
-    async fn get_db(&self) -> PoolResponse<Surreal<Any>> {
+impl SurrealDbRepository<LocalResource, LocalResourceId> for LocalResourceRepository {
+    async fn get_db(&self) -> PoolResponse<SurrealDbConnection> {
         self.db.retrieve().await.unwrap()
     }
 }
