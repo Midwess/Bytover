@@ -26,7 +26,6 @@ lib = [
     "core-services",
     "schema",
     "devlog-sdk",
-    "domain",
     "tokio",
     "async-trait",
     "log",
@@ -53,7 +52,8 @@ lib = [
     "ulid",
     "flate2",
     "tar",
-    "mime_guess"
+    "mime_guess",
+    "tokio-util"
 ]
 # Generated mode, we split it out to optimize build time (2x faster)
 uniffi-bindgen = ["uniffi"]
@@ -63,14 +63,13 @@ uniffi-bindgen = ["uniffi"]
 [dependencies]
 crux_core = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-surrealdb = { workspace = true, default-features = false, features = ["kv-surrealkv", "kv-mem"], optional = true }
+surrealdb = { workspace = true, features = ["kv-surrealkv", "kv-mem"], optional = true }
 lazy_static = { workspace = true, optional = true }
 uniffi = { workspace = true, optional = true }
 wasm-bindgen = { version = "0.2.100", optional = true }
-core-services = { path = "../libs/core-services", default-features = false, features = ["db-local", "local-storage"], optional = true }
+core-services = { path = "../libs/core-services", features = ["db-local", "local-storage"], optional = true }
 schema = { path = "../libs/schema/rust", optional = true, features = ["bindgen", "client"] }
-devlog-sdk = { path = "../libs/devlog-sdk", default-features = false, features = ["db-local"], optional = true }
-domain = { path = "../domain", optional = true }
+devlog-sdk = { path = "../libs/devlog-sdk", features = ["db-local"], optional = true }
 tokio = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
@@ -99,6 +98,7 @@ ulid = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
 mime_guess = { workspace = true, optional = true }
+tokio-util = {workspace = true, optional = true}
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

@@ -14,7 +14,6 @@ impl LocalResource {
             order_id: self.order_id as i64,
             name: self.name.clone(),
             size: self.size as i64,
-            thumbnail_png: None,
             r#type: proto_type as i32
         }
     }

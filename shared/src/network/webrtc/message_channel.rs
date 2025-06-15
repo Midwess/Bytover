@@ -211,7 +211,6 @@ impl MessageChannel {
             request_id: request_id.clone(),
             request: Some(msg),
             response: None,
-            ..Default::default()
         };
 
         let bytes = Self::encode_msg(&message)?;

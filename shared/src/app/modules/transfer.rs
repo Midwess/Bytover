@@ -64,6 +64,9 @@ pub enum TransferEvent {
     DeleteSession {
         session_id: u64
     },
+    StartPublicTransfer {
+        password: Option<String>
+    },
     StartTransfer {
         target_id: String
     },
@@ -258,6 +261,13 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
                     transfer_service.delete_session(session, it.clone()).await;
+                })
+            }
+            TransferEvent::StartPublicTransfer { password } => {
+                let selected_resources = model.transfer.selected_resources.clone();
+                Command::new(|it| async move {
+                    let transfer_service = DiContainer::get_instance().get_transfer_service();
+                    transfer_service.transfer(selected_resources, TransferTarget::Public { password }, it).await;
                 })
             }
             TransferEvent::StartTransfer { target_id } => {

@@ -14,6 +14,7 @@ use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
 use crate::get_tokio_rt;
+use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
@@ -112,10 +113,16 @@ impl DiContainer {
                 let _ = self.db.set(pool);
 
                 log::info!(target: "native", "Initializing authentication server");
-                let server = AuthServer::new(self.get_session_repository()).await;
+                let server = AuthServer::new(self.get_auth_provider()).await;
                 let _ = self.auth_server.set(server);
             });
         });
+    }
+
+    pub fn get_auth_provider(&self) -> AuthProvider {
+        AuthProvider {
+            session_repository: self.get_session_repository()
+        }
     }
 
     pub fn get_session_repository(&self) -> SessionRepository {

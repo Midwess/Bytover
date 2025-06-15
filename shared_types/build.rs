@@ -4,6 +4,7 @@ use crux_core::typegen::TypeGen;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
+use schema::value::static_resource::static_resource::Source;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::modules::authentication::{AuthenticationEvent, AuthenticationModel};
 use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
@@ -95,6 +96,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferType>()?;
     gen.register_type::<Response>()?;
     gen.register_type::<TransferSessionStatus>()?;
+
+    gen.register_type::<Source>()?;
 
     // Register native msg
     gen.register_type::<MessageToShell>()?;

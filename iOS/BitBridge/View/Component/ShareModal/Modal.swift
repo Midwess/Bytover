@@ -56,7 +56,7 @@ extension TransferMethodSelection {
 struct ShareModal: View {
     @EnvironmentObject var core: Core
     @State private var nearby: NearbyViewModel?
-    @State private var selection = TransferMethodSelection.user
+    @State private var selection = TransferMethodSelection.internet
     let selections = TransferMethodSelection.allCases
     
     var body: some View {

@@ -82,6 +82,7 @@ struct PeopleShareView: View {
                     Spacer()
                 }
             }
+            .frame(width: .infinity, height: 22)
             .padding(.vertical, 12)
             .padding(.horizontal, 20)
             .frame(maxWidth: .infinity)

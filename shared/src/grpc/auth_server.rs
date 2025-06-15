@@ -1,33 +1,29 @@
-use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
-use std::str::FromStr;
 use std::time::Duration;
-use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 use tonic::Request;
 
 use crate::config::get_gateway_grpc_url;
 use crate::entities::device::DeviceInfo;
-use crate::entities::session::SessionType;
 use crate::entities::user::User;
 use crate::errors::NetworkError;
+use crate::grpc::auth_provider::AuthProvider;
 use crate::network::grpc_channel::GrpcChannel;
-use crate::persistence::session::{SessionId, SessionRepository};
 
 pub struct AuthServer {
     channel: GrpcChannel,
-    session_repository: SessionRepository
+    auth_provider: AuthProvider
 }
 
 impl AuthServer {
-    pub async fn new(session_repository: SessionRepository) -> Self {
+    pub async fn new(auth_provider: AuthProvider) -> Self {
         Self {
             channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(1200))),
-            session_repository
+            auth_provider
         }
     }
 }
@@ -60,7 +56,7 @@ impl AuthServer {
 
         // Create request and add bearer token
         let mut req = Request::new(request);
-        self.with_auth(&mut req).await?;
+        self.auth_provider.with_auth(&mut req).await?;
 
         let mut user_rpc = UserServiceClient::new(channel);
         let response = user_rpc.me(req).await?;
@@ -70,30 +66,5 @@ impl AuthServer {
             name: response.user.display_name.clone(),
             avatar: response.user.avatar_url.clone().unwrap_or_default()
         })
-    }
-
-    // Helper method to create authenticated request
-    async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), NetworkError> {
-        let session = self
-            .session_repository
-            .find_one(&SessionId {
-                r#type: SessionType::Access
-            })
-            .await
-            .map_err(|e| NetworkError::Unauthorized(e.to_string()))?;
-
-        log::info!("Session: {:?}", session);
-
-        if session.is_none() {
-            return Err(NetworkError::Unauthorized("Session not found".to_string()));
-        }
-
-        let token = session.unwrap().token;
-
-        if let Ok(token) = MetadataValue::from_str(&token.value) {
-            request.metadata_mut().insert("authorization", token);
-        }
-
-        Ok(())
     }
 }

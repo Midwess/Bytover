@@ -215,6 +215,16 @@ impl TransferSession {
         }
     }
 
+    pub fn public(id: u64, resources: Vec<LocalResource>, password: Option<String>) -> Self {
+        Self {
+            order_id: id,
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            resources,
+            transfer_type: TransferType::Send,
+            target: TransferTarget::Public { password }
+        }
+    }
+
     pub async fn send(resources: Vec<LocalResource>, target: TransferTarget) -> Self {
         let mut resources = resources;
         resources.sort_by(|a, b| a.size.cmp(&b.size));
@@ -282,6 +292,10 @@ impl TransferSession {
 
     pub fn is_completed(&self) -> bool {
         self.progress.iter().all(|it| it.status.is_completed())
+    }
+
+    pub fn is_canceled(&self) -> bool {
+        self.progress.iter().any(|it| it.status == TransferStatus::Canceled)
     }
 
     pub fn cancel(&mut self) {

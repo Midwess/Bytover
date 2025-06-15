@@ -160,7 +160,7 @@ impl PeerCommunication {
                             .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
                     }
                     Request::ResourceThumbnailFullfill(mut thumbnail_message) => {
-                        if let Some(resource_thumbnail_message::Data::Png(data)) = thumbnail_message.data.take() {
+                        if let Some(resource_thumbnail_message::Content::Png(data)) = thumbnail_message.content.take() {
                             let resource_id = thumbnail_message.resource_id;
                             let current_index = thumbnail_message.current_index;
                             let data_length = thumbnail_message.data_length;
@@ -574,7 +574,7 @@ impl PeerCommunication {
                 resource_id: resource_id as i64,
                 data_length: buffer.len() as i64,
                 current_index: 0,
-                data: Some(resource_thumbnail_message::Data::Png(buffer))
+                content: Some(resource_thumbnail_message::Content::Png(buffer))
             };
 
             let _ = self
@@ -595,7 +595,7 @@ impl PeerCommunication {
                     resource_id: resource_id as i64,
                     data_length: buffer.len() as i64,
                     current_index: current_index as i64,
-                    data: Some(resource_thumbnail_message::Data::Png(chunk.to_vec()))
+                    content: Some(resource_thumbnail_message::Content::Png(chunk.to_vec()))
                 };
 
                 let _ = self
