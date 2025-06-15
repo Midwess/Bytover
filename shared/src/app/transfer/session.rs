@@ -221,7 +221,7 @@ impl TransferSession {
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
-            target: TransferTarget::Public { password }
+            target: TransferTarget::Internet { password }
         }
     }
 

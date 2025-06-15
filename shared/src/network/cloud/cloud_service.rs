@@ -58,7 +58,7 @@ impl CloudService {
 
         let session_guard = session.lock().await;
         let password = match &session_guard.target {
-            TransferTarget::Public { password } => password.clone(),
+            TransferTarget::Internet { password } => password.clone(),
             _ => return Err(CloudTransferErrors::InvalidSessionTarget)
         };
 

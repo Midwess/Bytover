@@ -1,63 +1,64 @@
-//
-//  DownloadUrl.swift
-//  BitBridge
-//
-//  Created by Dang Minh Tien on 6/3/25.
-//
-
 import SwiftUI
 import Foundation
 
 struct PublicUrlShareView: View {
     @EnvironmentObject var core: Core
-    @State var password: String = ""
-    @State var isObfuscated: Bool = true
-    
+    @State private var password: String = ""
+    @State private var isObfuscated: Bool = true
+    @FocusState private var isTextFieldFocused: Bool
+
     var body: some View {
         VStack(spacing: SpaceTheme.item.value) {
             Text("Password-protected shareable URL.")
                 .modifier(Label2())
-                .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
-                .multilineTextAlignment(.center)
-            
+                .foregroundColor(Theme.PrimaryText.color.opacity(1))
+                .multilineTextAlignment(.leading)
+
             HStack {
-                if isObfuscated {
+                ZStack {
                     SecureField("Enter password (optional)", text: $password)
-                        .frame(width: .infinity, height: 22)
+                        .frame(height: 22)
                         .modifier(Label1())
                         .foregroundColor(Theme.PrimaryText.color)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .focused($isTextFieldFocused)
+                        .opacity(isObfuscated ? 1 : 0)
                         .onChange(of: password) { newValue in
                             if newValue.count > 20 {
                                 password = String(newValue.prefix(20))
                             }
                         }
-                } else {
+
                     TextField("Enter password (optional)", text: $password)
-                        .frame(width: .infinity, height: 22)
+                        .frame(height: 22)
                         .modifier(Label1())
                         .foregroundColor(Theme.PrimaryText.color)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .focused($isTextFieldFocused)
+                        .opacity(isObfuscated ? 0 : 1)
                         .onChange(of: password) { newValue in
                             if newValue.count > 20 {
                                 password = String(newValue.prefix(20))
                             }
                         }
                 }
-                
+                .frame(width: .infinity)
+
                 if !password.isEmpty {
                     Button(action: {
                         password = ""
+                        isTextFieldFocused = true
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
                     }
                 }
-                
+
                 Button(action: {
                     isObfuscated.toggle()
+                    isTextFieldFocused = true
                 }) {
                     Image(systemName: isObfuscated ? "eye.slash" : "eye")
                         .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
@@ -70,9 +71,10 @@ struct PublicUrlShareView: View {
             .clipShape(Capsule())
             
             Spacer()
-            
+                .frame(height: 10)
+
             Button(action: {
-                
+                // Upload action
             }) {
                 Text("Upload")
                     .modifier(Label1())
@@ -84,22 +86,4 @@ struct PublicUrlShareView: View {
             .clipShape(Capsule())
         }
     }
-}
-
-extension View {
-    func placeholder<Content: View>(
-        when shouldShow: Bool,
-        alignment: Alignment = .leading,
-        @ViewBuilder placeholder: () -> Content) -> some View {
-
-        ZStack(alignment: alignment) {
-            placeholder().opacity(shouldShow ? 1 : 0)
-            self
-        }
-    }
-}
-
-#Preview {
-    PublicUrlShareView()
-        .environmentObject(CoreMock.withSelectedFileTransfers())
 }

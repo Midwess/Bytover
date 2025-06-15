@@ -267,7 +267,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let selected_resources = model.transfer.selected_resources.clone();
                 Command::new(|it| async move {
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
-                    transfer_service.transfer(selected_resources, TransferTarget::Public { password }, it).await;
+                    transfer_service.transfer(selected_resources, TransferTarget::Internet { password }, it).await;
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
