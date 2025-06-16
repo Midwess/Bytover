@@ -10,8 +10,8 @@ struct PublicUrlShareView: View {
     var body: some View {
         VStack(spacing: SpaceTheme.item.value) {
             Text("Password-protected shareable URL.")
-                .modifier(Label2())
-                .foregroundColor(Theme.PrimaryText.color.opacity(1))
+                .modifier(Label1())
+                .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
                 .multilineTextAlignment(.leading)
 
             HStack {

@@ -210,7 +210,7 @@ impl MessageChannel {
         let message = PeerMessageBody {
             request_id: request_id.clone(),
             request: Some(msg),
-            response: None,
+            response: None
         };
 
         let bytes = Self::encode_msg(&message)?;

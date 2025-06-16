@@ -81,6 +81,15 @@ impl CloudService {
             return Ok(());
         }
 
+        let thumbnail_upload_urls = create_session_response.thumbnail_upload_urls;
+        let (thumbnail_result, upload_result) = tokio::join!(
+            self.upload_thumbnails(&session, thumbnail_upload_urls),
+            self.upload_resources(&session, create_session_response.first_upload, core_request_id)
+        );
+
+        thumbnail_result?;
+        upload_result?;
+
         Ok(())
     }
 
@@ -256,9 +265,11 @@ impl CloudService {
 
             let progress = session_guard.resource_mut_progress(resource_order_id).expect("Progress not found");
             progress.update_progress(count as u64);
-            progress_sender.send(progress.clone());
-
+            let progress_update_event =
+                CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
             drop(session_guard);
+
+            progress_sender.send(MessageToShell::HandleResponse(core_request_id, progress_update_event)).await;
 
             if let Some(handle) = upload_handle.take() {
                 handle.await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))??;
