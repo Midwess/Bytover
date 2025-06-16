@@ -17,3 +17,4 @@ local.properties
 rustc-ice-*.txt
 **/*.xcodeproj/xcuserdata/
 **/*.xcworkspace/xcuserdata/
+.fleet

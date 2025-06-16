@@ -5,3 +5,22 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
+schema = { path = "../libs/schema/rust", features = ["client", "server"] }
+devlog-sdk = { path = "../libs/devlog-sdk", features = ["full"] }
+core-services = { path = "../libs/core-services", features = ["full"] }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+surreal_derive_plus = { workspace = true }
+surrealdb = { workspace = true }
+surreal_devl = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+tonic-middleware = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+tokio-scoped = { workspace = true }
+lazy_static = { workspace = true }

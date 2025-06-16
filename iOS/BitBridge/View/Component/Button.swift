@@ -72,7 +72,7 @@ struct MoreOptionButton<T>: View {
     @Binding var state: Bool
     var item: T? = nil
     @Binding var selectedItem: T?
-    
+
     var body: some View {
         Button(action: {
             state = true
@@ -162,7 +162,7 @@ struct CircleWaveEffect: ViewModifier {
                 stopAnimation()
             }
     }
-    
+
     private func startAnimation() {
         guard timer == nil else { return }
         isActive = true
@@ -170,7 +170,7 @@ struct CircleWaveEffect: ViewModifier {
             animationPhase += 1/14
         }
     }
-    
+
     private func stopAnimation() {
         timer?.invalidate()
         timer = nil
@@ -184,7 +184,7 @@ struct ShareButton: View {
     @State private var showShareModal = false
     @State private var shareModalContentHeight = CGFloat(0)
     @Environment(\.isPressed) private var isPressed
-    
+
     var body: some View {
         return AnyView(ZStack {
             Circle()

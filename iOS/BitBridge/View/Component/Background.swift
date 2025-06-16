@@ -49,11 +49,11 @@ struct StunningBackgroundGradientSecondary: View {
 
 struct FadingBackground: View {
     @State private var opacity: Double
-    
+
     private let finalOpacity: Double
     private let duration: Double
     private let autoStart: Bool
-    
+
     init(
         initialOpacity: Double = 1.0,
         finalOpacity: Double = 0.0,
@@ -65,7 +65,7 @@ struct FadingBackground: View {
         self.duration = duration
         self.autoStart = autoStart
     }
-    
+
     var body: some View {
         Rectangle()
             .fill(Theme.BlackBase.color)
@@ -77,7 +77,7 @@ struct FadingBackground: View {
                 }
             }
     }
-    
+
     func startAnimation() {
         withAnimation(.easeInOut(duration: duration)) {
             opacity = finalOpacity

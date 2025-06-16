@@ -926,6 +926,27 @@ dependencies = [
 [[package]]
 name = "backend"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "core-services",
+ "devlog-sdk",
+ "lazy_static",
+ "log",
+ "reqwest",
+ "schema",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "surreal_derive_plus",
+ "surreal_devl",
+ "surrealdb",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-scoped",
+ "tonic",
+ "tonic-middleware",
+]
 
 [[package]]
 name = "backtrace"

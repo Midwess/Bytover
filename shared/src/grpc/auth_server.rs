@@ -52,7 +52,7 @@ impl AuthServer {
     pub async fn get_me(&self) -> Result<User, NetworkError> {
         let channel = self.channel.connect().await?;
 
-        let request = MeRequest {};
+        let request = MeRequest { conditions: vec![] };
 
         // Create request and add bearer token
         let mut req = Request::new(request);
