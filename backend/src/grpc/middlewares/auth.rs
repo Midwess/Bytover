@@ -8,9 +8,7 @@ use tonic_middleware::RequestInterceptor;
 use crate::di_container::DiContainer;
 
 #[derive(Clone)]
-pub struct AuthInterceptor {
-    pub white_list: Vec<String>
-}
+pub struct AuthInterceptor {}
 
 impl Default for AuthInterceptor {
     fn default() -> Self {
@@ -20,7 +18,7 @@ impl Default for AuthInterceptor {
 
 impl AuthInterceptor {
     pub fn new() -> Self {
-        Self { white_list: vec![] }
+        Self {}
     }
 }
 

@@ -7,8 +7,13 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
 
+use crate::cloud_storage::storage::CloudStorage;
+use crate::grpc::cloud_service::CloudGrpcService;
+use crate::grpc::middlewares::auth::AuthInterceptor;
+use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
+use crate::transfer::transfer_service::TransferService;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -59,6 +64,29 @@ impl DiContainer {
         let channel = self.get_grpc_gateway_channel().connect().await?;
 
         Ok(UserServiceClient::new(channel))
+    }
+
+    pub async fn get_transfer_service(&'static self) -> TransferService {
+        TransferService {
+            transfer_repository: Box::new(self.get_transfer_session_repository().await),
+            cloud_storage: Box::new(self.get_cloud_storage())
+        }
+    }
+
+    pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
+        CloudGrpcService {
+            transfer_service: self.get_transfer_service().await
+        }
+    }
+
+    pub fn get_auth_middleware(&'static self) -> AuthInterceptor {
+        AuthInterceptor {}
+    }
+
+    pub fn get_cloud_storage(&'static self) -> impl CloudStorage {
+        S3CloudStorageImpl {
+            s3_client: self.devlog_sdk.s3_client()
+        }
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {

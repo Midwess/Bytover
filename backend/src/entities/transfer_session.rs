@@ -1,4 +1,5 @@
 use devlog_sdk::distributed_id::gen_id;
+use schema::value::static_resource::StaticResource;
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
 
@@ -6,11 +7,12 @@ use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatu
 use crate::entities::transfer_resource::TransferResource;
 
 use super::transfer_progress::TransferProgressErrors;
+use super::transfer_resource::TransferResourceType;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferSessionErrors {
-    #[error("This resource is already transfered {0}")]
-    DuplicatedResource(String),
+    #[error("This resource is already exist {0}")]
+    DuplicatedResource(u64),
     #[error("Resource not found")]
     ResourceNotFound,
     #[error("Transfer error {0}")]
@@ -37,9 +39,16 @@ impl TransferSession {
         }
     }
 
-    pub fn start_transfer(&mut self, resource: TransferResource) -> Result<(), TransferSessionErrors> {
+    pub async fn start_transfer(
+        &mut self,
+        order_id: Option<u64>,
+        name: impl Into<String>,
+        size: u64,
+        r#type: TransferResourceType
+    ) -> Result<(), TransferSessionErrors> {
+        let resource = TransferResource::new(order_id, self.order_id(), name, size, r#type).await;
         if self.resources.iter().any(|it| it.order_id() == resource.order_id()) {
-            return Err(TransferSessionErrors::DuplicatedResource(resource.name().to_owned()))
+            return Err(TransferSessionErrors::DuplicatedResource(resource.order_id()))
         }
 
         self.progress.push(TransferProgress::new(&resource));
@@ -71,6 +80,23 @@ impl TransferSession {
         });
 
         in_progress_resource
+    }
+
+    pub fn current_resource_mut(&mut self) -> Option<&mut TransferResource> {
+        let Some(current_id) = self.current_resource().map(|it| it.order_id()) else {
+            return None;
+        };
+
+        self.resources.iter_mut().find(|it| it.order_id() == current_id)
+    }
+
+    pub fn into_resource(mut self, resource_id: u64) -> Option<TransferResource> {
+        let Some(position) = self.resources.iter().position(|it| it.order_id() == resource_id) else {
+            return None;
+        };
+
+        let resource = self.resources.swap_remove(position);
+        Some(resource)
     }
 
     pub fn cancel(&mut self) {
@@ -108,5 +134,12 @@ impl TransferSession {
 
     pub fn order_id(&self) -> u64 {
         self.id
+    }
+
+    pub fn thumbnail_resources(&self) -> Vec<(u64, StaticResource)> {
+        self.resources
+            .iter()
+            .filter_map(|it| it.thumbnail_source(self.order_id()).map(|it2| (it.order_id(), it2)))
+            .collect::<Vec<_>>()
     }
 }

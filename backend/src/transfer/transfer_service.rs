@@ -1,14 +1,14 @@
 use core_services::db::repository::abstraction::errors::RepositoryError;
-use core_services::db::repository::abstraction::repository::Repository;
+use schema::value::static_resource::StaticResource;
 
-use crate::cloud_storage::storage::CloudStorage;
+use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
-use crate::entities::transfer_resource::TransferResource;
+use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 
 #[derive(Debug, thiserror::Error)]
-enum TransferErrors {
+pub enum TransferErrors {
     #[error("Session not found")]
     SessionNotFound,
     #[error("Resource not found or already completed")]
@@ -20,7 +20,23 @@ enum TransferErrors {
     #[error("System error {0}")]
     SystemError(#[from] RepositoryError),
     #[error("Upload error {0}")]
-    TransferProgressError(#[from] TransferProgressErrors)
+    TransferProgressError(#[from] TransferProgressErrors),
+    #[error("Cloud storage error {0}")]
+    CloudStroageError(#[from] CloudStorageErrors)
+}
+
+pub struct StartTransferResourceRequest {
+    // The user can decide the order id
+    // it cannot be duplicated
+    pub order_id: Option<u64>,
+    pub name: String,
+    pub r#type: TransferResourceType,
+    pub size: u64
+}
+
+pub struct StartTransferResourceResponse {
+    pub first_resource: TransferResource,
+    pub thumbnails: Vec<(u64, StaticResource)>
 }
 
 pub struct TransferService {
@@ -33,21 +49,43 @@ impl TransferService {
         &self,
         user_id: u64,
         password: Option<String>,
-        resources: Vec<TransferResource>
-    ) -> Result<TransferSession, TransferErrors> {
-        if resources.is_empty() {
+        requests: Vec<StartTransferResourceRequest>
+    ) -> Result<StartTransferResourceResponse, TransferErrors> {
+        if requests.is_empty() {
             return Err(TransferErrors::EmptyResources)
         }
 
         let mut session = TransferSession::public(password, user_id).await;
 
-        for resource in resources {
-            session.start_transfer(resource)?;
+        for request in requests {
+            session.start_transfer(request.order_id, request.name, request.size, request.r#type).await?;
         }
 
         let session = self.transfer_repository.create(session).await?;
 
-        Ok(session)
+        let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
+            log::warn!("The first resource must be defined, session id = {}", session.order_id());
+            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+        };
+
+        let mut thumbnails = session.thumbnail_resources();
+
+        for thumbnail in thumbnails.iter_mut() {
+            self.cloud_storage.sign(&mut thumbnail.1);
+        }
+
+        let Some(mut first_resource) = session.into_resource(first_resource_id) else {
+            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+        };
+
+        self.cloud_storage.sign_resource(&mut first_resource).await?;
+
+        let response = StartTransferResourceResponse {
+            first_resource,
+            thumbnails
+        };
+
+        Ok(response)
     }
 
     pub async fn cancel_transfer(&self, user_id: u64, session_order_id: u64) -> Result<(), TransferErrors> {
@@ -94,8 +132,18 @@ impl TransferService {
 
         current_progress.commit(status)?;
 
-        let updated_session = self.transfer_repository.update_one(session).await?;
+        let session = self.transfer_repository.update_one(session).await?;
 
-        Ok(updated_session.current_resource().cloned())
+        let Some(next_resource_id) = session.current_resource().map(|it| it.order_id()) else {
+            return Ok(None)
+        };
+
+        let Some(mut next_resource) = session.into_resource(next_resource_id) else {
+            return Ok(None)
+        };
+
+        self.cloud_storage.sign_resource(&mut next_resource).await?;
+
+        Ok(Some(next_resource))
     }
 }
