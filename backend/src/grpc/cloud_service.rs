@@ -15,12 +15,14 @@ use schema::devlog::bitbridge::{
 use schema::value::static_resource;
 use tonic::{Request, Response, Status};
 
+use crate::cloud_storage::storage::CloudStorage;
 use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
 use crate::transfer::transfer_service::{StartTransferResourceRequest, TransferService};
 
 pub struct CloudGrpcService {
-    pub transfer_service: TransferService
+    pub transfer_service: TransferService,
+    pub cloud_storage: Box<dyn CloudStorage>
 }
 
 #[async_trait::async_trait]
@@ -55,15 +57,18 @@ impl BitBridgeCloudService for CloudGrpcService {
         let password = request_body.password.clone();
 
         let response = self.transfer_service.start_public_transfer(user.order_id as u64, password, requests).await?;
+        let mut source = response.first_resource.source();
 
+        let signed_upload_url = self.cloud_storage.sign(&mut source).await?;
         let first_upload_session = UploadSession {
             status: UploadStatus::Pending.into(),
             resource_order_id: response.first_resource.order_id() as i64,
             failed_reason: None,
-            upload_url: "".to_owned()
+            upload_url: signed_upload_url
         };
 
         let response_body = CreatePublicTransferSessionResponse {
+            session_id: response.session_id as i64,
             first_upload: first_upload_session,
             thumbnail_upload_urls: response
                 .thumbnails

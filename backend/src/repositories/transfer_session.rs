@@ -37,7 +37,7 @@ impl SurrealDeserializer for TransferSessionId {
 
 impl Table<TransferSessionId> for TransferSession {
     fn get_table() -> &'static str {
-        "transferSessions"
+        "transferSession"
     }
 
     fn id(&self) -> TransferSessionId {

@@ -1,5 +1,6 @@
 use core_services::db::remote_surrealdb::SurrealDbConnection;
 use core_services::utils::pool::request::PoolRequest;
+use devlog_sdk::distributed_id::init_id_generator;
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
@@ -33,6 +34,8 @@ impl DiContainer {
         let devlog_sdk = DevlogSdk::new();
         devlog_sdk.enable_system_db().await;
         devlog_sdk.enable_db("bitbridge".to_owned(), 0, 250).await;
+
+        init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
 
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
@@ -75,7 +78,8 @@ impl DiContainer {
 
     pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
         CloudGrpcService {
-            transfer_service: self.get_transfer_service().await
+            transfer_service: self.get_transfer_service().await,
+            cloud_storage: Box::new(self.get_cloud_storage())
         }
     }
 

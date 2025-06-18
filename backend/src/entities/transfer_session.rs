@@ -21,7 +21,7 @@ pub enum TransferSessionErrors {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
 pub struct TransferSession {
-    id: u64,
+    order_id: u64,
     owner_user_order_id: u64,
     password: Option<String>,
     resources: Vec<TransferResource>,
@@ -31,7 +31,7 @@ pub struct TransferSession {
 impl TransferSession {
     pub async fn public(password: Option<String>, from_user: u64) -> Self {
         Self {
-            id: gen_id().await,
+            order_id: gen_id().await,
             owner_user_order_id: from_user,
             password,
             resources: Default::default(),
@@ -133,13 +133,13 @@ impl TransferSession {
     }
 
     pub fn order_id(&self) -> u64 {
-        self.id
+        self.order_id
     }
 
     pub fn thumbnail_resources(&self) -> Vec<(u64, StaticResource)> {
         self.resources
             .iter()
-            .filter_map(|it| it.thumbnail_source(self.order_id()).map(|it2| (it.order_id(), it2)))
+            .filter_map(|it| it.thumbnail_source().map(|it2| (it.order_id(), it2)))
             .collect::<Vec<_>>()
     }
 }

@@ -35,6 +35,7 @@ pub struct StartTransferResourceRequest {
 }
 
 pub struct StartTransferResourceResponse {
+    pub session_id: u64,
     pub first_resource: TransferResource,
     pub thumbnails: Vec<(u64, StaticResource)>
 }
@@ -63,6 +64,7 @@ impl TransferService {
 
         let session = self.transfer_repository.create(session).await?;
 
+        let order_id = session.order_id();
         let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
             log::warn!("The first resource must be defined, session id = {}", session.order_id());
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
@@ -71,16 +73,15 @@ impl TransferService {
         let mut thumbnails = session.thumbnail_resources();
 
         for thumbnail in thumbnails.iter_mut() {
-            self.cloud_storage.sign(&mut thumbnail.1);
+            let _ = self.cloud_storage.sign(&mut thumbnail.1).await;
         }
 
-        let Some(mut first_resource) = session.into_resource(first_resource_id) else {
+        let Some(first_resource) = session.into_resource(first_resource_id) else {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
 
-        self.cloud_storage.sign_resource(&mut first_resource).await?;
-
         let response = StartTransferResourceResponse {
+            session_id: order_id,
             first_resource,
             thumbnails
         };
@@ -138,11 +139,9 @@ impl TransferService {
             return Ok(None)
         };
 
-        let Some(mut next_resource) = session.into_resource(next_resource_id) else {
+        let Some(next_resource) = session.into_resource(next_resource_id) else {
             return Ok(None)
         };
-
-        self.cloud_storage.sign_resource(&mut next_resource).await?;
 
         Ok(Some(next_resource))
     }
