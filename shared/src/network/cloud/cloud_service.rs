@@ -3,9 +3,8 @@ use std::time::Duration;
 
 use core_services::local_storage::file_system::{File, Folder, IOCursor};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
-use schema::devlog::bitbridge::create_public_transfer_session_response::ThumbnailUploadUrl;
-use schema::devlog::bitbridge::upload_session::UploadStatus;
-use schema::devlog::bitbridge::{CloudResourceMessage, UploadSession};
+use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
+use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -38,7 +37,9 @@ pub enum CloudTransferErrors {
     #[error("Session is cancelled")]
     SessionCancelled,
     #[error("Resource not found")]
-    ResourceNotFound
+    ResourceNotFound,
+    #[error("Unsupported transfer target")]
+    UnsupportedTransferTarget
 }
 
 pub struct CloudService {
@@ -48,6 +49,23 @@ pub struct CloudService {
 }
 
 impl CloudService {
+    pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
+        let password = match &session.target {
+            TransferTarget::Internet { password, .. } => password.clone(),
+            _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
+        };
+
+        let response = self.server.create_public_transfer_session(password).await?;
+
+        session.order_id = response.order_id as u64;
+        session.target = TransferTarget::Internet {
+            password: response.password,
+            access_url: Some(response.access_url)
+        };
+
+        Ok(session)
+    }
+
     pub async fn send_session(&mut self, session: TransferSession, core_request_id: u32) -> Result<(), CloudTransferErrors> {
         if self.active_session.as_ref().and_then(|it| it.upgrade()).is_some() {
             return Err(CloudTransferErrors::OnlyOneSessionAllowed);
@@ -57,11 +75,7 @@ impl CloudService {
         self.active_session = Some(Arc::downgrade(&session));
 
         let session_guard = session.lock().await;
-        let password = match &session_guard.target {
-            TransferTarget::Internet { password } => password.clone(),
-            _ => return Err(CloudTransferErrors::InvalidSessionTarget)
-        };
-
+        let session_order_id = session_guard.order_id;
         let resources = session_guard
             .resources
             .iter()
@@ -74,17 +88,19 @@ impl CloudService {
             .collect();
 
         drop(session_guard);
-        let create_session_response = self.server.create_public_transfer_session(resources, password).await?;
 
+        let response = self.server.add_resources(session_order_id as i64, resources).await?;
+
+        let session_guard = session.lock().await;
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
             return Ok(());
         }
 
-        let thumbnail_upload_urls = create_session_response.thumbnail_upload_urls;
+        let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = tokio::join!(
-            self.upload_thumbnails(&session, thumbnail_upload_urls),
-            self.upload_resources(&session, create_session_response.first_upload, core_request_id)
+            self.upload_thumbnails(&session, thumbnail_upload_requests),
+            self.upload_resources(&session, response.first_resource_upload_request, core_request_id)
         );
 
         thumbnail_result?;
@@ -96,15 +112,15 @@ impl CloudService {
     pub async fn upload_thumbnails(
         &self,
         session: &Arc<Mutex<TransferSession>>,
-        thumbnail_upload_urls: Vec<ThumbnailUploadUrl>
+        thumbnail_upload_requests: Vec<ClientUploadRequest>
     ) -> Result<(), CloudTransferErrors> {
-        for thumbnail_upload in thumbnail_upload_urls {
+        for request in thumbnail_upload_requests {
             let session_guard = session.lock().await;
             if session_guard.is_canceled() {
                 return Ok(());
             }
 
-            let resource = match session_guard.resources.iter().find(|it| it.order_id == thumbnail_upload.resource_order_id as u64) {
+            let resource = match session_guard.resources.iter().find(|it| it.order_id == request.resource_order_id as u64) {
                 Some(resource) => resource,
                 None => continue
             };
@@ -133,7 +149,7 @@ impl CloudService {
 
             let client = reqwest::Client::new();
             let response = client
-                .put(&thumbnail_upload.upload_url)
+                .put(&request.upload_url)
                 .header("Content-Length", file_size.len().to_string())
                 .body(reqwest::Body::wrap_stream(stream))
                 .send()
@@ -151,42 +167,34 @@ impl CloudService {
     pub async fn upload_resources(
         &self,
         session: &Arc<Mutex<TransferSession>>,
-        first_upload_session: UploadSession,
+        first_upload_request: ClientUploadRequest,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
         let session_order_id = session.lock().await.order_id as i64;
-        let mut current_upload_session = Some(first_upload_session);
-        loop {
-            if let Some(upload_session) = current_upload_session.as_ref() {
-                if upload_session.status != UploadStatus::Pending as i32 {
-                    current_upload_session = self.server.commit_file_upload(session_order_id, upload_session.clone()).await?;
-                }
-            }
-
-            let Some(current_upload_session) = current_upload_session.as_mut() else {
-                // If the server return None, it means the upload is completed
-                return Ok(());
-            };
-
+        let mut current_upload_request = Some(first_upload_request);
+        while let Some(request) = current_upload_request {
             if session.lock().await.is_completed() {
                 self.server.cancel_session(session_order_id).await?;
                 return Ok(());
             }
 
-            let order_id = current_upload_session.resource_order_id as u64;
-            let upload_url = current_upload_session.upload_url.clone();
+            let order_id = request.resource_order_id as u64;
+            let upload_url = request.upload_url.clone();
 
-            match self.upload_resource(session, order_id, upload_url, core_request_id).await {
+            current_upload_request = match self.upload_resource(session, order_id, upload_url, core_request_id).await {
                 Ok(_) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    current_upload_session.status = UploadStatus::Success as i32;
                     self.shell_runtime
                         .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
                         .await;
+
+                    self.server
+                        .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Success, None)
+                        .await?
                 }
                 Err(e) => {
                     log::error!("Upload resource failed with status: {:?}", e);
@@ -195,14 +203,18 @@ impl CloudService {
                     progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    current_upload_session.status = UploadStatus::Failed as i32;
-                    current_upload_session.failed_reason = Some(e.to_string());
                     self.shell_runtime
                         .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
                         .await;
+
+                    self.server
+                        .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Failed, Some(e.to_string()))
+                        .await?
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn upload_resource(

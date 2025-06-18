@@ -22,10 +22,12 @@ pub enum TransferErrors {
     #[error("Upload error {0}")]
     TransferProgressError(#[from] TransferProgressErrors),
     #[error("Cloud storage error {0}")]
-    CloudStroageError(#[from] CloudStorageErrors)
+    CloudStroageError(#[from] CloudStorageErrors),
+    #[error("Password of a session cannot exceed {0}")]
+    PasswordLengthExceed(usize)
 }
 
-pub struct StartTransferResourceRequest {
+pub struct TransferResourceRequest {
     // The user can decide the order id
     // it cannot be duplicated
     pub order_id: Option<u64>,
@@ -34,7 +36,7 @@ pub struct StartTransferResourceRequest {
     pub size: u64
 }
 
-pub struct StartTransferResourceResponse {
+pub struct TransferResourcesResponse {
     pub session_id: u64,
     pub first_resource: TransferResource,
     pub thumbnails: Vec<(u64, StaticResource)>
@@ -46,25 +48,49 @@ pub struct TransferService {
 }
 
 impl TransferService {
-    pub async fn start_public_transfer(
+    pub async fn create_public_transfer_session(
         &self,
         user_id: u64,
-        password: Option<String>,
-        requests: Vec<StartTransferResourceRequest>
-    ) -> Result<StartTransferResourceResponse, TransferErrors> {
+        password: Option<String>
+    ) -> Result<TransferSession, TransferErrors> {
+        if let Some(ref password) = password {
+            if password.len() > 20 {
+                return Err(TransferErrors::PasswordLengthExceed(20))
+            }
+        }
+
+        let session = TransferSession::public(password, user_id).await;
+
+        let session = self.transfer_repository.create(session).await?;
+
+        Ok(session)
+    }
+
+    pub async fn add_resources(
+        &self,
+        user_id: u64,
+        session_order_id: u64,
+        requests: Vec<TransferResourceRequest>
+    ) -> Result<TransferResourcesResponse, TransferErrors> {
         if requests.is_empty() {
             return Err(TransferErrors::EmptyResources)
         }
 
-        let mut session = TransferSession::public(password, user_id).await;
+        let session_id = TransferSessionId {
+            order_id: Some(session_order_id),
+            user_order_id: Some(user_id)
+        };
+
+        let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
+            return Err(TransferErrors::SessionNotFound)
+        };
 
         for request in requests {
             session.start_transfer(request.order_id, request.name, request.size, request.r#type).await?;
         }
 
-        let session = self.transfer_repository.create(session).await?;
+        let session = self.transfer_repository.update_one(session).await?;
 
-        let order_id = session.order_id();
         let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
             log::warn!("The first resource must be defined, session id = {}", session.order_id());
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
@@ -80,8 +106,8 @@ impl TransferService {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
 
-        let response = StartTransferResourceResponse {
-            session_id: order_id,
+        let response = TransferResourcesResponse {
+            session_id: session_order_id,
             first_resource,
             thumbnails
         };

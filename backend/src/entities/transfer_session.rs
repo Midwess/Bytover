@@ -1,3 +1,5 @@
+use std::env;
+
 use devlog_sdk::distributed_id::gen_id;
 use schema::value::static_resource::StaticResource;
 use serde::{Deserialize, Serialize};
@@ -16,7 +18,9 @@ pub enum TransferSessionErrors {
     #[error("Resource not found")]
     ResourceNotFound,
     #[error("Transfer error {0}")]
-    TransferProgressError(#[from] TransferProgressErrors)
+    TransferProgressError(#[from] TransferProgressErrors),
+    #[error("Max resources exceed {0}")]
+    MaxResourceExceed(usize)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
@@ -46,6 +50,10 @@ impl TransferSession {
         size: u64,
         r#type: TransferResourceType
     ) -> Result<(), TransferSessionErrors> {
+        if self.resources.len() > 2048 {
+            return Err(TransferSessionErrors::MaxResourceExceed(2048))
+        }
+
         let resource = TransferResource::new(order_id, self.order_id(), name, size, r#type).await;
         if self.resources.iter().any(|it| it.order_id() == resource.order_id()) {
             return Err(TransferSessionErrors::DuplicatedResource(resource.order_id()))
@@ -133,6 +141,15 @@ impl TransferSession {
 
     pub fn order_id(&self) -> u64 {
         self.order_id
+    }
+
+    pub fn access_url(&self) -> String {
+        let website = env::var("DEVLOG_BITBRIDGE_WEBSITE_URL").unwrap_or("http://localhost:8000".to_owned());
+        format!("{}/sessions/{}", website, self.order_id)
+    }
+
+    pub fn password(&self) -> Option<String> {
+        self.password.clone()
     }
 
     pub fn thumbnail_resources(&self) -> Vec<(u64, StaticResource)> {

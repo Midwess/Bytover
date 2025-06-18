@@ -7,7 +7,11 @@ use crate::entities::peer::Peer;
 #[derive(Debug, Enum, Serialize, Deserialize, Clone, PartialEq, Eq, SurrealDerive)]
 pub enum TransferTarget {
     Nearby(Peer),
-    Internet { password: Option<String> }
+    Internet {
+        password: Option<String>,
+        // When it still loading it will be None
+        access_url: Option<String>
+    }
 }
 
 impl TransferTarget {

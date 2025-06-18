@@ -58,19 +58,20 @@ pub struct TransferSession {
 pub struct TransferProgress {
     pub resource_order_id: u64,
     pub file_size: u64,
-    #[surreal_derive(skip_serializing)]
-    #[surreal_derive(default)]
+    #[surreal(skip_serializing)]
+    #[surreal(default)]
     total_bytes_counter: u64,
-    #[surreal_derive(skip_serializing)]
-    #[surreal_derive(default)]
+    #[surreal(skip_serializing)]
+    #[surreal(default)]
     bytes_per_second: u64,
-    #[surreal_derive(skip_serializing)]
-    #[surreal_derive(default)]
+    #[surreal(skip_serializing)]
+    #[surreal(default)]
     start_time_utc_ms: u64,
-    #[surreal_derive(skip_serializing)]
-    #[surreal_derive(default)]
+    #[surreal(skip_serializing)]
+    #[surreal(default)]
     bytes_sec_counter: u64,
-    #[surreal_derive(skip_serializing)]
+    #[surreal(skip_serializing)]
+    #[surreal(default)]
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
     pub status: TransferStatus
@@ -221,7 +222,10 @@ impl TransferSession {
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
-            target: TransferTarget::Internet { password }
+            target: TransferTarget::Internet {
+                password,
+                access_url: None
+            }
         }
     }
 
