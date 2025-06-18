@@ -122,12 +122,15 @@ impl TransferService {
             return Err(TransferErrors::SessionNotFound)
         };
 
+        let session_order_id = session.order_id();
+
         let Some(current_progress) = session.current_resource_progress_mut() else {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
 
-        if current_progress.resource_id() != resource_id {
-            log::warn!("Resource already completed session id: {session_order_id}; resource id: {resource_id}");
+        let expected_id = current_progress.resource_id();
+        if expected_id != resource_id {
+            log::warn!("Id {resource_id} is not matched with current resource {expected_id} session_id {session_order_id}");
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         }
 

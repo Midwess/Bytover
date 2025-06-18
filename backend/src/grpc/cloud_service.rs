@@ -123,7 +123,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         let response_body = CommitFileUploadResponse {
-            next_upload: Some(self.create_upload_session(&next_resource)?)
+            next_upload: Some(self.create_upload_session(&next_resource).await?)
         };
 
         let response = Response::new(response_body);
@@ -150,18 +150,14 @@ impl BitBridgeCloudService for CloudGrpcService {
 }
 
 impl CloudGrpcService {
-    fn create_upload_session(&self, resource: &TransferResource) -> Result<UploadSession, Status> {
-        match resource.source().source.as_ref() {
-            Some(static_resource::static_resource::Source::Url(url)) => Ok(UploadSession {
-                upload_url: url.clone(),
-                resource_order_id: resource.order_id() as i64,
-                status: UploadStatus::Pending.into(),
-                failed_reason: None
-            }),
-            _ => {
-                log::warn!("The process not generate signed url");
-                Err(Status::internal("Internal error"))
-            }
-        }
+    async fn create_upload_session(&self, resource: &TransferResource) -> Result<UploadSession, Status> {
+        let mut source = resource.source();
+        let url = self.cloud_storage.sign(&mut source).await?;
+        Ok(UploadSession {
+            upload_url: url,
+            resource_order_id: resource.order_id() as i64,
+            status: UploadStatus::Pending.into(),
+            failed_reason: None
+        })
     }
 }
