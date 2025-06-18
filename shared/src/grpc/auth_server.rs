@@ -22,7 +22,7 @@ pub struct AuthServer {
 impl AuthServer {
     pub async fn new(auth_provider: AuthProvider) -> Self {
         Self {
-            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(1200))),
+            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(12000))),
             auth_provider
         }
     }

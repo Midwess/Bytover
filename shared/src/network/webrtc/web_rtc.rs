@@ -231,7 +231,6 @@ impl WebRtc {
 
             if message.join.is_some() {
                 if peer_id <= my_id {
-                    log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject join", peer_id, my_id);
                     continue;
                 }
 
@@ -266,7 +265,6 @@ impl WebRtc {
 
             if let Some(offer) = message.offer {
                 if peer_id >= my_id {
-                    log::info!(target: "broadcast", "Peer {:?} is not less than my id {:?}, reject offer", peer_id, my_id);
                     continue;
                 }
 

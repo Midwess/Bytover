@@ -216,9 +216,9 @@ impl TransferSession {
         }
     }
 
-    pub fn public(id: u64, resources: Vec<LocalResource>, password: Option<String>) -> Self {
+    pub fn public(password: Option<String>, resources: Vec<LocalResource>) -> Self {
         Self {
-            order_id: id,
+            order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,

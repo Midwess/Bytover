@@ -4,12 +4,15 @@ use tokio::sync::OnceCell;
 
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::CoreOperationOutput;
+use crate::errors::NetworkError;
+use crate::network::cloud::cloud_service::CloudService;
 use crate::network::webrtc::connection::ConnectionWebRtcErrors;
 use crate::network::webrtc::web_rtc::WebRtc;
 use crate::ShellRuntime;
 
 pub struct TransferNative {
     pub web_rtc: Arc<WebRtc>,
+    pub cloud_service: CloudService,
     pub shell_runtime: OnceCell<Arc<dyn ShellRuntime>>
 }
 
@@ -26,7 +29,21 @@ impl TransferNative {
 
     pub async fn handle(&self, request_id: u32, effect: TransferOperation) -> CoreOperationOutput {
         match effect {
+            TransferOperation::CreateCloudSession(session) => match self.cloud_service.create_public_session(session).await {
+                Ok(session) => CoreOperationOutput::Transfer(TransferOperationOutput::CreateCloudSession(session)),
+                Err(e) => {
+                    log::error!("Create public session error: {:?}", e);
+                    CoreOperationOutput::ConnectionError(NetworkError::InternalServerError(e.to_string()))
+                }
+            },
             TransferOperation::SendSession(session) => {
+                if session.target.is_public() {
+                    return match self.cloud_service.send_session(session, request_id).await {
+                        Ok(it) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(it)),
+                        Err(e) => CoreOperationOutput::ConnectionError(e.into())
+                    }
+                }
+
                 let Some(connection) = self
                     .web_rtc
                     .get_connection(session.peer_id().unwrap_or_default())

@@ -96,7 +96,21 @@ impl TransferService {
         }
 
         let transfer_target_id = transfer_target.id();
-        let mut transfer_session = TransferSession::send(selected_resources, transfer_target).await;
+        let mut transfer_session = match transfer_target {
+            TransferTarget::Internet { password, .. } => {
+                let session = TransferSession::public(password, selected_resources);
+                let result = match TransferOperation::create_cloud_session(session).into_future(cmd.clone()).await {
+                    Err(err) => {
+                        DialogOperation::toast(format!("{err} please try again")).into_future(cmd.clone()).await;
+                        return;
+                    }
+                    Ok(session) => session
+                };
+
+                result
+            }
+            TransferTarget::Nearby(_) => TransferSession::send(selected_resources, transfer_target).await
+        };
 
         for resource in transfer_session.resources.iter_mut() {
             resource.is_valid = LocalStorageOperation::is_file_exists(resource.path.clone()).into_future(cmd.clone()).await;

@@ -571,7 +571,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter_map(|it| match it {
                     TransferTarget::Nearby(peer) => {
-                        let send_session = model.transfer.transfer_sessions.iter().find(|it| {
+                        let send_session = model.transfer.transfer_sessions.iter().filter(|it| it.target.is_peer()).find(|it| {
                             it.transfer_type == TransferType::Send && it.peer_id().as_ref().unwrap().to_string() == peer.id
                         });
 

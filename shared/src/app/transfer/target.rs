@@ -15,6 +15,16 @@ pub enum TransferTarget {
 }
 
 impl TransferTarget {
+    pub fn is_public(&self) -> bool {
+        matches!(self, Self::Internet { .. })
+    }
+
+    pub fn is_peer(&self) -> bool {
+        matches!(self, Self::Nearby(_))
+    }
+}
+
+impl TransferTarget {
     pub fn id(&self) -> String {
         match self {
             TransferTarget::Nearby(peer) => peer.id().to_string(),

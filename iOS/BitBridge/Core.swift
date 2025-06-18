@@ -41,7 +41,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     
-    @Published var isSignedIn = true
+    @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     var alert: CurrentValueSubject<(AlertDialog, SingleWaiter<Bool>)?, Never> = .init(nil)
     var toastMessage: CurrentValueSubject<String?, Never> = .init(nil)

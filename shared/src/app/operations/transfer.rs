@@ -15,6 +15,7 @@ use super::{CoreOperation, CoreOperationOutput};
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
+    CreateCloudSession(TransferSession),
     SendSession(TransferSession),
     AnswerSessionRequest {
         thumbnail_dir: String,
@@ -28,6 +29,7 @@ pub enum TransferOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperationOutput {
+    CreateCloudSession(TransferSession),
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted(TransferSessionStatus),
     TransferCanceled
@@ -54,5 +56,15 @@ impl TransferOperation {
                 _ => panic!("Mismatch in response type, expected Void, got {it:?}")
             }
         )
+    }
+
+    pub fn create_cloud_session(
+        session: TransferSession
+    ) -> AppRequestBuilder<impl Future<Output = Result<TransferSession, NetworkError>>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::CreateCloudSession(session))).map(|it| match it {
+            CoreOperationOutput::Transfer(TransferOperationOutput::CreateCloudSession(session)) => Ok(session),
+            CoreOperationOutput::ConnectionError(error) => Err(error),
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+        })
     }
 }

@@ -55,7 +55,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     let di_container = DiContainer::get_instance();
                     di_container.init(workdir.clone());
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    // di_container.get_authentication_service().update_signin_session(ctx).await;
+                    di_container.get_authentication_service().update_signin_session(ctx.clone()).await;
                     log::info!(target: "nearby", "Starting");
                     ctx.notify_shell(CoreOperation::Notified(AppEvent::Environment(
                         EnvironmentEvent::UpdateWorkDir { workdir }

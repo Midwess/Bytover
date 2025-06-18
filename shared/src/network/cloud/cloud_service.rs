@@ -1,5 +1,6 @@
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use tokio::sync::OnceCell;
 
 use core_services::local_storage::file_system::{File, Folder, IOCursor};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
@@ -13,7 +14,7 @@ use tokio_util::io::ReaderStream;
 use crate::app::file_system::file::ResourceType;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::TransferSession;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
 use crate::errors::NetworkError;
 use crate::grpc::cloud_server::CloudServer;
@@ -44,11 +45,27 @@ pub enum CloudTransferErrors {
 
 pub struct CloudService {
     server: CloudServer,
-    shell_runtime: Arc<dyn ShellRuntime>,
-    active_session: Option<Weak<Mutex<TransferSession>>>
+    shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
+    active_session: Mutex<Weak<Mutex<TransferSession>>>
 }
 
 impl CloudService {
+    pub fn new(cloud: CloudServer) -> Self {
+        Self {
+            server: cloud,
+            shell_runtime: OnceCell::new(),
+            active_session: Default::default()
+        }
+    }
+
+    pub fn init(&self, shell_runtime: Arc<dyn ShellRuntime>) {
+        let _ = self.shell_runtime.set(shell_runtime);
+    }
+
+    pub fn shell_runtime(&self) -> &Arc<dyn ShellRuntime> {
+        self.shell_runtime.get().unwrap()
+    }
+
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
         let password = match &session.target {
             TransferTarget::Internet { password, .. } => password.clone(),
@@ -66,13 +83,18 @@ impl CloudService {
         Ok(session)
     }
 
-    pub async fn send_session(&mut self, session: TransferSession, core_request_id: u32) -> Result<(), CloudTransferErrors> {
-        if self.active_session.as_ref().and_then(|it| it.upgrade()).is_some() {
+    pub async fn send_session(
+        &self,
+        session: TransferSession,
+        core_request_id: u32
+    ) -> Result<TransferSessionStatus, CloudTransferErrors> {
+        let mut session_guard = self.active_session.lock().await;
+        if session_guard.upgrade().is_some() {
             return Err(CloudTransferErrors::OnlyOneSessionAllowed);
         }
 
         let session = Arc::new(Mutex::new(session));
-        self.active_session = Some(Arc::downgrade(&session));
+        *session_guard = Arc::downgrade(&session);
 
         let session_guard = session.lock().await;
         let session_order_id = session_guard.order_id;
@@ -92,9 +114,12 @@ impl CloudService {
         let response = self.server.add_resources(session_order_id as i64, resources).await?;
 
         let session_guard = session.lock().await;
-        let session_guard = session.lock().await;
         if session_guard.is_completed() {
-            return Ok(());
+            if session_guard.is_canceled() {
+                return Ok(TransferSessionStatus::Canceled)
+            };
+
+            return Ok(TransferSessionStatus::Success)
         }
 
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
@@ -106,7 +131,7 @@ impl CloudService {
         thumbnail_result?;
         upload_result?;
 
-        Ok(())
+        Ok(TransferSessionStatus::Success)
     }
 
     pub async fn upload_thumbnails(
@@ -188,7 +213,7 @@ impl CloudService {
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    self.shell_runtime
+                    self.shell_runtime()
                         .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
                         .await;
 
@@ -203,7 +228,7 @@ impl CloudService {
                     progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    self.shell_runtime
+                    self.shell_runtime()
                         .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
                         .await;
 
@@ -265,7 +290,7 @@ impl CloudService {
         });
 
         let mut upload_handle: Option<JoinHandle<Result<(), CloudTransferErrors>>> = None;
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime.clone(), Duration::from_millis(800));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(800));
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
             let count = chunk.len();
             let writer = writer.clone();

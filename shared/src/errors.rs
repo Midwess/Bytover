@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
+use crate::network::cloud::cloud_service::CloudTransferErrors;
 use crate::network::webrtc::connection::ConnectionWebRtcErrors;
 use crate::network::webrtc::peer::PeerErrors;
 use crate::network::webrtc::web_rtc::WebRtcErrors;
@@ -66,6 +67,12 @@ impl From<WebRtcErrors> for NetworkError {
             WebRtcErrors::TransferError(e) => NetworkError::Network(e.to_string()),
             WebRtcErrors::WebRTCServerError(e) => NetworkError::Network(e.to_string())
         }
+    }
+}
+
+impl From<CloudTransferErrors> for NetworkError {
+    fn from(value: CloudTransferErrors) -> Self {
+        Self::Network(value.to_string())
     }
 }
 

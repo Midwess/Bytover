@@ -16,12 +16,14 @@ use crate::app::transfer::transfer_service::TransferService;
 use crate::get_tokio_rt;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
+use crate::grpc::cloud_server::CloudServer;
 use crate::native::database::NativeDatabase;
 use crate::native::executor::NativeExecutor;
 use crate::native::local_storage::NativeLocalStorage;
 use crate::native::p2p::P2PNativeExecutor;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
+use crate::network::cloud::cloud_service::CloudService;
 use crate::network::webrtc::web_rtc::WebRtc;
 use crate::persistence::local_resource::LocalResourceRepository;
 use crate::persistence::session::SessionRepository;
@@ -154,6 +156,8 @@ impl DiContainer {
 
     pub fn get_native_executor(&self) -> NativeExecutor {
         let web_rtc = Arc::new(WebRtc::new(self.workdir.get().unwrap().clone()));
+        let cloud_service = CloudService::new(CloudServer::new(self.get_auth_provider()));
+
         NativeExecutor {
             rpc: NativeRpc {},
             database: NativeDatabase {
@@ -164,7 +168,8 @@ impl DiContainer {
             local_storage: NativeLocalStorage {},
             transfer: TransferNative {
                 web_rtc: web_rtc.clone(),
-                shell_runtime: OnceCell::new()
+                shell_runtime: OnceCell::new(),
+                cloud_service
             },
             p2p: P2PNativeExecutor {
                 web_rtc,

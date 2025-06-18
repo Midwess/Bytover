@@ -26,9 +26,9 @@ pub struct CloudServer {
 }
 
 impl CloudServer {
-    pub async fn new(auth_provider: AuthProvider) -> Self {
+    pub fn new(auth_provider: AuthProvider) -> Self {
         Self {
-            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(1200))),
+            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(12000))),
             auth_provider
         }
     }

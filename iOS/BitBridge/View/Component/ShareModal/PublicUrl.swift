@@ -75,6 +75,9 @@ struct PublicUrlShareView: View {
 
             Button(action: {
                 // Upload action
+                Task {
+                    await core.update(.transfer(.startPublicTransfer(password: password.isEmpty ? nil : password)))
+                }
             }) {
                 Text("Upload")
                     .modifier(Label1())
