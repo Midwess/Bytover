@@ -99,7 +99,7 @@ impl TransferService {
         let mut thumbnails = session.thumbnail_resources();
 
         for thumbnail in thumbnails.iter_mut() {
-            let _ = self.cloud_storage.sign(&mut thumbnail.1).await;
+            let _ = self.cloud_storage.sign_upload(&mut thumbnail.1).await;
         }
 
         let Some(first_resource) = session.into_resource(first_resource_id) else {

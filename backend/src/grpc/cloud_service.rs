@@ -81,7 +81,7 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let mut source = response.first_resource.source();
 
-        let signed_upload_url = self.cloud_storage.sign(&mut source).await?;
+        let signed_upload_url = self.cloud_storage.sign_upload(&mut source).await?;
         let response_body = AddResourcesResponse {
             first_resource_upload_request: ClientUploadRequest {
                 resource_order_id: response.first_resource.order_id() as i64,
@@ -168,7 +168,7 @@ impl BitBridgeCloudService for CloudGrpcService {
 impl CloudGrpcService {
     async fn create_upload_request(&self, resource: &TransferResource) -> Result<ClientUploadRequest, Status> {
         let mut source = resource.source();
-        let url = self.cloud_storage.sign(&mut source).await?;
+        let url = self.cloud_storage.sign_upload(&mut source).await?;
         Ok(ClientUploadRequest {
             upload_url: url,
             resource_order_id: resource.order_id() as i64

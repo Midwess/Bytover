@@ -39,6 +39,8 @@ pub enum CloudTransferErrors {
     SessionCancelled,
     #[error("Resource not found")]
     ResourceNotFound,
+    #[error("Resource error")]
+    ResourceError(String),
     #[error("Unsupported transfer target")]
     UnsupportedTransferTarget
 }
@@ -113,14 +115,17 @@ impl CloudService {
 
         let response = self.server.add_resources(session_order_id as i64, resources).await?;
 
+        log::info!("Adding resource response {:?}", response);
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
             if session_guard.is_canceled() {
                 return Ok(TransferSessionStatus::Canceled)
             };
 
-            return Ok(TransferSessionStatus::Success)
+            return Ok(TransferSessionStatus::Success);
         }
+
+        drop(session_guard);
 
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = tokio::join!(
@@ -173,16 +178,23 @@ impl CloudService {
             let stream = ReaderStream::new(file);
 
             let client = reqwest::Client::new();
-            let response = client
+            log::info!("Uploading thumbnail to {}", request.upload_url);
+            let Ok(response) = client
                 .put(&request.upload_url)
                 .header("Content-Length", file_size.len().to_string())
                 .body(reqwest::Body::wrap_stream(stream))
                 .send()
-                .await;
-
-            if let Err(e) = response {
-                log::error!("Upload thumbnail failed with status: {}", e);
+                .await
+            else {
                 continue;
+            };
+
+            if !response.status().is_success() {
+                log::warn!(
+                    "Failed to upload thumbnail, the status is {:?} with msg: {:?}",
+                    response.status(),
+                    response.text().await
+                )
             }
         }
 
@@ -261,19 +273,34 @@ impl CloudService {
             None => return Err(CloudTransferErrors::ResourceNotFound)
         };
 
-        let mut cursor = match resource_type {
+        let (mut cursor, size) = match resource_type {
             ResourceType::Folder => {
-                let folder = Folder::new(resource_path).await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                folder
-                    .cursor(upload_chunk_size)
+                let folder = Folder::new(resource_path.clone())
                     .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
+                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
+                let size = folder
+                    .calculate_tar_size()
+                    .await
+                    .map_err(|it| CloudTransferErrors::FileError(format!("{:?}", it)))?;
+                (
+                    folder
+                        .cursor(upload_chunk_size)
+                        .await
+                        .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?,
+                    size
+                )
             }
             _ => {
-                let file = File::new(None, resource_path).await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                file.cursor(0, upload_chunk_size)
+                let file = File::new(None, resource_path.clone())
                     .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
+                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
+                let size = file.metadata().await.map_err(|it| CloudTransferErrors::FileError(format!("{:?}", it)))?.size;
+                (
+                    file.cursor(0, upload_chunk_size)
+                        .await
+                        .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?,
+                    size
+                )
             }
         };
 
@@ -282,16 +309,33 @@ impl CloudService {
         let stream = ReaderStream::new(reader);
         let body = reqwest::Body::wrap_stream(stream);
 
+        let upload_url_cloned = upload_url.clone();
         let handle: JoinHandle<Result<(), CloudTransferErrors>> = tokio::spawn(async move {
             let client = reqwest::Client::new();
-            let response = client.put(&upload_url).header("Content-Type", "application/octet-stream").body(body).send().await?;
+            let response = client
+                .put(&upload_url_cloned)
+                .header("Content-Length", format!("{size}"))
+                .header("Content-Type", "application/octet-stream")
+                .body(body)
+                .send()
+                .await?;
+            if response.status().is_success() {
+                return Ok(())
+            }
 
-            Ok(())
+            Err(CloudTransferErrors::UploadProcessError(format!(
+                "STATUS {:?}, msg: {:?}",
+                response.status(),
+                response.text().await
+            )))
         });
 
         let mut upload_handle: Option<JoinHandle<Result<(), CloudTransferErrors>>> = None;
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(800));
+        log::info!("Uploading resource {} size = {}", resource_path, size);
+        let mut total_sent = 0;
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
+            total_sent += chunk.len();
             let count = chunk.len();
             let writer = writer.clone();
 
@@ -337,6 +381,7 @@ impl CloudService {
         }
 
         if let Ok(handle) = handle.await {
+            log::info!("Upload completed, sent {total_sent} bytes");
             handle?;
         }
 

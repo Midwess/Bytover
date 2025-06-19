@@ -20,6 +20,7 @@ impl TransferNative {
     pub fn update_shell_runtime(&self, shell_runtime: &Arc<dyn ShellRuntime>) {
         if self.shell_runtime.get().is_none() {
             let _ = self.shell_runtime.set(shell_runtime.clone());
+            self.cloud_service.init(shell_runtime.clone());
         }
     }
 

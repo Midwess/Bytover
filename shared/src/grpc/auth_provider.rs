@@ -22,8 +22,6 @@ impl AuthProvider {
             .await
             .map_err(|e| NetworkError::Unauthorized(e.to_string()))?;
 
-        log::info!("Session: {:?}", session);
-
         if session.is_none() {
             return Err(NetworkError::Unauthorized("Session not found".to_string()));
         }

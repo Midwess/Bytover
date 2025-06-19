@@ -10,9 +10,16 @@ pub struct S3CloudStorageImpl {
 
 #[async_trait::async_trait]
 impl CloudStorage for S3CloudStorageImpl {
-    async fn sign(&self, resource: &mut StaticResource) -> Result<String, CloudStorageErrors> {
+    async fn sign_upload(&self, resource: &mut StaticResource) -> Result<String, CloudStorageErrors> {
         let duration = Duration::from_secs(60 * 60 * 24 * 3);
-        let url = self.s3_client.sign_object(resource, duration).await?;
+        let url = self.s3_client.sign_upload(resource, duration).await?;
+
+        Ok(url)
+    }
+
+    async fn sign_download(&self, resource: &mut StaticResource) -> Result<String, CloudStorageErrors> {
+        let duration = Duration::from_secs(60 * 60 * 24 * 3);
+        let url = self.s3_client.sign_download(resource, duration).await?;
 
         Ok(url)
     }

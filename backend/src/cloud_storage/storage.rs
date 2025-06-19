@@ -8,5 +8,6 @@ pub enum CloudStorageErrors {
 
 #[async_trait::async_trait]
 pub trait CloudStorage: Send + Sync {
-    async fn sign(&self, source: &mut StaticResource) -> Result<String, CloudStorageErrors>;
+    async fn sign_upload(&self, source: &mut StaticResource) -> Result<String, CloudStorageErrors>;
+    async fn sign_download(&self, source: &mut StaticResource) -> Result<String, CloudStorageErrors>;
 }
