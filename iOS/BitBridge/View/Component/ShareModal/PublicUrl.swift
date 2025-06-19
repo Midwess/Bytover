@@ -1,10 +1,12 @@
 import SwiftUI
 import Foundation
+import SharedTypes
 
 struct PublicUrlShareView: View {
     @EnvironmentObject var core: Core
     @State private var password: String = ""
     @State private var isObfuscated: Bool = true
+    @State private var cloud: CloudSession? = nil
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
@@ -13,7 +15,7 @@ struct PublicUrlShareView: View {
                 .modifier(Label1())
                 .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
                 .multilineTextAlignment(.leading)
-
+            
             HStack {
                 ZStack {
                     SecureField("Enter password (optional)", text: $password)
@@ -29,7 +31,7 @@ struct PublicUrlShareView: View {
                                 password = String(newValue.prefix(20))
                             }
                         }
-
+                    
                     TextField("Enter password (optional)", text: $password)
                         .frame(height: 22)
                         .modifier(Label1())
@@ -45,7 +47,7 @@ struct PublicUrlShareView: View {
                         }
                 }
                 .frame(width: .infinity)
-
+                
                 if !password.isEmpty {
                     Button(action: {
                         password = ""
@@ -55,7 +57,7 @@ struct PublicUrlShareView: View {
                             .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
                     }
                 }
-
+                
                 Button(action: {
                     isObfuscated.toggle()
                     isTextFieldFocused = true
@@ -72,14 +74,14 @@ struct PublicUrlShareView: View {
             
             Spacer()
                 .frame(height: 10)
-
+            
             Button(action: {
                 // Upload action
                 Task {
                     await core.update(.transfer(.startPublicTransfer(password: password.isEmpty ? nil : password)))
                 }
             }) {
-                Text("Upload")
+                Text("Upload \(cloud?.display_download_speed)")
                     .modifier(Label1())
                     .foregroundColor(Theme.PrimaryText.color)
             }
@@ -88,5 +90,9 @@ struct PublicUrlShareView: View {
             .background(Theme.BluePrimary.color)
             .clipShape(Capsule())
         }
+        .onReceive(core.cloudSession, perform: { value in
+            cloud = value
+            password = cloud?.password ?? ""
+        })
     }
 }

@@ -57,6 +57,7 @@ struct ShareModal: View {
     @EnvironmentObject var core: Core
     @State private var nearby: NearbyViewModel?
     @State private var selection = TransferMethodSelection.internet
+    
     let selections = TransferMethodSelection.allCases
     
     var body: some View {
@@ -102,7 +103,17 @@ struct ShareModal: View {
                 Spacer()
             }
             
-            selection.body
+            ZStack {
+                TransferMethodSelection.device.body
+                    .opacity(selection == .device ? 1 : 0)
+                    .allowsHitTesting(selection == .device)
+                TransferMethodSelection.user.body
+                    .opacity(selection == .user ? 1 : 0)
+                    .allowsHitTesting(selection == .device)
+                TransferMethodSelection.internet.body
+                    .opacity(selection == .internet ? 1 : 0)
+                    .allowsHitTesting(selection == .internet)
+            }
             
             Spacer()
         }

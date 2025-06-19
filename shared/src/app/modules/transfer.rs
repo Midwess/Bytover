@@ -26,6 +26,7 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
+use crate::app::view_models::cloud_session::CloudSession;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -42,7 +43,8 @@ pub struct TransferViewModel {
     is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
     nearby_peers: Vec<PeerViewModel>,
-    received_sessions: Vec<ReceiveSessionViewModel>
+    received_sessions: Vec<ReceiveSessionViewModel>,
+    cloud_session: Option<CloudSession>
 }
 
 #[derive(Default)]
@@ -565,6 +567,28 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
+            cloud_session: model.transfer.transfer_sessions
+                .iter()
+                .filter(|it| it.target.is_public())
+                .find_map(|it| {
+                    let (access_url, password) = match &it.target {
+                        TransferTarget::Internet { access_url, password } => (access_url.clone(), password.clone()),
+                        _ => return None
+                    };
+
+                    Some(CloudSession {
+                        display_download_speed: match access_url.is_some() {
+                            true => "Initializing...".to_owned(),
+                            false => it.status().to_string()
+                        },
+                        password,
+                        session_id: it.order_id,
+                        is_completed: it.is_completed(),
+                        is_in_progress: !it.is_completed(),
+                        progress: it.total_progress(),
+                        access_url
+                    })
+                }),
             nearby_peers: model
                 .transfer
                 .transfer_targets
@@ -587,7 +611,7 @@ impl AppModule<BitBridge> for TransferModule {
                     }
                     _ => None
                 })
-                .collect()
+                .collect(),
         }
     }
 }

@@ -169,7 +169,7 @@ impl WebRtc {
         let signalling_client = self.signalling_client.get().unwrap().clone();
         let my_id = self.id();
         let scopes_mutex = self.scopes.clone();
-        let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(15));
+        let throttle_logger = ThrottleLogger::new("broadcast-task".to_string(), Duration::from_secs(30));
 
         let (broadcast_operation_sender, mut broadcast_operation_receiver) = mpsc::channel(1);
         let _ = self.broadcast_operation_sender.set(broadcast_operation_sender.clone());

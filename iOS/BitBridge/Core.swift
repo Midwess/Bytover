@@ -40,6 +40,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
+    var cloudSession: CurrentValueSubject<CloudSession?, Never> = .init(nil)
     
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
@@ -65,6 +66,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         self.environment.send(model.environment)
         self.transfer.send(model.transfer)
         self.nearby.send(model.nearby)
+        self.cloudSession.send(model.transfer?.cloud_session)
         
         if self.authentication.value?.user != nil {
             self.isSignedIn = true
@@ -736,7 +738,8 @@ class CoreMock: Core {
             is_loading_selected_resources: false, 
             transfer_method_selection: .device, 
             nearby_peers: [], 
-            received_sessions: [receive_session1, receive_session2, receive_session3]
+            received_sessions: [receive_session1, receive_session2, receive_session3],
+            cloud_session: nil
         ));
         
         // Add selected resources
