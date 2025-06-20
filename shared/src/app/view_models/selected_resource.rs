@@ -32,7 +32,7 @@ impl From<&LocalResource> for SelectedResourceViewModel {
                 }
             },
             path: resource.path.clone(),
-            thumbnail_path: resource.thumbnail_path.clone(),
+            thumbnail_path: Some(resource.thumbnail_path.clone().unwrap_or(resource.path.clone())),
             r#type: resource.r#type.clone(),
             is_valid: resource.is_valid
         };

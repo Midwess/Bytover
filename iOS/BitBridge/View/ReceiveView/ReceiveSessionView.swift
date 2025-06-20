@@ -36,7 +36,7 @@ struct ImageReceiveResourceView: View {
                 }
             }
         }
-        .onAppearAndReceive(core.transfer, perform: { value in
+        .onReceive(core.transfer, perform: { value in
             guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
                 return;
             }
