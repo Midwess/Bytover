@@ -116,23 +116,20 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
 #[cfg(feature = "lib")]
 pub struct NativeProcessor {
     shell: Arc<dyn ShellRuntime>,
-    native_executor: NativeExecutor
+    native_executor: Arc<NativeExecutor>
 }
 
 #[cfg(feature = "lib")]
 pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
-    match TOKIO_RT.get() {
-        Some(rt) => rt,
-        None => {
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .thread_name("bitbridge-native-worker")
-                .enable_all()
-                .build()
-                .unwrap();
-            TOKIO_RT.set(rt).unwrap();
-            TOKIO_RT.get().expect("Tokio runtime not initialized")
-        }
-    }
+    TOKIO_RT.get().unwrap_or_else(|| {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("bitbridge-native-worker")
+            .enable_all()
+            .build()
+            .unwrap();
+        TOKIO_RT.set(rt).unwrap();
+        TOKIO_RT.get().expect("Tokio runtime not initialized")
+    })
 }
 
 #[cfg(feature = "lib")]
@@ -140,7 +137,7 @@ impl NativeProcessor {
     pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
-        let native_executor: NativeExecutor = di_container.get_native_executor();
+        let native_executor = Arc::new(di_container.get_native_executor());
 
         Self {
             shell: shell.clone(),
@@ -155,21 +152,12 @@ impl NativeProcessor {
 
         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
-        let mut output = None;
-        tokio_scoped::scoped(get_tokio_rt().handle()).scope(|scope| {
-            scope.spawn(async {
-                output = Some(self.native_executor.handle(id, effect, self.shell.clone()).await);
-            });
-        });
-
-        if let Some(out) = output {
-            return get_tokio_rt()
-                .spawn_blocking(move || handle_response(id, serialize(&out)))
-                .await
-                .unwrap_or_default()
-        }
-
-        vec![]
+        let native_executor = self.native_executor.clone();
+        let shell = self.shell.clone();
+        get_tokio_rt().spawn(async move {
+            let output = native_executor.handle(id, effect, shell).await;
+            handle_response(id, serialize(&output))
+        }).await.unwrap_or_default()
     }
 }
 

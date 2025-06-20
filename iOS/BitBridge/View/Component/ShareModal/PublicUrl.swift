@@ -81,7 +81,7 @@ struct PublicUrlShareView: View {
                     await core.update(.transfer(.startPublicTransfer(password: password.isEmpty ? nil : password)))
                 }
             }) {
-                Text("Upload \(cloud?.display_download_speed)")
+                Text("Upload \(cloud?.display_download_speed ?? "")")
                     .modifier(Label1())
                     .foregroundColor(Theme.PrimaryText.color)
             }
