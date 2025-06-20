@@ -102,7 +102,7 @@ impl WebRtc {
 
         let throughput_controller = self.throughput_controller.clone();
         spawn(async move {
-            throughput_controller.start();
+            throughput_controller.start().await;
         });
 
         self.start_broadcast().await?;

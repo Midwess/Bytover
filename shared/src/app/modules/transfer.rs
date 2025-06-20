@@ -282,6 +282,7 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
+                log::info!("Start transferring to target {:?}", target_id);
                 let selected_resources = model.transfer.selected_resources.clone();
                 let transfer_targets = model.transfer.transfer_targets.clone();
                 let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {

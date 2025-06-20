@@ -109,7 +109,13 @@ impl TransferService {
 
                 result
             }
-            TransferTarget::Nearby(_) => TransferSession::send(selected_resources, transfer_target).await
+            TransferTarget::Nearby(_) => {
+                log::info!("Creating nearby session");
+                let result = TransferSession::send(selected_resources, transfer_target).await;
+                log::info!("Created nearby session");
+
+                result
+            }
         };
 
         for resource in transfer_session.resources.iter_mut() {

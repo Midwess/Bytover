@@ -109,7 +109,7 @@ struct ShareModal: View {
                     .allowsHitTesting(selection == .device)
                 TransferMethodSelection.user.body
                     .opacity(selection == .user ? 1 : 0)
-                    .allowsHitTesting(selection == .device)
+                    .allowsHitTesting(selection == .user)
                 TransferMethodSelection.internet.body
                     .opacity(selection == .internet ? 1 : 0)
                     .allowsHitTesting(selection == .internet)

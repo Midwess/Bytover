@@ -2,11 +2,13 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use bytes::Bytes;
+use futures_util::future::join_all;
 use futures_util::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, OnceCell};
 use tokio::task::yield_now;
 use tokio::time::{sleep, timeout};
 use webrtc::data_channel::RTCDataChannel;
+use tokio::sync::mpsc::UnboundedSender;
 
 use super::data_channel::{DataChannelError, RTCStreamChannel};
 
@@ -37,7 +39,7 @@ pub struct ThroughputController {
     pub received_broadcast: broadcast::Sender<()>,
     pub send_timeout: Duration,
     max_concurrent_sends: usize,
-    sent_queue: OnceCell<mpsc::Sender<SendRequest>>
+    sent_queue: OnceCell<mpsc::UnboundedSender<SendRequest>>
 }
 
 impl ThroughputController {
@@ -54,24 +56,25 @@ impl ThroughputController {
         }
     }
 
-    pub fn start(&self) {
-        let (sent_tx, sent_rx) = mpsc::channel(1024);
+    pub async fn start(&self) {
+        let (sent_tx, sent_rx) = mpsc::unbounded_channel();
         let _ = self.sent_queue.set(sent_tx);
 
         let sent_rx = Arc::new(Mutex::new(sent_rx));
-        tokio_scoped::scope(|scope| {
-            for _ in 0..self.max_concurrent_sends {
-                let sent_rx = sent_rx.clone();
-                scope.spawn(async move {
-                    while let Some(request) = sent_rx.lock().await.recv().await {
-                        let result = self.send_by_channel(request.channel, request.bytes).await;
-                        if let Err(err) = request.tx.send(result) {
-                            log::warn!(target: "throughput-controller", "Failed to send result to the channel: {:?}", err);
-                        }
+        let mut futures = vec![];
+        for _ in 0..self.max_concurrent_sends {
+            let sent_rx = sent_rx.clone();
+            futures.push(async move {
+                while let Some(request) = sent_rx.lock().await.recv().await {
+                    let result = self.send_by_channel(request.channel, request.bytes).await;
+                    if let Err(err) = request.tx.send(result) {
+                        log::warn!(target: "throughput-controller", "Failed to send result to the channel: {:?}", err);
                     }
-                });
-            }
-        });
+                }
+            });
+        }
+
+        let _ = join_all(futures).await;
     }
 
     pub async fn wait_buffer(&self, channel: Weak<RTCDataChannel>, sent_bytes: usize) {
@@ -126,7 +129,7 @@ impl ThroughputController {
 
         let (request, rx) = SendRequest::new(bytes.clone(), channel);
 
-        if let Err(err) = sent_tx.send(request).await {
+        if let Err(err) = sent_tx.send(request) {
             return Err(DataChannelError::ThroughputController(err.to_string()));
         }
 
