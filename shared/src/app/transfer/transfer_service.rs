@@ -15,7 +15,7 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::persistence::transfer_session::TransferSessionId;
 
-use super::session::{TransferSession, TransferStatus, TransferType};
+use super::session::{TransferSession, TransferType};
 use super::target::TransferTarget;
 
 pub struct TransferService {}

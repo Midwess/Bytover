@@ -6,7 +6,7 @@ use core_services::local_storage::file_system::{File, Folder, IOCursor};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
-use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{duplex, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
@@ -278,10 +278,7 @@ impl CloudService {
                 let folder = Folder::new(resource_path.clone())
                     .await
                     .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                let size = folder
-                    .calculate_tar_size()
-                    .await
-                    .map_err(|it| CloudTransferErrors::FileError(format!("{:?}", it)))?;
+                let size = folder.calculate_tar_size().await.map_err(|it| CloudTransferErrors::FileError(format!("{it:?}")))?;
                 (
                     folder
                         .cursor(upload_chunk_size)
@@ -294,7 +291,7 @@ impl CloudService {
                 let file = File::new(None, resource_path.clone())
                     .await
                     .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                let size = file.metadata().await.map_err(|it| CloudTransferErrors::FileError(format!("{:?}", it)))?.size;
+                let size = file.metadata().await.map_err(|it| CloudTransferErrors::FileError(format!("{it:?}")))?.size;
                 (
                     file.cursor(0, upload_chunk_size)
                         .await
@@ -304,8 +301,7 @@ impl CloudService {
             }
         };
 
-        let (writer, reader) = duplex(max_buffer_size);
-        let writer = Arc::new(Mutex::new(writer));
+        let (mut writer, reader) = duplex(max_buffer_size);
         let stream = ReaderStream::new(reader);
         let body = reqwest::Body::wrap_stream(stream);
 
@@ -330,14 +326,12 @@ impl CloudService {
             )))
         });
 
-        let mut upload_handle: Option<JoinHandle<Result<(), CloudTransferErrors>>> = None;
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(800));
         log::info!("Uploading resource {} size = {}", resource_path, size);
         let mut total_sent = 0;
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
             total_sent += chunk.len();
             let count = chunk.len();
-            let writer = writer.clone();
 
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
@@ -352,25 +346,13 @@ impl CloudService {
 
             progress_sender.send(MessageToShell::HandleResponse(core_request_id, progress_update_event)).await;
 
-            if let Some(handle) = upload_handle.take() {
-                handle.await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))??;
-            }
-
-            upload_handle = Some(tokio::spawn(async move {
-                writer
-                    .lock()
-                    .await
-                    .write_all(&chunk)
-                    .await
-                    .map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
-
-                Ok(())
-            }));
+            writer
+                .write_all(&chunk)
+                .await
+                .map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
         }
 
-        if let Some(handle) = upload_handle.take() {
-            handle.await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))??;
-        }
+        writer.flush().await.map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
 
         let session_guard = transfer_session.lock().await;
         let progress = session_guard.resource_progress(resource_order_id).expect("Progress not found");

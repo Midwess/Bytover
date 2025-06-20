@@ -81,13 +81,13 @@ struct ShareModal: View {
                     HStack {
                         Menu(selection.name) {
                             Button(TransferMethodSelection.device.name, action: {
-                                selection = .device
+                                core.selectedTransfer.value = .device
                             })
                             Button(TransferMethodSelection.user.name, action: {
-                                selection = .user
+                                core.selectedTransfer.value = .user
                             })
                             Button(TransferMethodSelection.internet.name, action: {
-                                selection = .internet
+                                core.selectedTransfer.value = .internet
                             })
                         }
                         .modifier(Body1())
@@ -124,6 +124,9 @@ struct ShareModal: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 36))
         .shadow(radius: 2)
+        .onReceive(self.core.selectedTransfer, perform: {value in
+            selection = value
+        })
         .onReceive(self.core.nearby, perform: {value in
             self.nearby = value
         })

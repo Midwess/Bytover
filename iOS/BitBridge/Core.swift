@@ -41,6 +41,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     var cloudSession: CurrentValueSubject<CloudSession?, Never> = .init(nil)
+    var selectedTransfer: CurrentValueSubject<TransferMethodSelection, Never> = .init(.internet)
     
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []

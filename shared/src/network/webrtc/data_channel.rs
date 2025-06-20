@@ -261,7 +261,8 @@ impl DataChannel {
         drop(session_guard);
 
         log::info!(target: "nearby", "Start uploading file: {resource_path} size = {unreliable_size}");
-        let mut last_sent_handle: Option<JoinHandle<Result<usize, DataChannelError>>> = None;
+
+        let mut receiver = None;
         while let Some(bytes) = cursor.next().await.map_err(|e| DataChannelError::FileError(format!("{e:?}")))? {
             let Some(session) = self.session.upgrade() else {
                 return Err(DataChannelError::SessionCanceled);
@@ -275,35 +276,23 @@ impl DataChannel {
             }
 
             progress.update_progress(bytes.len() as u64);
+            let progress = progress.clone();
+            drop(session_guard);
+
             let _ = progress_sender
                 .send(MessageToShell::HandleResponse(
                     core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                    CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress))
                 ))
                 .await;
 
-            drop(session_guard);
-
-            if let Some(handle) = last_sent_handle.take() {
-                _ = handle.await.map_err(|it| DataChannelError::DataChannelCorrupted(it.to_string()))??;
-            }
-
-            let throughput_controller = self.throughput_controller.clone();
-            let data_channel = self.data_channel.clone();
-            last_sent_handle = Some(spawn(async move {
-                let sent_bytes = throughput_controller.send(Arc::downgrade(&data_channel), &bytes).await?;
-                if sent_bytes < bytes.len() {
-                    Err(DataChannelError::DataChannelCorrupted(
-                        "The data sent less than data read".to_string()
-                    ))
-                } else {
-                    Ok(sent_bytes)
-                }
-            }));
+            receiver = Some(self.throughput_controller.send(Arc::downgrade(&self.data_channel), &bytes).await?);
         }
 
-        if let Some(handle) = last_sent_handle.take() {
-            _ = handle.await.map_err(|it| DataChannelError::DataChannelCorrupted(it.to_string()))??;
+        // We wait for the last receiver to finished, which also means
+        // the process is finished
+        if let Some(receiver) = receiver {
+            receiver.await.map_err(|e| DataChannelError::ThroughputController(e.to_string()))??;
         }
 
         let Some(session) = self.session.upgrade() else {

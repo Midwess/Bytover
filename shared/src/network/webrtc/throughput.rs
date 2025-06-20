@@ -5,10 +5,8 @@ use bytes::Bytes;
 use futures_util::future::join_all;
 use futures_util::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, OnceCell};
-use tokio::task::yield_now;
 use tokio::time::{sleep, timeout};
 use webrtc::data_channel::RTCDataChannel;
-use tokio::sync::mpsc::UnboundedSender;
 
 use super::data_channel::{DataChannelError, RTCStreamChannel};
 
@@ -39,7 +37,7 @@ pub struct ThroughputController {
     pub received_broadcast: broadcast::Sender<()>,
     pub send_timeout: Duration,
     max_concurrent_sends: usize,
-    sent_queue: OnceCell<mpsc::UnboundedSender<SendRequest>>
+    sent_queue: OnceCell<mpsc::Sender<SendRequest>>
 }
 
 impl ThroughputController {
@@ -48,7 +46,6 @@ impl ThroughputController {
         Self {
             max_bytes_buffer,
             received_timeout,
-            // Max size of message is 64KB, we expect the speed must at least 10KB/s
             send_timeout: Duration::from_millis(6400),
             received_broadcast: received_tx,
             max_concurrent_sends,
@@ -57,7 +54,7 @@ impl ThroughputController {
     }
 
     pub async fn start(&self) {
-        let (sent_tx, sent_rx) = mpsc::unbounded_channel();
+        let (sent_tx, sent_rx) = mpsc::channel(5);
         let _ = self.sent_queue.set(sent_tx);
 
         let sent_rx = Arc::new(Mutex::new(sent_rx));
@@ -67,9 +64,7 @@ impl ThroughputController {
             futures.push(async move {
                 while let Some(request) = sent_rx.lock().await.recv().await {
                     let result = self.send_by_channel(request.channel, request.bytes).await;
-                    if let Err(err) = request.tx.send(result) {
-                        log::warn!(target: "throughput-controller", "Failed to send result to the channel: {:?}", err);
-                    }
+                    let _ = request.tx.send(result);
                 }
             });
         }
@@ -86,7 +81,6 @@ impl ThroughputController {
 
             let sleep_duration = ((current_buffer as u64) / 10240).clamp(1, 10);
             tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
-            yield_now().await;
         }
     }
 
@@ -120,7 +114,11 @@ impl ThroughputController {
         }
     }
 
-    pub async fn send(&self, channel: Weak<RTCDataChannel>, bytes: &Bytes) -> Result<usize, DataChannelError> {
+    pub async fn send(
+        &self,
+        channel: Weak<RTCDataChannel>,
+        bytes: &Bytes
+    ) -> Result<oneshot::Receiver<Result<usize, DataChannelError>>, DataChannelError> {
         let Some(sent_tx) = self.sent_queue.get() else {
             return Err(DataChannelError::DataChannelCorrupted(
                 "The throughput controller is not started".to_string()
@@ -129,15 +127,11 @@ impl ThroughputController {
 
         let (request, rx) = SendRequest::new(bytes.clone(), channel);
 
-        if let Err(err) = sent_tx.send(request) {
+        if let Err(err) = sent_tx.send(request).await {
             return Err(DataChannelError::ThroughputController(err.to_string()));
         }
 
-        let sent_bytes = rx
-            .await
-            .map_err(|_| DataChannelError::ThroughputController("The channel is closed".to_string()))??;
-
-        Ok(sent_bytes)
+        Ok(rx)
     }
 
     pub async fn next_bytes(&self, stream: &mut RTCStreamChannel) -> Result<Option<Vec<u8>>, DataChannelError> {

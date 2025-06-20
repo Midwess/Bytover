@@ -9,7 +9,7 @@ pub struct CloudSession {
     pub is_completed: bool,
     pub is_in_progress: bool,
     pub display_download_speed: String,
-    pub progress: f64,
+    pub progress: f64
 }
 
 impl CloudSession {}
