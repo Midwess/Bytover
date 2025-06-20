@@ -12,7 +12,7 @@ import SharedTypes
 struct PeopleShareItem: View {
     @EnvironmentObject private var core: Core
     @State var peer: PeerViewModel
-    
+
     var body: some View {
         HStack(spacing: 0) {
             Avartar(avatar: peer.avatar)
@@ -26,7 +26,7 @@ struct PeopleShareItem: View {
                     Text("Nearby")
                         .modifier(Label2())
                         .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
-                    
+
                     if let uploadSpeed = peer.display_upload_speed {
                         ZStack(alignment: .leading) {
                             Text("0000000.0 MB/s")
@@ -42,11 +42,11 @@ struct PeopleShareItem: View {
                             }
                         }
                     }
-                    
+
                     Spacer()
                 }
             }
-            
+
             if peer.display_upload_speed != nil {
                 SharingProgress(progress: peer.transfer_progress)
                     .frame(width: 38, height: 38)
@@ -71,7 +71,7 @@ struct PeopleShareItem: View {
 struct PeopleShareView: View {
     @EnvironmentObject private var core: Core
     @State private var nearbyPeers: [PeerViewModel] = []
-    
+
     var body: some View {
         VStack(spacing: 16) {
             Button(action: {}) {
@@ -88,14 +88,13 @@ struct PeopleShareView: View {
             .frame(maxWidth: .infinity)
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
-            
+
             if nearbyPeers.isEmpty {
                 Text("No nearby friends found")
                     .modifier(Label1())
                     .foregroundStyle(Theme.PrimaryText.color)
                     .padding()
-            }
-            else {
+            } else {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top) {
                         ForEach(nearbyPeers, id: \.self) { peer in

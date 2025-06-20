@@ -113,4 +113,3 @@ struct GradientHeadingView_Preview: PreviewProvider {
         .background(Theme.DarkViolet.color)
     }
 }
-

@@ -12,7 +12,7 @@ import Metal
 struct SettingView: View {
     @State private var time: Double = 0
     @State private var startTime = Date.now
-    
+
     var body: some View {
         ZStack {
             Theme.darkBgGradient

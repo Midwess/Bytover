@@ -35,7 +35,7 @@ enum Theme: String {
     case DocumentColor
     case PrimaryBackground
     case Gray
-    
+
     static var gradientHeading: LinearGradient {
         get {
             LinearGradient(
@@ -45,7 +45,7 @@ enum Theme: String {
             )
         }
     }
-    
+
    static var gradientHeading2: LinearGradient {
         get {
             LinearGradient(
@@ -55,8 +55,7 @@ enum Theme: String {
             )
         }
     }
- 
-    
+
     static func starGradient(x: Double, y: Double) -> AngularGradient {
         AngularGradient(colors: [
             Theme.DarkViolet.color.opacity(0.1),
@@ -65,7 +64,7 @@ enum Theme: String {
             Theme.DarkViolet.color.opacity(0.08)
         ], center: .init(x: x, y: y), angle: .degrees(60))
     }
-    
+
     static var darkBgGradient: LinearGradient {
         get {
             LinearGradient(colors: [
@@ -74,16 +73,16 @@ enum Theme: String {
             ], startPoint: .top, endPoint: .bottom)
         }
     }
-    
+
     static var circlePrimaryGradient: RadialGradient {
         get {
             RadialGradient(colors: [
                 Theme.DarkViolet.color,
-                Theme.SecondaryVividViolet.color,
+                Theme.SecondaryVividViolet.color
             ], center: .center, startRadius: 0.0, endRadius: 80.0)
         }
     }
-    
+
     static var primaryGradient: LinearGradient {
         get {
             LinearGradient(
@@ -93,7 +92,7 @@ enum Theme: String {
             )
         }
     }
-    
+
     static var textGradient: LinearGradient {
         get {
             LinearGradient(
@@ -103,19 +102,19 @@ enum Theme: String {
             )
         }
     }
-    
+
     var color: Color {
         get {
             Color(rawValue)
         }
     }
-    
+
     var uiColor: UIColor {
         get {
             UIColor(color)
         }
     }
-    
+
     var string: String {
         get {
             rawValue
@@ -151,19 +150,19 @@ enum ImageAsset: String {
     case Owl
     case Download
     case Upload
-    
+
     var image: Image {
         get {
             Image(self.string)
         }
     }
-    
+
     var uiImage: UIImage {
         get {
             UIImage(named: self.string)!
         }
     }
-    
+
     var string: String {
         get {
             rawValue
@@ -178,43 +177,43 @@ struct FontTheme {
                 .weight(.bold)
         }
     }
-    
+
     static var H2Heading: Font {
         get {
             .title2.weight(.bold)
         }
     }
-    
+
     static var Body1: Font {
         get {
             .title3.weight(.bold)
         }
     }
-    
+
     static var Body2: Font {
         get {
             .body
         }
     }
-    
+
     static var Label1: Font {
         get {
             .callout
         }
     }
-    
+
     static var Label2: Font {
         get {
             .subheadline
         }
     }
-    
+
     static var Label3: Font {
         get {
             .subheadline
         }
     }
-    
+
     static var Label4: Font {
         get {
             .footnote
@@ -226,7 +225,7 @@ enum SpaceTheme {
     case screen
     case item
     case cohesive
-    
+
     var value: CGFloat {
         get {
             switch self {

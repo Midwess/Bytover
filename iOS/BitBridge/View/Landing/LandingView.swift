@@ -19,7 +19,7 @@ struct LandingView: View {
                 .frame(width: screenSize.width, height: screenSize.width)
                 .overlay(Theme.gradientHeading.opacity(1).blur(radius: 30).frame(width: .infinity, height: screenSize.width / 2).offset(y: screenSize.width / 4))
                 .padding(.top, safeAreaInsets.top)
-            
+
             Text("We feel thankful that you’re here 🙌")
                 .foregroundColor(Theme.LightSea.color)
                 .modifier(Label1())
@@ -30,9 +30,9 @@ struct LandingView: View {
                 .modifier(H1Heading())
                 .padding(.top, 10)
                 .padding(.horizontal, SpaceTheme.screen.value)
-            
+
             Spacer()
-            
+
             Button(action: {
                 Task {
                     await core.update(.authentication(.signIn))

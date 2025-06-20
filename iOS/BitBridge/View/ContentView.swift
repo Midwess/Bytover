@@ -11,8 +11,8 @@ import SharedTypes
 
 struct ContentView: View {
     @EnvironmentObject var core: Core
-    @State var quicklook_path: LocalResourcePath? = nil
-    
+    @State var quicklook_path: LocalResourcePath?
+
     var body: some View {
         ZStack {
             LandingView()

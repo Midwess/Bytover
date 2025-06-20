@@ -5,16 +5,16 @@
 //  Created by Tien Dang on 5/18/25.
 //
 
-import SwiftUI;
-import Foundation;
+import SwiftUI
+import Foundation
 
 struct CustomTabBar: View {
     @Binding var selection: Int
-    
+
     @Environment(\.safeAreaInsets) private var safeAreaInsets
-    
+
     var body: some View {
-        HStack() {
+        HStack {
             ButtonNavigation(icon: ImageAsset.GlobeEmpty.image, icon_selected: ImageAsset.GlobeFull.image, index: 1, selection: $selection)
                 .scaleEffect(1.08)
             Spacer()
@@ -33,13 +33,13 @@ struct ButtonNavigation: View {
     var icon: Image
     var icon_selected: Image
     var index: Int
-    
+
     @Binding var selection: Int
-    
+
     var isSelected: Bool {
         index == selection
     }
-    
+
     var body: some View {
         Button(action: {
             selection = index
@@ -53,5 +53,3 @@ struct ButtonNavigation: View {
         .frame(width: 44, height: 44)
     }
 }
-
-

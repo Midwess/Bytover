@@ -13,11 +13,11 @@ struct ReceiveView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
-    
+
     @State var receiveSessions: [ReceiveSessionViewModel] = []
     @State var selectedItem: ReceiveSessionViewModel?
     @State var isShowItemOption = false
-    
+
     var body: some View {
         ZStack {
             ScrollView {
@@ -29,27 +29,27 @@ struct ReceiveView: View {
                             .blur(radius: 15)
                             .frame(width: .infinity, height: screenSize.width / 2)
                         )
-                    
+
                     Text("Your Inbox")
                         .padding(.horizontal, 20)
                         .multilineTextAlignment(.center)
                         .modifier(Heading2())
-                    
+
                     UpgradePremiumButton()
-                    
+
                     ForEach(self.receiveSessions, id: \.self.id) { item in
                         ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
                         ReceiveSessionBodyView(session: item)
                     }
                     .padding(.horizontal, SpaceTheme.screen.value)
                     .padding(.top, SpaceTheme.item.value)
-                    
+
                     Spacer().frame(height: 130)
                 }
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))
             .padding(.bottom, SpaceTheme.screen.value)
-            
+
         }
         .confirmationDialog(selectedItem?.peer_name ?? "Session", isPresented: $isShowItemOption) {
             Button("Open") {
@@ -57,17 +57,17 @@ struct ReceiveView: View {
                     await core.update(.transfer(.openSession(session_id: selectedItem?.id ?? 0)))
                 }
             }
-           
+
             Button("Delete", role: .destructive) {
                 Task {
                     await core.update(.transfer(.deleteSession(session_id: selectedItem?.id ?? 0)))
                 }
             }
-            
+
         }
         .onReceive(self.core.transfer, perform: { value in
-            let receivedSessions = value?.received_sessions ?? [];
-            
+            let receivedSessions = value?.received_sessions ?? []
+
             if receivedSessions.count != self.receiveSessions.count {
                 self.receiveSessions = receivedSessions
             }

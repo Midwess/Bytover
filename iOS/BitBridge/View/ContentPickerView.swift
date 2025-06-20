@@ -15,9 +15,9 @@ struct ContentPickerView: View {
     @State private var isShowingPhotosPicker = false
     @State private var isShowingFilePicker = false
     @State private var selectedResources: [SelectedResourceViewModel] = []
-    
+
     @EnvironmentObject private var core: Core
-    
+
     var body: some View {
         VStack {
             Button(action: {
@@ -29,11 +29,10 @@ struct ContentPickerView: View {
                             .modifier(Label2())
                             .foregroundStyle(Theme.PrimaryText.color.opacity(0.7))
                             .padding(.trailing, 1)
-                    }
-                    else {
+                    } else {
                         Spacer()
                     }
-                    
+
                     Image(systemName: "plus")
                         .resizable()
                         .foregroundColor(Theme.PrimaryText.color)

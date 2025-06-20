@@ -13,12 +13,12 @@ struct ResourceImage: View {
     var resource: SelectedResourceViewModel
     var width: CGFloat = 48
     var height: CGFloat = 48
-    var radius: CGFloat? = nil
+    var radius: CGFloat?
     var backgroundColor: Bool = true
 
     @EnvironmentObject private var core: Core
     @State private var thumbnailImage: Image?
-    
+
     var body: some View {
         ZStack {
             if let thumbnailImage = thumbnailImage {
@@ -36,7 +36,7 @@ struct ResourceImage: View {
                     .padding(width != .infinity && height != .infinity ? ((width + height) / 2) * 0.1 : 0)
                     .frame(width: width, height: height)
             }
-            
+
             // Video overlay icon
             if resource.type == .video {
                 VStack {
@@ -65,13 +65,13 @@ struct ResourceImage: View {
         }
         .onAppearOrChange(of: resource.thumbnail_path) { oldValue, newValue in
             Task {
-                if (oldValue != newValue) {
+                if oldValue != newValue {
                     await loadThumbnail()
                 }
             }
         }
     }
-    
+
     func getColor() -> Color {
         if !backgroundColor {
             return .clear
@@ -110,12 +110,12 @@ struct SelectedResourceItem: View {
     @Binding var selectedItem: SelectedResourceViewModel?
     @State private var isVisible: Bool = false
     @EnvironmentObject var core: Core
-    
+
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
             ResourceImage(resource: resource)
                 .foregroundColor(.black.opacity(0.5))
-            
+
             VStack(alignment: .leading, spacing: 5) {
                 Text(resource.name)
                     .strikethrough(!resource.is_valid)
@@ -135,7 +135,7 @@ struct SelectedResourceItem: View {
                     Text("\(String(resource.size_gb)) GB")
                         .modifier(Label1())
                 }
-                
+
                 if resource.size_mb >= 0 {
                     Text("\(String(resource.size_mb)) MB")
                         .modifier(Label1())

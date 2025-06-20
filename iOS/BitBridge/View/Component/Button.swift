@@ -70,7 +70,7 @@ struct PrimaryButton: View {
 
 struct MoreOptionButton<T>: View {
     @Binding var state: Bool
-    var item: T? = nil
+    var item: T?
     @Binding var selectedItem: T?
 
     var body: some View {

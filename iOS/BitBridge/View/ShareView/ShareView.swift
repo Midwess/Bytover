@@ -15,7 +15,7 @@ public struct ShareView: View {
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject var core: Core
     @State private var selectedResources: [SelectedResourceViewModel] = []
-    @State private var selectedResource: SelectedResourceViewModel? = nil
+    @State private var selectedResource: SelectedResourceViewModel?
     @State private var isShowResourceOption = false
     @State private var isLoadingSelectedResource = false
     @State private var startTime = Date.now
@@ -32,20 +32,20 @@ public struct ShareView: View {
                             .blur(radius: 15)
                             .frame(width: .infinity, height: screenSize.width / 2)
                         )
-                    
+
                     Text("Your dashboard")
                         .multilineTextAlignment(.center)
                         .modifier(Heading2())
-                    
+
                     UpgradePremiumButton()
-                    
+
                     if selectedResources.isEmpty {
                         Spacer().frame(height: 150)
                     }
-                    
+
                     ContentPickerView()
                         .padding(.trailing, SpaceTheme.screen.value - 10)
-                    
+
                     LazyVStack {
                         ForEach(selectedResources, id: \.self.order_id) { item in
                             SelectedResourceItem(resource: item, isShowMoreOption: $isShowResourceOption, selectedItem: $selectedResource)
@@ -54,7 +54,7 @@ public struct ShareView: View {
                                 .id(item.order_id)
                         }
                     }
-                    
+
                     if isLoadingSelectedResource {
                         VStack(alignment: .center, spacing: 5) {
                             ProgressView()
@@ -64,14 +64,14 @@ public struct ShareView: View {
                                 .modifier(Label1())
                         }
                     }
-                    
+
                     Spacer().frame(width: 10, height: 120)
                 }
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             .padding(.top, safeAreaInsets.top)
             .padding(.bottom, SpaceTheme.screen.value + 60)
-            
+
             ShareButton(width: 220)
                 .offset(y: SpaceTheme.screen.value)
                 .padding(.horizontal, SpaceTheme.screen.value)

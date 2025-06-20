@@ -13,7 +13,7 @@ import QuickLook
 @main
 struct Main: App {
     @StateObject private var core = Core()
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()

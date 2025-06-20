@@ -17,7 +17,7 @@ import WebKit
 struct QuickLook: View {
     @Binding var path: LocalResourcePath?
     @State private var isLoading = true
-    
+
     var body: some View {
         Group {
             if let path = path {
@@ -35,7 +35,7 @@ struct QuickLook: View {
                                 isLoading = false
                             }
                     }
-                    
+
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
@@ -56,7 +56,7 @@ struct QuickLook: View {
 struct QuickLookSheet: View {
     @Binding var path: LocalResourcePath?
     @State private var isPresented = false
-    
+
     var body: some View {
         Text("")
             .onChange(of: path) { newPath in
@@ -88,12 +88,12 @@ struct QuickLookSheet: View {
                 }
             }
     }
-    
+
     private func getFileURL(for path: LocalResourcePath) -> URL? {
         switch path {
         case .absolutePath(let absolutePath):
             return URL(fileURLWithPath: absolutePath)
-            
+
         case .platformIdentifier(let identifier):
             if identifier.hasPrefix("bookmark://") {
                 let bookmarkString = String(identifier.dropFirst("bookmark://".count))
@@ -103,7 +103,7 @@ struct QuickLookSheet: View {
                         guard let url = try? URL(resolvingBookmarkData: bookmarkData, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
                             return nil
                         }
-                        
+
                         if url.startAccessingSecurityScopedResource() {
                             return url
                         }
@@ -111,17 +111,17 @@ struct QuickLookSheet: View {
                 }
             }
             return nil
-            
+
         case .relativePath(let relativePath, let isPrivate):
             let baseURL = getDocumentsDirectory(isPrivate: isPrivate)
             return baseURL.appendingPathComponent(relativePath)
         }
     }
-    
+
     private func getDocumentsDirectory(isPrivate: Bool) -> URL {
         let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        
+
         return isPrivate ? privatePath! : publicPath!
     }
 }
@@ -133,12 +133,12 @@ struct PhassetViewer: View {
     @State private var livePhoto: PHLivePhoto?
     @State private var player: AVPlayer?
     @State private var isLoading = true
-    
+
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
-            
+
             if isLoading {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
@@ -149,8 +149,7 @@ struct PhassetViewer: View {
                 case .image:
                     if asset.mediaSubtypes.contains(.photoLive), let livePhoto = livePhoto {
                         LivePhotoView(livePhoto: livePhoto)
-                    }
-                    else if let image = image {
+                    } else if let image = image {
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -171,7 +170,7 @@ struct PhassetViewer: View {
             loadAsset()
         }
     }
-    
+
     private func loadAsset() {
         Task {
             guard let assetCached = await PHAsset.getCachedAsset(identifier: assetIdentifier, false) else {
@@ -180,13 +179,13 @@ struct PhassetViewer: View {
                 }
                 return
             }
-            
+
             let asset = assetCached.asset
-            
+
             await MainActor.run {
                 self.asset = asset
             }
-            
+
             switch asset.mediaType {
             case .image:
                 if asset.mediaSubtypes.contains(.photoLive) {
@@ -199,18 +198,18 @@ struct PhassetViewer: View {
             default:
                 await loadImage(for: asset)
             }
-            
+
             await MainActor.run {
                 isLoading = false
             }
         }
     }
-    
+
     private func loadImage(for asset: PHAsset) async {
         let options = PHImageRequestOptions()
         options.isNetworkAccessAllowed = true
         options.deliveryMode = .highQualityFormat
-        
+
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { image, _ in
                 Task { @MainActor in
@@ -220,12 +219,12 @@ struct PhassetViewer: View {
             }
         }
     }
-    
+
     private func loadLivePhoto(for asset: PHAsset) async {
         let options = PHLivePhotoRequestOptions()
         options.isNetworkAccessAllowed = true
         options.deliveryMode = .highQualityFormat
-        
+
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestLivePhoto(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { livePhoto, _ in
                 Task { @MainActor in
@@ -235,12 +234,12 @@ struct PhassetViewer: View {
             }
         }
     }
-    
+
     private func loadVideo(for asset: PHAsset) async {
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
         options.deliveryMode = .highQualityFormat
-        
+
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                 Task { @MainActor in
@@ -256,14 +255,14 @@ struct PhassetViewer: View {
 
 struct LivePhotoView: UIViewRepresentable {
     let livePhoto: PHLivePhoto
-    
+
     func makeUIView(context: Context) -> PHLivePhotoView {
         let livePhotoView = PHLivePhotoView()
         livePhotoView.contentMode = .scaleAspectFit
         livePhotoView.livePhoto = livePhoto
         return livePhotoView
     }
-    
+
     func updateUIView(_ uiView: PHLivePhotoView, context: Context) {
         uiView.livePhoto = livePhoto
     }
@@ -272,7 +271,7 @@ struct LivePhotoView: UIViewRepresentable {
 struct FileViewer: View {
     let path: LocalResourcePath
     @State private var isLoading = true
-    
+
     var body: some View {
         ZStack {
             Group {
@@ -289,7 +288,7 @@ struct FileViewer: View {
                         }
                 }
             }
-            
+
             if isLoading {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
@@ -299,12 +298,12 @@ struct FileViewer: View {
             }
         }
     }
-    
+
     private func getFileURL() -> URL? {
         switch path {
         case .absolutePath(let absolutePath):
             return URL(fileURLWithPath: absolutePath)
-            
+
         case .platformIdentifier(let identifier):
             if identifier.hasPrefix("bookmark://") {
                 let bookmarkString = String(identifier.dropFirst("bookmark://".count))
@@ -314,7 +313,7 @@ struct FileViewer: View {
                         guard let url = try? URL(resolvingBookmarkData: bookmarkData, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
                             return nil
                         }
-                        
+
                         if url.startAccessingSecurityScopedResource() {
                             return url
                         }
@@ -322,17 +321,17 @@ struct FileViewer: View {
                 }
             }
             return nil
-            
+
         case .relativePath(let relativePath, let isPrivate):
             let baseURL = getDocumentsDirectory(isPrivate: isPrivate)
             return baseURL.appendingPathComponent(relativePath)
         }
     }
-    
+
     private func getDocumentsDirectory(isPrivate: Bool) -> URL {
         let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        
+
         return isPrivate ? privatePath! : publicPath!
     }
 }
@@ -373,21 +372,21 @@ class PHAssetPreviewItem: NSObject, QLPreviewItem {
     let assetIdentifier: String
     private var _previewItemURL: URL?
     private var _previewItemTitle: String?
-    
+
     init(assetIdentifier: String) {
         self.assetIdentifier = assetIdentifier
         super.init()
         loadAssetData()
     }
-    
+
     var previewItemURL: URL? {
         return _previewItemURL
     }
-    
+
     var previewItemTitle: String? {
         return _previewItemTitle
     }
-    
+
     private func loadAssetData() {
         Task {
             if let assetCached = await PHAsset.getCachedAsset(identifier: assetIdentifier) {
@@ -404,7 +403,7 @@ class PHAssetPreviewItem: NSObject, QLPreviewItem {
     VStack {
         // Example with absolute path
         QuickLookSheet(path: .constant(.absolutePath("/Users/tiendang/Downloads/IMG_4296.png")))
-        
+
 //        // Example with relative path (private)
 //        QuickLook(path: .constant(.relativePath(path: "example.pdf", is_private: true)))
 //        

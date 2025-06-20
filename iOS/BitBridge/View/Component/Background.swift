@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 
-
 struct StunningBackgroundGradient: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @Environment(\.screenSize) private var screenSize

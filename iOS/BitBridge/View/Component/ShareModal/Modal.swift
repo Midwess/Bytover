@@ -19,7 +19,7 @@ extension TransferMethodSelection {
     static var allCases: [TransferMethodSelection] {
         [.device, .user, .internet]
     }
-    
+
     var name: String {
         get {
             switch self {
@@ -29,7 +29,7 @@ extension TransferMethodSelection {
             }
         }
     }
-    
+
     func icon(_ model: NearbyViewModel?) -> AnyView {
         switch self {
         case .device: return AnyView(ImageAsset.DeviceEmpty.image)
@@ -41,7 +41,7 @@ extension TransferMethodSelection {
         case .internet: return AnyView(ImageAsset.GlobeEmpty.image)
         }
     }
-    
+
     var body: AnyView {
         get {
             switch self {
@@ -57,9 +57,9 @@ struct ShareModal: View {
     @EnvironmentObject var core: Core
     @State private var nearby: NearbyViewModel?
     @State private var selection = TransferMethodSelection.internet
-    
+
     let selections = TransferMethodSelection.allCases
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .center, spacing: 15) {
@@ -72,8 +72,7 @@ struct ShareModal: View {
                     .background(Circle()
                         .foregroundStyle(Theme.PrimaryText.color.opacity(0.15))
                     )
-                
-                
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Share to")
                         .modifier(Label2())
@@ -93,16 +92,16 @@ struct ShareModal: View {
                         .modifier(Body1())
                         .foregroundStyle(Theme.PrimaryText.color)
                         .background(.clear)
-                        
+
                         ImageAsset.ArrowDown.image
                             .resizable()
                             .frame(width: 25, height: 25)
                     }
                 }
-                
+
                 Spacer()
             }
-            
+
             ZStack {
                 TransferMethodSelection.device.body
                     .opacity(selection == .device ? 1 : 0)
@@ -114,7 +113,7 @@ struct ShareModal: View {
                     .opacity(selection == .internet ? 1 : 0)
                     .allowsHitTesting(selection == .internet)
             }
-            
+
             Spacer()
         }
         .padding(.horizontal, SpaceTheme.screen.value)

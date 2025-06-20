@@ -11,9 +11,9 @@ import SharedTypes
 
 struct Avartar: View {
     let avatar: AvatarViewModel
-    
+
     @State var uiImage: UIImage?
-    
+
     private func backgroundColor() -> Color {
         // Check if any of the dominant color values are nil
         guard let r = avatar.dominant_color_r,
@@ -21,13 +21,13 @@ struct Avartar: View {
               let b = avatar.dominant_color_b else {
             return .gray
         }
-        
+
         // If all values are available, create color from RGB values
         return Color(red: Double(r) / 255.0,
                      green: Double(g) / 255.0,
                      blue: Double(b) / 255.0)
     }
-    
+
     var body: some View {
         VStack {
             if let uiImage = uiImage {
@@ -37,8 +37,7 @@ struct Avartar: View {
                     .padding(.all, 5)
                     .background(Circle()
                         .fill(backgroundColor().opacity(0.7)))
-            }
-            else {
+            } else {
                 Circle().fill(.gray)
             }
         }

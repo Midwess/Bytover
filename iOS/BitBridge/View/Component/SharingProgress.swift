@@ -5,12 +5,12 @@
 //  Created by Tien Dang on 4/25/25.
 //
 
-import SwiftUI;
-import Foundation;
+import SwiftUI
+import Foundation
 
 struct CircularProgressView: View {
     let progress: Double
-    
+
     var body: some View {
         ZStack {
             Group {

@@ -8,9 +8,6 @@ import SharedTypes
 import SwiftUICore
 import SwiftUI
 import Serde
-import SharedTypes
-import PhotosUI
-import Photos
 import PhotosUI
 import Photos
 import AVFoundation
@@ -42,14 +39,14 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     var cloudSession: CurrentValueSubject<CloudSession?, Never> = .init(nil)
     var selectedTransfer: CurrentValueSubject<TransferMethodSelection, Never> = .init(.internet)
-    
+
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
     var alert: CurrentValueSubject<(AlertDialog, SingleWaiter<Bool>)?, Never> = .init(nil)
     var toastMessage: CurrentValueSubject<String?, Never> = .init(nil)
-    
+
     @Environment(\.openURL) private var openURL
-    
+
     var lastKnownLocation: CLLocationCoordinate2D?
     var manager = CLLocationManager()
     var nativeProcessor: NativeProcessor?
@@ -58,62 +55,62 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         super.init()
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
         manager.delegate = self
-        
+
         update_view(app)
     }
-    
+
     func update_view(_ model: AppViewModel) {
         self.authentication.send(model.authentication)
         self.environment.send(model.environment)
         self.transfer.send(model.transfer)
         self.nearby.send(model.nearby)
         self.cloudSession.send(model.transfer?.cloud_session)
-        
+
         if self.authentication.value?.user != nil {
             self.isSignedIn = true
         }
     }
-    
+
     func update(_ event: AppEvent) async {
         let effects = [UInt8](processEvent(Data(try! event.bincodeSerialize())))
-        
+
         var requests: [Request] = try! .bincodeDeserialize(input: effects)
-        
+
         while let request = requests.first {
             requests.removeFirst()
             let data = [UInt8](await processEffect(request))
-            
+
             if let newRequests: [Request] = try? .bincodeDeserialize(input: data) {
                 requests.append(contentsOf: newRequests)
             }
         }
     }
-    
+
     func _handleResponse(_ id: UInt32, _ response: CoreOperationOutput) async {
         let effects = [UInt8](handleResponse(id, Data(try! response.bincodeSerialize())))
         if effects.isEmpty {
             return
         }
-            
+
         var requests: [Request] = try! .bincodeDeserialize(input: effects)
         while let request = requests.first {
             requests.removeFirst()
             let data = [UInt8](await processEffect(request))
-            
+
             if let newRequests: [Request] = try? .bincodeDeserialize(input: data) {
                 requests.append(contentsOf: newRequests)
             }
         }
     }
-    
+
     func nativeProcessor() async -> NativeProcessor {
         while self.nativeProcessor == nil {
             try? await Task.sleep(nanoseconds: 100000000) // 100ms
         }
-        
+
         return self.nativeProcessor!
     }
-    
+
     func processEffect(_ request: Request) async -> Data {
         switch request.effect {
         case .appCapabilities(.initNativeExecutor):
@@ -145,16 +142,16 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 await getAbsoluteUrl(from: identifier) ?? ""
             case .relativePath(let relative, let isPrivate):
                 getDocumentsDirectory(isPrivate: isPrivate).appendingPathComponent(relative).path
-            };
-            
+            }
+
             return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
         case .appCapabilities(.localStorage(let ops)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.localStorage(ops).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.localStorage(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
             let deviceName = device.name
-            
+
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(
                 .deviceInfo(DeviceInfo(
                     platform: Platform.ios,
@@ -164,10 +161,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 ))
             ).bincodeSerialize()))
         case .appCapabilities(.device(.getGeoLocation)):
-            let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0);
+            let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0)
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.rpc(rpc).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
         case .appCapabilities(.database(let database)):
@@ -176,16 +173,16 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.transfer(let trans)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.transfer(trans).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.transfer(trans).bincodeSerialize()))
         case .appCapabilities(.internet(let internetOps)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.internet(internetOps).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.internet(internetOps).bincodeSerialize()))
         case .appCapabilities(.p2P(let p2p)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.p2P(p2p).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.p2P(p2p).bincodeSerialize()))
         case .appCapabilities(.notified(let event)):
             Task {
                 await self.update(event)
             }
-            
+
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.dialog(.alert(let alert))):
             self.alert.send((alert, SingleWaiter()))
@@ -196,10 +193,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             self.toastMessage.send(message)
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
         case .appCapabilities(.delay(let duration)):
-            return await self.nativeProcessor().handle(request.id, Data (try! CoreOperation.delay(duration).bincodeSerialize()))
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.delay(duration).bincodeSerialize()))
         }
     }
-    
+
     func msgFromNative(_ event: Data) async {
         let event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
@@ -216,27 +213,27 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             guard let bookmarkData = Data(base64Encoded: bookmarkString) else {
                 return nil
             }
-            
+
             var isStale = false
             do {
                 let url = try URL(resolvingBookmarkData: bookmarkData, relativeTo: nil, bookmarkDataIsStale: &isStale)
                 if isStale {
                     return nil
                 }
-                
+
                 return url.path
             } catch {
                 return nil
             }
         case "phasset":
             let identifier = platformIdentifier.dropFirst("phasset://".count)
-           
+
             return await PHAsset.getCachedAsset(identifier: String(identifier))?.fileUrl?.path ?? ""
         default:
             return nil
         }
     }
-    
+
     func onFileSelected(urls: [URL]) async {
         await self.update(.transfer(.beginLoadingResources))
         for url in urls {
@@ -257,30 +254,30 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             url.stopAccessingSecurityScopedResource()
             await self.update(.transfer(.addResources([resourceSelection])))
         }
-        
+
         await self.update(.transfer(.endLoadingResources))
     }
-    
+
     func onMediasChanged() async {
         await self.update(.transfer(.beginLoadingResources))
         let items = Array(self.selectedMediaItems)
         let chunkSize = 5
-        
+
         for i in stride(from: 0, to: items.count, by: chunkSize) {
             let chunk = Array(items[i..<min(i + chunkSize, items.count)])
-            
+
             await withTaskGroup(of: Void.self) { group in
                 for item in chunk {
                     group.addTask {
                         guard let identifier = item.itemIdentifier else { return }
-                        
+
                         guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
                             return
                         }
-                        
+
                         let asset = assetCached.asset
                         let asset_type = asset.mediaType
-                        
+
                         let resourceType: ResourceType = {
                             switch asset_type {
                             case .image:
@@ -291,28 +288,28 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                                 return .file
                             }
                         }()
-                        
+
                         let phassetUrl = "phasset://" + identifier
-                        
+
                         let resourceSelection = ResourceSelection(
                             path: .platformIdentifier(phassetUrl),
                             type: resourceType
                         )
-                        
+
                         await self.update(.transfer(.addResources([resourceSelection])))
                     }
                 }
             }
         }
-        
+
         await self.update(.transfer(.endLoadingResources))
         self.selectedMediaItems.removeAll()
     }
-    
+
     func open(path: LocalResourcePath) async {
         quicklook_path.value = path
     }
-    
+
     func getFileSize(item_identifier: String) async -> UInt64 {
         return await PHAsset.getCachedAsset(identifier: item_identifier)?.fileSize ?? 0
     }
@@ -320,39 +317,39 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func getFileName(item_identifier: String) async -> String {
         return await PHAsset.getCachedAsset(identifier: item_identifier)?.fileName ?? ""
     }
-    
+
     func getDocumentsDirectory(isPrivate: Bool) -> URL {
-        let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first;
-        let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first;
-        
+        let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+
         return isPrivate ? privatePath! : publicPath!
     }
-    
+
     func getThumbnailData(for itemIdentifier: String, size: CGSize = CGSize(width: 256, height: 256)) async -> Data? {
         if itemIdentifier.starts(with: "phasset://") {
             let assetId = itemIdentifier.split(separator: "://").last!.description
             guard let asset_cached = await PHAsset.getCachedAsset(identifier: assetId) else {
                 return nil
             }
-            
+
             if asset_cached.asset.mediaType == .video {
                 return await getVideoThumbnailData(for: assetId, size: size)
             }
-            
+
             let manager = PHImageManager.default()
             let options = PHImageRequestOptions()
             options.resizeMode = .fast
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .fastFormat
             options.isSynchronous = false
-            
+
             return await withCheckedContinuation { continuation in
                 manager.requestImage(
                     for: asset_cached.asset,
                     targetSize: size,
                     contentMode: .aspectFit,
                     options: options
-                ) { image, info in
+                ) { image, _ in
                     if let image = image, let pngData = image.pngData() {
                         continuation.resume(returning: pngData)
                     } else {
@@ -360,13 +357,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     }
                 }
             }
-        }
-        else if itemIdentifier.starts(with: "bookmark://") {
+        } else if itemIdentifier.starts(with: "bookmark://") {
             guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
                 print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
                 return nil
             }
-            
+
             let url = URL(fileURLWithPath: absolutePath)
 
             let scale = 1.0
@@ -377,7 +373,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 scale: scale,
                 representationTypes: .thumbnail
             )
-            
+
             return await withCheckedContinuation { continuation in
                 QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, error in
                     if let thumbnail = thumbnail, let pngData = thumbnail.uiImage.pngData() {
@@ -389,14 +385,14 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 }
             }
         }
-        
+
         return nil
     }
 
     func checkLocationAuthorization() {
         manager.delegate = self
         manager.startUpdatingLocation()
-        
+
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
@@ -407,13 +403,13 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             print("Location service disabled")
         }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
             Task {
                 await self.update(.nearby(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
-                
+
                 manager.stopUpdatingLocation()
             }
         }
@@ -424,27 +420,27 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         guard let asset_cached = fetchResult, asset_cached.asset.mediaType == .video else {
             return nil
         }
-        
+
         let manager = PHImageManager.default()
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
-        
+
         let avAsset = await withCheckedContinuation { continuation in
             manager.requestAVAsset(forVideo: asset_cached.asset, options: options) { avAsset, _, _ in
                 continuation.resume(returning: avAsset)
             }
         }
-        
+
         guard let avAsset = avAsset else {
             return nil
         }
-        
+
         let imageGenerator = AVAssetImageGenerator(asset: avAsset)
         imageGenerator.appliesPreferredTrackTransform = true
         imageGenerator.maximumSize = size
-        
+
         let cgImage: CGImage? = await withCheckedContinuation { continuation in
-            imageGenerator.generateCGImageAsynchronously(for: CMTime(seconds: 1, preferredTimescale: 60)) { cgImage, time, error in
+            imageGenerator.generateCGImageAsynchronously(for: CMTime(seconds: 1, preferredTimescale: 60)) { cgImage, _, error in
                 if let cgImage = cgImage {
                     continuation.resume(returning: cgImage)
                 } else {
@@ -453,7 +449,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 }
             }
         }
-        
+
         if let cgImage = cgImage {
             return UIImage(cgImage: cgImage).pngData()
         } else {
@@ -472,7 +468,7 @@ extension UIImage {
     static func fromAbsolutePath(_ path: String) -> UIImage? {
         return UIImage(contentsOfFile: path)
     }
-    
+
     static func fromURL(_ url: URL) -> UIImage? {
         guard url.isFileURL else { return nil }
         return UIImage(contentsOfFile: url.path)
@@ -513,7 +509,7 @@ class PHAssetCached {
     var fileName: String
     var fileUrl: URL?
     var asset: PHAsset
-    
+
     init(fileName: String, fileSize: UInt64, fileUrl: URL?, asset: PHAsset) {
         self.fileName = fileName
         self.fileSize = fileSize
@@ -526,19 +522,19 @@ class AssetCache {
     static var shared = AssetCache()
     private var cache: [String: PHAssetCached] = [:]
     private let queue = DispatchQueue(label: "com.bitbridge.assetcache")
-    
+
     func get(identifier: String) -> PHAssetCached? {
         queue.sync {
             return cache[identifier]
         }
     }
-    
+
     func set(identifier: String, asset: PHAssetCached) {
         queue.sync {
             cache[identifier] = asset
         }
     }
-    
+
     func clear() {
         queue.sync {
             cache.removeAll()
@@ -551,7 +547,7 @@ extension PHAsset {
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }
-        
+
         let options = PHFetchOptions()
         options.fetchLimit = 1
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: options)
@@ -559,9 +555,9 @@ extension PHAsset {
               let resource = PHAssetResource.assetResources(for: asset).first else {
                 return nil
         }
-        
+
         let fileSize = resource.value(forKey: "fileSize") as? Int ?? 0
-        
+
         let url = includeUrl ? await asset.getAbsoluteURL() : nil
         let cached = PHAssetCached(
             fileName: resource.originalFilename,
@@ -569,28 +565,28 @@ extension PHAsset {
             fileUrl: url,
             asset: asset
         )
-        
+
         AssetCache.shared.set(identifier: identifier, asset: cached)
         return cached
     }
-    
+
     func getAbsoluteURL(completionHandler: @escaping (URL?) -> Void) {
         switch self.mediaType {
         case .image:
             let options = PHContentEditingInputRequestOptions()
             options.isNetworkAccessAllowed = true
             options.canHandleAdjustmentData = { _ in return false }
-            
+
             self.requestContentEditingInput(with: options) { (contentEditingInput, _) in
                 completionHandler(contentEditingInput?.fullSizeImageURL)
             }
-            
+
         case .video:
             let options = PHVideoRequestOptions()
             options.version = .original
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
-            
+
             PHImageManager.default().requestAVAsset(forVideo: self, options: options) { (asset, _, _) in
                 if let urlAsset = asset as? AVURLAsset {
                     completionHandler(urlAsset.url)
@@ -598,16 +594,16 @@ extension PHAsset {
                     completionHandler(nil)
                 }
             }
-            
+
         default:
             let resources = PHAssetResource.assetResources(for: self)
             if let resource = resources.first {
                 let tempDirURL = FileManager.default.temporaryDirectory
                 let fileName = resource.originalFilename
                 let localURL = tempDirURL.appendingPathComponent(fileName)
-                
+
                 try? FileManager.default.removeItem(at: localURL)
-                
+
                 PHAssetResourceManager.default().writeData(for: resource, toFile: localURL, options: nil) { (error) in
                     if error == nil {
                         completionHandler(localURL)
@@ -620,7 +616,7 @@ extension PHAsset {
             }
         }
     }
-    
+
     func getAbsoluteURL() async -> URL? {
         return await withCheckedContinuation { continuation in
             getAbsoluteURL { url in
@@ -639,14 +635,13 @@ extension View {
             .onAppear {
                 if let defaultValue = defaultValue {
                     action(defaultValue)
-                }
-                else if let currentValue = publisher as? CurrentValueSubject<P.Output, Never> {
+                } else if let currentValue = publisher as? CurrentValueSubject<P.Output, Never> {
                     currentValue.send(currentValue.value)
                 }
             }
             .onReceive(publisher, perform: action)
     }
-    
+
     func onAppearOrChange<V: Equatable>(
         of value: V,
         perform action: @escaping (V?, V) -> Void
@@ -666,90 +661,90 @@ class CoreMock: Core {
     static func empty() -> Core {
         CoreMock() as Core
     }
-    
+
     static func withSelectedFileTransfers() -> Core {
-        let x = CoreMock() as Core;
-        
+        let x = CoreMock() as Core
+
         // Create avatar view models
         let bearAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
         let foxAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Fox.png?r=221&g=155&b=104", dominant_color_r: 221, dominant_color_g: 155, dominant_color_b: 104)
         let wolfAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Wolf.png?r=128&g=128&b=128", dominant_color_r: 128, dominant_color_g: 128, dominant_color_b: 128)
-        
+
         // Create resource view models
-        let path = LocalResourcePath.absolutePath("");
+        let path = LocalResourcePath.absolutePath("")
         let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", path: path, thumbnail_path: nil, type: .image, is_valid: true)
         let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", path: path, thumbnail_path: nil, type: .file, is_valid: true)
         let resource3 = SelectedResourceViewModel(order_id: 3, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", path: path, thumbnail_path: nil, type: .video, is_valid: true)
-        
+
         // Create receive sessions
         let receive_session1 = ReceiveSessionViewModel(
-            id: 1, 
-            peer_avatar: bearAvatar, 
-            peer_name: "Tien Dang", 
-            peer_description: "nearby", 
+            id: 1,
+            peer_avatar: bearAvatar,
+            peer_name: "Tien Dang",
+            peer_description: "nearby",
             image_resources: [
                 ImageReceiveResourceViewModel(model: resource1, is_completed: false)
-            ], 
-            video_resources: [], 
+            ],
+            video_resources: [],
             file_resources: [],
-            is_completed: false, 
-            is_in_progress: true, 
-            display_download_speed: "2.0 MB/s", 
+            is_completed: false,
+            is_in_progress: true,
+            display_download_speed: "2.0 MB/s",
             progress: 0.8,
             display_datetime: "2025-08-22 12:44"
         )
-        
+
         let receive_session2 = ReceiveSessionViewModel(
-            id: 2, 
-            peer_avatar: foxAvatar, 
-            peer_name: "Alex Smith", 
-            peer_description: "nearby", 
-            image_resources: [], 
-            video_resources: [], 
+            id: 2,
+            peer_avatar: foxAvatar,
+            peer_name: "Alex Smith",
+            peer_description: "nearby",
+            image_resources: [],
+            video_resources: [],
             file_resources: [
                 FileReceiveResourceViewModel(model: resource2, is_completed: false)
             ],
-            is_completed: false, 
-            is_in_progress: true, 
-            display_download_speed: "1.5 MB/s", 
+            is_completed: false,
+            is_in_progress: true,
+            display_download_speed: "1.5 MB/s",
             progress: 0.45,
             display_datetime: "2025-08-22 12:44"
         )
-        
+
         let receive_session3 = ReceiveSessionViewModel(
-            id: 3, 
-            peer_avatar: wolfAvatar, 
-            peer_name: "Sarah Johnson", 
-            peer_description: "nearby", 
-            image_resources: [], 
+            id: 3,
+            peer_avatar: wolfAvatar,
+            peer_name: "Sarah Johnson",
+            peer_description: "nearby",
+            image_resources: [],
             video_resources: [
                 VideoReceiveResourceViewModel(model: resource3, is_completed: true)
-            ], 
+            ],
             file_resources: [],
-            is_completed: true, 
-            is_in_progress: false, 
-            display_download_speed: "0 KB/s", 
+            is_completed: true,
+            is_in_progress: false,
+            display_download_speed: "0 KB/s",
             progress: 1.0,
             display_datetime: "2025-08-22 12:44"
         )
-        
+
         // Initialize the transfer view model
         x.transfer = .init(TransferViewModel(
-            selected_resources: [], 
-            is_loading_selected_resources: false, 
-            transfer_method_selection: .device, 
-            nearby_peers: [], 
+            selected_resources: [],
+            is_loading_selected_resources: false,
+            transfer_method_selection: .device,
+            nearby_peers: [],
             received_sessions: [receive_session1, receive_session2, receive_session3],
             cloud_session: nil
-        ));
-        
+        ))
+
         // Add selected resources
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image, is_valid: false));
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file, is_valid: true));
-        
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image, is_valid: false))
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file, is_valid: true))
+
         return x
     }
     override func update(_ event: AppEvent) async {}
-    
+
     override func update_view(_ model: AppViewModel) {}
 }

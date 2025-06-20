@@ -12,12 +12,12 @@ struct HomeView: View {
     @EnvironmentObject private var core: Core
     @State private var selectedTab: Int = 1
     @State private var previousTab: Int = 1
-    
+
     init() {
         UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor
             .withAlphaComponent(0.4)
     }
-    
+
     var body: some View {
         ZStack {
             StunningBackgroundGradient()
@@ -46,7 +46,7 @@ struct HomeView: View {
                             } else {
                                 Edge.leading
                             }
-                            
+
                             // Apply transition based on direction
                             withAnimation(.easeInOut) {
                                 selectedTab = newValue

@@ -10,12 +10,12 @@ import Foundation
 
 struct Alert: View {
     @EnvironmentObject private var core: Core
-    @State var toastMessage: String? = nil
+    @State var toastMessage: String?
     @State var opacity: Double = 0
-    
+
     @State var isShowingAlert = false
     @State var isShowingConfirmation = false
-    
+
     var body: some View {
         Text(core.toastMessage.value ?? "")
             .font(FontTheme.Body2)
@@ -32,10 +32,10 @@ struct Alert: View {
                 if value?.isEmpty ?? true {
                     return
                 }
-                
+
                 toastMessage = value
                 opacity = 1
-                
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     toastMessage = nil
                     opacity = 0
@@ -50,7 +50,7 @@ struct Alert: View {
                 Button(core.alert.value?.0.affirmative ?? "Yes", role: .destructive) {
                     core.alert.value?.1.resolve(true)
                 }
-                
+
                 Button(core.alert.value?.0.negative ?? "Cancel", role: .cancel) {
                     core.alert.value?.1.resolve(false)
                 }
@@ -63,7 +63,7 @@ struct Alert: View {
 }
 
 #Preview {
-    var core = CoreMock.empty() as Core;
+    var core = CoreMock.empty() as Core
     Alert()
         .environmentObject(core)
 }

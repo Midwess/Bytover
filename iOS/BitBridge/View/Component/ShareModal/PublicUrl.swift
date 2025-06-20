@@ -6,7 +6,7 @@ struct PublicUrlShareView: View {
     @EnvironmentObject var core: Core
     @State private var password: String = ""
     @State private var isObfuscated: Bool = true
-    @State private var cloud: CloudSession? = nil
+    @State private var cloud: CloudSession?
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
@@ -15,7 +15,7 @@ struct PublicUrlShareView: View {
                 .modifier(Label1())
                 .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
                 .multilineTextAlignment(.leading)
-            
+
             HStack {
                 ZStack {
                     SecureField("Enter password (optional)", text: $password)
@@ -31,7 +31,7 @@ struct PublicUrlShareView: View {
                                 password = String(newValue.prefix(20))
                             }
                         }
-                    
+
                     TextField("Enter password (optional)", text: $password)
                         .frame(height: 22)
                         .modifier(Label1())
@@ -47,7 +47,7 @@ struct PublicUrlShareView: View {
                         }
                 }
                 .frame(width: .infinity)
-                
+
                 if !password.isEmpty {
                     Button(action: {
                         password = ""
@@ -57,7 +57,7 @@ struct PublicUrlShareView: View {
                             .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
                     }
                 }
-                
+
                 Button(action: {
                     isObfuscated.toggle()
                     isTextFieldFocused = true
@@ -71,10 +71,10 @@ struct PublicUrlShareView: View {
             .frame(maxWidth: .infinity)
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
-            
+
             Spacer()
                 .frame(height: 10)
-            
+
             Button(action: {
                 // Upload action
                 Task {
