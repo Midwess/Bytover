@@ -17,7 +17,7 @@ struct LandingView: View {
         VStack(alignment: .leading) {
             LogoView(width: 10)
                 .frame(width: screenSize.width, height: screenSize.width)
-                .overlay(Theme.gradientHeading.opacity(1).blur(radius: 30).frame(width: .infinity, height: screenSize.width / 2).offset(y: screenSize.width / 4))
+                .overlay(Theme.gradientHeading.opacity(1).blur(radius: 30).frame(width: screenSize.width, height: screenSize.width / 2).offset(y: screenSize.width / 4))
                 .padding(.top, safeAreaInsets.top)
 
             Text("We feel thankful that you’re here 🙌")

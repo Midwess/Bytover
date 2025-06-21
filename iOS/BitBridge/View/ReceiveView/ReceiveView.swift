@@ -28,7 +28,7 @@ struct ReceiveView: View {
                             .overlay(Theme.gradientHeading
                                 .opacity(0.5)
                                 .blur(radius: 15)
-                                .frame(width: .infinity, height: screenSize.width / 2)
+                                .frame(width: screenSize.width, height: screenSize.width / 2)
                             )
 
                         Text("Your Inbox")
