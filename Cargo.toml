@@ -32,7 +32,7 @@ edition = "2021"
 anyhow = "1.0.97"
 crux_core = "0.14.0"
 serde = { version = "1.0.217" }
-surrealdb = {version="2.3.3"}
+surrealdb = {version="2.3.5"}
 thiserror = { version = "2.0.12" }
 serde_derive = { version = "1.0.203" }
 serde_json = { version = "1.0.117" }
@@ -41,7 +41,7 @@ surreal_derive_plus = "2.2.3"
 surreal_devl = "2.2.2"
 lazy_static = "1.5.0"
 tonic-middleware = { version = "0.1.4" }
-tokio = {version = "1.44.1", features = ["sync"]}
+tokio = {version = "1.44.1", features = ["sync", "rt-multi-thread"]}
 reqwest = { version = "0.12.9", features = ["json", "native-tls-vendored", "stream"] }
 async-trait = { version = "0.1.13" }
 log = { version = "0.4.22" }

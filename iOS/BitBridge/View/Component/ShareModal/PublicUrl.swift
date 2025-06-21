@@ -66,14 +66,14 @@ struct PublicUrlShareView: View {
                         .foregroundColor(Theme.PrimaryText.color.opacity(0.6))
                 }
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 20)
+            .padding(.vertical, SpaceTheme.item.value)
+            .padding(.horizontal, SpaceTheme.screen.value)
             .frame(maxWidth: .infinity)
-            .background(Theme.PrimaryText.color.opacity(0.15))
+            .background(Theme.PrimaryText.color.opacity(0.16))
             .clipShape(Capsule())
 
             Spacer()
-                .frame(height: 10)
+                .frame(height: SpaceTheme.item.value)
 
             Button(action: {
                 // Upload action
@@ -85,8 +85,8 @@ struct PublicUrlShareView: View {
                     .modifier(Label1())
                     .foregroundColor(Theme.PrimaryText.color)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 20)
+            .padding(.vertical, SpaceTheme.item.value)
+            .padding(.horizontal, SpaceTheme.screen.value)
             .background(Theme.BluePrimary.color)
             .clipShape(Capsule())
         }

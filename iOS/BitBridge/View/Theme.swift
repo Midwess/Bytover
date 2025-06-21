@@ -201,24 +201,6 @@ struct FontTheme {
             .callout
         }
     }
-
-    static var Label2: Font {
-        get {
-            .subheadline
-        }
-    }
-
-    static var Label3: Font {
-        get {
-            .subheadline
-        }
-    }
-
-    static var Label4: Font {
-        get {
-            .footnote
-        }
-    }
 }
 
 enum SpaceTheme {
@@ -230,12 +212,24 @@ enum SpaceTheme {
         get {
             switch self {
             case .screen:
-                return 25
+                return 24
             case .item:
-                return 15
+                return 12
             case .cohesive:
                 return 8
             }
+        }
+    }
+    
+    var halfValue: CGFloat {
+        get {
+            return value / 2
+        }
+    }
+    
+    var biggerValue: CGFloat {
+        get {
+            return value + Self.cohesive.value
         }
     }
 }

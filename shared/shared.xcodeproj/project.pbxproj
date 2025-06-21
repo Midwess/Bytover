@@ -452,7 +452,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CARGO_TARGET_DIR = "$(PROJECT_TEMP_DIR)/cargo_target";
-				CARGO_XCODE_BUILD_PROFILE = debug;
+				CARGO_XCODE_BUILD_PROFILE = release;
 				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;

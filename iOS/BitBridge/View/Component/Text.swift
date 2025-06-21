@@ -12,14 +12,6 @@ struct Heading1: ViewModifier {
     func body(content: Content) -> some View {
         content
             .lineSpacing(12)
-            .font(FontTheme.H1Heading)
-    }
-}
-
-struct Heading2: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .lineSpacing(12)
             .font(FontTheme.H2Heading)
     }
 }
@@ -38,14 +30,6 @@ struct Body2: ViewModifier {
     }
 }
 
-struct H1Heading: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .lineSpacing(9)
-            .font(FontTheme.H1Heading)
-    }
-}
-
 struct Label1: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -57,36 +41,14 @@ struct Label1: ViewModifier {
 struct Label2: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(FontTheme.Label2)
-    }
-}
-
-struct Caption: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .font(FontTheme.Label1)
-            .fontWeight(.bold)
-    }
-}
-
-struct Label3: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .font(FontTheme.Label3)
-    }
-}
-
-struct Label4: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .font(FontTheme.Label4)
+            .font(FontTheme.Body2)
     }
 }
 
 struct GradientHeading: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .modifier(H1Heading())
+            .modifier(Heading1())
             .foregroundStyle(Theme.gradientHeading)
             .multilineTextAlignment(.leading)
     }

@@ -14,27 +14,28 @@ struct PeopleShareItem: View {
     @State var peer: PeerViewModel
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: SpaceTheme.cohesive.value) {
             Avartar(avatar: peer.avatar)
                 .frame(width: 42, height: 42)
-                .padding(.trailing, 12)
-            VStack(alignment: .leading, spacing: 3) {
+                .padding(.trailing, SpaceTheme.cohesive.value)
+            VStack(alignment: .leading, spacing: SpaceTheme.cohesive.halfValue) {
                 Text(peer.display_name)
                     .foregroundColor(Theme.PrimaryText.color)
                     .modifier(Label1())
-                HStack(spacing: 3) {
+                HStack(spacing: SpaceTheme.cohesive.halfValue) {
                     Text("Nearby")
                         .modifier(Label2())
-                        .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
+                        .foregroundColor(Theme.PrimaryText.color.opacity(0.8))
 
                     if let uploadSpeed = peer.display_upload_speed {
                         ZStack(alignment: .leading) {
-                            Text("0000000.0 MB/s")
+                            Text("000000.0 MB/s")
+                                .modifier(Label1())
                                 .font(.caption)
                                 .opacity(0)
                             HStack {
                                 Text(uploadSpeed)
-                                    .font(.caption)
+                                    .modifier(Label1())
                                     .foregroundColor(Theme.PrimaryText.color)
                                 ImageAsset.Upload.image
                                     .offset(x: -1)
@@ -42,19 +43,16 @@ struct PeopleShareItem: View {
                             }
                         }
                     }
-
-                    Spacer()
                 }
             }
 
             if peer.display_upload_speed != nil {
                 SharingProgress(progress: peer.transfer_progress)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 40, height: 40)
             }
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, SpaceTheme.item.value)
+        .padding(.vertical, SpaceTheme.cohesive.value)
         .frame(maxWidth: .infinity)
         .clipShape(Capsule())
         .background(Capsule().fill(Theme.PrimaryText.color.opacity(0.1)))
@@ -78,7 +76,7 @@ struct PeopleShareView: View {
                 HStack {
                     Text("Find or add new people here")
                         .modifier(Label1())
-                        .foregroundStyle(Theme.PrimaryText.color)
+                        .foregroundStyle(Theme.PrimaryText.color.opacity(0.8))
                     Spacer()
                 }
             }

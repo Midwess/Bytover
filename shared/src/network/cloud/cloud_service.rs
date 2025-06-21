@@ -350,6 +350,7 @@ impl CloudService {
                 .write_all(&chunk)
                 .await
                 .map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
+            log::info!("Uploaded {} bytes", chunk.len());
         }
 
         writer.flush().await.map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;

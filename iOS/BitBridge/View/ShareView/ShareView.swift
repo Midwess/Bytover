@@ -24,29 +24,29 @@ public struct ShareView: View {
     public var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                LazyVStack(spacing: SpaceTheme.item.value) {
-                    LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
-                        .frame(width: screenSize.width, height: 100)
-                        .overlay(Theme.gradientHeading
-                            .opacity(0.5)
-                            .blur(radius: 15)
-                            .frame(width: .infinity, height: screenSize.width / 2)
-                        )
-
-                    Text("Your dashboard")
-                        .multilineTextAlignment(.center)
-                        .modifier(Heading2())
-
-                    UpgradePremiumButton()
-
-                    if selectedResources.isEmpty {
-                        Spacer().frame(height: 150)
+                LazyVStack(spacing: SpaceTheme.screen.value) {
+                    VStack(spacing: SpaceTheme.item.value) {
+                        LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
+                            .frame(width: screenSize.width, height: 100)
+                            .overlay(Theme.gradientHeading
+                                .opacity(0.5)
+                                .blur(radius: 15)
+                                .frame(width: .infinity, height: screenSize.width / 2)
+                            )
+                        
+                        Text("Your dashboard")
+                            .multilineTextAlignment(.center)
+                            .modifier(Heading1())
+                        
+                        UpgradePremiumButton()
                     }
 
-                    ContentPickerView()
-                        .padding(.trailing, SpaceTheme.screen.value - 10)
+                    if selectedResources.isEmpty {
+                        Spacer().frame(height: 160)
+                    }
 
-                    LazyVStack {
+                    LazyVStack(spacing: SpaceTheme.item.value) {
+                        ContentPickerView()
                         ForEach(selectedResources, id: \.self.order_id) { item in
                             SelectedResourceItem(resource: item, isShowMoreOption: $isShowResourceOption, selectedItem: $selectedResource)
                                 .padding(.top, SpaceTheme.item.value)
@@ -70,7 +70,7 @@ public struct ShareView: View {
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             .padding(.top, safeAreaInsets.top)
-            .padding(.bottom, SpaceTheme.screen.value + 60)
+            .padding(.bottom, SpaceTheme.screen.value * 3)
 
             ShareButton(width: 220)
                 .offset(y: SpaceTheme.screen.value)

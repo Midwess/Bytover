@@ -112,25 +112,25 @@ struct SelectedResourceItem: View {
     @EnvironmentObject var core: Core
 
     var body: some View {
-        HStack(alignment: .center, spacing: 7) {
+        HStack(alignment: .center, spacing: SpaceTheme.cohesive.value) {
             ResourceImage(resource: resource)
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(.black.opacity(0.6))
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
                 Text(resource.name)
                     .strikethrough(!resource.is_valid)
                     .modifier(Label1())
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(resource.display_path)
-                    .modifier(Label3())
+                    .modifier(Label2())
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .opacity(0.7)
+                    .opacity(0.8)
             }
-            .padding(.leading, 10)
+            .padding(.leading, SpaceTheme.item.value)
             Spacer()
-            VStack(alignment: .trailing, spacing: 7) {
+            VStack(alignment: .trailing, spacing: SpaceTheme.cohesive.value) {
                 if resource.size_gb > 0 {
                     Text("\(String(resource.size_gb)) GB")
                         .modifier(Label1())
@@ -148,10 +148,10 @@ struct SelectedResourceItem: View {
                 await core.update(.transfer(.openSelectedResource(resource_id: resource.order_id)))
             }
         }
-        .opacity(resource.is_valid ? 1 : 0.5)
+        .opacity(resource.is_valid ? 1 : 0.6)
         .background(.gray.opacity(0.0))
-        .clipShape(RoundedRectangle(cornerRadius: 15))
-        .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.0), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.0), lineWidth: 1))
         .onAppear {
             isVisible = true
         }

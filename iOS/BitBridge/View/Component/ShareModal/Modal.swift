@@ -61,23 +61,23 @@ struct ShareModal: View {
     let selections = TransferMethodSelection.allCases
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .center, spacing: 15) {
+        VStack(alignment: .leading, spacing: SpaceTheme.screen.value) {
+            HStack(alignment: .center, spacing: SpaceTheme.item.value) {
                 selection.icon(nearby)
-                    .frame(width: 54, height: 54)
+                    .frame(width: 56, height: 56)
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.GreenSecondary.color)
                     .padding(.all, 0)
                     .clipShape(Circle())
                     .background(Circle()
-                        .foregroundStyle(Theme.PrimaryText.color.opacity(0.15))
+                        .foregroundStyle(Theme.PrimaryText.color.opacity(0.16))
                     )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
                     Text("Share to")
                         .modifier(Label2())
-                        .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
-                    HStack {
+                        .foregroundColor(Theme.PrimaryText.color.opacity(0.8))
+                    HStack(spacing: SpaceTheme.cohesive.halfValue) {
                         Menu(selection.name) {
                             Button(TransferMethodSelection.device.name, action: {
                                 core.selectedTransfer.value = .device
@@ -95,13 +95,13 @@ struct ShareModal: View {
 
                         ImageAsset.ArrowDown.image
                             .resizable()
-                            .frame(width: 25, height: 25)
+                            .frame(width: 24, height: 24)
                     }
                 }
 
                 Spacer()
             }
-
+            
             ZStack {
                 TransferMethodSelection.device.body
                     .opacity(selection == .device ? 1 : 0)
@@ -113,11 +113,11 @@ struct ShareModal: View {
                     .opacity(selection == .internet ? 1 : 0)
                     .allowsHitTesting(selection == .internet)
             }
-
+            
             Spacer()
         }
         .padding(.horizontal, SpaceTheme.screen.value)
-        .padding(.top, 26)
+        .padding(.top, SpaceTheme.screen.value)
         .background(
             .clear
         )

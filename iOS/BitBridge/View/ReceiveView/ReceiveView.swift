@@ -21,30 +21,34 @@ struct ReceiveView: View {
     var body: some View {
         ZStack {
             ScrollView {
-                LazyVStack(spacing: SpaceTheme.item.value, pinnedViews: [.sectionHeaders]) {
-                    LogoScene(gltfFileName: "Rocket", logoScale: 1.5)
-                        .frame(width: screenSize.width, height: 100)
-                        .overlay(Theme.gradientHeading
-                            .opacity(0.5)
-                            .blur(radius: 15)
-                            .frame(width: .infinity, height: screenSize.width / 2)
-                        )
-
-                    Text("Your Inbox")
-                        .padding(.horizontal, 20)
-                        .multilineTextAlignment(.center)
-                        .modifier(Heading2())
-
-                    UpgradePremiumButton()
-
-                    ForEach(self.receiveSessions, id: \.self.id) { item in
-                        ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
-                        ReceiveSessionBodyView(session: item)
+                LazyVStack(spacing: SpaceTheme.screen.value, pinnedViews: [.sectionHeaders]) {
+                    VStack(spacing: SpaceTheme.item.value) {
+                        LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
+                            .frame(width: screenSize.width, height: 100)
+                            .overlay(Theme.gradientHeading
+                                .opacity(0.5)
+                                .blur(radius: 15)
+                                .frame(width: .infinity, height: screenSize.width / 2)
+                            )
+                        
+                        Text("Your Inbox")
+                            .padding(.horizontal, 20)
+                            .multilineTextAlignment(.center)
+                            .modifier(Heading1())
+                        
+                        UpgradePremiumButton()
                     }
-                    .padding(.horizontal, SpaceTheme.screen.value)
-                    .padding(.top, SpaceTheme.item.value)
 
-                    Spacer().frame(height: 130)
+                    VStack(spacing: SpaceTheme.item.value) {
+                        ForEach(self.receiveSessions, id: \.self.id) { item in
+                            ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
+                            ReceiveSessionBodyView(session: item)
+                        }
+                        .padding(.horizontal, SpaceTheme.screen.value)
+                        .padding(.top, SpaceTheme.item.value)
+                    }
+
+                    Spacer().frame(height: 160)
                 }
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))

@@ -104,18 +104,18 @@ struct FileReceiveResourceView: View {
                 HStack {
                     ResourceImage(resource: localResource.model, backgroundColor: false)
                         .background(
-                            RoundedRectangle(cornerRadius: 15)
-                                .fill(Theme.PrimaryText.color.opacity(0.05))
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.PrimaryText.color.opacity(0.06))
                         )
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
                         Text(localResource.model.name)
                             .modifier(Label1())
 
                         Text(localResource.model.display_path)
-                            .modifier(Label3())
+                            .modifier(Label2())
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .opacity(0.7)
+                            .opacity(0.8)
                     }
                     .padding(.trailing, SpaceTheme.item.value)
 
@@ -131,16 +131,16 @@ struct FileReceiveResourceView: View {
 
                 if !localResource.is_completed {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.9)))
-                        .scaleEffect(1.5)
-                        .background(Theme.BlackBase.color.blur(radius: 20))
+                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.PrimaryText.color.opacity(0.8)))
+                        .scaleEffect(1.6)
+                        .background(Theme.BlackBase.color.blur(radius: 24))
                 }
             }
             .frame(idealWidth: screenSize.width - 80, maxWidth: 320, idealHeight: 45)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
+            .padding(.horizontal, SpaceTheme.item.value)
+            .padding(.vertical, SpaceTheme.item.value)
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 24)
                     .fill(Theme.PrimaryText.color.opacity(0.1))
             )
         }
@@ -171,19 +171,19 @@ struct ReceiveSessionBodyView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: SpaceTheme.screen.value) {
             let mediaCount = self.session.image_resources.count + self.session.video_resources.count
             if mediaCount > 0 {
                 VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: SpaceTheme.cohesive.value) {
                         if self.session.video_resources.count > 0 {
                             Text("\(self.session.video_resources.count) Video\(self.session.video_resources.count > 1 ? "s" : "")")
-                                .modifier(Caption())
+                                .modifier(Label2())
                                 .foregroundColor(Theme.PrimaryText.color)
                         }
                         if self.session.image_resources.count > 0 {
                             Text("\(self.session.image_resources.count) Image\(self.session.image_resources.count > 1 ? "s" : "")")
-                                .modifier(Caption())
+                                .modifier(Label2())
                                 .foregroundColor(Theme.PrimaryText.color)
                         }
                     }
@@ -207,10 +207,10 @@ struct ReceiveSessionBodyView: View {
             if self.session.file_resources.count > 0 {
                 VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
                     Text("\(self.session.file_resources.count) File\(self.session.file_resources.count > 1 ? "s" : "")")
-                        .modifier(Caption())
+                        .modifier(Label2())
                         .foregroundColor(Theme.PrimaryText.color)
                     ScrollView(.horizontal) {
-                        LazyHGrid(rows: self.session.file_resources.count > 3 ? flexibleColumn2 : flexibleColumn, spacing: 10) {
+                        LazyHGrid(rows: self.session.file_resources.count > 3 ? flexibleColumn2 : flexibleColumn, spacing: SpaceTheme.item.value) {
                             ForEach(self.session.file_resources, id: \.model.order_id) { item in
                                 FileReceiveResourceView(sessionId: session.id, localResource: item)
                             }

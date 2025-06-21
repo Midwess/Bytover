@@ -27,7 +27,7 @@ struct LandingView: View {
                 .padding(.horizontal, SpaceTheme.screen.value)
 
             Text("The most\nsecure and fastest\nfile transfer 🚀")
-                .modifier(H1Heading())
+                .modifier(Heading1())
                 .padding(.top, 10)
                 .padding(.horizontal, SpaceTheme.screen.value)
 

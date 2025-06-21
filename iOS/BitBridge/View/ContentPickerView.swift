@@ -83,8 +83,7 @@ struct ContentPickerView: View {
                     await core.onMediasChanged()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, SpaceTheme.screen.value)
             .foregroundStyle(Theme.PrimaryText.color)
             .onReceive(self.core.transfer, perform: { value in
                 if value?.selected_resources.count != self.selectedResources.count {
