@@ -154,10 +154,13 @@ impl NativeProcessor {
 
         let native_executor = self.native_executor.clone();
         let shell = self.shell.clone();
-        get_tokio_rt().spawn(async move {
-            let output = native_executor.handle(id, effect, shell).await;
-            handle_response(id, serialize(&output))
-        }).await.unwrap_or_default()
+        get_tokio_rt()
+            .spawn(async move {
+                let output = native_executor.handle(id, effect, shell).await;
+                handle_response(id, serialize(&output))
+            })
+            .await
+            .unwrap_or_default()
     }
 }
 

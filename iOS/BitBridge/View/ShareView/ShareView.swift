@@ -33,11 +33,11 @@ public struct ShareView: View {
                                 .blur(radius: 15)
                                 .frame(width: .infinity, height: screenSize.width / 2)
                             )
-                        
+
                         Text("Your dashboard")
                             .multilineTextAlignment(.center)
                             .modifier(Heading1())
-                        
+
                         UpgradePremiumButton()
                     }
 

@@ -220,13 +220,13 @@ enum SpaceTheme {
             }
         }
     }
-    
+
     var halfValue: CGFloat {
         get {
             return value / 2
         }
     }
-    
+
     var biggerValue: CGFloat {
         get {
             return value + Self.cohesive.value

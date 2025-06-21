@@ -101,7 +101,7 @@ struct ShareModal: View {
 
                 Spacer()
             }
-            
+
             ZStack {
                 TransferMethodSelection.device.body
                     .opacity(selection == .device ? 1 : 0)
@@ -113,7 +113,7 @@ struct ShareModal: View {
                     .opacity(selection == .internet ? 1 : 0)
                     .allowsHitTesting(selection == .internet)
             }
-            
+
             Spacer()
         }
         .padding(.horizontal, SpaceTheme.screen.value)

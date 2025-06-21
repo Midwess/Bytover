@@ -30,12 +30,12 @@ struct ReceiveView: View {
                                 .blur(radius: 15)
                                 .frame(width: .infinity, height: screenSize.width / 2)
                             )
-                        
+
                         Text("Your Inbox")
                             .padding(.horizontal, 20)
                             .multilineTextAlignment(.center)
                             .modifier(Heading1())
-                        
+
                         UpgradePremiumButton()
                     }
 
