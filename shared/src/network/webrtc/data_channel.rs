@@ -5,7 +5,7 @@ use crate::app::transfer::session::{TransferSession, TransferSessionStatus, Tran
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use core_services::local_storage::file_system::{File, Folder};
-use futures_util::{SinkExt, Stream};
+use futures_util::Stream;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
@@ -83,7 +83,7 @@ impl DataChannel {
     ) -> Result<Self, DataChannelError> {
         let label = data_channel.label().to_owned();
         let (resource_id, session_id) =
-            DataChannel::from_label(&label).map_err(|e| DataChannelError::InvalidLabelFormat(label.clone()))?;
+            DataChannel::from_label(&label).map_err(|_| DataChannelError::InvalidLabelFormat(label.clone()))?;
 
         Ok(Self {
             data_channel,

@@ -29,13 +29,15 @@ pub enum RtcSignallingErrors {
     SendError(String)
 }
 
-pub struct RtcsSignalling {
+type WebSocketServerWriter = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
+pub struct RtcSignalling {
     msg_broadcast: broadcast::Sender<SignallingMessage>,
-    server_writer: Arc<Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    server_writer: Arc<Mutex<Option<WebSocketServerWriter>>>,
     join_handle: JoinHandle<()>
 }
 
-impl RtcsSignalling {
+impl RtcSignalling {
     pub async fn start() -> Result<Self, RtcSignallingErrors> {
         let (msg_broadcast, _) = broadcast::channel::<SignallingMessage>(128);
 
@@ -142,7 +144,7 @@ impl RtcsSignalling {
     }
 }
 
-impl Drop for RtcsSignalling {
+impl Drop for RtcSignalling {
     fn drop(&mut self) {
         self.join_handle.abort();
     }

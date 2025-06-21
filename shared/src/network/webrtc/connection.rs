@@ -27,7 +27,7 @@ use crate::network::webrtc::peer::PeerCommunication;
 use crate::ShellRuntime;
 
 use super::peer::PeerErrors;
-use super::signalling::{RtcSignallingErrors, RtcsSignalling};
+use super::signalling::{RtcSignalling, RtcSignallingErrors};
 use super::throughput::ThroughputController;
 
 #[derive(Debug, Error)]
@@ -60,7 +60,7 @@ pub struct ConnectionWebRtc {
     pub finding_scope: FindingScope,
     pub peer_connection: Arc<RTCPeerConnection>,
     pub msg_channel: OnceCell<MessageChannel>,
-    pub signalling_client: Arc<RtcsSignalling>,
+    pub signalling_client: Arc<RtcSignalling>,
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
     pub workdir: WorkDir,
@@ -103,7 +103,7 @@ impl ConnectionWebRtc {
         scope: FindingScope,
         current: Peer,
         peer_id: u128,
-        signalling_client: Arc<RtcsSignalling>,
+        signalling_client: Arc<RtcSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
         workdir: WorkDir
@@ -197,7 +197,7 @@ impl ConnectionWebRtc {
         current: Peer,
         peer_id: u128,
         offer: RTCSessionDescription,
-        signalling_client: Arc<RtcsSignalling>,
+        signalling_client: Arc<RtcSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
         workdir: WorkDir
@@ -251,7 +251,7 @@ impl ConnectionWebRtc {
         me.handle_signalling_message().await;
 
         let _ = spawn({
-            let signalling_client: Arc<RtcsSignalling> = me.signalling_client.clone();
+            let signalling_client: Arc<RtcSignalling> = me.signalling_client.clone();
             let my_id = me.id();
             let peer_id = me.peer_id;
             let ns = ns.clone();

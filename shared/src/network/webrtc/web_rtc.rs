@@ -23,7 +23,7 @@ use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::peer::{PeerCommunication, PeerErrors};
-use super::signalling::{RtcSignallingErrors, RtcsSignalling};
+use super::signalling::{RtcSignalling, RtcSignallingErrors};
 use super::throughput::ThroughputController;
 
 enum BroadcastOperation {
@@ -47,7 +47,7 @@ pub struct WebRtc {
     broadcast_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     peer: OnceCell<Peer>,
     connections: Mutex<HashMap<u128, OnceCell<Arc<PeerCommunication>>>>,
-    signalling_client: OnceCell<Arc<RtcsSignalling>>,
+    signalling_client: OnceCell<Arc<RtcSignalling>>,
     handle_signalling_message_join: Arc<Mutex<Option<JoinHandle<()>>>>,
     shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
     throughput_controller: Arc<ThroughputController>,
@@ -97,7 +97,7 @@ impl WebRtc {
         let _ = self.shell_runtime.set(shell_runtime);
 
         log::info!(target: "rtc", "Starting signalling client");
-        let signalling_client = RtcsSignalling::start().await?;
+        let signalling_client = RtcSignalling::start().await?;
         let _ = self.signalling_client.set(Arc::new(signalling_client));
 
         let throughput_controller = self.throughput_controller.clone();
@@ -133,7 +133,7 @@ impl WebRtc {
     }
 
     pub async fn broadcast(
-        signalling_client: &Arc<RtcsSignalling>,
+        signalling_client: &Arc<RtcSignalling>,
         my_id: u128,
         scopes: Vec<FindingScope>
     ) -> Result<(), WebRtcErrors> {
@@ -212,7 +212,6 @@ impl WebRtc {
     pub async fn handle_nearby_event(self: &Arc<Self>, core_request_id: u32) -> Result<(), WebRtcErrors> {
         let mut subscription = self.signalling_client.get().unwrap().subscribe();
         let throttle_logger = ThrottleLogger::new("handle-nearby-event".to_string(), Duration::from_secs(15));
-        let ns = "handle-nearby-event".to_string();
         while let Ok(message) = subscription.recv().await {
             let my_id = self.id();
             let peer_id = message.from_id_number();

@@ -1,6 +1,6 @@
 // Only compile these modules when "lib" feature is enabled
 
-static CURRENT_VERSION: &str = "1.0.0";
+static _CURRENT_VERSION: &str = "1.0.0";
 
 #[cfg(feature = "lib")]
 pub mod app;

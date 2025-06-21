@@ -1,7 +1,7 @@
 use chrono::Local;
 use futures_util::StreamExt;
 use geo_types::Coord;
-use h3ron::{H3Cell, Index, ToCoordinate};
+use h3ron::{H3Cell, ToCoordinate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uniffi::Enum;

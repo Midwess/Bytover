@@ -65,7 +65,7 @@ impl TransferNative {
                 session,
                 peer_request_id,
                 response,
-                thumbnail_dir
+                ..
             } => {
                 let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
                 else {

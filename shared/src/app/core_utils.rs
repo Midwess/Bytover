@@ -20,7 +20,7 @@ impl CoreCommandContextUtils for AppCommandContext {
 
 impl CoreCommandUtils for AppCommand {
     fn empty() -> Self {
-        Command::new(|it| async move {})
+        Command::new(|_| async move {})
     }
 
     fn then_render(self) -> Self {

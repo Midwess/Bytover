@@ -393,7 +393,7 @@ impl PeerCommunication {
                     data_channel.auto_close(false);
                     data_channel
                 }
-                Err(e) => {
+                Err(_) => {
                     session.lock().await.force_complete("No response from peer within timeout".to_string());
                     return Err(PeerErrors::NoResponseFromPeer);
                 }
@@ -454,10 +454,7 @@ impl PeerCommunication {
         let session = Arc::new(Mutex::new(out_session));
         self.active_sessions.lock().await.insert(session_id, Arc::downgrade(&session.clone()));
         let msg_channel = self.connection.msg_channel.get().unwrap();
-        let is_accepted = match response {
-            Response::TransferResponse(_) => true,
-            _ => false
-        };
+        let is_accepted = matches!(response, Response::TransferResponse(_));
 
         log::info!(target: "peer", "Sending response to peer {:?}", self.peer.id());
 

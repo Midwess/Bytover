@@ -28,7 +28,7 @@ impl Peer {
             "Giraffe", "Koala", "Lion", "Owl", "Panda"
         ];
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let chosen_animal = animals.choose(&mut rng).unwrap_or(&"Panda"); // Default to Panda if slice is empty (shouldn't happen here)
 
         format!("https://cdn.devlog.studio/public/animal_avatars/{chosen_animal}.png")

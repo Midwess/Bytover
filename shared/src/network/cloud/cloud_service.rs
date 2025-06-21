@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::{oneshot, OnceCell};
 
-use core_services::local_storage::file_system::{File, Folder, IOCursor};
+use core_services::local_storage::file_system::{File, Folder};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};

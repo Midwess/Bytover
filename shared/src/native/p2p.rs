@@ -60,9 +60,6 @@ impl P2PNativeExecutor {
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())
                 }
             }
-            _ => {
-                panic!("Mistake, unknown operation: {effect:?}");
-            }
         }
     }
 }
