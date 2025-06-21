@@ -1,6 +1,8 @@
+use futures_util::future::join_all;
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::OnceCell;
+use tokio::sync::{oneshot, OnceCell};
 
 use core_services::local_storage::file_system::{File, Folder, IOCursor};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
@@ -209,7 +211,45 @@ impl CloudService {
     ) -> Result<(), CloudTransferErrors> {
         let session_order_id = session.lock().await.order_id as i64;
         let mut current_upload_request = Some(first_upload_request);
-        while let Some(request) = current_upload_request {
+
+        let mut resource_size_tasks = HashMap::new();
+        let mut futures = Vec::new();
+
+        let session_guard = session.lock().await;
+
+        for resource in session_guard.resources.iter() {
+            let (tx, rx) = oneshot::channel();
+            resource_size_tasks.insert(resource.order_id, rx);
+
+            let resource_type = resource.r#type.clone();
+            let resource_path = resource.path.as_string();
+            futures.push(async move {
+                match resource_type {
+                    ResourceType::Folder => {
+                        if let Ok(folder) = Folder::new(resource_path).await {
+                            if let Ok(size) = folder.calculate_tar_size().await {
+                                let _ = tx.send(size);
+                            }
+                        }
+                    }
+                    _ => {
+                        if let Ok(file) = File::new(None, resource_path).await {
+                            if let Ok(size) = file.metadata().await.map(|it| it.size) {
+                                let _ = tx.send(size);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        drop(session_guard);
+
+        tokio::spawn(async move {
+            join_all(futures).await;
+        });
+
+        while let Some(ref request) = current_upload_request {
             if session.lock().await.is_completed() {
                 self.server.cancel_session(session_order_id).await?;
                 return Ok(());
@@ -218,7 +258,15 @@ impl CloudService {
             let order_id = request.resource_order_id as u64;
             let upload_url = request.upload_url.clone();
 
-            current_upload_request = match self.upload_resource(session, order_id, upload_url, core_request_id).await {
+            let size = match resource_size_tasks.remove(&order_id) {
+                Some(rx) => match rx.await {
+                    Ok(size) => size,
+                    Err(_) => continue
+                },
+                None => continue
+            };
+
+            current_upload_request = match self.upload_resource(session, order_id, upload_url, size, core_request_id).await {
                 Ok(_) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
@@ -259,6 +307,7 @@ impl CloudService {
         transfer_session: &Arc<Mutex<TransferSession>>,
         resource_order_id: u64,
         upload_url: String,
+        size: u64,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
         let upload_chunk_size = 1024 * 1024;
@@ -273,31 +322,23 @@ impl CloudService {
             None => return Err(CloudTransferErrors::ResourceNotFound)
         };
 
-        let (mut cursor, size) = match resource_type {
+        let mut cursor = match resource_type {
             ResourceType::Folder => {
                 let folder = Folder::new(resource_path.clone())
                     .await
                     .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                let size = folder.calculate_tar_size().await.map_err(|it| CloudTransferErrors::FileError(format!("{it:?}")))?;
-                (
-                    folder
-                        .cursor(upload_chunk_size)
-                        .await
-                        .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?,
-                    size
-                )
+                folder
+                    .cursor(upload_chunk_size)
+                    .await
+                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
             }
             _ => {
                 let file = File::new(None, resource_path.clone())
                     .await
                     .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                let size = file.metadata().await.map_err(|it| CloudTransferErrors::FileError(format!("{it:?}")))?.size;
-                (
-                    file.cursor(0, upload_chunk_size)
-                        .await
-                        .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?,
-                    size
-                )
+                file.cursor(0, upload_chunk_size)
+                    .await
+                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
             }
         };
 
