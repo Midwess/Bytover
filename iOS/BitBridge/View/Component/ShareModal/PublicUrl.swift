@@ -12,14 +12,14 @@ struct PublicUrlShareView: View {
     var body: some View {
         VStack(spacing: SpaceTheme.item.value) {
             Text("Password-protected shareable URL.")
-                .modifier(Label1())
-                .foregroundColor(Theme.PrimaryText.color.opacity(0.7))
+                .modifier(Label2())
+                .foregroundColor(Theme.PrimaryText.color.opacity(0.8))
                 .multilineTextAlignment(.leading)
 
             HStack {
                 ZStack {
                     SecureField("Enter password (optional)", text: $password)
-                        .frame(height: 22)
+                        .frame(height: SpaceTheme.screen.value)
                         .modifier(Label1())
                         .foregroundColor(Theme.PrimaryText.color)
                         .autocapitalization(.none)
@@ -33,7 +33,7 @@ struct PublicUrlShareView: View {
                         }
 
                     TextField("Enter password (optional)", text: $password)
-                        .frame(height: 22)
+                        .frame(height: SpaceTheme.screen.value)
                         .modifier(Label1())
                         .foregroundColor(Theme.PrimaryText.color)
                         .autocapitalization(.none)
@@ -46,7 +46,6 @@ struct PublicUrlShareView: View {
                             }
                         }
                 }
-                .frame(width: .infinity)
 
                 if !password.isEmpty {
                     Button(action: {

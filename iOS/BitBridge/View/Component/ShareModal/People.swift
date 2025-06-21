@@ -30,12 +30,11 @@ struct PeopleShareItem: View {
                     if let uploadSpeed = peer.display_upload_speed {
                         ZStack(alignment: .leading) {
                             Text("000000.0 MB/s")
-                                .modifier(Label1())
-                                .font(.caption)
+                                .modifier(Label2())
                                 .opacity(0)
                             HStack {
                                 Text(uploadSpeed)
-                                    .modifier(Label1())
+                                    .modifier(Label2())
                                     .foregroundColor(Theme.PrimaryText.color)
                                 ImageAsset.Upload.image
                                     .offset(x: -1)
@@ -71,7 +70,7 @@ struct PeopleShareView: View {
     @State private var nearbyPeers: [PeerViewModel] = []
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: SpaceTheme.item.value) {
             Button(action: {}) {
                 HStack {
                     Text("Find or add new people here")
@@ -80,9 +79,8 @@ struct PeopleShareView: View {
                     Spacer()
                 }
             }
-            .frame(width: .infinity, height: 22)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 20)
+            .padding(.vertical, SpaceTheme.item.value)
+            .padding(.horizontal, SpaceTheme.screen.value)
             .frame(maxWidth: .infinity)
             .background(Theme.PrimaryText.color.opacity(0.15))
             .clipShape(Capsule())
@@ -106,7 +104,7 @@ struct PeopleShareView: View {
                         }
                     }
                 }
-                .frame(minWidth: 100, minHeight: 70)
+                .frame(minWidth: 100, minHeight: 80)
                 .scrollIndicators(.hidden)
             }
         }
