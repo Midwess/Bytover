@@ -1,0 +1,26 @@
+name: Railway Deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug
+        run: |
+          echo '${{ vars.SSH_PRIVATE_KEY }}'
+      - name: Deploy to Railway
+        uses: dev-logs/deployment/.github/actions/railway_deployment@main
+        with:
+          version: ${{ github.sha }}
+          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          repository: 'dev-logs/bit-bridge'
+          deploy_branch: 'deploy'
+          ssh_key: ${{ vars.SSH_PRIVATE_KEY }}
