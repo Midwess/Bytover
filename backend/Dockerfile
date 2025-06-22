@@ -2,6 +2,9 @@
 FROM devlogstudio/rust:builder1.87.0 as builder
 WORKDIR /app
 COPY . .
+RUN ls libs
+RUN ls libs/core-services
+RUN ls libs/devlog-sdk
 RUN cargo build --release -p backend
 
 # Runtime stage
