@@ -40,16 +40,15 @@ chrono = "0.4.39"
 surreal_derive_plus = "2.2.3"
 surreal_devl = "2.2.2"
 lazy_static = "1.5.0"
-tonic-middleware = { version = "0.1.4" }
+tonic-middleware = { version = "0.3.0" }
 tokio = {version = "1.44.1", features = ["sync", "rt-multi-thread"]}
 reqwest = { version = "0.12.9", features = ["json", "native-tls-vendored", "stream"] }
 async-trait = { version = "0.1.13" }
 log = { version = "0.4.22" }
 tokio-scoped = { version = "0.2.0" }
-tonic = { version = "0.11", features = ["tls"], default-features = false }
-prost = { version = "0.12.6" }
+tonic = { version = "0.13.1" }
+prost = { version = "0.13.5" }
 uniffi = { version = "0.29.0" }
-ping = { version = "0.5.2" }
 md5 = { version = "0.7.0" }
 zip = { version = "3.0.0" }
 tokio-tungstenite = { version = "0.26.2" }
@@ -63,14 +62,13 @@ stunclient = "0.4.1"
 h3ron = { version = "0.18.0" }
 geo-types = "0.7.16"
 bytes = "1.10.1"
-debounced = "0.2.0"
-futures-channel = "0.3.31"
 ulid = "1.2.1"
 flate2 = "1.1.1"
 tar = { git = "https://github.com/dev-logs/tar-rs.git" }
 mime_guess = "2.0.5"
 aws-smithy-async = "1.2.5"
 tokio-util = "0.7.15"
+tonic-web-wasm-client = "0.7.1"
 
 [patch.crates-io]
 affinitypool = { git = "https://github.com/dev-logs/affinitypool.git", version = "0.3.1" }

@@ -10,8 +10,6 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use serde::{Deserialize, Serialize};
 
-use super::nearby::NearbyEvent;
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
     pub device: Option<DeviceInfo>,

@@ -1,7 +1,7 @@
 use schema::devlog::auth_gateway::rpc::MeRequest;
+use tonic::body::Body;
 use tonic::codegen::http::Request;
 use tonic::metadata::MetadataValue;
-use tonic::transport::Body;
 use tonic::{async_trait, Status};
 use tonic_middleware::RequestInterceptor;
 
@@ -28,11 +28,11 @@ impl RequestInterceptor for AuthInterceptor {
         match req.headers().get("authorization") {
             Some(token) => {
                 let di_container = DiContainer::instance().await;
-                let mut user_service = di_container.get_user_service().await?;
+                let mut user_service = di_container.get_user_service().await.map_err(|e| Status::internal(e.to_string()))?;
                 let request_body = MeRequest { conditions: vec![] };
 
                 let mut request = tonic::Request::new(request_body);
-                let token_str = token.to_str().unwrap().to_owned();
+                let token_str = token.to_str().map_err(|_| Status::invalid_argument("Invalid token"))?.to_owned();
                 request.metadata_mut().insert("authorization", MetadataValue::try_from(token_str).unwrap());
 
                 let user_info = user_service.me(request).await?;

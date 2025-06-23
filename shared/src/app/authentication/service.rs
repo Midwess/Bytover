@@ -8,7 +8,6 @@ use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
-use std::collections::HashMap;
 use url::Url;
 
 pub struct AuthenticationService {}
@@ -62,14 +61,12 @@ impl AuthenticationService {
             log::warn!("The redirect url is invalid: {redirect_url}");
             return;
         };
-        
-        let Some(token) = url
-            .query_pairs().find(|it| it.0 == "access_token")
-            .map(|it| it.1.to_string()) else {
-            log::info!("The redirect url does not contain access token");   
+
+        let Some(token) = url.query_pairs().find(|it| it.0 == "access_token").map(|it| it.1.to_string()) else {
+            log::info!("The redirect url does not contain access token");
             return;
         };
-        
+
         let token = Token {
             order_id: gen_id().await,
             value: token

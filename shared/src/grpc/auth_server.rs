@@ -1,29 +1,26 @@
-use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
-use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
-use schema::value::auth_method::AuthMethod;
-use schema::value::device::RegisteringDevice;
-use std::time::Duration;
-use tokio::time::timeout;
-use tonic::transport::Channel;
-use tonic::Request;
-
 use crate::config::get_gateway_grpc_url;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::errors::NetworkError;
 use crate::grpc::auth_provider::AuthProvider;
-use crate::network::grpc_channel::GrpcChannel;
+use crate::network::grpc_channel::GrpcClient;
+use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
+use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
+use schema::value::auth_method::AuthMethod;
+use schema::value::device::RegisteringDevice;
+use tokio::task::spawn_local;
+use tonic::Request;
 
 pub struct AuthServer {
-    channel: GrpcChannel,
+    client: GrpcClient,
     auth_provider: AuthProvider
 }
 
 impl AuthServer {
     pub async fn new(auth_provider: AuthProvider) -> Self {
         Self {
-            channel: GrpcChannel::new(Channel::builder(get_gateway_grpc_url().parse().unwrap()).timeout(Duration::from_millis(12000))),
+            client: GrpcClient::new(get_gateway_grpc_url()),
             auth_provider
         }
     }
@@ -31,7 +28,7 @@ impl AuthServer {
 
 impl AuthServer {
     pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, NetworkError> {
-        let channel = self.channel.connect().await?;
+        let client = self.client.connect().await?;
 
         let request = SigninRequest {
             app_name: "BitBridge".to_string(),
@@ -44,26 +41,26 @@ impl AuthServer {
             }
         };
 
-        let mut auth_rpc = AuthServiceClient::new(channel);
-        let response = auth_rpc.signin(request).await?;
+        let mut auth_rpc = AuthServiceClient::new(client);
+        let response = spawn_local(async move { auth_rpc.signin(request).await.map(|it| it.into_inner()) })
+            .await
+            .unwrap()?;
 
-        Ok(response.get_ref().signin_url.clone())
+        Ok(response.signin_url.clone())
     }
 
     pub async fn get_me(&self) -> Result<User, NetworkError> {
-        let channel = self.channel.connect().await?;
+        let client = self.client.connect().await?;
 
-        let request = MeRequest { conditions: vec![] };
+        let req = MeRequest { conditions: vec![] };
+        let mut request = Request::new(req);
 
         // Create request and add bearer token
-        let mut req = Request::new(request);
-        self.auth_provider.with_auth(&mut req).await?;
+        self.auth_provider.with_auth(&mut request).await?;
 
-        log::info!("Requesting user info 2");
-        let mut user_rpc = UserServiceClient::new(channel);
-        let response = user_rpc.me(req).await?;
-        log::info!("Requesting user info 3");
-        let response = response.get_ref();
+        let mut user_rpc = UserServiceClient::new(client);
+        let response = spawn_local(async move { user_rpc.me(request).await.map(|it| it.into_inner()) }).await.unwrap()?;
+
         Ok(User {
             email: response.user.email.clone(),
             name: response.user.display_name.clone(),

@@ -1,13 +1,9 @@
-use std::net::ToSocketAddrs;
-use std::time::{Duration, Instant};
 use futures_util::TryFutureExt;
 use serde::{Deserialize, Serialize};
-use tokio::net::UdpSocket;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 use crate::errors::NetworkError;
-use stunclient::StunClient;
-use surreal_derive_plus::SurrealDerive;
 
 #[async_trait::async_trait]
 pub trait NetworkModule {
@@ -60,7 +56,8 @@ impl InternetConnection {
         for _ in 0..MAX_RETRIES {
             if let Ok(response) = client.get("https://network-info.up.railway.app").send().await {
                 if response.status().is_success() {
-                    let network: NetworkResponse = response.json().await.map_err(|it| NetworkError::Network("Bad response format".to_owned()))?;
+                    let network: NetworkResponse =
+                        response.json().await.map_err(|it| NetworkError::Network("Bad response format".to_owned()))?;
 
                     return Ok(network.ip);
                 }
@@ -79,8 +76,7 @@ impl InternetConnection {
         }
 
         let ns = "internet-check";
-        let addr =
-            "https://network-info.up.railway.app";
+        let addr = "https://network-info.up.railway.app";
         let client = reqwest::Client::new();
 
         match client.get(addr).timeout(Duration::from_millis(3000)).send().await {
