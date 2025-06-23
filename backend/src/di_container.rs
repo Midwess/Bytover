@@ -33,7 +33,7 @@ impl DiContainer {
     pub async fn new() -> Self {
         let devlog_sdk = DevlogSdk::new();
         devlog_sdk.enable_system_db().await;
-        devlog_sdk.enable_db("bitbridge".to_owned(), 0, 250).await;
+        devlog_sdk.enable_db("bitbridge".to_owned(), 10, 250).await;
 
         init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
 
