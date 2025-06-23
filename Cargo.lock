@@ -5727,7 +5727,6 @@ dependencies = [
  "tokio-tungstenite 0.26.2",
  "tokio-util",
  "tonic 0.13.1",
- "tonic-web-wasm-client",
  "ulid",
  "uniffi",
  "url",
@@ -6785,31 +6784,6 @@ dependencies = [
  "futures-util",
  "tonic 0.13.1",
  "tower 0.4.13",
-]
-
-[[package]]
-name = "tonic-web-wasm-client"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66e3bb7acca55e6790354be650f4042d418fcf8e2bc42ac382348f2b6bf057e5"
-dependencies = [
- "base64 0.22.1",
- "byteorder",
- "bytes",
- "futures-util",
- "http 1.2.0",
- "http-body 1.0.1",
- "http-body-util",
- "httparse",
- "js-sys",
- "pin-project",
- "thiserror 2.0.12",
- "tonic 0.13.1",
- "tower-service",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-streams",
- "web-sys",
 ]
 
 [[package]]

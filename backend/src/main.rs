@@ -61,7 +61,6 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         .routes(vec![
             GatewayRouteBuilder::new()
                 .grpc()
-                .enable_web()
                 .path("~/devlog.bitbridge.*")
                 .strip_path(false)
                 .public(true)

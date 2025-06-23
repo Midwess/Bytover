@@ -9,7 +9,6 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
-use tokio::task::spawn_local;
 use tonic::Request;
 
 pub struct AuthServer {
@@ -28,7 +27,7 @@ impl AuthServer {
 
 impl AuthServer {
     pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, NetworkError> {
-        let client = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let request = SigninRequest {
             app_name: "BitBridge".to_string(),
@@ -41,16 +40,14 @@ impl AuthServer {
             }
         };
 
-        let mut auth_rpc = AuthServiceClient::new(client);
-        let response = spawn_local(async move { auth_rpc.signin(request).await.map(|it| it.into_inner()) })
-            .await
-            .unwrap()?;
+        let mut auth_rpc = AuthServiceClient::new(connection);
+        let response = auth_rpc.signin(request).await.map(|it| it.into_inner())?;
 
         Ok(response.signin_url.clone())
     }
 
     pub async fn get_me(&self) -> Result<User, NetworkError> {
-        let client = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let req = MeRequest { conditions: vec![] };
         let mut request = Request::new(req);
@@ -58,8 +55,8 @@ impl AuthServer {
         // Create request and add bearer token
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut user_rpc = UserServiceClient::new(client);
-        let response = spawn_local(async move { user_rpc.me(request).await.map(|it| it.into_inner()) }).await.unwrap()?;
+        let mut user_rpc = UserServiceClient::new(connection);
+        let response = user_rpc.me(request).await.map(|it| it.into_inner())?;
 
         Ok(User {
             email: response.user.email.clone(),

@@ -10,7 +10,6 @@ use schema::devlog::bitbridge::{
     CreatePublicTransferSessionRequest,
     PublicTransferSessionMessage
 };
-use tokio::task::spawn_local;
 use tonic::Request;
 
 use crate::config::get_gateway_grpc_url;
@@ -35,7 +34,7 @@ impl CloudServer {
         &self,
         password: Option<String>
     ) -> Result<PublicTransferSessionMessage, NetworkError> {
-        let channel = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let request_body = CreatePublicTransferSessionRequest { password };
 
@@ -43,10 +42,8 @@ impl CloudServer {
 
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut cloud_rpc = BitBridgeCloudServiceClient::new(channel);
-        let response = spawn_local(async move { cloud_rpc.create_public_transfer_session(request).await.map(|it| it.into_inner()) })
-            .await
-            .unwrap()?;
+        let mut cloud_rpc = BitBridgeCloudServiceClient::new(connection);
+        let response = cloud_rpc.create_public_transfer_session(request).await.map(|it| it.into_inner())?;
 
         Ok(response.session)
     }
@@ -56,7 +53,7 @@ impl CloudServer {
         session_order_id: i64,
         resources: Vec<CloudResourceMessage>
     ) -> Result<AddResourcesResponse, NetworkError> {
-        let channel = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let request_body = AddResourcesRequest {
             session_order_id,
@@ -65,10 +62,8 @@ impl CloudServer {
 
         let mut request = Request::new(request_body);
         self.auth_provider.with_auth(&mut request).await?;
-        let mut cloud_rpc = BitBridgeCloudServiceClient::new(channel);
-        let response = spawn_local(async move { cloud_rpc.add_resources(request).await.map(|it| it.into_inner()) })
-            .await
-            .unwrap()?;
+        let mut cloud_rpc = BitBridgeCloudServiceClient::new(connection);
+        let response = cloud_rpc.add_resources(request).await.map(|it| it.into_inner())?;
 
         Ok(response)
     }
@@ -80,7 +75,7 @@ impl CloudServer {
         status: UploadStatus,
         failed_reason: Option<String>
     ) -> Result<Option<ClientUploadRequest>, NetworkError> {
-        let channel = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let request_body = CommitFileUploadRequest {
             session_order_id,
@@ -93,16 +88,14 @@ impl CloudServer {
 
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut cloud_rpc = BitBridgeCloudServiceClient::new(channel);
-        let response = spawn_local(async move { cloud_rpc.commit_file_upload(request).await.map(|it| it.into_inner()) })
-            .await
-            .unwrap()?;
+        let mut cloud_rpc = BitBridgeCloudServiceClient::new(connection);
+        let response = cloud_rpc.commit_file_upload(request).await.map(|it| it.into_inner())?;
 
         Ok(response.next_upload_request)
     }
 
     pub async fn cancel_session(&self, session_order_id: i64) -> Result<(), NetworkError> {
-        let channel = self.client.connect().await?;
+        let connection = self.client.connect().await?;
 
         let request_body = CancelSessionRequest { session_order_id };
 
@@ -110,10 +103,8 @@ impl CloudServer {
 
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut cloud_rpc = BitBridgeCloudServiceClient::new(channel);
-        let _ = spawn_local(async move { cloud_rpc.cancel_session(request).await.map(|it| it.into_inner()) })
-            .await
-            .unwrap()?;
+        let mut cloud_rpc = BitBridgeCloudServiceClient::new(connection);
+        let _ = cloud_rpc.cancel_session(request).await.map(|it| it.into_inner())?;
 
         Ok(())
     }
