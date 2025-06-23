@@ -1,4 +1,6 @@
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
+use tokio::time::error::Elapsed;
 use uniffi::Enum;
 
 use crate::network::cloud::cloud_service::CloudTransferErrors;
@@ -22,7 +24,7 @@ pub enum NetworkError {
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
     #[error("Please check your internet connection")]
-    Network(String)
+    Network(String),
 }
 
 impl From<tonic::transport::Error> for NetworkError {

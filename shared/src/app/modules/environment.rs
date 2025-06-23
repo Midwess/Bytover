@@ -60,7 +60,6 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     ctx.notify_shell(CoreOperation::Notified(AppEvent::Environment(
                         EnvironmentEvent::UpdateWorkDir { workdir }
                     )));
-                    ctx.request_from_shell(CoreOperation::Notified(AppEvent::Nearby(NearbyEvent::Launch()))).await;
                 })
                 .then(Command::done())
             }

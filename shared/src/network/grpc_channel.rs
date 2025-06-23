@@ -1,7 +1,10 @@
+use std::future::poll_fn;
+use std::pin::Pin;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
-use tonic::transport::{Channel, Endpoint};
+use tonic::client::GrpcService;
+use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 
 use crate::errors::NetworkError;
 
@@ -22,7 +25,20 @@ impl GrpcChannel {
         }
     }
 
+    pub async fn reconnect(&self) -> Result<Channel, NetworkError> {
+        NetworkModule::connect(self, Duration::from_secs(5)).await?;
+        Ok(self.channel.lock().await.clone().unwrap())
+    }
+
     pub async fn connect(&self) -> Result<Channel, NetworkError> {
+        if self.is_connected().await {
+            return Ok(self.channel.lock().await.clone().unwrap())
+        }
+
+        if !self.internet_connection.is_connected().await {
+            return Err(NetworkError::Network("No internet".to_string()));
+        }
+
         NetworkModule::connect(self, Duration::from_secs(5)).await?;
         Ok(self.channel.lock().await.clone().unwrap())
     }
@@ -31,23 +47,24 @@ impl GrpcChannel {
 #[async_trait::async_trait]
 impl NetworkModule for GrpcChannel {
     async fn is_connected(&self) -> bool {
-        if !self.internet_connection.is_connected().await {
-            return false;
+        if let Some(mut channel) = self.channel.lock().await.clone() {
+            return poll_fn(|cx| Pin::new(&mut channel).poll_ready(cx)).await.is_ok()
         }
 
-        self.channel.lock().await.is_some()
+        false
     }
 
     async fn connect(&self, timeout: Duration) -> Result<(), NetworkError> {
-        if self.is_connected().await {
-            return Ok(());
-        }
+        let tls = ClientTlsConfig::new()
+            .domain_name("grpc.devlog.studio");
 
-        if !self.internet_connection.is_connected().await {
-            return Err(NetworkError::Network("No internet".to_string()));
-        }
+        let mut channel = self.endpoint.clone()
+            .connect_timeout(timeout)
+            .timeout(Duration::from_secs(10))
+            .connect()
+            .await?;
 
-        let channel = self.endpoint.clone().connect_timeout(timeout).connect().await?;
+        poll_fn(|cx| Pin::new(&mut channel).poll_ready(cx)).await?;
 
         self.channel.lock().await.replace(channel);
 

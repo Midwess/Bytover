@@ -12,7 +12,7 @@ struct Heading1: ViewModifier {
     func body(content: Content) -> some View {
         content
             .lineSpacing(12)
-            .font(FontTheme.H2Heading)
+            .font(FontTheme.H1Heading)
     }
 }
 

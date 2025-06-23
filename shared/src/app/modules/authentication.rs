@@ -53,7 +53,6 @@ impl AppModule<BitBridge> for AuthenticationModule {
             AuthenticationEvent::SignUp => Command::done(),
             AuthenticationEvent::OnSignInSuccess { user } => {
                 model.authentication.user.replace(user);
-                log::info!("Signin success");
                 Command::new(|ctx| async move {
                     ctx.send_event(AppEvent::Nearby(NearbyEvent::Launch()));
                 })

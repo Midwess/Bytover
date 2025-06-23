@@ -4,6 +4,7 @@ use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use std::time::Duration;
+use tokio::time::timeout;
 use tonic::transport::Channel;
 use tonic::Request;
 
@@ -58,8 +59,10 @@ impl AuthServer {
         let mut req = Request::new(request);
         self.auth_provider.with_auth(&mut req).await?;
 
+        log::info!("Requesting user info 2");
         let mut user_rpc = UserServiceClient::new(channel);
         let response = user_rpc.me(req).await?;
+        log::info!("Requesting user info 3");
         let response = response.get_ref();
         Ok(User {
             email: response.user.email.clone(),

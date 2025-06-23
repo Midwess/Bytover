@@ -46,7 +46,7 @@ reqwest = { version = "0.12.9", features = ["json", "native-tls-vendored", "stre
 async-trait = { version = "0.1.13" }
 log = { version = "0.4.22" }
 tokio-scoped = { version = "0.2.0" }
-tonic = { version = "0.11", default-features = false }
+tonic = { version = "0.11", features = ["tls"], default-features = false }
 prost = { version = "0.12.6" }
 uniffi = { version = "0.29.0" }
 ping = { version = "0.5.2" }

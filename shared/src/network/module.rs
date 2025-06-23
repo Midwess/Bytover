@@ -1,17 +1,19 @@
 use std::net::ToSocketAddrs;
 use std::time::{Duration, Instant};
-
+use futures_util::TryFutureExt;
+use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
 use crate::errors::NetworkError;
 use stunclient::StunClient;
+use surreal_derive_plus::SurrealDerive;
 
 #[async_trait::async_trait]
 pub trait NetworkModule {
     // Check if the module is connected to the upstream
     async fn is_connected(&self) -> bool;
-    // The module could try to reconnect it self, we need to wait until it is connected
+    // The module could try to reconnect it's self, we need to wait until it is connected
     async fn wait_until_connected(&self, timeout: Duration) {
         let elapsed = Instant::now();
         while elapsed.elapsed() < timeout {
@@ -22,13 +24,18 @@ pub trait NetworkModule {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
-    // Call this method will cause module to reconnect to the upstream
+    // Call this method will cause this module to reconnect to the upstream
     // Even if it is already connected
     async fn connect(&self, timeout: Duration) -> Result<(), NetworkError>;
 }
 
 pub struct InternetConnection {
     last_passed: Mutex<Instant>
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NetworkResponse {
+    ip: String
 }
 
 impl Default for InternetConnection {
@@ -48,39 +55,18 @@ impl InternetConnection {
         const MAX_RETRIES: usize = 30;
         const RETRY_DELAY_MS: u64 = 500;
 
-        let Some(stun_addr) = "stun.l.google.com:19302".to_socket_addrs().ok().as_mut().and_then(|it| it.find(|x| x.is_ipv4())) else {
-            return Err(NetworkError::Network("Failed to get public IP address".to_string()));
-        };
+        let client = reqwest::Client::new();
 
-        for attempt in 1..=MAX_RETRIES {
-            let socket = match UdpSocket::bind("0.0.0.0:0").await {
-                Ok(s) => s,
-                Err(e) => {
-                    log::warn!(target: "internet-check", "Attempt {}/{}: Failed to bind UDP socket: {}", attempt, MAX_RETRIES, e);
-                    if attempt == MAX_RETRIES {
-                        return Err(NetworkError::Network(format!(
-                            "Failed to bind UDP socket after {MAX_RETRIES} attempts: {e}"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
-                    continue;
-                }
-            };
+        for _ in 0..MAX_RETRIES {
+            if let Ok(response) = client.get("https://network-info.up.railway.app").send().await {
+                if response.status().is_success() {
+                    let network: NetworkResponse = response.json().await.map_err(|it| NetworkError::Network("Bad response format".to_owned()))?;
 
-            let client = StunClient::new(stun_addr);
-
-            match client.query_external_address_async(&socket).await {
-                Ok(addr) => return Ok(format!("{}", addr.ip())),
-                Err(e) => {
-                    log::warn!(target: "internet-check", "Attempt {}/{}: Failed to get public IP: {}", attempt, MAX_RETRIES, e);
-                    if attempt == MAX_RETRIES {
-                        return Err(NetworkError::Network(format!(
-                            "Failed to get public IP after {MAX_RETRIES} attempts: {e}"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
+                    return Ok(network.ip);
                 }
             }
+
+            tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
         }
 
         Err(NetworkError::Network("Failed to get public IP address".to_string()))
@@ -93,14 +79,11 @@ impl InternetConnection {
         }
 
         let ns = "internet-check";
-        // This endpoint is located in Digitalocean
         let addr =
-            "https://faas-sgp1-18bc02ac.doserverless.co/api/v1/web/fn-40c6321e-1ea6-4748-bfec-44cee2c996d5/default/network-check";
+            "https://network-info.up.railway.app";
         let client = reqwest::Client::new();
 
-        // Timeout is 5 seconds seem too much, but it is neccessary for cross region connection
-        // And for Digital ocean sometime has a cold start which take more time than usual
-        match client.get(addr).timeout(Duration::from_millis(5000)).send().await {
+        match client.get(addr).timeout(Duration::from_millis(3000)).send().await {
             Ok(_) => {
                 *last_passed = Instant::now();
                 true

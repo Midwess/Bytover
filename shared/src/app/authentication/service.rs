@@ -9,13 +9,22 @@ use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
 use std::collections::HashMap;
+use url::Url;
 
 pub struct AuthenticationService {}
 
 impl AuthenticationService {
     pub async fn update_signin_session(&self, ctx: AppCommandContext) {
         // Call API to update the user info
-        let mut user = RpcOperation::get_me().into_future(ctx.clone()).await.ok();
+        log::info!(target: "auth", "Updating sign in session");
+        let mut user = match RpcOperation::get_me().into_future(ctx.clone()).await {
+            Ok(user) => Some(user),
+            Err(e) => {
+                log::error!(target: "auth", "Failed to get user info: {:?}", e);
+                None
+            }
+        };
+
         if user.is_none() {
             let session = SessionOperation::get_session().into_future(ctx.clone()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {
@@ -49,20 +58,21 @@ impl AuthenticationService {
     pub async fn handle_auth_response(&self, redirect_url: String, ctx: AppCommandContext) {
         let query_string = redirect_url.split('?').nth(1).unwrap();
 
-        let params: HashMap<String, String> = query_string
-            .split('&')
-            .filter_map(|pair| {
-                let mut parts = pair.split('=');
-                match (parts.next(), parts.next()) {
-                    (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                    _ => None
-                }
-            })
-            .collect();
-
+        let Ok(url) = Url::parse(redirect_url.as_str()) else {
+            log::warn!("The redirect url is invalid: {redirect_url}");
+            return;
+        };
+        
+        let Some(token) = url
+            .query_pairs().find(|it| it.0 == "access_token")
+            .map(|it| it.1.to_string()) else {
+            log::info!("The redirect url does not contain access token");   
+            return;
+        };
+        
         let token = Token {
             order_id: gen_id().await,
-            value: params.get("access_token").unwrap().to_string()
+            value: token
         };
 
         if token.value.is_empty() {
@@ -70,7 +80,9 @@ impl AuthenticationService {
             return;
         }
 
+        log::info!("Saving token");
         SessionOperation::save_token(token).into_future(ctx.clone()).await;
+        log::info!("Updating user");
         self.update_signin_session(ctx).await;
     }
 }
