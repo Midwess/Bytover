@@ -18,6 +18,7 @@ pub struct AuthServer {
 
 impl AuthServer {
     pub async fn new(auth_provider: AuthProvider) -> Self {
+        log::info!("Creating AuthServer at {}", get_gateway_grpc_url());
         Self {
             client: GrpcClient::new(get_gateway_grpc_url()),
             auth_provider

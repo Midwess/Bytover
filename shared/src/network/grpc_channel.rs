@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 use tonic::client::GrpcService;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, ClientTlsConfig};
 
 use crate::errors::NetworkError;
 
@@ -54,12 +54,18 @@ impl NetworkModule for GrpcClient {
     }
 
     async fn connect(&self, timeout: Duration) -> Result<(), NetworkError> {
-        let builder = Channel::builder(self.endpoint.parse().unwrap())
+        let mut builder = Channel::builder(self.endpoint.parse().unwrap())
             .connect_timeout(timeout)
             .timeout(Duration::from_millis(12000));
 
-        let channel = builder.connect().await?;
+        if self.endpoint.starts_with("https") {
+            let tls = ClientTlsConfig::new()
+                .with_webpki_roots();
 
+            builder = builder.tls_config(tls)?;
+        };
+
+        let channel = builder.connect().await?;
         self.channel.lock().await.replace(channel);
 
         Ok(())

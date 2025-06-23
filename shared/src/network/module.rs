@@ -1,4 +1,3 @@
-use futures_util::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -57,7 +56,7 @@ impl InternetConnection {
             if let Ok(response) = client.get("https://network-info.up.railway.app").send().await {
                 if response.status().is_success() {
                     let network: NetworkResponse =
-                        response.json().await.map_err(|it| NetworkError::Network("Bad response format".to_owned()))?;
+                        response.json().await.map_err(|_| NetworkError::Network("Bad response format".to_owned()))?;
 
                     return Ok(network.ip);
                 }

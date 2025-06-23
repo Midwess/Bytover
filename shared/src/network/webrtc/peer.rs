@@ -64,7 +64,6 @@ pub enum PeerErrors {
 // A higher level that utilize the WebRtc connection
 // To develop a transferable peer-to-peer logic
 pub struct PeerCommunication {
-    mine: PeerEntity,
     pub peer: PeerEntity,
     connection: Arc<ConnectionWebRtc>,
     shell_runtime: Arc<dyn ShellRuntime>,
@@ -119,7 +118,6 @@ impl PeerCommunication {
 
         let me = Arc::new(Self {
             peer_event_request_id: OnceCell::new(),
-            mine: current_peer,
             peer,
             connection,
             shell_runtime: shell_runtime.clone(),

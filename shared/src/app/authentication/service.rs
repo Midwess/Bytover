@@ -55,8 +55,6 @@ impl AuthenticationService {
     }
 
     pub async fn handle_auth_response(&self, redirect_url: String, ctx: AppCommandContext) {
-        let query_string = redirect_url.split('?').nth(1).unwrap();
-
         let Ok(url) = Url::parse(redirect_url.as_str()) else {
             log::warn!("The redirect url is invalid: {redirect_url}");
             return;
