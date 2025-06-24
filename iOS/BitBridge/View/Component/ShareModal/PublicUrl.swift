@@ -7,6 +7,7 @@ struct PublicUrlShareView: View {
     @State private var password: String = ""
     @State private var isObfuscated: Bool = true
     @State private var cloud: CloudSession?
+    @State private var showUrlSharingModel: Bool = false
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
@@ -16,7 +17,18 @@ struct PublicUrlShareView: View {
             }
 
             if cloud != nil {
-                accessUrl
+                Button(action: {
+                    if !(cloud?.access_url?.isEmpty ?? true) {
+                        showUrlSharingModel = true
+                    }
+                }) {
+                    accessUrl
+                        .sheet(isPresented: $showUrlSharingModel) {
+                            if let urlString = cloud?.access_url, let url = URL(string: urlString) {
+                                ActivityView(activityItems: [url])
+                            }
+                        }
+                }
             }
 
             Spacer()
