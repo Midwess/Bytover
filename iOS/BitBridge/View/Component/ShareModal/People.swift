@@ -107,6 +107,7 @@ struct PeopleShareView: View {
                 .frame(minWidth: 100, minHeight: 80)
                 .scrollIndicators(.hidden)
             }
+            Spacer()
         }
         .onAppearAndReceive(self.core.nearby, perform: { value in
             if value?.peers.count ?? 0 != nearbyPeers.count {

@@ -150,6 +150,9 @@ enum ImageAsset: String {
     case Owl
     case Download
     case Upload
+    case Edit
+    case Link
+    case Lock
 
     var image: Image {
         get {

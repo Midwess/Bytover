@@ -83,6 +83,16 @@ impl TransferNative {
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
                 log::info!(target: "native", "Cancelling session: {:?}", session_id);
+
+                if self.cloud_service.cancel(session_id).await {
+                    return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);
+                }
+
+                let Some(peer_id) = peer_id else {
+                    log::error!(target: "native", "Peer ID is not provided");
+                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
+                };
+
                 let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
                 else {
                     return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());

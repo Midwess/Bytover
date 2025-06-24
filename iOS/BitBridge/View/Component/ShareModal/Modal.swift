@@ -73,10 +73,11 @@ struct ShareModal: View {
                         .foregroundStyle(Theme.PrimaryText.color.opacity(0.16))
                     )
 
-                VStack(alignment: .leading, spacing: SpaceTheme.cohesive.value) {
+                VStack(alignment: .leading, spacing: SpaceTheme.cohesive.halfValue) {
                     Text("Share to")
                         .modifier(Label2())
                         .foregroundColor(Theme.PrimaryText.color.opacity(0.8))
+
                     HStack(spacing: SpaceTheme.cohesive.halfValue) {
                         Menu(selection.name) {
                             Button(TransferMethodSelection.device.name, action: {

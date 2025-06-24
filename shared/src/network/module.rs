@@ -53,7 +53,7 @@ impl InternetConnection {
         let client = reqwest::Client::new();
 
         for _ in 0..MAX_RETRIES {
-            if let Ok(response) = client.get("https://network-info.up.railway.app").send().await {
+            if let Ok(response) = client.get("https://network-info.devlog.studio").send().await {
                 if response.status().is_success() {
                     let network: NetworkResponse =
                         response.json().await.map_err(|_| NetworkError::Network("Bad response format".to_owned()))?;
@@ -75,10 +75,10 @@ impl InternetConnection {
         }
 
         let ns = "internet-check";
-        let addr = "https://network-info.up.railway.app";
+        let addr = "https://network-info.devlog.studio";
         let client = reqwest::Client::new();
 
-        match client.get(addr).timeout(Duration::from_millis(3000)).send().await {
+        match client.get(addr).timeout(Duration::from_millis(5000)).send().await {
             Ok(_) => {
                 *last_passed = Instant::now();
                 true

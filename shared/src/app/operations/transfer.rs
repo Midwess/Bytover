@@ -24,7 +24,7 @@ pub enum TransferOperation {
         peer_request_id: String,
         response: Response
     },
-    CancelSession(u128, u64)
+    CancelSession(Option<u128>, u64)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -48,7 +48,10 @@ impl TransferOperation {
         })
     }
 
-    pub fn cancel_session(peer_id: u128, session_id: u64) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
+    pub fn cancel_session(
+        peer_id: Option<u128>,
+        session_id: u64
+    ) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(peer_id, session_id))).map(
             |it| match it {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled) => Ok(()),

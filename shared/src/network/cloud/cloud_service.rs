@@ -100,6 +100,8 @@ impl CloudService {
         let session = Arc::new(Mutex::new(session));
         *session_guard = Arc::downgrade(&session);
 
+        drop(session_guard);
+
         let session_guard = session.lock().await;
         let session_order_id = session_guard.order_id;
         let resources = session_guard
@@ -310,7 +312,7 @@ impl CloudService {
         size: u64,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
-        let upload_chunk_size = 1024 * 1024;
+        let upload_chunk_size = 512 * 1024;
         let max_buffer_size = upload_chunk_size * 5;
         let resource_type = match transfer_session.lock().await.resources.iter().find(|it| it.order_id == resource_order_id) {
             Some(resource) => resource.r#type.clone(),
@@ -367,7 +369,7 @@ impl CloudService {
             )))
         });
 
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(800));
+        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(100));
         log::info!("Uploading resource {} size = {}", resource_path, size);
         let mut total_sent = 0;
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
@@ -409,5 +411,25 @@ impl CloudService {
         }
 
         Ok(())
+    }
+
+    pub async fn cancel(&self, session_id: u64) -> bool {
+        let session_guard = self.active_session.lock().await.clone();
+        if let Some(session) = session_guard.upgrade() {
+            let mut session = session.lock().await;
+            if session.order_id == session_id {
+                log::info!(target: "cloud", "Cancelling cloud session: {:?}", session_id);
+                session.cancel();
+                drop(session);
+
+                if let Err(e) = self.server.cancel_session(session_id as i64).await {
+                    log::error!("Failed to cancel session: {:?}", e);
+                }
+
+                return true;
+            }
+        }
+
+        false
     }
 }

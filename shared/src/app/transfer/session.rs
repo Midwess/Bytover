@@ -165,7 +165,7 @@ impl TransferProgress {
             self.bytes_sec_counter = bytes_count;
         }
 
-        self.bytes_per_second = (self.bytes_sec_counter as f64 / (elapsed.max(1) as f64 / 1000.0)).round() as u64;
+        self.bytes_per_second = self.bytes_sec_counter;
 
         if self.percentage() == 1.0 {
             self.success();

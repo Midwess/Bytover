@@ -167,23 +167,25 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 };
 
-                if session.is_completed() {
+                if session.is_completed() && session.target.is_peer() {
                     return Command::new(|it| async move {
                         DialogOperation::toast("Session is already completed".to_string()).into_future(it.clone()).await;
                     });
                 }
 
                 Command::new(|it| async move {
-                    let confirmation = DialogOperation::alert(AlertDialog::confirmation(
-                        "Cancel the transfer ?".to_string(),
-                        "Yes".to_string(),
-                        Some("No".to_string())
-                    ))
-                    .into_future(it.clone())
-                    .await;
+                    if !session.is_completed() {
+                        let confirmation = DialogOperation::alert(AlertDialog::confirmation(
+                            "Cancel the transfer ?".to_string(),
+                            "Yes".to_string(),
+                            Some("No".to_string())
+                        ))
+                        .into_future(it.clone())
+                        .await;
 
-                    if !confirmation {
-                        return;
+                        if !confirmation {
+                            return;
+                        }
                     }
 
                     let transfer_service = DiContainer::get_instance().get_transfer_service();
@@ -575,7 +577,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Some(CloudSession {
-                    display_download_speed: match access_url.is_some() {
+                    display_download_speed: match access_url.is_none() {
                         true => "Initializing...".to_owned(),
                         false => it.status().to_string()
                     },

@@ -210,7 +210,7 @@ struct ShareButton: View {
             .buttonStyle(PressableButtonStyle())
             .sheet(isPresented: $showShareModal) {
                 ShareModal()
-                    .presentationDetents([.height(shareModalContentHeight), .medium])
+                    .presentationDetents([.fraction(0.42), .medium])
                     .presentationCornerRadius(36)
                     .presentationBackground(.clear)
                     .background {

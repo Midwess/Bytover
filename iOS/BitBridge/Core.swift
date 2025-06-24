@@ -735,7 +735,7 @@ class CoreMock: Core {
             transfer_method_selection: .device,
             nearby_peers: [],
             received_sessions: [receive_session1, receive_session2, receive_session3],
-            cloud_session: nil
+            cloud_session: CloudSession(access_url: "https://bitbridge.devlog.studio/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
         ))
 
         // Add selected resources

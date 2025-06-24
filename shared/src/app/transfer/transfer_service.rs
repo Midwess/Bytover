@@ -53,7 +53,7 @@ impl TransferService {
         if !transfer_session.is_completed() {
             log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
-            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id().unwrap(), transfer_session.order_id)
+            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)
                 .into_future(cmd.clone())
                 .await
             {
@@ -211,6 +211,12 @@ impl TransferService {
         }
 
         log::info!(target: "transfer", "Transfer session completed");
+
+        // We not remove the public transfer, since user need to see the information
+        // after transfer completed.
+        if transfer_session.target.is_public() {
+            return;
+        }
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
