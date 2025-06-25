@@ -1,0 +1,18 @@
+[Trait, WithForeign]
+interface ShellRuntime {
+    [Async]
+    void msg_from_native(bytes event);
+};
+
+namespace shared {
+  bytes process_event(bytes msg);
+  bytes handle_response(u32 id, bytes res);
+  bytes view();
+};
+
+interface NativeProcessor {
+  constructor(ShellRuntime shell);
+ 
+  [Async]
+  bytes handle(u32 id, bytes effect);
+};

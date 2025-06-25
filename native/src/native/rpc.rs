@@ -1,4 +1,4 @@
-use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
+use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::di_container::DiContainer;
 
 pub struct NativeRpc {}
@@ -11,7 +11,7 @@ impl NativeRpc {
                 let response = di_container.get_authentication_server().request_signin_url(device_info).await;
                 match response {
                     Ok(url) => RpcOperationOutput::SignInUrl(url),
-                    Err(e) => RpcOperationOutput::NetworkError(e)
+                    Err(e) => RpcOperationOutput::NetworkError(e.into())
                 }
             }
             RpcOperation::GetMe() => {
@@ -19,7 +19,7 @@ impl NativeRpc {
                 let response = di_container.get_authentication_server().get_me().await;
                 match response {
                     Ok(user) => RpcOperationOutput::GetMe(user),
-                    Err(e) => RpcOperationOutput::NetworkError(e)
+                    Err(e) => RpcOperationOutput::NetworkError(e.into())
                 }
             }
         }

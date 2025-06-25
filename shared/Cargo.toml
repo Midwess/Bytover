@@ -3,116 +3,39 @@ name = "shared"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["lib", "staticlib", "cdylib"]
-name = "shared"
-required-features = ["lib"]
-
 [features]
 typegen = ["crux_core/typegen"]
-# Enable both uniffi-bindgen and lib features allowing compiler to check fully code
-default = ["uniffi-bindgen", "lib"]
-# Main mode
-lib = [
-    "crux_core",
-    "serde",
-    "surrealdb",
-    "lazy_static",
-    "uniffi",
-    "wasm-bindgen",
-    "core-services",
-    "schema",
-    "devlog-sdk",
-    "tokio",
-    "async-trait",
-    "log",
-    "bincode",
-    "erased-serde",
-    "reqwest",
-    "tokio-scoped",
-    "tonic",
-    "thiserror",
-    "surreal_devl",
-    "surreal_derive_plus",
-    "tokio-tungstenite",
-    "futures-util",
-    "url",
-    "webrtc",
-    "prost",
-    "uuid",
-    "rand",
-    "chrono",
-    "stunclient",
-    "h3ron",
-    "geo-types",
-    "bytes",
-    "ulid",
-    "flate2",
-    "tar",
-    "mime_guess",
-    "tokio-util"
-]
-# Generated mode, we split it out to optimize build time (2x faster)
-uniffi-bindgen = ["uniffi"]
 
-# All of theses deps are required but because optimization in build time
-# we need to mark it as optional, then enable it in the feature ["lib"]
 [dependencies]
-crux_core = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive"], optional = true }
-surrealdb = { workspace = true, features = ["kv-surrealkv"], optional = true }
-lazy_static = { workspace = true, optional = true }
-uniffi = { workspace = true, optional = true }
-wasm-bindgen = { version = "0.2.100", optional = true }
-core-services = { path = "../libs/core-services", features = ["db-local", "local-storage"], optional = true }
-schema = { path = "../libs/schema/rust", optional = true, features = ["bindgen", "client"] }
-devlog-sdk = { path = "../libs/devlog-sdk", features = ["db-local"], optional = true }
-tokio = { workspace = true, optional = true }
-async-trait = { workspace = true, optional = true }
-log = { workspace = true, optional = true }
-bincode = { version = "1.3.3", optional = true }
-erased-serde = { version = "0.4.5", optional = true }
-tokio-scoped = { workspace = true, optional = true }
-tonic = { workspace = true, features = ["tls-webpki-roots"], optional = true }
-thiserror = { workspace = true, optional = true }
-surreal_devl = { workspace = true, optional = true }
-surreal_derive_plus = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
-tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"], optional = true }
-futures-util = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
-webrtc = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
-uuid = { workspace = true, optional = true }
-rand = { workspace = true, optional = true }
-chrono = { workspace = true, optional = true }
-stunclient = { workspace = true, optional = true }
-h3ron = { workspace = true, optional = true }
-geo-types = { workspace = true, optional = true }
-bytes = { workspace = true, optional = true }
+crux_core.workspace = true
+uniffi = {workspace = true, features = ["bindgen"]}
+wasm-bindgen = { version = "0.2.100" }
+core-services = { path = "../libs/core-services", features = ["db-local"] }
+schema = { path = "../libs/schema/rust", features = ["bindgen", "client"] }
+devlog-sdk = { path = "../libs/devlog-sdk", features = ["db-local"] }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+bincode = { version = "1.3.3" }
+erased-serde = { version = "0.4.5" }
+thiserror = { workspace = true }
+prost = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }
+h3ron = { workspace = true }
+geo-types = { workspace = true }
 anyhow = { workspace = true }
-ulid = { workspace = true, optional = true }
-flate2 = { workspace = true, optional = true }
-tar = { workspace = true, optional = true }
-mime_guess = { workspace = true, optional = true }
-tokio-util = {workspace = true, optional = true}
+ulid = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+url = { workspace = true }
+surrealdb.workspace = true
+surreal_devl = { workspace = true }
+surreal_derive_plus = { workspace = true }
+futures-util = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
-
-[package.metadata]
-# Will log the query command at runtime
-surreal_enable_log = true
-# Will log the generated code at build time
-surreal_enable_compile_log = true
-# Change the naming convention of generated statement into camel case
-surreal_use_camel_case = false
-# The log namespace, apply for both build time log and runtime log
-surreal_namespace = "surrealql"
-# The macro name that use for info log
-surreal_info_log_macro = "log::info"
-# The macro name that use for warning log
-surreal_warn_log_macro = "log::info"

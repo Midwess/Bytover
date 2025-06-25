@@ -1,7 +1,6 @@
 use crate::config::get_gateway_grpc_url;
-use crate::entities::device::DeviceInfo;
-use crate::entities::user::User;
-use crate::errors::NetworkError;
+use shared::entities::device::DeviceInfo;
+use shared::entities::user::User;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::network::grpc_channel::GrpcClient;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
@@ -10,6 +9,8 @@ use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
+use shared::errors::NetworkError;
+use crate::grpc::errors::NativeGrpcErrors;
 
 pub struct AuthServer {
     client: GrpcClient,
@@ -27,7 +28,7 @@ impl AuthServer {
 }
 
 impl AuthServer {
-    pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, NetworkError> {
+    pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let request = SigninRequest {
@@ -47,7 +48,7 @@ impl AuthServer {
         Ok(response.signin_url.clone())
     }
 
-    pub async fn get_me(&self) -> Result<User, NetworkError> {
+    pub async fn get_me(&self) -> Result<User, NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let req = MeRequest { conditions: vec![] };

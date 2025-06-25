@@ -5,11 +5,11 @@ use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
-use crate::di_container::DiContainer;
 use crate::entities::device::DeviceInfo;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use crate::app::nearby::nearby_services::NearbyService;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NearbyModel {
@@ -25,8 +25,9 @@ pub struct NearbyViewModel {
     pub peers: Vec<PeerViewModel>
 }
 
-#[derive(Default)]
-pub struct NearbyModule {}
+pub struct NearbyModule {
+    nearby_service: &'static NearbyService
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
 pub enum NearbyEvent {
@@ -51,11 +52,11 @@ impl AppModule<BitBridge> for NearbyModule {
         model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
+        let nearby_service = self.nearby_service;
         match event {
             NearbyEvent::Launch() => {
                 let user = model.authentication.user.clone();
                 let nearby_command = Command::new(|it| async move {
-                    let nearby_service = DiContainer::get_instance().get_nearby_service();
                     nearby_service.start_service(user, it.clone()).await;
                 });
 
@@ -79,7 +80,6 @@ impl AppModule<BitBridge> for NearbyModule {
                 })
             }
             NearbyEvent::StartIpAddressMonitor => Command::new(|it| async move {
-                let nearby_service = DiContainer::get_instance().get_nearby_service();
                 nearby_service.start_ip_address_monitor(it.clone()).await;
             }),
             NearbyEvent::OnLocationUpdated(location) => {

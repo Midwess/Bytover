@@ -26,13 +26,13 @@ use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
-use crate::app::file_system::file::LocalResourcePath;
-use crate::app::file_system::workdir::WorkDir;
-use crate::app::operations::p2p::P2POperationOutput;
-use crate::app::operations::transfer::TransferOperationOutput;
-use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
-use crate::entities::peer::Peer as PeerEntity;
+use shared::app::file_system::file::LocalResourcePath;
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::operations::p2p::P2POperationOutput;
+use shared::app::operations::transfer::TransferOperationOutput;
+use shared::app::operations::CoreOperationOutput;
+use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
+use shared::entities::peer::Peer as PeerEntity;
 use crate::native::message_to_shell::MessageToShell;
 use crate::network::webrtc::message_channel::PeerRequest;
 use crate::{serialize, ShellRuntime};
@@ -163,7 +163,7 @@ impl PeerCommunication {
                             let current_index = thumbnail_message.current_index;
                             let data_length = thumbnail_message.data_length;
                             let shell_runtime = self.shell_runtime.clone();
-                            let thumbnail_path = self.work_dir.thumbnails(format!("{resource_id}.png"));
+                            let thumbnail_path = self.work_dir.thumbnails(resource_id as u64);
                             let session_id = thumbnail_message.session_id as u64;
                             let workdir = self.work_dir.clone();
 

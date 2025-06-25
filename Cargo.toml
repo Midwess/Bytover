@@ -6,8 +6,9 @@ members = [
     "libs/core-services",
     "libs/schema/rust",
     # "Desktop/src-tauri",
-    "backend"
-, "backend"]
+    "backend",
+    "native"
+]
 
 resolver = "1"
 

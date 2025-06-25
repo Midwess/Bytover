@@ -214,12 +214,7 @@ impl LocalResourceDatabaseOperation {
 }
 
 impl TransferSessionOperation {
-    pub fn save(mut session: TransferSession, workdir: &WorkDir) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        session.resources.iter_mut().for_each(|resource| {
-            resource.path = workdir.to_relative_path(&resource.path);
-            resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_relative_path(path));
-        });
-
+    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::Save(session)
         )))
@@ -248,12 +243,8 @@ impl TransferSessionOperation {
 
     pub fn update_resource(
         session_id: TransferSessionId,
-        mut resource: LocalResource,
-        workdir: &WorkDir
+        resource: LocalResource,
     ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        resource.path = workdir.to_relative_path(&resource.path);
-        resource.thumbnail_path = resource.thumbnail_path.as_ref().map(|path| workdir.to_relative_path(path));
-
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::UpdateResource { session_id, resource }
         )))

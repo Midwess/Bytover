@@ -18,7 +18,6 @@ pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
     AnswerSessionRequest {
-        thumbnail_dir: String,
         peer_id: u128,
         session: TransferSession,
         peer_request_id: String,

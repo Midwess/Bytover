@@ -1,7 +1,7 @@
 use core_services::db::repository::abstraction::repository::SurrealDbRepository;
 use devlog_sdk::distributed_id::gen_id;
 
-use crate::app::operations::database::{
+use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
     LocalResourceDatabaseOperation,
@@ -11,10 +11,10 @@ use crate::app::operations::database::{
     TransferSessionOperation,
     TransferSessionOperationOutput
 };
-use crate::entities::session::{Session, SessionType};
-use crate::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
-use crate::persistence::session::{SessionId, SessionRepository};
-use crate::persistence::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::entities::session::{Session, SessionType};
+use shared::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::persistence::session::{SessionId, SessionRepository};
+use shared::persistence::transfer_session::{TransferSessionId, TransferSessionRepository};
 
 pub struct NativeDatabase {
     pub session_repository: SessionRepository,

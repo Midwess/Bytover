@@ -3,16 +3,21 @@ use std::path::PathBuf;
 use core_services::local_storage::file_system::{File, Folder};
 use devlog_sdk::distributed_id::gen_id;
 
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use crate::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
+use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
+use shared::errors::InputError;
 
-pub struct NativeLocalStorage {}
+pub struct NativeLocalStorage {
+    pub workdir: WorkDir,
+}
 
 impl NativeLocalStorage {
     pub async fn handle(&self, effect: LocalStorageOperation) -> LocalStorageOperationOutput {
         match effect {
-            LocalStorageOperation::NewFile { bytes, path } => {
-                let created_file = File::new(Some(bytes), path).await.unwrap();
+            LocalStorageOperation::NewThumbnail { png_bytes, resource_id } => {
+                let path = self.workdir.thumbnails(resource_id);
+                let created_file = File::new(Some(png_bytes), path).await.unwrap();
                 let metadata = created_file.metadata().await.unwrap();
                 let resource = LocalResource {
                     order_id: gen_id().await,
@@ -26,23 +31,11 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::NewFile(resource)
             }
-            LocalStorageOperation::Copy { source, destination } => {
-                let created_file = File::new(None, source).await.unwrap();
-                let new_file = created_file.copy_to(destination).await.unwrap();
-                let metadata = new_file.metadata().await.unwrap();
-                let resource = LocalResource {
-                    order_id: gen_id().await,
-                    name: new_file.name,
-                    size: metadata.size,
-                    path: LocalResourcePath::AbsolutePath(new_file.path.to_string_lossy().to_string()),
-                    thumbnail_path: None,
-                    r#type: ResourceType::File,
-                    is_valid: true
+            LocalStorageOperation::Get { path } => {
+                let LocalResourcePath::AbsolutePath(path) = path else {
+                    return LocalStorageOperationOutput::BadRequest(InputError::ExpectedAnAbsolutePath(path.clone()))
                 };
 
-                LocalStorageOperationOutput::Copy(resource)
-            }
-            LocalStorageOperation::Get { path } => {
                 let path_buf = PathBuf::from(path.clone());
                 if path_buf.is_dir() {
                     let folder = Folder::new(path_buf).await.unwrap();
@@ -75,11 +68,19 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::Get(Some(resource))
             }
-            LocalStorageOperation::IsFileExists { absolute_path } => {
+            LocalStorageOperation::IsFileExists { path } => {
+                let LocalResourcePath::AbsolutePath(absolute_path) = path else {
+                    return LocalStorageOperationOutput::IsFileExists(false);
+                };
+
                 let file = File::existing(absolute_path).await;
                 LocalStorageOperationOutput::IsFileExists(file.is_ok())
             }
-            LocalStorageOperation::GetResourceType { absolute_path } => {
+            LocalStorageOperation::GetResourceType { path } => {
+                let LocalResourcePath::AbsolutePath(absolute_path) = path else {
+                    return LocalStorageOperationOutput::GetResourceType(None);
+                };
+
                 let file_result = File::existing(&absolute_path).await;
 
                 if let Ok(file) = file_result {
@@ -104,10 +105,8 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::GetResourceType(None)
             }
-            LocalStorageOperation::Delete { path } => {
-                let LocalResourcePath::AbsolutePath(path) = path else {
-                    return LocalStorageOperationOutput::Delete(false);
-                };
+            LocalStorageOperation::DeleteSession{  session_id } => {
+                let path = self.workdir.session_folder(session_id);
 
                 let path_buf = PathBuf::from(path);
                 if path_buf.is_dir() {

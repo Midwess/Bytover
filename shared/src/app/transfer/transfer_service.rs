@@ -61,9 +61,7 @@ impl TransferService {
             }
         }
 
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        let path = workdir.session_folder(transfer_session.order_id);
-        let _ = LocalStorageOperation::delete(LocalResourcePath::AbsolutePath(path)).into_future(cmd.clone()).await;
+        let _ = LocalStorageOperation::delete_session(transfer_session.order_id).into_future(cmd.clone()).await;
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
@@ -130,17 +128,6 @@ impl TransferService {
 
                 continue;
             }
-
-            resource.path = LocalResourcePath::AbsolutePath(
-                LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await
-            );
-
-            resource.thumbnail_path = match &resource.thumbnail_path {
-                Some(path) => Some(LocalResourcePath::AbsolutePath(
-                    LocalStorageOperation::get_absolute_path(path.clone()).into_future(cmd.clone()).await
-                )),
-                None => None
-            };
 
             if resource.r#type == ResourceType::Folder {
                 resource.name = format!("{}.tar", resource.name);
@@ -233,12 +220,19 @@ impl TransferService {
     ) {
         let peer_id = peer.id();
         let mut resources = vec![];
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        let thumbnail_dir = workdir.thumbnails("".to_string());
         for resource_request in remote_session.resources {
+            let Some(saved_path) = LocalStorageOperation::generate_resource_path(
+                remote_session.order_id,
+                resource_request.order_id as u64,
+                resource_request.name.clone()
+            ).into_future(cmd.clone()).await else {
+                log::warn!("Failed to generate resource path for resource: {:?}" , resource_request);
+                continue;
+            };
+
             resources.push(LocalResource {
                 is_valid: true,
-                path: LocalResourcePath::AbsolutePath(workdir.resources(remote_session.order_id, resource_request.name.clone())),
+                path: saved_path,
                 thumbnail_path: None,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
@@ -261,7 +255,6 @@ impl TransferService {
 
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
-            thumbnail_dir,
             peer_id,
             session: transfer_session.clone(),
             peer_request_id: request_id,

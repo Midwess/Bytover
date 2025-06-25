@@ -50,8 +50,6 @@ impl ResourceTransferSelectionService {
     }
 
     pub async fn add_resources(&self, ctx: AppCommandContext, mut selections: Vec<ResourceSelection>) {
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(ctx.clone()).await;
-
         while let Some(selection) = selections.pop() {
             let existing_resource = LocalResourceDatabaseOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
@@ -59,14 +57,12 @@ impl ResourceTransferSelectionService {
             }
 
             let order_id = DatabaseOperation::gen_id().into_future(ctx.clone()).await;
-            let disk_path = LocalStorageOperation::get_absolute_path(selection.path.clone()).into_future(ctx.clone()).await;
 
-            let Some(mut local_resource) = LocalStorageOperation::get(disk_path).into_future(ctx.clone()).await else {
+            let Some(mut local_resource) = LocalStorageOperation::get(selection.path.clone()).into_future(ctx.clone()).await else {
                 log::error!(target: "transfer", "Failed to get resource: {:?}", selection.path);
                 continue;
             };
 
-            // Keep the original path from the platform
             local_resource.path = selection.path.clone();
 
             local_resource.r#type = match selection.r#type.clone() {
@@ -74,7 +70,7 @@ impl ResourceTransferSelectionService {
                 None => match LocalStorageOperation::get_resource_type(selection.path.clone()).into_future(ctx.clone()).await {
                     Some(resource_type) => resource_type,
                     None => {
-                        log::error!(target: "transfer", "Faled to get resource type, the file might no longer exist");
+                        log::error!(target: "transfer", "Failed to get resource type, the file might no longer exist");
                         continue;
                     }
                 }
@@ -84,13 +80,9 @@ impl ResourceTransferSelectionService {
                 .into_future(ctx.clone())
                 .await
             {
-                let absolute_path = workdir.thumbnails(format!("{order_id}.png"));
-                let _ = LocalStorageOperation::new_file(thumbnail_png, absolute_path.clone()).into_future(ctx.clone()).await;
+                let thumbnail = LocalStorageOperation::new_thumbnail(thumbnail_png, order_id).into_future(ctx.clone()).await;
 
-                local_resource.thumbnail_path = Some(LocalResourcePath::RelativePath {
-                    path: workdir.to_relative(absolute_path),
-                    is_private: true
-                });
+                local_resource.thumbnail_path = Some(thumbnail.path);
             }
 
             let new_resources = LocalResourceDatabaseOperation::add(vec![local_resource]).into_future(ctx.clone()).await;

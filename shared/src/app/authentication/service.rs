@@ -10,6 +10,7 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
 use url::Url;
 
+#[derive(Default)]
 pub struct AuthenticationService {}
 
 impl AuthenticationService {

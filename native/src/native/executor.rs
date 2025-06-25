@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use tokio::time::sleep;
 
-use crate::app::operations::internet::{InternetOperation, InternetOperationOutput};
-use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::AppEvent;
+use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
+use shared::app::operations::{CoreOperation, CoreOperationOutput};
+use shared::app::AppEvent;
 use crate::network::module::InternetConnection;
 use crate::{process_event, ShellRuntime};
 

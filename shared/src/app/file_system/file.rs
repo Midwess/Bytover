@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use surreal_derive_plus::SurrealDerive;
-use uniffi::{Enum, Record};
+use uniffi::Record;
+use uniffi::Enum;
 
 use crate::app::operations::database::LocalResourceDatabaseOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;

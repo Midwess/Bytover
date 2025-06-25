@@ -8,11 +8,11 @@ use core_services::utils::pool::request::PoolRequestBuilder;
 use tokio::sync::OnceCell;
 use tokio_scoped::scoped;
 
-use crate::app::authentication::service::AuthenticationService;
-use crate::app::file_system::workdir::WorkDir;
-use crate::app::nearby::nearby_services::NearbyService;
-use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
-use crate::app::transfer::transfer_service::TransferService;
+use shared::app::authentication::service::AuthenticationService;
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::nearby::nearby_services::NearbyService;
+use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
+use shared::app::transfer::transfer_service::TransferService;
 use crate::get_tokio_rt;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
@@ -25,10 +25,10 @@ use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::cloud::cloud_service::CloudService;
 use crate::network::webrtc::web_rtc::WebRtc;
-use crate::persistence::local_resource::LocalResourceRepository;
-use crate::persistence::session::SessionRepository;
-use crate::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
-use crate::persistence::transfer_session::TransferSessionRepository;
+use shared::persistence::local_resource::LocalResourceRepository;
+use shared::persistence::session::SessionRepository;
+use shared::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
+use shared::persistence::transfer_session::TransferSessionRepository;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -44,23 +44,20 @@ pub struct DiContainer {
 
 impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
-        match DI_SINGLETON.get() {
-            Some(instance) => instance,
-            None => {
-                let instance = DiContainer {
-                    db: OnceCell::new(),
-                    auth_service: OnceCell::new(),
-                    auth_server: OnceCell::new(),
-                    workdir: OnceCell::new(),
-                    nearby_service: OnceCell::new(),
-                    transfer_service: OnceCell::new(),
-                    transfer_selection_service: OnceCell::new()
-                };
+        DI_SINGLETON.get().unwrap_or_else(|| {
+            let instance = DiContainer {
+                db: OnceCell::new(),
+                auth_service: OnceCell::new(),
+                auth_server: OnceCell::new(),
+                workdir: OnceCell::new(),
+                nearby_service: OnceCell::new(),
+                transfer_service: OnceCell::new(),
+                transfer_selection_service: OnceCell::new()
+            };
 
-                let _ = DI_SINGLETON.set(instance);
-                DI_SINGLETON.get().unwrap()
-            }
-        }
+            let _ = DI_SINGLETON.set(instance);
+            DI_SINGLETON.get().unwrap()
+        })
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -165,7 +162,9 @@ impl DiContainer {
                 local_resource_repository: self.get_local_resource_repository(),
                 transfer_session_repository: self.get_transfer_session_repository()
             },
-            local_storage: NativeLocalStorage {},
+            local_storage: NativeLocalStorage {
+                workdir: self.workdir.get().unwrap().clone()
+            },
             transfer: TransferNative {
                 web_rtc: web_rtc.clone(),
                 shell_runtime: OnceCell::new(),

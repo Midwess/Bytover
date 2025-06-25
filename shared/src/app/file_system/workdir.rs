@@ -30,12 +30,12 @@ impl WorkDir {
         PathBuf::from(&self.private_path).join("surrealdb.db").to_string_lossy().to_string()
     }
 
-    pub fn thumbnails(&self, path: String) -> String {
-        PathBuf::from(&self.private_path).join(self.thumbnails_relative(path)).to_string_lossy().to_string()
+    pub fn thumbnails(&self, resource_id: u64) -> String {
+        PathBuf::from(&self.private_path).join(self.thumbnails_relative(resource_id)).to_string_lossy().to_string()
     }
 
-    pub fn thumbnails_relative(&self, path: String) -> String {
-        PathBuf::from("thumbnails").join(Self::normalize_path(path)).to_string_lossy().to_string()
+    pub fn thumbnails_relative(&self, resource_id: u64) -> String {
+        PathBuf::from("thumbnails").join(Self::normalize_path(format!("{resource_id}.png"))).to_string_lossy().to_string()
     }
 
     pub fn resources(&self, session_id: u64, path: String) -> String {

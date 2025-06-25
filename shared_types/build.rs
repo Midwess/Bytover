@@ -37,7 +37,7 @@ use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::user::User;
 use shared::errors::NetworkError;
-use shared::native::message_to_shell::MessageToShell;
+use native::native::message_to_shell::MessageToShell;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");

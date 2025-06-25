@@ -4,26 +4,26 @@ use core_services::db::repository::abstraction::repository::Repository;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
 
-use crate::entities::session::SessionType;
-use crate::errors::NetworkError;
-use crate::persistence::session::{SessionId, SessionRepository};
+use shared::entities::session::SessionType;
+use shared::persistence::session::{SessionId, SessionRepository};
+use crate::grpc::errors::NativeGrpcErrors;
 
 pub struct AuthProvider {
     pub session_repository: SessionRepository
 }
 
 impl AuthProvider {
-    pub async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), NetworkError> {
+    pub async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), NativeGrpcErrors> {
         let session = self
             .session_repository
             .find_one(&SessionId {
                 r#type: SessionType::Access
             })
             .await
-            .map_err(|e| NetworkError::Unauthorized(e.to_string()))?;
+            .map_err(|e| NativeGrpcErrors::Unauthorized(e.to_string()))?;
 
         if session.is_none() {
-            return Err(NetworkError::Unauthorized("Session not found".to_string()));
+            return Err(NativeGrpcErrors::Unauthorized("Session not found".to_string()));
         }
 
         let token = session.unwrap().token;

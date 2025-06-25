@@ -13,20 +13,20 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 
-use crate::app::file_system::file::ResourceType;
-use crate::app::operations::transfer::TransferOperationOutput;
-use crate::app::operations::CoreOperationOutput;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
-use crate::app::transfer::target::TransferTarget;
-use crate::errors::NetworkError;
+use shared::app::file_system::file::ResourceType;
+use shared::app::operations::transfer::TransferOperationOutput;
+use shared::app::operations::CoreOperationOutput;
+use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
+use shared::app::transfer::target::TransferTarget;
 use crate::grpc::cloud_server::CloudServer;
 use crate::native::message_to_shell::MessageToShell;
 use crate::{serialize, ShellRuntime, ThrottleShellRuntime};
+use crate::grpc::errors::NativeGrpcErrors;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
     #[error("Network error: {0}")]
-    NetworkError(#[from] NetworkError),
+    GrpcErrors(#[from] NativeGrpcErrors),
     #[error("Invalid session target")]
     InvalidSessionTarget,
     #[error("Failed to open file: {0}")]

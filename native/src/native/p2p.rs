@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use tokio::sync::OnceCell;
 
-use crate::app::operations::p2p::P2POperation;
-use crate::app::operations::CoreOperationOutput;
+use shared::app::operations::p2p::P2POperation;
+use shared::app::operations::CoreOperationOutput;
 use crate::network::webrtc::connection::ConnectionWebRtcErrors;
 use crate::network::webrtc::web_rtc::WebRtc;
 use crate::ShellRuntime;

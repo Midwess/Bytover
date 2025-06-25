@@ -21,6 +21,7 @@ use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferVi
 use modules::AppModule;
 use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
@@ -28,10 +29,10 @@ pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitB
 
 #[derive(Default)]
 pub struct BitBridge {
-    environment: EnvironmentModule,
-    authentication: AuthenticationModule,
-    transfer: TransferModule,
-    nearby: NearbyModule
+    environment: OnceCell<EnvironmentModule>,
+    authentication: OnceCell<AuthenticationModule>,
+    transfer: OnceCell<TransferModule>,
+    nearby: OnceCell<NearbyModule>
 }
 
 #[derive(Debug, Clone, Default)]
@@ -93,20 +94,20 @@ impl App for BitBridge {
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
-            AppEvent::Environment(event) => self.environment.update(event, model, caps),
-            AppEvent::Authentication(event) => self.authentication.update(event, model, caps),
-            AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
-            AppEvent::Nearby(event) => self.nearby.update(event, model, caps),
+            AppEvent::Environment(event) => self.environment.get().unwrap().update(event, model, caps),
+            AppEvent::Authentication(event) => self.authentication.get().unwrap().update(event, model, caps),
+            AppEvent::Transfer(event) => self.transfer.get().unwrap().update(event, model, caps),
+            AppEvent::Nearby(event) => self.nearby.get().unwrap().update(event, model, caps),
             AppEvent::Void => Command::done()
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         AppViewModel {
-            environment: Some(self.environment.view(model)),
-            authentication: Some(self.authentication.view(model)),
-            transfer: Some(self.transfer.view(model)),
-            nearby: Some(self.nearby.view(model))
+            environment: Some(self.environment.get().unwrap().view(model)),
+            authentication: Some(self.authentication.get().unwrap().view(model)),
+            transfer: Some(self.transfer.get().unwrap().view(model)),
+            nearby: Some(self.nearby.get().unwrap().view(model))
         }
     }
 }

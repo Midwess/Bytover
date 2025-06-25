@@ -13,8 +13,8 @@ use schema::devlog::bitbridge::{
 use tonic::Request;
 
 use crate::config::get_gateway_grpc_url;
-use crate::errors::NetworkError;
 use crate::grpc::auth_provider::AuthProvider;
+use crate::grpc::errors::NativeGrpcErrors;
 use crate::network::grpc_channel::GrpcClient;
 
 pub struct CloudServer {
@@ -33,7 +33,7 @@ impl CloudServer {
     pub async fn create_public_transfer_session(
         &self,
         password: Option<String>
-    ) -> Result<PublicTransferSessionMessage, NetworkError> {
+    ) -> Result<PublicTransferSessionMessage, NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let request_body = CreatePublicTransferSessionRequest { password };
@@ -52,7 +52,7 @@ impl CloudServer {
         &self,
         session_order_id: i64,
         resources: Vec<CloudResourceMessage>
-    ) -> Result<AddResourcesResponse, NetworkError> {
+    ) -> Result<AddResourcesResponse, NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let request_body = AddResourcesRequest {
@@ -74,7 +74,7 @@ impl CloudServer {
         resource_order_id: i64,
         status: UploadStatus,
         failed_reason: Option<String>
-    ) -> Result<Option<ClientUploadRequest>, NetworkError> {
+    ) -> Result<Option<ClientUploadRequest>, NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let request_body = CommitFileUploadRequest {
@@ -94,7 +94,7 @@ impl CloudServer {
         Ok(response.next_upload_request)
     }
 
-    pub async fn cancel_session(&self, session_order_id: i64) -> Result<(), NetworkError> {
+    pub async fn cancel_session(&self, session_order_id: i64) -> Result<(), NativeGrpcErrors> {
         let connection = self.client.connect().await?;
 
         let request_body = CancelSessionRequest { session_order_id };
