@@ -1,13 +1,12 @@
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
-use uniffi::Record;
-use uniffi::Enum;
+
+use uniffi::{Enum, Record};
 
 use crate::app::operations::database::LocalResourceDatabaseOperation;
 use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::AppCommandContext;
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
 pub struct LocalResource {
     pub order_id: u64,
     pub name: String,
@@ -15,11 +14,10 @@ pub struct LocalResource {
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
-    #[surreal(default)]
     pub is_valid: bool
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
 pub enum LocalResourcePath {
     // Relative from the workdir of application
     RelativePath { path: String, is_private: bool },
@@ -46,7 +44,7 @@ impl LocalResourcePath {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
 pub enum ResourceType {
     Image,
     Video,

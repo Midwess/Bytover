@@ -1,5 +1,5 @@
-use core_services::db::remote_surrealdb::SurrealDbConnection;
-use core_services::db::repository::abstraction::repository::SurrealDbRepository;
+use core_services::db::surrealdb::connection::SurrealDbConnection;
+use core_services::db::surrealdb::repository::SurrealDbRepository;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 

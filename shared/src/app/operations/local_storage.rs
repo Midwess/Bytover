@@ -5,26 +5,45 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
+use super::{CoreOperation, CoreOperationOutput};
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::file_system::workdir::WorkDir;
 use crate::app::AppRequestBuilder;
 use crate::errors::InputError;
-use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperation {
     GetWorkDirPath,
-    IsFileExists { path: LocalResourcePath },
-    GetResourceType { path: LocalResourcePath },
+    IsFileExists {
+        path: LocalResourcePath
+    },
+    GetResourceType {
+        path: LocalResourcePath
+    },
     GetAbsolutePath(LocalResourcePath),
     LoadFileThumbnailPng(LocalResourcePath),
-    Get { path: LocalResourcePath },
-    NewThumbnail { png_bytes: Vec<u8>, resource_id: u64 },
-    Open { path: LocalResourcePath },
-    OpenSession { session_id: u64 },
-    DeleteSession { session_id: u64 },
-    GenerateResourcePath { session_id: u64, resource_id: u64, resource_name: String }
+    Get {
+        path: LocalResourcePath
+    },
+    NewThumbnail {
+        png_bytes: Vec<u8>,
+        resource_id: u64
+    },
+    Open {
+        path: LocalResourcePath
+    },
+    OpenSession {
+        session_id: u64
+    },
+    DeleteSession {
+        session_id: u64
+    },
+    GenerateResourcePath {
+        session_id: u64,
+        resource_id: u64,
+        resource_name: String
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -39,7 +58,7 @@ pub enum LocalStorageOperationOutput {
     LoadFileThumbnailPng(Option<Vec<u8>>),
     Delete(bool),
     BadRequest(InputError),
-    GenerateResourcePath(Option<LocalResourcePath>),
+    GenerateResourcePath(Option<LocalResourcePath>)
 }
 
 impl Operation for LocalStorageOperation {
@@ -48,7 +67,11 @@ impl Operation for LocalStorageOperation {
 
 impl LocalStorageOperation {
     pub fn new_thumbnail(bytes: Vec<u8>, resource_id: u64) -> AppRequestBuilder<impl Future<Output = LocalResource>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::NewThumbnail { png_bytes: bytes, resource_id })).map(|it| match it {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::NewThumbnail {
+            png_bytes: bytes,
+            resource_id
+        }))
+        .map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::NewFile(resource)) => resource,
             _ => panic!("Mismatch in response type, expected NewFile, got {it:?}")
         })
@@ -71,23 +94,17 @@ impl LocalStorageOperation {
     }
 
     pub fn is_file_exists(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::IsFileExists {
-            path
-        }))
-        .map(|it| match it {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::IsFileExists { path })).map(|it| match it {
             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::IsFileExists(exists)) => exists,
             _ => panic!("Mismatch in response type, expected IsFileExists, got {it:?}")
         })
     }
 
     pub fn get_resource_type(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<ResourceType>>> {
-         Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetResourceType {
-             path
-         }))
-         .map(|it| match it {
-             CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetResourceType(resource_type)) => resource_type,
-             _ => panic!("Mismatch in response type, expected GetResourceType, got {it:?}")
-         })
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GetResourceType { path })).map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GetResourceType(resource_type)) => resource_type,
+            _ => panic!("Mismatch in response type, expected GetResourceType, got {it:?}")
+        })
     }
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
@@ -98,24 +115,36 @@ impl LocalStorageOperation {
     }
 
     pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::OpenSession { session_id })).map(|it| match it {
-            CoreOperationOutput::Void => (),
-            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
-        })
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::OpenSession { session_id })).map(
+            |it| match it {
+                CoreOperationOutput::Void => (),
+                _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+            }
+        )
     }
 
     pub fn delete_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::DeleteSession { session_id })).map(|it| match it {
-            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Delete(deleted)) => deleted,
-            _ => panic!("Mismatch in response type, expected Delete, got {it:?}")
-        })
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::DeleteSession { session_id })).map(
+            |it| match it {
+                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::Delete(deleted)) => deleted,
+                _ => panic!("Mismatch in response type, expected Delete, got {it:?}")
+            }
+        )
     }
 
-    pub fn generate_resource_path(session_id: u64, resource_id: u64, resource_name: String) -> AppRequestBuilder<impl Future<Output = Option<LocalResourcePath>>> {
-        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GenerateResourcePath { session_id, resource_id, resource_name }))
-            .map(|it| match it {
-                CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GenerateResourcePath(path)) => path,
-                _ => panic!("Mismatch in response type, expected GenerateResourcePath, got {it:?}")
-            })
+    pub fn generate_resource_path(
+        session_id: u64,
+        resource_id: u64,
+        resource_name: String
+    ) -> AppRequestBuilder<impl Future<Output = Option<LocalResourcePath>>> {
+        Command::request_from_shell(CoreOperation::LocalStorage(LocalStorageOperation::GenerateResourcePath {
+            session_id,
+            resource_id,
+            resource_name
+        }))
+        .map(|it| match it {
+            CoreOperationOutput::LocalStorage(LocalStorageOperationOutput::GenerateResourcePath(path)) => path,
+            _ => panic!("Mismatch in response type, expected GenerateResourcePath, got {it:?}")
+        })
     }
 }

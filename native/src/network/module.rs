@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
+use shared::errors::NetworkError;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use shared::errors::NetworkError;
 
 #[async_trait::async_trait]
 pub trait NetworkModule {

@@ -1,10 +1,9 @@
 use schema::value::device::{DeviceType, RegisteringDevice};
 use schema::value::platform::Platform;
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
 use uniffi::Record;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Record, SurrealDerive)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Record)]
 pub struct DeviceInfo {
     pub platform: Platform,
     pub name: String,

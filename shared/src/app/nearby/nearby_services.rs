@@ -66,7 +66,7 @@ impl NearbyService {
                     });
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: "nearby", "Device error: {:?}", error);
+                    log::error!(target: "nearby", "Device error: {error:?}");
                     ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
@@ -123,11 +123,11 @@ impl NearbyService {
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::ConnectionError(error) => {
-                    log::error!(target: ns.as_str(), "Connection error: {:?}", error);
+                    log::error!(target: ns.as_str(), "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: ns.as_str(), "Device error: {:?}", error);
+                    log::error!(target: ns.as_str(), "Device error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ThumbnailFullfillment {

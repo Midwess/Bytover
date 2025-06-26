@@ -1,15 +1,14 @@
 use std::path::PathBuf;
 
 use core_services::local_storage::file_system::{File, Folder};
-use devlog_sdk::distributed_id::gen_id;
-
+use devlog_sdk::local_id_generator::gen_id;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::file_system::workdir::WorkDir;
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::errors::InputError;
 
 pub struct NativeLocalStorage {
-    pub workdir: WorkDir,
+    pub workdir: WorkDir
 }
 
 impl NativeLocalStorage {
@@ -105,7 +104,7 @@ impl NativeLocalStorage {
 
                 LocalStorageOperationOutput::GetResourceType(None)
             }
-            LocalStorageOperation::DeleteSession{  session_id } => {
+            LocalStorageOperation::DeleteSession { session_id } => {
                 let path = self.workdir.session_folder(session_id);
 
                 let path_buf = PathBuf::from(path);

@@ -1,14 +1,14 @@
 use rand::seq::IndexedRandom;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
+
 use uniffi::Record;
 
 use crate::entities::device::DeviceInfo;
 
 // Peer is represent for the information that you want other
 // people to know about
-#[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq, SurrealDerive)]
+#[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Peer {
     pub id: String,
     pub name: Option<String>,

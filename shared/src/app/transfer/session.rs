@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 use chrono::Utc;
-use devlog_sdk::distributed_id::gen_id;
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
+
 use uniffi::{Enum, Record};
 
 use crate::app::file_system::file::LocalResource;
@@ -11,13 +10,13 @@ use crate::entities::peer::Peer;
 
 use super::target::TransferTarget;
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
 pub enum TransferType {
     Send,
     Receive
 }
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
 pub enum TransferSessionStatus {
     Initializing,
     InProgress { bytes_per_second: u64, percentage: f64 },
@@ -45,7 +44,7 @@ impl Display for TransferSessionStatus {
     }
 }
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
 pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
@@ -54,22 +53,14 @@ pub struct TransferSession {
     pub target: TransferTarget
 }
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
 pub struct TransferProgress {
     pub resource_order_id: u64,
     pub file_size: u64,
     total_bytes_counter: u64,
-    #[surreal(skip_serializing)]
-    #[surreal(default)]
     bytes_per_second: u64,
-    #[surreal(skip_serializing)]
-    #[surreal(default)]
     start_time_utc_ms: u64,
-    #[surreal(skip_serializing)]
-    #[surreal(default)]
     bytes_sec_counter: u64,
-    #[surreal(skip_serializing)]
-    #[surreal(default)]
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
     pub status: TransferStatus
@@ -181,7 +172,7 @@ impl TransferProgress {
     }
 }
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
 pub enum TransferStatus {
     Pending,
     InProgress,
@@ -231,7 +222,7 @@ impl TransferSession {
         let mut resources = resources;
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
-            order_id: gen_id().await,
+            order_id: 0,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
@@ -240,6 +231,12 @@ impl TransferSession {
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
+        self.resources.push(resource);
+        self.resources.sort_by(|a, b| a.size.cmp(&b.size));
+    }
+
+    pub fn replace_resource(&mut self, resource: LocalResource) {
+        self.resources.retain(|it| it.order_id != resource.order_id);
         self.resources.push(resource);
         self.resources.sort_by(|a, b| a.size.cmp(&b.size));
     }

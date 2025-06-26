@@ -1,16 +1,16 @@
 use crate::config::get_gateway_grpc_url;
-use shared::entities::device::DeviceInfo;
-use shared::entities::user::User;
 use crate::grpc::auth_provider::AuthProvider;
+use crate::grpc::errors::NativeGrpcErrors;
 use crate::network::grpc_channel::GrpcClient;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
-use tonic::Request;
+use shared::entities::device::DeviceInfo;
+use shared::entities::user::User;
 use shared::errors::NetworkError;
-use crate::grpc::errors::NativeGrpcErrors;
+use tonic::Request;
 
 pub struct AuthServer {
     client: GrpcClient,

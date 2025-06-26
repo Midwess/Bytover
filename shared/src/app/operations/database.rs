@@ -6,13 +6,11 @@ use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath};
-use crate::app::file_system::workdir::WorkDir;
 use crate::app::transfer::session::{TransferProgress, TransferSession};
 use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::user::User;
-use crate::persistence::transfer_session::TransferSessionId;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -80,11 +78,8 @@ pub enum TransferSessionOperation {
     Save(TransferSession),
     UpdateProgresses(u64, Vec<TransferProgress>),
     Remove(u64),
-    GetAll(TransferSessionId),
-    UpdateResource {
-        session_id: TransferSessionId,
-        resource: LocalResource
-    }
+    GetAllReceivedSessions(),
+    UpdateResource { session_id: u64, resource: LocalResource }
 }
 
 impl Operation for TransferSessionOperation {
@@ -242,8 +237,8 @@ impl TransferSessionOperation {
     }
 
     pub fn update_resource(
-        session_id: TransferSessionId,
-        resource: LocalResource,
+        session_id: u64,
+        resource: LocalResource
     ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
             TransferSessionOperation::UpdateResource { session_id, resource }
@@ -256,9 +251,9 @@ impl TransferSessionOperation {
         })
     }
 
-    pub fn get_all(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
+    pub fn get_all_received_sessions() -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Database(DatabaseOperation::TransferSession(
-            TransferSessionOperation::GetAll(id)
+            TransferSessionOperation::GetAllReceivedSessions()
         )))
         .map(move |it| match it {
             CoreOperationOutput::Database(DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(

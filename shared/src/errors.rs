@@ -1,6 +1,6 @@
+use crate::app::file_system::file::LocalResourcePath;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
-use crate::app::file_system::file::LocalResourcePath;
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)

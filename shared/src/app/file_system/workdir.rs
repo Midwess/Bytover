@@ -31,11 +31,17 @@ impl WorkDir {
     }
 
     pub fn thumbnails(&self, resource_id: u64) -> String {
-        PathBuf::from(&self.private_path).join(self.thumbnails_relative(resource_id)).to_string_lossy().to_string()
+        PathBuf::from(&self.private_path)
+            .join(self.thumbnails_relative(resource_id))
+            .to_string_lossy()
+            .to_string()
     }
 
     pub fn thumbnails_relative(&self, resource_id: u64) -> String {
-        PathBuf::from("thumbnails").join(Self::normalize_path(format!("{resource_id}.png"))).to_string_lossy().to_string()
+        PathBuf::from("thumbnails")
+            .join(Self::normalize_path(format!("{resource_id}.png")))
+            .to_string_lossy()
+            .to_string()
     }
 
     pub fn resources(&self, session_id: u64, path: String) -> String {

@@ -9,6 +9,7 @@ use crate::app::transfer::file_selection_service::{ResourceSelection, ResourceTr
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferStatus, TransferType};
 use crate::app::transfer::target::TransferTarget;
 use crate::app::transfer::transfer_selection::TransferMethodSelection;
+use crate::app::transfer::transfer_service::TransferService;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::peer::PeerViewModel;
@@ -21,12 +22,10 @@ use crate::app::view_models::receive_session::{
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::peer::Peer;
-use crate::persistence::transfer_session::TransferSessionId;
 use crux_core::{App, Command};
-use devlog_sdk::distributed_id::id_to_datetime;
+use devlog_sdk::local_id_generator::id_to_date;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
-use crate::app::transfer::transfer_service::TransferService;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -135,12 +134,10 @@ impl AppModule<BitBridge> for TransferModule {
         let transfer_service = self.transfer_service;
         let resource_selection_service = self.resource_selection_service;
         match event {
-            TransferEvent::Launch() => {
-                Command::new(|it| async move {
-                    resource_selection_service.load_resources(it.clone()).await;
-                    transfer_service.load_transfer_sessions(it).await;
-                })
-            }
+            TransferEvent::Launch() => Command::new(|it| async move {
+                resource_selection_service.load_resources(it.clone()).await;
+                transfer_service.load_transfer_sessions(it).await;
+            }),
             TransferEvent::BeginLoadingResources() => {
                 model.transfer.is_loading_selected_resources = true;
                 Command::new(async |it| {
@@ -280,7 +277,7 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
-                log::info!("Start transferring to target {:?}", target_id);
+                log::info!("Start transferring to target {target_id:?}");
                 let selected_resources = model.transfer.selected_resources.clone();
                 let transfer_targets = model.transfer.transfer_targets.clone();
                 let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {
@@ -310,12 +307,10 @@ impl AppModule<BitBridge> for TransferModule {
                 request_id,
                 remote_session,
                 peer
-            } => {
-                Command::new(|it| async move {
-                    transfer_service.received_session_request((request_id, remote_session), peer, it).await;
-                    log::info!(target: "transfer", "Done download, shell should done");
-                })
-            }
+            } => Command::new(|it| async move {
+                transfer_service.received_session_request((request_id, remote_session), peer, it).await;
+                log::info!(target: "transfer", "Done download, shell should done");
+            }),
             TransferEvent::UpdateTransferSessions { loaded, new, removed } => {
                 let mut command = Command::new(|_| async move {});
 
@@ -425,14 +420,7 @@ impl AppModule<BitBridge> for TransferModule {
                     resource.thumbnail_path = Some(path.clone());
                     let resource = resource.clone();
                     return Command::new(|it| async move {
-                        let session_id = TransferSessionId {
-                            order_id: Some(session_id),
-                            transfer_type: Some(transfer_type)
-                        };
-
-                        TransferSessionOperation::update_resource(session_id, resource)
-                            .into_future(it.clone())
-                            .await;
+                        TransferSessionOperation::update_resource(session_id, resource).into_future(it.clone()).await;
                     })
                     .then_render();
                 }
@@ -549,10 +537,7 @@ impl AppModule<BitBridge> for TransferModule {
                         image_resources,
                         video_resources,
                         file_resources,
-                        display_datetime: id_to_datetime(it.order_id)
-                            .with_timezone(&chrono::Local)
-                            .format("%Y-%m-%d %H:%M")
-                            .to_string()
+                        display_datetime: id_to_date(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
                     })
                 })
                 .collect(),

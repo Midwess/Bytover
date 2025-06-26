@@ -1,8 +1,13 @@
+PACKAGES := backend-native shared shared_types
+
 ffmt:
-	cargo fix --allow-dirty --allow-staged; \
-	cargo clippy --all --allow-dirty --allow-staged --fix; \
-	cargo +nightly fmt; \
-	swiftlint lint --fix || true;
+	for pkg in $(PACKAGES); do \
+		echo "==> Fixing and formatting $$pkg"; \
+		cargo fix -p $$pkg --allow-dirty --allow-staged; \
+		cargo clippy -p $$pkg --allow-dirty --allow-staged --fix; \
+		cargo +nightly fmt -p $$pkg; \
+	done; \
+	swiftlint lint --fix || true
 
 gen:
 	cargo build -p shared_types

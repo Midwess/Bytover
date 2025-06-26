@@ -70,7 +70,7 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         ])
         .build();
 
-    log::info!("Register service {:?}", service);
+    log::info!("Register service {service:?}");
     api_gateway.register(service).await?;
 
     Ok(())

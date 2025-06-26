@@ -1,17 +1,16 @@
+use crate::app::authentication::service::AuthenticationService;
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
-use crate::app::{AppEvent, AppModel, BitBridge};
+use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use core_services::logger;
 use crux_core::{App, Command};
-use devlog_sdk::distributed_id::init_scoped_id_generator;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
-use crate::app::authentication::service::AuthenticationService;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
-    pub device: Option<DeviceInfo>,
+    pub device: Option<DeviceInfo>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -23,7 +22,7 @@ pub struct EnvironmentModule {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Enum)]
 pub enum EnvironmentEvent {
-    AppLaunched,
+    AppLaunched
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -39,7 +38,6 @@ impl AppModule<BitBridge> for EnvironmentModule {
         match event {
             EnvironmentEvent::AppLaunched => {
                 logger::setup();
-                init_scoped_id_generator("BitBridge".to_string());
                 let authentication_service = self.authentication_service;
                 Command::new(|ctx| async move {
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;

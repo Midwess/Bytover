@@ -1,5 +1,5 @@
-use schema::devlog::bitbridge::cloud_resource_message::ResourceType as SchemaResourceType;
 use crate::app::file_system::file::ResourceType;
+use schema::devlog::bitbridge::cloud_resource_message::ResourceType as SchemaResourceType;
 
 impl From<&ResourceType> for SchemaResourceType {
     fn from(value: &ResourceType) -> Self {

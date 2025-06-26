@@ -1,5 +1,6 @@
 use crate::app::modules::AppModule;
 use crate::app::nearby::finding_scope::FindingScope;
+use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::operations::device::GeoLocation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperation;
@@ -9,7 +10,6 @@ use crate::entities::device::DeviceInfo;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
-use crate::app::nearby::nearby_services::NearbyService;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NearbyModel {

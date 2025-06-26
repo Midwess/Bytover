@@ -1,5 +1,5 @@
-use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::di_container::DiContainer;
+use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 
 pub struct NativeRpc {}
 

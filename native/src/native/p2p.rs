@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use tokio::sync::OnceCell;
 
-use shared::app::operations::p2p::P2POperation;
-use shared::app::operations::CoreOperationOutput;
 use crate::network::webrtc::connection::ConnectionWebRtcErrors;
 use crate::network::webrtc::web_rtc::WebRtc;
 use crate::ShellRuntime;
+use shared::app::operations::p2p::P2POperation;
+use shared::app::operations::CoreOperationOutput;
 
 pub struct P2PNativeExecutor {
     pub shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,

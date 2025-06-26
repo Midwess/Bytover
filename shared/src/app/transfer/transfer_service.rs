@@ -3,7 +3,7 @@ use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
 
 use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::database::TransferSessionOperation;
 use crate::app::operations::dialog::DialogOperation;
@@ -13,9 +13,8 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
-use crate::persistence::transfer_session::TransferSessionId;
 
-use super::session::{TransferSession, TransferType};
+use super::session::TransferSession;
 use super::target::TransferTarget;
 
 pub struct TransferService {}
@@ -33,12 +32,8 @@ impl TransferService {
 
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
         log::info!(target: "transfer", "Loading transfer sessions");
-        let receive_session_id = TransferSessionId {
-            transfer_type: Some(TransferType::Receive),
-            ..Default::default()
-        };
 
-        let receive_sessions = TransferSessionOperation::get_all(receive_session_id).into_future(cmd.clone()).await;
+        let receive_sessions = TransferSessionOperation::get_all_received_sessions().into_future(cmd.clone()).await;
 
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: receive_sessions,
@@ -57,7 +52,7 @@ impl TransferService {
                 .into_future(cmd.clone())
                 .await
             {
-                log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
+                log::error!(target: "transfer", "Failed to cancel transfer: {error:?}");
             }
         }
 
@@ -142,7 +137,7 @@ impl TransferService {
             removed: vec![]
         }));
 
-        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target_id);
+        log::info!(target: "transfer", "Sending resources to peer: {transfer_target_id:?}");
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -173,18 +168,18 @@ impl TransferService {
                         break;
                     }
                     other => {
-                        log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
+                        log::error!(target: "transfer", "Unexpected transfer output: {other:?}");
                         break;
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    log::error!(target: "transfer", "Connection error: {:?}", error);
+                    log::error!(target: "transfer", "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
-                    log::error!(target: "transfer", "Device error: {:?}", error);
+                    log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
                 _ => {
@@ -225,8 +220,11 @@ impl TransferService {
                 remote_session.order_id,
                 resource_request.order_id as u64,
                 resource_request.name.clone()
-            ).into_future(cmd.clone()).await else {
-                log::warn!("Failed to generate resource path for resource: {:?}" , resource_request);
+            )
+            .into_future(cmd.clone())
+            .await
+            else {
+                log::warn!("Failed to generate resource path for resource: {resource_request:?}");
                 continue;
             };
 
@@ -294,12 +292,12 @@ impl TransferService {
                 },
                 CoreOperationOutput::ConnectionError(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    log::error!(target: "transfer", "Connection error: {:?}", error);
+                    log::error!(target: "transfer", "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
-                    log::error!(target: "transfer", "Device error: {:?}", error);
+                    log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
                 _ => {

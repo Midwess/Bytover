@@ -1,5 +1,3 @@
-use devlog_sdk::distributed_id::gen_id;
-
 use crate::app::modules::authentication::AuthenticationEvent;
 use crate::app::operations::database::SessionOperation;
 use crate::app::operations::device::DeviceOperation;
@@ -8,6 +6,7 @@ use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
+use devlog_sdk::local_id_generator::gen_id;
 use url::Url;
 
 #[derive(Default)]
@@ -20,7 +19,7 @@ impl AuthenticationService {
         let mut user = match RpcOperation::get_me().into_future(ctx.clone()).await {
             Ok(user) => Some(user),
             Err(e) => {
-                log::error!(target: "auth", "Failed to get user info: {:?}", e);
+                log::error!(target: "auth", "Failed to get user info: {e:?}");
                 None
             }
         };
@@ -47,7 +46,7 @@ impl AuthenticationService {
         let url = match RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await {
             Ok(url) => url,
             Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {:?}", e);
+                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
                 return;
             }
         };
@@ -72,7 +71,7 @@ impl AuthenticationService {
         };
 
         if token.value.is_empty() {
-            log::error!(target: "auth", "Failed to get access token from auth response {}", redirect_url);
+            log::error!(target: "auth", "Failed to get access token from auth response {redirect_url}");
             return;
         }
 

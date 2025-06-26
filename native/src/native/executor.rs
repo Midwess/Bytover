@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use tokio::time::sleep;
 
+use crate::network::module::InternetConnection;
+use crate::{process_event, ShellRuntime};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::app::AppEvent;
-use crate::network::module::InternetConnection;
-use crate::{process_event, ShellRuntime};
 
 use super::database::NativeDatabase;
 use super::local_storage::NativeLocalStorage;

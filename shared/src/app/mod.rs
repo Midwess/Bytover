@@ -4,6 +4,7 @@ pub mod file_system;
 pub mod modules;
 pub mod nearby;
 pub mod operations;
+pub mod repository;
 pub mod system;
 pub mod transfer;
 pub mod view_models;

@@ -1,18 +1,3 @@
-use core::panic;
-use std::sync::Arc;
-use std::time::Duration;
-
-use core_services::db::remote_surrealdb::SurrealDbConnection;
-use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
-use core_services::utils::pool::request::PoolRequestBuilder;
-use tokio::sync::OnceCell;
-use tokio_scoped::scoped;
-
-use shared::app::authentication::service::AuthenticationService;
-use shared::app::file_system::workdir::WorkDir;
-use shared::app::nearby::nearby_services::NearbyService;
-use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
-use shared::app::transfer::transfer_service::TransferService;
 use crate::get_tokio_rt;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
@@ -25,15 +10,31 @@ use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::cloud::cloud_service::CloudService;
 use crate::network::webrtc::web_rtc::WebRtc;
-use shared::persistence::local_resource::LocalResourceRepository;
-use shared::persistence::session::SessionRepository;
-use shared::persistence::surrealdb::connection::{SurrealDbConnectionProvider, SurrealDbLocalConnectionInfo};
-use shared::persistence::transfer_session::TransferSessionRepository;
+use core::panic;
+use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
+use core_services::utils::pool::request::PoolRequestBuilder;
+use redb::Database;
+use shared::app::authentication::service::AuthenticationService;
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::nearby::nearby_services::NearbyService;
+use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
+use shared::app::transfer::transfer_service::TransferService;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::OnceCell;
+
+use crate::repository::auth_session::AuthSessionRepositoryImpl;
+use crate::repository::local_resource::LocalResourceRepositoryImpl;
+use crate::repository::transfer_session::TransferSessionRepositoryImpl;
+use crate::repository::RedbPoolProvider;
+use shared::app::repository::auth_session::AuthSessionRepository;
+use shared::app::repository::local_resource::LocalResourceRepository;
+use shared::app::repository::transfer_session::TransferSessionRepository;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
-    db: OnceCell<Arc<PoolAllocator<SurrealDbConnection>>>,
+    db: OnceCell<Arc<PoolAllocator<Database>>>,
     auth_service: OnceCell<AuthenticationService>,
     auth_server: OnceCell<AuthServer>,
     workdir: OnceCell<WorkDir>,
@@ -92,40 +93,34 @@ impl DiContainer {
         }
     }
 
-    pub fn init(&self, work_dir: WorkDir) {
+    pub async fn init(&self, work_dir: WorkDir) {
         let _ = self.workdir.set(work_dir.clone());
-        scoped(get_tokio_rt().handle()).scope(move |scope| {
-            scope.spawn(async move {
-                let db_path = work_dir.database();
-                log::info!(target: "environment", "Connecting to local database at {}", db_path);
-                let local_db: Box<dyn PoolResourceProvider<SurrealDbConnection>> = Box::new(SurrealDbConnectionProvider {
-                    connection: SurrealDbLocalConnectionInfo { db_path: db_path.clone() }
-                });
+        let db_path = work_dir.database();
+        log::info!(target: "environment", "Connecting to local database at {}", db_path);
+        let local_db: Box<dyn PoolResourceProvider<Database>> = Box::new(RedbPoolProvider { path: db_path.clone() });
 
-                let pool = PoolBuilder::new(local_db)
-                    .max_pool_size(1)
-                    .min_pool_size(0)
-                    .resource_idle_timeout(Duration::from_secs(5))
-                    .build()
-                    .await;
+        let pool = PoolBuilder::new(local_db)
+            .max_pool_size(1)
+            .min_pool_size(0)
+            .resource_idle_timeout(Duration::from_secs(5))
+            .build()
+            .await;
 
-                let _ = self.db.set(pool);
+        let _ = self.db.set(pool);
 
-                log::info!(target: "native", "Initializing authentication server");
-                let server = AuthServer::new(self.get_auth_provider()).await;
-                let _ = self.auth_server.set(server);
-            });
-        });
+        log::info!(target: "native", "Initializing authentication server");
+        let server = AuthServer::new(self.get_auth_provider()).await;
+        let _ = self.auth_server.set(server);
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {
         AuthProvider {
-            session_repository: self.get_session_repository()
+            session_repository: Box::new(self.get_auth_session_repository())
         }
     }
 
-    pub fn get_session_repository(&self) -> SessionRepository {
-        SessionRepository {
+    pub fn get_auth_session_repository(&self) -> impl AuthSessionRepository {
+        AuthSessionRepositoryImpl {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -133,8 +128,8 @@ impl DiContainer {
         }
     }
 
-    pub fn get_local_resource_repository(&self) -> LocalResourceRepository {
-        LocalResourceRepository {
+    pub fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
+        LocalResourceRepositoryImpl {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -142,8 +137,8 @@ impl DiContainer {
         }
     }
 
-    pub fn get_transfer_session_repository(&self) -> TransferSessionRepository {
-        TransferSessionRepository {
+    pub fn get_transfer_session_repository(&self) -> impl TransferSessionRepository {
+        TransferSessionRepositoryImpl {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -158,9 +153,9 @@ impl DiContainer {
         NativeExecutor {
             rpc: NativeRpc {},
             database: NativeDatabase {
-                session_repository: self.get_session_repository(),
-                local_resource_repository: self.get_local_resource_repository(),
-                transfer_session_repository: self.get_transfer_session_repository()
+                auth_session_repository: Box::new(self.get_auth_session_repository()),
+                local_resource_repository: Box::new(self.get_local_resource_repository()),
+                transfer_session_repository: Box::new(self.get_transfer_session_repository())
             },
             local_storage: NativeLocalStorage {
                 workdir: self.workdir.get().unwrap().clone()

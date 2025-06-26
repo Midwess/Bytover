@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
+use native::native::message_to_shell::MessageToShell;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
@@ -37,7 +38,6 @@ use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::user::User;
 use shared::errors::NetworkError;
-use native::native::message_to_shell::MessageToShell;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");

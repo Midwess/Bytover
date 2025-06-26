@@ -1,6 +1,4 @@
-use core_services::db::repository::abstraction::repository::SurrealDbRepository;
-use devlog_sdk::distributed_id::gen_id;
-
+use devlog_sdk::local_id_generator::gen_id;
 use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,
@@ -11,15 +9,16 @@ use shared::app::operations::database::{
     TransferSessionOperation,
     TransferSessionOperationOutput
 };
+use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
+use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::app::transfer::session::TransferType;
 use shared::entities::session::{Session, SessionType};
-use shared::persistence::local_resource::{LocalResourceId, LocalResourceRepository};
-use shared::persistence::session::{SessionId, SessionRepository};
-use shared::persistence::transfer_session::{TransferSessionId, TransferSessionRepository};
 
 pub struct NativeDatabase {
-    pub session_repository: SessionRepository,
-    pub local_resource_repository: LocalResourceRepository,
-    pub transfer_session_repository: TransferSessionRepository
+    pub auth_session_repository: Box<dyn AuthSessionRepository>,
+    pub local_resource_repository: Box<dyn LocalResourceRepository>,
+    pub transfer_session_repository: Box<dyn TransferSessionRepository>
 }
 
 impl NativeDatabase {
@@ -27,12 +26,12 @@ impl NativeDatabase {
         match effect {
             DatabaseOperation::Session(SessionOperation::WriteToken(token)) => {
                 let _ = self
-                    .session_repository
-                    .delete_one(&SessionId {
+                    .auth_session_repository
+                    .delete_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })
                     .await;
-                self.session_repository
+                self.auth_session_repository
                     .create(Session {
                         r#type: SessionType::Access,
                         token,
@@ -44,8 +43,8 @@ impl NativeDatabase {
             }
             DatabaseOperation::Session(SessionOperation::Get()) => {
                 match self
-                    .session_repository
-                    .find_one(&SessionId {
+                    .auth_session_repository
+                    .find_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })
                     .await
@@ -56,14 +55,14 @@ impl NativeDatabase {
             }
             DatabaseOperation::Session(SessionOperation::WriteUser(user)) => {
                 let session = self
-                    .session_repository
-                    .find_one(&SessionId {
+                    .auth_session_repository
+                    .find_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })
                     .await;
                 if let Ok(Some(mut session)) = session {
                     session.user = Some(user);
-                    let _ = self.session_repository.update_one(session).await;
+                    let _ = self.auth_session_repository.update_one(session).await;
                 }
 
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
@@ -83,7 +82,8 @@ impl NativeDatabase {
                     .local_resource_repository
                     .delete_one(&LocalResourceId {
                         r#type: None,
-                        order_id: Some(id)
+                        order_id: Some(id),
+                        ..Default::default()
                     })
                     .await
                 {
@@ -97,12 +97,23 @@ impl NativeDatabase {
                 DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::FindAll(resources))
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Find(path)) => {
-                let resource = self.local_resource_repository.find_by_path(&path).await;
-                DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
+                let id = LocalResourceId {
+                    path: Some(path),
+                    ..Default::default()
+                };
+
+                let result = self.local_resource_repository.find_one(&id).await;
+                match result {
+                    Ok(resource) => DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource)),
+                    Err(err) => {
+                        log::error!("Failed to find local resource: {:?}", err);
+                        DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(None))
+                    }
+                }
             }
             DatabaseOperation::GenId() => DatabaseOperationOutput::GenId(gen_id().await),
             DatabaseOperation::TransferSession(TransferSessionOperation::Save(session)) => {
-                let result = self.transfer_session_repository.save_session(session).await;
+                let result = self.transfer_session_repository.create(session).await;
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(Some(session))),
                     Err(err) => {
@@ -111,7 +122,12 @@ impl NativeDatabase {
                     }
                 }
             }
-            DatabaseOperation::TransferSession(TransferSessionOperation::GetAll(id)) => {
+            DatabaseOperation::TransferSession(TransferSessionOperation::GetAllReceivedSessions()) => {
+                let id = TransferSessionId {
+                    r#type: Some(TransferType::Receive),
+                    ..Default::default()
+                };
+
                 let result = self.transfer_session_repository.find_all(Some(&id), None, None).await;
                 match result {
                     Ok(sessions) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
@@ -148,7 +164,12 @@ impl NativeDatabase {
                 }
             }
             DatabaseOperation::TransferSession(TransferSessionOperation::UpdateResource { session_id, resource }) => {
-                let result = self.transfer_session_repository.update_resource(session_id, resource).await;
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    ..Default::default()
+                };
+
+                let result = self.transfer_session_repository.update_resource(id, resource).await;
 
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(session)),

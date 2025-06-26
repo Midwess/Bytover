@@ -1,15 +1,15 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
-use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::app::authentication::service::AuthenticationService;
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::user::User;
 
 use super::nearby::NearbyEvent;
 use super::AppModule;
 
 pub struct AuthenticationModule {
-    authentication_service: &'static AuthenticationService,
+    authentication_service: &'static AuthenticationService
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

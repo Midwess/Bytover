@@ -19,6 +19,8 @@ pub mod native;
 #[cfg(feature = "lib")]
 pub mod network;
 #[cfg(feature = "lib")]
+pub mod repository;
+#[cfg(feature = "lib")]
 use bincode::Options;
 #[cfg(feature = "lib")]
 pub use crux_core::{bridge::Bridge, Core, Request};
@@ -31,15 +33,15 @@ use lazy_static::lazy_static;
 #[cfg(feature = "lib")]
 use native::executor::NativeExecutor;
 #[cfg(feature = "lib")]
-use std::sync::Arc;
-#[cfg(feature = "lib")]
-use tokio::{spawn, task::JoinHandle};
-#[cfg(feature = "lib")]
-use tokio::sync::OnceCell;
+use shared::app::operations::CoreOperation;
 #[cfg(feature = "lib")]
 use shared::app::BitBridge;
 #[cfg(feature = "lib")]
-use shared::app::operations::CoreOperation;
+use std::sync::Arc;
+#[cfg(feature = "lib")]
+use tokio::sync::OnceCell;
+#[cfg(feature = "lib")]
+use tokio::{spawn, task::JoinHandle};
 
 #[cfg(feature = "lib")]
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();

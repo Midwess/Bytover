@@ -13,13 +13,13 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
+use crate::native::message_to_shell::MessageToShell;
+use crate::{serialize, ShellRuntime};
 use shared::app::file_system::workdir::WorkDir;
 use shared::app::nearby::finding_scope::FindingScope;
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
 use shared::entities::peer::Peer;
-use crate::native::message_to_shell::MessageToShell;
-use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::peer::{PeerCommunication, PeerErrors};

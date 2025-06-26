@@ -1,12 +1,12 @@
 use std::future::poll_fn;
 use std::time::Duration;
 
+use super::module::{InternetConnection, NetworkModule};
+use crate::grpc::errors::NativeGrpcErrors;
+use shared::errors::NetworkError;
 use tokio::sync::Mutex;
 use tonic::client::GrpcService;
 use tonic::transport::{Channel, ClientTlsConfig};
-use shared::errors::NetworkError;
-use crate::grpc::errors::NativeGrpcErrors;
-use super::module::{InternetConnection, NetworkModule};
 
 pub struct GrpcClient {
     channel: Mutex<Option<Channel>>,

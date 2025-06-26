@@ -26,6 +26,9 @@ use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
 
+use crate::native::message_to_shell::MessageToShell;
+use crate::network::webrtc::message_channel::PeerRequest;
+use crate::{serialize, ShellRuntime};
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::file_system::workdir::WorkDir;
 use shared::app::operations::p2p::P2POperationOutput;
@@ -33,9 +36,6 @@ use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
 use shared::entities::peer::Peer as PeerEntity;
-use crate::native::message_to_shell::MessageToShell;
-use crate::network::webrtc::message_channel::PeerRequest;
-use crate::{serialize, ShellRuntime};
 
 use super::connection::{ConnectionWebRtc, ConnectionWebRtcErrors};
 use super::data_channel::{DataChannel, DataChannelError};

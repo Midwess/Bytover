@@ -19,12 +19,12 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
-use shared::app::file_system::workdir::WorkDir;
-use shared::app::nearby::finding_scope::FindingScope;
-use shared::entities::peer::Peer;
 use crate::network::webrtc::message_channel::MessageChannel;
 use crate::network::webrtc::peer::PeerCommunication;
 use crate::ShellRuntime;
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::nearby::finding_scope::FindingScope;
+use shared::entities::peer::Peer;
 
 use super::peer::PeerErrors;
 use super::signalling::{RtcSignalling, RtcSignallingErrors};
