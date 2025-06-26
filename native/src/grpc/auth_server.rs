@@ -9,7 +9,6 @@ use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use shared::entities::device::DeviceInfo;
 use shared::entities::user::User;
-use shared::errors::NetworkError;
 use tonic::Request;
 
 pub struct AuthServer {

@@ -33,7 +33,7 @@ impl TransferNative {
             TransferOperation::CreateCloudSession(session) => match self.cloud_service.create_public_session(session).await {
                 Ok(session) => CoreOperationOutput::Transfer(TransferOperationOutput::CreateCloudSession(session)),
                 Err(e) => {
-                    log::error!("Create public session error: {:?}", e);
+                    log::error!("Create public session error: {e:?}");
                     CoreOperationOutput::ConnectionError(NetworkError::InternalServerError(e.to_string()))
                 }
             },
@@ -74,7 +74,7 @@ impl TransferNative {
 
                 let result = connection.answer_session_request(request_id, session, peer_request_id, response).await;
 
-                log::info!(target: "transfer", "Answered session request: {:?}", result);
+                log::info!(target: "transfer", "Answered session request: {result:?}");
 
                 match result {
                     Ok(status) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(status)),
@@ -82,7 +82,7 @@ impl TransferNative {
                 }
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
-                log::info!(target: "native", "Cancelling session: {:?}", session_id);
+                log::info!(target: "native", "Cancelling session: {session_id:?}");
 
                 if self.cloud_service.cancel(session_id).await {
                     return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);

@@ -121,7 +121,7 @@ impl WebRtc {
         current_scopes.clear();
         current_scopes.extend(scopes);
 
-        log::info!(target: "broadcast", "Updated finding scopes: {:?}", current_scopes);
+        log::info!(target: "broadcast", "Updated finding scopes: {current_scopes:?}");
 
         Ok(())
     }
@@ -150,7 +150,7 @@ impl WebRtc {
         };
 
         if let Err(e) = signalling_client.send(message.clone()).await {
-            log::error!(target: "broadcast", "Error sending message, ignored: {:?}", e);
+            log::error!(target: "broadcast", "Error sending message, ignored: {e:?}");
         }
 
         Ok(())
@@ -184,7 +184,7 @@ impl WebRtc {
                 }
 
                 if let Err(e) = Self::broadcast(&signalling_client, my_id, scopes).await {
-                    log::error!(target: "broadcast", "Error in broadcast: {:?}", e);
+                    log::error!(target: "broadcast", "Error in broadcast: {e:?}");
                     broadcast_operation_sender.send(BroadcastOperation::Restart).await.unwrap();
                 } else {
                     throttle_logger.log("Broadcasting completed successfully".to_string()).await;
@@ -295,7 +295,7 @@ impl WebRtc {
                             self_clone.handle_connection(core_request_id, connection, peer_id).await;
                         }
                         Err(e) => {
-                            log::error!(target: "broadcast", "Error creating session description: {:?}", e);
+                            log::error!(target: "broadcast", "Error creating session description: {e:?}");
                             let mut current_connections = self_clone.connections.lock().await;
                             current_connections.remove(&peer_id);
                         }
@@ -314,12 +314,12 @@ impl WebRtc {
     pub async fn get_connection(&self, peer_id: u128) -> Result<Weak<PeerCommunication>, WebRtcErrors> {
         let current_connections = self.connections.lock().await;
         let Some(connection) = current_connections.get(&peer_id) else {
-            log::error!(target: "broadcast", "Connection not found for peer {:?}", peer_id);
+            log::error!(target: "broadcast", "Connection not found for peer {peer_id:?}");
             return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound))
         };
 
         let Some(connection) = connection.get() else {
-            log::error!(target: "broadcast", "Connection not yet available for peer {:?}", peer_id);
+            log::error!(target: "broadcast", "Connection not yet available for peer {peer_id:?}");
             return Err(WebRtcErrors::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound))
         };
 
@@ -346,10 +346,10 @@ impl WebRtc {
                     Box::new(move || {
                         let self_clone = self_clone.clone();
                         Box::pin(async move {
-                            log::info!(target: "broadcast", "Removing connection for peer {:?}", peer_id);
+                            log::info!(target: "broadcast", "Removing connection for peer {peer_id:?}");
                             let mut current_connections = self_clone.connections.lock().await;
                             current_connections.remove(&peer_id);
-                            log::info!(target: "broadcast", "Removed connection for peer {:?}", peer_id);
+                            log::info!(target: "broadcast", "Removed connection for peer {peer_id:?}");
                             self_clone.restart_broadcast().await;
                         })
                     })
@@ -367,7 +367,7 @@ impl WebRtc {
             Err(e) => {
                 let mut current_connections = self.connections.lock().await;
                 current_connections.remove_entry(&peer_id);
-                log::error!(target: "broadcast", "Error creating connection: {:?}", e);
+                log::error!(target: "broadcast", "Error creating connection: {e:?}");
                 self.restart_broadcast().await;
             }
         }

@@ -110,7 +110,7 @@ impl ConnectionWebRtc {
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
-        log::info!(target: ns.as_str(), "Offering connection to peer {}", peer_id);
+        log::info!(target: ns.as_str(), "Offering connection to peer {peer_id}");
         let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 
         let (notified_msg_channel_ready, mut msg_channel_receiver) = mpsc::channel(1);
@@ -165,7 +165,7 @@ impl ConnectionWebRtc {
                     })
                     .await
                 {
-                    log::error!(target: ns.as_str(), "Failed to send offer: {:?}", e);
+                    log::error!(target: ns.as_str(), "Failed to send offer: {e:?}");
                 }
             }
         });
@@ -204,19 +204,19 @@ impl ConnectionWebRtc {
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
-        log::info!(target: ns.as_str(), "Accepting offer from peer {}", peer_id);
+        log::info!(target: ns.as_str(), "Accepting offer from peer {peer_id}");
         let api = APIBuilder::new().with_setting_engine(Self::setting_engine()).build();
 
         let peer_connection = api.new_peer_connection(Self::create_config()).await?;
         if let Err(e) = peer_connection.set_remote_description(offer).await {
-            log::error!(target: ns.as_str(), "Failed to set remote description: {:?}", e);
+            log::error!(target: ns.as_str(), "Failed to set remote description: {e:?}");
             return Err(ConnectionWebRtcErrors::WebRTCServerError(e));
         }
 
         let answer = peer_connection.create_answer(None).await?;
 
         if let Err(e) = peer_connection.set_local_description(answer.clone()).await {
-            log::error!(target: ns.as_str(), "Failed to set local description: {:?}", e);
+            log::error!(target: ns.as_str(), "Failed to set local description: {e:?}");
             return Err(ConnectionWebRtcErrors::WebRTCServerError(e));
         }
 
@@ -268,7 +268,7 @@ impl ConnectionWebRtc {
                     })
                     .await
                 {
-                    log::error!(target: ns.as_str(), "Failed to send answer: {:?}", e);
+                    log::error!(target: ns.as_str(), "Failed to send answer: {e:?}");
                 }
             }
         })
@@ -326,7 +326,7 @@ impl ConnectionWebRtc {
                     log::info!(target: "rtc", "Setting remote description from {}", msg.from_id);
                     if let Ok(answer) = RTCSessionDescription::answer(answer.sdp) {
                         if let Err(e) = peer_connection.set_remote_description(answer).await {
-                            log::error!(target: "rtc", "Invalid answer SDP: {:?}", e);
+                            log::error!(target: "rtc", "Invalid answer SDP: {e:?}");
                         }
                     }
                 }
@@ -335,7 +335,7 @@ impl ConnectionWebRtc {
                     let result = peer_connection.add_ice_candidate(Self::parse_ice_candidate(candidate.ice_candidates)).await;
 
                     if let Err(e) = result {
-                        log::error!(target: "rtc", "Error adding ice candidate: {:?}", e);
+                        log::error!(target: "rtc", "Error adding ice candidate: {e:?}");
                     }
                 }
             }
@@ -375,7 +375,7 @@ impl ConnectionWebRtc {
                         .await;
 
                     if let Err(e) = result {
-                        log::error!(target: "rtc", "Error sending ice candidate: {:?}", e);
+                        log::error!(target: "rtc", "Error sending ice candidate: {e:?}");
                     }
                 }
             })
@@ -413,7 +413,7 @@ impl ConnectionWebRtc {
                     }
 
                     let mut callback = callback.lock().await;
-                    log::info!(target: "rtc", "Peer connection closed {:?}", state);
+                    log::info!(target: "rtc", "Peer connection closed {state:?}");
                     callback().await;
                 }
             })
@@ -451,7 +451,7 @@ impl ConnectionWebRtc {
             }
         }
 
-        log::info!(target: "peer", "The peer connection is closed with closing process status = {:?}", result);
+        log::info!(target: "peer", "The peer connection is closed with closing process status = {result:?}");
     }
 }
 
@@ -470,7 +470,7 @@ impl Drop for ConnectionWebRtc {
         let mut on_disconnect = self.on_disconnect.get().cloned();
         spawn(async move {
             let result = timeout(Duration::from_secs(3), connection.close()).await;
-            log::info!(target: "rtc", "The peer connection is closed with closing process status = {:?}", result);
+            log::info!(target: "rtc", "The peer connection is closed with closing process status = {result:?}");
 
             if let Some(join_handle) = signalling_join_handle.lock().await.take() {
                 join_handle.abort();

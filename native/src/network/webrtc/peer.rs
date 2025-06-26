@@ -276,7 +276,7 @@ impl PeerCommunication {
                             Arc::new(data_channel)
                         }
                         Err(e) => {
-                            log::error!(target: "peer", "Failed to create data channel {:?}", e);
+                            log::error!(target: "peer", "Failed to create data channel {e:?}");
                             return;
                         }
                     };
@@ -320,12 +320,12 @@ impl PeerCommunication {
                     match self.connection.send::<TransferResponseMessage>(request, None, None).await {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => {
-                            log::error!(target: "peer", "Failed to send session to peer {:?}", e);
+                            log::error!(target: "peer", "Failed to send session to peer {e:?}");
                             session_guard.force_complete(e.to_string());
                             return Err(PeerErrors::FailedToSendSession(e.to_string()));
                         }
                         Err(e) => {
-                            log::error!(target: "peer", "Failed to send session to peer {:?}", e);
+                            log::error!(target: "peer", "Failed to send session to peer {e:?}");
                             session_guard.force_complete(e.to_string());
                             return Err(PeerErrors::FailedToSendSession(e.to_string()));
                         }
@@ -344,9 +344,9 @@ impl PeerCommunication {
                     }
 
                     if let Err(e) = self.send_resource_thumbnail(order_id, resource_id, path.as_str()).await {
-                        log::error!(target: "peer", "Failed to send resource thumbnail {:?}", e);
+                        log::error!(target: "peer", "Failed to send resource thumbnail {e:?}");
                     } else {
-                        log::info!(target: "peer", "Sent resource thumbnail {:?}", resource_id);
+                        log::info!(target: "peer", "Sent resource thumbnail {resource_id:?}");
                     }
                 }
 
@@ -401,7 +401,7 @@ impl PeerCommunication {
                         return Err(PeerErrors::NoResponseFromPeer);
                     }
                     RecvError::Lagged(e) => {
-                        log::warn!(target: "peer", "Data channel lagged by {:?} channels", e);
+                        log::warn!(target: "peer", "Data channel lagged by {e:?} channels");
                         continue;
                     }
                 }
@@ -421,7 +421,7 @@ impl PeerCommunication {
             let progress = session_guard.resource_mut_progress(data_channel.resource_id).expect("Progress not found");
 
             if let Err(e) = upload_result {
-                log::error!(target: "peer", "Failed to send resource {:?}", e);
+                log::error!(target: "peer", "Failed to send resource {e:?}");
                 progress.fail(e.to_string());
                 shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
                     core_request_id,
@@ -448,7 +448,7 @@ impl PeerCommunication {
         response: Response
     ) -> Result<TransferSessionStatus, PeerErrors> {
         let session_id = out_session.order_id;
-        log::info!(target: "peer", "Answering session request {:?}", session_id);
+        log::info!(target: "peer", "Answering session request {session_id:?}");
         let session = Arc::new(Mutex::new(out_session));
         self.active_sessions.lock().await.insert(session_id, Arc::downgrade(&session.clone()));
         let msg_channel = self.connection.msg_channel.get().unwrap();
@@ -502,7 +502,7 @@ impl PeerCommunication {
             let shell_runtime = self.shell_runtime.clone();
             let result = data_channel.start_download(core_request_id).await;
             let mut session_guard = session.lock().await;
-            log::info!(target: "nearby", "Completed resource {:?}", order_id);
+            log::info!(target: "nearby", "Completed resource {order_id:?}");
             let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
             match result {
                 Ok(_) => {
@@ -542,7 +542,7 @@ impl PeerCommunication {
         }
 
         for session_id in active_session_ids {
-            log::info!(target: "peer", "Stopping session {:?}", session_id);
+            log::info!(target: "peer", "Stopping session {session_id:?}");
             self.stop_session(session_id).await;
         }
     }
@@ -615,7 +615,7 @@ impl PeerCommunication {
             }
         }
 
-        log::info!(target: "peer", "Completed sending resource thumbnail {:?}", resource_id);
+        log::info!(target: "peer", "Completed sending resource thumbnail {resource_id:?}");
 
         Ok(())
     }
@@ -628,7 +628,7 @@ impl PeerCommunication {
             });
 
             let mut session_guard = session.lock().await;
-            log::info!(target: "peer", "Stopping session: {:?}", session_id);
+            log::info!(target: "peer", "Stopping session: {session_id:?}");
             let _ = self.connection.send_request_and_forget(request);
             session_guard.cancel();
         }

@@ -99,7 +99,7 @@ impl MessageChannel {
                 let msg_request_broadcast = msg_request_broadcast_cloned.clone();
                 let msg_response_broadcast_cloned = msg_response_broadcast_cloned.clone();
                 Box::pin(async move {
-                    log::info!(target: "message-channel", "Connection error: {:?}", e);
+                    log::info!(target: "message-channel", "Connection error: {e:?}");
                     let _ = msg_request_broadcast.send(Err(format!("Channel error: {e:?}")));
                     let _ = msg_response_broadcast_cloned.send(Err(format!("Channel error: {e:?}")));
                 })
@@ -111,7 +111,7 @@ impl MessageChannel {
             let msg = match PeerMessageBody::decode(msg.data) {
                 Ok(msg) => msg,
                 Err(e) => {
-                    log::error!(target: "rtc", "Failed to decode message {:?}", e);
+                    log::error!(target: "rtc", "Failed to decode message {e:?}");
                     return Box::pin(async move {});
                 }
             };
@@ -135,7 +135,7 @@ impl MessageChannel {
                     });
 
                     if let Err(e) = result {
-                        log::error!(target: "rtc", "Failed to broadcast request message {:?}", e);
+                        log::error!(target: "rtc", "Failed to broadcast request message {e:?}");
                     }
                 });
             }
@@ -190,11 +190,11 @@ impl MessageChannel {
         match result {
             Ok(Ok((request_id, request))) => Ok(PeerRequest::new(request, request_id, self.msg_channel.clone())),
             Ok(Err(e)) => {
-                log::error!(target: "message-channel", "Failed to receive request {:?}", e);
+                log::error!(target: "message-channel", "Failed to receive request {e:?}");
                 Err(ConnectionWebRtcErrors::ConnectionCorrupted)
             }
             Err(e) => {
-                log::error!(target: "message-channel", "Failed to receive request {:?}", e);
+                log::error!(target: "message-channel", "Failed to receive request {e:?}");
                 Err(ConnectionWebRtcErrors::ConnectionCorrupted)
             }
         }

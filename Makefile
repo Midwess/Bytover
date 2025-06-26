@@ -1,4 +1,4 @@
-PACKAGES := backend-native shared shared_types
+PACKAGES := backend native shared shared_types
 
 ffmt:
 	for pkg in $(PACKAGES); do \

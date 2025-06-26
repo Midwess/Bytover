@@ -60,10 +60,10 @@ impl NetworkModule for GrpcClient {
         if self.endpoint.starts_with("https") {
             let tls = ClientTlsConfig::new().with_webpki_roots();
 
-            builder = builder.tls_config(tls).map_err(|it| NativeGrpcErrors::from(it))?;
+            builder = builder.tls_config(tls).map_err(NativeGrpcErrors::from)?;
         };
 
-        let channel = builder.connect().await.map_err(|it| NativeGrpcErrors::from(it))?;
+        let channel = builder.connect().await.map_err(NativeGrpcErrors::from)?;
         self.channel.lock().await.replace(channel);
 
         Ok(())

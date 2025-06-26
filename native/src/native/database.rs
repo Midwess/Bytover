@@ -106,7 +106,7 @@ impl NativeDatabase {
                 match result {
                     Ok(resource) => DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource)),
                     Err(err) => {
-                        log::error!("Failed to find local resource: {:?}", err);
+                        log::error!("Failed to find local resource: {err:?}");
                         DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(None))
                     }
                 }
@@ -117,7 +117,7 @@ impl NativeDatabase {
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(Some(session))),
                     Err(err) => {
-                        log::error!("Failed to save transfer session: {:?}", err);
+                        log::error!("Failed to save transfer session: {err:?}");
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Save(None))
                     }
                 }
@@ -132,7 +132,7 @@ impl NativeDatabase {
                 match result {
                     Ok(sessions) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
                     Err(err) => {
-                        log::error!("Failed to get all transfer sessions: {:?}", err);
+                        log::error!("Failed to get all transfer sessions: {err:?}");
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(vec![]))
                     }
                 }
@@ -142,7 +142,7 @@ impl NativeDatabase {
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(session)),
                     Err(err) => {
-                        log::error!("Failed to update transfer session: {:?}", err);
+                        log::error!("Failed to update transfer session: {err:?}");
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(None))
                     }
                 }
@@ -158,7 +158,7 @@ impl NativeDatabase {
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(Some(session))),
                     Err(err) => {
-                        log::error!("Failed to remove transfer session: {:?}", err);
+                        log::error!("Failed to remove transfer session: {err:?}");
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::Remove(None))
                     }
                 }
@@ -174,7 +174,7 @@ impl NativeDatabase {
                 match result {
                     Ok(session) => DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(session)),
                     Err(err) => {
-                        log::error!("Failed to update transfer session: {:?}", err);
+                        log::error!("Failed to update transfer session: {err:?}");
                         DatabaseOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(None))
                     }
                 }

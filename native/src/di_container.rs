@@ -1,4 +1,3 @@
-use crate::get_tokio_rt;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
 use crate::grpc::cloud_server::CloudServer;
@@ -96,7 +95,7 @@ impl DiContainer {
     pub async fn init(&self, work_dir: WorkDir) {
         let _ = self.workdir.set(work_dir.clone());
         let db_path = work_dir.database();
-        log::info!(target: "environment", "Connecting to local database at {}", db_path);
+        log::info!(target: "environment", "Connecting to local database at {db_path}");
         let local_db: Box<dyn PoolResourceProvider<Database>> = Box::new(RedbPoolProvider { path: db_path.clone() });
 
         let pool = PoolBuilder::new(local_db)

@@ -1,5 +1,4 @@
 use core_services::db::repository::abstraction::id::DbId;
-use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

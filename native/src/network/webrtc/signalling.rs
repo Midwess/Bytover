@@ -73,7 +73,7 @@ impl RtcSignalling {
                                 let mut server_writer = server_writer.lock().await;
                                 if let Some(write) = server_writer.as_mut() {
                                     if let Err(e) = write.send(Message::Ping(Bytes::from_static(&[1]))).await {
-                                        log::error!(target: "rtc-signalling", "Failed to send ping to signalling server: {:?}", e);
+                                        log::error!(target: "rtc-signalling", "Failed to send ping to signalling server: {e:?}");
                                     }
                                 }
                             }
@@ -89,7 +89,7 @@ impl RtcSignalling {
                                     };
 
                                     if let Err(e) = msg_broadcast.send(message) {
-                                        log::error!(target: "rtc-signalling", "Failed to send message to broadcast: {:?}", e);
+                                        log::error!(target: "rtc-signalling", "Failed to send message to broadcast: {e:?}");
                                     }
                                 }
                             }
@@ -122,7 +122,7 @@ impl RtcSignalling {
             if let Ok(mut writer) = writer {
                 if let Some(writer) = writer.as_mut() {
                     if let Err(e) = writer.send(Message::Binary(message.encode_to_vec().into())).await {
-                        log::error!(target: "rtc-signalling", "Failed to send message to signalling server: {:?}", e);
+                        log::error!(target: "rtc-signalling", "Failed to send message to signalling server: {e:?}");
                         continue;
                     }
 

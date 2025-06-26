@@ -119,7 +119,7 @@ impl CloudService {
 
         let response = self.server.add_resources(session_order_id as i64, resources).await?;
 
-        log::info!("Adding resource response {:?}", response);
+        log::info!("Adding resource response {response:?}");
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
             if session_guard.is_canceled() {
@@ -284,7 +284,7 @@ impl CloudService {
                         .await?
                 }
                 Err(e) => {
-                    log::error!("Upload resource failed with status: {:?}", e);
+                    log::error!("Upload resource failed with status: {e:?}");
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
                     progress.fail(e.to_string());
@@ -370,7 +370,7 @@ impl CloudService {
         });
 
         let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(100));
-        log::info!("Uploading resource {} size = {}", resource_path, size);
+        log::info!("Uploading resource {resource_path} size = {size}");
         let mut total_sent = 0;
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
             total_sent += chunk.len();
@@ -418,12 +418,12 @@ impl CloudService {
         if let Some(session) = session_guard.upgrade() {
             let mut session = session.lock().await;
             if session.order_id == session_id {
-                log::info!(target: "cloud", "Cancelling cloud session: {:?}", session_id);
+                log::info!(target: "cloud", "Cancelling cloud session: {session_id:?}");
                 session.cancel();
                 drop(session);
 
                 if let Err(e) = self.server.cancel_session(session_id as i64).await {
-                    log::error!("Failed to cancel session: {:?}", e);
+                    log::error!("Failed to cancel session: {e:?}");
                 }
 
                 return true;

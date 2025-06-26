@@ -126,7 +126,7 @@ impl DataChannel {
             )));
         };
 
-        log::info!(target: "nearby", "Data channel created: {}", label);
+        log::info!(target: "nearby", "Data channel created: {label}");
         Ok(Self {
             data_channel,
             shell_runtime,
@@ -393,7 +393,7 @@ impl RTCStreamChannel {
             Box::pin(async move {
                 if let Some(sender) = maybe_sender.upgrade() {
                     if let Err(e) = sender.send(Ok(Some(message.data.to_vec()))).await {
-                        log::error!(target: "nearby", "Failed to send message: {:?}", e);
+                        log::error!(target: "nearby", "Failed to send message: {e:?}");
                     }
                 }
             })
