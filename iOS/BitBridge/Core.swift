@@ -114,7 +114,9 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func processEffect(_ request: Request) async -> Data {
         switch request.effect {
         case .appCapabilities(.initNativeExecutor):
-            self.nativeProcessor = NativeProcessor(self)
+            let privatePath = getDocumentsDirectory(isPrivate: true).path;
+            let publicPath = getDocumentsDirectory(isPrivate: false).path;
+            self.nativeProcessor = await NativeProcessor.init(self, privatePath, publicPath)
             self.checkLocationAuthorization()
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
         case .appCapabilities(.webView(.openUrl(let url))):

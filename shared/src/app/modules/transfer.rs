@@ -47,8 +47,8 @@ pub struct TransferViewModel {
 }
 
 pub struct TransferModule {
-    resource_selection_service: &'static ResourceTransferSelectionService,
-    transfer_service: &'static TransferService
+    pub resource_selection_service: &'static ResourceTransferSelectionService,
+    pub transfer_service: &'static TransferService
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]

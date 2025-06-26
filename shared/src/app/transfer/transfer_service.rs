@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use futures_util::StreamExt;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
@@ -28,6 +30,11 @@ impl Default for TransferService {
 impl TransferService {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub fn instance() -> &'static TransferService {
+        static INSTANCE: OnceLock<TransferService> = OnceLock::new();
+        INSTANCE.get_or_init(|| TransferService::new())
     }
 
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {

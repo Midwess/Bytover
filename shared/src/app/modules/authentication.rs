@@ -9,7 +9,7 @@ use super::nearby::NearbyEvent;
 use super::AppModule;
 
 pub struct AuthenticationModule {
-    authentication_service: &'static AuthenticationService
+    pub authentication_service: &'static AuthenticationService
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

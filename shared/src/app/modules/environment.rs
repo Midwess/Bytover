@@ -17,7 +17,7 @@ pub struct EnvironmentModel {
 pub struct EnvironmentViewModel {}
 
 pub struct EnvironmentModule {
-    authentication_service: &'static AuthenticationService
+    pub authentication_service: &'static AuthenticationService
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Enum)]

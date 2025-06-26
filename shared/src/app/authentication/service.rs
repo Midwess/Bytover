@@ -9,10 +9,16 @@ use crate::entities::token::Token;
 use devlog_sdk::local_id_generator::gen_id;
 use url::Url;
 
-#[derive(Default)]
+use std::sync::OnceLock;
+
 pub struct AuthenticationService {}
 
 impl AuthenticationService {
+    pub fn instance() -> &'static Self {
+        static INSTANCE: OnceLock<AuthenticationService> = OnceLock::new();
+        INSTANCE.get_or_init(|| AuthenticationService {})
+    }
+
     pub async fn update_signin_session(&self, ctx: AppCommandContext) {
         // Call API to update the user info
         log::info!(target: "auth", "Updating sign in session");

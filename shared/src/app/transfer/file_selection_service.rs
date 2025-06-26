@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 use uniffi::Record;
 
@@ -18,6 +20,11 @@ pub struct ResourceSelection {
 pub struct ResourceTransferSelectionService {}
 
 impl ResourceTransferSelectionService {
+    pub fn instance() -> &'static ResourceTransferSelectionService {
+        static INSTANCE: OnceLock<ResourceTransferSelectionService> = OnceLock::new();
+        INSTANCE.get_or_init(|| ResourceTransferSelectionService {})
+    }
+
     pub async fn load_resources(&self, ctx: AppCommandContext) {
         let mut resources = LocalResourceDatabaseOperation::find_all().into_future(ctx.clone()).await;
 

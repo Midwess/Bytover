@@ -27,7 +27,7 @@ impl WorkDir {
     }
 
     pub fn database(&self) -> String {
-        PathBuf::from(&self.private_path).join("surrealdb.db").to_string_lossy().to_string()
+        PathBuf::from(&self.private_path).join("database").to_string_lossy().to_string()
     }
 
     pub fn thumbnails(&self, resource_id: u64) -> String {

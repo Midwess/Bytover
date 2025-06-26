@@ -9,9 +9,11 @@ pub mod system;
 pub mod transfer;
 pub mod view_models;
 
-// pub mod bridge;
-
+use crate::app::authentication::service::AuthenticationService;
 use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel};
+use crate::app::nearby::nearby_services::NearbyService;
+use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
+use crate::app::transfer::transfer_service::TransferService;
 use crux_core::capability::CapabilityContext;
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::Capability;
@@ -28,12 +30,31 @@ pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Ev
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitBridge as App>::Event, T>;
 
-#[derive(Default)]
 pub struct BitBridge {
-    environment: OnceCell<EnvironmentModule>,
-    authentication: OnceCell<AuthenticationModule>,
-    transfer: OnceCell<TransferModule>,
-    nearby: OnceCell<NearbyModule>
+    environment: EnvironmentModule,
+    authentication: AuthenticationModule,
+    transfer: TransferModule,
+    nearby: NearbyModule
+}
+
+impl Default for BitBridge {
+    fn default() -> Self {
+        Self {
+            environment: EnvironmentModule {
+                authentication_service: AuthenticationService::instance()
+            },
+            authentication: AuthenticationModule {
+                authentication_service: AuthenticationService::instance()
+            },
+            transfer: TransferModule {
+                transfer_service: TransferService::instance(),
+                resource_selection_service: ResourceTransferSelectionService::instance()
+            },
+            nearby: NearbyModule {
+                nearby_service: NearbyService::instance()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -95,20 +116,20 @@ impl App for BitBridge {
 
     fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
-            AppEvent::Environment(event) => self.environment.get().unwrap().update(event, model, caps),
-            AppEvent::Authentication(event) => self.authentication.get().unwrap().update(event, model, caps),
-            AppEvent::Transfer(event) => self.transfer.get().unwrap().update(event, model, caps),
-            AppEvent::Nearby(event) => self.nearby.get().unwrap().update(event, model, caps),
+            AppEvent::Environment(event) => self.environment.update(event, model, caps),
+            AppEvent::Authentication(event) => self.authentication.update(event, model, caps),
+            AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
+            AppEvent::Nearby(event) => self.nearby.update(event, model, caps),
             AppEvent::Void => Command::done()
         }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         AppViewModel {
-            environment: Some(self.environment.get().unwrap().view(model)),
-            authentication: Some(self.authentication.get().unwrap().view(model)),
-            transfer: Some(self.transfer.get().unwrap().view(model)),
-            nearby: Some(self.nearby.get().unwrap().view(model))
+            environment: Some(self.environment.view(model)),
+            authentication: Some(self.authentication.view(model)),
+            transfer: Some(self.transfer.view(model)),
+            nearby: Some(self.nearby.view(model))
         }
     }
 }

@@ -129,14 +129,20 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
 
 #[cfg(feature = "lib")]
 impl NativeProcessor {
-    pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
+    pub async fn new(shell: Arc<dyn ShellRuntime>, private_path: String, public_path: String) -> Self {
+        use shared::app::file_system::workdir::WorkDir;
+
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
+        di_container.init(WorkDir::new(
+            private_path,
+            public_path
+        )).await;
         let native_executor = Arc::new(di_container.get_native_executor());
 
         Self {
             shell: shell.clone(),
-            native_executor
+            native_executor,
         }
     }
 

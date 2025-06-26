@@ -25,20 +25,27 @@ impl NativeDatabase {
     pub async fn handle(&self, effect: DatabaseOperation) -> DatabaseOperationOutput {
         match effect {
             DatabaseOperation::Session(SessionOperation::WriteToken(token)) => {
-                let _ = self
+                log::info!("Writing token to database, delete first");
+                if let Err(err) = self
                     .auth_session_repository
                     .delete_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })
-                    .await;
-                self.auth_session_repository
+                    .await {
+                        log::error!("Failed to delete token from database: {err:?}");
+                    }
+
+                if let Err(err) = self.auth_session_repository
                     .create(Session {
                         r#type: SessionType::Access,
                         token,
                         user: None
                     })
-                    .await
-                    .unwrap();
+                    .await {
+                        log::error!("Failed to write token to database: {err:?}");
+                        return DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken());
+                    }
+
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())
             }
             DatabaseOperation::Session(SessionOperation::Get()) => {

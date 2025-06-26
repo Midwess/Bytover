@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -18,6 +19,11 @@ use crate::entities::user::User;
 pub struct NearbyService {}
 
 impl NearbyService {
+    pub fn instance() -> &'static NearbyService {
+        static INSTANCE: OnceLock<NearbyService> = OnceLock::new();
+        INSTANCE.get_or_init(|| NearbyService {})
+    }
+
     pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
 

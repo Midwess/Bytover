@@ -26,7 +26,7 @@ pub struct NearbyViewModel {
 }
 
 pub struct NearbyModule {
-    nearby_service: &'static NearbyService
+    pub nearby_service: &'static NearbyService
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
