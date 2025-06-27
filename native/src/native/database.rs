@@ -1,4 +1,4 @@
-use devlog_sdk::local_id_generator::gen_id;
+use devlog_sdk::distributed_id::gen_id;
 use shared::app::operations::database::{
     DatabaseOperation,
     DatabaseOperationOutput,

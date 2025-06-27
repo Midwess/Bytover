@@ -6,10 +6,10 @@ use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
-use devlog_sdk::local_id_generator::gen_id;
 use url::Url;
 
 use std::sync::OnceLock;
+use devlog_sdk::distributed_id::gen_id;
 
 pub struct AuthenticationService {}
 

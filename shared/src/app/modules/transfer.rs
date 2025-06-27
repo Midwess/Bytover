@@ -23,9 +23,9 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
-use devlog_sdk::local_id_generator::id_to_date;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
+use devlog_sdk::distributed_id::id_to_datetime;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -536,7 +536,7 @@ impl AppModule<BitBridge> for TransferModule {
                         image_resources,
                         video_resources,
                         file_resources,
-                        display_datetime: id_to_date(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
+                        display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
                     })
                 })
                 .collect(),

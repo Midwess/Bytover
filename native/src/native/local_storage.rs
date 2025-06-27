@@ -1,13 +1,13 @@
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::ShellRuntime;
 use core_services::local_storage::file_system::{File, Folder};
-use devlog_sdk::local_id_generator::gen_id;
 use shared::app::file_system::file::{LocalResource, ResourceType};
 use shared::app::file_system::workdir::WorkDir;
 use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
+use devlog_sdk::distributed_id::gen_id;
 
 pub struct NativeLocalStorage {
     pub workdir: WorkDir,
