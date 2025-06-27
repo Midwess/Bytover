@@ -414,7 +414,6 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
-                let transfer_type = session.transfer_type.clone();
                 let resource = session.resources.iter_mut().find(|it| it.order_id == resource_id);
                 if let Some(resource) = resource {
                     resource.thumbnail_path = Some(path.clone());

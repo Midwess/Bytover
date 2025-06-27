@@ -18,9 +18,9 @@ pub struct AuthSessionRepositoryImpl {
 }
 
 impl RedbId for RedbIdWrapper<AuthSessionId> {
-    fn id(&self) -> Vec<Bytes> {
+    fn lower_id(&self) -> Vec<Vec<u8>> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
-        vec![Bytes::from(code)]
+        vec![code]
     }
 }
 

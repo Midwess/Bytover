@@ -14,7 +14,6 @@ use crate::errors::InputError;
 /// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperation {
-    GetWorkDirPath,
     IsFileExists {
         path: LocalResourcePath
     },
@@ -48,7 +47,6 @@ pub enum LocalStorageOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum LocalStorageOperationOutput {
-    WorkDirPath(WorkDir),
     IsFileExists(bool),
     GetResourceType(Option<ResourceType>),
     Get(Option<LocalResource>),

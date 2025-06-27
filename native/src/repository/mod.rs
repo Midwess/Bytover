@@ -18,6 +18,6 @@ impl PoolResourceProvider<Database> for RedbPoolProvider {
     where
         Self: 'async_trait
     {
-        unsafe { Database::create(self.path.clone()).unwrap() }
+        Database::create(self.path.clone()).unwrap()
     }
 }

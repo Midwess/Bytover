@@ -157,7 +157,8 @@ impl DiContainer {
                 transfer_session_repository: Box::new(self.get_transfer_session_repository())
             },
             local_storage: NativeLocalStorage {
-                workdir: self.workdir.get().unwrap().clone()
+                workdir: self.workdir.get().unwrap().clone(),
+                shell: OnceCell::new()
             },
             transfer: TransferNative {
                 web_rtc: web_rtc.clone(),

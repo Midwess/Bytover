@@ -42,6 +42,8 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 #[cfg(feature = "lib")]
 use tokio::{spawn, task::JoinHandle};
+#[cfg(feature = "lib")]
+use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 
 #[cfg(feature = "lib")]
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
@@ -49,12 +51,19 @@ pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 #[cfg(feature = "lib")]
 #[async_trait::async_trait]
 pub trait ShellRuntime: Send + Sync + 'static {
-    async fn msg_from_native(&self, event: Vec<u8>);
-    fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<()> {
+    async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8>;
+    fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<Vec<u8>> {
         let self_clone = self.clone();
         spawn(async move {
-            self_clone.msg_from_native(event).await;
+            self_clone.msg_from_native(event).await
         })
+    }
+
+    async fn request(&self, event: MessageToShell) -> MessageToShellResponse {
+        let data = serialize(&event);
+        let response_data = self.msg_from_native(data).await;
+        let response: MessageToShellResponse = bincode::deserialize(&response_data).unwrap();
+        response
     }
 }
 

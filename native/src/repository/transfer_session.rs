@@ -18,14 +18,14 @@ pub struct TransferSessionRepositoryImpl {
 }
 
 impl RedbId for RedbIdWrapper<TransferSessionId> {
-    fn id(&self) -> Vec<Bytes> {
+    fn lower_id(&self) -> Vec<Vec<u8>> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
         let target = bincode::serialize(&self.0.target).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
         vec![
-            Bytes::from(code),
-            Bytes::from(target),
-            Bytes::from(id),
+            code,
+            target,
+            id
         ]
     }
 }
@@ -100,10 +100,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         };
         let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(
             self,
-            &RedbIdWrapper(TransferSessionId {
-                order_id: Some(order_id),
-                ..Default::default()
-            })
+            &RedbIdWrapper(id)
         )
         .await?;
 

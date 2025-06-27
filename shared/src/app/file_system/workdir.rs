@@ -27,7 +27,9 @@ impl WorkDir {
     }
 
     pub fn database(&self) -> String {
-        PathBuf::from(&self.private_path).join("database").to_string_lossy().to_string()
+        let path = PathBuf::from(&self.private_path).join("database.redb").to_string_lossy().to_string();
+        log::info!("Database saved at {path}");
+        path
     }
 
     pub fn thumbnails(&self, resource_id: u64) -> String {

@@ -15,6 +15,10 @@ import CoreLocation
 import Combine
 import QuickLookThumbnailing
 
+enum MyError: Error {
+    case invalidInput(reason: String)
+}
+
 final class SingleWaiter<T> {
     private var continuation: CheckedContinuation<T, Never>?
 
@@ -39,6 +43,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     var cloudSession: CurrentValueSubject<CloudSession?, Never> = .init(nil)
     var selectedTransfer: CurrentValueSubject<TransferMethodSelection, Never> = .init(.internet)
+    var privatePath: URL?
+    var publicPath: URL?
 
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
@@ -134,8 +140,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .appCapabilities(.localStorage(.open(let path))):
             await self.open(path: path)
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.localStorage(.getWorkDirPath)):
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.workDirPath(WorkDir(private_path: getDocumentsDirectory(isPrivate: true).path, public_path: getDocumentsDirectory(isPrivate: false).path))).bincodeSerialize()))
         case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
             let absolutePath = switch path {
             case .absolutePath(let absolute):
@@ -199,11 +203,18 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         }
     }
 
-    func msgFromNative(_ event: Data) async {
+    func msgFromNative(_ event: Data) async -> Data {
         let event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
         case .handleResponse(let id, let response):
             await self._handleResponse(id, response)
+            return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
+        case .resolveAbsolutePath(let localResourcePath):
+            let result = await self.resolveAbsolutePath(path: localResourcePath)
+            return Data(try! MessageToShellResponse.resolveAbsolutePath(result).bincodeSerialize())
+        case .resolveLocalResourcePath(let absolute):
+            let result = try! await self.resolveRelativePath(absolutePath: absolute);
+            return Data(try! MessageToShellResponse.resolveLocalResourcePath(result).bincodeSerialize())
         }
     }
 
@@ -321,9 +332,18 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
 
     func getDocumentsDirectory(isPrivate: Bool) -> URL {
-        let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if privatePath != nil && isPrivate {
+            return privatePath!
+        }
+        
+        if publicPath != nil && !isPrivate {
+            return publicPath!
+        }
+        
+        privatePath = try! FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
 
+        publicPath = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        
         return isPrivate ? privatePath! : publicPath!
     }
 
@@ -359,7 +379,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     }
                 }
             }
-        } else if itemIdentifier.starts(with: "bookmark://") {
+        }
+        else if itemIdentifier.starts(with: "bookmark://") {
             guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
                 print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
                 return nil
@@ -458,6 +479,33 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return nil
         }
     }
+    
+    func resolveAbsolutePath(path: LocalResourcePath) async -> String? {
+        switch path {
+        case .absolutePath(let path):
+            return path
+        case .relativePath(let path, let isPrivate):
+            let workdir = self.getDocumentsDirectory(isPrivate: isPrivate)
+            let path = workdir.appendingPathComponent(path).path
+            return path
+        case .platformIdentifier(let identifier):
+            return await self.getAbsoluteUrl(from: identifier)
+        }
+    }
+    
+    func resolveRelativePath(absolutePath: String) async throws -> LocalResourcePath {
+        let private_path = self.getDocumentsDirectory(isPrivate: true).path;
+        let public_path = self.getDocumentsDirectory(isPrivate: false).path;
+        if absolutePath.hasPrefix(private_path) {
+            return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: true)
+        }
+        
+        if absolutePath.hasPrefix(public_path) {
+            return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: false)
+        }
+        
+        throw MyError.invalidInput(reason: "The absolutePath is not in the sandboxed directory")
+    }
 }
 
 extension Data {
@@ -546,6 +594,8 @@ class AssetCache {
 
 extension PHAsset {
     static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
+        let identifier = identifier.components(separatedBy: "://").last!;
+        
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }

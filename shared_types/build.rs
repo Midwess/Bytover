@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
-use native::native::message_to_shell::MessageToShell;
+use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferType>()?;
     gen.register_type::<Response>()?;
     gen.register_type::<TransferSessionStatus>()?;
+    gen.register_type::<MessageToShellResponse>()?;
 
     gen.register_type::<Source>()?;
 

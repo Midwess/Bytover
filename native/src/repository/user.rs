@@ -17,9 +17,9 @@ pub struct UserRepositoryImpl {
 }
 
 impl RedbId for RedbIdWrapper<UserId> {
-    fn id(&self) -> Vec<Bytes> {
+    fn lower_id(&self) -> Vec<Vec<u8>> {
         let email = bincode::serialize(&self.0.email).unwrap();
-        vec![Bytes::from(email)]
+        vec![email]
     }
 }
 

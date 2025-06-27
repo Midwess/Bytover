@@ -27,6 +27,7 @@ impl NativeExecutor {
     pub async fn handle(&self, request_id: u32, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
         self.transfer.update_shell_runtime(&shell_runtime);
         self.p2p.update_shell_runtime(&shell_runtime);
+        self.local_storage.update_shell(&shell_runtime);
 
         match effect {
             CoreOperation::Rpc(rpc_effect) => {

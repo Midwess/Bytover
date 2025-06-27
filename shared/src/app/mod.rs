@@ -10,7 +10,7 @@ pub mod transfer;
 pub mod view_models;
 
 use crate::app::authentication::service::AuthenticationService;
-use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel};
+use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
 use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
@@ -24,7 +24,6 @@ use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferVi
 use modules::AppModule;
 use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
-use tokio::sync::OnceCell;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
@@ -59,7 +58,6 @@ impl Default for BitBridge {
 
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
-    environment: EnvironmentModel,
     authentication: AuthenticationModel,
     transfer: TransferModel,
     nearby: NearbyModel

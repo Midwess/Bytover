@@ -75,6 +75,7 @@ impl NativeDatabase {
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Add(resources)) => {
+                log::info!("Creating {:?}", resources);
                 let mut created_resources = vec![];
                 for resource in resources {
                     if let Ok(resource) = self.local_resource_repository.create(resource).await {
@@ -111,7 +112,10 @@ impl NativeDatabase {
 
                 let result = self.local_resource_repository.find_one(&id).await;
                 match result {
-                    Ok(resource) => DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource)),
+                    Ok(resource) => {
+                        log::info!("Found local resource: {:?}", resource);
+                        DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
+                    },
                     Err(err) => {
                         log::error!("Failed to find local resource: {err:?}");
                         DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(None))

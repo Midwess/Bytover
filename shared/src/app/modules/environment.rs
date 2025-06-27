@@ -32,7 +32,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
     fn update(
         &self,
         event: Self::Event,
-        model: &mut AppModel,
+        _model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
