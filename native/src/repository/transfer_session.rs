@@ -1,5 +1,4 @@
 use crate::repository::id::RedbIdWrapper;
-use bytes::Bytes;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
 use core_services::db::redb::table::RedbTable;
@@ -22,11 +21,7 @@ impl RedbId for RedbIdWrapper<TransferSessionId> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
         let target = bincode::serialize(&self.0.target).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
-        vec![
-            code,
-            target,
-            id
-        ]
+        vec![code, target, id]
     }
 }
 
@@ -98,11 +93,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
             order_id: Some(order_id),
             ..Default::default()
         };
-        let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(
-            self,
-            &RedbIdWrapper(id)
-        )
-        .await?;
+        let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(self, &RedbIdWrapper(id)).await?;
 
         if let Some(session) = session {
             let mut session = session;

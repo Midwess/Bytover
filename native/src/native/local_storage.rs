@@ -1,14 +1,13 @@
+use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+use crate::ShellRuntime;
+use core_services::local_storage::file_system::{File, Folder};
+use devlog_sdk::local_id_generator::gen_id;
+use shared::app::file_system::file::{LocalResource, ResourceType};
+use shared::app::file_system::workdir::WorkDir;
+use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use core_services::local_storage::file_system::{File, Folder};
-use devlog_sdk::local_id_generator::gen_id;
-use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use shared::app::file_system::workdir::WorkDir;
-use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
-use crate::native::message_to_shell::MessageToShell;
-use crate::native::message_to_shell::MessageToShellResponse;
-use crate::ShellRuntime;
 
 pub struct NativeLocalStorage {
     pub workdir: WorkDir,
@@ -32,7 +31,9 @@ impl NativeLocalStorage {
                 let created_file = File::new(Some(png_bytes), path).await.unwrap();
                 let metadata = created_file.metadata().await.unwrap();
                 let absolute = created_file.path.to_string_lossy().to_string();
-                let MessageToShellResponse::ResolveLocalResourcePath(Some(path)) = self.shell().request(MessageToShell::ResolveLocalResourcePath(absolute)).await else {
+                let MessageToShellResponse::ResolveLocalResourcePath(Some(path)) =
+                    self.shell().request(MessageToShell::ResolveLocalResourcePath(absolute)).await
+                else {
                     return LocalStorageOperationOutput::Get(None)
                 };
                 let resource = LocalResource {
@@ -48,7 +49,9 @@ impl NativeLocalStorage {
                 LocalStorageOperationOutput::NewFile(resource)
             }
             LocalStorageOperation::Get { path } => {
-                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) = self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await else {
+                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) =
+                    self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await
+                else {
                     return LocalStorageOperationOutput::Get(None);
                 };
 
@@ -86,7 +89,9 @@ impl NativeLocalStorage {
                 LocalStorageOperationOutput::Get(Some(resource))
             }
             LocalStorageOperation::IsFileExists { path } => {
-                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) = self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await else {
+                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) =
+                    self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await
+                else {
                     return LocalStorageOperationOutput::Get(None);
                 };
 
@@ -94,7 +99,9 @@ impl NativeLocalStorage {
                 LocalStorageOperationOutput::IsFileExists(file.is_ok())
             }
             LocalStorageOperation::GetResourceType { path } => {
-                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) = self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await else {
+                let MessageToShellResponse::ResolveAbsolutePath(Some(absolute_path)) =
+                    self.shell().request(MessageToShell::ResolveAbsolutePath(path.clone())).await
+                else {
                     return LocalStorageOperationOutput::Get(None);
                 };
 

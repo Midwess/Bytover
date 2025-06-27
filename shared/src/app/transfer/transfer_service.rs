@@ -34,7 +34,7 @@ impl TransferService {
 
     pub fn instance() -> &'static TransferService {
         static INSTANCE: OnceLock<TransferService> = OnceLock::new();
-        INSTANCE.get_or_init(|| TransferService::new())
+        INSTANCE.get_or_init(TransferService::new)
     }
 
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {

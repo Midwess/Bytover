@@ -31,20 +31,23 @@ impl NativeDatabase {
                     .delete_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })
-                    .await {
-                        log::error!("Failed to delete token from database: {err:?}");
-                    }
+                    .await
+                {
+                    log::error!("Failed to delete token from database: {err:?}");
+                }
 
-                if let Err(err) = self.auth_session_repository
+                if let Err(err) = self
+                    .auth_session_repository
                     .create(Session {
                         r#type: SessionType::Access,
                         token,
                         user: None
                     })
-                    .await {
-                        log::error!("Failed to write token to database: {err:?}");
-                        return DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken());
-                    }
+                    .await
+                {
+                    log::error!("Failed to write token to database: {err:?}");
+                    return DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken());
+                }
 
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteToken())
             }
@@ -75,7 +78,7 @@ impl NativeDatabase {
                 DatabaseOperationOutput::Session(SessionOperationOutput::WriteUser())
             }
             DatabaseOperation::LocalResource(LocalResourceDatabaseOperation::Add(resources)) => {
-                log::info!("Creating {:?}", resources);
+                log::info!("Creating {resources:?}");
                 let mut created_resources = vec![];
                 for resource in resources {
                     if let Ok(resource) = self.local_resource_repository.create(resource).await {
@@ -113,9 +116,9 @@ impl NativeDatabase {
                 let result = self.local_resource_repository.find_one(&id).await;
                 match result {
                     Ok(resource) => {
-                        log::info!("Found local resource: {:?}", resource);
+                        log::info!("Found local resource: {resource:?}");
                         DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(resource))
-                    },
+                    }
                     Err(err) => {
                         log::error!("Failed to find local resource: {err:?}");
                         DatabaseOperationOutput::LocalResource(LocalResourceDatabaseOperationOutput::Find(None))

@@ -120,8 +120,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func processEffect(_ request: Request) async -> Data {
         switch request.effect {
         case .appCapabilities(.initNativeExecutor):
-            let privatePath = getDocumentsDirectory(isPrivate: true).path;
-            let publicPath = getDocumentsDirectory(isPrivate: false).path;
+            let privatePath = getDocumentsDirectory(isPrivate: true).path
+            let publicPath = getDocumentsDirectory(isPrivate: false).path
             self.nativeProcessor = await NativeProcessor.init(self, privatePath, publicPath)
             self.checkLocationAuthorization()
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
@@ -213,7 +213,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let result = await self.resolveAbsolutePath(path: localResourcePath)
             return Data(try! MessageToShellResponse.resolveAbsolutePath(result).bincodeSerialize())
         case .resolveLocalResourcePath(let absolute):
-            let result = try! await self.resolveRelativePath(absolutePath: absolute);
+            let result = try! await self.resolveRelativePath(absolutePath: absolute)
             return Data(try! MessageToShellResponse.resolveLocalResourcePath(result).bincodeSerialize())
         }
     }
@@ -335,15 +335,15 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         if privatePath != nil && isPrivate {
             return privatePath!
         }
-        
+
         if publicPath != nil && !isPrivate {
             return publicPath!
         }
-        
+
         privatePath = try! FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
 
         publicPath = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        
+
         return isPrivate ? privatePath! : publicPath!
     }
 
@@ -379,8 +379,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     }
                 }
             }
-        }
-        else if itemIdentifier.starts(with: "bookmark://") {
+        } else if itemIdentifier.starts(with: "bookmark://") {
             guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
                 print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
                 return nil
@@ -479,7 +478,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return nil
         }
     }
-    
+
     func resolveAbsolutePath(path: LocalResourcePath) async -> String? {
         switch path {
         case .absolutePath(let path):
@@ -492,18 +491,18 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return await self.getAbsoluteUrl(from: identifier)
         }
     }
-    
+
     func resolveRelativePath(absolutePath: String) async throws -> LocalResourcePath {
-        let private_path = self.getDocumentsDirectory(isPrivate: true).path;
-        let public_path = self.getDocumentsDirectory(isPrivate: false).path;
+        let private_path = self.getDocumentsDirectory(isPrivate: true).path
+        let public_path = self.getDocumentsDirectory(isPrivate: false).path
         if absolutePath.hasPrefix(private_path) {
             return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: true)
         }
-        
+
         if absolutePath.hasPrefix(public_path) {
             return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: false)
         }
-        
+
         throw MyError.invalidInput(reason: "The absolutePath is not in the sandboxed directory")
     }
 }
@@ -594,8 +593,8 @@ class AssetCache {
 
 extension PHAsset {
     static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
-        let identifier = identifier.components(separatedBy: "://").last!;
-        
+        let identifier = identifier.components(separatedBy: "://").last!
+
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }

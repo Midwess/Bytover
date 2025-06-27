@@ -21,6 +21,8 @@ pub mod network;
 #[cfg(feature = "lib")]
 pub mod repository;
 #[cfg(feature = "lib")]
+use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+#[cfg(feature = "lib")]
 use bincode::Options;
 #[cfg(feature = "lib")]
 pub use crux_core::{bridge::Bridge, Core, Request};
@@ -42,8 +44,6 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 #[cfg(feature = "lib")]
 use tokio::{spawn, task::JoinHandle};
-#[cfg(feature = "lib")]
-use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 
 #[cfg(feature = "lib")]
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
@@ -54,9 +54,7 @@ pub trait ShellRuntime: Send + Sync + 'static {
     async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8>;
     fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<Vec<u8>> {
         let self_clone = self.clone();
-        spawn(async move {
-            self_clone.msg_from_native(event).await
-        })
+        spawn(async move { self_clone.msg_from_native(event).await })
     }
 
     async fn request(&self, event: MessageToShell) -> MessageToShellResponse {
@@ -143,15 +141,12 @@ impl NativeProcessor {
 
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
-        di_container.init(WorkDir::new(
-            private_path,
-            public_path
-        )).await;
+        di_container.init(WorkDir::new(private_path, public_path)).await;
         let native_executor = Arc::new(di_container.get_native_executor());
 
         Self {
             shell: shell.clone(),
-            native_executor,
+            native_executor
         }
     }
 

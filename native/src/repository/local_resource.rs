@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
 use core_services::db::redb::table::RedbTable;
@@ -22,11 +21,7 @@ impl RedbId for RedbIdWrapper<LocalResourceId> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
         let path = bincode::serialize(&self.0.path).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
-        vec![
-            code,
-            path,
-            id,
-        ]
+        vec![code, path, id]
     }
 }
 

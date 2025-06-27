@@ -7,7 +7,6 @@ use uniffi::Enum;
 
 use super::{CoreOperation, CoreOperationOutput};
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use crate::app::file_system::workdir::WorkDir;
 use crate::app::AppRequestBuilder;
 use crate::errors::InputError;
 

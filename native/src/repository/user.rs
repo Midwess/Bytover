@@ -1,5 +1,4 @@
 use crate::repository::id::RedbIdWrapper;
-use bytes::Bytes;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
 use core_services::db::redb::table::RedbTable;
