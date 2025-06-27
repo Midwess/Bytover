@@ -14,7 +14,6 @@ uniffi = {workspace = true, features = ["bindgen"]}
 core-services = { path = "../libs/core-services", default-features = false }
 schema = { path = "../libs/schema/rust", features = ["bindgen", "client"], default-features = false }
 devlog-sdk = { path = "../libs/devlog-sdk", default-features = false }
-tokio = {version = "1.44.1", default-features = false, features = ["sync", "rt"]}
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
@@ -26,14 +25,6 @@ ulid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 url = { workspace = true }
 futures-util = { workspace = true }
-
-[tokio.dependencies]
-workspace = true
-default-features = false
-features = [
-    "rt",
-    "sync",
-]
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
