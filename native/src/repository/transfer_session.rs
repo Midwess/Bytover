@@ -1,3 +1,7 @@
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use tokio::fs;
+use std::sync::Arc;
 use crate::repository::id::RedbIdWrapper;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
@@ -8,12 +12,16 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use shared::app::file_system::file::LocalResource;
+use core_services::local_storage::file_system::Folder;
+use shared::app::file_system::file::{LocalResource, LocalResourcePath};
+use shared::app::repository::errors::PersistenceError;
+use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
 
 pub struct TransferSessionRepositoryImpl {
-    pub db: PoolRequest<Database>
+    pub db: PoolRequest<Database>,
+    pub path_resolver: Arc<dyn PathResolver>
 }
 
 impl RedbId for RedbIdWrapper<TransferSessionId> {
@@ -88,7 +96,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         &self,
         order_id: u64,
         progresses: Vec<TransferProgress>
-    ) -> Result<Option<TransferSession>, RepositoryError> {
+    ) -> Result<Option<TransferSession>, PersistenceError> {
         let id = TransferSessionId {
             order_id: Some(order_id),
             ..Default::default()
@@ -109,7 +117,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         &self,
         session_id: TransferSessionId,
         resource: LocalResource
-    ) -> Result<Option<TransferSession>, RepositoryError> {
+    ) -> Result<Option<TransferSession>, PersistenceError> {
         let session =
             RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(self, &RedbIdWrapper(session_id.clone()))
                 .await?;
@@ -121,5 +129,65 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         } else {
             Ok(None)
         }
+    }
+
+    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
+        let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::delete_one(self, &RedbIdWrapper(session_id.clone())).await?;
+        let session_order_id = session.order_id;
+        let session_dir_path = self.path_resolver.get_session_dir_path(session_order_id).await;
+        let path_buf = PathBuf::from(session_dir_path);
+        if !path_buf.is_dir() {
+            return Err(PersistenceError::NotFound(format!("Not found folder for session {}", session_order_id)))
+        }
+
+        if let Err(e) = fs::remove_dir_all(path_buf).await {
+            log::error!("Error when delete session folder but we already delete the session record, so skipping...: {}", e);
+        }
+
+        Ok(())
+    }
+
+    async fn generate_resource_paths(
+        &self,
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>,
+    ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+        let workdir = PathBuf::from(self.path_resolver.get_session_dir_path(session_order_id).await);
+        let mut result = HashMap::new();
+        let mut used_names = HashSet::new();
+
+        for (resource_id, resource_name) in resource_names {
+            let mut candidate_name = resource_name.clone();
+            let mut counter = 1;
+
+            while used_names.contains(&candidate_name) {
+                candidate_name = generate_new_filename(&resource_name, counter);
+                counter += 1;
+            }
+
+            used_names.insert(candidate_name.clone());
+
+            let path = workdir.join(&candidate_name);
+            let absolute_path = path.to_string_lossy().to_string();
+            let resolved_path = self.path_resolver.get_local_resource_path(absolute_path).await;
+            result.insert(resource_id, resolved_path);
+        }
+
+        Ok(result)
+    }
+}
+
+fn generate_new_filename(original_name: &str, counter: u32) -> String {
+    let path = Path::new(original_name);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(original_name);
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    if let Some(ext) = ext {
+        format!("{}-{}.{}", stem, counter, ext)
+    } else {
+        format!("{}-{}", stem, counter)
     }
 }

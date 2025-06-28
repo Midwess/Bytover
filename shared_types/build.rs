@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
 use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+use native::repository::path_resolver::{PathResolverMessage, PathResolverResponseMessage};
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
@@ -12,20 +13,19 @@ use shared::app::modules::environment::{EnvironmentEvent, EnvironmentModel};
 use shared::app::modules::nearby::NearbyEvent;
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
 use shared::app::nearby::finding_scope::FindingScope;
-use shared::app::operations::database::{
-    DatabaseOperation,
-    DatabaseOperationOutput,
-    LocalResourceDatabaseOperation,
-    LocalResourceDatabaseOperationOutput,
-    SessionOperation,
-    SessionOperationOutput,
-    TransferSessionOperation,
+use shared::app::operations::persistent::{
+    PersistentOperation,
+    PersistentOperationOutput,
+    LocalResourcePersistentOperation,
+    LocalResourcePersistentOperationOutput,
+    SessionPersistentOperation,
+    SessionPersistentOperationOutput,
+    TransferSessionPersistentOperation,
     TransferSessionOperationOutput
 };
-use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation};
+use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation, OpenOperation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
-use shared::app::operations::local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -62,19 +62,17 @@ fn main() -> anyhow::Result<()> {
     // Register operation enums
     gen.register_type::<DialogOperation>()?;
     gen.register_type::<DialogOperationOutput>()?;
-    gen.register_type::<DatabaseOperation>()?;
-    gen.register_type::<DatabaseOperationOutput>()?;
+    gen.register_type::<PersistentOperation>()?;
+    gen.register_type::<PersistentOperationOutput>()?;
     gen.register_type::<RpcOperation>()?;
     gen.register_type::<RpcOperationOutput>()?;
-    gen.register_type::<SessionOperation>()?;
-    gen.register_type::<SessionOperationOutput>()?;
-    gen.register_type::<LocalStorageOperation>()?;
-    gen.register_type::<LocalStorageOperationOutput>()?;
+    gen.register_type::<SessionPersistentOperation>()?;
+    gen.register_type::<SessionPersistentOperationOutput>()?;
     gen.register_type::<TransferOperation>()?;
     gen.register_type::<TransferOperationOutput>()?;
-    gen.register_type::<LocalResourceDatabaseOperation>()?;
-    gen.register_type::<LocalResourceDatabaseOperationOutput>()?;
-    gen.register_type::<TransferSessionOperation>()?;
+    gen.register_type::<LocalResourcePersistentOperation>()?;
+    gen.register_type::<LocalResourcePersistentOperationOutput>()?;
+    gen.register_type::<TransferSessionPersistentOperation>()?;
     gen.register_type::<TransferSessionOperationOutput>()?;
     gen.register_type::<InternetOperation>()?;
     gen.register_type::<InternetOperationOutput>()?;
@@ -83,6 +81,10 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<P2POperation>()?;
     gen.register_type::<P2POperationOutput>()?;
     gen.register_type::<NearbyEvent>()?;
+    gen.register_type::<OpenOperation>()?;
+    gen.register_type::<PathResolverMessage>()?;
+    gen.register_type::<PathResolverResponseMessage>()?;
+
     // Register module types
     gen.register_type::<EnvironmentEvent>()?;
     gen.register_type::<EnvironmentModel>()?;

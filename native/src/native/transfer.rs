@@ -13,21 +13,10 @@ use shared::errors::NetworkError;
 pub struct TransferNative {
     pub web_rtc: Arc<WebRtc>,
     pub cloud_service: CloudService,
-    pub shell_runtime: OnceCell<Arc<dyn ShellRuntime>>
+    pub shell_runtime: Arc<dyn ShellRuntime>
 }
 
 impl TransferNative {
-    pub fn update_shell_runtime(&self, shell_runtime: &Arc<dyn ShellRuntime>) {
-        if self.shell_runtime.get().is_none() {
-            let _ = self.shell_runtime.set(shell_runtime.clone());
-            self.cloud_service.init(shell_runtime.clone());
-        }
-    }
-
-    pub fn shell_runtime(&self) -> Arc<dyn ShellRuntime> {
-        self.shell_runtime.get().unwrap().clone()
-    }
-
     pub async fn handle(&self, request_id: u32, effect: TransferOperation) -> CoreOperationOutput {
         match effect {
             TransferOperation::CreateCloudSession(session) => match self.cloud_service.create_public_session(session).await {

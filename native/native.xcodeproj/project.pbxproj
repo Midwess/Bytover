@@ -217,7 +217,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libnative.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libnative.a;
-				CARGO_XCODE_FEATURES = lib;
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64e]" = aarch64;
@@ -248,7 +248,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libnative.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libnative.a;
-				CARGO_XCODE_FEATURES = lib;
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
@@ -280,7 +280,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libnative.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libnative.dylib;
-				CARGO_XCODE_FEATURES = lib;
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64e]" = aarch64;
@@ -305,7 +305,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = libnative.d;
 				CARGO_XCODE_CARGO_FILE_NAME = libnative.dylib;
-				CARGO_XCODE_FEATURES = lib;
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
@@ -331,7 +331,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen.d";
 				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen";
-				CARGO_XCODE_FEATURES = "uniffi-bindgen";
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64e]" = aarch64;
@@ -345,6 +345,9 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				DEVLOG_PUBLIC_GATEWAY_HOST = api.devlog.studio;
+				DEVLOG_PUBLIC_GATEWAY_PORT = 45650;
+				DEVLOG_WITH_SSL = 1;
 				PRODUCT_NAME = "uniffi-bindgen";
 				SUPPORTED_PLATFORMS = macosx;
 			};
@@ -355,7 +358,7 @@
 			buildSettings = {
 				CARGO_XCODE_CARGO_DEP_FILE_NAME = "uniffi-bindgen.d";
 				CARGO_XCODE_CARGO_FILE_NAME = "uniffi-bindgen";
-				CARGO_XCODE_FEATURES = "uniffi-bindgen";
+				CARGO_XCODE_FEATURES = "";
 				"CARGO_XCODE_TARGET_ARCH[arch=arm*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64*]" = aarch64;
 				"CARGO_XCODE_TARGET_ARCH[arch=arm64]" = aarch64;
@@ -370,6 +373,9 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
+				DEVLOG_PUBLIC_GATEWAY_HOST = api.devlog.studio;
+				DEVLOG_PUBLIC_GATEWAY_PORT = 45650;
+				DEVLOG_WITH_SSL = 1;
 				PRODUCT_NAME = "uniffi-bindgen";
 				SUPPORTED_PLATFORMS = macosx;
 			};

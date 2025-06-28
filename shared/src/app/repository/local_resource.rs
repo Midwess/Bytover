@@ -3,6 +3,9 @@ use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
+use url::Url;
+use crate::app::repository::errors::PersistenceError;
+use crate::core_api::{IOReader, IOWriter, NetStream};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct LocalResourceId {
@@ -12,7 +15,15 @@ pub struct LocalResourceId {
 }
 
 #[async_trait::async_trait]
-pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {}
+pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
+    async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError>;
+    async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError>;
+    async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError>;
+    async fn load_all(&self) -> Result<Vec<LocalResource>, PersistenceError>;
+    async fn read(&self, path: LocalResourcePath) -> Result<Box<dyn IOReader>, PersistenceError>;
+    async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError>;
+    async fn new_thumbnail_writer(&self, resource_id: u64) -> Result<(Box<dyn IOWriter>, LocalResourcePath), PersistenceError>;
+}
 
 impl Table<LocalResourceId> for LocalResource {
     fn get_table() -> &'static str {

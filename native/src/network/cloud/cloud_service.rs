@@ -2,16 +2,15 @@ use futures_util::future::join_all;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use log::info;
 use tokio::sync::{oneshot, OnceCell};
 
 use core_services::local_storage::file_system::{File, Folder};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
-use tokio::io::{duplex, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tokio_util::io::ReaderStream;
 
 use crate::grpc::cloud_server::CloudServer;
 use crate::grpc::errors::NativeGrpcErrors;
@@ -20,8 +19,11 @@ use crate::{serialize, ShellRuntime, ThrottleShellRuntime};
 use shared::app::file_system::file::ResourceType;
 use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
+use shared::app::repository::errors::PersistenceError;
+use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
 use shared::app::transfer::target::TransferTarget;
+use shared::core_api::{CoreBridge, IOReader, NetStream};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -31,8 +33,6 @@ pub enum CloudTransferErrors {
     InvalidSessionTarget,
     #[error("Failed to open file: {0}")]
     FileError(String),
-    #[error("Http error: {0}")]
-    HttpError(#[from] reqwest::Error),
     #[error("Upload process error: {0}")]
     UploadProcessError(String),
     #[error("Only one session is allowed")]
@@ -44,32 +44,22 @@ pub enum CloudTransferErrors {
     #[error("Resource error")]
     ResourceError(String),
     #[error("Unsupported transfer target")]
-    UnsupportedTransferTarget
+    UnsupportedTransferTarget,
+    #[error("Internal error {0}")]
+    InternalError(#[from] anyhow::Error),
+    #[error("IO Error {0}")]
+    IOError(#[from] PersistenceError),
 }
 
 pub struct CloudService {
-    server: CloudServer,
-    shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
-    active_session: Mutex<Weak<Mutex<TransferSession>>>
+    pub server: CloudServer,
+    pub core_bridge: Arc<dyn CoreBridge>,
+    pub active_session: Mutex<Weak<Mutex<TransferSession>>>,
+    pub repository: Arc<dyn LocalResourceRepository>,
+    pub net_stream: Box<dyn NetStream>
 }
 
 impl CloudService {
-    pub fn new(cloud: CloudServer) -> Self {
-        Self {
-            server: cloud,
-            shell_runtime: OnceCell::new(),
-            active_session: Default::default()
-        }
-    }
-
-    pub fn init(&self, shell_runtime: Arc<dyn ShellRuntime>) {
-        let _ = self.shell_runtime.set(shell_runtime);
-    }
-
-    pub fn shell_runtime(&self) -> &Arc<dyn ShellRuntime> {
-        self.shell_runtime.get().unwrap()
-    }
-
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
         let password = match &session.target {
             TransferTarget::Internet { password, .. } => password.clone(),
@@ -119,7 +109,6 @@ impl CloudService {
 
         let response = self.server.add_resources(session_order_id as i64, resources).await?;
 
-        log::info!("Adding resource response {response:?}");
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
             if session_guard.is_canceled() {
@@ -130,6 +119,8 @@ impl CloudService {
         }
 
         drop(session_guard);
+
+        log::info!("Start uploading resources and thumbnails");
 
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = tokio::join!(
@@ -148,8 +139,10 @@ impl CloudService {
         session: &Arc<Mutex<TransferSession>>,
         thumbnail_upload_requests: Vec<ClientUploadRequest>
     ) -> Result<(), CloudTransferErrors> {
+        log::info!("Uploading thumbnails");
         for request in thumbnail_upload_requests {
             let session_guard = session.lock().await;
+            log::info!("Uploading thumbnail {}", request.resource_order_id);
             if session_guard.is_canceled() {
                 return Ok(());
             }
@@ -166,41 +159,29 @@ impl CloudService {
 
             drop(session_guard);
 
-            let thumbnail_file = match File::new(None, thumbnail_file_path.as_string()).await {
-                Ok(file) => file,
-                Err(_) => continue
-            };
-
-            let Ok(file) = thumbnail_file.open().await else {
+            let Ok(mut cursor) = self.repository.read(thumbnail_file_path).await else {
                 continue;
             };
 
-            let Ok(file_size) = file.metadata().await else {
+            let Ok(size) = cursor.total_size().await else {
                 continue;
             };
 
-            let stream = ReaderStream::new(file);
-
-            let client = reqwest::Client::new();
             log::info!("Uploading thumbnail to {}", request.upload_url);
-            let Ok(response) = client
-                .put(&request.upload_url)
-                .header("Content-Length", file_size.len().to_string())
-                .body(reqwest::Body::wrap_stream(stream))
-                .send()
-                .await
-            else {
+            let url = (request.upload_url.clone()).parse::<url::Url>().unwrap();
+            let Ok(mut net_stream) = self.net_stream.start(url, size).await else {
                 continue;
             };
 
-            if !response.status().is_success() {
-                log::warn!(
-                    "Failed to upload thumbnail, the status is {:?} with msg: {:?}",
-                    response.status(),
-                    response.text().await
-                )
+            while let Ok(Some(bytes)) = cursor.next().await {
+                if let Err(e) = net_stream.write(bytes).await {
+                    log::warn!("Failed to upload thumbnail: {e:?}");
+                    break
+                }
             }
         }
+
+        log::info!("Thumbnails uploaded");
 
         Ok(())
     }
@@ -223,25 +204,23 @@ impl CloudService {
             let (tx, rx) = oneshot::channel();
             resource_size_tasks.insert(resource.order_id, rx);
 
-            let resource_type = resource.r#type.clone();
-            let resource_path = resource.path.as_string();
+            let resource_path = resource.path.clone();
+            let repository = self.repository.clone();
             futures.push(async move {
-                match resource_type {
-                    ResourceType::Folder => {
-                        if let Ok(folder) = Folder::new(resource_path).await {
-                            if let Ok(size) = folder.calculate_tar_size().await {
-                                let _ = tx.send(size);
-                            }
-                        }
+                let cursor = match repository.read(resource_path).await {
+                    Ok(cursor) => cursor,
+                    Err(e) => {
+                        let _ = tx.send(Err(CloudTransferErrors::from(e)));
+                        return;
                     }
-                    _ => {
-                        if let Ok(file) = File::new(None, resource_path).await {
-                            if let Ok(size) = file.metadata().await.map(|it| it.size) {
-                                let _ = tx.send(size);
-                            }
-                        }
-                    }
-                }
+                };
+
+                if let Err(e) = cursor.total_size().await {
+                    let _ = tx.send(Err(CloudTransferErrors::from(e)));
+                    return;
+                };
+
+                let _ = tx.send(Ok(cursor));
             });
         }
 
@@ -260,23 +239,23 @@ impl CloudService {
             let order_id = request.resource_order_id as u64;
             let upload_url = request.upload_url.clone();
 
-            let size = match resource_size_tasks.remove(&order_id) {
+            let cursor = match resource_size_tasks.remove(&order_id) {
                 Some(rx) => match rx.await {
-                    Ok(size) => size,
+                    Ok(size) => size?,
                     Err(_) => continue
                 },
                 None => continue
             };
 
-            current_upload_request = match self.upload_resource(session, order_id, upload_url, size, core_request_id).await {
+            current_upload_request = match self.upload_resource(session, order_id, upload_url, cursor, core_request_id).await {
                 Ok(_) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    self.shell_runtime()
-                        .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                    let _ = self.core_bridge
+                        .response(core_request_id, msg)
                         .await;
 
                     self.server
@@ -290,8 +269,8 @@ impl CloudService {
                     progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    self.shell_runtime()
-                        .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                    let _ = self.core_bridge
+                        .response(core_request_id, msg)
                         .await;
 
                     self.server
@@ -309,7 +288,7 @@ impl CloudService {
         transfer_session: &Arc<Mutex<TransferSession>>,
         resource_order_id: u64,
         upload_url: String,
-        size: u64,
+        mut cursor: Box<dyn IOReader>,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
         let upload_chunk_size = 512 * 1024;
@@ -324,54 +303,11 @@ impl CloudService {
             None => return Err(CloudTransferErrors::ResourceNotFound)
         };
 
-        let mut cursor = match resource_type {
-            ResourceType::Folder => {
-                let folder = Folder::new(resource_path.clone())
-                    .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                folder
-                    .cursor(upload_chunk_size)
-                    .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
-            }
-            _ => {
-                let file = File::new(None, resource_path.clone())
-                    .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?;
-                file.cursor(0, upload_chunk_size)
-                    .await
-                    .map_err(|it| CloudTransferErrors::FileError(it.to_string()))?
-            }
-        };
-
-        let (mut writer, reader) = duplex(max_buffer_size);
-        let stream = ReaderStream::new(reader);
-        let body = reqwest::Body::wrap_stream(stream);
-
-        let upload_url_cloned = upload_url.clone();
-        let handle: JoinHandle<Result<(), CloudTransferErrors>> = tokio::spawn(async move {
-            let client = reqwest::Client::new();
-            let response = client
-                .put(&upload_url_cloned)
-                .header("Content-Length", format!("{size}"))
-                .header("Content-Type", "application/octet-stream")
-                .body(body)
-                .send()
-                .await?;
-            if response.status().is_success() {
-                return Ok(())
-            }
-
-            Err(CloudTransferErrors::UploadProcessError(format!(
-                "STATUS {:?}, msg: {:?}",
-                response.status(),
-                response.text().await
-            )))
-        });
-
-        let progress_sender = ThrottleShellRuntime::new(self.shell_runtime().clone(), Duration::from_millis(100));
-        log::info!("Uploading resource {resource_path} size = {size}");
+        let total_size = cursor.total_size().await?;
+        log::info!("Uploading resource {resource_path} size = {total_size}");
         let mut total_sent = 0;
+        let url = (upload_url.clone()).parse::<url::Url>().unwrap();
+        let mut net_stream = self.net_stream.start(url, total_size).await?;
         while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
             total_sent += chunk.len();
             let count = chunk.len();
@@ -387,15 +323,15 @@ impl CloudService {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
             drop(session_guard);
 
-            progress_sender.send(MessageToShell::HandleResponse(core_request_id, progress_update_event)).await;
+            self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
 
-            writer
-                .write_all(&chunk)
+            net_stream
+                .write(chunk)
                 .await
                 .map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
         }
 
-        writer.flush().await.map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
+        net_stream.end().await?;
 
         let session_guard = transfer_session.lock().await;
         let progress = session_guard.resource_progress(resource_order_id).expect("Progress not found");
@@ -403,11 +339,6 @@ impl CloudService {
             return Err(CloudTransferErrors::UploadProcessError(
                 "Upload process is interrupted".to_string()
             ));
-        }
-
-        if let Ok(handle) = handle.await {
-            log::info!("Upload completed, sent {total_sent} bytes");
-            handle?;
         }
 
         Ok(())

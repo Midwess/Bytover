@@ -9,17 +9,11 @@ use shared::app::operations::p2p::P2POperation;
 use shared::app::operations::CoreOperationOutput;
 
 pub struct P2PNativeExecutor {
-    pub shell_runtime: OnceCell<Arc<dyn ShellRuntime>>,
+    pub shell_runtime: Arc<dyn ShellRuntime>,
     pub web_rtc: Arc<WebRtc>
 }
 
 impl P2PNativeExecutor {
-    pub fn update_shell_runtime(&self, shell_runtime: &Arc<dyn ShellRuntime>) {
-        if self.shell_runtime.get().is_none() {
-            let _ = self.shell_runtime.set(shell_runtime.clone());
-        }
-    }
-
     pub async fn handle(&self, request_id: u32, effect: P2POperation) -> CoreOperationOutput {
         match effect {
             P2POperation::PeerEvents(peer_id) => {
@@ -54,7 +48,7 @@ impl P2PNativeExecutor {
             }
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc.clone();
-                let result = web_rtc.start(request_id, peer, self.shell_runtime.get().unwrap().clone()).await;
+                let result = web_rtc.start(request_id, peer, self.shell_runtime.clone()).await;
                 match result {
                     Ok(_) => CoreOperationOutput::Void,
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())

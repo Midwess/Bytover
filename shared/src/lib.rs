@@ -8,5 +8,8 @@ pub mod app;
 pub mod entities;
 pub mod errors;
 pub mod grpc;
+pub mod core_api;
 
-setup_scaffolding!();
+pub use app::CoreOperation as CoreOperation;
+
+setup_scaffolding!("shared");

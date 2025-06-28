@@ -1,5 +1,5 @@
 use crate::app::modules::authentication::AuthenticationEvent;
-use crate::app::operations::database::SessionOperation;
+use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
@@ -31,7 +31,7 @@ impl AuthenticationService {
         };
 
         if user.is_none() {
-            let session = SessionOperation::get_session().into_future(ctx.clone()).await;
+            let session = SessionPersistentOperation::get_session().into_future(ctx.clone()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {
                 user.replace(user_info);
             }
@@ -39,7 +39,7 @@ impl AuthenticationService {
             // User not signined in
             return;
         } else {
-            SessionOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
+            SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
         }
 
         let user = user.unwrap();
@@ -82,7 +82,7 @@ impl AuthenticationService {
         }
 
         log::info!("Saving token");
-        SessionOperation::save_token(token).into_future(ctx.clone()).await;
+        SessionPersistentOperation::save_token(token).into_future(ctx.clone()).await;
         log::info!("Updating user");
         self.update_signin_session(ctx).await;
     }

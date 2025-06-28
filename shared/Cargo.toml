@@ -10,7 +10,7 @@ typegen = ["crux_core/typegen"]
 
 [dependencies]
 crux_core.workspace = true
-uniffi = {workspace = true, features = ["bindgen"]}
+uniffi = {workspace = true}
 core-services = { path = "../libs/core-services", default-features = false }
 schema = { path = "../libs/schema/rust", features = ["bindgen", "client"], default-features = false }
 devlog-sdk = { path = "../libs/devlog-sdk", default-features = false }
@@ -24,6 +24,8 @@ anyhow = { workspace = true }
 ulid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 url = { workspace = true }
+tokio = { workspace = true, default-features = false, features = ["rt", "sync"] }
+bytes.workspace = true
 futures-util = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]

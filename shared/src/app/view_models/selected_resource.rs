@@ -13,7 +13,6 @@ pub struct SelectedResourceViewModel {
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
-    pub is_valid: bool
 }
 
 impl From<&LocalResource> for SelectedResourceViewModel {
@@ -34,7 +33,6 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             path: resource.path.clone(),
             thumbnail_path: Some(resource.thumbnail_path.clone().unwrap_or(resource.path.clone())),
             r#type: resource.r#type.clone(),
-            is_valid: resource.is_valid
         };
 
         if view_model.size_gb < 0.1 {

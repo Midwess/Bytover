@@ -18,8 +18,8 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn id(&self) -> u128 {
-        self.id.parse::<u128>().expect("Failed to parse peer id")
+    pub fn id(&self) -> String {
+        self.id.clone()
     }
 
     pub fn random_avatar() -> String {

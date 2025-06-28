@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/core_api/core";
 import "./App.css";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/core_api/event";
 
 type CounterState = {
   count: 0

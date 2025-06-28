@@ -2,53 +2,33 @@
 
 static _CURRENT_VERSION: &str = "1.0.0";
 
-#[cfg(feature = "lib")]
 use tokio::sync::Mutex;
-#[cfg(feature = "lib")]
 use tokio::time::{self, Duration, Interval};
-#[cfg(feature = "lib")]
 pub mod config;
-#[cfg(feature = "lib")]
 pub mod di_container;
-#[cfg(feature = "lib")]
 pub mod errors;
-#[cfg(feature = "lib")]
 pub mod grpc;
-#[cfg(feature = "lib")]
 pub mod native;
-#[cfg(feature = "lib")]
 pub mod network;
-#[cfg(feature = "lib")]
 pub mod repository;
-#[cfg(feature = "lib")]
-use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
-#[cfg(feature = "lib")]
-use bincode::Options;
-#[cfg(feature = "lib")]
-pub use crux_core::{bridge::Bridge, Core, Request};
-#[cfg(feature = "lib")]
-use di_container::DiContainer;
-#[cfg(feature = "lib")]
-use erased_serde::Serialize;
-#[cfg(feature = "lib")]
-use lazy_static::lazy_static;
-#[cfg(feature = "lib")]
-use native::executor::NativeExecutor;
-#[cfg(feature = "lib")]
-use shared::app::operations::CoreOperation;
-#[cfg(feature = "lib")]
-use shared::app::BitBridge;
-#[cfg(feature = "lib")]
-use std::sync::Arc;
-#[cfg(feature = "lib")]
-use tokio::sync::OnceCell;
-#[cfg(feature = "lib")]
-use tokio::{spawn, task::JoinHandle};
+mod core_api_impl;
 
-#[cfg(feature = "lib")]
+use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+use bincode::Options;
+pub use crux_core::{bridge::Bridge, Core, Request};
+use di_container::DiContainer;
+use erased_serde::Serialize;
+use lazy_static::lazy_static;
+use native::executor::NativeExecutor;
+use shared::app::operations::CoreOperation;
+use shared::app::BitBridge;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
+use tokio::{spawn, task::JoinHandle};
+use crate::repository::path_resolver::PathResolverImpl;
+
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
-#[cfg(feature = "lib")]
 #[async_trait::async_trait]
 pub trait ShellRuntime: Send + Sync + 'static {
     async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8>;
@@ -63,22 +43,25 @@ pub trait ShellRuntime: Send + Sync + 'static {
         let response: MessageToShellResponse = bincode::deserialize(&response_data).unwrap();
         response
     }
+
+    fn notify(self: Arc<Self>, msg: MessageToShell) -> JoinHandle<MessageToShellResponse> {
+        let self_clone = self.clone();
+        spawn(async move { self_clone.request(msg).await })
+    }
 }
 
-#[cfg(feature = "lib")]
 pub struct ThrottleShellRuntime<E: Serialize + Send + 'static> {
     latest_event: Arc<Mutex<Option<E>>>,
     join_handle: JoinHandle<()>
 }
 
-#[cfg(feature = "lib")]
 impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
     pub fn new(shell_runtime: Arc<dyn ShellRuntime>, delay: Duration) -> Self {
         let latest_event = Arc::new(Mutex::new(None::<E>));
         let latest_event_clone = latest_event.clone();
         let shell_runtime_clone = shell_runtime.clone();
 
-        let join_handle = spawn(async move {
+        let join_handle = get_tokio_rt().spawn(async move {
             let mut interval: Interval = time::interval(delay);
             interval.tick().await;
 
@@ -106,7 +89,6 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
     }
 }
 
-#[cfg(feature = "lib")]
 impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
     fn drop(&mut self) {
         let handle = self.join_handle.abort_handle();
@@ -115,13 +97,11 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
 }
 
 // NativeProcessor implementation
-#[cfg(feature = "lib")]
 pub struct NativeProcessor {
     shell: Arc<dyn ShellRuntime>,
-    native_executor: Arc<NativeExecutor>
+    native_executor: &'static NativeExecutor
 }
 
-#[cfg(feature = "lib")]
 pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     TOKIO_RT.get().unwrap_or_else(|| {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -134,19 +114,20 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     })
 }
 
-#[cfg(feature = "lib")]
 impl NativeProcessor {
-    pub async fn new(shell: Arc<dyn ShellRuntime>, private_path: String, public_path: String) -> Self {
-        use shared::app::file_system::workdir::WorkDir;
-
+    pub async fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
-        di_container.init(WorkDir::new(private_path, public_path)).await;
-        let native_executor = Arc::new(di_container.get_native_executor());
+
+        di_container.init(Arc::new(PathResolverImpl {
+            shell: shell.clone()
+        }), shell.clone()).await;
+
+        let native_executor = di_container.get_native_executor();
 
         Self {
-            shell: shell.clone(),
-            native_executor
+            native_executor,
+            shell: shell.clone()
         }
     }
 
@@ -157,7 +138,7 @@ impl NativeProcessor {
 
         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
 
-        let native_executor = self.native_executor.clone();
+        let native_executor = self.native_executor;
         let shell = self.shell.clone();
         get_tokio_rt()
             .spawn(async move {
@@ -169,30 +150,24 @@ impl NativeProcessor {
     }
 }
 
-#[cfg(feature = "lib")]
 uniffi::include_scaffolding!("shared");
 
-#[cfg(feature = "lib")]
 lazy_static! {
     pub static ref CORE_BRIDGE: Bridge<BitBridge> = Bridge::new(Core::new());
 }
 
-#[cfg(feature = "lib")]
 pub fn process_event(msg: Vec<u8>) -> Vec<u8> {
     CORE_BRIDGE.process_event(&msg).unwrap_or_default()
 }
 
-#[cfg(feature = "lib")]
 pub fn handle_response(id: u32, res: Vec<u8>) -> Vec<u8> {
     CORE_BRIDGE.handle_response(id, &res).unwrap_or_default()
 }
 
-#[cfg(feature = "lib")]
 pub fn view() -> Vec<u8> {
     CORE_BRIDGE.view().unwrap_or_default()
 }
 
-#[cfg(feature = "lib")]
 pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
     let options = bincode_options();
     let mut buffer = Vec::new();
@@ -201,7 +176,6 @@ pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
     buffer
 }
 
-#[cfg(feature = "lib")]
 fn bincode_options() -> impl bincode::Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }

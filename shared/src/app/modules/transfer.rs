@@ -1,9 +1,8 @@
 use crate::app::core_utils::CoreCommandUtils;
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
-use crate::app::operations::database::{LocalResourceDatabaseOperation, TransferSessionOperation};
+use crate::app::operations::persistent::{LocalResourcePersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
-use crate::app::operations::local_storage::LocalStorageOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::{ResourceSelection, ResourceTransferSelectionService};
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferStatus, TransferType};
@@ -26,6 +25,7 @@ use crux_core::{App, Command};
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use devlog_sdk::distributed_id::id_to_datetime;
+use crate::app::operations::device::{DeviceOperation, OpenOperation};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -230,7 +230,7 @@ impl AppModule<BitBridge> for TransferModule {
                 if !new.is_empty() {
                     let new = new.clone();
                     command = command.and(Command::new(|it| async move {
-                        LocalResourceDatabaseOperation::add(new).into_future(it.clone()).await;
+                        LocalResourcePersistentOperation::add(new).into_future(it.clone()).await;
                     }));
                 }
 
@@ -330,7 +330,7 @@ impl AppModule<BitBridge> for TransferModule {
                     if new.transfer_type == TransferType::Receive {
                         let new = new.clone();
                         command = command.and(Command::new(|it| async move {
-                            TransferSessionOperation::save(new).into_future(it.clone()).await;
+                            TransferSessionPersistentOperation::save(new).into_future(it.clone()).await;
                         }));
                     }
 
@@ -341,7 +341,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 for removed in removed {
                     command = command.and(Command::new(|it| async move {
-                        TransferSessionOperation::remove(removed).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::remove(removed).into_future(it.clone()).await;
                     }));
                 }
 
@@ -372,7 +372,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let resource_path = resource.path.clone();
                 Command::new(move |it| async move {
-                    let _ = LocalStorageOperation::open(resource_path).into_future(it.clone()).await;
+                    let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
             TransferEvent::OpenSession { session_id } => {
@@ -392,7 +392,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let session_id = session.order_id;
                 Command::new(|it| async move {
-                    let _ = LocalStorageOperation::open_session(session_id).into_future(it.clone()).await;
+                    let _ = OpenOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
             TransferEvent::OpenSelectedResource { resource_id } => {
@@ -402,7 +402,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let resource_path = resource.path.clone();
                 Command::new(move |it| async move {
-                    let _ = LocalStorageOperation::open(resource_path).into_future(it.clone()).await;
+                    let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
             TransferEvent::SessionResourceThumbnailFullfillment {
@@ -419,7 +419,7 @@ impl AppModule<BitBridge> for TransferModule {
                     resource.thumbnail_path = Some(path.clone());
                     let resource = resource.clone();
                     return Command::new(|it| async move {
-                        TransferSessionOperation::update_resource(session_id, resource).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::update_resource(session_id, resource).into_future(it.clone()).await;
                     })
                     .then_render();
                 }
@@ -440,7 +440,7 @@ impl AppModule<BitBridge> for TransferModule {
                 if session.is_completed() {
                     let progresses = session.progress.clone();
                     return Command::new(|it| async move {
-                        TransferSessionOperation::update_progresses(session_id, progresses).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::update_progresses(session_id, progresses).into_future(it.clone()).await;
                         it.notify_shell(CoreOperation::Render);
                     });
                 }

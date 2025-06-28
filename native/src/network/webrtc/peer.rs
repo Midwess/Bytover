@@ -3,7 +3,7 @@ use std::mem;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-
+use bytes::Bytes;
 use core_services::local_storage::file_system::File;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
@@ -25,15 +25,15 @@ use tokio::sync::{broadcast, Mutex, OnceCell};
 use tokio::time::timeout;
 use tokio::{select, spawn};
 use webrtc::data_channel::data_channel_state::RTCDataChannelState;
-
+use core_services::db::repository::abstraction::repository::Repository;
 use crate::native::message_to_shell::MessageToShell;
 use crate::network::webrtc::message_channel::PeerRequest;
 use crate::{serialize, ShellRuntime};
 use shared::app::file_system::file::LocalResourcePath;
-use shared::app::file_system::workdir::WorkDir;
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
+use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
 use shared::entities::peer::Peer as PeerEntity;
 
@@ -71,15 +71,15 @@ pub struct PeerCommunication {
     peer_event_request_id: OnceCell<u32>,
     throughput_controller: Arc<ThroughputController>,
     active_sessions: Arc<Mutex<HashMap<u64, Weak<Mutex<TransferSession>>>>>,
-    work_dir: WorkDir
+    repository: Arc<dyn LocalResourceRepository>,
 }
 
 impl PeerCommunication {
     pub async fn upgrade(
-        work_dir: WorkDir,
+        repository: Arc<dyn LocalResourceRepository>,
         connection: ConnectionWebRtc,
         current_peer: PeerEntity,
-        peer_id: u128,
+        peer_id: String,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>
     ) -> Result<Arc<Self>, PeerErrors> {
@@ -124,7 +124,7 @@ impl PeerCommunication {
             data_channel_tx,
             throughput_controller,
             active_sessions: Arc::new(Mutex::new(HashMap::new())),
-            work_dir
+            repository
         });
 
         me.handle_data_channel();
@@ -145,7 +145,7 @@ impl PeerCommunication {
                             remote_session: transfer_request.session.clone()
                         });
                         self.shell_runtime.clone()
-                            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
+                            .notify(MessageToShell::HandleResponse(core_request_id, response));
                     }
                     Request::CancelRequest(cancel_request) => {
                         log::info!(target: "peer", "Received cancel request from peer {:?}", self.peer.id());
@@ -155,57 +155,37 @@ impl PeerCommunication {
                         });
 
                         self.shell_runtime.clone()
-                            .msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, response)));
+                            .notify(MessageToShell::HandleResponse(core_request_id, response));
                     }
                     Request::ResourceThumbnailFullfill(mut thumbnail_message) => {
                         if let Some(resource_thumbnail_message::Content::Png(data)) = thumbnail_message.content.take() {
-                            let resource_id = thumbnail_message.resource_id;
+                            let resource_id = thumbnail_message.resource_id as u64;
                             let current_index = thumbnail_message.current_index;
                             let data_length = thumbnail_message.data_length;
                             let shell_runtime = self.shell_runtime.clone();
-                            let thumbnail_path = self.work_dir.thumbnails(resource_id as u64);
                             let session_id = thumbnail_message.session_id as u64;
-                            let workdir = self.work_dir.clone();
 
-                            tokio::spawn(async move {
-                                let saved_path = thumbnail_path;
-
-                                // Check if this is the first chunk
-                                if current_index == 0 {
-                                    // Delete existing file if it exists
-                                    if let Ok(existing) = File::existing(saved_path.clone()).await {
-                                        log::info!(target: "peer", "Deleting existing thumbnail file");
-                                        let _ = existing.delete().await;
-                                    }
-
-                                    // Create new file
-                                    if let Ok(mut new_file) = File::new(None, saved_path.clone()).await {
-                                        let _ = new_file.write(data.clone()).await;
-                                    } else {
-                                        log::error!(target: "peer", "Failed to create new thumbnail file");
-                                    }
-                                }
-                                else {
-                                    // Append to existing file
-                                    if let Ok(mut existing_file) = File::existing(saved_path.clone()).await {
-                                        let _ = existing_file.write(data.clone()).await;
-                                    }
-                                    else {
-                                        log::error!(target: "peer", "Thumbnail file not found for appending");
-                                    }
-                                }
-
-                                // Check if this is the last chunk
+                            let repository = self.repository.clone();
+                            spawn(async move {
                                 let chunk_size = data.len() as i64;
+                                let Ok((mut cursor, path)) = repository.new_thumbnail_writer(resource_id).await else {
+                                    return;
+                                };
+
+                                if let Err(e) = cursor.write(Bytes::from(data)).await {
+                                    log::warn!(target: "peer", "Failed to write thumbnail to disk {e:?}");
+                                    return;
+                                }
+
                                 if current_index + chunk_size >= data_length - 1 {
                                     let msg = CoreOperationOutput::P2P(P2POperationOutput::ThumbnailFullfillment {
                                         session_id,
                                         resource_id: resource_id as u64,
-                                        path: workdir.to_relative_path(&LocalResourcePath::AbsolutePath(saved_path))
+                                        path
                                     });
 
                                     let _ = shell_runtime
-                                        .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                                        .request(MessageToShell::HandleResponse(core_request_id, msg))
                                         .await;
                                 }
 
@@ -423,17 +403,17 @@ impl PeerCommunication {
             if let Err(e) = upload_result {
                 log::error!(target: "peer", "Failed to send resource {e:?}");
                 progress.fail(e.to_string());
-                shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
+                shell_runtime.notify(MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                )));
+                ));
 
                 drop(session_guard);
             } else {
-                shell_runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(
+                shell_runtime.notify(MessageToShell::HandleResponse(
                     core_request_id,
                     CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                )));
+                ));
             }
 
             let _graceful_close_in_bg = data_channel.graceful_close();
@@ -510,7 +490,7 @@ impl PeerCommunication {
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
 
                     shell_runtime
-                        .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
+                        .request(MessageToShell::HandleResponse(core_request_id, msg))
                         .await;
                 }
                 Err(e) => {
@@ -518,8 +498,7 @@ impl PeerCommunication {
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
 
                     shell_runtime
-                        .msg_from_native(serialize(&MessageToShell::HandleResponse(core_request_id, msg)))
-                        .await;
+                        .request(MessageToShell::HandleResponse(core_request_id, msg)).await;
                 }
             };
 
@@ -653,7 +632,7 @@ impl Drop for PeerCommunication {
             log::info!(target: "peer", "Sending leaved message to peer {:?}", self.peer.id());
             let leaved_msg = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected());
             spawn(async move {
-                runtime.msg_from_native_bg(serialize(&MessageToShell::HandleResponse(core_request_id, leaved_msg)));
+                runtime.notify(MessageToShell::HandleResponse(core_request_id, leaved_msg));
                 // For some reason, this close will be hangup randomly
                 // we need to monitor if it could serious memory leak or performance issue
                 let _ = connection.close().await;

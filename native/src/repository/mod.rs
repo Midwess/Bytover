@@ -7,6 +7,7 @@ pub mod id;
 pub mod local_resource;
 pub mod transfer_session;
 pub mod user;
+pub mod path_resolver;
 
 pub struct RedbPoolProvider {
     pub path: String

@@ -1,0 +1,234 @@
+use devlog_sdk::distributed_id::gen_id;
+use shared::app::operations::persistent::{
+    PersistentOperation,
+    PersistentOperationOutput,
+    LocalResourcePersistentOperation,
+    LocalResourcePersistentOperationOutput,
+    SessionPersistentOperation,
+    SessionPersistentOperationOutput,
+    TransferSessionPersistentOperation,
+    TransferSessionOperationOutput
+};
+use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
+use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::app::transfer::session::TransferType;
+use shared::entities::session::{Session, SessionType};
+
+pub struct NativePersistent {
+    pub auth_session_repository: Box<dyn AuthSessionRepository>,
+    pub local_resource_repository: Box<dyn LocalResourceRepository>,
+    pub transfer_session_repository: Box<dyn TransferSessionRepository>
+}
+
+impl NativePersistent {
+    pub async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
+        match effect {
+            PersistentOperation::Session(SessionPersistentOperation::WriteToken(token)) => {
+                log::info!("Writing token to database, delete first");
+                if let Err(err) = self
+                    .auth_session_repository
+                    .delete_one(&AuthSessionId {
+                        r#type: SessionType::Access
+                    })
+                    .await
+                {
+                    log::error!("Failed to delete token from database: {err:?}");
+                }
+
+                if let Err(err) = self
+                    .auth_session_repository
+                    .create(Session {
+                        r#type: SessionType::Access,
+                        token,
+                        user: None
+                    })
+                    .await
+                {
+                    log::error!("Failed to write token to database: {err:?}");
+                    return PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteToken());
+                }
+
+                PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteToken())
+            }
+            PersistentOperation::Session(SessionPersistentOperation::Get()) => {
+                match self
+                    .auth_session_repository
+                    .find_one(&AuthSessionId {
+                        r#type: SessionType::Access
+                    })
+                    .await
+                {
+                    Ok(session) => PersistentOperationOutput::Session(SessionPersistentOperationOutput::Get(session)),
+                    Err(_error) => PersistentOperationOutput::Session(SessionPersistentOperationOutput::Get(None))
+                }
+            }
+            PersistentOperation::Session(SessionPersistentOperation::WriteUser(user)) => {
+                let session = self
+                    .auth_session_repository
+                    .find_one(&AuthSessionId {
+                        r#type: SessionType::Access
+                    })
+                    .await;
+                if let Ok(Some(mut session)) = session {
+                    session.user = Some(user);
+                    let _ = self.auth_session_repository.update_one(session).await;
+                }
+
+                PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteUser())
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Add(resources)) => {
+                let mut created_resources = vec![];
+                for resource in resources {
+                    if let Ok(resource) = self.local_resource_repository.create(resource).await {
+                        created_resources.push(resource);
+                    }
+                }
+
+                PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(created_resources))
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)) => {
+                if let Ok(resource) = self
+                    .local_resource_repository
+                    .delete_one(&LocalResourceId {
+                        r#type: None,
+                        order_id: Some(id),
+                        ..Default::default()
+                    })
+                    .await
+                {
+                    PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(Some(resource)))
+                } else {
+                    PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(None))
+                }
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll) => {
+                let resources = self.local_resource_repository.find_all(None, None, None).await.unwrap();
+                PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::FindAll(resources))
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Find(path)) => {
+                let id = LocalResourceId {
+                    path: Some(path),
+                    ..Default::default()
+                };
+
+                let result = self.local_resource_repository.find_one(&id).await;
+                match result {
+                    Ok(resource) => {
+                        log::info!("Found local resource: {resource:?}");
+                        PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(resource))
+                    }
+                    Err(err) => {
+                        log::error!("Failed to find local resource: {err:?}");
+                        PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(None))
+                    }
+                }
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::LoadOnDisk(path)) => {
+                match self.local_resource_repository.load(path).await {
+                    Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::LoadOnDisk(result)),
+                    Err(e) => {
+                        log::error!("Failed to load local resource: {e:?}");
+                        return PersistentOperationOutput::Error(e.to_string());
+                    }
+                }
+            }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id}) => {
+                match self.local_resource_repository.save_thumbnail(png_bytes, resource_id).await {
+                    Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::AddThumbnail(result)),
+                    Err(e) => {
+                        log::error!("Failed to save thumbnail: {e:?}");
+                        return PersistentOperationOutput::Error(e.to_string());
+                    }
+                }
+            },
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::GetResourceType { path }) => {
+                match self.local_resource_repository.get_resource_type(path).await {
+                    Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::GetResourceType(result)),
+                    Err(e) => {
+                        log::error!("Failed to get resource type: {e:?}");
+                        return PersistentOperationOutput::Error(e.to_string());
+                    }
+                }
+            },
+            PersistentOperation::GenId() => PersistentOperationOutput::GenId(gen_id().await),
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
+                let result = self.transfer_session_repository.create(session).await;
+                match result {
+                    Ok(session) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Save(Some(session))),
+                    Err(err) => {
+                        log::error!("Failed to save transfer session: {err:?}");
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Save(None))
+                    }
+                }
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GetAllReceivedSessions()) => {
+                let id = TransferSessionId {
+                    r#type: Some(TransferType::Receive),
+                    ..Default::default()
+                };
+
+                let result = self.transfer_session_repository.find_all(Some(&id), None, None).await;
+                match result {
+                    Ok(sessions) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
+                    Err(err) => {
+                        log::error!("Failed to get all transfer sessions: {err:?}");
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(vec![]))
+                    }
+                }
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)) => {
+                let result = self.transfer_session_repository.update_progresses(order_id, progresses).await;
+                match result {
+                    Ok(session) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(session)),
+                    Err(err) => {
+                        log::error!("Failed to update transfer session: {err:?}");
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(None))
+                    }
+                }
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove(order_id)) => {
+                if let Err(e) = self
+                    .transfer_session_repository
+                    .delete_session(TransferSessionId {
+                        order_id: Some(order_id),
+                        ..Default::default()
+                    })
+                    .await {
+                    log::error!("Failed to remove transfer session: {e:?}");
+                    return PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(false));
+                }
+
+                PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(true))
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateResource { session_id, resource }) => {
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    ..Default::default()
+                };
+
+                let result = self.transfer_session_repository.update_resource(id, resource).await;
+
+                match result {
+                    Ok(session) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(session)),
+                    Err(err) => {
+                        log::error!("Failed to update transfer session: {err:?}");
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateResource(None))
+                    }
+                }
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath { session_id, resource_names }) => {
+                match self.transfer_session_repository.generate_resource_paths(session_id, resource_names).await {
+                    Ok(result) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateResourcePath(result)),
+                    Err(e) => {
+                        log::error!("Failed to generate resources path: {e:?}");
+                        return PersistentOperationOutput::Error(e.to_string());
+                    }
+                }
+            }
+            PersistentOperation::User(_) => {
+                panic!("Unimplemented");
+            }
+        }
+    }
+}

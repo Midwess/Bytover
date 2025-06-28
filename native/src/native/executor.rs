@@ -8,8 +8,7 @@ use shared::app::operations::internet::{InternetOperation, InternetOperationOutp
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::app::AppEvent;
 
-use super::database::NativeDatabase;
-use super::local_storage::NativeLocalStorage;
+use super::persistent::{NativePersistent};
 use super::p2p::P2PNativeExecutor;
 use super::rpc::NativeRpc;
 use super::transfer::TransferNative;
@@ -17,18 +16,13 @@ use super::transfer::TransferNative;
 // This is the placed where we can put Rust logic to share accross platform
 pub struct NativeExecutor {
     pub rpc: NativeRpc,
-    pub database: NativeDatabase,
-    pub local_storage: NativeLocalStorage,
+    pub persistent: NativePersistent,
     pub transfer: TransferNative,
     pub p2p: P2PNativeExecutor
 }
 
 impl NativeExecutor {
     pub async fn handle(&self, request_id: u32, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
-        self.transfer.update_shell_runtime(&shell_runtime);
-        self.p2p.update_shell_runtime(&shell_runtime);
-        self.local_storage.update_shell(&shell_runtime);
-
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
@@ -38,13 +32,9 @@ impl NativeExecutor {
                 process_event(crate::serialize(&AppEvent::Void));
                 CoreOperationOutput::Void
             }
-            CoreOperation::Database(database) => {
-                let response = self.database.handle(database).await;
+            CoreOperation::Persistent(database) => {
+                let response = self.persistent.handle(database).await;
                 CoreOperationOutput::Database(response)
-            }
-            CoreOperation::LocalStorage(local_storage) => {
-                let response = self.local_storage.handle(local_storage).await;
-                CoreOperationOutput::LocalStorage(response)
             }
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
             CoreOperation::Internet(internet) => match internet {

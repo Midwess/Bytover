@@ -218,11 +218,11 @@ impl TransferSession {
         }
     }
 
-    pub async fn send(resources: Vec<LocalResource>, target: TransferTarget) -> Self {
+    pub async fn send(order_id: u64, resources: Vec<LocalResource>, target: TransferTarget) -> Self {
         let mut resources = resources;
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
-            order_id: 0,
+            order_id,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
@@ -241,7 +241,7 @@ impl TransferSession {
         self.resources.sort_by(|a, b| a.size.cmp(&b.size));
     }
 
-    pub fn peer_id(&self) -> Option<u128> {
+    pub fn peer_id(&self) -> Option<String> {
         match &self.target {
             TransferTarget::Nearby(peer) => Some(peer.id()),
             _ => None

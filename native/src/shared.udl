@@ -12,7 +12,7 @@ namespace shared {
 
 interface NativeProcessor {
   [Async]
-  constructor(ShellRuntime shell, string private_path, string public_path);
+  constructor(ShellRuntime shell);
  
   [Async]
   bytes handle(u32 id, bytes effect);

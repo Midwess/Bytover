@@ -1,8 +1,7 @@
-pub mod database;
+pub mod persistent;
 pub mod device;
 pub mod dialog;
 pub mod internet;
-pub mod local_storage;
 pub mod p2p;
 pub mod rpc;
 pub mod transfer;
@@ -11,11 +10,10 @@ pub mod webview;
 use std::time::Duration;
 
 use crux_core::capability::Operation;
-use database::{DatabaseOperation, DatabaseOperationOutput};
+use persistent::{PersistentOperation, PersistentOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
 use dialog::{DialogOperation, DialogOperationOutput};
 use internet::{InternetOperation, InternetOperationOutput};
-use local_storage::{LocalStorageOperation, LocalStorageOperationOutput};
 use p2p::{P2POperation, P2POperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
@@ -27,13 +25,12 @@ use crate::errors::{DeviceError, NetworkError};
 
 use super::AppEvent;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum CoreOperation {
-    LocalStorage(LocalStorageOperation),
     WebView(WebViewOperation),
     Device(DeviceOperation),
     Rpc(RpcOperation),
-    Database(DatabaseOperation),
+    Persistent(PersistentOperation),
     Transfer(TransferOperation),
     P2P(P2POperation),
     Internet(InternetOperation),
@@ -47,11 +44,10 @@ pub enum CoreOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum CoreOperationOutput {
-    LocalStorage(LocalStorageOperationOutput),
     WebView(WebViewOperationOutput),
     Device(DeviceOperationOutput),
     Rpc(RpcOperationOutput),
-    Database(DatabaseOperationOutput),
+    Database(PersistentOperationOutput),
     Transfer(TransferOperationOutput),
     P2P(P2POperationOutput),
     Internet(InternetOperationOutput),

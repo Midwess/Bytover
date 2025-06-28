@@ -13,17 +13,17 @@ use crate::errors::NetworkError;
 use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
 pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
     AnswerSessionRequest {
-        peer_id: u128,
+        peer_id: String,
         session: TransferSession,
         peer_request_id: String,
         response: Response
     },
-    CancelSession(Option<u128>, u64)
+    CancelSession(Option<String>, u64)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -48,7 +48,7 @@ impl TransferOperation {
     }
 
     pub fn cancel_session(
-        peer_id: Option<u128>,
+        peer_id: Option<String>,
         session_id: u64
     ) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(peer_id, session_id))).map(

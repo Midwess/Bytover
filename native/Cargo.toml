@@ -11,84 +11,44 @@ required-features = ["lib"]
 
 [features]
 typegen = ["crux_core/typegen"]
-# Enable both uniffi-bindgen and lib features allowing compiler to check fully code
-default = ["uniffi-bindgen", "lib"]
-# Main mode
-lib = [
-    "crux_core",
-    "serde",
-    "lazy_static",
-    "uniffi",
-    "wasm-bindgen",
-    "core-services",
-    "schema",
-    "devlog-sdk",
-    "tokio",
-    "async-trait",
-    "log",
-    "bincode",
-    "erased-serde",
-    "reqwest",
-    "tonic",
-    "thiserror",
-    "tokio-tungstenite",
-    "futures-util",
-    "url",
-    "webrtc",
-    "prost",
-    "uuid",
-    "rand",
-    "chrono",
-    "stunclient",
-    "bytes",
-    "ulid",
-    "flate2",
-    "tar",
-    "mime_guess",
-    "tokio-util",
-    "shared",
-    "redb"
-]
-# Generated mode, we split it out to optimize build time (2x faster)
-uniffi-bindgen = ["uniffi"]
 
 # All of theses deps are required but because optimization in build time
 # we need to mark it as optional, then enable it in the feature ["lib"]
 [dependencies]
-crux_core = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive"], optional = true }
-lazy_static = { workspace = true, optional = true }
-uniffi = { workspace = true, optional = true }
-wasm-bindgen = { version = "0.2.100", optional = true }
-shared = { path = "../shared", optional = true }
-core-services = { path = "../libs/core-services", optional = true, features = ["db-red", "local-storage", "retry"] }
-schema = { path = "../libs/schema/rust", optional = true, features = ["bindgen", "client"] }
-devlog-sdk = { path = "../libs/devlog-sdk", optional = true }
-tokio = { workspace = true, optional = true, features = ["rt-multi-thread", "sync"] }
-async-trait = { workspace = true, optional = true }
-log = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
-erased-serde = { version = "0.4.5", optional = true }
-tonic = { workspace = true, features = ["tls-webpki-roots"], optional = true }
-thiserror = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
-tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"], optional = true }
-futures-util = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
-webrtc = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
-uuid = { workspace = true, optional = true }
-rand = { workspace = true, optional = true }
-chrono = { workspace = true, optional = true }
-stunclient = { workspace = true, optional = true }
-bytes = { workspace = true, optional = true }
+crux_core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+lazy_static = { workspace = true }
+uniffi = { workspace = true }
+wasm-bindgen = { version = "0.2.100" }
+shared = { path = "../shared" }
+core-services = { path = "../libs/core-services", features = ["db-red", "local-storage", "retry"] }
+schema = { path = "../libs/schema/rust", features = ["bindgen", "client"] }
+devlog-sdk = { path = "../libs/devlog-sdk" }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+async-trait = { workspace = true }
+log = { workspace = true }
+bincode = { workspace = true }
+erased-serde = { version = "0.4.5" }
+tonic = { workspace = true, features = ["tls-webpki-roots"] }
+thiserror = { workspace = true }
+reqwest = { workspace = true }
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
+futures-util = { workspace = true }
+url = { workspace = true }
+webrtc = { workspace = true }
+prost = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }
+stunclient = { workspace = true }
+bytes = { workspace = true }
 anyhow = { workspace = true }
-ulid = { workspace = true, optional = true }
-flate2 = { workspace = true, optional = true }
-tar = { workspace = true, optional = true }
-mime_guess = { workspace = true, optional = true }
-tokio-util = {workspace = true, optional = true}
-redb = { workspace = true, optional = true }
+ulid = { workspace = true }
+flate2 = { workspace = true }
+tar = { workspace = true }
+mime_guess = { workspace = true }
+tokio-util = {workspace = true}
+redb = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }

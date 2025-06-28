@@ -18,12 +18,12 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
-
+use core_services::db::repository::abstraction::repository::Repository;
 use crate::network::webrtc::message_channel::MessageChannel;
 use crate::network::webrtc::peer::PeerCommunication;
 use crate::ShellRuntime;
-use shared::app::file_system::workdir::WorkDir;
 use shared::app::nearby::finding_scope::FindingScope;
+use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::entities::peer::Peer;
 
 use super::peer::PeerErrors;
@@ -56,14 +56,14 @@ pub enum ConnectionWebRtcErrors {
 
 pub struct ConnectionWebRtc {
     pub current: Peer,
-    pub peer_id: u128,
+    pub peer_id: String,
     pub finding_scope: FindingScope,
     pub peer_connection: Arc<RTCPeerConnection>,
     pub msg_channel: OnceCell<MessageChannel>,
     pub signalling_client: Arc<RtcSignalling>,
     pub signalling_join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub on_disconnect: OnceCell<Arc<Mutex<OnCloseHdlrFn>>>,
-    pub workdir: WorkDir,
+    pub repository: Arc<dyn LocalResourceRepository>,
     pub ns: String,
     pub throughput_controller: Arc<ThroughputController>
 }
@@ -95,18 +95,18 @@ impl ConnectionWebRtc {
         setting_engine
     }
 
-    pub fn id(&self) -> u128 {
+    pub fn id(&self) -> String {
         self.current.id()
     }
 
     pub async fn offer(
         scope: FindingScope,
         current: Peer,
-        peer_id: u128,
+        peer_id: String,
         signalling_client: Arc<RtcSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
-        workdir: WorkDir
+        repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
@@ -132,7 +132,7 @@ impl ConnectionWebRtc {
 
         let me = Self {
             current: current.clone(),
-            peer_id,
+            peer_id: peer_id.clone(),
             finding_scope: scope,
             peer_connection: Arc::new(peer_connection),
             msg_channel: OnceCell::new(),
@@ -140,7 +140,7 @@ impl ConnectionWebRtc {
             signalling_join_handle: Arc::new(Mutex::new(None)),
             on_disconnect: OnceCell::new(),
             ns: ns.clone(),
-            workdir: workdir.clone(),
+            repository: repository.clone(),
             throughput_controller
         };
 
@@ -149,7 +149,7 @@ impl ConnectionWebRtc {
         me.handle_signalling_message().await;
 
         let _ = spawn({
-            let to_id = me.peer_id;
+            let to_id = me.peer_id.clone();
             let from_id = me.id();
             let scope = me.finding_scope.clone();
             let signalling_client = me.signalling_client.clone();
@@ -175,12 +175,14 @@ impl ConnectionWebRtc {
 
         me.handle_ice_candidate();
 
+        let peer_id = peer_id.clone();
+        let repository = repository.clone();
         match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
                 let throughput_controller = me.throughput_controller.clone();
                 Ok(
-                    PeerCommunication::upgrade(workdir.clone(), me, current, peer_id, shell_runtime, throughput_controller)
+                    PeerCommunication::upgrade(repository, me, current, peer_id.clone(), shell_runtime, throughput_controller)
                         .await
                         .unwrap()
                 )
@@ -195,12 +197,12 @@ impl ConnectionWebRtc {
     pub async fn accept_offer(
         scope: FindingScope,
         current: Peer,
-        peer_id: u128,
+        peer_id: String,
         offer: RTCSessionDescription,
         signalling_client: Arc<RtcSignalling>,
         shell_runtime: Arc<dyn ShellRuntime>,
         throughput_controller: Arc<ThroughputController>,
-        workdir: WorkDir
+        repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Arc<PeerCommunication>, ConnectionWebRtcErrors> {
         let my_id = current.id();
         let ns = format!("rtc-m{my_id}-p{peer_id}");
@@ -236,7 +238,7 @@ impl ConnectionWebRtc {
 
         let me = Self {
             current: current.clone(),
-            peer_id,
+            peer_id: peer_id.clone(),
             finding_scope: scope,
             signalling_client,
             signalling_join_handle: Arc::new(Mutex::new(None)),
@@ -244,7 +246,7 @@ impl ConnectionWebRtc {
             msg_channel: OnceCell::new(),
             ns: ns.clone(),
             on_disconnect: OnceCell::new(),
-            workdir: workdir.clone(),
+            repository: repository.clone(),
             throughput_controller
         };
 
@@ -253,7 +255,7 @@ impl ConnectionWebRtc {
         let _ = spawn({
             let signalling_client: Arc<RtcSignalling> = me.signalling_client.clone();
             let my_id = me.id();
-            let peer_id = me.peer_id;
+            let peer_id = me.peer_id.clone();
             let ns = ns.clone();
             let scope = me.finding_scope.clone();
             log::info!(target: ns.as_str(), "Sending answer to signalling server");
@@ -262,7 +264,7 @@ impl ConnectionWebRtc {
                     .send(Message {
                         scopes: vec![scope.as_string()],
                         from_id: my_id.to_string(),
-                        to_id: Some(peer_id.to_string()),
+                        to_id: Some(peer_id.clone().to_string()),
                         answer: Some(AnswerMessage { sdp: answer.sdp.clone() }),
                         ..Default::default()
                     })
@@ -277,12 +279,13 @@ impl ConnectionWebRtc {
         me.handle_ice_candidate();
 
         let connection_timeout = Duration::from_secs(10);
+        let repository = repository.clone();
         let result = match tokio::time::timeout(connection_timeout, msg_channel_receiver.recv()).await {
             Ok(Some(msg_channel)) => {
                 let _ = me.msg_channel.set(msg_channel);
                 let throughput_controller = me.throughput_controller.clone();
                 Ok(
-                    PeerCommunication::upgrade(workdir.clone(), me, current, peer_id, shell_runtime, throughput_controller)
+                    PeerCommunication::upgrade(repository.clone(), me, current, peer_id.clone(), shell_runtime, throughput_controller)
                         .await
                         .map_err(Box::new)?
                 )
@@ -312,13 +315,13 @@ impl ConnectionWebRtc {
 
         let peer_connection = self.peer_connection.clone();
         let my_id = self.id();
-        let peer_id = self.peer_id;
+        let peer_id = self.peer_id.clone();
         let peer_connection = peer_connection.clone();
         let signalling_client = self.signalling_client.clone();
         *signalling_join_handle = Some(tokio::spawn(async move {
             let mut signalling_subscription = signalling_client.subscribe();
             while let Ok(msg) = signalling_subscription.recv().await {
-                if msg.from_id_number() != peer_id || msg.to_id_number().is_some_and(|id| id != my_id) {
+                if msg.from_id != peer_id || msg.to_id.is_some_and(|id| id != my_id) {
                     continue;
                 }
 
@@ -345,13 +348,13 @@ impl ConnectionWebRtc {
     pub fn handle_ice_candidate(&self) {
         let signaling_client = self.signalling_client.clone();
         let my_id = self.id();
-        let peer_id = self.peer_id;
+        let peer_id = self.peer_id.clone();
         let scope = self.finding_scope.clone();
 
         self.peer_connection.on_ice_candidate(Box::new(move |candidate| {
             let signaling_client = signaling_client.clone();
-            let my_id = my_id;
-            let peer_id = peer_id;
+            let my_id = my_id.clone();
+            let peer_id = peer_id.clone();
             let finding_scope = scope.clone();
 
             Box::pin(async move {

@@ -5800,6 +5800,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bytes",
  "chrono",
  "core-services",
  "crux_core",
@@ -5812,6 +5813,7 @@ dependencies = [
  "schema",
  "serde",
  "thiserror 2.0.12",
+ "tokio",
  "ulid",
  "uniffi",
  "url",
