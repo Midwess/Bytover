@@ -243,7 +243,7 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::Nearby(peer) => Some(peer.id()),
+            TransferTarget::Nearby(peer) => Some(peer.id().to_string()),
             _ => None
         }
     }

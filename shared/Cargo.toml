@@ -2,6 +2,7 @@
 name = "shared"
 version = "0.1.0"
 edition = "2021"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -22,17 +23,24 @@ chrono = { workspace = true }
 h3o = { workspace = true }
 anyhow = { workspace = true }
 ulid = { workspace = true }
+uuid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 url = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["rt", "sync"] }
-bytes.workspace = true
 futures-util = { workspace = true }
+bytes.workspace = true
+prost.workspace = true
+futures-timer.workspace = true
+n0-future.workspace = true
+
+matchbox_protocol.workspace = true
+matchbox_socket.workspace = true
+ewebsock = { workspace = true, features = ["tokio", "tls"] }
+futures = "0.3.31"
+wasm-bindgen-futures = "0.4.50"
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
-
-[target.wasm32-unknown-unknown.dependencies]
-getrandom = { workspace = true, features = ["wasm_js"] }

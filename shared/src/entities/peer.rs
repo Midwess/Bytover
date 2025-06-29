@@ -1,3 +1,4 @@
+use matchbox_protocol::PeerId;
 use rand::seq::IndexedRandom;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
@@ -18,8 +19,12 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn id(&self) -> String {
-        self.id.clone()
+    pub fn id(&self) -> uuid::Uuid {
+        self.id.clone().parse().unwrap()
+    }
+
+    pub fn peer_id(&self) -> PeerId {
+        self.id().into()
     }
 
     pub fn random_avatar() -> String {

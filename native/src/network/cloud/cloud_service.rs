@@ -15,7 +15,6 @@ use tokio::task::JoinHandle;
 use crate::grpc::cloud_server::CloudServer;
 use crate::grpc::errors::NativeGrpcErrors;
 use crate::native::message_to_shell::MessageToShell;
-use crate::{serialize, ShellRuntime, ThrottleShellRuntime};
 use shared::app::file_system::file::ResourceType;
 use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
@@ -179,6 +178,8 @@ impl CloudService {
                     break
                 }
             }
+
+            let _ = net_stream.end().await;
         }
 
         log::info!("Thumbnails uploaded");
@@ -291,13 +292,6 @@ impl CloudService {
         mut cursor: Box<dyn IOReader>,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
-        let upload_chunk_size = 512 * 1024;
-        let max_buffer_size = upload_chunk_size * 5;
-        let resource_type = match transfer_session.lock().await.resources.iter().find(|it| it.order_id == resource_order_id) {
-            Some(resource) => resource.r#type.clone(),
-            None => return Err(CloudTransferErrors::ResourceNotFound)
-        };
-
         let resource_path = match transfer_session.lock().await.resources.iter().find(|it| it.order_id == resource_order_id) {
             Some(resource) => resource.path.as_string(),
             None => return Err(CloudTransferErrors::ResourceNotFound)

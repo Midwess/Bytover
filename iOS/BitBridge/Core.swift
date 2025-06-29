@@ -248,7 +248,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func onFileSelected(urls: [URL]) async {
         await self.update(.transfer(.beginLoadingResources))
         for url in urls {
-            url.startAccessingSecurityScopedResource()
+            let _ = url.startAccessingSecurityScopedResource()
 
             guard let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil) else {
                 continue

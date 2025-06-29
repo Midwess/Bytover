@@ -241,7 +241,7 @@ impl TransferService {
 
         let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
-            peer_id,
+            peer_id: peer_id.to_string(),
             session: transfer_session.clone(),
             peer_request_id: request_id,
             response
