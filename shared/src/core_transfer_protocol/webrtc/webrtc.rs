@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::{Arc, Weak};
 use futures::select;
 use std::time::Duration;
 use futures_timer::Delay;
@@ -15,13 +15,15 @@ use crate::core_api::CoreBridge;
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::core_transfer_protocol::webrtc::peer::{WebRtcPeer};
-use crate::core_transfer_protocol::webrtc::signalling::{WebSignaller, WebSignallerBuilder};
+use crate::core_transfer_protocol::webrtc::signalling::{SharedContext, WebSignaller, WebSignallerBuilder};
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
+use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::repository::local_resource::LocalResourceRepository;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::entities::peer::Peer as PeerEntity;
 
 pub static MSG_CHANNEL_ID: usize = 0;
@@ -33,20 +35,88 @@ pub struct WebRtc {
     core_bridge: Arc<dyn CoreBridge>,
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
+    shared_context: SharedContext,
 }
 
 impl WebRtc {
-    fn new(core_bridge: Arc<dyn CoreBridge>, addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
+    pub fn new(core_bridge: Arc<dyn CoreBridge>, addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
         Self {
             peers: Default::default(),
             core_bridge,
             addr,
-            local_resource_repository
+            local_resource_repository,
+            shared_context: SharedContext::new(),
         }
     }
 
-    async fn start(&self, core_request_id: u32, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
-        let signaller_builder = Arc::new(WebSignallerBuilder::new());
+    pub async fn is_peer_connected(&self, peer_id: String) -> bool {
+        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peers_guard = self.peers.lock().await;
+        peers_guard.contains_key(&peer_id)
+    }
+
+    pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
+        self.shared_context.update_finding_scopes(scopes).await;
+    }
+
+    pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peers_guard = self.peers.lock().await;
+        if let Some(peer) = peers_guard.get(&peer_id) {
+            peer.cancel_transfer(
+                session_id,
+            ).await;
+
+            return Ok(())
+        };
+
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn answer_session(&self, core_id: u32, peer_id: String, session: Option<TransferSession>, session_id: u64) -> Result<TransferSessionStatus, WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peers_guard = self.peers.lock().await;
+        if let Some(peer) = peers_guard.get(&peer_id) {
+            let result = peer.answer_transfer(
+                core_id,
+                session_id,
+                session
+            ).await;
+
+            return result;
+        };
+
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn send_session(&self, core_id: u32, session: TransferSession) -> Result<TransferSessionStatus, WebRtcErrors> {
+        let peer_id = session.peer().unwrap().peer_id();
+        let peers_guard = self.peers.lock().await;
+        if let Some(peer) = peers_guard.get(&peer_id) {
+            let result = peer.transfer_session(
+                core_id,
+                session
+            ).await;
+
+            return result;
+        };
+
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn start_peer_core_stream(&self, peer_id: String, core_id: u32) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peers_guard = self.peers.lock().await;
+        if let Some(peer) = peers_guard.get(&peer_id) {
+            peer.start_core_stream(core_id);
+            return Ok(());
+        }
+
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn start(&self, core_request_id: u32, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+        let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
             .add_reliable_channel()
@@ -108,7 +178,9 @@ impl WebRtc {
                }
                else {
                    let mut peers_guard = self.peers.lock().await;
-                   peers_guard.remove(&peer_id);
+                   if let Some(peer) = peers_guard.remove(&peer_id) {
+                       peer.peer_disconnected().await;
+                   }
                }
             }
 
@@ -177,7 +249,7 @@ impl WebRtc {
 
                 let peers_guard = self.peers.lock().await;
                 if let Some(peer) = peers_guard.get(&peer_id) {
-                    peer.process_request(request);
+                    peer.process_request(request).await;
                 }
             }
 

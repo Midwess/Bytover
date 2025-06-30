@@ -1,7 +1,9 @@
+use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use prost::{DecodeError, EncodeError};
 use schema::devlog::rpc_signalling::server::ParseIceCandidateError;
 use crate::app::repository::errors::PersistenceError;
+use crate::errors::NetworkError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
@@ -29,6 +31,8 @@ pub enum WebRtcErrors {
    ReadFileError(String),
    #[error("Invalid delimiter")]
    InvalidDelimiter(String),
+   #[error("Peer connection not found {0}")]
+   ConnectionNotFound(PeerId),
 }
 
 impl From<ParseIceCandidateError> for WebRtcErrors {
@@ -40,5 +44,11 @@ impl From<ParseIceCandidateError> for WebRtcErrors {
 impl Into<matchbox_socket::SignalingError> for WebRtcErrors {
    fn into(self) -> matchbox_socket::SignalingError {
       matchbox_socket::SignalingError::UserImplementationError(format!("{self:?}"))
+   }
+}
+
+impl From<WebRtcErrors> for NetworkError {
+   fn from(err: WebRtcErrors) -> Self {
+      NetworkError::Network(format!("{err:?}"))
    }
 }

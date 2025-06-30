@@ -1,13 +1,33 @@
 use std::sync::Arc;
 use async_trait::async_trait;
+use futures_util::lock::Mutex;
 use matchbox_protocol::PeerId;
 use schema::devlog::rpc_signalling::server::{Message, JoinMessage, IceCandidateUpdateMessage, IceCandidate, OfferMessage, AnswerMessage};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use ulid::Ulid;
 use uuid::Uuid;
+use crate::app::nearby::finding_scope::FindingScope;
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
 
 use super::errors::WebRtcErrors;
+
+#[derive(Debug, Clone)]
+pub struct SharedContext {
+    finding_scopes: Arc<Mutex<Vec<FindingScope>>>
+}
+
+impl SharedContext {
+    pub fn new() -> Self {
+        Self {
+            finding_scopes: Default::default()
+        }
+    }
+    
+    pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
+        self.finding_scopes.lock().await.clear();
+        self.finding_scopes.lock().await.extend(scopes);
+    }
+}
 
 #[derive(Debug)]
 struct SignallingPeerRequest(Uuid, PeerRequest);
@@ -98,14 +118,16 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
 
 pub struct WebSignaller {
     client: SignallingClient,
-    peer_id: Uuid
+    peer_id: Uuid,
+    shared_context: SharedContext,
 }
 
 impl WebSignaller {
-    pub fn new(client: SignallingClient, peer_id: Uuid) -> Self {
+    pub fn new(client: SignallingClient, peer_id: Uuid, shared_context: SharedContext) -> Self {
         Self {
             client,
-            peer_id
+            peer_id,
+            shared_context
         }
     }
 
@@ -120,9 +142,11 @@ impl Signaller for WebSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = SignallingPeerRequest(self.peer_id, request);
         log::debug!("Signaller: Sending request: {request:#?}");
-        let Ok(message) = TryInto::<Message>::try_into(request) else {
+        let Ok(mut message) = TryInto::<Message>::try_into(request) else {
             return Ok(())
         };
+
+        message.scopes = self.shared_context.finding_scopes.lock().await.iter().map(|it| it.as_string()).collect();
 
         self.client.send(message).await.map_err(Into::<SignalingError>::into)?;
         Ok(())
@@ -138,11 +162,15 @@ impl Signaller for WebSignaller {
 }
 
 #[derive(Debug)]
-pub struct WebSignallerBuilder {}
+pub struct WebSignallerBuilder {
+    shared_context: SharedContext
+}
 
 impl WebSignallerBuilder {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(context: SharedContext) -> Self {
+        Self {
+            shared_context: context
+        }
     }
 }
 
@@ -156,7 +184,11 @@ impl SignallerBuilder for WebSignallerBuilder {
     ) -> Result<Box<dyn Signaller>, SignalingError> {
         let client = SignallingClient::new(socket_url);
         let id = Ulid::new();
-        let mut signaller = WebSignaller::new(client, Uuid::from_bytes(id.to_bytes().into()));
+        let mut signaller = WebSignaller::new(
+            client,
+            Uuid::from_bytes(id.to_bytes().into()),
+            self.shared_context.clone()
+        );
         signaller.start().await.map_err(|it| Into::<SignalingError>::into(it))?;
 
         Ok(Box::new(signaller))

@@ -239,11 +239,10 @@ impl TransferService {
 
         cmd.notify_event(event);
 
-        let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
-            session: transfer_session.clone(),
-            response
+            session: Some(transfer_session.clone()),
+            session_id: transfer_session.order_id,
         });
 
         let mut stream = cmd.stream_from_shell(response);

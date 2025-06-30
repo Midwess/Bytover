@@ -7,7 +7,6 @@ use crate::native::p2p::P2PNativeExecutor;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::cloud::cloud_service::CloudService;
-use crate::network::webrtc::web_rtc::WebRtc;
 use core::panic;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -29,6 +28,8 @@ use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::core_api::{CoreBridge, NetStream};
+use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
+use crate::config::get_signalling_server_ws_url;
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::ShellRuntime;
@@ -175,7 +176,11 @@ impl DiContainer {
             return executor
         }
 
-        let web_rtc = Arc::new(WebRtc::new(Arc::new(self.get_local_resource_repository())));
+        let web_rtc = Arc::new(WebRtc::new(
+            self.core_bridge.get().unwrap().clone(),
+            get_signalling_server_ws_url(),
+            Arc::new(self.get_local_resource_repository()))
+        );
         let cloud_service = CloudService {
             server: CloudServer::new(self.get_auth_provider()),
             core_bridge: self.core_bridge.get().unwrap().clone(),

@@ -24,7 +24,7 @@ use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
-use crate::app::transfer::session::{TransferProgress, TransferSession};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::core_api::{CoreBridge, IOReader, IOWriter};
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
@@ -122,7 +122,7 @@ impl WebRtcPeer {
         })
     }
 
-    pub async fn start_core_stream(&self, core_stream_id: u32) {
+    pub fn start_core_stream(&self, core_stream_id: u32) {
         self.core_id.store(core_stream_id, Ordering::Relaxed)
     }
 
@@ -157,6 +157,8 @@ impl WebRtcPeer {
         self.transfers_context.stop_all().await;
         self.inbound_thumbnail_stream_sender.lock().await.take();
         self.inbound_data_stream_sender.lock().await.take();
+        let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
+        let _ = self.core_bridge.response(self.core_id.load(Ordering::Relaxed), response).await;
         self.core_id.store(0, Ordering::Relaxed);
     }
 
@@ -176,7 +178,7 @@ impl WebRtcPeer {
         core_request_id: u32,
         session_id: u64,
         session: Option<TransferSession>
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferSessionStatus, WebRtcErrors> {
         let (dat_tx, mut data_rx) = mpsc::unbounded();
         let (th_tx, mut thumbnail_rx) = mpsc::unbounded();
 
@@ -190,7 +192,7 @@ impl WebRtcPeer {
                 self.msg_channel.send_response(rtc_request_id, Response::TransferResponse(response)).await?;
             };
 
-            return Ok(());
+            return Ok(TransferSessionStatus::Canceled);
         }
 
         let mut session = session.unwrap();
@@ -312,14 +314,14 @@ impl WebRtcPeer {
         let _ = start_handle.await.unwrap();
         let _ = thumbnail_handle.await.unwrap()?;
 
-        Ok(())
+        Ok(session.status())
     }
 
     pub async fn transfer_session(
         &self,
         core_request_id: u32,
         mut session: TransferSession,
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferSessionStatus, WebRtcErrors> {
         let request_id = uuid::Uuid::new_v4();
         self.transfers_context.start_transfer(session.order_id, request_id.to_string()).await;
 
@@ -432,7 +434,7 @@ impl WebRtcPeer {
 
         let _ = thumbnail_handle.await;
 
-        Ok(())
+        Ok(session.status())
     }
 
     pub fn cancel_transfer_session(&self) -> Result<(), WebRtcErrors> {

@@ -201,10 +201,10 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let file = File::existing(&absolute_path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        Ok(file.cursor(0, 1024 * 1024).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
+        Ok(file.cursor(0, size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {

@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use tokio::sync::OnceCell;
-
-use crate::network::webrtc::connection::ConnectionWebRtcErrors;
-use crate::network::webrtc::web_rtc::WebRtc;
 use crate::ShellRuntime;
 use shared::app::operations::p2p::P2POperation;
 use shared::app::operations::CoreOperationOutput;
+use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
+use shared::errors::NetworkError;
 
 pub struct P2PNativeExecutor {
     pub shell_runtime: Arc<dyn ShellRuntime>,
@@ -18,37 +16,19 @@ impl P2PNativeExecutor {
         match effect {
             P2POperation::PeerEvents(peer_id) => {
                 let web_rtc = self.web_rtc.clone();
-                loop {
-                    let Some(connection) = web_rtc
-                        .get_connection(peer_id.parse().expect("Mistake, peer id must be number"))
-                        .await
-                        .ok()
-                        .and_then(|connection| connection.upgrade())
-                    else {
-                        return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
-                    };
-
-                    match connection.next_peers_event(request_id).await {
-                        Ok(_) => {
-                            continue;
-                        }
-                        Err(e) => {
-                            return CoreOperationOutput::ConnectionError(e.into());
-                        }
-                    }
+                match web_rtc.start_peer_core_stream(peer_id, request_id).await {
+                    Ok(_) => CoreOperationOutput::Void,
+                    Err(e) => CoreOperationOutput::ConnectionError(e.into())
                 }
             }
             P2POperation::UpdateFindingScopes(update_finding_scopes) => {
                 let web_rtc = self.web_rtc.clone();
                 let result = web_rtc.update_finding_scopes(update_finding_scopes).await;
-                match result {
-                    Ok(_) => CoreOperationOutput::Void,
-                    Err(e) => CoreOperationOutput::ConnectionError(e.into())
-                }
+                CoreOperationOutput::Void
             }
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc.clone();
-                let result = web_rtc.start(request_id, peer, self.shell_runtime.clone()).await;
+                let result = web_rtc.start(request_id, peer).await;
                 match result {
                     Ok(_) => CoreOperationOutput::Void,
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())

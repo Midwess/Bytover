@@ -158,7 +158,7 @@ impl CloudService {
 
             drop(session_guard);
 
-            let Ok(mut cursor) = self.repository.read(thumbnail_file_path).await else {
+            let Ok(mut cursor) = self.repository.read(thumbnail_file_path, 1024 * 1024).await else {
                 continue;
             };
 
@@ -208,7 +208,7 @@ impl CloudService {
             let resource_path = resource.path.clone();
             let repository = self.repository.clone();
             futures.push(async move {
-                let cursor = match repository.read(resource_path).await {
+                let cursor = match repository.read(resource_path, 1024 * 1024).await {
                     Ok(cursor) => cursor,
                     Err(e) => {
                         let _ = tx.send(Err(CloudTransferErrors::from(e)));

@@ -3,11 +3,10 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 
 use crate::network::cloud::cloud_service::CloudService;
-use crate::network::webrtc::connection::ConnectionWebRtcErrors;
-use crate::network::webrtc::web_rtc::WebRtc;
 use crate::ShellRuntime;
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
+use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use shared::errors::NetworkError;
 
 pub struct TransferNative {
@@ -34,17 +33,7 @@ impl TransferNative {
                     }
                 }
 
-                let Some(connection) = self
-                    .web_rtc
-                    .get_connection(session.peer_id().unwrap_or_default())
-                    .await
-                    .ok()
-                    .and_then(|connection| connection.upgrade())
-                else {
-                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
-                };
-
-                match connection.send_session(session, request_id).await {
+                match self.web_rtc.send_session(request_id, session).await {
                     Ok(status) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(status)),
                     Err(e) => CoreOperationOutput::ConnectionError(e.into())
                 }
@@ -52,16 +41,14 @@ impl TransferNative {
             TransferOperation::AnswerSessionRequest {
                 peer_id,
                 session,
-                peer_request_id,
-                response,
-                ..
+                session_id
             } => {
-                let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
-                else {
-                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
-                };
-
-                let result = connection.answer_session_request(request_id, session, peer_request_id, response).await;
+                let result = self.web_rtc.answer_session(
+                    request_id,
+                    peer_id,
+                    session,
+                    session_id
+                ).await;
 
                 log::info!(target: "transfer", "Answered session request: {result:?}");
 
@@ -76,18 +63,12 @@ impl TransferNative {
                 if self.cloud_service.cancel(session_id).await {
                     return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);
                 }
+                
+                if peer_id.is_none() {
+                    return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);
+                }
 
-                let Some(peer_id) = peer_id else {
-                    log::error!(target: "native", "Peer ID is not provided");
-                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
-                };
-
-                let Some(connection) = self.web_rtc.get_connection(peer_id).await.ok().and_then(|connection| connection.upgrade())
-                else {
-                    return CoreOperationOutput::ConnectionError(ConnectionWebRtcErrors::ConnectionNotFound.into());
-                };
-
-                connection.stop_session(session_id).await;
+                let _ = self.web_rtc.cancel_session(peer_id.unwrap(), session_id).await;
 
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled)
             }
