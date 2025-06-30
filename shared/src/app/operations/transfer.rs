@@ -20,7 +20,6 @@ pub enum TransferOperation {
     AnswerSessionRequest {
         peer_id: String,
         session: TransferSession,
-        peer_request_id: String,
         response: Response
     },
     CancelSession(Option<String>, u64)

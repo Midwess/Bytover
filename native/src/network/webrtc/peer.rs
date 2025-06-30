@@ -454,7 +454,7 @@ impl PeerCommunication {
                 break Ok(session_guard.status());
             }
 
-            let Some(next_resource) = session_guard.get_next_download_resource() else {
+            let Some(next_resource) = session_guard.get_next_transfer_resource() else {
                 log::info!(target: "peer", "No more resources to download");
                 break Ok(session_guard.status());
             };

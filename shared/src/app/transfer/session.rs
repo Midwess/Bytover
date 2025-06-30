@@ -305,7 +305,7 @@ impl TransferSession {
         });
     }
 
-    pub fn get_next_download_resource(&self) -> Option<&LocalResource> {
+    pub fn get_next_transfer_resource(&self) -> Option<&LocalResource> {
         if self.transfer_type == TransferType::Send {
             return None;
         }

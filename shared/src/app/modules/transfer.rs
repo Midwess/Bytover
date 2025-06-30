@@ -80,7 +80,6 @@ pub enum TransferEvent {
         session_id: u64
     },
     TransferRequest {
-        request_id: String,
         remote_session: TransferSessionMessage,
         peer: Peer
     },
@@ -304,11 +303,10 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::TransferRequest {
-                request_id,
                 remote_session,
                 peer
             } => Command::new(|it| async move {
-                transfer_service.received_session_request((request_id, remote_session), peer, it).await;
+                transfer_service.received_session_request(remote_session, peer, it).await;
                 log::info!(target: "transfer", "Done download, shell should done");
             }),
             TransferEvent::UpdateTransferSessions { loaded, new, removed } => {

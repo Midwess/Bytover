@@ -117,12 +117,10 @@ impl NearbyService {
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
-                    request_id,
                     remote_session
                 }) => {
                     log::info!(target: ns.as_str(), "Received session request from peer: {}", peer.id);
                     let request = AppEvent::Transfer(TransferEvent::TransferRequest {
-                        request_id,
                         remote_session,
                         peer: peer.clone()
                     });

@@ -188,7 +188,7 @@ impl TransferService {
 
     pub async fn received_session_request(
         &self,
-        (request_id, remote_session): (String, TransferSessionMessage),
+        remote_session: TransferSessionMessage,
         peer: Peer,
         cmd: AppCommandContext
     ) {
@@ -243,7 +243,6 @@ impl TransferService {
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
             session: transfer_session.clone(),
-            peer_request_id: request_id,
             response
         });
 

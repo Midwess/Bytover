@@ -2,6 +2,8 @@ use tokio::task::JoinHandle;
 use url::Url;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
 use crate::app::operations::CoreOperationOutput;
+use crate::app::operations::transfer::TransferOperationOutput;
+use crate::app::transfer::session::TransferProgress;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -20,6 +22,11 @@ pub trait CoreBridge: Send + Sync {
 
     // How many throttle is depends on the implementation
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput);
+    
+    async fn resource_progress_update(&self, request_id: u32, progress: &TransferProgress) {
+        let response = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
+        self.response_throttle(request_id, response).await;
+    }
 }
 
 // Abstraction open stream to http server

@@ -26,11 +26,9 @@ pub enum P2POperationOutput {
     PeerConnected(Peer),
     PeerDisconnected(),
     ReceivedSessionRequest {
-        request_id: String,
         remote_session: TransferSessionMessage
     },
     CancelSessionRequest {
-        request_id: String,
         session_id: u64
     },
     NearbyServerStopped,

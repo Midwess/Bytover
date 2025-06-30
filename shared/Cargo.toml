@@ -32,6 +32,8 @@ bytes.workspace = true
 prost.workspace = true
 futures-timer.workspace = true
 n0-future.workspace = true
+async-stream.workspace = true
+bincode.workspace = true
 
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
