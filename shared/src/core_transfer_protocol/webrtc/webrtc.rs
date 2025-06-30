@@ -122,7 +122,7 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_secs(3)))
+            .signaling_keep_alive_interval(Some(Duration::from_secs(30)))
             .build();
 
         let loop_fut = loop_fut.fuse();
@@ -145,6 +145,7 @@ impl WebRtc {
                        continue;
                    }
 
+                   log::info!("Peer {} connected", peer_id);
                    if peer_id < current_user.peer_id() {
                        let direct_message_channel = DirectMessageChannel::new(peer_id.clone(), outbound_msg_sender.clone());
                        let core_bridge = self.core_bridge.clone();
@@ -197,6 +198,7 @@ impl WebRtc {
                 let request_id = msg.request_id;
                 if let Some(response) = msg.response {
                     peer.msg_channel.notify_response(request_id.clone(), response).await;
+                    continue;
                 };
 
                 let Some(request) = msg.request else {
@@ -247,7 +249,6 @@ impl WebRtc {
                     continue;
                 };
 
-                let peers_guard = self.peers.lock().await;
                 if let Some(peer) = peers_guard.get(&peer_id) {
                     peer.process_request(request).await;
                 }
@@ -264,18 +265,15 @@ impl WebRtc {
                 _ = (&mut timeout).fuse() => {
                     timeout.reset(Duration::from_millis(100));
                 }
-                _ = async {
-                     for handle in handles.drain(..) {
-                        if let Err(e) = handle.await {
-                            log::error!("Error while joining async task: {:?}", e);
-                        }
-                    }
-                }.fuse() => {
-                    timeout.reset(Duration::from_millis(100));
-                }
                 // Or break if the message loop ends (disconnected, closed, etc.)
                 _ = &mut loop_fut => {
                     break;
+                }
+            }
+
+            for handle in handles.drain(..) {
+                if let Err(e) = handle.await {
+                    log::error!("Error while joining async task: {:?}", e);
                 }
             }
         }

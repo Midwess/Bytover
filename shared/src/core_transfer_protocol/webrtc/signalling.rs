@@ -22,10 +22,19 @@ impl SharedContext {
             finding_scopes: Default::default()
         }
     }
-    
+
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
-        self.finding_scopes.lock().await.clear();
-        self.finding_scopes.lock().await.extend(scopes);
+        let mut finding_scopes = self.finding_scopes.lock().await;
+        if scopes.ne(&*finding_scopes) {
+            log::info!("Updating finding scopes: {scopes:#?}");
+        }
+
+        finding_scopes.clear();
+        finding_scopes.extend(scopes);
+    }
+
+    pub async fn get_finding_scopes(&self) -> Vec<FindingScope> {
+        self.finding_scopes.lock().await.clone()
     }
 }
 
@@ -141,12 +150,12 @@ impl WebSignaller {
 impl Signaller for WebSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = SignallingPeerRequest(self.peer_id, request);
-        log::debug!("Signaller: Sending request: {request:#?}");
+        log::info!("Signaller: Sending request: {request:#?}");
         let Ok(mut message) = TryInto::<Message>::try_into(request) else {
             return Ok(())
         };
 
-        message.scopes = self.shared_context.finding_scopes.lock().await.iter().map(|it| it.as_string()).collect();
+        message.scopes = self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>();
 
         self.client.send(message).await.map_err(Into::<SignalingError>::into)?;
         Ok(())
@@ -156,6 +165,8 @@ impl Signaller for WebSignaller {
         let message = self.client.next_message().await.map_err(Into::<SignalingError>::into)?;
         let response = SignallingPeerResponse(message);
         let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
+
+        log::info!("Signaller: Received message: {peer_event:#?}");
 
         Ok(peer_event)
     }

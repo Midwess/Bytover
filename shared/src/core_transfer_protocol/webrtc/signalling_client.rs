@@ -1,5 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
+use n0_future::task::spawn;
+use n0_future::task::JoinHandle;
 use anyhow::anyhow;
 use ewebsock::{connect, ws_connect, Options, WsEvent, WsMessage};
 use schema::devlog::rpc_signalling::server::Message;
@@ -7,8 +9,8 @@ use tokio::sync::{mpsc, Mutex};
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use matchbox_socket::Signaller;
 use tokio::signal::unix::Signal;
-use tokio::task::{spawn_blocking, spawn_local, JoinHandle};
 use prost::Message as prost_message;
+use tokio::time::sleep;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -39,8 +41,9 @@ impl SignallingClient {
 
         let msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
-        let handle = tokio::spawn(async move {
+        let handle = spawn(async move {
             loop {
+                log::info!("Starting signalling client at {}", addr);
                 let (mut sender, receiver) = match connect(addr.clone(), options.clone()) {
                     Ok(socket) => socket,
                     Err(err) => {
@@ -52,17 +55,34 @@ impl SignallingClient {
 
                 let receiver = Arc::new(Mutex::new(receiver));
 
+                log::info!("websocket connected");
                 loop {
                     let receiver = receiver.clone();
                     tokio::select! {
-                        Ok(Some(WsEvent::Message(WsMessage::Binary(bytes)))) = spawn_local(async move {
-                            receiver.lock().await.try_recv()
-                        }) => {
-                            let Ok(msg) = Message::decode(&bytes[..]) else {
+                        Some(msg) = async {
+                            sleep(Duration::from_millis(100)).await;
+                            let receiver = receiver.lock().await;
+                            let result = receiver.try_recv();
+                            result
+                        } => {
+                            if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
+                                let Ok(msg) = Message::decode(&bytes[..]) else {
+                                    continue;
+                                };
+                                
+                                let _ = msg_sender.send(msg).await;
                                 continue;
-                            };
-
-                            let _ = msg_sender.send(msg).await;
+                            }
+                            
+                            if let WsEvent::Closed = msg {
+                                log::info!("websocket closed");
+                                break;
+                            }
+                            
+                            if let WsEvent::Error(err) = msg {
+                                log::error!("websocket error: {:?}", err);
+                                break;
+                            }
                         },
                         Some(msg_to_send) = signal_receiver.recv() => {
                             let mut bytes = vec![];
@@ -71,7 +91,7 @@ impl SignallingClient {
                                 continue;
                             }
 
-                            let _ = sender.send(WsMessage::Binary(bytes));
+                            sender.send(WsMessage::Binary(bytes));
                         }
                     }
                 }
