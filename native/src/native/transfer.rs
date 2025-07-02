@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::OnceCell;
-
 use crate::network::cloud::cloud_service::CloudService;
 use crate::ShellRuntime;
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -43,12 +41,7 @@ impl TransferNative {
                 session,
                 session_id
             } => {
-                let result = self.web_rtc.answer_session(
-                    request_id,
-                    peer_id,
-                    session,
-                    session_id
-                ).await;
+                let result = self.web_rtc.answer_session(request_id, peer_id, session, session_id).await;
 
                 log::info!(target: "transfer", "Answered session request: {result:?}");
 
@@ -63,7 +56,7 @@ impl TransferNative {
                 if self.cloud_service.cancel(session_id).await {
                     return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);
                 }
-                
+
                 if peer_id.is_none() {
                     return CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled);
                 }

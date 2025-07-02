@@ -2,19 +2,17 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use futures_util::StreamExt;
-use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
+use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::persistent::{LocalResourcePersistentOperation, PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::peer::Peer;
 
 use super::session::TransferSession;
@@ -181,12 +179,7 @@ impl TransferService {
         }));
     }
 
-    pub async fn received_session_request(
-        &self,
-        remote_session: TransferSessionMessage,
-        peer: Peer,
-        cmd: AppCommandContext
-    ) {
+    pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
         let peer_id = peer.id();
         let generate_file_paths_request = {
             let mut result = HashMap::new();
@@ -196,16 +189,17 @@ impl TransferService {
 
             result
         };
-        
-        let mut generated_thumbnails_paths = TransferSessionPersistentOperation::generate_thumbnail_paths(
-            generate_file_paths_request.keys().map(|id| *id).collect()
-        ).into_future(cmd.clone()).await;
 
-        let mut generated_saved_paths = TransferSessionPersistentOperation::generate_resource_paths(
-            remote_session.order_id,
-            generate_file_paths_request
-        ).into_future(cmd.clone()).await;
-        
+        let mut generated_thumbnails_paths =
+            TransferSessionPersistentOperation::generate_thumbnail_paths(generate_file_paths_request.keys().copied().collect())
+                .into_future(cmd.clone())
+                .await;
+
+        let mut generated_saved_paths =
+            TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)
+                .into_future(cmd.clone())
+                .await;
+
         log::info!(
             target: "transfer",
             "Received session request from peer: {peer_id:?}: {remote_session:?}"
@@ -245,7 +239,7 @@ impl TransferService {
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
             session: Some(transfer_session.clone()),
-            session_id: transfer_session.order_id,
+            session_id: transfer_session.order_id
         });
 
         let mut stream = cmd.stream_from_shell(response);

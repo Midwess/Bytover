@@ -11,7 +11,7 @@ pub fn get_gateway_grpc_url() -> String {
 }
 
 pub fn get_signalling_server_ws_url() -> String {
-    return format!("ws://tiendang.local:8000/rpc-signalling");
+    return "ws://tiendang.local:8000/rpc-signalling".to_string();
     if DEVLOG_WITH_SSL == "1" {
         format!("wss://{GATEWAY_HOST}:{GATEWAY_PORT}/rpc-signalling")
     } else {

@@ -5,8 +5,8 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use uniffi::{Enum, Record};
 
-use crate::app::AppRequestBuilder;
 use crate::app::file_system::file::LocalResourcePath;
+use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -67,22 +67,19 @@ impl DeviceOperation {
 
 impl OpenOperation {
     pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::OpenSession(session_id))))
-            .map(|it| {
-                match it {
-                    CoreOperationOutput::Void => (),
-                    _ => panic!("Invalid output for DeviceOperation::OpenSession")
-                }
-            })
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::OpenSession(
+            session_id
+        ))))
+        .map(|it| match it {
+            CoreOperationOutput::Void => (),
+            _ => panic!("Invalid output for DeviceOperation::OpenSession")
+        })
     }
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::Open(path))))
-            .map(|it| {
-                match it {
-                    CoreOperationOutput::Void => (),
-                    _ => panic!("Invalid output for DeviceOperation::Open")
-                }
-            })
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::Open(path)))).map(|it| match it {
+            CoreOperationOutput::Void => (),
+            _ => panic!("Invalid output for DeviceOperation::Open")
+        })
     }
 }

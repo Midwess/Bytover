@@ -1,38 +1,38 @@
+use crate::config::get_signalling_server_ws_url;
+use crate::core_api_impl::bridge::CoreBridgeImpl;
+use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::grpc::auth_provider::AuthProvider;
 use crate::grpc::auth_server::AuthServer;
 use crate::grpc::cloud_server::CloudServer;
-use crate::native::persistent::{NativePersistent};
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutor;
+use crate::native::persistent::NativePersistent;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
 use crate::network::cloud::cloud_service::CloudService;
-use core::panic;
-use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
-use core_services::utils::pool::request::PoolRequestBuilder;
-use redb::Database;
-use shared::app::authentication::service::AuthenticationService;
-use shared::app::nearby::nearby_services::NearbyService;
-use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
-use shared::app::transfer::transfer_service::TransferService;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::OnceCell;
-use devlog_sdk::distributed_id::init_scoped_id_generator;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
+use crate::ShellRuntime;
+use core::panic;
+use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
+use core_services::utils::pool::request::PoolRequestBuilder;
+use devlog_sdk::distributed_id::init_scoped_id_generator;
+use redb::Database;
+use shared::app::authentication::service::AuthenticationService;
+use shared::app::nearby::nearby_services::NearbyService;
 use shared::app::repository::auth_session::AuthSessionRepository;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::TransferSessionRepository;
+use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
+use shared::app::transfer::transfer_service::TransferService;
 use shared::core_api::{CoreBridge, NetStream};
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
-use crate::config::get_signalling_server_ws_url;
-use crate::core_api_impl::bridge::CoreBridgeImpl;
-use crate::core_api_impl::net_stream::NetStreamImpl;
-use crate::ShellRuntime;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::OnceCell;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -113,9 +113,7 @@ impl DiContainer {
     pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<dyn ShellRuntime>) {
         let _ = self.path_resolver.set(path_resolver);
         let _ = self.shell.set(shell);
-        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(
-            self.shell.get().unwrap().clone()
-        )));
+        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
 
         let db_path = self.path_resolver().get_db_path().await;
         log::info!(target: "environment", "Connecting to local database at {db_path}");
@@ -179,8 +177,8 @@ impl DiContainer {
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
-            Arc::new(self.get_local_resource_repository()))
-        );
+            Arc::new(self.get_local_resource_repository())
+        ));
         let cloud_service = CloudService {
             server: CloudServer::new(self.get_auth_provider()),
             core_bridge: self.core_bridge.get().unwrap().clone(),

@@ -8,8 +8,8 @@ use shared::app::operations::internet::{InternetOperation, InternetOperationOutp
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::app::AppEvent;
 
-use super::persistent::{NativePersistent};
 use super::p2p::P2PNativeExecutor;
+use super::persistent::NativePersistent;
 use super::rpc::NativeRpc;
 use super::transfer::TransferNative;
 // Handle the effect comming from the platform

@@ -1,16 +1,13 @@
+use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
+use anyhow::anyhow;
+use ewebsock::{connect, Options, WsEvent, WsMessage};
+use matchbox_socket::Signaller;
+use n0_future::task::{spawn, JoinHandle};
+use prost::Message as prost_message;
+use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
-use n0_future::task::spawn;
-use n0_future::task::JoinHandle;
-use anyhow::anyhow;
-use ewebsock::{connect, ws_connect, Options, WsEvent, WsMessage};
-use futures_util::{select, FutureExt};
-use schema::devlog::rpc_signalling::server::Message;
 use tokio::sync::{mpsc, Mutex};
-use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
-use matchbox_socket::Signaller;
-use tokio::signal::unix::Signal;
-use prost::Message as prost_message;
 use tokio::time::sleep;
 
 pub struct SignallingClient {
@@ -18,7 +15,7 @@ pub struct SignallingClient {
     handle: Option<JoinHandle<()>>,
     sender: mpsc::Sender<Message>,
     receiver: Mutex<mpsc::Receiver<Message>>,
-    signal: Option<mpsc::Sender<Message>>,
+    signal: Option<mpsc::Sender<Message>>
 }
 
 impl SignallingClient {
@@ -44,11 +41,11 @@ impl SignallingClient {
         let addr = self.socket_addr.clone();
         let handle = spawn(async move {
             loop {
-                log::info!("Starting signalling client at {}", addr);
+                log::info!("Starting signalling client at {addr}");
                 let (mut sender, receiver) = match connect(addr.clone(), options.clone()) {
                     Ok(socket) => socket,
                     Err(err) => {
-                        log::error!("websocket error, retrying... {:?}", err);
+                        log::error!("websocket error, retrying... {err:?}");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -60,41 +57,41 @@ impl SignallingClient {
                 loop {
                     let receiver = receiver.clone();
                     tokio::select! {
-                        Some(msg) = async {
-                            sleep(Duration::from_millis(50)).await;
-                            let receiver = receiver.lock().await;
-                            let result = receiver.try_recv();
-                            result
-                        } => {
-                            if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
-                                let Ok(msg) = Message::decode(&bytes[..]) else {
-                                    continue;
-                                };
+                         Some(msg) = async {
+                             sleep(Duration::from_millis(50)).await;
+                             let receiver = receiver.lock().await;
 
-                                let _ = msg_sender.send(msg).await;
-                                continue;
-                            }
+                             receiver.try_recv()
+                         } => {
+                             if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
+                                 let Ok(msg) = Message::decode(&bytes[..]) else {
+                                     continue;
+                                 };
 
-                            if let WsEvent::Closed = msg {
-                                log::info!("websocket closed");
-                                break;
-                            }
+                                 let _ = msg_sender.send(msg).await;
+                                 continue;
+                             }
 
-                            if let WsEvent::Error(err) = msg {
-                                log::error!("websocket error: {:?}", err);
-                                break;
-                            }
-                        },
-                        Some(msg_to_send) = signal_receiver.recv() => {
-                            let mut bytes = vec![];
-                            let _ = msg_to_send.encode(&mut bytes);
-                            if bytes.is_empty() {
-                                continue;
-                            }
+                             if let WsEvent::Closed = msg {
+                                 log::info!("websocket closed");
+                                 break;
+                             }
 
-                            sender.send(WsMessage::Binary(bytes));
-                        },
-                   }
+                             if let WsEvent::Error(err) = msg {
+                                 log::error!("websocket error: {err:?}");
+                                 break;
+                             }
+                         },
+                         Some(msg_to_send) = signal_receiver.recv() => {
+                             let mut bytes = vec![];
+                             let _ = msg_to_send.encode(&mut bytes);
+                             if bytes.is_empty() {
+                                 continue;
+                             }
+
+                             sender.send(WsMessage::Binary(bytes));
+                         },
+                    }
                 }
             }
         });

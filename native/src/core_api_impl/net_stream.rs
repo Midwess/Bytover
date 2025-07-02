@@ -1,15 +1,15 @@
+use crate::network::cloud::cloud_service::CloudTransferErrors;
+use shared::core_api::{NetStream, NetStreamInner};
 use tokio::io::{duplex, AsyncWriteExt};
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 use url::Url;
-use shared::core_api::{NetStream, NetStreamInner};
-use crate::network::cloud::cloud_service::CloudTransferErrors;
 
 pub struct NetStreamImpl {}
 
 pub struct NetStreamInnerImpl {
     handle: Option<JoinHandle<Result<(), CloudTransferErrors>>>,
-    writer: tokio::io::DuplexStream,
+    writer: tokio::io::DuplexStream
 }
 
 #[async_trait::async_trait]
@@ -23,12 +23,13 @@ impl NetStream for NetStreamImpl {
         let handle: JoinHandle<Result<(), CloudTransferErrors>> = tokio::spawn(async move {
             let client = reqwest::Client::new();
             let response = client
-                .put(&upload_url_cloned.to_string())
+                .put(upload_url_cloned.to_string())
                 .header("Content-Length", format!("{size}"))
                 .header("Content-Type", "application/octet-stream")
                 .body(body)
                 .send()
-                .await.map_err(|e| anyhow::anyhow!(e))?;
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
             if response.status().is_success() {
                 return Ok(())
             }
@@ -42,7 +43,7 @@ impl NetStream for NetStreamImpl {
 
         Ok(Box::new(NetStreamInnerImpl {
             handle: Some(handle),
-            writer,
+            writer
         }))
     }
 }
@@ -62,9 +63,7 @@ impl NetStreamInner for NetStreamInnerImpl {
             return Ok(());
         };
 
-        let Ok(result) = handle.await else {
-            return Ok(())
-        };
+        let Ok(result) = handle.await else { return Ok(()) };
 
         result?;
 

@@ -2,13 +2,12 @@ use std::future::Future;
 
 use crux_core::capability::Operation;
 use crux_core::Command;
-use schema::devlog::bitbridge::peer_message_body::Response;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
-use crate::app::file_system::file::LocalResourcePath;
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -21,7 +20,7 @@ pub enum TransferOperation {
     AnswerSessionRequest {
         peer_id: String,
         session: Option<TransferSession>,
-        session_id: u64,
+        session_id: u64
     },
     CancelSession(Option<String>, u64)
 }
@@ -34,7 +33,7 @@ pub enum TransferOperationOutput {
     ThumbnailFullFilled {
         local_resource_path: LocalResourcePath,
         resource_id: u64,
-        session_id: u64,
+        session_id: u64
     },
     TransferCanceled
 }

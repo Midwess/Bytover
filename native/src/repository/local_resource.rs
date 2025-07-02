@@ -1,31 +1,26 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use futures_util::future::join_all;
+use crate::core_api_impl::io::IOWriterImpl;
+use crate::repository::id::RedbIdWrapper;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
 use core_services::db::redb::table::RedbTable;
 use core_services::db::repository::abstraction::errors::Resolve;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
+use core_services::local_storage::file_system::{File, Folder};
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use redb::Database;
-use tokio::fs;
-use url::Url;
-use core_services::local_storage::abstraction::IOCursor;
-use core_services::local_storage::file_system;
-use core_services::local_storage::file_system::{File, Folder};
 use devlog_sdk::distributed_id::gen_id;
+use futures_util::future::join_all;
+use redb::Database;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::app::repository::path_resolver::PathResolver;
-use shared::core_api::{IOReader, IOWriter, NetStream};
-use crate::core_api_impl::io::{IOReaderImpl, IOWriterImpl};
-use crate::core_api_impl::net_stream::NetStreamImpl;
-use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
-use crate::repository::id::RedbIdWrapper;
+use shared::core_api::{IOReader, IOWriter};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::fs;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<Database>,
@@ -113,7 +108,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 size: folder.calculate_total_size().await.unwrap_or_default(),
                 path,
                 thumbnail_path: None,
-                r#type: ResourceType::Folder,
+                r#type: ResourceType::Folder
             };
 
             return Ok(Some(resource))
@@ -130,7 +125,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             size: metadata.size,
             path,
             thumbnail_path: None,
-            r#type: ResourceType::File,
+            r#type: ResourceType::File
         };
 
         Ok(Some(resource))
@@ -157,7 +152,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             });
         }
 
-        let mut resources = join_all(futures).await.into_iter().filter_map(|it| it).collect::<Vec<_>>();
+        let mut resources = join_all(futures).await.into_iter().flatten().collect::<Vec<_>>();
 
         resources.sort_by(|a, b| a.order_id.cmp(&b.order_id));
 
@@ -165,11 +160,16 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
-        let Some(mut resource) = RedbRepository::find_one(self, &RedbIdWrapper(LocalResourceId {
-            order_id: Some(resource_id),
-            ..Default::default()
-        })).await? else {
-            return Err(PersistenceError::NotFound(format!("Resource {}", resource_id)))
+        let Some(mut resource) = RedbRepository::find_one(
+            self,
+            &RedbIdWrapper(LocalResourceId {
+                order_id: Some(resource_id),
+                ..Default::default()
+            })
+        )
+        .await?
+        else {
+            return Err(PersistenceError::NotFound(format!("Resource {resource_id}")))
         };
 
         let path = self.path_resolver.get_thumbnail_file_path(resource_id).await;
@@ -181,6 +181,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         Ok(saved_path)
     }
+
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let file = File::existing(&absolute_path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
@@ -189,8 +190,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         if metadata.is_dir {
             Ok(ResourceType::Folder)
-        }
-        else {
+        } else {
             let mime_type = mime_guess::from_path(&file.path).first_or_octet_stream();
             let resource_type = if mime_type.type_() == mime_guess::mime::IMAGE {
                 ResourceType::Image
@@ -209,7 +209,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let path = PathBuf::from(absolute_path);
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-            return Ok(folder.cursor(size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?);
+            return folder.cursor(size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
         };
 
         let file = File::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;

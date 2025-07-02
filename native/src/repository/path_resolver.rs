@@ -1,12 +1,11 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+use crate::ShellRuntime;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::path_resolver::PathResolver;
-use crate::native::message_to_shell::MessageToShell;
-use crate::native::message_to_shell::MessageToShellResponse;
-use crate::ShellRuntime;
+use std::path::PathBuf;
+use std::sync::Arc;
+use uniffi::Enum;
 
 #[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Clone)]
 pub enum PathResolverMessage {
@@ -14,7 +13,7 @@ pub enum PathResolverMessage {
     GetLocalResourcePath { absolute_path: String },
     GetThumbnailDirPath,
     GetSessionDirPath { session_id: u64 },
-    GetSystemDirPath,
+    GetSystemDirPath
 }
 
 #[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Clone)]
@@ -23,7 +22,7 @@ pub enum PathResolverResponseMessage {
     GetLocalResourcePath { path: LocalResourcePath },
     GetThumbnailDirPath { path: String },
     GetSessionDirPath { path: String },
-    GetSystemDirPath { path: String },
+    GetSystemDirPath { path: String }
 }
 
 pub struct PathResolverImpl {
@@ -33,7 +32,11 @@ pub struct PathResolverImpl {
 #[async_trait::async_trait]
 impl PathResolver for PathResolverImpl {
     async fn get_absolute_path(&self, path: LocalResourcePath) -> String {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetAbsolutePath { absolute_path }) = self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetAbsolutePath { path })).await else {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetAbsolutePath { absolute_path }) = self
+            .shell
+            .request(MessageToShell::PathResolver(PathResolverMessage::GetAbsolutePath { path }))
+            .await
+        else {
             panic!("Failed to get absolute path");
         };
 
@@ -41,7 +44,13 @@ impl PathResolver for PathResolverImpl {
     }
 
     async fn get_local_resource_path(&self, absolute_path: String) -> LocalResourcePath {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetLocalResourcePath { path }) = self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetLocalResourcePath { absolute_path })).await else {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetLocalResourcePath { path }) = self
+            .shell
+            .request(MessageToShell::PathResolver(PathResolverMessage::GetLocalResourcePath {
+                absolute_path
+            }))
+            .await
+        else {
             panic!("Failed to get local resource path");
         };
 
@@ -49,7 +58,9 @@ impl PathResolver for PathResolverImpl {
     }
 
     async fn get_thumbnail_dir_path(&self) -> String {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetThumbnailDirPath { path }) = self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetThumbnailDirPath)).await else {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetThumbnailDirPath { path }) =
+            self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetThumbnailDirPath)).await
+        else {
             panic!("Failed to get thumbnail dir path");
         };
 
@@ -57,7 +68,13 @@ impl PathResolver for PathResolverImpl {
     }
 
     async fn get_session_dir_path(&self, session_id: u64) -> String {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetSessionDirPath { path }) = self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetSessionDirPath { session_id })).await else {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetSessionDirPath { path }) = self
+            .shell
+            .request(MessageToShell::PathResolver(PathResolverMessage::GetSessionDirPath {
+                session_id
+            }))
+            .await
+        else {
             panic!("Failed to get session dir path");
         };
 
@@ -65,7 +82,9 @@ impl PathResolver for PathResolverImpl {
     }
 
     async fn get_system_dir_path(&self) -> String {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetSystemDirPath { path }) = self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetSystemDirPath)).await else {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetSystemDirPath { path }) =
+            self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetSystemDirPath)).await
+        else {
             panic!("Failed to get system dir path");
         };
 

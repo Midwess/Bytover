@@ -1,6 +1,6 @@
 use crate::app::modules::authentication::AuthenticationEvent;
-use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::device::DeviceOperation;
+use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
@@ -8,8 +8,8 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
 use url::Url;
 
-use std::sync::OnceLock;
 use devlog_sdk::distributed_id::gen_id;
+use std::sync::OnceLock;
 
 pub struct AuthenticationService {}
 

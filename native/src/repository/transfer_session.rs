@@ -1,23 +1,22 @@
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use tokio::fs;
-use std::sync::Arc;
 use crate::repository::id::RedbIdWrapper;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
 use core_services::db::redb::table::RedbTable;
-use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
+use core_services::db::repository::abstraction::errors::Resolve;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use core_services::local_storage::file_system::Folder;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::fs;
 
 pub struct TransferSessionRepositoryImpl {
     pub db: PoolRequest<Database>,
@@ -132,16 +131,20 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     }
 
     async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
-        let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::delete_one(self, &RedbIdWrapper(session_id.clone())).await?;
+        let session =
+            RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::delete_one(self, &RedbIdWrapper(session_id.clone()))
+                .await?;
         let session_order_id = session.order_id;
         let session_dir_path = self.path_resolver.get_session_dir_path(session_order_id).await;
         let path_buf = PathBuf::from(session_dir_path);
         if !path_buf.is_dir() {
-            return Err(PersistenceError::NotFound(format!("Not found folder for session {}", session_order_id)))
+            return Err(PersistenceError::NotFound(format!(
+                "Not found folder for session {session_order_id}"
+            )))
         }
 
         if let Err(e) = fs::remove_dir_all(path_buf).await {
-            log::error!("Error when delete session folder but we already delete the session record, so skipping...: {}", e);
+            log::error!("Error when delete session folder but we already delete the session record, so skipping...: {e}");
         }
 
         Ok(())
@@ -150,7 +153,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn generate_resource_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, String>,
+        resource_names: HashMap<u64, String>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let workdir = PathBuf::from(self.path_resolver.get_session_dir_path(session_order_id).await);
         let mut result = HashMap::new();
@@ -179,15 +182,12 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
 
 fn generate_new_filename(original_name: &str, counter: u32) -> String {
     let path = Path::new(original_name);
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(original_name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(original_name);
     let ext = path.extension().and_then(|e| e.to_str());
 
     if let Some(ext) = ext {
-        format!("{}-{}.{}", stem, counter, ext)
+        format!("{stem}-{counter}.{ext}")
     } else {
-        format!("{}-{}", stem, counter)
+        format!("{stem}-{counter}")
     }
 }

@@ -1,13 +1,13 @@
 use devlog_sdk::distributed_id::gen_id;
 use shared::app::operations::persistent::{
-    PersistentOperation,
-    PersistentOperationOutput,
     LocalResourcePersistentOperation,
     LocalResourcePersistentOperationOutput,
+    PersistentOperation,
+    PersistentOperationOutput,
     SessionPersistentOperation,
     SessionPersistentOperationOutput,
-    TransferSessionPersistentOperation,
-    TransferSessionOperationOutput
+    TransferSessionOperationOutput,
+    TransferSessionPersistentOperation
 };
 use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
@@ -129,28 +129,32 @@ impl NativePersistent {
                     Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::LoadOnDisk(result)),
                     Err(e) => {
                         log::error!("Failed to load local resource: {e:?}");
-                        return PersistentOperationOutput::Error(e.to_string());
+                        PersistentOperationOutput::Error(e.to_string())
                     }
                 }
             }
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id}) => {
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id }) => {
                 match self.local_resource_repository.save_thumbnail(png_bytes, resource_id).await {
-                    Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::AddThumbnail(result)),
+                    Ok(result) => {
+                        PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::AddThumbnail(result))
+                    }
                     Err(e) => {
                         log::error!("Failed to save thumbnail: {e:?}");
-                        return PersistentOperationOutput::Error(e.to_string());
+                        PersistentOperationOutput::Error(e.to_string())
                     }
                 }
-            },
+            }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::GetResourceType { path }) => {
                 match self.local_resource_repository.get_resource_type(path).await {
-                    Ok(result) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::GetResourceType(result)),
+                    Ok(result) => {
+                        PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::GetResourceType(result))
+                    }
                     Err(e) => {
                         log::error!("Failed to get resource type: {e:?}");
-                        return PersistentOperationOutput::Error(e.to_string());
+                        PersistentOperationOutput::Error(e.to_string())
                     }
                 }
-            },
+            }
             PersistentOperation::GenId() => PersistentOperationOutput::GenId(gen_id().await),
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
                 let result = self.transfer_session_repository.create(session).await;
@@ -180,7 +184,9 @@ impl NativePersistent {
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)) => {
                 let result = self.transfer_session_repository.update_progresses(order_id, progresses).await;
                 match result {
-                    Ok(session) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(session)),
+                    Ok(session) => {
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(session))
+                    }
                     Err(err) => {
                         log::error!("Failed to update transfer session: {err:?}");
                         PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::UpdateProgresses(None))
@@ -194,7 +200,8 @@ impl NativePersistent {
                         order_id: Some(order_id),
                         ..Default::default()
                     })
-                    .await {
+                    .await
+                {
                     log::error!("Failed to remove transfer session: {e:?}");
                     return PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(false));
                 }
@@ -217,21 +224,24 @@ impl NativePersistent {
                     }
                 }
             }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath { session_id, resource_names }) => {
-                match self.transfer_session_repository.generate_resource_paths(session_id, resource_names).await {
-                    Ok(result) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateResourcePath(result)),
-                    Err(e) => {
-                        log::error!("Failed to generate resources path: {e:?}");
-                        return PersistentOperationOutput::Error(e.to_string());
-                    }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath {
+                session_id,
+                resource_names
+            }) => match self.transfer_session_repository.generate_resource_paths(session_id, resource_names).await {
+                Ok(result) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateResourcePath(result)),
+                Err(e) => {
+                    log::error!("Failed to generate resources path: {e:?}");
+                    PersistentOperationOutput::Error(e.to_string())
                 }
-            }
+            },
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateThumbnailPath { resource_ids }) => {
                 match self.local_resource_repository.generate_thumbnail_paths(resource_ids).await {
-                    Ok(result) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateThumbnailPath(result)),
+                    Ok(result) => {
+                        PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateThumbnailPath(result))
+                    }
                     Err(e) => {
                         log::error!("Failed to generate resources path: {e:?}");
-                        return PersistentOperationOutput::Error(e.to_string());
+                        PersistentOperationOutput::Error(e.to_string())
                     }
                 }
             }

@@ -1,9 +1,6 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use futures_util::StreamExt;
-use ulid::Ulid;
-use uuid::Uuid;
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::nearby::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
@@ -15,6 +12,8 @@ use crate::app::transfer::target::TransferTarget;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
+use futures_util::StreamExt;
+use uuid::Uuid;
 
 pub struct NearbyService {}
 
@@ -122,9 +121,7 @@ impl NearbyService {
 
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
-                    remote_session
-                }) => {
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
                     log::info!(target: ns.as_str(), "Received session request from peer: {}", peer.id);
                     let request = AppEvent::Transfer(TransferEvent::TransferRequest {
                         remote_session,

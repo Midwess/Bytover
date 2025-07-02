@@ -2,9 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use uniffi::{Enum, Record};
 
-use crate::app::operations::persistent::LocalResourcePersistentOperation;
-use crate::app::AppCommandContext;
-
 #[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
 pub struct LocalResource {
     pub order_id: u64,
@@ -12,7 +9,7 @@ pub struct LocalResource {
     pub size: u64,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType,
+    pub r#type: ResourceType
 }
 
 #[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]

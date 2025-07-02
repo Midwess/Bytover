@@ -1,9 +1,9 @@
-use std::path::PathBuf;
 use anyhow::Result;
 use async_trait::async_trait;
 use core_services::local_storage::abstraction::IOCursor;
 use core_services::local_storage::file_system::{File, Folder};
 use shared::core_api::{IOReader, IOWriter};
+use std::path::PathBuf;
 
 pub struct IOReaderImpl {
     cursor: Box<dyn IOCursor>
@@ -14,15 +14,12 @@ impl IOReaderImpl {
         let cursor = if path.is_dir() {
             let folder = Folder::new(path.clone()).await?;
             folder.cursor(1024 * 1024).await?
-        }
-        else {
+        } else {
             let file = File::new(None, path).await?;
             file.cursor(0, 1024 * 1024).await?
         };
 
-        Ok(Self {
-            cursor
-        })
+        Ok(Self { cursor })
     }
 }
 
@@ -44,9 +41,7 @@ pub struct IOWriterImpl {
 impl IOWriterImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
         let file = File::new(None, path).await?;
-        Ok(Self {
-            file
-        })
+        Ok(Self { file })
     }
 }
 

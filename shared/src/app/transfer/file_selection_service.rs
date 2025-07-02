@@ -5,10 +5,10 @@ use uniffi::Record;
 
 use crate::app::file_system::file::{LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::persistent::{PersistentOperation, LocalResourcePersistentOperation};
+use crate::app::operations::device::DeviceOperation;
+use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::app::operations::device::DeviceOperation;
 
 #[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
@@ -45,7 +45,10 @@ impl ResourceTransferSelectionService {
                 continue;
             }
 
-            let Some(mut local_resource) = LocalResourcePersistentOperation::load_from_disk(selection.path.clone()).into_future(ctx.clone()).await else {
+            let Some(mut local_resource) = LocalResourcePersistentOperation::load_from_disk(selection.path.clone())
+                .into_future(ctx.clone())
+                .await
+            else {
                 log::error!(target: "transfer", "File not exists: {:?}", selection.path);
                 continue;
             };
@@ -53,21 +56,24 @@ impl ResourceTransferSelectionService {
             local_resource.path = selection.path.clone();
             local_resource.r#type = match selection.r#type.clone() {
                 Some(r#type) => r#type,
-                None => LocalResourcePersistentOperation::get_resource_type(selection.path.clone()).into_future(ctx.clone()).await
+                None => {
+                    LocalResourcePersistentOperation::get_resource_type(selection.path.clone())
+                        .into_future(ctx.clone())
+                        .await
+                }
             };
 
             let mut new_resources = LocalResourcePersistentOperation::add(vec![local_resource.clone()]).into_future(ctx.clone()).await;
             if new_resources.is_empty() {
                 continue;
             }
-            
+
             let mut new_resource = new_resources.pop().unwrap();
-            
-            if let Some(thumbnail_png) = DeviceOperation::load_thumbnail_png(selection.path.clone())
-                .into_future(ctx.clone())
-                .await
-            {
-                let thumbnail = LocalResourcePersistentOperation::add_thumbnail(thumbnail_png, local_resource.order_id).into_future(ctx.clone()).await;
+
+            if let Some(thumbnail_png) = DeviceOperation::load_thumbnail_png(selection.path.clone()).into_future(ctx.clone()).await {
+                let thumbnail = LocalResourcePersistentOperation::add_thumbnail(thumbnail_png, local_resource.order_id)
+                    .into_future(ctx.clone())
+                    .await;
 
                 new_resource.thumbnail_path = Some(thumbnail);
             }

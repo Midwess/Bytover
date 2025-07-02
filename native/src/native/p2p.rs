@@ -4,7 +4,6 @@ use crate::ShellRuntime;
 use shared::app::operations::p2p::P2POperation;
 use shared::app::operations::CoreOperationOutput;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
-use shared::errors::NetworkError;
 
 pub struct P2PNativeExecutor {
     pub shell_runtime: Arc<dyn ShellRuntime>,

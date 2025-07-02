@@ -1,21 +1,15 @@
 use futures_util::future::join_all;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
-use log::info;
-use tokio::sync::{oneshot, OnceCell};
+use tokio::sync::oneshot;
 
-use core_services::local_storage::file_system::{File, Folder};
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 use crate::grpc::cloud_server::CloudServer;
 use crate::grpc::errors::NativeGrpcErrors;
-use crate::native::message_to_shell::MessageToShell;
-use shared::app::file_system::file::ResourceType;
 use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::repository::errors::PersistenceError;
@@ -47,7 +41,7 @@ pub enum CloudTransferErrors {
     #[error("Internal error {0}")]
     InternalError(#[from] anyhow::Error),
     #[error("IO Error {0}")]
-    IOError(#[from] PersistenceError),
+    IOError(#[from] PersistenceError)
 }
 
 pub struct CloudService {
@@ -255,9 +249,7 @@ impl CloudService {
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    let _ = self.core_bridge
-                        .response(core_request_id, msg)
-                        .await;
+                    let _ = self.core_bridge.response(core_request_id, msg).await;
 
                     self.server
                         .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Success, None)
@@ -270,9 +262,7 @@ impl CloudService {
                     progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    let _ = self.core_bridge
-                        .response(core_request_id, msg)
-                        .await;
+                    let _ = self.core_bridge.response(core_request_id, msg).await;
 
                     self.server
                         .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Failed, Some(e.to_string()))

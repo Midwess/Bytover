@@ -203,14 +203,14 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let result = try! await self.resolveRelativePath(absolutePath: absolute_path)
             return Data(try! MessageToShellResponse.pathResolverResponse(.getLocalResourcePath(path: result)).bincodeSerialize())
         case .pathResolver(.getSessionDirPath(let session_id)):
-            let public_dir = self.getDocumentsDirectory(isPrivate: false).path;
+            let public_dir = self.getDocumentsDirectory(isPrivate: false).path
             let session_dir = "\(public_dir)/session-\(session_id)"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getSessionDirPath(path: session_dir)).bincodeSerialize())
         case .pathResolver(.getSystemDirPath):
-            let private_dir = self.getDocumentsDirectory(isPrivate: true).path;
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path
             return Data(try! MessageToShellResponse.pathResolverResponse(.getSystemDirPath(path: private_dir)).bincodeSerialize())
         case .pathResolver(.getThumbnailDirPath):
-            let private_dir = self.getDocumentsDirectory(isPrivate: true).path;
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
         }
@@ -248,7 +248,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func onFileSelected(urls: [URL]) async {
         await self.update(.transfer(.beginLoadingResources))
         for url in urls {
-            let _ = url.startAccessingSecurityScopedResource()
+            _ = url.startAccessingSecurityScopedResource()
 
             guard let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil) else {
                 continue
@@ -498,7 +498,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             if path.hasPrefix("/") {
                 path = String(path.dropFirst(1))
             }
- 
+
             print("Resolving from \(absolutePath) to private \(path)")
             return LocalResourcePath.relativePath(path: path, is_private: true)
         }
@@ -508,11 +508,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             if path.hasPrefix("/") {
                 path = String(path.dropFirst(1))
             }
-            
+
             print("Resolving from \(absolutePath) to private \(path)")
             return LocalResourcePath.relativePath(path: path, is_private: false)
         }
-        
 
         throw MyError.invalidInput(reason: "The absolutePath is not in the sandboxed directory")
     }

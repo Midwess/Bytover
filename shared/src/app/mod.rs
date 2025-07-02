@@ -9,7 +9,7 @@ pub mod system;
 pub mod transfer;
 pub mod view_models;
 
-pub use crate::app::operations::CoreOperation as CoreOperation;
+pub use crate::app::operations::CoreOperation;
 
 use crate::app::authentication::service::AuthenticationService;
 use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
@@ -18,15 +18,14 @@ use crate::app::transfer::file_selection_service::ResourceTransferSelectionServi
 use crate::app::transfer::transfer_service::TransferService;
 use crux_core::capability::CapabilityContext;
 use crux_core::command::{CommandContext, RequestBuilder};
-use crux_core::macros::{Capability};
+use crux_core::macros::Capability;
 use crux_core::{App, Command};
 use modules::authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
 use modules::nearby::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
-use uniffi::export;
+use uniffi::Enum;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;

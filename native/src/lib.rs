@@ -5,17 +5,19 @@ static _CURRENT_VERSION: &str = "1.0.0";
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration, Interval};
 pub mod config;
+mod core_api_impl;
 pub mod di_container;
 pub mod errors;
 pub mod grpc;
 pub mod native;
 pub mod network;
 pub mod repository;
-mod core_api_impl;
 
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+use crate::repository::path_resolver::PathResolverImpl;
 use bincode::Options;
-pub use crux_core::{bridge::Bridge, Core, Request};
+pub use crux_core::bridge::Bridge;
+pub use crux_core::{Core, Request};
 use di_container::DiContainer;
 use erased_serde::Serialize;
 use lazy_static::lazy_static;
@@ -23,9 +25,9 @@ use native::executor::NativeExecutor;
 use shared::app::operations::CoreOperation;
 use shared::app::BitBridge;
 use std::sync::Arc;
+use tokio::spawn;
 use tokio::sync::OnceCell;
-use tokio::{spawn, task::JoinHandle};
-use crate::repository::path_resolver::PathResolverImpl;
+use tokio::task::JoinHandle;
 
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
@@ -119,9 +121,7 @@ impl NativeProcessor {
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
 
-        di_container.init(Arc::new(PathResolverImpl {
-            shell: shell.clone()
-        }), shell.clone()).await;
+        di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
 
         let native_executor = di_container.get_native_executor();
 

@@ -6,7 +6,6 @@ use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
 
-use crate::app::file_system::file::LocalResourcePath;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
@@ -25,13 +24,9 @@ pub enum P2POperation {
 pub enum P2POperationOutput {
     PeerConnected(Peer),
     PeerDisconnected(),
-    ReceivedSessionRequest {
-        remote_session: TransferSessionMessage
-    },
-    CancelSessionRequest {
-        session_id: u64
-    },
-    NearbyServerStopped,
+    ReceivedSessionRequest { remote_session: TransferSessionMessage },
+    CancelSessionRequest { session_id: u64 },
+    NearbyServerStopped
 }
 
 impl Operation for P2POperation {

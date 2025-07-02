@@ -1,31 +1,25 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Weak};
-use futures::select;
-use std::time::Duration;
-use futures_timer::Delay;
-use futures_util::{AsyncReadExt, FutureExt, StreamExt};
-use futures_util::lock::Mutex;
-use matchbox_protocol::PeerId;
-use matchbox_socket::WebRtcSocket;
-use ulid::Ulid;
-use uuid::Uuid;
-use n0_future::task::spawn;
-use schema::devlog::bitbridge::PeerMessageBody;
+use crate::app::nearby::finding_scope::FindingScope;
+use crate::app::operations::p2p::P2POperationOutput;
+use crate::app::operations::CoreOperationOutput;
+use crate::app::repository::local_resource::LocalResourceRepository;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::core_api::CoreBridge;
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
-use crate::core_transfer_protocol::webrtc::peer::{WebRtcPeer};
-use crate::core_transfer_protocol::webrtc::signalling::{SharedContext, WebSignaller, WebSignallerBuilder};
-use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
-use prost::Message;
-use tracing_subscriber::util::SubscriberInitExt;
-use schema::devlog::bitbridge::peer_message_body::Request;
-use crate::app::nearby::finding_scope::FindingScope;
-use crate::app::operations::CoreOperationOutput;
-use crate::app::operations::p2p::P2POperationOutput;
-use crate::app::repository::local_resource::LocalResourceRepository;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
+use crate::core_transfer_protocol::webrtc::peer::WebRtcPeer;
+use crate::core_transfer_protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::entities::peer::Peer as PeerEntity;
+use futures::select;
+use futures_timer::Delay;
+use futures_util::{FutureExt, StreamExt};
+use matchbox_protocol::PeerId;
+use matchbox_socket::WebRtcSocket;
+use n0_future::task::spawn;
+use prost::Message;
+use schema::devlog::bitbridge::peer_message_body::Request;
+use schema::devlog::bitbridge::PeerMessageBody;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -37,7 +31,7 @@ pub struct WebRtc {
     core_bridge: Arc<dyn CoreBridge>,
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
-    shared_context: SharedContext,
+    shared_context: SharedContext
 }
 
 impl WebRtc {
@@ -46,7 +40,7 @@ impl WebRtc {
             core_bridge,
             addr,
             local_resource_repository,
-            shared_context: SharedContext::new(),
+            shared_context: SharedContext::new()
         }
     }
 
@@ -62,9 +56,7 @@ impl WebRtc {
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            peer.cancel_transfer(
-                session_id,
-            ).await;
+            peer.cancel_transfer(session_id).await;
 
             return Ok(())
         };
@@ -72,15 +64,17 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn answer_session(&self, core_id: u32, peer_id: String, session: Option<TransferSession>, session_id: u64) -> Result<TransferSessionStatus, WebRtcErrors> {
+    pub async fn answer_session(
+        &self,
+        core_id: u32,
+        peer_id: String,
+        session: Option<TransferSession>,
+        session_id: u64
+    ) -> Result<TransferSessionStatus, WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
 
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.answer_transfer(
-                core_id,
-                session_id,
-                session
-            ).await;
+            let result = peer.answer_transfer(core_id, session_id, session).await;
 
             return result;
         };
@@ -91,10 +85,7 @@ impl WebRtc {
     pub async fn send_session(&self, core_id: u32, session: TransferSession) -> Result<TransferSessionStatus, WebRtcErrors> {
         let peer_id = session.peer().unwrap().peer_id();
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.transfer_session(
-                core_id,
-                session
-            ).await;
+            let result = peer.transfer_session(core_id, session).await;
 
             return result;
         };
@@ -139,49 +130,55 @@ impl WebRtc {
         loop {
             for (peer_id, state) in socket.try_update_peers()? {
                 let buffer = socket.get_peer_buffer_info(peer_id).cloned();
-               if state == matchbox_socket::PeerState::Connected {
-                   log::info!("Peer {} connected", peer_id);
-                   if self.shared_context.is_peer_connected(&peer_id).await {
-                       log::warn!("Peer {} already connected", peer_id);
-                       continue;
-                   }
+                if state == matchbox_socket::PeerState::Connected {
+                    log::info!("Peer {peer_id} connected");
+                    if self.shared_context.is_peer_connected(&peer_id).await {
+                        log::warn!("Peer {peer_id} already connected");
+                        continue;
+                    }
 
-                   if peer_id < current_user.peer_id() {
-                       let direct_message_channel = DirectMessageChannel::new(peer_id.clone(), outbound_msg_sender.clone());
-                       let core_bridge = self.core_bridge.clone();
-                       let current_user = current_user.clone();
-                       let outbound_data_sender = outbound_data_sender.clone();
-                       let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
-                       let local_resource_repository = self.local_resource_repository.clone();
-                       let context = self.shared_context.clone();
-                       self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
-                       handles.push(spawn(async move {
-                           let peer = match WebRtcPeer::new(
-                               current_user.clone(),
-                               direct_message_channel,
-                               core_bridge.clone(),
-                               outbound_data_sender,
-                               outbound_thumbnail_sender,
-                               buffer.unwrap(),
-                               local_resource_repository
-                           ).await {
-                               Ok(peer) => peer,
-                               Err(err) => {
-                                   log::error!("Failed to connect to peer {:?}", err);
-                                   return;
-                               }
-                           };
+                    if peer_id < current_user.peer_id() {
+                        let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
+                        let core_bridge = self.core_bridge.clone();
+                        let current_user = current_user.clone();
+                        let outbound_data_sender = outbound_data_sender.clone();
+                        let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
+                        let local_resource_repository = self.local_resource_repository.clone();
+                        let context = self.shared_context.clone();
+                        self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
+                        handles.push(spawn(async move {
+                            let peer = match WebRtcPeer::new(
+                                current_user.clone(),
+                                direct_message_channel,
+                                core_bridge.clone(),
+                                outbound_data_sender,
+                                outbound_thumbnail_sender,
+                                buffer.unwrap(),
+                                local_resource_repository
+                            )
+                            .await
+                            {
+                                Ok(peer) => peer,
+                                Err(err) => {
+                                    log::error!("Failed to connect to peer {err:?}");
+                                    return;
+                                }
+                            };
 
-                           let peer_entity = peer.peer.clone();
-                           context.add_peer(peer).await;
-                           let _ = core_bridge.response(core_request_id, CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))).await;
-                       }));
-                   }
-               }
-               else {
-                   log::info!("Peer {} disconnected", peer_id);
-                   self.shared_context.remove_peer(&peer_id).await
-               }
+                            let peer_entity = peer.peer.clone();
+                            context.add_peer(peer).await;
+                            let _ = core_bridge
+                                .response(
+                                    core_request_id,
+                                    CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))
+                                )
+                                .await;
+                        }));
+                    }
+                } else {
+                    log::info!("Peer {peer_id} disconnected");
+                    self.shared_context.remove_peer(&peer_id).await
+                }
             }
 
             for (peer_id, msg) in socket.channel_mut(MSG_CHANNEL_ID).receive() {
@@ -192,9 +189,9 @@ impl WebRtc {
 
                 if let Some(Request::IntroduceRequest(request)) = msg.request {
                     let core_bridge = self.core_bridge.clone();
-                    let direct_message_channel =  DirectMessageChannel::new(peer_id.clone(), outbound_msg_sender.clone());
+                    let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
                     let current_user = current_user.clone();
-                    let peer_id = peer_id.clone();
+                    let peer_id = peer_id;
                     let outbound_data_sender = outbound_data_sender.clone();
                     let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
@@ -212,17 +209,24 @@ impl WebRtc {
                             outbound_thumbnail_sender,
                             buffer.unwrap(),
                             local_resource_repository
-                        ).await {
+                        )
+                        .await
+                        {
                             Ok(peer) => peer,
                             Err(err) => {
-                                log::error!("Failed to connect to peer {:?}", err);
+                                log::error!("Failed to connect to peer {err:?}");
                                 return;
                             }
                         };
 
                         let peer_entity = peer.peer.clone();
                         context.add_peer(peer).await;
-                        let _ = core_bridge.response(core_request_id, CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))).await;
+                        let _ = core_bridge
+                            .response(
+                                core_request_id,
+                                CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))
+                            )
+                            .await;
                     }));
 
                     continue;

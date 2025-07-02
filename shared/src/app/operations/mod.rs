@@ -1,8 +1,8 @@
-pub mod persistent;
 pub mod device;
 pub mod dialog;
 pub mod internet;
 pub mod p2p;
+pub mod persistent;
 pub mod rpc;
 pub mod transfer;
 pub mod webview;
@@ -10,11 +10,11 @@ pub mod webview;
 use std::time::Duration;
 
 use crux_core::capability::Operation;
-use persistent::{PersistentOperation, PersistentOperationOutput};
 use device::{DeviceOperation, DeviceOperationOutput};
 use dialog::{DialogOperation, DialogOperationOutput};
 use internet::{InternetOperation, InternetOperationOutput};
 use p2p::{P2POperation, P2POperationOutput};
+use persistent::{PersistentOperation, PersistentOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};

@@ -1,4 +1,3 @@
-use shared::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::grpc::errors::NativeGrpcErrors;
 use crate::network::cloud::cloud_service::CloudTransferErrors;
 use shared::errors::NetworkError;

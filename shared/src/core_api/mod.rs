@@ -1,14 +1,12 @@
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use crate::app::operations::transfer::TransferOperationOutput;
+use crate::app::operations::CoreOperationOutput;
+use crate::app::transfer::session::TransferProgress;
+pub use core_services::local_storage::abstraction::IOCursor as IOReader;
+use futures::channel::mpsc::UnboundedReceiver;
 use matchbox_socket::PeerBuffered;
 use n0_future::StreamExt;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
 use url::Url;
-pub use core_services::local_storage::abstraction::IOCursor as IOReader;
-use crate::app::AppEvent;
-use crate::app::operations::CoreOperationOutput;
-use crate::app::operations::transfer::TransferOperationOutput;
-use crate::app::transfer::session::TransferProgress;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -27,13 +25,12 @@ pub trait CoreBridge: Send + Sync {
 
     // How many throttle is depends on the implementation
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput);
-    
+
     async fn resource_progress_update(&self, request_id: u32, progress: &TransferProgress, is_sync: bool) {
         let response = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
         if is_sync {
             let _ = self.response(request_id, response).await;
-        }
-        else {
+        } else {
             self.response_throttle(request_id, response).await;
         }
     }
@@ -82,7 +79,6 @@ impl BufferExt for PeerBuffered {
         let timeout = std::time::Duration::from_secs((buffered / 40).min(10) as u64);
         Ok(tokio::time::timeout(timeout, self.flush(index)).await?)
     }
-
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
         let buffered = self.sum_buffered_amount().await;

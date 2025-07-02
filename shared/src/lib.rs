@@ -7,12 +7,12 @@ use uniffi::setup_scaffolding;
 static _CURRENT_VERSION: &str = "1.0.0";
 
 pub mod app;
+pub mod core_api;
+pub mod core_transfer_protocol;
 pub mod entities;
 pub mod errors;
 pub mod grpc;
-pub mod core_api;
-pub mod core_transfer_protocol;
 
-pub use app::CoreOperation as CoreOperation;
+pub use app::CoreOperation;
 
 setup_scaffolding!("shared");

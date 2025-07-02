@@ -1,23 +1,23 @@
-use std::collections::HashMap;
-use std::sync::{Arc};
+use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use async_stream::stream;
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures::Stream;
 use futures::channel::mpsc;
+use futures::channel::mpsc::UnboundedSender;
+use futures::Stream;
 use futures_util::lock::Mutex;
 use futures_util::{SinkExt, StreamExt};
 use matchbox_protocol::PeerId;
-use matchbox_socket::{Packet, WebRtcChannel};
+use matchbox_socket::Packet;
 use prost::Message;
-use schema::devlog::bitbridge::{peer_message_body, PeerMessageBody};
 use schema::devlog::bitbridge::peer_message_body::Response;
-use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
+use schema::devlog::bitbridge::{peer_message_body, PeerMessageBody};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DirectMessageChannel {
     to_peer_id: PeerId,
     response_streams: Arc<Mutex<HashMap<String, mpsc::Sender<Response>>>>,
-    outbound_sender: Arc<Mutex<UnboundedSender<(PeerId, Packet)>>>,
+    outbound_sender: Arc<Mutex<UnboundedSender<(PeerId, Packet)>>>
 }
 
 impl DirectMessageChannel {
@@ -25,7 +25,7 @@ impl DirectMessageChannel {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
             outbound_sender: Arc::new(Mutex::new(outbound_sender)),
-            to_peer_id: peer_id,
+            to_peer_id: peer_id
         }
     }
 
@@ -36,10 +36,11 @@ impl DirectMessageChannel {
             request_id,
             response: Some(response),
             ..Default::default()
-        }.encode(&mut binary)?;
+        }
+        .encode(&mut binary)?;
 
         let packet = Packet::from(binary);
-        let _ = self.outbound_sender.lock().await.send((self.to_peer_id.clone(), packet)).await;
+        let _ = self.outbound_sender.lock().await.send((self.to_peer_id, packet)).await;
 
         Ok(())
     }
@@ -64,7 +65,12 @@ impl DirectMessageChannel {
         msg.encode(&mut bytes)?;
         let packet = Packet::from(bytes);
 
-        self.outbound_sender.lock().await.send((self.to_peer_id.clone(), packet)).await.map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
+        self.outbound_sender
+            .lock()
+            .await
+            .send((self.to_peer_id, packet))
+            .await
+            .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         let (tx, mut rx) = mpsc::channel(1);
         self.response_streams.lock().await.insert(request_id.clone(), tx);
@@ -88,15 +94,17 @@ impl DirectMessageChannel {
         msg.encode(&mut bytes)?;
         let packet = Packet::from(bytes);
 
-        self.outbound_sender.lock().await.send((self.to_peer_id.clone(), packet)).await.map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
+        self.outbound_sender
+            .lock()
+            .await
+            .send((self.to_peer_id, packet))
+            .await
+            .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         Ok(request_id)
     }
 
-    pub async fn stream(
-        &self,
-        request: peer_message_body::Request,
-    ) -> Result<impl Stream<Item = Response> + '_, WebRtcErrors> {
+    pub async fn stream(&self, request: peer_message_body::Request) -> Result<impl Stream<Item = Response> + '_, WebRtcErrors> {
         let request_id = self.notify(request).await?;
 
         let (tx, mut rx) = mpsc::channel(64);

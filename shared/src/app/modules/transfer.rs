@@ -1,8 +1,9 @@
 use crate::app::core_utils::CoreCommandUtils;
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
-use crate::app::operations::persistent::{LocalResourcePersistentOperation, TransferSessionPersistentOperation};
+use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::persistent::{LocalResourcePersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::CoreOperation;
 use crate::app::transfer::file_selection_service::{ResourceSelection, ResourceTransferSelectionService};
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferStatus, TransferType};
@@ -22,10 +23,9 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
+use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
-use devlog_sdk::distributed_id::id_to_datetime;
-use crate::app::operations::device::{DeviceOperation, OpenOperation};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -302,10 +302,7 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.transfer(selected_resources, target, it).await;
                 })
             }
-            TransferEvent::TransferRequest {
-                remote_session,
-                peer
-            } => Command::new(|it| async move {
+            TransferEvent::TransferRequest { remote_session, peer } => Command::new(|it| async move {
                 transfer_service.received_session_request(remote_session, peer, it).await;
                 log::info!(target: "transfer", "Done download, shell should done");
             }),
@@ -417,7 +414,9 @@ impl AppModule<BitBridge> for TransferModule {
                     resource.thumbnail_path = Some(path.clone());
                     let resource = resource.clone();
                     return Command::new(|it| async move {
-                        TransferSessionPersistentOperation::update_resource(session_id, resource).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::update_resource(session_id, resource)
+                            .into_future(it.clone())
+                            .await;
                     })
                     .then_render();
                 }
@@ -438,7 +437,9 @@ impl AppModule<BitBridge> for TransferModule {
                 if session.is_completed() {
                     let progresses = session.progress.clone();
                     return Command::new(|it| async move {
-                        TransferSessionPersistentOperation::update_progresses(session_id, progresses).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::update_progresses(session_id, progresses)
+                            .into_future(it.clone())
+                            .await;
                         it.notify_shell(CoreOperation::Render);
                     });
                 }
@@ -534,7 +535,10 @@ impl AppModule<BitBridge> for TransferModule {
                         image_resources,
                         video_resources,
                         file_resources,
-                        display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
+                        display_datetime: id_to_datetime(it.order_id)
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
                     })
                 })
                 .collect(),
@@ -563,9 +567,12 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter_map(|it| match it {
                     TransferTarget::Nearby(peer) => {
-                        let send_session = model.transfer.transfer_sessions.iter().filter(|it| it.target.is_peer()).find(|it| {
-                            it.transfer_type == TransferType::Send && it.peer_id().as_ref().unwrap().to_string() == peer.id
-                        });
+                        let send_session = model
+                            .transfer
+                            .transfer_sessions
+                            .iter()
+                            .filter(|it| it.target.is_peer())
+                            .find(|it| it.transfer_type == TransferType::Send && *it.peer_id().as_ref().unwrap() == peer.id);
 
                         Some(PeerViewModel {
                             id: peer.id.clone(),

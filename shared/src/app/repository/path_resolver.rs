@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use crate::app::file_system::file::LocalResourcePath;
+use std::path::PathBuf;
 
 #[async_trait::async_trait]
 pub trait PathResolver: Send + Sync {
@@ -16,7 +16,7 @@ pub trait PathResolver: Send + Sync {
     async fn get_db_path(&self) -> String;
 
     async fn get_thumbnail_file_path(&self, resource_id: u64) -> String {
-        let path = PathBuf::from(self.get_thumbnail_dir_path().await).join(format!("{}.png", resource_id));
+        let path = PathBuf::from(self.get_thumbnail_dir_path().await).join(format!("{resource_id}.png"));
         path.to_string_lossy().to_string()
     }
 }
