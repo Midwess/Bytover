@@ -113,7 +113,7 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_millis(1000)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(100)))
             .build();
 
         let loop_fut = loop_fut.fuse();

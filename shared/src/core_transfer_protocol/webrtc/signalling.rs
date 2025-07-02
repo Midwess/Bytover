@@ -95,9 +95,15 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
+        log::info!("Removing peer: {:?}", peer_id);
         let mut peers = self.peers.lock().await;
         if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get().cloned()) {
+            log::info!("Peer removed");
+            drop(peers);
             peer.peer_disconnected().await;
+        }
+        else {
+            log::info!("Peer not found {peer_id}");
         }
     }
 
@@ -262,6 +268,10 @@ impl Signaller for WebSignaller {
                     return Ok(peer_event);
                 }
             } else {
+                if matches!(peer_event, PeerEvent::PeerLeft(_)) {
+                    log::info!("Peer left: {:?}", peer_event);
+                }
+
                 return Ok(peer_event);
             }
         }
