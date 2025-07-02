@@ -306,8 +306,6 @@ impl WebRtcPeer {
 
                 let _ = bridge.response(core_request_id, CoreOperationOutput::Transfer(thumbnail_full_filled)).await;
             }
-
-            Ok(())
         });
 
         while !session.is_completed() {

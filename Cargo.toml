@@ -82,8 +82,8 @@ aws-smithy-async = "1.2.5"
 tokio-util = { version = "0.7.15", default-features = false }
 redb = "2.6.0"
 redb_model = "0.11.3"
-matchbox_protocol = { path = "../matchbox/matchbox_protocol" }
-matchbox_socket = { path = "../matchbox/matchbox_socket" }
+matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git" }
+matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git" }
 ewebsock = "0.8.0"
 futures-timer = "3.0.3"
 n0-future = "0.1.3"

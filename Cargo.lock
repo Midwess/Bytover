@@ -4040,6 +4040,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
+source = "git+https://github.com/dev-logs/matchbox.git#d84eaf061546ba266e2d4211b4dbf0d6ed509471"
 dependencies = [
  "cfg-if",
  "derive_more 2.0.1",
@@ -4050,6 +4051,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
+source = "git+https://github.com/dev-logs/matchbox.git#d84eaf061546ba266e2d4211b4dbf0d6ed509471"
 dependencies = [
  "async-compat",
  "async-trait",
