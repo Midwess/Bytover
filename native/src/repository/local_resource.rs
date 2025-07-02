@@ -14,6 +14,7 @@ use redb::Database;
 use tokio::fs;
 use url::Url;
 use core_services::local_storage::abstraction::IOCursor;
+use core_services::local_storage::file_system;
 use core_services::local_storage::file_system::{File, Folder};
 use devlog_sdk::distributed_id::gen_id;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
@@ -205,7 +206,13 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
     async fn read(&self, path: LocalResourcePath, size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
-        let file = File::existing(&absolute_path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        let path = PathBuf::from(absolute_path);
+        if path.is_dir() {
+            let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+            return Ok(folder.cursor(size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?);
+        };
+
+        let file = File::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
         Ok(file.cursor(0, size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
     }
 
