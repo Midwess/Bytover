@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use futures_util::future::join_all;
@@ -100,6 +101,7 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path.clone()).await;
+        log::info!("Loading resource {absolute_path:?}");
         let path_buf = PathBuf::from(absolute_path.clone());
         if path_buf.is_dir() {
             let folder = Folder::new(path_buf).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
@@ -119,8 +121,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             return Ok(None)
         }
 
-        let file = File::new(None, absolute_path).await.unwrap();
-        let metadata = file.metadata().await.unwrap();
+        let file = File::new(None, absolute_path).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+        let metadata = file.metadata().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
         let resource = LocalResource {
             order_id: gen_id().await,
             name: file.name.clone(),
@@ -227,5 +229,17 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
 
         Ok((Box::new(cursor), path))
+    }
+
+    async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+        let mut result = HashMap::new();
+        for resource_id in resource_ids.iter() {
+            let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;
+            let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
+            result.insert(*resource_id, path);
+        }
+
+        log::info!("Generated thumbnail paths: {:?}", result);
+        Ok(result)
     }
 }

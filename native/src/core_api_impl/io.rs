@@ -43,7 +43,7 @@ pub struct IOWriterImpl {
 
 impl IOWriterImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
-        let file = File::existing(path).await?;
+        let file = File::new(None, path).await?;
         Ok(Self {
             file
         })

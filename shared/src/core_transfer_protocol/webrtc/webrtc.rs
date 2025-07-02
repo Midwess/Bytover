@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use futures::select;
 use std::time::Duration;
 use futures_timer::Delay;
-use futures_util::FutureExt;
+use futures_util::{AsyncReadExt, FutureExt, StreamExt};
 use futures_util::lock::Mutex;
 use matchbox_protocol::PeerId;
 use matchbox_socket::WebRtcSocket;
@@ -18,6 +18,7 @@ use crate::core_transfer_protocol::webrtc::peer::{WebRtcPeer};
 use crate::core_transfer_protocol::webrtc::signalling::{SharedContext, WebSignaller, WebSignallerBuilder};
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
 use prost::Message;
+use tracing_subscriber::util::SubscriberInitExt;
 use schema::devlog::bitbridge::peer_message_body::Request;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::operations::CoreOperationOutput;
@@ -28,10 +29,11 @@ use crate::entities::peer::Peer as PeerEntity;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
-pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 1;
+pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 2;
+
+pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 40;
 
 pub struct WebRtc {
-    peers: Arc<Mutex<HashMap<PeerId, WebRtcPeer>>>,
     core_bridge: Arc<dyn CoreBridge>,
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
@@ -41,7 +43,6 @@ pub struct WebRtc {
 impl WebRtc {
     pub fn new(core_bridge: Arc<dyn CoreBridge>, addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
         Self {
-            peers: Default::default(),
             core_bridge,
             addr,
             local_resource_repository,
@@ -51,8 +52,7 @@ impl WebRtc {
 
     pub async fn is_peer_connected(&self, peer_id: String) -> bool {
         let peer_id = PeerId(peer_id.parse().unwrap());
-        let peers_guard = self.peers.lock().await;
-        peers_guard.contains_key(&peer_id)
+        self.shared_context.get_peer(&peer_id).await.is_some()
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -61,8 +61,7 @@ impl WebRtc {
 
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
-        let peers_guard = self.peers.lock().await;
-        if let Some(peer) = peers_guard.get(&peer_id) {
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.cancel_transfer(
                 session_id,
             ).await;
@@ -75,8 +74,8 @@ impl WebRtc {
 
     pub async fn answer_session(&self, core_id: u32, peer_id: String, session: Option<TransferSession>, session_id: u64) -> Result<TransferSessionStatus, WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
-        let peers_guard = self.peers.lock().await;
-        if let Some(peer) = peers_guard.get(&peer_id) {
+
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             let result = peer.answer_transfer(
                 core_id,
                 session_id,
@@ -91,8 +90,7 @@ impl WebRtc {
 
     pub async fn send_session(&self, core_id: u32, session: TransferSession) -> Result<TransferSessionStatus, WebRtcErrors> {
         let peer_id = session.peer().unwrap().peer_id();
-        let peers_guard = self.peers.lock().await;
-        if let Some(peer) = peers_guard.get(&peer_id) {
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             let result = peer.transfer_session(
                 core_id,
                 session
@@ -106,8 +104,7 @@ impl WebRtc {
 
     pub async fn start_peer_core_stream(&self, peer_id: String, core_id: u32) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
-        let peers_guard = self.peers.lock().await;
-        if let Some(peer) = peers_guard.get(&peer_id) {
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.start_core_stream(core_id);
             return Ok(());
         }
@@ -116,18 +113,21 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request_id: u32, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+        self.shared_context.set_current_id(current_user.peer_id());
+
+        log::info!("Starting WebRTC server with my peer = {current_user:?}");
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_secs(30)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(1000)))
             .build();
 
         let loop_fut = loop_fut.fuse();
         futures::pin_mut!(loop_fut);
-        let timeout = Delay::new(Duration::from_millis(100));
+        let timeout = Delay::new(Duration::from_millis(10));
         futures::pin_mut!(timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
@@ -138,22 +138,23 @@ impl WebRtc {
 
         loop {
             for (peer_id, state) in socket.try_update_peers()? {
+                let buffer = socket.get_peer_buffer_info(peer_id).cloned();
                if state == matchbox_socket::PeerState::Connected {
-                   let peers_guard = self.peers.lock().await;
-                   if peers_guard.contains_key(&peer_id) {
-                       log::warn!("Skip the peer since it already exists");
+                   log::info!("Peer {} connected", peer_id);
+                   if self.shared_context.is_peer_connected(&peer_id).await {
+                       log::warn!("Peer {} already connected", peer_id);
                        continue;
                    }
 
-                   log::info!("Peer {} connected", peer_id);
                    if peer_id < current_user.peer_id() {
                        let direct_message_channel = DirectMessageChannel::new(peer_id.clone(), outbound_msg_sender.clone());
                        let core_bridge = self.core_bridge.clone();
-                       let peers = self.peers.clone();
                        let current_user = current_user.clone();
                        let outbound_data_sender = outbound_data_sender.clone();
                        let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                        let local_resource_repository = self.local_resource_repository.clone();
+                       let context = self.shared_context.clone();
+                       self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                        handles.push(spawn(async move {
                            let peer = match WebRtcPeer::new(
                                current_user.clone(),
@@ -161,6 +162,7 @@ impl WebRtc {
                                core_bridge.clone(),
                                outbound_data_sender,
                                outbound_thumbnail_sender,
+                               buffer.unwrap(),
                                local_resource_repository
                            ).await {
                                Ok(peer) => peer,
@@ -171,57 +173,34 @@ impl WebRtc {
                            };
 
                            let peer_entity = peer.peer.clone();
-                           let mut peers_guard = peers.lock().await;
-                           peers_guard.insert(peer_id, peer);
+                           context.add_peer(peer).await;
                            let _ = core_bridge.response(core_request_id, CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))).await;
                        }));
                    }
                }
                else {
-                   let mut peers_guard = self.peers.lock().await;
-                   if let Some(peer) = peers_guard.remove(&peer_id) {
-                       peer.peer_disconnected().await;
-                   }
+                   log::info!("Peer {} disconnected", peer_id);
+                   self.shared_context.remove_peer(&peer_id).await
                }
             }
 
             for (peer_id, msg) in socket.channel_mut(MSG_CHANNEL_ID).receive() {
-                let peers_guard = self.peers.lock().await;
-                let Some(peer) = peers_guard.get(&peer_id) else {
-                    continue;
-                };
-
+                let buffer = socket.get_peer_buffer_info(peer_id).cloned();
                 let Ok(msg) = PeerMessageBody::decode(&msg[..]) else {
                     continue;
                 };
 
-                let request_id = msg.request_id;
-                if let Some(response) = msg.response {
-                    peer.msg_channel.notify_response(request_id.clone(), response).await;
-                    continue;
-                };
-
-                let Some(request) = msg.request else {
-                    continue;
-                };
-
-                if let Request::IntroduceRequest(request) = request {
-                    if peers_guard.contains_key(&peer_id) {
-                        log::warn!("Skip the peer since it already exists");
-                        continue;
-                    }
-
-                    drop(peers_guard);
-
+                if let Some(Request::IntroduceRequest(request)) = msg.request {
                     let core_bridge = self.core_bridge.clone();
                     let direct_message_channel =  DirectMessageChannel::new(peer_id.clone(), outbound_msg_sender.clone());
                     let current_user = current_user.clone();
                     let peer_id = peer_id.clone();
-                    let peers = self.peers.clone();
                     let outbound_data_sender = outbound_data_sender.clone();
                     let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
-                    let request_id = request_id.clone();
+                    let request_id = msg.request_id.clone();
+                    let context = self.shared_context.clone();
+                    context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                     handles.push(spawn(async move {
                         let peer = match WebRtcPeer::from_introduce_request(
                             current_user,
@@ -231,6 +210,7 @@ impl WebRtc {
                             core_bridge.clone(),
                             outbound_data_sender,
                             outbound_thumbnail_sender,
+                            buffer.unwrap(),
                             local_resource_repository
                         ).await {
                             Ok(peer) => peer,
@@ -240,40 +220,53 @@ impl WebRtc {
                             }
                         };
 
-                        let mut peers = peers.lock().await;
                         let peer_entity = peer.peer.clone();
-                        peers.insert(peer_id, peer);
+                        context.add_peer(peer).await;
                         let _ = core_bridge.response(core_request_id, CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))).await;
                     }));
 
                     continue;
                 };
 
-                if let Some(peer) = peers_guard.get(&peer_id) {
-                    peer.process_request(request).await;
-                }
-            }
-
-            for (peer, data) in socket.channel_mut(TRANSFER_RESOURCE_CHANNEL_ID).receive() {
-                let Some(peer) = self.peers.lock().await.get(&peer) else {
+                let request_id = msg.request_id;
+                if let Some(response) = msg.response {
+                    self.shared_context.notify_peer_response(&peer_id, request_id.clone(), response).await;
                     continue;
+                };
+
+                let Some(request) = msg.request else {
+                    continue;
+                };
+
+                if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) {
+                    peer.process_request(request_id, request).await;
                 };
             }
 
-            select! {
-                // Restart this loop every 100 ms
-                _ = (&mut timeout).fuse() => {
-                    timeout.reset(Duration::from_millis(100));
-                }
-                // Or break if the message loop ends (disconnected, closed, etc.)
-                _ = &mut loop_fut => {
-                    break;
-                }
+            for (peer_id, data) in socket.channel_mut(TRANSFER_RESOURCE_CHANNEL_ID).receive() {
+                let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
+                    log::info!("Not found any peer, why ?");
+                    continue;
+                };
+
+                peer.process_data_packet(data).await;
             }
 
-            for handle in handles.drain(..) {
-                if let Err(e) = handle.await {
-                    log::error!("Error while joining async task: {:?}", e);
+            for (peer_id, data) in socket.channel_mut(TRANSFER_THUMBNAIL_CHANNEL_ID).receive() {
+                let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
+                    log::info!("Not found any peer, why ?");
+                    continue;
+                };
+
+                peer.process_thumbnail_packet(data).await;
+            }
+
+            select! {
+                _ = (&mut timeout).fuse() => {
+                    timeout.reset(Duration::from_millis(10));
+                }
+                _ = &mut loop_fut => {
+                    break;
                 }
             }
         }

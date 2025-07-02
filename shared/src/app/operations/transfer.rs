@@ -8,6 +8,7 @@ use uniffi::Enum;
 
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
+use crate::app::file_system::file::LocalResourcePath;
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -30,6 +31,11 @@ pub enum TransferOperationOutput {
     CreateCloudSession(TransferSession),
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted(TransferSessionStatus),
+    ThumbnailFullFilled {
+        local_resource_path: LocalResourcePath,
+        resource_id: u64,
+        session_id: u64,
+    },
     TransferCanceled
 }
 

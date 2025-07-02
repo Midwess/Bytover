@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
@@ -23,6 +24,7 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
     async fn read(&self, path: LocalResourcePath, max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError>;
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError>;
     async fn new_thumbnail_writer(&self, resource_id: u64) -> Result<(Box<dyn IOWriter>, LocalResourcePath), PersistenceError>;
+    async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
 }
 
 impl Table<LocalResourceId> for LocalResource {

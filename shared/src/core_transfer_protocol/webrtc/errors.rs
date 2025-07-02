@@ -1,7 +1,6 @@
 use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use prost::{DecodeError, EncodeError};
-use schema::devlog::rpc_signalling::server::ParseIceCandidateError;
 use crate::app::repository::errors::PersistenceError;
 use crate::errors::NetworkError;
 
@@ -9,8 +8,6 @@ use crate::errors::NetworkError;
 pub enum WebRtcErrors {
    #[error("Signalling client error: {0}")]
    SignallingClientError(anyhow::Error),
-   #[error("Ice invalid format")]
-   IceInvalidFormat(ParseIceCandidateError),
    #[error("Unsupported event from signalling server")]
    UnSupportedEventFromSignallingServer,
    #[error("Channel error")]
@@ -33,12 +30,8 @@ pub enum WebRtcErrors {
    InvalidDelimiter(String),
    #[error("Peer connection not found {0}")]
    ConnectionNotFound(PeerId),
-}
-
-impl From<ParseIceCandidateError> for WebRtcErrors {
-   fn from(e: ParseIceCandidateError) -> Self {
-      Self::IceInvalidFormat(e)
-   }
+   #[error("System error")]
+   SystemError(#[from] anyhow::Error),
 }
 
 impl Into<matchbox_socket::SignalingError> for WebRtcErrors {

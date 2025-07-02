@@ -207,10 +207,10 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let session_dir = "\(public_dir)/session-\(session_id)"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getSessionDirPath(path: session_dir)).bincodeSerialize())
         case .pathResolver(.getSystemDirPath):
-            let private_dir = self.getDocumentsDirectory(isPrivate: false).path;
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path;
             return Data(try! MessageToShellResponse.pathResolverResponse(.getSystemDirPath(path: private_dir)).bincodeSerialize())
         case .pathResolver(.getThumbnailDirPath):
-            let private_dir = self.getDocumentsDirectory(isPrivate: false).path;
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path;
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
         }
@@ -493,14 +493,26 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func resolveRelativePath(absolutePath: String) async throws -> LocalResourcePath {
         let private_path = self.getDocumentsDirectory(isPrivate: true).path
         let public_path = self.getDocumentsDirectory(isPrivate: false).path
-        print(absolutePath)
         if absolutePath.hasPrefix(private_path) {
-            return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: true)
+            var path = String(absolutePath.dropFirst(private_path.count))
+            if path.hasPrefix("/") {
+                path = String(path.dropFirst(1))
+            }
+ 
+            print("Resolving from \(absolutePath) to private \(path)")
+            return LocalResourcePath.relativePath(path: path, is_private: true)
         }
 
         if absolutePath.hasPrefix(public_path) {
-            return LocalResourcePath.relativePath(path: String(absolutePath.dropFirst(private_path.count)), is_private: false)
+            var path = String(absolutePath.dropFirst(public_path.count))
+            if path.hasPrefix("/") {
+                path = String(path.dropFirst(1))
+            }
+            
+            print("Resolving from \(absolutePath) to private \(path)")
+            return LocalResourcePath.relativePath(path: path, is_private: false)
         }
+        
 
         throw MyError.invalidInput(reason: "The absolutePath is not in the sandboxed directory")
     }

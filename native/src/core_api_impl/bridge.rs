@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use shared::app::AppEvent;
 use shared::app::operations::CoreOperationOutput;
 use shared::core_api::CoreBridge;
 use crate::native::message_to_shell::MessageToShell;
@@ -25,7 +26,7 @@ impl CoreBridge for CoreBridgeImpl {
     fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
         let shell = self.shell.clone();
         tokio::spawn(async move {
-            shell.notify(MessageToShell::HandleResponse(request_id, response));
+            let _ = shell.notify(MessageToShell::HandleResponse(request_id, response)).await;
         })
     }
 

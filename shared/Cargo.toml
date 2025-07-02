@@ -46,3 +46,6 @@ uniffi = { workspace = true, features = ["cli"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { version = "0.3.9", features = ["env-filter"] }

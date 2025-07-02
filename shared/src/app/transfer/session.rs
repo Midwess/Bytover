@@ -306,10 +306,6 @@ impl TransferSession {
     }
 
     pub fn get_next_transfer_resource(&self) -> Option<&LocalResource> {
-        if self.transfer_type == TransferType::Send {
-            return None;
-        }
-
         self.resources.iter().find(|resource| {
             self.progress
                 .iter()

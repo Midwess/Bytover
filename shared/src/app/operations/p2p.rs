@@ -32,11 +32,6 @@ pub enum P2POperationOutput {
         session_id: u64
     },
     NearbyServerStopped,
-    ThumbnailFullfillment {
-        session_id: u64,
-        resource_id: u64,
-        path: LocalResourcePath
-    }
 }
 
 impl Operation for P2POperation {

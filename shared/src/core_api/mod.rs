@@ -1,6 +1,11 @@
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use matchbox_socket::PeerBuffered;
+use n0_future::StreamExt;
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use url::Url;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
+use crate::app::AppEvent;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::transfer::session::TransferProgress;
@@ -23,9 +28,14 @@ pub trait CoreBridge: Send + Sync {
     // How many throttle is depends on the implementation
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput);
     
-    async fn resource_progress_update(&self, request_id: u32, progress: &TransferProgress) {
+    async fn resource_progress_update(&self, request_id: u32, progress: &TransferProgress, is_sync: bool) {
         let response = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-        self.response_throttle(request_id, response).await;
+        if is_sync {
+            let _ = self.response(request_id, response).await;
+        }
+        else {
+            self.response_throttle(request_id, response).await;
+        }
     }
 }
 
@@ -40,4 +50,43 @@ pub trait NetStreamInner: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
 
     async fn end(&mut self) -> anyhow::Result<()>;
+}
+
+#[async_trait::async_trait]
+pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
+    async fn recv_timeout(&mut self, timeout: std::time::Duration) -> Option<T>;
+    async fn recv_default_timeout(&mut self) -> Option<T>;
+}
+
+#[async_trait::async_trait]
+impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
+    async fn recv_timeout(&mut self, timeout: std::time::Duration) -> Option<T> {
+        tokio::time::timeout(timeout, self.next()).await.unwrap_or_else(|_| None)
+    }
+
+    async fn recv_default_timeout(&mut self) -> Option<T> {
+        self.recv_timeout(std::time::Duration::from_secs(10)).await
+    }
+}
+
+#[async_trait::async_trait]
+pub trait BufferExt: Send + Sync {
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()>;
+    async fn flush_all_timeout(&self) -> anyhow::Result<()>;
+}
+
+#[async_trait::async_trait]
+impl BufferExt for PeerBuffered {
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()> {
+        let buffered = self.buffered_amount(index).await;
+        let timeout = std::time::Duration::from_secs((buffered / 40).min(10) as u64);
+        Ok(tokio::time::timeout(timeout, self.flush(index)).await?)
+    }
+
+
+    async fn flush_all_timeout(&self) -> anyhow::Result<()> {
+        let buffered = self.sum_buffered_amount().await;
+        let timeout = std::time::Duration::from_secs((buffered / 40).min(10) as u64);
+        Ok(tokio::time::timeout(timeout, self.flush_all()).await?)
+    }
 }

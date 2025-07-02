@@ -14,6 +14,7 @@ use crate::app::operations::transfer::{TransferOperation, TransferOperationOutpu
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
+use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::peer::Peer;
 
 use super::session::TransferSession;
@@ -102,12 +103,6 @@ impl TransferService {
             }
         };
 
-        for resource in transfer_session.resources.iter_mut() {
-            if resource.r#type == ResourceType::Folder {
-                resource.name = format!("{}.tar", resource.name);
-            }
-        }
-
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
@@ -193,7 +188,6 @@ impl TransferService {
         cmd: AppCommandContext
     ) {
         let peer_id = peer.id();
-        let mut resources = vec![];
         let generate_file_paths_request = {
             let mut result = HashMap::new();
             for resource in remote_session.resources.iter() {
@@ -202,24 +196,33 @@ impl TransferService {
 
             result
         };
+        
+        let mut generated_thumbnails_paths = TransferSessionPersistentOperation::generate_thumbnail_paths(
+            generate_file_paths_request.keys().map(|id| *id).collect()
+        ).into_future(cmd.clone()).await;
 
-        let generated_saved_paths = TransferSessionPersistentOperation::generate_resource_paths(
+        let mut generated_saved_paths = TransferSessionPersistentOperation::generate_resource_paths(
             remote_session.order_id,
             generate_file_paths_request
         ).into_future(cmd.clone()).await;
-
+        
         log::info!(
             target: "transfer",
             "Received session request from peer: {peer_id:?}: {remote_session:?}"
         );
 
+        let mut resources = vec![];
         for resource_request in remote_session.resources {
             let order_id = resource_request.order_id as u64;
-            let saved_path = generated_saved_paths.get(&order_id).unwrap().clone();
+            let Some(saved_path) = generated_saved_paths.remove(&order_id) else {
+                continue;
+            };
+
+            let generated_thumbnail_path = generated_thumbnails_paths.remove(&order_id);
 
             resources.push(LocalResource {
                 path: saved_path,
-                thumbnail_path: None,
+                thumbnail_path: generated_thumbnail_path,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
                 ),
@@ -271,6 +274,20 @@ impl TransferService {
 
                         log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
                         break;
+                    }
+                    TransferOperationOutput::ThumbnailFullFilled {
+                        session_id,
+                        local_resource_path,
+                        resource_id
+                    } => {
+                        log::info!("Received thumbnail full filled for resource {resource_id}");
+                        let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
+                            session_id,
+                            resource_id,
+                            path: local_resource_path
+                        });
+
+                        cmd.notify_shell(CoreOperation::Notified(request));
                     }
                     _ => {
                         continue;

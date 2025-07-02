@@ -1,26 +1,46 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use futures_util::lock::Mutex;
+use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use schema::devlog::rpc_signalling::server::{Message, JoinMessage, IceCandidateUpdateMessage, IceCandidate, OfferMessage, AnswerMessage};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
+use tokio::sync::OnceCell;
 use ulid::Ulid;
 use uuid::Uuid;
+use schema::devlog::bitbridge::peer_message_body::Response;
 use crate::app::nearby::finding_scope::FindingScope;
+use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
+use crate::core_transfer_protocol::webrtc::peer::WebRtcPeer;
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
 
 use super::errors::WebRtcErrors;
 
 #[derive(Debug, Clone)]
 pub struct SharedContext {
-    finding_scopes: Arc<Mutex<Vec<FindingScope>>>
+    peers: Arc<Mutex<HashMap<PeerId, OnceCell<Arc<WebRtcPeer>>>>>,
+    peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
+    finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
+    current_id: OnceCell<PeerId>,
 }
 
 impl SharedContext {
     pub fn new() -> Self {
         Self {
-            finding_scopes: Default::default()
+            current_id: Default::default(),
+            finding_scopes: Default::default(),
+            peers: Default::default(),
+            peer_msg_channels: Default::default(),
         }
+    }
+
+    pub fn set_current_id(&self, id: PeerId) {
+        self.current_id.set(id).unwrap();
+    }
+
+    pub fn get_current_id(&self) -> PeerId {
+        self.current_id.get().unwrap().clone()
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -36,10 +56,67 @@ impl SharedContext {
     pub async fn get_finding_scopes(&self) -> Vec<FindingScope> {
         self.finding_scopes.lock().await.clone()
     }
+
+    pub async fn add_peer_msg_channel(&self, peer_id: &PeerId, channel: &DirectMessageChannel) {
+        let mut peer_msg_channels = self.peer_msg_channels.lock().await;
+        peer_msg_channels.insert(peer_id.clone(), channel.clone());
+    }
+
+    pub async fn notify_peer_response(&self, peer_id: &PeerId, request_id: String, response: Response) {
+        let mut peer_msg_channels = self.peer_msg_channels.lock().await;
+        if let Some(channel) = peer_msg_channels.get_mut(peer_id) {
+            let _ = channel.notify_response(request_id, response).await;
+        }
+    }
+
+    pub async fn get_peer(&self, peer_id: &PeerId) -> Option<Weak<WebRtcPeer>> {
+        let mut peers = self.peers.lock().await;
+        if let Some(peer) = peers.get(&peer_id).and_then(|it| it.get()) {
+            return Some(Arc::downgrade(peer));
+        }
+
+        None
+    }
+
+    pub async fn add_peer_place_holder(&self, peer_id: PeerId) {
+        let mut peers = self.peers.lock().await;
+        peers.insert(peer_id, OnceCell::new());
+    }
+
+    pub async fn remove_peer(&self, peer_id: &PeerId) {
+        let mut peers = self.peers.lock().await;
+        if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get().cloned()) {
+            peer.peer_disconnected().await;
+        }
+    }
+
+    pub async fn add_peer(&self, peer: WebRtcPeer) {
+        let peer_id = peer.peer.peer_id();
+        let mut peers = self.peers.lock().await;
+        if !peers.contains_key(&peer_id) {
+            peers.insert(peer_id.clone(), OnceCell::new());
+        }
+
+        if let Some(holder) = peers.get(&peer_id) {
+            if let Err(_) = holder.set(Arc::new(peer)) {
+                log::error!("Already set {:?}", holder.get().map(|it| &it.peer));
+            }
+        }
+    }
+
+    // Return true when peer is not connected
+    // and not connecting
+    pub async fn is_peer_connected_or_connecting(&self, peer_id: &PeerId) -> bool {
+        self.peers.lock().await.get(peer_id).is_some()
+    }
+
+    pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
+        self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
+    }
 }
 
 #[derive(Debug)]
-struct SignallingPeerRequest(Uuid, PeerRequest);
+struct SignallingPeerRequest(PeerId, PeerRequest);
 
 #[derive(Debug)]
 struct SignallingPeerResponse(Message);
@@ -58,7 +135,7 @@ impl TryFrom<SignallingPeerRequest> for Message {
 
                 match signal {
                     PeerSignal::IceCandidate(ice) => {
-                        let ice_msg = IceCandidate::try_from(ice)?;
+                        let ice_msg = IceCandidate::from(ice);
                         msg.ice_candidate_update = Some(IceCandidateUpdateMessage {
                             ice_candidates: ice_msg
                         });
@@ -127,12 +204,12 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
 
 pub struct WebSignaller {
     client: SignallingClient,
-    peer_id: Uuid,
+    peer_id: PeerId,
     shared_context: SharedContext,
 }
 
 impl WebSignaller {
-    pub fn new(client: SignallingClient, peer_id: Uuid, shared_context: SharedContext) -> Self {
+    pub fn new(client: SignallingClient, peer_id: PeerId, shared_context: SharedContext) -> Self {
         Self {
             client,
             peer_id,
@@ -150,9 +227,12 @@ impl WebSignaller {
 impl Signaller for WebSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = SignallingPeerRequest(self.peer_id, request);
-        log::info!("Signaller: Sending request: {request:#?}");
-        let Ok(mut message) = TryInto::<Message>::try_into(request) else {
-            return Ok(())
+        let mut message = match TryInto::<Message>::try_into(request) {
+            Ok(msg) => msg,
+            Err(err) => {
+                log::error!("Signaller: Failed to convert request to message: {err:#?}");
+                return Err(err.into());
+            }
         };
 
         message.scopes = self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>();
@@ -162,13 +242,23 @@ impl Signaller for WebSignaller {
     }
 
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
-        let message = self.client.next_message().await.map_err(Into::<SignalingError>::into)?;
-        let response = SignallingPeerResponse(message);
-        let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
+        loop {
+            let message = self.client.next_message().await.map_err(Into::<SignalingError>::into)?;
+            let response = SignallingPeerResponse(message);
+            let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
+            if let PeerEvent::NewPeer(ref peer_id) = peer_event {
+                if peer_id.0 >= self.peer_id.0 {
+                    continue;
+                }
 
-        log::info!("Signaller: Received message: {peer_event:#?}");
-
-        Ok(peer_event)
+                if !self.shared_context.is_peer_connected_or_connecting(peer_id).await {
+                    self.shared_context.add_peer_place_holder(peer_id.clone()).await;
+                    return Ok(peer_event);
+                }
+            } else {
+                return Ok(peer_event);
+            }
+        }
     }
 }
 
@@ -194,10 +284,10 @@ impl SignallerBuilder for WebSignallerBuilder {
         socket_url: String,
     ) -> Result<Box<dyn Signaller>, SignalingError> {
         let client = SignallingClient::new(socket_url);
-        let id = Ulid::new();
+        let id = self.shared_context.get_current_id();
         let mut signaller = WebSignaller::new(
             client,
-            Uuid::from_bytes(id.to_bytes().into()),
+            id,
             self.shared_context.clone()
         );
         signaller.start().await.map_err(|it| Into::<SignalingError>::into(it))?;

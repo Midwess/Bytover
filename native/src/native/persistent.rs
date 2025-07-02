@@ -226,6 +226,15 @@ impl NativePersistent {
                     }
                 }
             }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateThumbnailPath { resource_ids }) => {
+                match self.local_resource_repository.generate_thumbnail_paths(resource_ids).await {
+                    Ok(result) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateThumbnailPath(result)),
+                    Err(e) => {
+                        log::error!("Failed to generate resources path: {e:?}");
+                        return PersistentOperationOutput::Error(e.to_string());
+                    }
+                }
+            }
             PersistentOperation::User(_) => {
                 panic!("Unimplemented");
             }

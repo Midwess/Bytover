@@ -4040,8 +4040,6 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0cfe43dd6af96da1ea044838f59b8d7438971f85376be464ead11bbd7a01c27"
 dependencies = [
  "cfg-if",
  "derive_more 2.0.1",
@@ -4052,8 +4050,6 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c2bc39cd3e655243143ddb40faa4c30c0c415347f6a0985e378806a24593e9e"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -6360,6 +6356,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "tokio",
+ "tracing-subscriber",
  "ulid",
  "uniffi",
  "url",

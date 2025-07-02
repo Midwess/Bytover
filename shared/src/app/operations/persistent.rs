@@ -93,6 +93,9 @@ pub enum TransferSessionPersistentOperation {
         session_id: u64,
         resource_names: HashMap<u64, String>,
     },
+    GenerateThumbnailPath {
+        resource_ids: Vec<u64>,
+    }
 }
 
 impl Operation for TransferSessionPersistentOperation {
@@ -106,7 +109,8 @@ pub enum TransferSessionOperationOutput {
     Removed(bool),
     GetAll(Vec<TransferSession>),
     UpdateResource(Option<TransferSession>),
-    GenerateResourcePath(HashMap<u64, LocalResourcePath>)
+    GenerateResourcePath(HashMap<u64, LocalResourcePath>),
+    GenerateThumbnailPath(HashMap<u64, LocalResourcePath>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
@@ -309,6 +313,20 @@ impl TransferSessionPersistentOperation {
             ))) => is_removed,
             _ => panic!("Invalid output expected Remove got {it:?}")
         })
+    }
+
+    pub fn generate_thumbnail_paths(resource_ids: Vec<u64>) -> AppRequestBuilder<impl Future<Output = HashMap<u64, LocalResourcePath>>> {
+        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+            TransferSessionPersistentOperation::GenerateThumbnailPath {
+                resource_ids
+            }
+        )))
+            .map(|it| {
+                match it {
+                    CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GenerateThumbnailPath(resource_paths))) => resource_paths,
+                    _ => panic!("Invalid output expected GenerateResourcePath got {it:?}")
+                }
+            })
     }
 
     pub fn generate_resource_paths(id: u64, resource_names: HashMap<u64, String>) -> AppRequestBuilder<impl Future<Output = HashMap<u64, LocalResourcePath>>> {

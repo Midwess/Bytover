@@ -4,6 +4,7 @@ use n0_future::task::spawn;
 use n0_future::task::JoinHandle;
 use anyhow::anyhow;
 use ewebsock::{connect, ws_connect, Options, WsEvent, WsMessage};
+use futures_util::{select, FutureExt};
 use schema::devlog::rpc_signalling::server::Message;
 use tokio::sync::{mpsc, Mutex};
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
@@ -60,7 +61,7 @@ impl SignallingClient {
                     let receiver = receiver.clone();
                     tokio::select! {
                         Some(msg) = async {
-                            sleep(Duration::from_millis(100)).await;
+                            sleep(Duration::from_millis(50)).await;
                             let receiver = receiver.lock().await;
                             let result = receiver.try_recv();
                             result
@@ -69,16 +70,16 @@ impl SignallingClient {
                                 let Ok(msg) = Message::decode(&bytes[..]) else {
                                     continue;
                                 };
-                                
+
                                 let _ = msg_sender.send(msg).await;
                                 continue;
                             }
-                            
+
                             if let WsEvent::Closed = msg {
                                 log::info!("websocket closed");
                                 break;
                             }
-                            
+
                             if let WsEvent::Error(err) = msg {
                                 log::error!("websocket error: {:?}", err);
                                 break;
@@ -92,8 +93,8 @@ impl SignallingClient {
                             }
 
                             sender.send(WsMessage::Binary(bytes));
-                        }
-                    }
+                        },
+                   }
                 }
             }
         });

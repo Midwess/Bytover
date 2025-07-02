@@ -35,7 +35,7 @@ impl TransferDelimiterShema {
 
     pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {
         if data.len() != 1024 {
-            return Err(WebRtcErrors::InvalidDelimiter("Data buffer must be exactly 1024 bytes".to_string()))
+            return Err(WebRtcErrors::InvalidDelimiter(format!("Data buffer must be exactly 1024 bytes got {}", data.len())))
         }
 
         let len_bytes = &data[0..2];
@@ -64,7 +64,7 @@ impl SessionContext {
 
 #[derive(Debug, Clone)]
 pub struct TransfersContext {
-    pub active_transfers: Arc<Mutex<Vec<SessionContext>>>
+    active_transfers: Arc<Mutex<Vec<SessionContext>>>
 }
 
 impl TransfersContext {
