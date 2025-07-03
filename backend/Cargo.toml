@@ -12,7 +12,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 surreal_derive_plus = { workspace = true }
-surrealdb = { workspace = true }
+surrealdb = { workspace = true, features = ["native-tls"] }
 surreal_devl = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
