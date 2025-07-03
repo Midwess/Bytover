@@ -1,12 +1,13 @@
 use futures_util::future::join_all;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use tokio::sync::oneshot;
-
+use futures::channel::oneshot;
+use futures_util::join;
+use n0_future::task::spawn;
+use futures_util::lock::Mutex;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
-use tokio::sync::Mutex;
 
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -131,7 +132,7 @@ T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
         log::info!("Start uploading resources and thumbnails");
 
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
-        let (thumbnail_result, upload_result) = tokio::join!(
+        let (thumbnail_result, upload_result) = join!(
             self.upload_thumbnails(&session, thumbnail_upload_requests),
             self.upload_resources(&session, response.first_resource_upload_request, core_request_id)
         );
@@ -236,7 +237,7 @@ T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
 
         drop(session_guard);
 
-        tokio::spawn(async move {
+        spawn(async move {
             join_all(futures).await;
         });
 

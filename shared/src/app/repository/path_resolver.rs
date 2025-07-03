@@ -1,7 +1,8 @@
 use crate::app::file_system::file::LocalResourcePath;
 use std::path::PathBuf;
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait PathResolver: Send + Sync {
     async fn get_absolute_path(&self, path: LocalResourcePath) -> String;
 

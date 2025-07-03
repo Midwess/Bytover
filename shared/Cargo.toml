@@ -26,7 +26,6 @@ anyhow = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 url = { workspace = true }
-tokio = { workspace = true, default-features = false, features = ["rt", "sync"] }
 futures-util = { workspace = true }
 bytes.workspace = true
 prost.workspace = true
@@ -35,8 +34,8 @@ n0-future.workspace = true
 async-stream.workspace = true
 bincode.workspace = true
 tower-service.workspace = true
-http.workspace = true
 reqwest.workspace = true
+once_cell.workspace = true
 
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true

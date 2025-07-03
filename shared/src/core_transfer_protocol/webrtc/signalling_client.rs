@@ -7,20 +7,25 @@ use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::sleep;
+use futures::channel::mpsc;
+use futures::channel::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
+use futures_timer::Delay;
+use futures_util::lock::Mutex;
+use futures_util::SinkExt;
+use n0_future::StreamExt;
+use n0_future::time::Instant;
 
 pub struct SignallingClient {
     socket_addr: String,
     handle: Option<JoinHandle<()>>,
-    sender: mpsc::Sender<Message>,
-    receiver: Mutex<mpsc::Receiver<Message>>,
-    signal: Option<mpsc::Sender<Message>>
+    sender: UnboundedSender<Message>,
+    receiver: Mutex<UnboundedReceiver<Message>>,
+    signal: Option<UnboundedSender<Message>>
 }
 
 impl SignallingClient {
     pub fn new(socket_addr: String) -> Self {
-        let (sender, receiver) = mpsc::channel(64);
+        let (sender, receiver) = unbounded();
         Self {
             socket_addr,
             handle: None,
@@ -33,12 +38,14 @@ impl SignallingClient {
     pub async fn start(&mut self) -> Result<(), WebRtcErrors> {
         self.stop().await;
 
-        let (signal_sender, mut signal_receiver) = mpsc::channel::<Message>(10);
+        let (signal_sender, mut signal_receiver) = unbounded::<Message>();
         let mut options = Options::default();
         options.read_timeout = Some(Duration::from_secs(60));
 
-        let msg_sender = self.sender.clone();
+        let mut msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
+        let min_keep_alive = Duration::from_secs(3);
+        let mut last_keep_alive = Instant::now() - min_keep_alive;
         let handle = spawn(async move {
             loop {
                 log::info!("Starting signalling client at {addr}");
@@ -46,7 +53,7 @@ impl SignallingClient {
                     Ok(socket) => socket,
                     Err(err) => {
                         log::error!("websocket error, retrying... {err:?}");
-                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        Delay::new(Duration::from_secs(3)).await;
                         continue;
                     }
                 };
@@ -56,41 +63,50 @@ impl SignallingClient {
                 log::info!("websocket connected");
                 loop {
                     let receiver = receiver.clone();
-                    tokio::select! {
-                         Some(msg) = async {
-                             sleep(Duration::from_millis(50)).await;
-                             let receiver = receiver.lock().await;
+                    Delay::new(Duration::from_millis(10)).await;
 
-                             receiver.try_recv()
-                         } => {
-                             if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
-                                 let Ok(msg) = Message::decode(&bytes[..]) else {
-                                     continue;
-                                 };
+                    let msg_opt = {
+                        let receiver = receiver.lock().await;
+                        receiver.try_recv()
+                    };
 
-                                 let _ = msg_sender.send(msg).await;
-                                 continue;
-                             }
+                    if let Some(msg) = msg_opt {
+                        if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
+                            let Ok(msg) = Message::decode(&bytes[..]) else {
+                                continue;
+                            };
 
-                             if let WsEvent::Closed = msg {
-                                 log::info!("websocket closed");
-                                 break;
-                             }
+                            let _ = msg_sender.send(msg).await;
+                            continue;
+                        }
 
-                             if let WsEvent::Error(err) = msg {
-                                 log::error!("websocket error: {err:?}");
-                                 break;
-                             }
-                         },
-                         Some(msg_to_send) = signal_receiver.recv() => {
-                             let mut bytes = vec![];
-                             let _ = msg_to_send.encode(&mut bytes);
-                             if bytes.is_empty() {
-                                 continue;
-                             }
+                        if let WsEvent::Closed = msg {
+                            log::info!("websocket closed");
+                            break;
+                        }
 
-                             sender.send(WsMessage::Binary(bytes));
-                         },
+                        if let WsEvent::Error(err) = msg {
+                            log::error!("websocket error: {err:?}");
+                            break;
+                        }
+                    }
+
+                    if let Ok(Some(msg_to_send)) = signal_receiver.try_next() {
+                        if msg_to_send.join.is_some() {
+                            if last_keep_alive.elapsed() <= min_keep_alive {
+                                last_keep_alive = Instant::now();
+                                // We avoid sending too much keep a live message
+                                continue;
+                            }
+                        }
+
+                        let mut bytes = vec![];
+                        let _ = msg_to_send.encode(&mut bytes);
+                        if bytes.is_empty() {
+                            continue;
+                        }
+
+                        sender.send(WsMessage::Binary(bytes));
                     }
                 }
             }
@@ -102,7 +118,7 @@ impl SignallingClient {
     }
 
     pub async fn next_message(&self) -> Result<Message, WebRtcErrors> {
-        let Some(msg) = self.receiver.lock().await.recv().await else {
+        let Some(msg) = self.receiver.lock().await.next().await else {
             return Err(WebRtcErrors::SignallingClientError(anyhow!("Channel has been closed")))
         };
 
@@ -111,7 +127,7 @@ impl SignallingClient {
 
     pub async fn send(&self, msg: Message) -> Result<(), WebRtcErrors> {
         if let Some(signal_sender) = self.signal.as_ref() {
-            let _ = signal_sender.send(msg).await;
+            let _ = signal_sender.unbounded_send(msg);
         };
 
         Ok(())
@@ -121,7 +137,8 @@ impl SignallingClient {
         if let Some(handle) = self.handle.take() {
             handle.abort();
             self.signal = None;
-            let _ = self.sender.closed().await;
+            let _ = self.sender.close().await;
+            let _ = self.sender.close_channel();
         }
     }
 }

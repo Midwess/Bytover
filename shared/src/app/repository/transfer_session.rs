@@ -7,6 +7,7 @@ use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransferSessionId {
@@ -15,7 +16,8 @@ pub struct TransferSessionId {
     pub order_id: Option<u64>
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
     async fn update_progresses(
         &self,

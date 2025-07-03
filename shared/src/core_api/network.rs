@@ -2,7 +2,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use crate::errors::NetworkError;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use futures_timer::Delay;
+use futures_util::lock::Mutex;
 
 #[derive(Clone)]
 pub struct InternetConnection {
@@ -43,7 +44,7 @@ impl InternetConnection {
                 }
             }
 
-            tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
+            Delay::new(Duration::from_millis(RETRY_DELAY_MS)).await;
         }
 
         Err(NetworkError::Network("Failed to get public IP address".to_string()))

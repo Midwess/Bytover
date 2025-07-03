@@ -14,7 +14,8 @@ pub struct LocalResourceId {
     pub order_id: Option<u64>
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError>;
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError>;

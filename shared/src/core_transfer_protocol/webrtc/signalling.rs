@@ -2,7 +2,6 @@ use crate::app::nearby::finding_scope::FindingScope;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::core_transfer_protocol::webrtc::peer::WebRtcPeer;
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
-use async_trait::async_trait;
 use futures_util::lock::Mutex;
 use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
@@ -18,8 +17,7 @@ use schema::devlog::rpc_signalling::server::{
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use tokio::sync::OnceCell;
-
+use once_cell::sync::OnceCell;
 use super::errors::WebRtcErrors;
 
 #[derive(Debug, Clone)]
@@ -234,8 +232,8 @@ impl WebSignaller {
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl Signaller for WebSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = SignallingPeerRequest(self.peer_id, request);
@@ -289,8 +287,8 @@ impl WebSignallerBuilder {
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl SignallerBuilder for WebSignallerBuilder {
     async fn new_signaller(&self, _attempts: Option<u16>, socket_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
         let client = SignallingClient::new(socket_url);
