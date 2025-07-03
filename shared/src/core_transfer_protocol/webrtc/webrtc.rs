@@ -25,7 +25,7 @@ pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 2;
 
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 40;
+pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 4;
 
 pub struct WebRtc {
     core_bridge: Arc<dyn CoreBridge>,
@@ -120,6 +120,9 @@ impl WebRtc {
         futures::pin_mut!(loop_fut);
         let timeout = Delay::new(Duration::from_millis(10));
         futures::pin_mut!(timeout);
+
+        let connection_timeout = Delay::new(Duration::from_secs(10));
+        futures::pin_mut!(connection_timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
         let outbound_data_sender = socket.channel(TRANSFER_RESOURCE_CHANNEL_ID).sender_clone();
@@ -268,6 +271,11 @@ impl WebRtc {
             select! {
                 _ = (&mut timeout).fuse() => {
                     timeout.reset(Duration::from_millis(10));
+                }
+                _ = (&mut connection_timeout).fuse() => {
+                    log::info!("Polling timeout");
+                    self.shared_context.poll_timeout().await;
+                    connection_timeout.reset(Duration::from_secs(10));
                 }
                 _ = &mut loop_fut => {
                     break;

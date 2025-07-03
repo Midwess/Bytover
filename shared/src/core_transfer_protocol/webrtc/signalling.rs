@@ -17,12 +17,35 @@ use schema::devlog::rpc_signalling::server::{
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use n0_future::time::Instant;
 use once_cell::sync::OnceCell;
 use super::errors::WebRtcErrors;
 
+pub enum WebRtcPeerConnectionProcess {
+    Connecting(Instant),
+    Connected(Arc<WebRtcPeer>)
+}
+
+impl WebRtcPeerConnectionProcess {
+    pub fn connecting() -> Self {
+        Self::Connecting(Instant::now())
+    }
+
+    pub fn connected(peer: Arc<WebRtcPeer>) -> Self {
+        Self::Connected(peer)
+    }
+
+    pub fn get(&self) -> Option<Arc<WebRtcPeer>> {
+        match self {
+            Self::Connecting(_) => None,
+            Self::Connected(peer) => Some(peer.clone())
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SharedContext {
-    peers: Arc<Mutex<HashMap<PeerId, OnceCell<Arc<WebRtcPeer>>>>>,
+    peers: Arc<Mutex<HashMap<PeerId, WebRtcPeerConnectionProcess>>>,
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: OnceCell<PeerId>
@@ -81,7 +104,7 @@ impl SharedContext {
     pub async fn get_peer(&self, peer_id: &PeerId) -> Option<Weak<WebRtcPeer>> {
         let peers = self.peers.lock().await;
         if let Some(peer) = peers.get(peer_id).and_then(|it| it.get()) {
-            return Some(Arc::downgrade(peer));
+            return Some(Arc::downgrade(&peer));
         }
 
         None
@@ -89,13 +112,13 @@ impl SharedContext {
 
     pub async fn add_peer_place_holder(&self, peer_id: PeerId) {
         let mut peers = self.peers.lock().await;
-        peers.insert(peer_id, OnceCell::new());
+        peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         log::info!("Removing peer: {:?}", peer_id);
         let mut peers = self.peers.lock().await;
-        if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get().cloned()) {
+        if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get()) {
             log::info!("Peer removed");
             drop(peers);
             peer.peer_disconnected().await;
@@ -108,13 +131,7 @@ impl SharedContext {
     pub async fn add_peer(&self, peer: WebRtcPeer) {
         let peer_id = peer.peer.peer_id();
         let mut peers = self.peers.lock().await;
-        peers.entry(peer_id).or_insert_with(OnceCell::new);
-
-        if let Some(holder) = peers.get(&peer_id) {
-            if let Err(_) = holder.set(Arc::new(peer)) {
-                log::error!("Already set {:?}", holder.get().map(|it| &it.peer));
-            }
-        }
+        peers.insert(peer_id, WebRtcPeerConnectionProcess::connected(Arc::new(peer)));
     }
 
     // Return true when peer is not connected
@@ -125,6 +142,23 @@ impl SharedContext {
 
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
+    }
+    
+    pub async fn poll_timeout(&self) {
+        let peers = self.peers.lock().await;
+        let mut peers_to_remove = vec![];
+        for (peer_id, peer) in peers.iter() {
+            if let WebRtcPeerConnectionProcess::Connecting(connecting_time) = peer {
+                if Instant::now().duration_since(*connecting_time).as_secs() > 10 {
+                    log::info!("Peer not connected for 10 seconds: {:?}", peer_id);
+                    peers_to_remove.push(peer_id.clone());
+                }
+            }
+        }
+        
+        for peer_id in peers_to_remove {
+            self.remove_peer(&peer_id).await;
+        }
     }
 }
 
