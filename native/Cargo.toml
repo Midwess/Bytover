@@ -35,7 +35,6 @@ reqwest = { workspace = true }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 futures-util = { workspace = true }
 url = { workspace = true }
-webrtc = { workspace = true }
 prost = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
@@ -43,7 +42,6 @@ chrono = { workspace = true }
 stunclient = { workspace = true }
 bytes = { workspace = true }
 anyhow = { workspace = true }
-ulid = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 mime_guess = { workspace = true }
