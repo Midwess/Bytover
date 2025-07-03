@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use tokio::time::sleep;
 
-use crate::network::module::InternetConnection;
 use crate::{process_event, ShellRuntime};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::app::AppEvent;
-
+use shared::core_api::network::InternetConnection;
 use super::p2p::P2PNativeExecutor;
 use super::persistent::NativePersistent;
 use super::rpc::NativeRpc;

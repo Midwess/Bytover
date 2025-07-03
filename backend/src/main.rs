@@ -57,7 +57,7 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
 
     let service = GatewayServiceBuilder::new()
         .grpc(tcp.public_host.clone(), tcp.port)
-        .name("devlog-bitbridge-grpc-server")
+        .name("devlog-bitbridge-rpc-server")
         .routes(vec![
             GatewayRouteBuilder::new()
                 .grpc()
@@ -65,7 +65,7 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
                 .strip_path(false)
                 .public(true)
                 .preserve_host(false)
-                .name("devlog-bitbridge-grpc-server-path")
+                .name("devlog-bitbridge-rpc-server-path")
                 .build(),
         ])
         .build();

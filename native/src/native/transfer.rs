@@ -1,15 +1,15 @@
 use std::sync::Arc;
-
-use crate::network::cloud::cloud_service::CloudService;
+use tonic::transport::Channel;
 use crate::ShellRuntime;
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
+use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use shared::errors::NetworkError;
 
 pub struct TransferNative {
     pub web_rtc: Arc<WebRtc>,
-    pub cloud_service: CloudService,
+    pub cloud_service: CloudService<Channel>,
     pub shell_runtime: Arc<dyn ShellRuntime>
 }
 

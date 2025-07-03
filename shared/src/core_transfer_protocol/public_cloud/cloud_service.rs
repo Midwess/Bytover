@@ -8,20 +8,20 @@ use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use tokio::sync::Mutex;
 
-use crate::grpc::cloud_server::CloudServer;
-use crate::grpc::errors::NativeGrpcErrors;
-use shared::app::operations::transfer::TransferOperationOutput;
-use shared::app::operations::CoreOperationOutput;
-use shared::app::repository::errors::PersistenceError;
-use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::app::transfer::session::{TransferSession, TransferSessionStatus};
-use shared::app::transfer::target::TransferTarget;
-use shared::core_api::{CoreBridge, IOReader, NetStream};
+use crate::app::operations::transfer::TransferOperationOutput;
+use crate::app::operations::CoreOperationOutput;
+use crate::app::repository::errors::PersistenceError;
+use crate::app::repository::local_resource::LocalResourceRepository;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
+use crate::app::transfer::target::TransferTarget;
+use crate::core_api::{CoreBridge, IOReader, NetStream};
+use crate::rpc::cloud_server::CloudServer;
+use crate::rpc::errors::RpcErrors;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
     #[error("Network error: {0}")]
-    GrpcErrors(#[from] NativeGrpcErrors),
+    GrpcErrors(#[from] RpcErrors),
     #[error("Invalid session target")]
     InvalidSessionTarget,
     #[error("Failed to open file: {0}")]
@@ -44,15 +44,30 @@ pub enum CloudTransferErrors {
     IOError(#[from] PersistenceError)
 }
 
-pub struct CloudService {
-    pub server: CloudServer,
+pub struct CloudService<T> where
+    T: Clone,
+    T: Send + Sync,
+    T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Error: Into<tonic::codegen::StdError>,
+    T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+{
+    pub server: CloudServer<T>,
     pub core_bridge: Arc<dyn CoreBridge>,
     pub active_session: Mutex<Weak<Mutex<TransferSession>>>,
     pub repository: Arc<dyn LocalResourceRepository>,
     pub net_stream: Box<dyn NetStream>
 }
 
-impl CloudService {
+impl<T> CloudService<T>
+where
+T: Clone,
+T: Send + Sync,
+T: tonic::client::GrpcService<tonic::body::Body>,
+T::Error: Into<tonic::codegen::StdError>,
+T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+<T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+{
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
         let password = match &session.target {
             TransferTarget::Internet { password, .. } => password.clone(),

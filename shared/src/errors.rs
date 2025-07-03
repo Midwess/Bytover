@@ -1,6 +1,8 @@
 use crate::app::file_system::file::LocalResourcePath;
 use serde::{Deserialize, Serialize};
 use uniffi::Enum;
+use crate::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use crate::rpc::errors::RpcErrors;
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
@@ -18,7 +20,19 @@ pub enum NetworkError {
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
     #[error("Please check your internet connection")]
-    Network(String)
+    Network(String),
+}
+
+impl From<CloudTransferErrors> for NetworkError {
+    fn from(e: CloudTransferErrors) -> Self {
+        Self::Network(format!("{e:?}"))
+    }
+}
+
+impl From<RpcErrors> for NetworkError {
+    fn from(e: RpcErrors) -> Self {
+        Self::Network(format!("{e:?}"))
+    }
 }
 
 #[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]

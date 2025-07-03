@@ -1,3 +1,5 @@
+pub mod network;
+
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;

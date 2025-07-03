@@ -15,6 +15,7 @@ uniffi = {workspace = true}
 core-services = { path = "../libs/core-services", default-features = false }
 schema = { path = "../libs/schema/rust", features = ["bindgen", "client"], default-features = false }
 devlog-sdk = { path = "../libs/devlog-sdk", default-features = false }
+tonic = { workspace = true }
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
@@ -22,7 +23,6 @@ rand = { workspace = true }
 chrono = { workspace = true }
 h3o = { workspace = true }
 anyhow = { workspace = true }
-ulid = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 url = { workspace = true }
@@ -34,18 +34,19 @@ futures-timer.workspace = true
 n0-future.workspace = true
 async-stream.workspace = true
 bincode.workspace = true
+tower-service.workspace = true
+http.workspace = true
+reqwest.workspace = true
 
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
 ewebsock = { workspace = true, features = ["tokio", "tls"] }
 futures = "0.3.31"
 wasm-bindgen-futures = "0.4.50"
+http-body = "1.0.1"
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true, features = ["cli"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = { version = "0.3.9", features = ["env-filter"] }

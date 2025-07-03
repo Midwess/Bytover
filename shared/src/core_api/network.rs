@@ -1,30 +1,12 @@
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use shared::errors::NetworkError;
+use crate::errors::NetworkError;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-#[async_trait::async_trait]
-pub trait NetworkModule {
-    // Check if the module is connected to the upstream
-    async fn is_connected(&self) -> bool;
-    // The module could try to reconnect it's self, we need to wait until it is connected
-    async fn wait_until_connected(&self, timeout: Duration) {
-        let elapsed = Instant::now();
-        while elapsed.elapsed() < timeout {
-            if self.is_connected().await {
-                break;
-            }
-
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    }
-    // Call this method will cause this module to reconnect to the upstream
-    // Even if it is already connected
-    async fn connect(&self, timeout: Duration) -> Result<(), NetworkError>;
-}
-
+#[derive(Clone)]
 pub struct InternetConnection {
-    last_passed: Mutex<Instant>
+    last_passed: Arc<Mutex<Instant>>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -41,7 +23,7 @@ impl Default for InternetConnection {
 impl InternetConnection {
     pub fn new() -> Self {
         Self {
-            last_passed: Mutex::new(Instant::now() - Duration::from_secs(5))
+            last_passed: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(5)))
         }
     }
 

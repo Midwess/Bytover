@@ -11,7 +11,7 @@ pub mod core_api;
 pub mod core_transfer_protocol;
 pub mod entities;
 pub mod errors;
-pub mod grpc;
+pub mod rpc;
 
 pub use app::CoreOperation;
 

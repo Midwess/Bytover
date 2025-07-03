@@ -7,11 +7,9 @@ use tokio::time::{self, Duration, Interval};
 pub mod config;
 mod core_api_impl;
 pub mod di_container;
-pub mod errors;
-pub mod grpc;
 pub mod native;
-pub mod network;
 pub mod repository;
+pub mod network;
 
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::repository::path_resolver::PathResolverImpl;
