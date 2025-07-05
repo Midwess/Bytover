@@ -1,0 +1,13 @@
+{
+  "name": "bitbridge",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "style": "npx @tailwindcss/cli -i input.css -o assets/style.css --watch"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "tailwindcss": "^4.1.11"
+  }
+}

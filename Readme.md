@@ -1,16 +1,28 @@
 # BitBridge
 
-# Prequisitudes:
+# Prerequisites:
 1. Rust `1.81`
 2. Android NDK `28.0.12916984`
 
 # Development workflow:
 ## Installation:
 
-### 1. Android NDK:
+### Web
+```bash
+# Web
+$ cd web-leptos
+# Install js dependencies
+$ yarn install
+# To start tailwind styling
+$ yarn style
+# To start web in dev mode
+$ make web
+```
+
+### Android NDK:
 Install correct Android NDK via `Android Studio > tools > Android Sdk Manager`
 
-### 2. Environments:
+### Environments:
 ```bash
 export ANDROID_HOME=/Users/tiendang/Library/Android/sdk
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.12916984
@@ -23,13 +35,13 @@ export PATH=$ANDROID_HOME:$PATH
 export PATH=$PATH:$TOOLCHAIN/bin
 ```
 
-### 3. Openssl
+### Openssl
 #### MacOS
 ```bash
 $ brew install openssl@3
 ```
 
-### 4. Enable target build
+### Enable target build
 ```
 $ rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 ```

@@ -17,8 +17,12 @@ leptos_router = { version = "0.7.0" }
 wasm-bindgen = { workspace = true }
 http = { workspace = true, optional = true }
 shared = { path = "../shared" }
+core-services = { path = "../libs/core-services", default-features = false }
+log = { workspace = true }
 
 [features]
+default = ["full"]
+full = ["csr", "ssr", "hydrate"]
 csr = ["leptos/csr"]
 hydrate = ["leptos/hydrate"]
 ssr = [

@@ -18,3 +18,4 @@ rustc-ice-*.txt
 **/*.xcodeproj/xcuserdata/
 **/*.xcworkspace/xcuserdata/
 .fleet
+web-leptos/assets/style.css

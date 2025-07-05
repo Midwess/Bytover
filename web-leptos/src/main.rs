@@ -1,4 +1,8 @@
+use actix_web::{get, Responder};
+use core_services::logger;
+
 #[cfg(feature = "ssr")]
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     use actix_files::Files;
@@ -8,6 +12,8 @@ async fn main() -> std::io::Result<()> {
     use leptos_meta::MetaTags;
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use web_leptos::app::*;
+
+    logger::setup();
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -27,6 +33,7 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/assets", &site_root))
             // serve the favicon from /favicon.ico
             .service(favicon)
+            .service(style)
             .leptos_routes(routes, {
                 let leptos_options = leptos_options.clone();
                 move || {
@@ -34,6 +41,7 @@ async fn main() -> std::io::Result<()> {
                         <!DOCTYPE html>
                         <html lang="en">
                             <head>
+                                <link rel="stylesheet" href="style.css" />
                                 <meta charset="utf-8"/>
                                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                                 <AutoReload options=leptos_options.clone() />
@@ -55,11 +63,24 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
+
+#[cfg(feature = "ssr")]
+#[actix_web::get("style.css")]
+async fn style(
+    leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
+) -> impl Responder {
+    log::info!("Serving styling.css");
+    let leptos_options = leptos_options.into_inner();
+    let site_root = &leptos_options.site_root;
+    actix_files::NamedFile::open_async(format!("{site_root}/style.css")).await
+}
+
 #[cfg(feature = "ssr")]
 #[actix_web::get("favicon.ico")]
 async fn favicon(
     leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
 ) -> actix_web::Result<actix_files::NamedFile> {
+    log::info!("Serving favicon.ico");
     let leptos_options = leptos_options.into_inner();
     let site_root = &leptos_options.site_root;
     Ok(actix_files::NamedFile::open(format!(
@@ -81,6 +102,8 @@ pub fn main() {
     // prefer using `cargo leptos serve` instead
     // to run: `trunk serve --open --features csr`
     use web_leptos::app::*;
+
+    logger::setup();
 
     console_error_panic_hook::set_once();
 
