@@ -34,7 +34,7 @@ bincode.workspace = true
 reqwest = { workspace = true, features = ["json"], default-features = false }
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
-ewebsock = { workspace = true }
+ewebsock = { workspace = true, features = ["tokio", "tls"] }
 once_cell = { workspace = true }
 futures = { workspace = true }
 http-body = { workspace = true }

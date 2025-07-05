@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use matchbox_protocol::PeerId;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};

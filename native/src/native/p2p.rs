@@ -22,7 +22,7 @@ impl P2PNativeExecutor {
             }
             P2POperation::UpdateFindingScopes(update_finding_scopes) => {
                 let web_rtc = self.web_rtc.clone();
-                let result = web_rtc.update_finding_scopes(update_finding_scopes).await;
+                let _ = web_rtc.update_finding_scopes(update_finding_scopes).await;
                 CoreOperationOutput::Void
             }
             P2POperation::StartNearbyServer(peer) => {

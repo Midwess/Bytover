@@ -18,7 +18,7 @@ typegen = ["crux_core/typegen"]
 crux_core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 lazy_static = { workspace = true }
-uniffi = { workspace = true }
+uniffi = { workspace = true, features = ["cli"] }
 shared = { path = "../shared" }
 core-services = { workspace = true, features = ["db-red", "local-storage", "retry"] }
 devlog-sdk = { workspace = true }
@@ -29,7 +29,6 @@ bincode = { workspace = true }
 erased-serde = { version = "0.4.5" }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
 reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots", "stream"] }
-tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 futures-util = { workspace = true }
 url = { workspace = true }
 bytes = { workspace = true }
@@ -39,10 +38,10 @@ tokio-util = {workspace = true}
 redb = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
-uniffi = { workspace = true, features = ["cli"] }
+uniffi = { workspace = true }
 
 [build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+uniffi = { workspace = true, features = ["build", "cli"] }
 
 [package.metadata]
 # Will log the query command at runtime

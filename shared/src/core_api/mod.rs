@@ -1,6 +1,5 @@
 pub mod network;
 
-use std::time::Duration;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
@@ -11,6 +10,7 @@ use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::StreamExt;
+use std::time::Duration;
 use url::Url;
 
 #[cfg(not(target_family = "wasm"))]

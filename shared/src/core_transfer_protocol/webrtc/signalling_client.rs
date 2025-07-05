@@ -105,6 +105,8 @@ impl SignallingClient {
                         sender.send(WsMessage::Binary(bytes));
                     }
                 }
+
+                Delay::new(Duration::from_secs(3)).await;
             }
         });
 
