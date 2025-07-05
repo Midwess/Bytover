@@ -1,13 +1,12 @@
 use crate::app::file_system::file::LocalResourcePath;
-use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 use crate::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::rpc::errors::RpcErrors;
+use serde::{Deserialize, Serialize};
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
 /// but it's must be detailed enough to be used for debugging (Debug trait)
-#[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum NetworkError {
     // Unknown error from backend, should not happend
     #[error("Error happened, please try again")]
@@ -20,7 +19,7 @@ pub enum NetworkError {
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
     #[error("Please check your internet connection")]
-    Network(String),
+    Network(String)
 }
 
 impl From<CloudTransferErrors> for NetworkError {
@@ -35,13 +34,13 @@ impl From<RpcErrors> for NetworkError {
     }
 }
 
-#[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum DeviceError {
     #[error("Insufficient storage")]
     StorageInsufficient(String)
 }
 
-#[derive(Debug, thiserror::Error, Enum, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum InputError {
     #[error("Expected an absolute path")]
     ExpectedAnAbsolutePath(LocalResourcePath)

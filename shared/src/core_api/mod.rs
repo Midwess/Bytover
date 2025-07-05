@@ -1,16 +1,16 @@
 pub mod network;
 
-use std::time::Duration;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
-use n0_future::task::JoinHandle;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
+use n0_future::task::JoinHandle;
 use n0_future::StreamExt;
+use std::time::Duration;
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -70,7 +70,7 @@ pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
 impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
     async fn recv_timeout(&mut self, timeout: std::time::Duration) -> Option<T> {
         select! {
-            msg = self.next().fuse() => Option::from(msg),
+            msg = self.next().fuse() => msg,
             _ = Delay::new(Duration::from_secs(10)).fuse() => None,
             complete => None,
         }

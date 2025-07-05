@@ -11,11 +11,10 @@ typegen = ["crux_core/typegen"]
 
 [dependencies]
 crux_core.workspace = true
-uniffi = {workspace = true}
-core-services = { path = "../libs/core-services", default-features = false }
-schema = { path = "../libs/schema/rust", features = ["bindgen", "client"], default-features = false }
-devlog-sdk = { path = "../libs/devlog-sdk", default-features = false }
-tonic = { workspace = true }
+core-services = { workspace = true, default-features = false }
+schema = { workspace = true, features = ["client"], default-features = false }
+devlog-sdk = { workspace = true, default-features = false }
+tonic = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
@@ -29,19 +28,16 @@ url = { workspace = true }
 futures-util = { workspace = true }
 bytes.workspace = true
 prost.workspace = true
-futures-timer.workspace = true
+futures-timer = {workspace = true, features = ["wasm-bindgen"]}
 n0-future.workspace = true
-async-stream.workspace = true
+async-stream = {workspace = true, default-features = false}
 bincode.workspace = true
-tower-service.workspace = true
-reqwest.workspace = true
-once_cell.workspace = true
-
+reqwest = { workspace = true, features = ["json"], default-features = false }
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
-ewebsock = { workspace = true, features = ["tokio", "tls"] }
+ewebsock = { workspace = true }
+once_cell = { workspace = true }
 futures = "0.3.31"
-wasm-bindgen-futures = "0.4.50"
 http-body = "1.0.1"
 
 [target.uniffi-bindgen.dependencies]
@@ -49,3 +45,6 @@ uniffi = { workspace = true, features = ["cli"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }

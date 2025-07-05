@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use uniffi::Record;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Token {
     pub order_id: u64,
     pub value: String

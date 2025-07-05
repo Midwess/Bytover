@@ -1,25 +1,21 @@
 use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
-use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutor;
 use crate::native::persistent::NativePersistent;
 use crate::native::rpc::NativeRpc;
 use crate::native::transfer::TransferNative;
+use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
 use crate::ShellRuntime;
-use core::panic;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
-use shared::rpc::cloud_server::CloudServer;
-use shared::rpc::auth_provider::AuthProvider;
-use shared::rpc::auth_server::AuthServer;
 use shared::app::authentication::service::AuthenticationService;
 use shared::app::nearby::nearby_services::NearbyService;
 use shared::app::repository::auth_session::AuthSessionRepository;
@@ -29,13 +25,15 @@ use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use shared::app::transfer::transfer_service::TransferService;
 use shared::core_api::{CoreBridge, NetStream};
+use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
+use shared::rpc::auth_provider::AuthProvider;
+use shared::rpc::auth_server::AuthServer;
+use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
-use shared::rpc::connection::RpcNetworkModule;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -66,7 +64,7 @@ impl DiContainer {
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url())
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -165,10 +163,7 @@ impl DiContainer {
     }
 
     pub fn get_cloud_server(&self) -> CloudServer<Channel> {
-        CloudServer::new(
-            Box::new(self.rpc_connection.clone()),
-            self.get_auth_provider()
-        )
+        CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
     }
 
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
@@ -191,7 +186,7 @@ impl DiContainer {
 
         let executor = NativeExecutor {
             rpc: NativeRpc {
-                auth_server: self.get_authentication_server(),
+                auth_server: self.get_authentication_server()
             },
             persistent: NativePersistent {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

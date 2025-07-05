@@ -5,9 +5,8 @@ use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::path_resolver::PathResolver;
 use std::path::PathBuf;
 use std::sync::Arc;
-use uniffi::Enum;
 
-#[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PathResolverMessage {
     GetAbsolutePath { path: LocalResourcePath },
     GetLocalResourcePath { absolute_path: String },
@@ -16,7 +15,7 @@ pub enum PathResolverMessage {
     GetSystemDirPath
 }
 
-#[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PathResolverResponseMessage {
     GetAbsolutePath { absolute_path: String },
     GetLocalResourcePath { path: LocalResourcePath },

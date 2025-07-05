@@ -3,7 +3,6 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
 use crate::app::file_system::file::LocalResourcePath;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
@@ -13,7 +12,7 @@ use crate::errors::NetworkError;
 use super::{CoreOperation, CoreOperationOutput};
 
 /// This operation is used to access the local storage of device.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
@@ -25,7 +24,7 @@ pub enum TransferOperation {
     CancelSession(Option<String>, u64)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperationOutput {
     CreateCloudSession(TransferSession),
     TransferResourceProgressUpdate(TransferProgress),

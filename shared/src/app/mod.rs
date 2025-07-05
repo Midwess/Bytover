@@ -25,7 +25,6 @@ use modules::nearby::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
@@ -96,7 +95,7 @@ pub struct AppEffect {
     capabilities: AppCapabilities<AppEvent>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AppEvent {
     Environment(EnvironmentEvent),
     Authentication(AuthenticationEvent),

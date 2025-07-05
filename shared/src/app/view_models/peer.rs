@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
 use crate::entities::device::DeviceInfo;
 use crate::entities::peer::Peer;
 
 use super::avatar::AvatarViewModel;
 
-#[derive(Debug, Serialize, Deserialize, Record, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct PeerViewModel {
     pub id: String,
     pub display_name: String,

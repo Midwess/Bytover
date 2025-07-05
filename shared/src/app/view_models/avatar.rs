@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AvatarViewModel {
     pub url: String,
     pub dominant_color_r: Option<u32>,

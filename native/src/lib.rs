@@ -8,8 +8,8 @@ pub mod config;
 mod core_api_impl;
 pub mod di_container;
 pub mod native;
-pub mod repository;
 pub mod network;
+pub mod repository;
 
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::repository::path_resolver::PathResolverImpl;

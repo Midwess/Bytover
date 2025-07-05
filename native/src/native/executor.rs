@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use tokio::time::sleep;
 
+use super::p2p::P2PNativeExecutor;
+use super::persistent::NativePersistent;
+use super::rpc::NativeRpc;
+use super::transfer::TransferNative;
 use crate::{process_event, ShellRuntime};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::app::AppEvent;
 use shared::core_api::network::InternetConnection;
-use super::p2p::P2PNativeExecutor;
-use super::persistent::NativePersistent;
-use super::rpc::NativeRpc;
-use super::transfer::TransferNative;
 // Handle the effect comming from the platform
 // This is the placed where we can put Rust logic to share accross platform
 pub struct NativeExecutor {

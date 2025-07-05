@@ -29,6 +29,7 @@ use shared::app::operations::persistent::{
 };
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
+use shared::app::operations::CoreOperationOutput;
 use shared::app::transfer::file_selection_service::ResourceSelection;
 use shared::app::transfer::session::{TransferSessionStatus, TransferStatus, TransferType};
 use shared::app::transfer::target::TransferTarget;
@@ -98,11 +99,13 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferType>()?;
     gen.register_type::<Response>()?;
     gen.register_type::<TransferSessionStatus>()?;
-    gen.register_type::<MessageToShellResponse>()?;
+
+    gen.register_type::<CoreOperationOutput>()?;
 
     gen.register_type::<Source>()?;
 
     // Register native msg
+    gen.register_type::<MessageToShellResponse>()?;
     gen.register_type::<MessageToShell>()?;
 
     gen.register_type::<TransferTarget>()?;

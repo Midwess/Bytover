@@ -1,10 +1,9 @@
-use tonic::transport::Channel;
-use crate::di_container::DiContainer;
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::rpc::auth_server::AuthServer;
+use tonic::transport::Channel;
 
 pub struct NativeRpc {
-    pub auth_server: AuthServer<Channel>,
+    pub auth_server: AuthServer<Channel>
 }
 
 impl NativeRpc {

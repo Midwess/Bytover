@@ -7,7 +7,6 @@ use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransferSessionId {

@@ -1,23 +1,22 @@
-use std::time::Duration;
+use crate::entities::device::DeviceInfo;
+use crate::entities::user::User;
+use crate::rpc::auth_provider::AuthProvider;
+use crate::rpc::connection::RpcNetworkModule;
+use crate::rpc::errors::RpcErrors;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
-use crate::entities::device::DeviceInfo;
-use crate::entities::user::User;
 use tonic::Request;
-use crate::rpc::auth_provider::AuthProvider;
-use crate::rpc::connection::RpcNetworkModule;
-use crate::rpc::errors::RpcErrors;
 
 pub struct AuthServer<T>
 where
-T: Clone,
-T: tonic::client::GrpcService<tonic::body::Body>,
-T::Error: Into<tonic::codegen::StdError>,
-T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-<T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    T: Clone,
+    T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Error: Into<tonic::codegen::StdError>,
+    T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
     auth_provider: AuthProvider
@@ -30,14 +29,15 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub fn new(auth_provider: AuthProvider, network: Box<dyn RpcNetworkModule<T>>) -> Self {
-       Self {
-           auth_provider,
-           rpc_module: network,
+        Self {
+            auth_provider,
+            rpc_module: network
         }
     }
+
     pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request = SigninRequest {

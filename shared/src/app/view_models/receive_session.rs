@@ -1,28 +1,27 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
 use super::avatar::AvatarViewModel;
 use super::selected_resource::SelectedResourceViewModel;
 
-#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub is_completed: bool
 }
 
-#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VideoReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub is_completed: bool
 }
 
-#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FileReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub is_completed: bool
 }
 
-#[derive(Clone, Record, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveSessionViewModel {
     pub id: u64,
     pub peer_avatar: AvatarViewModel,

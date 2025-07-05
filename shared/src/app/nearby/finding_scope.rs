@@ -3,14 +3,13 @@ use futures_util::StreamExt;
 use h3o::{LatLng, Resolution};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use uniffi::Enum;
 
 use crate::app::operations::device::GeoLocation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::AppCommandContext;
 use crate::errors::NetworkError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Enum)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FindingScope {
     Global(String),
     Local(String),

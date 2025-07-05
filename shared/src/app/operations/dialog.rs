@@ -3,13 +3,12 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
 
 use crate::app::AppRequestBuilder;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AlertDialog {
     pub message: String,
     pub affirmative: String,
@@ -34,13 +33,13 @@ impl AlertDialog {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DialogOperation {
     Toast(String),
     Alert(AlertDialog)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DialogOperationOutput {
     Toast,
     Alert { is_confirmed: bool }

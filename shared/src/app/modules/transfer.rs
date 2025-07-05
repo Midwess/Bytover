@@ -51,7 +51,7 @@ pub struct TransferModule {
     pub transfer_service: &'static TransferService
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TransferEvent {
     // Event from shell
     Launch(),

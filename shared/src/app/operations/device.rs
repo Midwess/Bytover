@@ -3,7 +3,6 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
 
 use crate::app::file_system::file::LocalResourcePath;
 use crate::app::AppRequestBuilder;
@@ -11,13 +10,13 @@ use crate::entities::device::DeviceInfo;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GeoLocation {
     pub latitude: f64,
     pub longitude: f64
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceOperation {
     GetDeviceInfo,
     GetGeoLocation,
@@ -25,14 +24,14 @@ pub enum DeviceOperation {
     LoadThumbnailPng(LocalResourcePath)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceOperationOutput {
     DeviceInfo(DeviceInfo),
     GetGeoLocation(Option<GeoLocation>),
     LoadThumbnailPng(Option<Vec<u8>>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OpenOperation {
     OpenSession(u64),
     Open(LocalResourcePath)

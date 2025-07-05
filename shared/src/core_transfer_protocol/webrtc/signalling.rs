@@ -1,3 +1,4 @@
+use super::errors::WebRtcErrors;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::core_transfer_protocol::webrtc::peer::WebRtcPeer;
@@ -6,6 +7,8 @@ use futures_util::lock::Mutex;
 use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
+use n0_future::time::Instant;
+use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::rpc_signalling::server::{
     AnswerMessage,
@@ -17,9 +20,6 @@ use schema::devlog::rpc_signalling::server::{
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use n0_future::time::Instant;
-use once_cell::sync::OnceCell;
-use super::errors::WebRtcErrors;
 
 pub enum WebRtcPeerConnectionProcess {
     Connecting(Instant),
@@ -116,14 +116,13 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        log::info!("Removing peer: {:?}", peer_id);
+        log::info!("Removing peer: {peer_id:?}");
         let mut peers = self.peers.lock().await;
         if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get()) {
             log::info!("Peer removed");
             drop(peers);
             peer.peer_disconnected().await;
-        }
-        else {
+        } else {
             log::info!("Peer not found {peer_id}");
         }
     }
@@ -143,19 +142,19 @@ impl SharedContext {
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
     }
-    
+
     pub async fn poll_timeout(&self) {
         let peers = self.peers.lock().await;
         let mut peers_to_remove = vec![];
         for (peer_id, peer) in peers.iter() {
             if let WebRtcPeerConnectionProcess::Connecting(connecting_time) = peer {
                 if Instant::now().duration_since(*connecting_time).as_secs() > 10 {
-                    log::info!("Peer not connected for 10 seconds: {:?}", peer_id);
-                    peers_to_remove.push(peer_id.clone());
+                    log::info!("Peer not connected for 10 seconds: {peer_id:?}");
+                    peers_to_remove.push(*peer_id);
                 }
             }
         }
-        
+
         for peer_id in peers_to_remove {
             self.remove_peer(&peer_id).await;
         }
@@ -301,7 +300,7 @@ impl Signaller for WebSignaller {
                 }
             } else {
                 if matches!(peer_event, PeerEvent::PeerLeft(_)) {
-                    log::info!("Peer left: {:?}", peer_event);
+                    log::info!("Peer left: {peer_event:?}");
                 }
 
                 return Ok(peer_event);

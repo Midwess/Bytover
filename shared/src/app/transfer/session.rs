@@ -3,20 +3,18 @@ use std::fmt::Display;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use uniffi::{Enum, Record};
-
 use crate::app::file_system::file::LocalResource;
 use crate::entities::peer::Peer;
 
 use super::target::TransferTarget;
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
     Send,
     Receive
 }
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferSessionStatus {
     Initializing,
     InProgress { bytes_per_second: u64, percentage: f64 },
@@ -44,7 +42,7 @@ impl Display for TransferSessionStatus {
     }
 }
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
@@ -53,7 +51,7 @@ pub struct TransferSession {
     pub target: TransferTarget
 }
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct TransferProgress {
     pub resource_order_id: u64,
     pub file_size: u64,
@@ -172,7 +170,7 @@ impl TransferProgress {
     }
 }
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferStatus {
     Pending,
     InProgress,

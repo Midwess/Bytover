@@ -1,13 +1,13 @@
-use futures_util::future::join_all;
-use std::collections::HashMap;
-use std::sync::{Arc, Weak};
 use futures::channel::oneshot;
+use futures_util::future::join_all;
 use futures_util::join;
-use n0_future::task::spawn;
 use futures_util::lock::Mutex;
+use n0_future::task::spawn;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
 
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -45,13 +45,14 @@ pub enum CloudTransferErrors {
     IOError(#[from] PersistenceError)
 }
 
-pub struct CloudService<T> where
+pub struct CloudService<T>
+where
     T: Clone,
     T: Send + Sync,
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub server: CloudServer<T>,
     pub core_bridge: Arc<dyn CoreBridge>,
@@ -62,12 +63,12 @@ pub struct CloudService<T> where
 
 impl<T> CloudService<T>
 where
-T: Clone,
-T: Send + Sync,
-T: tonic::client::GrpcService<tonic::body::Body>,
-T::Error: Into<tonic::codegen::StdError>,
-T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-<T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    T: Clone,
+    T: Send + Sync,
+    T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Error: Into<tonic::codegen::StdError>,
+    T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
         let password = match &session.target {

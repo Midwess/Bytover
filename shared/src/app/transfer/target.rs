@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use uniffi::Enum;
-
 use crate::entities::peer::Peer;
 
-#[derive(Debug, Enum, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TransferTarget {
     Nearby(Peer),
     Internet {

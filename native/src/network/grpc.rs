@@ -1,12 +1,12 @@
+use shared::core_api::network::InternetConnection;
+use shared::rpc::connection::RpcNetworkModule;
+use shared::rpc::errors::RpcErrors;
 use std::future::poll_fn;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tonic::codegen::Service;
 use tonic::transport::{Channel, ClientTlsConfig};
-use shared::core_api::network::InternetConnection;
-use shared::rpc::connection::RpcNetworkModule;
-use shared::rpc::errors::RpcErrors;
 
 #[derive(Clone)]
 pub struct RpcNetworkModuleImpl {

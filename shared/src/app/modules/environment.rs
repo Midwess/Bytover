@@ -6,7 +6,6 @@ use crate::entities::device::DeviceInfo;
 use core_services::logger;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
@@ -20,7 +19,7 @@ pub struct EnvironmentModule {
     pub authentication_service: &'static AuthenticationService
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
     AppLaunched
 }

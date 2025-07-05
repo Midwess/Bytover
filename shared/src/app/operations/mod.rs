@@ -18,14 +18,13 @@ use persistent::{PersistentOperation, PersistentOperationOutput};
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};
-use uniffi::Enum;
 use webview::{WebViewOperation, WebViewOperationOutput};
 
 use crate::errors::{DeviceError, NetworkError};
 
 use super::AppEvent;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CoreOperation {
     WebView(WebViewOperation),
     Device(DeviceOperation),
@@ -42,7 +41,7 @@ pub enum CoreOperation {
     Delay(Duration)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CoreOperationOutput {
     WebView(WebViewOperationOutput),
     Device(DeviceOperationOutput),

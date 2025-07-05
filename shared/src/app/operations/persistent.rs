@@ -10,11 +10,10 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uniffi::Enum;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperation {
     GenId(),
     Session(SessionPersistentOperation),
@@ -23,7 +22,7 @@ pub enum PersistentOperation {
     TransferSession(TransferSessionPersistentOperation)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourcePersistentOperation {
     Add(Vec<LocalResource>),
     Remove(u64),
@@ -34,7 +33,7 @@ pub enum LocalResourcePersistentOperation {
     AddThumbnail { png_bytes: Vec<u8>, resource_id: u64 }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourcePersistentOperationOutput {
     Add(Vec<LocalResource>),
     AddThumbnail(LocalResourcePath),
@@ -45,7 +44,7 @@ pub enum LocalResourcePersistentOperationOutput {
     FindAll(Vec<LocalResource>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum UserPersistentOperation {
     Save(User)
 }
@@ -54,12 +53,12 @@ impl Operation for UserPersistentOperation {
     type Output = UserPersistentOperationOutput;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum UserPersistentOperationOutput {
     Save()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionPersistentOperation {
     WriteToken(Token),
     WriteUser(User),
@@ -70,14 +69,14 @@ impl Operation for SessionPersistentOperation {
     type Output = SessionPersistentOperationOutput;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionPersistentOperationOutput {
     WriteToken(),
     WriteUser(),
     Get(Option<Session>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferSessionPersistentOperation {
     Save(TransferSession),
     UpdateProgresses(u64, Vec<TransferProgress>),
@@ -100,7 +99,7 @@ impl Operation for TransferSessionPersistentOperation {
     type Output = TransferSessionOperationOutput;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferSessionOperationOutput {
     Save(Option<TransferSession>),
     UpdateProgresses(Option<TransferSession>),
@@ -111,7 +110,7 @@ pub enum TransferSessionOperationOutput {
     GenerateThumbnailPath(HashMap<u64, LocalResourcePath>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperationOutput {
     Session(SessionPersistentOperationOutput),
     User(UserPersistentOperationOutput),

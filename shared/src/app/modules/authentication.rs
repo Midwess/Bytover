@@ -22,7 +22,7 @@ pub struct AuthenticationViewModel {
     pub user: Option<User>
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AuthenticationEvent {
     SignIn,
     SignUp,

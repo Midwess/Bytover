@@ -29,7 +29,7 @@ pub struct NearbyModule {
     pub nearby_service: &'static NearbyService
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum NearbyEvent {
     Launch(),
     StartIpAddressMonitor,

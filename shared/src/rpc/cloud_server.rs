@@ -1,8 +1,6 @@
-use tonic::body::Body;
-use tonic::client::GrpcService;
-use tonic::Request;
-use tower_service::Service;
-use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use crate::rpc::auth_provider::AuthProvider;
+use crate::rpc::connection::RpcNetworkModule;
+use crate::rpc::errors::RpcErrors;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{
@@ -15,10 +13,7 @@ use schema::devlog::bitbridge::{
     CreatePublicTransferSessionRequest,
     PublicTransferSessionMessage
 };
-use crate::rpc::auth_provider::AuthProvider;
-use crate::rpc::connection::RpcNetworkModule;
-use crate::rpc::errors::RpcErrors;
-use http_body::Body as HttpBody;
+use tonic::Request;
 
 pub struct CloudServer<T>
 where
@@ -27,10 +22,10 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
-    auth_provider: AuthProvider,
+    auth_provider: AuthProvider
 }
 
 impl<T> CloudServer<T>
@@ -40,22 +35,13 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
-    pub fn new(
-        rpc_module: Box<dyn RpcNetworkModule<T>>,
-        auth_provider: AuthProvider
-    ) -> Self {
-        Self {
-            rpc_module,
-            auth_provider
-        }
+    pub fn new(rpc_module: Box<dyn RpcNetworkModule<T>>, auth_provider: AuthProvider) -> Self {
+        Self { rpc_module, auth_provider }
     }
 
-    pub async fn create_public_transfer_session(
-        &self,
-        password: Option<String>
-    ) -> Result<PublicTransferSessionMessage, RpcErrors> {
+    pub async fn create_public_transfer_session(&self, password: Option<String>) -> Result<PublicTransferSessionMessage, RpcErrors> {
         let request_body = CreatePublicTransferSessionRequest { password };
         let channel = self.rpc_module.connect().await?;
 
@@ -82,7 +68,7 @@ where
 
         let mut request = Request::new(request_body);
         self.auth_provider.with_auth(&mut request).await?;
-        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let client = BitBridgeCloudServiceClient::new(channel);
         let response = client.clone().add_resources(request).await.map(|it| it.into_inner())?;
 
         Ok(response)
@@ -107,7 +93,7 @@ where
 
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let client = BitBridgeCloudServiceClient::new(channel);
         let response = client.clone().commit_file_upload(request).await.map(|it| it.into_inner())?;
 
         Ok(response.next_upload_request)
@@ -121,7 +107,7 @@ where
 
         self.auth_provider.with_auth(&mut request).await?;
 
-        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let client = BitBridgeCloudServiceClient::new(channel);
         let _ = client.clone().cancel_session(request).await.map(|it| it.into_inner())?;
 
         Ok(())

@@ -1,19 +1,18 @@
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use anyhow::anyhow;
 use ewebsock::{connect, Options, WsEvent, WsMessage};
+use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures_timer::Delay;
+use futures_util::lock::Mutex;
+use futures_util::SinkExt;
 use matchbox_socket::Signaller;
 use n0_future::task::{spawn, JoinHandle};
+use n0_future::time::Instant;
+use n0_future::StreamExt;
 use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
-use futures::channel::mpsc;
-use futures::channel::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
-use futures_timer::Delay;
-use futures_util::lock::Mutex;
-use futures_util::SinkExt;
-use n0_future::StreamExt;
-use n0_future::time::Instant;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -92,12 +91,10 @@ impl SignallingClient {
                     }
 
                     if let Ok(Some(msg_to_send)) = signal_receiver.try_next() {
-                        if msg_to_send.join.is_some() {
-                            if last_keep_alive.elapsed() <= min_keep_alive {
-                                last_keep_alive = Instant::now();
-                                // We avoid sending too much keep a live message
-                                continue;
-                            }
+                        if msg_to_send.join.is_some() && last_keep_alive.elapsed() <= min_keep_alive {
+                            last_keep_alive = Instant::now();
+                            // We avoid sending too much keep a live message
+                            continue;
                         }
 
                         let mut bytes = vec![];
@@ -138,7 +135,7 @@ impl SignallingClient {
             handle.abort();
             self.signal = None;
             let _ = self.sender.close().await;
-            let _ = self.sender.close_channel();
+            self.sender.close_channel();
         }
     }
 }

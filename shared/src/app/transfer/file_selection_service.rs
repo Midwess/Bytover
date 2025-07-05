@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
 use crate::app::file_system::file::{LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
@@ -10,7 +9,7 @@ use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
 
-#[derive(Debug, PartialEq, Eq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
     // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File

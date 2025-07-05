@@ -31,7 +31,7 @@ bincode = { workspace = true }
 erased-serde = { version = "0.4.5" }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
 thiserror = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots", "stream"] }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 futures-util = { workspace = true }
 url = { workspace = true }
@@ -39,7 +39,6 @@ prost = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
 chrono = { workspace = true }
-stunclient = { workspace = true }
 bytes = { workspace = true }
 anyhow = { workspace = true }
 flate2 = { workspace = true }

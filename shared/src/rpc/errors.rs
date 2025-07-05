@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use crate::errors::NetworkError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcErrors {
@@ -8,7 +7,7 @@ pub enum RpcErrors {
     #[error("Bad request {0}")]
     BadRequest(String),
     #[error("Internal server error {0}")]
-    InternalServerError(String),
+    InternalServerError(String)
 }
 impl From<tonic::Status> for RpcErrors {
     fn from(status: tonic::Status) -> Self {

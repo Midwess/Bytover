@@ -1,9 +1,9 @@
 use shared::core_api::{NetStream, NetStreamInner};
+use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use tokio::io::{duplex, AsyncWriteExt};
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 use url::Url;
-use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 
 pub struct NetStreamImpl {}
 

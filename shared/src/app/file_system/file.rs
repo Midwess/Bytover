@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use uniffi::{Enum, Record};
-
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct LocalResource {
     pub order_id: u64,
     pub name: String,
@@ -12,7 +10,7 @@ pub struct LocalResource {
     pub r#type: ResourceType
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum LocalResourcePath {
     // Relative from the workdir of application
     RelativePath { path: String, is_private: bool },
@@ -39,7 +37,7 @@ impl LocalResourcePath {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum ResourceType {
     Image,
     Video,

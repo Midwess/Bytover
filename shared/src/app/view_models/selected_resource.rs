@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {
     pub order_id: u64,
     pub name: String,

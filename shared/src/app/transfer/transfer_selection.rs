@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
-#[derive(Debug, PartialEq, Enum, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferMethodSelection {
     User(),
     Device(),
