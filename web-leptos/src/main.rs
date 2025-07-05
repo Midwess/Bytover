@@ -65,7 +65,7 @@ async fn main() -> std::io::Result<()> {
 
 
 #[cfg(feature = "ssr")]
-#[actix_web::get("style.css")]
+#[get("style.css")]
 async fn style(
     leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
 ) -> impl Responder {
@@ -76,7 +76,7 @@ async fn style(
 }
 
 #[cfg(feature = "ssr")]
-#[actix_web::get("favicon.ico")]
+#[get("favicon.ico")]
 async fn favicon(
     leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
 ) -> actix_web::Result<actix_files::NamedFile> {

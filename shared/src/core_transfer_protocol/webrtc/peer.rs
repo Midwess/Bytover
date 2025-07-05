@@ -11,7 +11,6 @@ use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel
 use crate::core_transfer_protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::core_transfer_protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
 use crate::entities::peer::Peer as PeerEntity;
-use core_services::db::repository::abstraction::table::Table;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures_util::SinkExt;

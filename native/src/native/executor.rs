@@ -21,7 +21,7 @@ pub struct NativeExecutor {
 }
 
 impl NativeExecutor {
-    pub async fn handle(&self, request_id: u32, effect: CoreOperation, shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
+    pub async fn handle(&self, request_id: u32, effect: CoreOperation, _shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
