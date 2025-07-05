@@ -4,13 +4,18 @@ pub mod file_system;
 pub mod modules;
 pub mod nearby;
 pub mod operations;
+pub mod repository;
 pub mod system;
 pub mod transfer;
 pub mod view_models;
 
-// pub mod bridge;
+pub use crate::app::operations::CoreOperation;
 
-use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModel, EnvironmentModule, EnvironmentViewModel};
+use crate::app::authentication::service::AuthenticationService;
+use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
+use crate::app::nearby::nearby_services::NearbyService;
+use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
+use crate::app::transfer::transfer_service::TransferService;
 use crux_core::capability::CapabilityContext;
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::Capability;
@@ -19,14 +24,12 @@ use modules::authentication::{AuthenticationEvent, AuthenticationModel, Authenti
 use modules::nearby::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
-use operations::CoreOperation;
 use serde::{Deserialize, Serialize};
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppRequestBuilder<T> = RequestBuilder<<BitBridge as App>::Effect, <BitBridge as App>::Event, T>;
 
-#[derive(Default)]
 pub struct BitBridge {
     environment: EnvironmentModule,
     authentication: AuthenticationModule,
@@ -34,9 +37,28 @@ pub struct BitBridge {
     nearby: NearbyModule
 }
 
+impl Default for BitBridge {
+    fn default() -> Self {
+        Self {
+            environment: EnvironmentModule {
+                authentication_service: AuthenticationService::instance()
+            },
+            authentication: AuthenticationModule {
+                authentication_service: AuthenticationService::instance()
+            },
+            transfer: TransferModule {
+                transfer_service: TransferService::instance(),
+                resource_selection_service: ResourceTransferSelectionService::instance()
+            },
+            nearby: NearbyModule {
+                nearby_service: NearbyService::instance()
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
-    environment: EnvironmentModel,
     authentication: AuthenticationModel,
     transfer: TransferModel,
     nearby: NearbyModel

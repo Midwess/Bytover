@@ -1,14 +1,13 @@
-use rand::seq::IndexedRandom;
+use chrono::Utc;
+use matchbox_protocol::PeerId;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
-use uniffi::Record;
 
 use crate::entities::device::DeviceInfo;
 
 // Peer is represent for the information that you want other
 // people to know about
-#[derive(Debug, Clone, Record, Serialize, Deserialize, PartialEq, Eq, SurrealDerive)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Peer {
     pub id: String,
     pub name: Option<String>,
@@ -18,8 +17,12 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn id(&self) -> u128 {
-        self.id.parse::<u128>().expect("Failed to parse peer id")
+    pub fn id(&self) -> uuid::Uuid {
+        self.id.clone().parse().unwrap()
+    }
+
+    pub fn peer_id(&self) -> PeerId {
+        self.id().into()
     }
 
     pub fn random_avatar() -> String {
@@ -28,8 +31,8 @@ impl Peer {
             "Giraffe", "Koala", "Lion", "Owl", "Panda"
         ];
 
-        let mut rng = rand::rng();
-        let chosen_animal = animals.choose(&mut rng).unwrap_or(&"Panda"); // Default to Panda if slice is empty (shouldn't happen here)
+        let rng = (Utc::now().timestamp_millis() % (animals.len() as i64)) as usize;
+        let chosen_animal = animals[rng];
 
         format!("https://cdn.devlog.studio/public/animal_avatars/{chosen_animal}.png")
     }

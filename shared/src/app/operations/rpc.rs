@@ -3,7 +3,6 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
@@ -12,13 +11,13 @@ use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperation {
     GetSignInUrl(DeviceInfo),
     GetMe()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     NetworkError(NetworkError),
     SignInUrl(String),

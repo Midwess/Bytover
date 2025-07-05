@@ -1,21 +1,21 @@
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use futures_util::StreamExt;
-use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::bitbridge::{ResourceTypeMessage, TransferResponseMessage, TransferSessionMessage};
+use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::database::TransferSessionOperation;
 use crate::app::operations::dialog::DialogOperation;
-use crate::app::operations::local_storage::LocalStorageOperation;
+use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
-use crate::persistence::transfer_session::TransferSessionId;
 
-use super::session::{TransferSession, TransferType};
+use super::session::TransferSession;
 use super::target::TransferTarget;
 
 pub struct TransferService {}
@@ -31,14 +31,15 @@ impl TransferService {
         Self {}
     }
 
+    pub fn instance() -> &'static TransferService {
+        static INSTANCE: OnceLock<TransferService> = OnceLock::new();
+        INSTANCE.get_or_init(TransferService::new)
+    }
+
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
         log::info!(target: "transfer", "Loading transfer sessions");
-        let receive_session_id = TransferSessionId {
-            transfer_type: Some(TransferType::Receive),
-            ..Default::default()
-        };
 
-        let receive_sessions = TransferSessionOperation::get_all(receive_session_id).into_future(cmd.clone()).await;
+        let receive_sessions = TransferSessionPersistentOperation::get_all_received_sessions().into_future(cmd.clone()).await;
 
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: receive_sessions,
@@ -57,13 +58,11 @@ impl TransferService {
                 .into_future(cmd.clone())
                 .await
             {
-                log::error!(target: "transfer", "Failed to cancel transfer: {:?}", error);
+                log::error!(target: "transfer", "Failed to cancel transfer: {error:?}");
             }
         }
 
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        let path = workdir.session_folder(transfer_session.order_id);
-        let _ = LocalStorageOperation::delete(LocalResourcePath::AbsolutePath(path)).into_future(cmd.clone()).await;
+        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id).into_future(cmd.clone()).await;
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
@@ -72,24 +71,7 @@ impl TransferService {
         }));
     }
 
-    pub async fn transfer(&self, mut selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
-        let mut update_resources = vec![];
-        for selected_resource in selected_resources.iter_mut() {
-            if selected_resource.validate(cmd.clone()).await {
-                update_resources.push(selected_resource.clone());
-            }
-        }
-
-        if !update_resources.is_empty() {
-            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-                loaded: vec![],
-                new: vec![],
-                removed: vec![],
-                updated: update_resources
-            }));
-        }
-
-        let selected_resources = selected_resources.into_iter().filter(|it| it.is_valid).collect::<Vec<_>>();
+    pub async fn transfer(&self, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
         if selected_resources.is_empty() {
             DialogOperation::toast("No valid resources selected".to_string()).into_future(cmd.clone()).await;
             return;
@@ -111,41 +93,13 @@ impl TransferService {
             }
             TransferTarget::Nearby(_) => {
                 log::info!("Creating nearby session");
-                let result = TransferSession::send(selected_resources, transfer_target).await;
+                let order_id = PersistentOperation::gen_id().into_future(cmd.clone()).await;
+                let result = TransferSession::send(order_id, selected_resources, transfer_target).await;
                 log::info!("Created nearby session");
 
                 result
             }
         };
-
-        for resource in transfer_session.resources.iter_mut() {
-            resource.is_valid = LocalStorageOperation::is_file_exists(resource.path.clone()).into_future(cmd.clone()).await;
-            if !resource.is_valid {
-                cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
-                    loaded: vec![],
-                    new: vec![],
-                    removed: vec![],
-                    updated: vec![resource.clone()]
-                }));
-
-                continue;
-            }
-
-            resource.path = LocalResourcePath::AbsolutePath(
-                LocalStorageOperation::get_absolute_path(resource.path.clone()).into_future(cmd.clone()).await
-            );
-
-            resource.thumbnail_path = match &resource.thumbnail_path {
-                Some(path) => Some(LocalResourcePath::AbsolutePath(
-                    LocalStorageOperation::get_absolute_path(path.clone()).into_future(cmd.clone()).await
-                )),
-                None => None
-            };
-
-            if resource.r#type == ResourceType::Folder {
-                resource.name = format!("{}.tar", resource.name);
-            }
-        }
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
@@ -155,7 +109,7 @@ impl TransferService {
             removed: vec![]
         }));
 
-        log::info!(target: "transfer", "Sending resources to peer: {:?}", transfer_target_id);
+        log::info!(target: "transfer", "Sending resources to peer: {transfer_target_id:?}");
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -186,18 +140,18 @@ impl TransferService {
                         break;
                     }
                     other => {
-                        log::error!(target: "transfer", "Unexpected transfer output: {:?}", other);
+                        log::error!(target: "transfer", "Unexpected transfer output: {other:?}");
                         break;
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    log::error!(target: "transfer", "Connection error: {:?}", error);
+                    log::error!(target: "transfer", "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
-                    log::error!(target: "transfer", "Device error: {:?}", error);
+                    log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
                 _ => {
@@ -225,21 +179,44 @@ impl TransferService {
         }));
     }
 
-    pub async fn received_session_request(
-        &self,
-        (request_id, remote_session): (String, TransferSessionMessage),
-        peer: Peer,
-        cmd: AppCommandContext
-    ) {
+    pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
         let peer_id = peer.id();
+        let generate_file_paths_request = {
+            let mut result = HashMap::new();
+            for resource in remote_session.resources.iter() {
+                result.insert(resource.order_id as u64, resource.name.clone());
+            }
+
+            result
+        };
+
+        let mut generated_thumbnails_paths =
+            TransferSessionPersistentOperation::generate_thumbnail_paths(generate_file_paths_request.keys().copied().collect())
+                .into_future(cmd.clone())
+                .await;
+
+        let mut generated_saved_paths =
+            TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)
+                .into_future(cmd.clone())
+                .await;
+
+        log::info!(
+            target: "transfer",
+            "Received session request from peer: {peer_id:?}: {remote_session:?}"
+        );
+
         let mut resources = vec![];
-        let workdir = LocalStorageOperation::get_work_dir_path_cmd().into_future(cmd.clone()).await;
-        let thumbnail_dir = workdir.thumbnails("".to_string());
         for resource_request in remote_session.resources {
+            let order_id = resource_request.order_id as u64;
+            let Some(saved_path) = generated_saved_paths.remove(&order_id) else {
+                continue;
+            };
+
+            let generated_thumbnail_path = generated_thumbnails_paths.remove(&order_id);
+
             resources.push(LocalResource {
-                is_valid: true,
-                path: LocalResourcePath::AbsolutePath(workdir.resources(remote_session.order_id, resource_request.name.clone())),
-                thumbnail_path: None,
+                path: saved_path,
+                thumbnail_path: generated_thumbnail_path,
                 r#type: ResourceType::from(
                     ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
                 ),
@@ -259,13 +236,10 @@ impl TransferService {
 
         cmd.notify_event(event);
 
-        let response = Response::TransferResponse(TransferResponseMessage {});
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
-            thumbnail_dir,
-            peer_id,
-            session: transfer_session.clone(),
-            peer_request_id: request_id,
-            response
+            peer_id: peer_id.to_string(),
+            session: Some(transfer_session.clone()),
+            session_id: transfer_session.order_id
         });
 
         let mut stream = cmd.stream_from_shell(response);
@@ -295,18 +269,32 @@ impl TransferService {
                         log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
                         break;
                     }
+                    TransferOperationOutput::ThumbnailFullFilled {
+                        session_id,
+                        local_resource_path,
+                        resource_id
+                    } => {
+                        log::info!("Received thumbnail full filled for resource {resource_id}");
+                        let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
+                            session_id,
+                            resource_id,
+                            path: local_resource_path
+                        });
+
+                        cmd.notify_shell(CoreOperation::Notified(request));
+                    }
                     _ => {
                         continue;
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    log::error!(target: "transfer", "Connection error: {:?}", error);
+                    log::error!(target: "transfer", "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
-                    log::error!(target: "transfer", "Device error: {:?}", error);
+                    log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
                 _ => {

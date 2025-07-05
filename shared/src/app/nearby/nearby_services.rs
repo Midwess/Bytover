@@ -1,7 +1,5 @@
+use std::sync::OnceLock;
 use std::time::Duration;
-
-use futures_util::StreamExt;
-use ulid::Ulid;
 
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::nearby::NearbyEvent;
@@ -14,14 +12,21 @@ use crate::app::transfer::target::TransferTarget;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
+use futures_util::StreamExt;
+use uuid::Uuid;
 
 pub struct NearbyService {}
 
 impl NearbyService {
+    pub fn instance() -> &'static NearbyService {
+        static INSTANCE: OnceLock<NearbyService> = OnceLock::new();
+        INSTANCE.get_or_init(|| NearbyService {})
+    }
+
     pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
 
-        let peer_id = Ulid::new().0.to_string();
+        let peer_id = Uuid::new_v4().to_string();
 
         let peer = match user {
             Some(user) => Peer {
@@ -66,12 +71,18 @@ impl NearbyService {
                     });
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: "nearby", "Device error: {:?}", error);
+                    log::error!(target: "nearby", "Device error: {error:?}");
                     ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped");
+                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    break;
+                }
+                CoreOperationOutput::Void => {}
+                CoreOperationOutput::ConnectionError(error) => {
+                    log::error!(target: "nearby", "Connection error: {error:?}");
                     ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
@@ -110,38 +121,21 @@ impl NearbyService {
 
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
-                    request_id,
-                    remote_session
-                }) => {
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
                     log::info!(target: ns.as_str(), "Received session request from peer: {}", peer.id);
                     let request = AppEvent::Transfer(TransferEvent::TransferRequest {
-                        request_id,
                         remote_session,
                         peer: peer.clone()
                     });
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::ConnectionError(error) => {
-                    log::error!(target: ns.as_str(), "Connection error: {:?}", error);
+                    log::error!(target: ns.as_str(), "Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: ns.as_str(), "Device error: {:?}", error);
+                    log::error!(target: ns.as_str(), "Device error: {error:?}");
                     break;
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::ThumbnailFullfillment {
-                    session_id,
-                    resource_id,
-                    path
-                }) => {
-                    log::info!(target: ns.as_str(), "Received thumbnail fullfillment from peer: {}", peer.id);
-                    let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
-                        session_id,
-                        resource_id,
-                        path: path.clone()
-                    });
-                    ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::Void => {
                     continue;

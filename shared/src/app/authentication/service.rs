@@ -1,8 +1,6 @@
-use devlog_sdk::distributed_id::gen_id;
-
 use crate::app::modules::authentication::AuthenticationEvent;
-use crate::app::operations::database::SessionOperation;
 use crate::app::operations::device::DeviceOperation;
+use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
@@ -10,22 +8,30 @@ use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::token::Token;
 use url::Url;
 
+use devlog_sdk::distributed_id::gen_id;
+use std::sync::OnceLock;
+
 pub struct AuthenticationService {}
 
 impl AuthenticationService {
+    pub fn instance() -> &'static Self {
+        static INSTANCE: OnceLock<AuthenticationService> = OnceLock::new();
+        INSTANCE.get_or_init(|| AuthenticationService {})
+    }
+
     pub async fn update_signin_session(&self, ctx: AppCommandContext) {
         // Call API to update the user info
         log::info!(target: "auth", "Updating sign in session");
         let mut user = match RpcOperation::get_me().into_future(ctx.clone()).await {
             Ok(user) => Some(user),
             Err(e) => {
-                log::error!(target: "auth", "Failed to get user info: {:?}", e);
+                log::error!(target: "auth", "Failed to get user info: {e:?}");
                 None
             }
         };
 
         if user.is_none() {
-            let session = SessionOperation::get_session().into_future(ctx.clone()).await;
+            let session = SessionPersistentOperation::get_session().into_future(ctx.clone()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {
                 user.replace(user_info);
             }
@@ -33,7 +39,7 @@ impl AuthenticationService {
             // User not signined in
             return;
         } else {
-            SessionOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
+            SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
         }
 
         let user = user.unwrap();
@@ -46,7 +52,7 @@ impl AuthenticationService {
         let url = match RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await {
             Ok(url) => url,
             Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {:?}", e);
+                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
                 return;
             }
         };
@@ -71,12 +77,12 @@ impl AuthenticationService {
         };
 
         if token.value.is_empty() {
-            log::error!(target: "auth", "Failed to get access token from auth response {}", redirect_url);
+            log::error!(target: "auth", "Failed to get access token from auth response {redirect_url}");
             return;
         }
 
         log::info!("Saving token");
-        SessionOperation::save_token(token).into_future(ctx.clone()).await;
+        SessionPersistentOperation::save_token(token).into_future(ctx.clone()).await;
         log::info!("Updating user");
         self.update_signin_session(ctx).await;
     }

@@ -1,21 +1,19 @@
 use chrono::Local;
 use futures_util::StreamExt;
-use geo_types::Coord;
-use h3ron::{H3Cell, ToCoordinate};
+use h3o::{LatLng, Resolution};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use uniffi::Enum;
 
 use crate::app::operations::device::GeoLocation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::AppCommandContext;
 use crate::errors::NetworkError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Enum)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FindingScope {
     Global(String),
     Local(String),
-    Location(String)
+    Location(u64)
 }
 
 impl FindingScope {
@@ -33,13 +31,8 @@ impl FindingScope {
         let lat = geo_location.latitude;
         let lng = geo_location.longitude;
 
-        // Use resolution 12 for cells, approximately 11m edge length
-        let resolution = 12;
-
-        // Get the center cell
-        let Ok(center) = H3Cell::from_coordinate(Coord { x: lng, y: lat }, resolution) else {
-            return vec![];
-        };
+        let latlng = LatLng::new(lat, lng).unwrap();
+        let center = latlng.to_cell(Resolution::Twelve);
 
         let mut cells = Vec::with_capacity(5);
         let mut cell_set = HashSet::new();
@@ -49,68 +42,12 @@ impl FindingScope {
         cells.push(center_str.clone());
         cell_set.insert(center_str);
 
-        // Get all neighbors arround the center cell
-        let Ok(k_ring) = center.grid_ring_unsafe(1) else {
-            // If we can't get neighbors, just return the center cell
-            return vec![Self::Location(
-                center.to_string()
-            )];
-        };
-
-        let neighbors: Vec<H3Cell> = k_ring.into_iter().filter(|cell| *cell != center).collect();
-
-        let Ok(center_coord) = center.to_coordinate() else {
-            return vec![Self::Location(
-                center.to_string()
-            )];
-        };
-
-        let mut neighbors_with_angles = Vec::new();
-        for neighbor in neighbors {
-            if let Ok(neighbor_coord) = neighbor.to_coordinate() {
-                // Calculate angle from center to neighbor (in radians)
-                let dx = neighbor_coord.x - center_coord.x;
-                let dy = neighbor_coord.y - center_coord.y;
-                let angle = dy.atan2(dx);
-
-                neighbors_with_angles.push((neighbor, angle));
-            }
-        }
-
-        neighbors_with_angles.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        // Select neighbors at specific positions:
-        // - North (top): closest to π/2 (90°)
-        // - Northeast (top-right): closest to π/4 (45°)
-        // - East (right): closest to 0°
-        // - Southeast (bottom-right): closest to -π/4 (-45°)
-        // - South (bottom): closest to -π/2 (-90°)
-
-        let positions = [
-            (std::f64::consts::FRAC_PI_2, "top"),           // North (90°)
-            (std::f64::consts::FRAC_PI_4, "top-right"),     // Northeast (45°)
-            (0.0, "right"),                                 // East (0°)
-            (-std::f64::consts::FRAC_PI_4, "bottom-right"), // Southeast (-45°)
-            (-std::f64::consts::FRAC_PI_2, "bottom")        // South (-90°)
-        ];
-
-        for (target_angle, _position) in positions {
-            // Find the neighbor closest to this angle
-            if let Some((neighbor, _)) = neighbors_with_angles.iter().min_by(|(_, angle1), (_, angle2)| {
-                let diff1 = (angle1 - target_angle).abs();
-                let diff2 = (angle2 - target_angle).abs();
-                diff1.partial_cmp(&diff2).unwrap_or(std::cmp::Ordering::Equal)
-            }) {
-                let neighbor_str = neighbor.to_string();
-                if !cell_set.contains(&neighbor_str) {
-                    cells.push(neighbor_str.clone());
-                    cell_set.insert(neighbor_str);
-                }
-            }
-        }
-
-        // Convert H3 cell IDs to FindingScope instances
-        cells.into_iter().map(Self::Location).collect()
+        center
+            .grid_disk::<Vec<_>>(1)
+            .into_iter()
+            .filter(|it| (*it).eq(&center))
+            .map(|it| Self::Location(it.into()))
+            .collect::<Vec<Self>>()
     }
 
     pub fn from_string(s: String) -> Option<Self> {
@@ -128,7 +65,11 @@ impl FindingScope {
         } else if parts[0] == "local" {
             return Some(FindingScope::Local(scope_key.to_string()));
         } else if parts[0] == "location" {
-            return Some(FindingScope::Location(scope_key.to_string()));
+            let Ok(id) = scope_key.parse::<u64>() else {
+                return None;
+            };
+
+            return Some(FindingScope::Location(id));
         }
 
         None

@@ -2,10 +2,9 @@ use std::future::Future;
 
 use crux_core::capability::Operation;
 use crux_core::Command;
-use schema::devlog::bitbridge::peer_message_body::Response;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
@@ -18,20 +17,23 @@ pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
     AnswerSessionRequest {
-        thumbnail_dir: String,
-        peer_id: u128,
-        session: TransferSession,
-        peer_request_id: String,
-        response: Response
+        peer_id: String,
+        session: Option<TransferSession>,
+        session_id: u64
     },
-    CancelSession(Option<u128>, u64)
+    CancelSession(Option<String>, u64)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperationOutput {
     CreateCloudSession(TransferSession),
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted(TransferSessionStatus),
+    ThumbnailFullFilled {
+        local_resource_path: LocalResourcePath,
+        resource_id: u64,
+        session_id: u64
+    },
     TransferCanceled
 }
 
@@ -49,7 +51,7 @@ impl TransferOperation {
     }
 
     pub fn cancel_session(
-        peer_id: Option<u128>,
+        peer_id: Option<String>,
         session_id: u64
     ) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
         Command::request_from_shell(CoreOperation::Transfer(TransferOperation::CancelSession(peer_id, session_id))).map(

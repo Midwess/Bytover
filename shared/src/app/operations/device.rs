@@ -3,14 +3,14 @@ use std::future::Future;
 use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
-use uniffi::{Enum, Record};
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GeoLocation {
     pub latitude: f64,
     pub longitude: f64
@@ -19,13 +19,22 @@ pub struct GeoLocation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceOperation {
     GetDeviceInfo,
-    GetGeoLocation
+    GetGeoLocation,
+    Open(OpenOperation),
+    LoadThumbnailPng(LocalResourcePath)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceOperationOutput {
     DeviceInfo(DeviceInfo),
-    GetGeoLocation(Option<GeoLocation>)
+    GetGeoLocation(Option<GeoLocation>),
+    LoadThumbnailPng(Option<Vec<u8>>)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum OpenOperation {
+    OpenSession(u64),
+    Open(LocalResourcePath)
 }
 
 impl Operation for DeviceOperation {
@@ -44,6 +53,32 @@ impl DeviceOperation {
         Command::request_from_shell(CoreOperation::Device(DeviceOperation::GetGeoLocation)).map(|output| match output {
             CoreOperationOutput::Device(DeviceOperationOutput::GetGeoLocation(geo_location)) => geo_location,
             _ => None
+        })
+    }
+
+    pub fn load_thumbnail_png(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::LoadThumbnailPng(path))).map(|output| match output {
+            CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(path)) => path,
+            _ => None
+        })
+    }
+}
+
+impl OpenOperation {
+    pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::OpenSession(
+            session_id
+        ))))
+        .map(|it| match it {
+            CoreOperationOutput::Void => (),
+            _ => panic!("Invalid output for DeviceOperation::OpenSession")
+        })
+    }
+
+    pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::Open(path)))).map(|it| match it {
+            CoreOperationOutput::Void => (),
+            _ => panic!("Invalid output for DeviceOperation::Open")
         })
     }
 }

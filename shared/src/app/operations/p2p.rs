@@ -4,9 +4,7 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
-use uniffi::Enum;
 
-use crate::app::file_system::file::LocalResourcePath;
 use crate::app::nearby::finding_scope::FindingScope;
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
@@ -14,31 +12,20 @@ use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperation {
     StartNearbyServer(Peer),
     UpdateFindingScopes(Vec<FindingScope>),
     PeerEvents(String)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Enum)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperationOutput {
     PeerConnected(Peer),
     PeerDisconnected(),
-    ReceivedSessionRequest {
-        request_id: String,
-        remote_session: TransferSessionMessage
-    },
-    CancelSessionRequest {
-        request_id: String,
-        session_id: u64
-    },
-    NearbyServerStopped,
-    ThumbnailFullfillment {
-        session_id: u64,
-        resource_id: u64,
-        path: LocalResourcePath
-    }
+    ReceivedSessionRequest { remote_session: TransferSessionMessage },
+    CancelSessionRequest { session_id: u64 },
+    NearbyServerStopped
 }
 
 impl Operation for P2POperation {

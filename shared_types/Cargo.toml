@@ -10,4 +10,5 @@ edition.workspace = true
 anyhow.workspace = true
 crux_core.workspace = true
 shared = { path = "../shared", features = ["typegen"] }
-schema = { path = "../libs/schema/rust" }
+native = { path = "../native", features = ["typegen"] }
+schema = { path = "../libs/schema/rust", features = ["client"] }

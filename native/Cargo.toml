@@ -1,0 +1,58 @@
+[package]
+name = "native"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+name = "native"
+required-features = ["lib"]
+
+[features]
+typegen = ["crux_core/typegen"]
+
+# All of theses deps are required but because optimization in build time
+# we need to mark it as optional, then enable it in the feature ["lib"]
+[dependencies]
+crux_core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+lazy_static = { workspace = true }
+uniffi = { workspace = true, features = ["cli"] }
+shared = { path = "../shared" }
+core-services = { workspace = true, features = ["db-red", "local-storage", "retry"] }
+devlog-sdk = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+async-trait = { workspace = true }
+log = { workspace = true }
+bincode = { workspace = true }
+erased-serde = { version = "0.4.5" }
+tonic = { workspace = true, features = ["tls-webpki-roots"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots", "stream"] }
+futures-util = { workspace = true }
+url = { workspace = true }
+bytes = { workspace = true }
+anyhow = { workspace = true }
+mime_guess = { workspace = true }
+tokio-util = {workspace = true}
+redb = { workspace = true }
+
+[target.uniffi-bindgen.dependencies]
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build", "cli"] }
+
+[package.metadata]
+# Will log the query command at runtime
+surreal_enable_log = true
+# Will log the generated code at build time
+surreal_enable_compile_log = true
+# Change the naming convention of generated statement into camel case
+surreal_use_camel_case = false
+# The log namespace, apply for both build time log and runtime log
+surreal_namespace = "surrealql"
+# The macro name that use for info log
+surreal_info_log_macro = "log::info"
+# The macro name that use for warning log
+surreal_warn_log_macro = "log::info"

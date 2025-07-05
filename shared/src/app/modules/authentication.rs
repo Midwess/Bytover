@@ -1,15 +1,16 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
+use crate::app::authentication::service::AuthenticationService;
 use crate::app::{AppEvent, AppModel, BitBridge};
-use crate::di_container::DiContainer;
 use crate::entities::user::User;
 
 use super::nearby::NearbyEvent;
 use super::AppModule;
 
-#[derive(Default)]
-pub struct AuthenticationModule {}
+pub struct AuthenticationModule {
+    pub authentication_service: &'static AuthenticationService
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
@@ -21,7 +22,7 @@ pub struct AuthenticationViewModel {
     pub user: Option<User>
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, uniffi::Enum)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AuthenticationEvent {
     SignIn,
     SignUp,
@@ -42,13 +43,11 @@ impl AppModule<BitBridge> for AuthenticationModule {
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             AuthenticationEvent::SignIn => Command::new(|ctx| async {
-                let auth_service = DiContainer::get_instance().get_authentication_service();
-                auth_service.signin(ctx).await;
+                self.authentication_service.signin(ctx).await;
             }),
             AuthenticationEvent::SignOut => Command::done(),
             AuthenticationEvent::OnRedirected { url } => Command::new(|ctx| async {
-                let auth_service = DiContainer::get_instance().get_authentication_service();
-                auth_service.handle_auth_response(url, ctx).await;
+                self.authentication_service.handle_auth_response(url, ctx).await;
             }),
             AuthenticationEvent::SignUp => Command::done(),
             AuthenticationEvent::OnSignInSuccess { user } => {

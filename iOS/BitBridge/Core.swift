@@ -15,6 +15,10 @@ import CoreLocation
 import Combine
 import QuickLookThumbnailing
 
+enum MyError: Error {
+    case invalidInput(reason: String)
+}
+
 final class SingleWaiter<T> {
     private var continuation: CheckedContinuation<T, Never>?
 
@@ -39,6 +43,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var quicklook_path: CurrentValueSubject<LocalResourcePath?, Never> = .init(nil)
     var cloudSession: CurrentValueSubject<CloudSession?, Never> = .init(nil)
     var selectedTransfer: CurrentValueSubject<TransferMethodSelection, Never> = .init(.internet)
+    var privatePath: URL?
+    var publicPath: URL?
 
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
@@ -114,39 +120,28 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func processEffect(_ request: Request) async -> Data {
         switch request.effect {
         case .appCapabilities(.initNativeExecutor):
-            self.nativeProcessor = NativeProcessor(self)
+            self.nativeProcessor = await NativeProcessor.init(self)
             self.checkLocationAuthorization()
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
         case .appCapabilities(.webView(.openUrl(let url))):
             openURL(URL(string: url)!)
             return handleResponse(request.id, Data(try! CoreOperationOutput.webView(WebViewOperationOutput.openUrl).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.loadFileThumbnailPng(let localStoragePath))):
+        case .appCapabilities(.device(.loadThumbnailPng(let localStoragePath))):
             switch localStoragePath {
             case .platformIdentifier(let identifier):
                 let thumbnail = await self.getThumbnailData(for: identifier)
-                return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
+                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
             default:
                 let errorMessage = "Loading thumbnail for non-platform identifier paths is unsupported"
-                return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.loadFileThumbnailPng(nil)).bincodeSerialize()))
+                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(nil)).bincodeSerialize()))
             }
-        case .appCapabilities(.localStorage(.open(let path))):
+        case .appCapabilities(.device(.open(.open(let path)))):
             await self.open(path: path)
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.localStorage(.getWorkDirPath)):
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(LocalStorageOperationOutput.workDirPath(WorkDir(private_path: getDocumentsDirectory(isPrivate: true).path, public_path: getDocumentsDirectory(isPrivate: false).path))).bincodeSerialize()))
-        case .appCapabilities(.localStorage(.getAbsolutePath(let path))):
-            let absolutePath = switch path {
-            case .absolutePath(let absolute):
-                absolute
-            case .platformIdentifier(let identifier):
-                await getAbsoluteUrl(from: identifier) ?? ""
-            case .relativePath(let relative, let isPrivate):
-                getDocumentsDirectory(isPrivate: isPrivate).appendingPathComponent(relative).path
-            }
-
-            return handleResponse(request.id, Data(try! CoreOperationOutput.localStorage(.getAbsolutePath(absolutePath)).bincodeSerialize()))
-        case .appCapabilities(.localStorage(let ops)):
-            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.localStorage(ops).bincodeSerialize()))
+        case .appCapabilities(.device(.open(.openSession(let path)))):
+            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+        case .appCapabilities(.persistent(let ops)):
+            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.persistent(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
@@ -167,8 +162,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .appCapabilities(.void):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
-        case .appCapabilities(.database(let database)):
-            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.database(database).bincodeSerialize()))
         case .appCapabilities(.render):
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
@@ -197,11 +190,29 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         }
     }
 
-    func msgFromNative(_ event: Data) async {
+    func msgFromNative(_ event: Data) async -> Data {
         let event: MessageToShell = try! .bincodeDeserialize(input: event.bytes)
         switch event {
         case .handleResponse(let id, let response):
             await self._handleResponse(id, response)
+            return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
+        case .pathResolver(.getAbsolutePath(let path)):
+            let result = await self.resolveAbsolutePath(path: path) ?? ""
+            return Data(try! MessageToShellResponse.pathResolverResponse(.getAbsolutePath(absolute_path: result)).bincodeSerialize())
+        case .pathResolver(.getLocalResourcePath(let absolute_path)):
+            let result = try! await self.resolveRelativePath(absolutePath: absolute_path)
+            return Data(try! MessageToShellResponse.pathResolverResponse(.getLocalResourcePath(path: result)).bincodeSerialize())
+        case .pathResolver(.getSessionDirPath(let session_id)):
+            let public_dir = self.getDocumentsDirectory(isPrivate: false).path
+            let session_dir = "\(public_dir)/session-\(session_id)"
+            return Data(try! MessageToShellResponse.pathResolverResponse(.getSessionDirPath(path: session_dir)).bincodeSerialize())
+        case .pathResolver(.getSystemDirPath):
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path
+            return Data(try! MessageToShellResponse.pathResolverResponse(.getSystemDirPath(path: private_dir)).bincodeSerialize())
+        case .pathResolver(.getThumbnailDirPath):
+            let private_dir = self.getDocumentsDirectory(isPrivate: true).path
+            let thumbnail_dir = "\(private_dir)/thumbnails"
+            return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
         }
     }
 
@@ -237,7 +248,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     func onFileSelected(urls: [URL]) async {
         await self.update(.transfer(.beginLoadingResources))
         for url in urls {
-            url.startAccessingSecurityScopedResource()
+            _ = url.startAccessingSecurityScopedResource()
 
             guard let bookmarkData = try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil) else {
                 continue
@@ -319,8 +330,17 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
 
     func getDocumentsDirectory(isPrivate: Bool) -> URL {
-        let privatePath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        let publicPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if privatePath != nil && isPrivate {
+            return privatePath!
+        }
+
+        if publicPath != nil && !isPrivate {
+            return publicPath!
+        }
+
+        privatePath = try! FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+
+        publicPath = try! FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
 
         return isPrivate ? privatePath! : publicPath!
     }
@@ -456,6 +476,45 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return nil
         }
     }
+
+    func resolveAbsolutePath(path: LocalResourcePath) async -> String? {
+        switch path {
+        case .absolutePath(let path):
+            return path
+        case .relativePath(let path, let isPrivate):
+            let workdir = self.getDocumentsDirectory(isPrivate: isPrivate)
+            let path = workdir.appendingPathComponent(path).path
+            return path
+        case .platformIdentifier(let identifier):
+            return await self.getAbsoluteUrl(from: identifier)
+        }
+    }
+
+    func resolveRelativePath(absolutePath: String) async throws -> LocalResourcePath {
+        let private_path = self.getDocumentsDirectory(isPrivate: true).path
+        let public_path = self.getDocumentsDirectory(isPrivate: false).path
+        if absolutePath.hasPrefix(private_path) {
+            var path = String(absolutePath.dropFirst(private_path.count))
+            if path.hasPrefix("/") {
+                path = String(path.dropFirst(1))
+            }
+
+            print("Resolving from \(absolutePath) to private \(path)")
+            return LocalResourcePath.relativePath(path: path, is_private: true)
+        }
+
+        if absolutePath.hasPrefix(public_path) {
+            var path = String(absolutePath.dropFirst(public_path.count))
+            if path.hasPrefix("/") {
+                path = String(path.dropFirst(1))
+            }
+
+            print("Resolving from \(absolutePath) to private \(path)")
+            return LocalResourcePath.relativePath(path: path, is_private: false)
+        }
+
+        throw MyError.invalidInput(reason: "The absolutePath is not in the sandboxed directory")
+    }
 }
 
 extension Data {
@@ -544,6 +603,8 @@ class AssetCache {
 
 extension PHAsset {
     static func getCachedAsset(identifier: String, _ includeUrl: Bool = true) async -> PHAssetCached? {
+        let identifier = identifier.components(separatedBy: "://").last!
+
         if let cached = AssetCache.shared.get(identifier: identifier) {
             return cached
         }
@@ -672,9 +733,9 @@ class CoreMock: Core {
 
         // Create resource view models
         let path = LocalResourcePath.absolutePath("")
-        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", path: path, thumbnail_path: nil, type: .image, is_valid: true)
-        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", path: path, thumbnail_path: nil, type: .file, is_valid: true)
-        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", path: path, thumbnail_path: nil, type: .video, is_valid: true)
+        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", path: path, thumbnail_path: nil, type: .image)
+        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", path: path, thumbnail_path: nil, type: .file)
+        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", path: path, thumbnail_path: nil, type: .video)
 
         // Create receive sessions
         let receive_session1 = ReceiveSessionViewModel(
@@ -739,8 +800,8 @@ class CoreMock: Core {
         ))
 
         // Add selected resources
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image, is_valid: false))
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file, is_valid: true))
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image))
+        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file))
 
         return x
     }

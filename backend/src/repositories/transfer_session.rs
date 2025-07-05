@@ -1,6 +1,7 @@
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
+use core_services::db::surrealdb::id::SurrealDbId;
 use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::SurrealResponseError;
@@ -48,6 +49,8 @@ impl Table<TransferSessionId> for TransferSession {
     }
 }
 
+impl SurrealDbId for TransferSessionId {}
+
 impl DbId for TransferSessionId {
     fn soft_delete(&mut self) {
         todo!("Not support soft delete")
@@ -66,7 +69,7 @@ impl SurrealId for TransferSession {
     fn id(&self) -> Thing {
         let id = Table::id(self);
         let table = Self::get_table();
-        id.id(table)
+        SurrealDbId::id(id, table)
     }
 }
 

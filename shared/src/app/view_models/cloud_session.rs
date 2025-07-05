@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Record, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CloudSession {
     pub access_url: Option<String>,
     pub password: Option<String>,

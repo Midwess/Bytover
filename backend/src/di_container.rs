@@ -1,4 +1,4 @@
-use core_services::db::remote_surrealdb::SurrealDbConnection;
+use core_services::db::surrealdb::connection::SurrealDbConnection;
 use core_services::utils::pool::request::PoolRequest;
 use devlog_sdk::distributed_id::init_id_generator;
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;

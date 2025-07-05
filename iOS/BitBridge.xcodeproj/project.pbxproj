@@ -7,12 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 80ABCDEC1AE53705DFC3637E /* libshared_static.a */; };
-		97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */ = {isa = PBXBuildFile; fileRef = A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C73956D02DBE7DB900A73950 /* ToastUI in Frameworks */ = {isa = PBXBuildFile; productRef = C73956CF2DBE7DB900A73950 /* ToastUI */; };
+		C74721162E0BCF6E00CEF1F6 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C74721152E0BCF6E00CEF1F6 /* shared.udl */; };
+		C74722632E0BF01900CEF1F6 /* libnative_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C74721792E0BD25C00CEF1F6 /* libnative_static.a */; };
 		C757A8712D662A31005561E9 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = C757A86F2D662A2A005561E9 /* Shaders.metal */; };
 		C79443152D49065900866E37 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794430D2D49065900866E37 /* App.swift */; };
-		C79443172D4907CB00866E37 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C79443162D4907CB00866E37 /* shared.udl */; };
 		C794AB252D5C6E30003CD57F /* Core.swift in Sources */ = {isa = PBXBuildFile; fileRef = C794AB242D5C6E26003CD57F /* Core.swift */; };
 		C794AB2F2D5C7B5C003CD57F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */; };
 		C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */ = {isa = PBXBuildFile; productRef = C7B01BCA2D5CF60900F9C90A /* GLTFSceneKit */; };
@@ -36,59 +35,45 @@
 			outputFilesCompilerFlags = (
 			);
 			runOncePerArchitecture = 0;
-			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n   echo \"Not building *.udl files during indexing.\"\n   exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n   echo \"Not building *.udl files during preview builds.\"\n   exit 0\nfi\n\ncd \"${INPUT_FILE_DIR}/..\"\n\"${BUILD_DIR}/debug/uniffi-bindgen\" generate \"src/${INPUT_FILE_NAME}\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
+			script = "#!/bin/bash\nset -e\n\n# Skip during indexing phase in XCode 13+\nif [ \"$ACTION\" == \"indexbuild\" ]; then\n   echo \"Not building *.udl files during indexing.\"\n   exit 0\nfi\n\n# Skip for preview builds\nif [ \"$ENABLE_PREVIEWS\" = \"YES\" ]; then\n   echo \"Not building *.udl files during preview builds.\"\n   exit 0\nfi\n\ncd \"${INPUT_FILE_DIR}/..\"\n\"${BUILD_DIR}/${CONFIGURATION}/uniffi-bindgen\" generate \"src/${INPUT_FILE_NAME}\" --language swift --out-dir \"${PROJECT_DIR}/generated\"\n";
 		};
 /* End PBXBuildRule section */
 
 /* Begin PBXContainerItemProxy section */
-		12BC830E7740921054BA2F4C /* PBXContainerItemProxy */ = {
+		C74721782E0BD25C00CEF1F6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 1;
-			remoteGlobalIDString = CA02FA85CE9E4296ADE0F606;
+			containerPortal = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA0009C13DBB2969E816930C;
+			remoteInfo = "native-staticlib";
+		};
+		C747217A2E0BD25C00CEF1F6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA0185092185EAC3B2E0A336;
+			remoteInfo = "native-cdylib";
+		};
+		C747217C2E0BD25C00CEF1F6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = CA029C754B428109328FB0D5;
 			remoteInfo = "uniffi-bindgen-bin";
 		};
-		2C1CE78667D7090A19603167 /* PBXContainerItemProxy */ = {
+		C74721FE2E0BE38F00CEF1F6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
+			containerPortal = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
 			proxyType = 1;
-			remoteGlobalIDString = CA0049BF7D4FD346A0A05154;
-			remoteInfo = "shared-staticlib";
+			remoteGlobalIDString = CA0009C13DBBA4FBD9FA5238;
+			remoteInfo = "native-staticlib";
 		};
-		34A56E614364FDEEB5D64E84 /* PBXContainerItemProxy */ = {
+		C74722002E0BE38F00CEF1F6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 2;
-			remoteGlobalIDString = CA0049BF7D4FFB09138082B7;
-			remoteInfo = "shared-staticlib";
-		};
-		A4BCF0C4734067619C66A4F7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 2;
-			remoteGlobalIDString = CA02FA85CE9E8109328FB0D5;
+			containerPortal = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = CA029C754B42E7FB4E3CB439;
 			remoteInfo = "uniffi-bindgen-bin";
-		};
-		C7365AD72D47AF86005A342A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 2;
-			remoteGlobalIDString = CA01C51694BE10F7F7FCAC5B;
-			remoteInfo = "shared-cdylib";
-		};
-		C757A84D2D64A2FD005561E9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 2;
-			remoteGlobalIDString = C757A8442D649EEF005561E9;
-			remoteInfo = "shared-types-gen";
-		};
-		C757A8502D64A352005561E9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 58EE16ACA8E76DC26004C5AA /* Shared */;
-			proxyType = 1;
-			remoteGlobalIDString = C757A83C2D649EEF005561E9;
-			remoteInfo = "shared-types-gen";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -107,12 +92,12 @@
 /* Begin PBXFileReference section */
 		0324C0BA079EF82D60C106A2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		58EE16ACA8E76DC26004C5AA /* Shared */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Shared; path = ../shared/shared.xcodeproj; sourceTree = "<group>"; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
+		C74721152E0BCF6E00CEF1F6 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../native/src/shared.udl; sourceTree = "<group>"; };
+		C74721182E0BD24500CEF1F6 /* native.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = native.xcodeproj; path = ../native/native.xcodeproj; sourceTree = SOURCE_ROOT; };
 		C757A8312D649E26005561E9 /* shared-types */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "shared-types"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C757A86F2D662A2A005561E9 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		C794430D2D49065900866E37 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-		C79443162D4907CB00866E37 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../shared/src/shared.udl; sourceTree = "<group>"; };
 		C794AB242D5C6E26003CD57F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -126,8 +111,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C74722632E0BF01900CEF1F6 /* libnative_static.a in Frameworks */,
 				C73956D02DBE7DB900A73950 /* ToastUI in Frameworks */,
-				0B3FDF5ECB36680A964EE291 /* libshared_static.a in Frameworks */,
 				D33FBF81F1327E610D0A8910 /* SharedTypes in Frameworks */,
 				C7B01BCB2D5CF60900F9C90A /* GLTFSceneKit in Frameworks */,
 			);
@@ -146,11 +131,12 @@
 		1C46BF452BA4D4CC56D829CE = {
 			isa = PBXGroup;
 			children = (
-				C79443162D4907CB00866E37 /* shared.udl */,
+				C74721152E0BCF6E00CEF1F6 /* shared.udl */,
 				1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */,
 				A47BF5DCC98B22ED079F3B75 /* Packages */,
 				2593BD6571133D3DF25B08DD /* Products */,
 				935BE9B51B0DC2FC3F86B1E3 /* Projects */,
+				C747201C2E0BC60400CEF1F6 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -176,21 +162,10 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		6B596B39E2FDBB5FAD6DD364 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				80ABCDEC1AE53705DFC3637E /* libshared_static.a */,
-				C7365AD82D47AF86005A342A /* shared.dylib */,
-				A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */,
-				C757A84E2D64A2FD005561E9 /* shared */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		935BE9B51B0DC2FC3F86B1E3 /* Projects */ = {
 			isa = PBXGroup;
 			children = (
-				58EE16ACA8E76DC26004C5AA /* Shared */,
+				C74721182E0BD24500CEF1F6 /* native.xcodeproj */,
 			);
 			name = Projects;
 			sourceTree = "<group>";
@@ -201,6 +176,23 @@
 				7A7A7E41003307355FE9E0FE /* SharedTypes */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		C747201C2E0BC60400CEF1F6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		C74721732E0BD25C00CEF1F6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C74721792E0BD25C00CEF1F6 /* libnative_static.a */,
+				C747217B2E0BD25C00CEF1F6 /* native.dylib */,
+				C747217D2E0BD25C00CEF1F6 /* uniffi-bindgen */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -219,8 +211,8 @@
 				7D95D2C1296A41973288C5A5 /* PBXBuildRule */,
 			);
 			dependencies = (
-				49BE88D7BCB71F91CA44B7D4 /* PBXTargetDependency */,
-				69741DC9E0A2BEFEE16DA40E /* PBXTargetDependency */,
+				C74721FF2E0BE38F00CEF1F6 /* PBXTargetDependency */,
+				C74722012E0BE38F00CEF1F6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C794AB262D5C7585003CD57F /* View */,
@@ -246,7 +238,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				C757A8512D64A352005561E9 /* PBXTargetDependency */,
 			);
 			name = "shared-types";
 			packageProductDependencies = (
@@ -287,8 +278,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 6B596B39E2FDBB5FAD6DD364 /* Products */;
-					ProjectRef = 58EE16ACA8E76DC26004C5AA /* Shared */;
+					ProductGroup = C74721732E0BD25C00CEF1F6 /* Products */;
+					ProjectRef = C74721182E0BD24500CEF1F6 /* native.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -300,32 +291,25 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		80ABCDEC1AE53705DFC3637E /* libshared_static.a */ = {
+		C74721792E0BD25C00CEF1F6 /* libnative_static.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
-			path = libshared_static.a;
-			remoteRef = 34A56E614364FDEEB5D64E84 /* PBXContainerItemProxy */;
+			path = libnative_static.a;
+			remoteRef = C74721782E0BD25C00CEF1F6 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		A6DF9448CDA9F4D54F5A7D17 /* uniffi-bindgen */ = {
+		C747217B2E0BD25C00CEF1F6 /* native.dylib */ = {
+			isa = PBXReferenceProxy;
+			fileType = "compiled.mach-o.dylib";
+			path = native.dylib;
+			remoteRef = C747217A2E0BD25C00CEF1F6 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		C747217D2E0BD25C00CEF1F6 /* uniffi-bindgen */ = {
 			isa = PBXReferenceProxy;
 			fileType = "compiled.mach-o.executable";
 			path = "uniffi-bindgen";
-			remoteRef = A4BCF0C4734067619C66A4F7 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		C7365AD82D47AF86005A342A /* shared.dylib */ = {
-			isa = PBXReferenceProxy;
-			fileType = "compiled.mach-o.dylib";
-			path = shared.dylib;
-			remoteRef = C7365AD72D47AF86005A342A /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		C757A84E2D64A2FD005561E9 /* shared */ = {
-			isa = PBXReferenceProxy;
-			fileType = "compiled.mach-o.executable";
-			path = shared;
-			remoteRef = C757A84D2D64A2FD005561E9 /* PBXContainerItemProxy */;
+			remoteRef = C747217C2E0BD25C00CEF1F6 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -336,7 +320,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				C794AB2F2D5C7B5C003CD57F /* Assets.xcassets in Resources */,
-				97D20F6782C34DAEFBC18462 /* uniffi-bindgen in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,7 +350,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C79443172D4907CB00866E37 /* shared.udl in Sources */,
+				C74721162E0BCF6E00CEF1F6 /* shared.udl in Sources */,
 				C757A8712D662A31005561E9 /* Shaders.metal in Sources */,
 				C794AB252D5C6E30003CD57F /* Core.swift in Sources */,
 				C79443152D49065900866E37 /* App.swift in Sources */,
@@ -384,20 +367,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		49BE88D7BCB71F91CA44B7D4 /* PBXTargetDependency */ = {
+		C74721FF2E0BE38F00CEF1F6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "native-staticlib";
+			targetProxy = C74721FE2E0BE38F00CEF1F6 /* PBXContainerItemProxy */;
+		};
+		C74722012E0BE38F00CEF1F6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "uniffi-bindgen-bin";
-			targetProxy = 12BC830E7740921054BA2F4C /* PBXContainerItemProxy */;
-		};
-		69741DC9E0A2BEFEE16DA40E /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "shared-staticlib";
-			targetProxy = 2C1CE78667D7090A19603167 /* PBXContainerItemProxy */;
-		};
-		C757A8512D64A352005561E9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "shared-types-gen";
-			targetProxy = C757A8502D64A352005561E9 /* PBXContainerItemProxy */;
+			targetProxy = C74722002E0BE38F00CEF1F6 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

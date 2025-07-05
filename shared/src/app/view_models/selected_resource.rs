@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use uniffi::Record;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {
     pub order_id: u64,
     pub name: String,
@@ -12,8 +11,7 @@ pub struct SelectedResourceViewModel {
     pub display_path: String,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType,
-    pub is_valid: bool
+    pub r#type: ResourceType
 }
 
 impl From<&LocalResource> for SelectedResourceViewModel {
@@ -32,9 +30,8 @@ impl From<&LocalResource> for SelectedResourceViewModel {
                 }
             },
             path: resource.path.clone(),
-            thumbnail_path: Some(resource.thumbnail_path.clone().unwrap_or(resource.path.clone())),
-            r#type: resource.r#type.clone(),
-            is_valid: resource.is_valid
+            thumbnail_path: resource.thumbnail_path.clone(),
+            r#type: resource.r#type.clone()
         };
 
         if view_model.size_gb < 0.1 {

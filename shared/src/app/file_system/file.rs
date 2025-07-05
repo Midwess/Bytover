@@ -1,24 +1,16 @@
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
-use uniffi::{Enum, Record};
 
-use crate::app::operations::database::LocalResourceDatabaseOperation;
-use crate::app::operations::local_storage::LocalStorageOperation;
-use crate::app::AppCommandContext;
-
-#[derive(Debug, PartialEq, Record, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct LocalResource {
     pub order_id: u64,
     pub name: String,
     pub size: u64,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType,
-    #[surreal(default)]
-    pub is_valid: bool
+    pub r#type: ResourceType
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum LocalResourcePath {
     // Relative from the workdir of application
     RelativePath { path: String, is_private: bool },
@@ -45,25 +37,10 @@ impl LocalResourcePath {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Enum, Serialize, Deserialize, Clone, SurrealDerive)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum ResourceType {
     Image,
     Video,
     File,
     Folder
-}
-
-impl LocalResource {
-    // Return true if value is updated
-    pub async fn validate(&mut self, cmd: AppCommandContext) -> bool {
-        let is_valid = LocalStorageOperation::is_file_exists(self.path.clone()).into_future(cmd.clone()).await;
-        let is_changed = self.is_valid != is_valid;
-        self.is_valid = is_valid;
-
-        if is_changed && !is_valid {
-            LocalResourceDatabaseOperation::remove(self.order_id).into_future(cmd.clone()).await;
-        }
-
-        is_changed
-    }
 }
