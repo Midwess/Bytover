@@ -11,7 +11,7 @@ use crate::core_transfer_protocol::webrtc::signalling::{SharedContext, WebSignal
 use crate::entities::peer::Peer as PeerEntity;
 use futures::select;
 use futures_timer::Delay;
-use futures_util::{FutureExt, StreamExt};
+use futures_util::FutureExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::WebRtcSocket;
 use n0_future::task::spawn;

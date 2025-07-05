@@ -5,7 +5,6 @@ use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
 use futures_util::SinkExt;
-use matchbox_socket::Signaller;
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::time::Instant;
 use n0_future::StreamExt;

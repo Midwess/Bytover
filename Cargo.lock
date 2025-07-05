@@ -295,7 +295,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
- "const-random",
  "getrandom 0.3.3",
  "once_cell",
  "version_check",
@@ -1371,6 +1370,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "core-services",
+ "devlog-sdk",
+ "lazy_static",
+ "log",
+ "reqwest",
+ "schema",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "surreal_derive_plus",
+ "surreal_devl",
+ "surrealdb",
+ "thiserror 2.0.12",
+ "tokio",
+ "tonic 0.13.1",
+ "tonic-middleware 0.3.0",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1778,9 +1801,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.27"
+version = "1.2.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d487aa071b5f64da6f19a3e848e3578944b726ee5a4854b82172f02aa876bfdc"
+checksum = "4ad45f4f74e4e20eaa392913b7b33a7091c87e59628f4dd27888205ad888843c"
 dependencies = [
  "jobserver",
  "libc",
@@ -2054,26 +2077,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
-name = "const-random"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87e00182fe74b066627d63b85fd550ac2998d4b0bd86bfed477a0ae4c7c71359"
-dependencies = [
- "const-random-macro",
-]
-
-[[package]]
-name = "const-random-macro"
-version = "0.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d839f2a20b0aee515dc581a6172f2321f96cab76c1a38a4c584a194955390e"
-dependencies = [
- "getrandom 0.2.16",
- "once_cell",
- "tiny-keccak",
-]
-
-[[package]]
 name = "const_format"
 version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2196,7 +2199,6 @@ dependencies = [
  "md5",
  "pretty_env_logger",
  "prost 0.13.5",
- "rand 0.9.1",
  "redb",
  "reqwest",
  "schema",
@@ -2210,7 +2212,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
- "tonic-middleware",
+ "tonic-middleware 0.1.4",
  "zip",
 ]
 
@@ -2654,7 +2656,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tonic 0.13.1",
- "tonic-middleware",
+ "tonic-middleware 0.1.4",
 ]
 
 [[package]]
@@ -2967,7 +2969,7 @@ dependencies = [
  "document-features",
  "js-sys",
  "log",
- "tungstenite 0.23.0",
+ "tungstenite 0.24.0",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3514,7 +3516,6 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd8f6bbd82fcf88ec958095a97201044bc36307ad0ac3dba72106c973e8873a9"
 dependencies = [
- "ahash 0.8.12",
  "either",
  "float_eq",
  "h3o-bit",
@@ -4803,7 +4804,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#f09d84b7facbd294583f23070ed0a1b55a43fcad"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#4644b0ba841533b54a881cce45bdf7925a707182"
 dependencies = [
  "cfg-if",
  "derive_more 2.0.1",
@@ -4814,7 +4815,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#f09d84b7facbd294583f23070ed0a1b55a43fcad"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#4644b0ba841533b54a881cce45bdf7925a707182"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -5031,33 +5032,24 @@ dependencies = [
  "async-trait",
  "bincode",
  "bytes",
- "chrono",
  "core-services",
  "crux_core",
  "devlog-sdk",
  "erased-serde",
- "flate2",
  "futures-util",
  "lazy_static",
  "log",
  "mime_guess",
- "prost 0.13.5",
- "rand 0.9.1",
  "redb",
  "reqwest",
- "schema",
  "serde",
  "shared",
- "tar",
- "thiserror 2.0.12",
  "tokio",
- "tokio-tungstenite 0.27.0",
+ "tokio-tungstenite",
  "tokio-util",
  "tonic 0.13.1",
  "uniffi",
  "url",
- "uuid",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -7300,13 +7292,11 @@ dependencies = [
  "n0-future",
  "once_cell",
  "prost 0.13.5",
- "rand 0.9.1",
  "reqwest",
  "schema",
  "serde",
  "thiserror 2.0.12",
  "tonic 0.13.1",
- "uniffi",
  "url",
  "uuid",
 ]
@@ -7655,6 +7645,7 @@ dependencies = [
  "geo",
  "getrandom 0.3.3",
  "indexmap 2.10.0",
+ "native-tls",
  "path-clean",
  "pharos",
  "reblessive",
@@ -7671,7 +7662,7 @@ dependencies = [
  "surrealdb-core",
  "thiserror 1.0.69",
  "tokio",
- "tokio-tungstenite 0.23.1",
+ "tokio-tungstenite",
  "tokio-util",
  "tracing",
  "trice",
@@ -8191,27 +8182,13 @@ checksum = "c6989540ced10490aaf14e6bad2e3d33728a2813310a0c71d1574304c49631cd"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "rustls 0.23.28",
  "rustls-pki-types",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls 0.26.2",
  "tungstenite 0.23.0",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
-name = "tokio-tungstenite"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "489a59b6730eda1b0171fcfda8b121f4bee2b35cba8645ca35c5f7ba3eb736c1"
-dependencies = [
- "futures-util",
- "log",
- "rustls 0.23.28",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls 0.26.2",
- "tungstenite 0.27.0",
  "webpki-roots 0.26.11",
 ]
 
@@ -8355,6 +8332,18 @@ dependencies = [
  "async-trait",
  "futures-util",
  "tonic 0.11.0",
+ "tower 0.4.13",
+]
+
+[[package]]
+name = "tonic-middleware"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fd98c177e4ab6b01e31866e46df0270e9c167171a5cd8d56fe6aabfadcac07e"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "tonic 0.13.1",
  "tower 0.4.13",
 ]
 
@@ -8518,12 +8507,31 @@ dependencies = [
  "http 1.3.1",
  "httparse",
  "log",
+ "native-tls",
  "rand 0.8.5",
  "rustls 0.23.28",
  "rustls-pki-types",
  "sha1",
  "thiserror 1.0.69",
  "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.3.1",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha1",
+ "thiserror 1.0.69",
  "utf-8",
 ]
 
@@ -8539,25 +8547,6 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.1",
- "sha1",
- "thiserror 2.0.12",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eadc29d668c91fcc564941132e17b28a7ceb2f3ebf0b9dae3e03fd7a6748eb0d"
-dependencies = [
- "bytes",
- "data-encoding",
- "http 1.3.1",
- "httparse",
- "log",
- "rand 0.9.1",
- "rustls 0.23.28",
- "rustls-pki-types",
  "sha1",
  "thiserror 2.0.12",
  "utf-8",

@@ -19,30 +19,21 @@ crux_core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 lazy_static = { workspace = true }
 uniffi = { workspace = true }
-wasm-bindgen = { version = "0.2.100" }
 shared = { path = "../shared" }
-core-services = { path = "../libs/core-services", features = ["db-red", "local-storage", "retry"] }
-schema = { path = "../libs/schema/rust", features = ["bindgen", "client"] }
-devlog-sdk = { path = "../libs/devlog-sdk" }
+core-services = { workspace = true, features = ["db-red", "local-storage", "retry"] }
+devlog-sdk = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 async-trait = { workspace = true }
 log = { workspace = true }
 bincode = { workspace = true }
 erased-serde = { version = "0.4.5" }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
-thiserror = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots", "stream"] }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 futures-util = { workspace = true }
 url = { workspace = true }
-prost = { workspace = true }
-uuid = { workspace = true }
-rand = { workspace = true }
-chrono = { workspace = true }
 bytes = { workspace = true }
 anyhow = { workspace = true }
-flate2 = { workspace = true }
-tar = { workspace = true }
 mime_guess = { workspace = true }
 tokio-util = {workspace = true}
 redb = { workspace = true }

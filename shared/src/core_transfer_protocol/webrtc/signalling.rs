@@ -4,7 +4,6 @@ use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel
 use crate::core_transfer_protocol::webrtc::peer::WebRtcPeer;
 use crate::core_transfer_protocol::webrtc::signalling_client::SignallingClient;
 use futures_util::lock::Mutex;
-use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;

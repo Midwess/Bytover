@@ -5,6 +5,3 @@ xcode = ["bin", "cargo-xcode"]
 
 [build]
 rustflags = ["-Z", "threads=8"]
-
-[target.wasm32-unknown-unknown]
-rustflags = ["--cfg", "uuid_unstable", "--cfg", "surrealdb_unstable", "--cfg", 'getrandom_backend="wasm_js"']

@@ -18,7 +18,6 @@ tonic = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-rand = { workspace = true }
 chrono = { workspace = true }
 h3o = { workspace = true }
 anyhow = { workspace = true }
@@ -37,14 +36,8 @@ matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
 ewebsock = { workspace = true }
 once_cell = { workspace = true }
-futures = "0.3.31"
-http-body = "1.0.1"
-
-[target.uniffi-bindgen.dependencies]
-uniffi = { workspace = true, features = ["cli"] }
-
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+futures = { workspace = true }
+http-body = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { workspace = true, features = ["js"] }
+uuid = { workspace = true, features = ["js", "v4"] }

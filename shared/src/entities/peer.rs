@@ -1,5 +1,5 @@
+use chrono::{DateTime, Utc};
 use matchbox_protocol::PeerId;
-use rand::seq::IndexedRandom;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 
@@ -31,8 +31,8 @@ impl Peer {
             "Giraffe", "Koala", "Lion", "Owl", "Panda"
         ];
 
-        let mut rng = rand::rng();
-        let chosen_animal = animals.choose(&mut rng).unwrap_or(&"Panda"); // Default to Panda if slice is empty (shouldn't happen here)
+        let rng = (Utc::now().timestamp_millis() % (animals.len() as i64)) as usize;
+        let chosen_animal = animals[rng];
 
         format!("https://cdn.devlog.studio/public/animal_avatars/{chosen_animal}.png")
     }
