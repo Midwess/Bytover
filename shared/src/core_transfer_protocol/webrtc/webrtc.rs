@@ -273,7 +273,6 @@ impl WebRtc {
                     timeout.reset(Duration::from_millis(10));
                 }
                 _ = (&mut connection_timeout).fuse() => {
-                    log::info!("Polling timeout");
                     self.shared_context.poll_timeout().await;
                     connection_timeout.reset(Duration::from_secs(10));
                 }

@@ -100,7 +100,7 @@ impl NearbyService {
                 ctx.notify_event(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(ip_address)));
             }
 
-            ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
+            ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
         }
     }
 
