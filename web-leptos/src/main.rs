@@ -34,6 +34,8 @@ async fn main() -> std::io::Result<()> {
             // serve the favicon from /favicon.ico
             .service(favicon)
             .service(style)
+            .service(images)
+            .service(fonts)
             .leptos_routes(routes, {
                 let leptos_options = leptos_options.clone();
                 move || {
@@ -86,6 +88,32 @@ async fn favicon(
     Ok(actix_files::NamedFile::open(format!(
         "{site_root}/favicon.ico"
     ))?)
+}
+
+#[get("images/{file}")]
+async fn images(
+    leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
+    file: actix_web::web::Path<String>,
+) -> actix_web::Result<actix_files::NamedFile> {
+    log::info!("Serving images: {}", file);
+
+    let leptos_options = leptos_options.into_inner();
+    let site_root = &leptos_options.site_root;
+
+    let filepath = format!("{site_root}/images/{file}");
+
+    Ok(actix_files::NamedFile::open(filepath)?)
+}
+
+#[get("fonts/{file}")]
+async fn fonts(
+    leptos_options: actix_web::web::Data<leptos::config::LeptosOptions>,
+    file: actix_web::web::Path<String>,
+) -> actix_web::Result<actix_files::NamedFile> {
+    log::info!("Serving fonts: {}", file);
+    let leptos_options = leptos_options.into_inner();
+    let site_root = &leptos_options.site_root;
+    Ok(actix_files::NamedFile::open(format!("{site_root}/fonts/{file}"))?)
 }
 
 #[cfg(not(any(feature = "ssr", feature = "csr")))]

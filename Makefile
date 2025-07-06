@@ -16,4 +16,4 @@ gsu:
 	git submodule update --init --recursive
 
 web:
-	cd web-leptos; cargo leptos watch
+	cd web-leptos; cargo watch -d 1 -w src/ -x "leptos serve"

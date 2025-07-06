@@ -1,5 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 @import "tailwindcss";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@font-face {
+  font-family: "SFProDisplay-Bold";
+  src: url("/fonts/SFProDisplay-Bold.woff2") format("woff2"), url("/fonts/SFProDisplay-Bold.woff") format("woff");
+}
+
+@theme {
+  --color-lightSea: oklch(81.26% 0.133 154.76);
+  --color-navy: oklch(40.62% 0.093 250.34);
+  --color-orange: oklch(69.19% 0.283 66.91);
+  --color-primaryText: oklch(99.54% 0.009 99.31);
+  --color-seaTertiary: oklch(79.24% 0.278 191.87);
+  --color-blueSky: oklch(63.43% 0.187 204.43);
+  --color-blueViolet: oklch(46.74% 0.191 269.37);
+  --color-darkBlue: oklch(33.41% 0.083 266.96);
+  --color-documentColor: oklch(69.19% 0.249 282.34);
+  --color-fileColor: oklch(73.11% 0.196 142.85);
+  --color-folderColor: oklch(90.65% 0.192 97.91);
+  --color-greenSecondary: oklch(89.67% 0.342 148.77);
+  --color-blackBase: oklch(12.69% 0.007 268.06);
+  --color-blackSecondary: oklch(24.79% 0.017 270.00);
+  --color-bluePrimary: oklch(45.11% 0.273 266.23);
+  --font-sfbold: SFProDisplay-Bold;
+  --font-poppins: Poppins;
+}
+
+.container {
+  padding: 12px;
+  @include styleFor(tablet-and-up) {
+    padding: 18px;
+  }
+
+  max-width: 1386px;
+  overflow-y: hidden;
+}
+
+pre {
+  background-color: rgba(1, 1, 1, 1) !important;
+}
+
+/* width */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: rgba(229,86,4, 0.3);
+}
