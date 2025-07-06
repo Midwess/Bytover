@@ -23,6 +23,6 @@ pub fn Navigation(
     title: &'static str,
 ) -> impl IntoView {
     view! {
-       <p class="text-md text-primaryText text-opacity-80 font-sfbold">{title}</p>
+       <p class="text-md text-primaryText opacity-80 font-sfbold">{title}</p>
     }
 }
