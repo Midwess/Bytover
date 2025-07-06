@@ -59,20 +59,16 @@ tonic = { version = "0.13.1", default-features = false }
 prost = { version = "0.13.5", default-features = false }
 uniffi = { version = "0.29.3" }
 bincode = { version = "1.3.3", default-features = false }
-md5 = { version = "0.7.0", default-features = false }
-zip = { version = "3.0.0", default-features = false }
 tower-service = { version = "0.3.3", default-features = false }
 tokio-stream = { version = "0.1.16", default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 url = { version = "2.5.4", default-features = false }
 uuid = { version = "1.17.0", default-features = false }
-regex = { version = "1.11.1", default-features = false }
 h3o = { version = "0.8.0", default-features = false }
 bytes = { version = "1.10.1", default-features = false }
 flate2 = { version = "1.1.1", default-features = false }
 tar = { git = "https://github.com/dev-logs/tar-rs.git", default-features = false }
 mime_guess = { version = "2.0.5", default-features = false }
-aws-smithy-async = { version = "1.2.5", default-features = false }
 tokio-util = { version = "0.7.15", default-features = false }
 redb = { version = "2.6.0", default-features = false }
 matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
@@ -96,7 +92,7 @@ cargo-binstall = { version = "1.10.22" }
 surreal_enable_log = true
 # Will log the generated code at build time
 surreal_enable_compile_log = true
-# Change the naming convention of generated statement into camel case
+# Change the naming convention of a generated statement into a camel case
 surreal_use_camel_case = false
 # The log namespace, apply for both build time log and runtime log
 surreal_namespace = "surrealql"

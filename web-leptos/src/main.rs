@@ -12,11 +12,13 @@ async fn main() -> std::io::Result<()> {
     use leptos_meta::MetaTags;
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use web_leptos::app::*;
+    use devlog_sdk::tcp::listener::find_tcp_listener;
 
     logger::setup();
 
     let conf = get_configuration(None).unwrap();
-    let addr = conf.leptos_options.site_addr;
+    let tcp_listen = find_tcp_listener().await.unwrap();
+    let port = tcp_listen.port;
 
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos App
@@ -24,7 +26,7 @@ async fn main() -> std::io::Result<()> {
         let leptos_options = &conf.leptos_options;
         let site_root = leptos_options.site_root.clone().to_string();
 
-        println!("listening on http://{}", &addr);
+        log::info!("Serving on port {}", port);
 
         App::new()
             // serve JS/WASM/CSS from `pkg`
@@ -60,7 +62,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(leptos_options.to_owned()))
         //.wrap(middleware::Compress::default())
     })
-    .bind(&addr)?
+    .listen(tcp_listen.listener)?
     .run()
     .await
 }
