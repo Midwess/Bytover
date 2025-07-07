@@ -85,7 +85,7 @@ pub enum TransferEvent {
     },
     // Event from core
     UpdateTransferSessions {
-        // Loaded from database
+        // Loaded from our database
         loaded: Vec<TransferSession>,
         // New sessions
         new: Vec<TransferSession>,
@@ -109,7 +109,7 @@ pub enum TransferEvent {
     OpenSelectedResource {
         resource_id: u64
     },
-    SessionResourceThumbnailFullfillment {
+    SessionResourceThumbnailFullFilled {
         session_id: u64,
         resource_id: u64,
         path: LocalResourcePath
@@ -400,7 +400,7 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::SessionResourceThumbnailFullfillment {
+            TransferEvent::SessionResourceThumbnailFullFilled {
                 session_id,
                 resource_id,
                 path

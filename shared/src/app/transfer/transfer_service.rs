@@ -275,7 +275,7 @@ impl TransferService {
                         resource_id
                     } => {
                         log::info!("Received thumbnail full filled for resource {resource_id}");
-                        let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullfillment {
+                        let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullFilled {
                             session_id,
                             resource_id,
                             path: local_resource_path

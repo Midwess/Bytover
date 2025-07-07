@@ -4,7 +4,7 @@ use leptos::prelude::*;
 #[component]
 pub fn Header() -> impl IntoView {
     view! {
-        <div class="w-screen container flex justify-between fixed top-0 z-50 text-primaryText text-opacity-30 my-5">
+        <div class="w-screen container flex justify-between text-primaryText text-opacity-30 my-5">
             <div class="flex flex-row items-center gap-2">
                 <img src="/images/earth.png" class="h-[60px] w-[60px]"/>
                 <p class="text-3xl font-sfbold">Bit bridge</p>

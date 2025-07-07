@@ -260,6 +260,16 @@ impl WebSignaller {
     }
 
     pub async fn start(&mut self) -> Result<(), WebRtcErrors> {
+        let first_msg = Message {
+            from_id: self.peer_id.to_string(),
+            join: Some(JoinMessage {
+                id: self.peer_id.to_string()
+            }),
+            ..Default::default()
+        };
+
+        // Send the join msg right after the socket connected
+        self.client.send(first_msg).await.map_err(Into::<WebRtcErrors>::into)?;
         self.client.start().await
     }
 }

@@ -2662,6 +2662,7 @@ dependencies = [
  "aws-smithy-async",
  "chrono",
  "core-services",
+ "futures-util",
  "lazy_static",
  "log",
  "reqwest",
