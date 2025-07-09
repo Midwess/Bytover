@@ -6,9 +6,12 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint --fix"
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -19,6 +22,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-use-measure": "^2.1.7",
+    "shared_types": "file:../shared_types/generated/typescript",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {

@@ -1,21 +1,19 @@
-import {Button} from '@/components/ui/button'
 import {StarsBackground} from "@/components/animate-ui/backgrounds/stars";
 import {TypingText} from "@/components/animate-ui/text/typing";
 import Header from "@/components/web/header";
-import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
-import {RippleButton} from '@/components/animate-ui/buttons/ripple'
 import {LiquidButton} from '@/components/animate-ui/buttons/liquid'
 import Android from '@/public/android.svg'
 import apple from '@/public/apple.svg'
 import windows from '@/public/windows.svg'
 import Image from 'next/image'
+import TransferBoard from "@/app/transfer";
 
 export default function Home() {
-    return <>
-        <div className={'flex flex-col items-center h-screen gap-16'}>
+    return <div className="flex flex-col w-full h-full items-center">
+        <div className={'relative flex flex-col w-full items-center gap-16 pb-16'}>
             <Header/>
             <div
-                className="absolute top-0 z-[-1] h-[40vh] w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
+                className="absolute top-0 z-[-1] h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
                 <StarsBackground speed={30} starColor={'green'}/>
             </div>
             <div className={'flex flex-col items-center gap-4 container'}>
@@ -32,7 +30,7 @@ export default function Home() {
                 />
             </div>
             <div className={"flex flex-col items-center gap-4"}>
-                <p className={"font-poppins font-bold text-primaryText/80"}>Available on all platforms</p>
+                <p className={"font-poppins font-bold text-lg text-primaryText/80"}>Available on all platforms</p>
                 <div className={"flex flex-row gap-2"}>
                     <LiquidButton className={"flex flex-row gap-3"}>
                         <Image src={Android} alt="Android" width={20} height={20}/>
@@ -53,5 +51,9 @@ export default function Home() {
                 </div>
             </div>
         </div>
-    </>
+        <div className={"container flex flex-col gap-10"}>
+            <TransferBoard/>
+        </div>
+        <div className={"h-36 w-full"}></div>
+    </div>
 }

@@ -1,13 +1,14 @@
-import {Button} from '@/components/ui/button'
 import {LiquidButton} from '@/components/animate-ui/buttons/liquid'
 import {GitHubStarsButton} from '@/components/animate-ui/buttons/github-stars'
+import Image from "next/image";
 
 export default function Header() {
     return (
-        <div className="relative flex justify-between items-center w-full py-10 px-10">
+        <div className="relative flex justify-between items-center w-full py-10 container">
             <div className="flex flex-row gap-2 items-center">
-                <img
-                    className="w-[40px] h-[40px]"
+                <Image
+                    width={40}
+                    height={40}
                     src="logo.svg"
                     alt="Logo"
                 />
