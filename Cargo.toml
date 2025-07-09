@@ -5,7 +5,6 @@ members = [
     # "Desktop/src-tauri",
     "backend",
     "native",
-    "web-leptos",
 ]
 
 resolver = "2"

@@ -43,7 +43,7 @@ impl TransferService {
 
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: receive_sessions,
-            new: vec![],
+            added: vec![],
             removed: vec![]
         });
 
@@ -66,7 +66,7 @@ impl TransferService {
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
-            new: vec![],
+            added: vec![],
             removed: vec![transfer_session.order_id]
         }));
     }
@@ -105,7 +105,7 @@ impl TransferService {
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
-            new: vec![transfer_session.clone()],
+            added: vec![transfer_session.clone()],
             removed: vec![]
         }));
 
@@ -174,7 +174,7 @@ impl TransferService {
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
-            new: vec![],
+            added: vec![],
             removed: vec![transfer_session.order_id]
         }));
     }
@@ -230,7 +230,7 @@ impl TransferService {
 
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
-            new: vec![transfer_session.clone()],
+            added: vec![transfer_session.clone()],
             removed: vec![]
         });
 
@@ -313,7 +313,7 @@ impl TransferService {
 
             cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
                 loaded: vec![],
-                new: vec![],
+                added: vec![],
                 removed: vec![transfer_session.order_id]
             }));
         } else {

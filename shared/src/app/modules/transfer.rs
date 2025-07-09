@@ -88,18 +88,18 @@ pub enum TransferEvent {
         // Loaded from our database
         loaded: Vec<TransferSession>,
         // New sessions
-        new: Vec<TransferSession>,
+        added: Vec<TransferSession>,
         // Removed sessions
         removed: Vec<u64>
     },
     UpdateResourcesModel {
         loaded: Vec<LocalResource>,
-        new: Vec<LocalResource>,
+        added: Vec<LocalResource>,
         removed: Vec<LocalResource>,
         updated: Vec<LocalResource>
     },
     UpdateTransferTargets {
-        new: Vec<TransferTarget>,
+        added: Vec<TransferTarget>,
         removed: Vec<TransferTarget>
     },
     OpenSessionResource {
@@ -204,7 +204,7 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::UpdateResourcesModel {
                 loaded,
-                new,
+                added: new,
                 removed,
                 updated
             } => {
@@ -306,7 +306,7 @@ impl AppModule<BitBridge> for TransferModule {
                 transfer_service.received_session_request(remote_session, peer, it).await;
                 log::info!(target: "transfer", "Done download, shell should done");
             }),
-            TransferEvent::UpdateTransferSessions { loaded, new, removed } => {
+            TransferEvent::UpdateTransferSessions { loaded, added: new, removed } => {
                 let mut command = Command::new(|_| async move {});
 
                 for loaded in loaded {
@@ -343,7 +343,7 @@ impl AppModule<BitBridge> for TransferModule {
                 model.transfer.transfer_sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
                 command.then_render()
             }
-            TransferEvent::UpdateTransferTargets { new, removed } => {
+            TransferEvent::UpdateTransferTargets { added: new, removed } => {
                 model.transfer.transfer_targets.extend(new);
                 model.transfer.transfer_targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
                 Command::done()

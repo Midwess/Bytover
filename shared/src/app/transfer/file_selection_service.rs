@@ -29,7 +29,7 @@ impl ResourceTransferSelectionService {
 
         ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
             loaded: resources.clone(),
-            new: vec![],
+            added: vec![],
             removed: vec![],
             updated: vec![]
         }));
@@ -79,7 +79,7 @@ impl ResourceTransferSelectionService {
 
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                 loaded: vec![],
-                new: vec![new_resource],
+                added: vec![new_resource],
                 removed: vec![],
                 updated: vec![]
             }));
@@ -91,7 +91,7 @@ impl ResourceTransferSelectionService {
         if let Some(removed_resource) = removed_resource {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                 loaded: vec![],
-                new: vec![],
+                added: vec![],
                 removed: vec![removed_resource],
                 updated: vec![]
             }));

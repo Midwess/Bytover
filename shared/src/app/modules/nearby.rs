@@ -36,8 +36,8 @@ pub enum NearbyEvent {
     OnLocationUpdated(GeoLocation),
     OnIpAddressUpdated(String),
 
-    UpdateMe { new: Peer },
-    UpdateNearbyPeers { new: Vec<Peer>, removed: Vec<Peer> },
+    UpdateMe { new_peer: Peer },
+    UpdateNearbyPeers { new_peer: Vec<Peer>, removed: Vec<Peer> },
 
     ClearNearbyPeers
 }
@@ -91,9 +91,9 @@ impl AppModule<BitBridge> for NearbyModule {
                     let _ = P2POperation::update_finding_scopes(finding_scopes).into_future(it).await;
                 })
             }
-            NearbyEvent::UpdateNearbyPeers { new, removed } => {
+            NearbyEvent::UpdateNearbyPeers { new_peer, removed } => {
                 model.nearby.peers.retain(|it| !removed.contains(it));
-                model.nearby.peers.extend(new);
+                model.nearby.peers.extend(new_peer);
                 Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
                 })
@@ -104,8 +104,8 @@ impl AppModule<BitBridge> for NearbyModule {
                     it.notify_shell(CoreOperation::Render);
                 })
             }
-            NearbyEvent::UpdateMe { new } => {
-                model.nearby.me = Some(new);
+            NearbyEvent::UpdateMe { new_peer } => {
+                model.nearby.me = Some(new_peer);
                 Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
                 })
