@@ -7,7 +7,7 @@ import {
     ResourceTypeVariantImage,
     VideoReceiveResourceViewModel,
     ResourceTypeVariantVideo,
-    FileReceiveResourceViewModel, ResourceTypeVariantFolder
+    FileReceiveResourceViewModel, ResourceTypeVariantFolder, ResourceTypeVariantFile
 } from 'shared_types/types/shared_types'
 
 // Create image resources using test data images
@@ -183,7 +183,7 @@ export const receiveFileResources: FileReceiveResourceViewModel[] = [
             "/test_data/file2.pdf",
             new LocalResourcePathVariantAbsolutePath("/test_data/file2.pdf"),
             null,
-            new ResourceTypeVariantFolder()
+            new ResourceTypeVariantFile()
         ),
         false
     ),
@@ -196,7 +196,7 @@ export const receiveFileResources: FileReceiveResourceViewModel[] = [
             "/test_data/file3.doc",
             new LocalResourcePathVariantAbsolutePath("/test_data/Document.tar"),
             null,
-            new ResourceTypeVariantImage()
+            new ResourceTypeVariantFile()
         ),
         true
     )

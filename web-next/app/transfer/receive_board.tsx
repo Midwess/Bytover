@@ -80,7 +80,7 @@ export default function ReceiveBoard() {
                             <div
                                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-4 pb-8">
                                 {
-                                    selectedSession.image_resources.map((file: FileReceiveResourceViewModel, index: number) => {
+                                    selectedSession.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
                                             <div className={"h-[180px]"}>
                                                 <FileView key={index} file={file}/>
@@ -167,6 +167,8 @@ function FileView(props: { file: FileReceiveResourceViewModel }) {
         displaySize = `${model.size_gb} GB`;
     }
 
+    console.log(model)
+
     return (
         <div
             className="w-full h-full overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5 overflow-clip">
@@ -182,7 +184,7 @@ function FileView(props: { file: FileReceiveResourceViewModel }) {
 
             <div className="relative aspect-square w-full scale-80">
                 <Image
-                    className="w-full h-full object-contain text-primaryText"
+                    className="w-full h-auto text-primaryText"
                     layout="fill"
                     alt={`${model.type}`}
                     src={thumbnailPath}
