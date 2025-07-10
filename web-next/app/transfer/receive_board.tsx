@@ -2,7 +2,10 @@
 import * as React from "react";
 import {
     FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel, LocalResourcePathVariantAbsolutePath, ResourceTypeVariantFolder,
+    ImageReceiveResourceViewModel,
+    LocalResourcePathVariantAbsolutePath,
+    ReceiveSessionViewModel,
+    ResourceTypeVariantFolder,
     SelectedResourceViewModel,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -24,6 +27,8 @@ import Image from "next/image";
 import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
 import {Input} from "@/components/ui/input";
+import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
+import CircleProgress from "@/components/ui/progress";
 
 export default function ReceiveBoard() {
     const [selectedSession] = useState(receiveList[0])
@@ -82,7 +87,7 @@ export default function ReceiveBoard() {
                                 {
                                     selectedSession.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
-                                            <div className={"h-[180px]"}>
+                                            <div className={"h-fit"}>
                                                 <FileView key={index} file={file}/>
                                             </div>
                                         </ItemEffect>
@@ -128,16 +133,6 @@ function ReceiveCategory(props: {
 }
 
 function Board() {
-    const list = receiveList.map((item) => {
-        return {
-            id: item.id,
-            name: item.peer_name,
-            info: item.display_datetime,
-            icon: <Globe className="text-primaryText size-4"/>,
-            pinned: false
-        } as unknown as PinListItem
-    });
-
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
             <p className={"text-lg font-poppins font-bold pl-2"}>Receive sessions</p>
@@ -145,12 +140,45 @@ function Board() {
                 <p className={"opacity-80 text-sm pl-2"}>Search session</p>
                 <Input className={"rounded-xl font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}/>
             </div>
-            <PinList className={"space-y-2"} items={list} labels={{pinned: "Starred", unpinned: "List"}}/>
+            <div className={"flex flex-col gap-3"}>
+                <MotionHighlight hover className={"flex flex-col gap-2 rounded-3xl bg-primaryText/10"}>
+                    {
+                        receiveList.map((item, index) => {
+                            return <TransferSession session={item} key={index}/>
+                        })
+                    }
+                </MotionHighlight>
+            </div>
         </div>
     </>
 }
 
-function FileView(props: { file: FileReceiveResourceViewModel }) {
+function TransferSession(props: {
+    session: ReceiveSessionViewModel
+}) {
+    const {session} = props;
+
+    return <>
+        <div
+            className={"flex flex-row bg-muted rounded-3xl items-center px-2 py-1 gap-3 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
+            <div className={"flex flex-row items-center gap-2"}>
+                <div
+                    className={"bg-bluePrimary rounded-full p-2 my-2 aspect-square justify-center items-center text-primaryText flex"}>
+                    <Globe className={"text-primaryText w-full h-full"}/>
+                </div>
+                <div className={"flex flex-col gap-0 text-sm"}>
+                    <p className={"text-primaryText"}>{session.peer_name}</p>
+                    <p className={"text-primaryText/70"}>{session.display_datetime}</p>
+                </div>
+            </div>
+            <CircleProgress progress={session.progress} size={35}/>
+        </div>
+    </>
+}
+
+function FileView(props: {
+    file: FileReceiveResourceViewModel
+}) {
     const {file} = props;
     const isMobile = useIsMobile();
     const model = file.model;
@@ -171,7 +199,7 @@ function FileView(props: { file: FileReceiveResourceViewModel }) {
 
     return (
         <div
-            className="w-full h-full overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5 overflow-clip">
+            className="w-full h-fit overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5 overflow-clip">
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center",
@@ -182,7 +210,7 @@ function FileView(props: { file: FileReceiveResourceViewModel }) {
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-full scale-80">
+            <div className="relative aspect-square w-full scale-70">
                 <Image
                     className="w-full h-auto text-primaryText"
                     layout="fill"
