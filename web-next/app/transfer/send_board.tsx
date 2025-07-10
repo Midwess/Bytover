@@ -2,7 +2,7 @@
 
 import {
     DropdownMenuTrigger,
-    DropdownMenu
+    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
     Globe,
@@ -52,7 +52,7 @@ const activeMethods = [
 ]
 
 function Board() {
-    const [activeMethod] = React.useState(activeMethods[0])
+    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
 
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-3"}>
@@ -73,6 +73,20 @@ function Board() {
                         <ChevronsUpDown className="ml-auto"/>
                     </Button>
                 </DropdownMenuTrigger>
+                <DropdownMenuContent className={"font-medium w-[300px]"}>
+                    <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row"} checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
+                        setActiveMethod(activeMethods[0])
+                    }}>
+                        <Globe/>
+                        Public
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem className={"w-[200px]"} checked={(activeMethod === activeMethods[1])} onCheckedChange={() => {
+                        setActiveMethod(activeMethods[1])
+                    }}>
+                        <Users/>
+                        People
+                    </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
             </DropdownMenu>
         </div>
     </>

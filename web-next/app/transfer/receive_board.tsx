@@ -14,7 +14,6 @@ import {
     Globe, Play
 } from 'lucide-react'
 import {receiveList} from "@/app/mock_data";
-import {PinList, PinListItem} from "@/components/animate-ui/components/pin-list";
 import {Button} from '@/components/ui/button'
 import {
     Collapsible,
@@ -37,10 +36,10 @@ export default function ReceiveBoard() {
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-12 w-full h-full gap-2"}>
-                <div className={"col-span-3 h-full"}>
+                <div className={"col-span-4 lg:col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20"}>
+                <div className={"col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20"}>
                     <Collapsible
                         className={`w-full ${selectedSession.image_resources.length ? 'visible' : 'hidden'}`}>
                         <ReceiveCategory
@@ -83,7 +82,7 @@ export default function ReceiveBoard() {
                             title={`${selectedSession.file_resources.length} File${selectedSession.file_resources.length !== 1 ? 's' : ''}`}/>
                         <CollapsibleContent className={"space-y-2"}>
                             <div
-                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-4 pb-8">
+                                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-x-4 gap-y-4 pb-8">
                                 {
                                     selectedSession.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
@@ -160,18 +159,18 @@ function TransferSession(props: {
 
     return <>
         <div
-            className={"flex flex-row bg-muted rounded-3xl items-center px-2 py-1 gap-3 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
-            <div className={"flex flex-row items-center gap-2"}>
+            className={"flex flex-row bg-muted rounded-3xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
+            <div className={"flex flex-row items-center gap-3"}>
                 <div
-                    className={"bg-bluePrimary rounded-full p-2 my-2 aspect-square justify-center items-center text-primaryText flex"}>
-                    <Globe className={"text-primaryText w-full h-full"}/>
+                    className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
+                    <Globe className={"text-primaryText w-full h-full m-2"}/>
                 </div>
-                <div className={"flex flex-col gap-0 text-sm"}>
-                    <p className={"text-primaryText"}>{session.peer_name}</p>
-                    <p className={"text-primaryText/70"}>{session.display_datetime}</p>
+                <div className={"flex flex-col gap-0"}>
+                    <p className={"text-primaryText text-sm"}>{session.peer_name}</p>
+                    <p className={"text-primaryText/70 text-xs"}>{session.display_datetime}</p>
                 </div>
             </div>
-            <CircleProgress progress={session.progress} size={35}/>
+            <CircleProgress progress={session.progress} size={30}/>
         </div>
     </>
 }
@@ -210,7 +209,7 @@ function FileView(props: {
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-full scale-70">
+            <div className="relative aspect-square w-full scale-60">
                 <Image
                     className="w-full h-auto text-primaryText"
                     layout="fill"
@@ -221,8 +220,8 @@ function FileView(props: {
 
             {/* Metadata */}
             <div className="flex flex-col text-white items-center mt-1">
-                <p className="text-md font-poppins">{model.name}</p>
-                <p className="text-sm text-white/80 font-poppins">{displaySize}</p>
+                <p className="text-sm text-center text-sm font-poppins">{model.name}</p>
+                <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
         </div>
     );
