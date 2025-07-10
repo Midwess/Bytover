@@ -1,7 +1,8 @@
 'use client'
 import * as React from "react";
 import {
-    ImageReceiveResourceViewModel,
+    FileReceiveResourceViewModel,
+    ImageReceiveResourceViewModel, LocalResourcePathVariantAbsolutePath, ResourceTypeVariantFolder,
     SelectedResourceViewModel,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -34,13 +35,13 @@ export default function ReceiveBoard() {
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-9 h-full p-4 flex flex-col gap-4 sm:gap-8 overflow-y-scroll pb-20"}>
+                <div className={"col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20"}>
                     <Collapsible
                         className={`w-full ${selectedSession.image_resources.length ? 'visible' : 'hidden'}`}>
                         <ReceiveCategory
                             title={`${selectedSession.image_resources.length} Image${selectedSession.image_resources.length !== 1 ? 's' : ''}`}/>
                         <CollapsibleContent className={"space-y-2"}>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
                                 {
                                     selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
@@ -58,7 +59,7 @@ export default function ReceiveBoard() {
                         <ReceiveCategory
                             title={`${selectedSession.video_resources.length} Video${selectedSession.video_resources.length !== 1 ? 's' : ''}`}/>
                         <CollapsibleContent className={"space-y-2"}>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
                                 {
                                     selectedSession.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
@@ -76,12 +77,13 @@ export default function ReceiveBoard() {
                         <ReceiveCategory
                             title={`${selectedSession.file_resources.length} File${selectedSession.file_resources.length !== 1 ? 's' : ''}`}/>
                         <CollapsibleContent className={"space-y-2"}>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                            <div
+                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-4 pb-8">
                                 {
-                                    selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
+                                    selectedSession.image_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
-                                            <div className={"h-[200px]"}>
-                                                <MediaView key={index} image={image} video={undefined}/>
+                                            <div className={"h-[180px]"}>
+                                                <FileView key={index} file={file}/>
                                             </div>
                                         </ItemEffect>
                                     })
@@ -141,11 +143,59 @@ function Board() {
             <p className={"text-lg font-poppins font-bold pl-2"}>Receive sessions</p>
             <div className={"flex flex-col justify-start font-poppins text-primaryText gap-2"}>
                 <p className={"opacity-80 text-sm pl-2"}>Search session</p>
-                <Input className={"rounded-xl font-poppins"} placeholder={"Id or Url, eg: 123123"}/>
+                <Input className={"rounded-xl font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}/>
             </div>
             <PinList className={"space-y-2"} items={list} labels={{pinned: "Starred", unpinned: "List"}}/>
         </div>
     </>
+}
+
+function FileView(props: { file: FileReceiveResourceViewModel }) {
+    const {file} = props;
+    const isMobile = useIsMobile();
+    const model = file.model;
+
+    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    if (!thumbnailPath) {
+        thumbnailPath = model.type instanceof ResourceTypeVariantFolder
+            ? "/folder.svg"
+            : "/file.svg";
+    }
+
+    let displaySize = `${model.size_mb} MB`;
+    if (model.size_gb > 0) {
+        displaySize = `${model.size_gb} GB`;
+    }
+
+    return (
+        <div
+            className="w-full h-full overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5 overflow-clip">
+            <div
+                className={clsx(
+                    "absolute z-20 inset-0 flex items-center justify-center",
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
+                )}>
+                <Button className={"rounded-xl"}>
+                    <Download/>
+                </Button>
+            </div>
+
+            <div className="relative aspect-square w-full scale-80">
+                <Image
+                    className="w-full h-full object-contain text-primaryText"
+                    layout="fill"
+                    alt={`${model.type}`}
+                    src={thumbnailPath}
+                />
+            </div>
+
+            {/* Metadata */}
+            <div className="flex flex-col text-white items-center mt-1">
+                <p className="text-md font-poppins">{model.name}</p>
+                <p className="text-sm text-white/80 font-poppins">{displaySize}</p>
+            </div>
+        </div>
+    );
 }
 
 function MediaView(props: {
@@ -183,7 +233,7 @@ function MediaView(props: {
 
             <div
                 className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center pb-5 px-3 justify-between",
+                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -197,7 +247,7 @@ function MediaView(props: {
                         {displaySize}
                     </p>
                 </div>
-                <Button>
+                <Button className={"rounded-xl"}>
                     <Download/>
                 </Button>
             </div>
@@ -205,7 +255,7 @@ function MediaView(props: {
             {
                 isVideo
                     ? <video
-                        className="w-full h-auto rounded-2xl"
+                        className="w-auto h-full rounded-2xl object-cover"
                         muted>
                         <source src={model.display_path}/>
                         Your browser does not support the video tag.

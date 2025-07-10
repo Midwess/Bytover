@@ -1,4 +1,14 @@
-import {ReceiveSessionViewModel, ImageReceiveResourceViewModel, AvatarViewModel, SelectedResourceViewModel, LocalResourcePathVariantAbsolutePath, ResourceTypeVariantImage, VideoReceiveResourceViewModel, ResourceTypeVariantVideo} from 'shared_types/types/shared_types'
+import {
+    ReceiveSessionViewModel,
+    ImageReceiveResourceViewModel,
+    AvatarViewModel,
+    SelectedResourceViewModel,
+    LocalResourcePathVariantAbsolutePath,
+    ResourceTypeVariantImage,
+    VideoReceiveResourceViewModel,
+    ResourceTypeVariantVideo,
+    FileReceiveResourceViewModel, ResourceTypeVariantFolder
+} from 'shared_types/types/shared_types'
 
 // Create image resources using test data images
 export const receiveImageResources: ImageReceiveResourceViewModel[] = [
@@ -150,6 +160,48 @@ export const receiveVideoResources: VideoReceiveResourceViewModel[] = [
     )
 ]
 
+export const receiveFileResources: FileReceiveResourceViewModel[] = [
+    new FileReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            1n,
+            "file1.txt",
+            0.0,
+            1.6,
+            "/test_data/file1.txt",
+            new LocalResourcePathVariantAbsolutePath("/test_data/file1.txt"),
+            null,
+            new ResourceTypeVariantFolder()
+        ),
+        true
+    ),
+    new FileReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            2n,
+            "file2.pdf",
+            0.0,
+            2.4,
+            "/test_data/file2.pdf",
+            new LocalResourcePathVariantAbsolutePath("/test_data/file2.pdf"),
+            null,
+            new ResourceTypeVariantFolder()
+        ),
+        false
+    ),
+    new FileReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            3n,
+            "Document.tar",
+            1.0,
+            0.0,
+            "/test_data/file3.doc",
+            new LocalResourcePathVariantAbsolutePath("/test_data/Document.tar"),
+            null,
+            new ResourceTypeVariantImage()
+        ),
+        true
+    )
+]
+
 export const receiveList: ReceiveSessionViewModel[] = [
         new ReceiveSessionViewModel(
             1n,
@@ -163,7 +215,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "192.168.1.100",
             receiveImageResources,
             receiveVideoResources,
-            [],
+            receiveFileResources,
             true,
             false,
             "1MB/s",
@@ -182,7 +234,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "192.168.1.101",
             receiveImageResources,
             receiveVideoResources,
-            [],
+            receiveFileResources,
             true,
             false,
             "2MB/s",
@@ -201,7 +253,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "192.168.1.102",
             receiveImageResources,
             receiveVideoResources,
-            [],
+            receiveFileResources,
             false,
             true,
             "1.5MB/s",
