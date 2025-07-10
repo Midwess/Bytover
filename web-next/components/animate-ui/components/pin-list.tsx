@@ -10,12 +10,13 @@ import {
   type Transition,
 } from 'motion/react';
 import { cn } from '@/lib/utils';
+import {ReactElement} from "react";
 
 type PinListItem = {
   id: number;
   name: string;
   info: string;
-  icon: React.ElementType;
+  icon: ReactElement;
   pinned: boolean;
 };
 
@@ -115,8 +116,8 @@ function PinList({
                   className="flex items-center justify-between gap-5 rounded-2xl bg-neutral-200 dark:bg-neutral-800 p-2"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="rounded-lg bg-background p-2">
-                      <item.icon className="size-5 text-neutral-500 dark:text-neutral-400" />
+                    <div className="rounded-lg bg-bluePrimary/80 p-2">
+                      {item.icon}
                     </div>
                     <div>
                       <div className="text-sm font-semibold">{item.name}</div>
@@ -167,8 +168,8 @@ function PinList({
                   className="flex items-center justify-between gap-5 rounded-2xl bg-neutral-200 dark:bg-neutral-800 p-2 group"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="rounded-lg bg-background p-2">
-                      <item.icon className="size-5 text-neutral-500 dark:text-neutral-400" />
+                    <div className="rounded-lg bg-bluePrimary/80 p-2">
+                      {item.icon}
                     </div>
                     <div>
                       <div className="text-sm font-semibold">{item.name}</div>

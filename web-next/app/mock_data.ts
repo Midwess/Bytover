@@ -1,4 +1,4 @@
-import {ReceiveSessionViewModel, ImageReceiveResourceViewModel, AvatarViewModel, SelectedResourceViewModel, LocalResourcePathVariantAbsolutePath, ResourceTypeVariantImage} from 'shared_types/types/shared_types'
+import {ReceiveSessionViewModel, ImageReceiveResourceViewModel, AvatarViewModel, SelectedResourceViewModel, LocalResourcePathVariantAbsolutePath, ResourceTypeVariantImage, VideoReceiveResourceViewModel, ResourceTypeVariantVideo} from 'shared_types/types/shared_types'
 
 // Create image resources using test data images
 export const receiveImageResources: ImageReceiveResourceViewModel[] = [
@@ -82,6 +82,74 @@ export const receiveImageResources: ImageReceiveResourceViewModel[] = [
     )
 ]
 
+export const receiveVideoResources: VideoReceiveResourceViewModel[] = [
+    new VideoReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            1n,
+            "video1.mp4",
+            0.0,
+            10.0,
+            "/test_data/video1.mp4",
+            new LocalResourcePathVariantAbsolutePath("/test_data/video1.mp4"),
+            null,
+            new ResourceTypeVariantVideo()
+        ),
+        false
+    ),
+    new VideoReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            2n,
+            "video2.mp4",
+            0.0,
+            15.5,
+            "/test_data/video2.mp4",
+            new LocalResourcePathVariantAbsolutePath("/test_data/video2.mp4"),
+            null,
+            new ResourceTypeVariantVideo()
+        ),
+        true
+    ),
+    new VideoReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            3n,
+            "video3.mp4",
+            0.0,
+            8.2,
+            "/test_data/video3.mp4",
+            new LocalResourcePathVariantAbsolutePath("/test_data/video3.mp4"),
+            null,
+            new ResourceTypeVariantVideo()
+        ),
+        false
+    ),
+    new VideoReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            4n,
+            "video4.mp4",
+            0.0,
+            22.1,
+            "/test_data/video4.mp4",
+            new LocalResourcePathVariantAbsolutePath("/test_data/video4.mp4"),
+            null,
+            new ResourceTypeVariantVideo()
+        ),
+        true
+    ),
+    new VideoReceiveResourceViewModel(
+        new SelectedResourceViewModel(
+            5n,
+            "video5.mp4",
+            0.0,
+            12.7,
+            "/test_data/video5.mp4",
+            new LocalResourcePathVariantAbsolutePath("/test_data/video5.mp4"),
+            null,
+            new ResourceTypeVariantVideo()
+        ),
+        false
+    )
+]
+
 export const receiveList: ReceiveSessionViewModel[] = [
         new ReceiveSessionViewModel(
             1n,
@@ -94,7 +162,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "John Doe",
             "192.168.1.100",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             true,
             false,
@@ -113,7 +181,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Jane Smith",
             "192.168.1.101",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             true,
             false,
@@ -132,7 +200,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Mike Johnson",
             "192.168.1.102",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             true,
@@ -151,7 +219,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Sarah Wilson",
             "192.168.1.103",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             false,
@@ -170,7 +238,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "David Brown",
             "192.168.1.104",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             true,
@@ -189,7 +257,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Emily Davis",
             "192.168.1.105",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             true,
             false,
@@ -208,7 +276,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Alex Miller",
             "192.168.1.106",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             false,
@@ -227,7 +295,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Lisa Garcia",
             "192.168.1.107",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             true,
@@ -246,7 +314,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Tom Anderson",
             "192.168.1.108",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             true,
             false,
@@ -265,7 +333,7 @@ export const receiveList: ReceiveSessionViewModel[] = [
             "Rachel White",
             "192.168.1.109",
             receiveImageResources,
-            [],
+            receiveVideoResources,
             [],
             false,
             false,

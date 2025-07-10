@@ -16,12 +16,12 @@ export default function Header() {
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
-                <div className="flex flex-row gap-5 rounded-full border border-primaryText/30 px-5 py-2">
+                <div className="flex flex-row gap-5 rounded-full border border-primaryText/30 px-8 py-2">
                     {["About", "Pricing", "How it works"].map((item) => (
                         <a
                             key={item}
                             href="#"
-                            className="nav-link font-poppins font-bold text-primaryText/80"
+                            className="nav-link font-poppins text-primaryText/80"
                         >
                             {item}
                         </a>
@@ -47,7 +47,7 @@ export default function Header() {
                       width: 100%;
                     }
                 `}
-              </style>
+                </style>
 
             </div>
             <div className="flex flex-row gap-2 font-poppins font-bold text-primaryText">

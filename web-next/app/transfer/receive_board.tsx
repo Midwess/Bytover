@@ -1,9 +1,13 @@
 'use client'
 import * as React from "react";
-import {ImageReceiveResourceViewModel} from 'shared_types/types/shared_types'
+import {
+    ImageReceiveResourceViewModel,
+    SelectedResourceViewModel,
+    VideoReceiveResourceViewModel
+} from 'shared_types/types/shared_types'
 import {
     ChevronsUpDown, Download,
-    Globe
+    Globe, Play
 } from 'lucide-react'
 import {receiveList} from "@/app/mock_data";
 import {PinList, PinListItem} from "@/components/animate-ui/components/pin-list";
@@ -17,6 +21,8 @@ import {ReactElement, useState} from "react";
 import {MotionEffect} from '@/components/animate-ui/effects/motion-effect';
 import Image from "next/image";
 import {useIsMobile} from "@/hooks/use-mobile";
+import clsx from "clsx";
+import {Input} from "@/components/ui/input";
 
 export default function ReceiveBoard() {
     const [selectedSession] = useState(receiveList[0])
@@ -28,7 +34,7 @@ export default function ReceiveBoard() {
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-9 h-full p-4 flex flex-col gap-4 sm:gap-8"}>
+                <div className={"col-span-9 h-full p-4 flex flex-col gap-4 sm:gap-8 overflow-y-scroll pb-20"}>
                     <Collapsible
                         className={`w-full ${selectedSession.image_resources.length ? 'visible' : 'hidden'}`}>
                         <ReceiveCategory
@@ -39,7 +45,7 @@ export default function ReceiveBoard() {
                                     selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
                                             <div className={"h-[200px]"}>
-                                                <ImagesView key={index} image={image}/>
+                                                <MediaView key={index} media={image}/>
                                             </div>
                                         </ItemEffect>
                                     })
@@ -54,10 +60,10 @@ export default function ReceiveBoard() {
                         <CollapsibleContent className={"space-y-2"}>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
                                 {
-                                    selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
+                                    selectedSession.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
                                             <div className={"h-[200px]"}>
-                                                <ImagesView key={index} image={image}/>
+                                                <MediaView key={index} media={video}/>
                                             </div>
                                         </ItemEffect>
                                     })
@@ -75,7 +81,7 @@ export default function ReceiveBoard() {
                                     selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                         return <ItemEffect key={index} index={index}>
                                             <div className={"h-[200px]"}>
-                                                <ImagesView key={index} image={image}/>
+                                                <MediaView key={index} image={image} video={undefined}/>
                                             </div>
                                         </ItemEffect>
                                     })
@@ -109,7 +115,7 @@ function ReceiveCategory(props: {
 }) {
     const {title} = props
     return <CollapsibleTrigger asChild>
-        <Button variant="secondary" className="w-full cursor-pointer mb-4">
+        <Button variant="secondary" className="w-full cursor-pointer mb-4 rounded-xl h-10 border border-primaryText/5">
             <div className={"flex flex-row w-full items-center justify-between"}>
                 <p className={"font-poppins font-bold text-md"}>{title}</p>
                 <ChevronsUpDown className="h-4 w-4"/>
@@ -125,31 +131,35 @@ function Board() {
             id: item.id,
             name: item.peer_name,
             info: item.display_datetime,
-            icon: Globe,
+            icon: <Globe className="text-primaryText size-4"/>,
             pinned: false
         } as unknown as PinListItem
     });
 
     return <>
-        <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-3"}>
-            <p className={"text-lg font-poppins font-bold p-2"}>Receive list</p>
-            <PinList items={list}/>
+        <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
+            <p className={"text-lg font-poppins font-bold pl-2"}>Receive sessions</p>
+            <div className={"flex flex-col justify-start font-poppins text-primaryText gap-2"}>
+                <p className={"opacity-80 text-sm pl-2"}>Search session</p>
+                <Input className={"rounded-xl font-poppins"} placeholder={"Id or Url, eg: 123123"}/>
+            </div>
+            <PinList className={"space-y-2"} items={list} labels={{pinned: "Starred", unpinned: "List"}}/>
         </div>
     </>
 }
 
-import clsx from "clsx";
-
-function ImagesView(props: {
-    image: ImageReceiveResourceViewModel;
+function MediaView(props: {
+    media: ImageReceiveResourceViewModel | VideoReceiveResourceViewModel,
 }) {
-    const {image} = props;
+    const {media} = props;
 
+    const model: SelectedResourceViewModel = media.model;
+    const isVideo = media instanceof VideoReceiveResourceViewModel;
     const isMobile = useIsMobile();
 
-    let displaySize = `${image.model.size_mb} MB`;
-    if (image.model.size_gb > 0) {
-        displaySize = `${image.model.size_gb} GB`;
+    let displaySize = `${model.size_mb} MB`;
+    if (model.size_gb > 0) {
+        displaySize = `${model.size_gb} GB`;
     }
 
     return (
@@ -163,6 +173,14 @@ function ImagesView(props: {
                 )}
             ></div>
 
+            {
+                isVideo && <div className={"absolute z-10 flex w-full h-full justify-center items-center"}>
+                    <Button>
+                        <Play/>
+                    </Button>
+                </div>
+            }
+
             <div
                 className={clsx(
                     "flex w-full flex-row z-4 bottom-0 absolute items-center pb-5 px-3 justify-between",
@@ -173,7 +191,7 @@ function ImagesView(props: {
             >
                 <div className="flex flex-col items-start gap-1">
                     <p className="font-poppins text-primaryText text-md">
-                        {image.model.name}
+                        {model.name}
                     </p>
                     <p className="font-poppins text-sm text-primaryText/80">
                         {displaySize}
@@ -184,12 +202,21 @@ function ImagesView(props: {
                 </Button>
             </div>
 
-            <Image
-                layout="fill"
-                className="rounded-2xl"
-                alt={image.model.name}
-                src={image.model.display_path}
-            />
+            {
+                isVideo
+                    ? <video
+                        className="w-full h-auto rounded-2xl"
+                        muted>
+                        <source src={model.display_path}/>
+                        Your browser does not support the video tag.
+                    </video>
+                    : <Image
+                        layout="fill"
+                        className="rounded-2xl"
+                        alt={model.name}
+                        src={model.display_path}
+                    />
+            }
         </div>
     );
 }
