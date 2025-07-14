@@ -1,0 +1,36 @@
+use std::sync::Arc;
+use core_services::utils::maybe::MaybeSendSync;
+use crate::app::operations::p2p::P2POperation;
+use crate::app::operations::CoreOperationOutput;
+use crate::core_transfer_protocol::webrtc::webrtc::WebRtc;
+
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
+pub trait P2PNativeExecutor: MaybeSendSync {
+    fn web_rtc(&self) -> &Arc<WebRtc>;
+
+    async fn handle(&self, request_id: u32, effect: P2POperation) -> CoreOperationOutput {
+        match effect {
+            P2POperation::PeerEvents(peer_id) => {
+                let web_rtc = self.web_rtc().clone();
+                match web_rtc.start_peer_core_stream(peer_id, request_id).await {
+                    Ok(_) => CoreOperationOutput::Void,
+                    Err(e) => CoreOperationOutput::ConnectionError(e.into())
+                }
+            }
+            P2POperation::UpdateFindingScopes(update_finding_scopes) => {
+                let web_rtc = self.web_rtc().clone();
+                let _ = web_rtc.update_finding_scopes(update_finding_scopes).await;
+                CoreOperationOutput::Void
+            }
+            P2POperation::StartNearbyServer(peer) => {
+                let web_rtc = self.web_rtc().clone();
+                let result = web_rtc.start(request_id, peer).await;
+                match result {
+                    Ok(_) => CoreOperationOutput::Void,
+                    Err(e) => CoreOperationOutput::ConnectionError(e.into())
+                }
+            }
+        }
+    }
+}

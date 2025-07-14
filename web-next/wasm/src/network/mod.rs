@@ -1,1 +1,1 @@
-mod grpc;
+pub mod grpc;

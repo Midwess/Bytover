@@ -14,15 +14,17 @@ use schema::devlog::bitbridge::{
     PublicTransferSessionMessage
 };
 use tonic::Request;
+use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 
 pub struct CloudServer<T>
 where
     T: Clone,
-    T: Send + Sync,
+    T: MaybeSend,
     T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
-    T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    T::ResponseBody: http_body::Body<Data = bytes::Bytes> + 'static,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + MaybeSend
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
     auth_provider: AuthProvider
@@ -31,7 +33,8 @@ where
 impl<T> CloudServer<T>
 where
     T: Clone,
-    T: Send + Sync,
+    T: MaybeSend + Sync,
+    T::Future: MaybeSend,
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,

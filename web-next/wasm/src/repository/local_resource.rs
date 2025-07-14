@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::Database;
+use idb::{Database, TransactionMode};
 use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
@@ -13,11 +14,13 @@ use core_services::utils::pool::request::PoolRequest;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::app::repository::path_resolver::PathResolver;
 use shared::core_api::{IOReader, IOWriter};
 use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
+    pub path_resolver: Arc<dyn PathResolver>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -106,19 +109,33 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 #[async_trait::async_trait(?Send)]
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
-        todo!()
+        panic!("The load by path will be implemented in Javascript")
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
-        todo!()
+        let db = self.get_db().await;
+        let store = "thumbnails";
+        let name = format!("{}.png", resource_id);
+
+        let transaction = db.transaction(&[store], TransactionMode::ReadWrite)
+            .map_err(|it| RepositoryError::from(it))?;
+        let store = transaction.object_store(store).map_err(|it| RepositoryError::from(it))?;
+        let value = JsValue::from(png_bytes);
+        let key = JsValue::from(name.clone());
+        let _ = store.put(&value, Some(&key))
+            .map_err(|it| RepositoryError::from(it))?
+            .await
+            .map_err(|it| RepositoryError::from(it))?;
+
+        Ok(LocalResourcePath::PlatformIdentifier(format!("thumbnails/{}", name)))
     }
 
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {
-        todo!()
+        panic!("The load by path will be implemented in Javascript")
     }
 
     async fn load_all(&self) -> Result<Vec<LocalResource>, PersistenceError> {
-        todo!()
+        Ok(vec![])
     }
 
     async fn read(&self, path: LocalResourcePath, max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {

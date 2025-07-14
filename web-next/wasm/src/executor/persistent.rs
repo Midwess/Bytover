@@ -1,6 +1,6 @@
-use shared::app::repository::auth_session::{AuthSessionRepository};
-use shared::app::repository::local_resource::{LocalResourceRepository};
-use shared::app::repository::transfer_session::{TransferSessionRepository};
+use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
+use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::executor::persistent::NativePersistent;
 
 pub struct NativePersistentImpl {
@@ -9,7 +9,7 @@ pub struct NativePersistentImpl {
     pub transfer_session_repository: Box<dyn TransferSessionRepository>
 }
 
-#[async_trait::async_trait]
+#[async_trait::async_trait(?Send)]
 impl NativePersistent for NativePersistentImpl {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository> {
         &self.auth_session_repository

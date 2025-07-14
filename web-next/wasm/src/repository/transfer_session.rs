@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -12,13 +13,15 @@ use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath};
 use shared::app::repository::errors::PersistenceError;
+use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
 use shared::core_api::{IOReader, IOWriter};
 use crate::repository::id::IdbIdWrapper;
 
 pub struct TransferSessionRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
+    pub path_resolver: Arc<dyn PathResolver>
 }
 
 impl IdbId for IdbIdWrapper<TransferSessionId> {

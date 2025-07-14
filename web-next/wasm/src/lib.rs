@@ -1,7 +1,10 @@
 pub mod network;
-pub mod message_to_shell;
 pub mod repository;
 pub mod core_api_impl;
+// pub mod di_container;
+pub mod executor;
+pub mod config;
+mod file_api;
 
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
@@ -13,14 +16,32 @@ use erased_serde::{Serialize};
 use futures::lock::Mutex;
 use n0_future::time;
 use n0_future::time::Interval;
+use wasm_bindgen::prelude::*;
 use shared::app::BitBridge;
-use crate::message_to_shell::{MessageToShell, MessageToShellResponse};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::js_sys::Uint8Array;
+use shared::CoreOperation;
+// use crate::di_container::DiContainer;
+// use crate::executor::executor::NativeExecutor;
+use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
-#[async_trait::async_trait]
-pub trait ShellRuntime: Send + Sync + 'static {
-    async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8>;
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = core)]
+    async fn msg_from_native(event: &Uint8Array) -> Uint8Array;
+}
+
+pub struct ShellRuntime {}
+
+impl ShellRuntime {
+    async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8> {
+        let uint8_array = Uint8Array::from(event.as_slice());
+        let response = msg_from_native(&uint8_array).await;
+        response.to_vec()
+    }
+
     fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<Vec<u8>> {
         let self_clone = self.clone();
         spawn(async move { self_clone.msg_from_native(event).await })
@@ -45,7 +66,7 @@ pub struct ThrottleShellRuntime<E: Serialize + Send + 'static> {
 }
 
 impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
-    pub fn new(shell_runtime: Arc<dyn ShellRuntime>, delay: Duration) -> Self {
+    pub fn new(shell_runtime: Arc<ShellRuntime>, delay: Duration) -> Self {
         let latest_event = Arc::new(Mutex::new(None::<E>));
         let latest_event_clone = latest_event.clone();
         let shell_runtime_clone = shell_runtime.clone();
@@ -64,7 +85,7 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
 
                 if let Some(event) = event_to_send {
                     let serialized_event = serialize(&event);
-                    shell_runtime_clone.clone().msg_from_native_bg(serialized_event);
+                    // shell_runtime_clone.clone().msg_from_native_bg(serialized_event);
                 }
             }
         });
@@ -83,8 +104,8 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
 /// If the core fails to process the event
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
-pub fn process_event(data: &[u8]) -> Vec<u8> {
-    match CORE.process_event(data) {
+pub fn process_event(data: Vec<u8>) -> Vec<u8> {
+    match CORE.process_event(data.as_slice()) {
         Ok(effects) => effects,
         Err(e) => panic!("{e}"),
     }
@@ -122,3 +143,29 @@ pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
 fn bincode_options() -> impl bincode::Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
+
+// #[wasm_bindgen]
+// pub struct NativeProcessor {
+//     executor: &'static NativeExecutor
+// }
+//
+// #[wasm_bindgen]
+// impl NativeProcessor {
+//     #[wasm_bindgen(constructor)]
+//     pub fn new() -> Self {
+//         let di_container = DiContainer::get_instance();
+//         Self {
+//             executor: di_container.get_native_executor()
+//         }
+//     }
+//
+//     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {
+//         let options = bincode_options();
+//         let mut deser = bincode::Deserializer::from_slice(&effect, options);
+//         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+//         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+//         let native_executor = self.executor.handle();
+//         let output = native_executor.handle(request_id, effect).await;
+//         handle_response(request_id, serialize(&output))
+//     }
+// }

@@ -9,11 +9,13 @@ use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
+use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 
 pub struct AuthServer<T>
 where
     T: Clone,
     T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
@@ -25,7 +27,8 @@ where
 impl<T> AuthServer<T>
 where
     T: Clone,
-    T: Send + Sync,
+    T: MaybeSend + Sync,
+    T::Future: MaybeSend,
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,

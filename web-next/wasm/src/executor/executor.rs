@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
-use tokio::time::sleep;
-use tonic::transport::Channel;
-use crate::{process_event, ShellRuntime};
+use futures_timer::Delay;
+use tonic_web_wasm_client::Client;
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
-use shared::app::AppEvent;
 use shared::core_api::network::InternetConnection;
 use shared::executor::p2p::P2PNativeExecutor;
 use shared::executor::persistent::NativePersistent;
@@ -13,23 +9,22 @@ use shared::executor::rpc::NativeRpc;
 use shared::executor::transfer::TransferNative;
 
 // Handle the effect coming from the platform
-// This is the placed where we can put Rust logic to share across platform
+// This is the placed where we can put Rust logic to share across a platform
 pub struct NativeExecutor {
-    pub rpc: Box<dyn NativeRpc<Channel>>,
+    pub rpc: Box<dyn NativeRpc<Client>>,
     pub persistent: Box<dyn NativePersistent>,
-    pub transfer: Box<dyn TransferNative<Channel>>,
+    pub transfer: Box<dyn TransferNative<Client>>,
     pub p2p: Box<dyn P2PNativeExecutor>
 }
 
 impl NativeExecutor {
-    pub async fn handle(&self, request_id: u32, effect: CoreOperation, _shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
+    pub async fn handle(&self, request_id: u32, effect: CoreOperation) -> CoreOperationOutput {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
                 CoreOperationOutput::Rpc(response)
             }
             CoreOperation::Void => {
-                process_event(crate::serialize(&AppEvent::Void));
                 CoreOperationOutput::Void
             }
             CoreOperation::Persistent(database) => {
@@ -48,7 +43,7 @@ impl NativeExecutor {
             },
             CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
             CoreOperation::Delay(duration) => {
-                sleep(duration).await;
+                Delay::new(duration).await;
                 CoreOperationOutput::Delay()
             }
             _ => panic!("Native executor doesn't support this effect {effect:?}")

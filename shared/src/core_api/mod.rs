@@ -13,16 +13,6 @@ use n0_future::StreamExt;
 use std::time::Duration;
 use url::Url;
 
-#[cfg(not(target_family = "wasm"))]
-pub trait MaybeSend: Send + Sync {}
-#[cfg(not(target_family = "wasm"))]
-impl<T: Send + Sync> MaybeSend for T {}
-
-#[cfg(target_family = "wasm")]
-pub trait MaybeSend: Send {}
-#[cfg(target_family = "wasm")]
-impl<T> MaybeSend for T where T: Send {}
-
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
     #[error("IOWriter Error: {0}")]
@@ -31,13 +21,13 @@ pub enum IOWriterError {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait IOWriter: MaybeSend + Sync {
+pub trait IOWriter: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait CoreBridge: MaybeSend + Sync {
+pub trait CoreBridge: Send + Sync {
     fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()>;
 
     // How many throttle is depends on the implementation
@@ -56,13 +46,13 @@ pub trait CoreBridge: MaybeSend + Sync {
 // Abstraction open stream to http server
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait NetStream: MaybeSend + Sync {
+pub trait NetStream: Send + Sync {
     async fn start(&self, http_url: Url, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait NetStreamInner: MaybeSend + Sync {
+pub trait NetStreamInner: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
 
     async fn end(&mut self) -> anyhow::Result<()>;
@@ -70,14 +60,14 @@ pub trait NetStreamInner: MaybeSend + Sync {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait TimeoutReceiver<T: MaybeSend + Sync>: MaybeSend + Sync {
+pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
     async fn recv_timeout(&mut self, timeout: Duration) -> Option<T>;
     async fn recv_default_timeout(&mut self) -> Option<T>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl<T: MaybeSend + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
+impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
     async fn recv_timeout(&mut self, timeout: Duration) -> Option<T> {
         select! {
             msg = self.next().fuse() => msg,
@@ -93,7 +83,7 @@ impl<T: MaybeSend + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait BufferExt: MaybeSend + Sync {
+pub trait BufferExt: Send + Sync {
     async fn flush_timeout(&self, index: usize) -> anyhow::Result<()>;
     async fn flush_all_timeout(&self) -> anyhow::Result<()>;
 }

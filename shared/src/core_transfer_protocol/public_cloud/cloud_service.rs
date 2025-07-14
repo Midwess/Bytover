@@ -8,7 +8,7 @@ use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-
+use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::repository::errors::PersistenceError;
@@ -48,8 +48,9 @@ pub enum CloudTransferErrors {
 pub struct CloudService<T>
 where
     T: Clone,
-    T: Send + Sync,
+    T: MaybeSend + Sync,
     T: tonic::client::GrpcService<tonic::body::Body>,
+    T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
@@ -64,7 +65,8 @@ where
 impl<T> CloudService<T>
 where
     T: Clone,
-    T: Send + Sync,
+    T: MaybeSend + Sync,
+    T::Future: MaybeSend,
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,

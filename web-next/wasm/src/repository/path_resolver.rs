@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::path_resolver::PathResolver;
 use std::sync::Arc;
-use crate::message_to_shell::MessageToShellResponse;
-use crate::message_to_shell::MessageToShell;
+use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PathResolverMessage {
@@ -25,7 +24,7 @@ pub enum PathResolverResponseMessage {
 }
 
 pub struct PathResolverImpl {
-    pub shell: Arc<dyn ShellRuntime>
+    pub shell: Arc<ShellRuntime>
 }
 
 #[async_trait::async_trait(?Send)]

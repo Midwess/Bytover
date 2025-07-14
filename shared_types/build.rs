@@ -104,7 +104,7 @@ fn main() -> anyhow::Result<()> {
 
     gen.register_type::<Source>()?;
 
-    // Register native msg
+    // Register executor msg
     gen.register_type::<MessageToShellResponse>()?;
     gen.register_type::<MessageToShell>()?;
 

@@ -7859,14 +7859,20 @@ dependencies = [
 name = "wasm"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
+ "bytes",
  "core-services",
  "crux_core",
+ "devlog-sdk",
  "erased-serde",
  "futures",
+ "futures-timer",
  "idb",
+ "log",
  "n0-future",
+ "once_cell",
  "prost 0.13.5",
  "serde",
  "serde-wasm-bindgen",
@@ -7875,6 +7881,8 @@ dependencies = [
  "tonic 0.13.1",
  "tonic-web-wasm-client",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

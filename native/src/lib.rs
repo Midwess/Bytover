@@ -105,7 +105,7 @@ pub struct NativeProcessor {
 pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     TOKIO_RT.get().unwrap_or_else(|| {
         let rt = tokio::runtime::Builder::new_multi_thread()
-            .thread_name("bitbridge-native-worker")
+            .thread_name("bitbridge-executor-worker")
             .enable_all()
             .build()
             .unwrap();

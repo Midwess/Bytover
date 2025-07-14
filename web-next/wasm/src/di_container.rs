@@ -1,17 +1,11 @@
-use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
-use crate::core_api_impl::bridge::CoreBridgeImpl;
-use crate::core_api_impl::net_stream::NetStreamImpl;
-use crate::native::executor::NativeExecutor;
-use crate::network::grpc::RpcNetworkModuleImpl;
+use crate::executor::executor::NativeExecutor;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
-use crate::repository::RedbPoolProvider;
 use crate::ShellRuntime;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
-use redb::Database;
 use shared::app::authentication::service::AuthenticationService;
 use shared::app::nearby::nearby_services::NearbyService;
 use shared::app::repository::auth_session::AuthSessionRepository;
@@ -28,23 +22,25 @@ use shared::rpc::auth_server::AuthServer;
 use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::OnceCell;
-use tonic::transport::Channel;
-use crate::native::rpc::NativeRpcImpl;
-use shared::executor::rpc::NativeRpc;
-use shared::executor::persistent::NativePersistent;
-use shared::executor::transfer::TransferNative;
-use shared::executor::p2p::P2PNativeExecutor;
-use crate::native::p2p::P2PNativeExecutorImpl;
-use crate::native::persistent::NativePersistentImpl;
-use crate::native::transfer::TransferNativeImpl;
+use idb::Database;
+use once_cell::sync::OnceCell;
+use tonic_web_wasm_client::Client;
+use core_services::utils::never_send::NeverSend;
+use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
+use crate::core_api_impl::bridge::CoreBridgeImpl;
+use crate::executor::p2p::P2PNativeExecutorImpl;
+use crate::executor::persistent::NativePersistentImpl;
+use crate::executor::rpc::NativeRpcImpl;
+use crate::executor::transfer::TransferNativeImpl;
+use crate::network::grpc::RpcNetworkModuleImpl;
+use crate::repository::IdbPoolProvider;
 
-static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
+static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::new();
 
 pub struct DiContainer {
-    db: OnceCell<Arc<PoolAllocator<Database>>>,
+    db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
     path_resolver: OnceCell<Arc<dyn PathResolver>>,
-    shell: OnceCell<Arc<dyn ShellRuntime>>,
+    shell: OnceCell<Arc<ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
     auth_service: OnceCell<AuthenticationService>,
@@ -81,7 +77,7 @@ impl DiContainer {
     }
 
     pub fn get_net_stream(&self) -> impl NetStream {
-        NetStreamImpl {}
+        todo!()
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -96,7 +92,7 @@ impl DiContainer {
         }
     }
 
-    pub fn get_authentication_server(&'static self) -> AuthServer<Channel> {
+    pub fn get_authentication_server(&'static self) -> AuthServer<Client> {
         AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
     }
 
@@ -111,15 +107,13 @@ impl DiContainer {
         }
     }
 
-    pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<dyn ShellRuntime>) {
+    pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<ShellRuntime>) {
         let _ = self.path_resolver.set(path_resolver);
         let _ = self.shell.set(shell);
         let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
 
-        let db_path = self.path_resolver().get_db_path().await;
-        log::info!(target: "environment", "Connecting to local database at {db_path}");
         init_scoped_id_generator("BitBridge".to_owned());
-        let local_db: Box<dyn PoolResourceProvider<Database>> = Box::new(RedbPoolProvider { path: db_path.clone() });
+        let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
 
         let pool = PoolBuilder::new(local_db)
             .max_pool_size(1)
@@ -166,7 +160,7 @@ impl DiContainer {
         }
     }
 
-    pub fn get_cloud_server(&self) -> CloudServer<Channel> {
+    pub fn get_cloud_server(&self) -> CloudServer<Client> {
         CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
     }
 

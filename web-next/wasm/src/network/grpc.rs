@@ -2,6 +2,7 @@ use tonic_web_wasm_client::Client;
 use shared::rpc::connection::RpcNetworkModule;
 use shared::rpc::errors::RpcErrors;
 
+#[derive(Clone)]
 pub struct RpcNetworkModuleImpl {
     pub endpoint: String
 }

@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 shared = { path = "../../shared" }
+devlog-sdk = { path = "../../libs/devlog-sdk" }
 wasm-bindgen = "0.2.100"
 tonic-web-wasm-client = "0.7.1"
 crux_core = { workspace = true }
@@ -24,6 +25,13 @@ core-services = { workspace = true, default-features = false, features = ["db-id
 idb = { version = "0.6.4" }
 serde_json = { workspace = true }
 serde-wasm-bindgen = { version = "0.6.5" }
+once_cell = { workspace = true }
+log = "0.4.27"
+anyhow = { workspace = true }
+bytes = { workspace = true }
+web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader"] }
+futures-timer = {workspace = true, features = ["wasm-bindgen"]}
+wasm-bindgen-futures = { version = "0.4.50" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
