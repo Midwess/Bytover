@@ -1,0 +1,29 @@
+[package]
+name = "wasm"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shared = { path = "../../shared" }
+wasm-bindgen = "0.2.100"
+tonic-web-wasm-client = "0.7.1"
+crux_core = { workspace = true }
+tonic = { workspace = true, default-features = false }
+async-trait = { workspace = true }
+prost = { workspace = true }
+n0-future = { workspace = true }
+futures = { workspace = true }
+erased-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+bincode = { workspace = true }
+core-services = { workspace = true, default-features = false, features = ["db-idb"] }
+idb = { version = "0.6.4" }
+serde_json = { workspace = true }
+serde-wasm-bindgen = { version = "0.6.5" }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

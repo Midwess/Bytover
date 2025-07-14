@@ -7,12 +7,11 @@ export default function Header() {
         <div className="relative flex justify-between items-center w-full py-10 container">
             <div className="flex flex-row gap-2 items-center">
                 <Image
-                    width={40}
-                    height={40}
+                    width={35}
+                    height={35}
                     src="logo.svg"
                     alt="Logo"
                 />
-                <p className="text-2xl font-poppins font-bold">Bit bridge</p>
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
@@ -21,9 +20,9 @@ export default function Header() {
                         <a
                             key={item}
                             href="#"
-                            className="nav-link font-poppins text-primaryText/80"
+                            className="nav-link text-primaryText/80"
                         >
-                            {item}
+                            <h2>{item}</h2>
                         </a>
                     ))}
                 </div>
@@ -50,7 +49,7 @@ export default function Header() {
                 </style>
 
             </div>
-            <div className="flex flex-row gap-2 font-poppins font-bold text-primaryText">
+            <div className="flex flex-row gap-2 font-bold text-primaryText">
                 <LiquidButton variant={"outline"}>Sign up</LiquidButton>
                 <GitHubStarsButton className={"bg-white/90"} username="Dev-log" repo="animate-ui"/>
             </div>

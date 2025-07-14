@@ -5,6 +5,7 @@ members = [
     # "Desktop/src-tauri",
     "backend",
     "native",
+    "web-next/wasm",
 ]
 
 resolver = "2"
@@ -80,6 +81,7 @@ async-stream = { version = "0.3.6", default-features = false }
 once_cell = { version = "1.21.3", default-features = false }
 futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
+erased-serde = "0.4.6"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

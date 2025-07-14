@@ -37,7 +37,7 @@ export default function ReceiveBoard() {
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-12 w-full h-full gap-2"}>
                 <div className={"col-span-4 lg:col-span-3 h-full"}>
-                    <Board/>
+                    <Board />
                 </div>
                 <div className={"col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20"}>
                     <Collapsible
@@ -123,7 +123,7 @@ function ReceiveCategory(props: {
     return <CollapsibleTrigger asChild>
         <Button variant="secondary" className="w-full cursor-pointer mb-4 rounded-xl h-10 border border-primaryText/5">
             <div className={"flex flex-row w-full items-center justify-between"}>
-                <p className={"font-poppins font-bold text-md"}>{title}</p>
+                <p className={"font-bold h2 text-md"}>{title}</p>
                 <ChevronsUpDown className="h-4 w-4"/>
                 <span className="sr-only">Toggle</span>
             </div>
@@ -134,8 +134,8 @@ function ReceiveCategory(props: {
 function Board() {
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
-            <p className={"text-lg font-poppins font-bold pl-2"}>Receive sessions</p>
-            <div className={"flex flex-col justify-start font-poppins text-primaryText gap-2"}>
+            <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
+            <div className={"flex flex-col justify-start text-primaryText gap-2"}>
                 <p className={"opacity-80 text-sm pl-2"}>Search session</p>
                 <Input className={"rounded-xl font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}/>
             </div>
@@ -161,6 +161,7 @@ function TransferSession(props: {
         <div
             className={"flex flex-row bg-muted rounded-3xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
             <div className={"flex flex-row items-center gap-3"}>
+
                 <div
                     className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
                     <Globe className={"text-primaryText w-full h-full m-2"}/>
@@ -194,11 +195,9 @@ function FileView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
-    console.log(model)
-
     return (
         <div
-            className="w-full h-fit overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5 overflow-clip">
+            className="w-full h-fit overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5">
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center",
@@ -269,10 +268,10 @@ function MediaView(props: {
                 )}
             >
                 <div className="flex flex-col items-start gap-1">
-                    <p className="font-poppins text-primaryText text-md">
+                    <p className="text-primaryText text-md">
                         {model.name}
                     </p>
-                    <p className="font-poppins text-sm text-primaryText/80">
+                    <p className="text-sm text-primaryText/80">
                         {displaySize}
                     </p>
                 </div>

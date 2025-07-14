@@ -17,7 +17,7 @@ type Props = {
 export default function CircleProgress({
     progress,
     size = 80,
-    strokeWidth = 4,
+    strokeWidth = 2,
 }: Props) {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -60,7 +60,7 @@ export default function CircleProgress({
             <div
                 className={clsx(
                     "absolute flex items-center justify-center",
-                    "cursor-pointer bg-bluePrimary"
+                    "cursor-pointer bg-bluePrimary m-3"
                 )}
                 style={{
                     width: size * 0.4,

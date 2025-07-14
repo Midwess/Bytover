@@ -14,23 +14,22 @@ export default function Home() {
             <Header/>
             <div
                 className="absolute top-0 z-[-1] h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
-                <StarsBackground speed={30} starColor={'green'}/>
             </div>
             <div className={'flex flex-col items-center gap-4 container'}>
-                <p className="text-lg tracking-widest font-poppins  text-greenSecondary text-center">
+                <h2 className="text-lg tracking-widest  text-greenSecondary text-center">
                     Powering your productivity 👋
-                </p>
+                </h2>
                 <TypingText
                     delay={200}
                     duration={15}
-                    className="text-5xl font-poppins font-bold text-center"
+                    className="text-5xl font-bold text-center h1"
                     text="Seamless file transfer that you can trust"
                     cursor
                     cursorClassName="h-9"
                 />
             </div>
             <div className={"flex flex-col items-center gap-4"}>
-                <p className={"font-poppins font-bold text-lg text-primaryText/80"}>Available on all platforms</p>
+                <h2 className={"font-bold text-lg text-primaryText/80"}>Available on all platforms</h2>
                 <div className={"flex flex-row gap-2"}>
                     <LiquidButton className={"flex flex-row gap-3"}>
                         <Image src={Android} alt="Android" width={20} height={20}/>

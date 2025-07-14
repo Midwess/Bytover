@@ -5,14 +5,29 @@ use crate::app::transfer::target::TransferTarget;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransferTargetId {
+    Internet,
+    Nearby
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransferSessionId {
     pub r#type: Option<TransferType>,
-    pub target: Option<TransferTarget>,
+    pub target: Option<TransferTargetId>,
     pub order_id: Option<u64>
+}
+
+impl From<&TransferTarget> for TransferTargetId {
+    fn from(value: &TransferTarget) -> Self {
+        match value {
+            TransferTarget::Internet { .. } => TransferTargetId::Internet,
+            TransferTarget::Nearby(_) => TransferTargetId::Nearby
+        }
+    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -45,7 +60,7 @@ impl Table<TransferSessionId> for TransferSession {
     fn id(&self) -> TransferSessionId {
         TransferSessionId {
             r#type: Some(self.transfer_type.clone()),
-            target: Some(self.target.clone()),
+            target: Some((&self.target).into()),
             order_id: Some(self.order_id)
         }
     }

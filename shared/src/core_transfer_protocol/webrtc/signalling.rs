@@ -341,3 +341,5 @@ impl SignallerBuilder for WebSignallerBuilder {
         Ok(Box::new(signaller))
     }
 }
+
+unsafe impl Send for WebSignallerBuilder {}
