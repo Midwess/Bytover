@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod network;
 pub mod repository;
 pub mod core_api_impl;
@@ -21,6 +23,7 @@ use shared::app::BitBridge;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use shared::CoreOperation;
+use crate::executor::executor::NativeExecutor;
 // use crate::di_container::DiContainer;
 // use crate::executor::executor::NativeExecutor;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
@@ -144,28 +147,24 @@ fn bincode_options() -> impl bincode::Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
 
-// #[wasm_bindgen]
-// pub struct NativeProcessor {
-//     executor: &'static NativeExecutor
-// }
-//
-// #[wasm_bindgen]
-// impl NativeProcessor {
-//     #[wasm_bindgen(constructor)]
-//     pub fn new() -> Self {
-//         let di_container = DiContainer::get_instance();
-//         Self {
-//             executor: di_container.get_native_executor()
-//         }
-//     }
-//
-//     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {
-//         let options = bincode_options();
-//         let mut deser = bincode::Deserializer::from_slice(&effect, options);
-//         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-//         let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-//         let native_executor = self.executor.handle();
-//         let output = native_executor.handle(request_id, effect).await;
-//         handle_response(request_id, serialize(&output))
-//     }
-// }
+#[wasm_bindgen]
+pub struct NativeProcessor {
+    executor: &'static NativeExecutor
+}
+
+#[wasm_bindgen]
+impl NativeProcessor {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        todo!()
+    }
+
+    pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {
+        let options = bincode_options();
+        let mut deser = bincode::Deserializer::from_slice(&effect, options);
+        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+        let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+        let output = self.executor.handle(request_id, effect).await;
+        handle_response(request_id, serialize(&output).as_slice())
+    }
+}

@@ -26,13 +26,14 @@ import {
 } from '../../shared_types/generated/typescript/types/shared_types'
 import {BincodeDeserializer} from "../../shared_types/generated/typescript/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "../../shared_types/generated/typescript/bincode/bincodeSerializer";
-import {process_event} from "@/wasm/pkg";
+import {process_event, NativeProcessor} from "@/wasm/pkg";
 import BPromise from 'bluebird'
 
 class WasmCore {
     constructor() {}
 
     async update(event: AppEvent) {
+        const processor = new NativeProcessor();
         let effects_bytes = process_event(serialize(event));
         let effects = deserializeRequests(effects_bytes);
         while (effects.length > 0) {

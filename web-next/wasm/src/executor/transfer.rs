@@ -12,7 +12,7 @@ pub struct TransferNativeImpl {
 
 #[ async_trait::async_trait(?Send)]
 impl TransferNative<Client> for TransferNativeImpl {
-    fn web_rtc(&self) -> &WebRtc {
+    fn web_rtc(&self) -> &Arc<WebRtc> {
         &self.web_rtc
     }
 
