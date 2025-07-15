@@ -7872,6 +7872,7 @@ dependencies = [
  "idb",
  "js-sys",
  "log",
+ "mime_guess",
  "n0-future",
  "once_cell",
  "prost 0.13.5",

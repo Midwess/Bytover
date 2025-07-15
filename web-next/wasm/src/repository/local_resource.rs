@@ -16,12 +16,13 @@ use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::app::repository::path_resolver::PathResolver;
 use shared::core_api::{IOReader, IOWriter};
+use crate::file_api::storage::FileStorage;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
     pub path_resolver: Arc<dyn PathResolver>,
-
+    pub file_storage: FileStorage
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -110,7 +111,11 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 #[async_trait::async_trait(?Send)]
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
-        panic!("The load by path will be implemented in Javascript")
+        let Some(resource) = self.file_storage.load(path).await else {
+            return Ok(None);
+        };
+
+        Ok(Some(resource))
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
@@ -132,7 +137,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {
-        panic!("The load by path will be implemented in Javascript")
+        let Some(resource) = self.load(path.clone()).await? else {
+            return Err(PersistenceError::NotFound(format!("{:?}", path)));
+        };
+
+        Ok(resource.r#type)
     }
 
     async fn load_all(&self) -> Result<Vec<LocalResource>, PersistenceError> {
@@ -152,6 +161,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
-        todo!()
+        let mut result = HashMap::new();
+        for resource_id in resource_ids.iter() {
+            let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;
+            let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
+            result.insert(*resource_id, path);
+        }
+
+        log::info!("Generated thumbnail paths: {:?}", result);
+        Ok(result)
     }
 }

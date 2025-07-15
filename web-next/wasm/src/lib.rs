@@ -16,6 +16,7 @@ use bincode::Options;
 pub use crux_core::{bridge::Bridge, Core, Request};
 use erased_serde::{Serialize};
 use futures::lock::Mutex;
+use js_sys::Array;
 use n0_future::time;
 use n0_future::time::Interval;
 use wasm_bindgen::prelude::*;
@@ -164,9 +165,10 @@ impl NativeProcessor {
         }
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn storage(&self) -> FileStorage {
-        self.storage.clone()
+    pub async fn add_device_files(&self, files: &Array) -> Vec<u8> {
+        let paths = self.storage.add_device_wasm_files(files).await;
+
+        serialize(&paths)
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

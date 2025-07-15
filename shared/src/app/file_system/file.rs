@@ -10,7 +10,7 @@ pub struct LocalResource {
     pub r#type: ResourceType
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
 pub enum LocalResourcePath {
     // Relative from the workdir of application
     RelativePath { path: String, is_private: bool },

@@ -149,6 +149,7 @@ impl DiContainer {
 
     pub fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
         LocalResourceRepositoryImpl {
+            file_storage: self.file_storage.clone(),
             path_resolver: self.path_resolver().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
