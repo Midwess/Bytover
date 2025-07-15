@@ -5,7 +5,7 @@ use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
-pub trait NativeRpc<T>: MaybeSendSync
+pub trait NativeRpc<T>: Send + Sync
 where
     T: Clone,
     T: MaybeSend + Sync,

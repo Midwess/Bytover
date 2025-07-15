@@ -18,7 +18,7 @@ use crate::entities::session::{Session, SessionType};
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
-pub trait NativePersistent: MaybeSendSync {
+pub trait NativePersistent: Send + Sync {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
     fn local_resource_repository(&self) -> &Box<dyn LocalResourceRepository>;
     fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository>;

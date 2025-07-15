@@ -20,7 +20,8 @@ use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
-    pub path_resolver: Arc<dyn PathResolver>
+    pub path_resolver: Arc<dyn PathResolver>,
+
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {

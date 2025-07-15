@@ -9,7 +9,7 @@ use core_services::utils::never_send::NeverSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
-pub trait TransferNative<T>: MaybeSendSync
+pub trait TransferNative<T>: Send + Sync
 where
     T: Clone,
     T: MaybeSend + Sync,

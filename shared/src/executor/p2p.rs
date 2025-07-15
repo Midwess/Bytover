@@ -1,12 +1,11 @@
 use std::sync::Arc;
-use core_services::utils::maybe::MaybeSendSync;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::core_transfer_protocol::webrtc::webrtc::WebRtc;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
-pub trait P2PNativeExecutor: MaybeSendSync {
+pub trait P2PNativeExecutor: Send + Sync {
     fn web_rtc(&self) -> &Arc<WebRtc>;
 
     async fn handle(&self, request_id: u32, effect: P2POperation) -> CoreOperationOutput {

@@ -3,10 +3,10 @@ extern crate core;
 pub mod network;
 pub mod repository;
 pub mod core_api_impl;
-// pub mod di_container;
+pub mod di_container;
 pub mod executor;
 pub mod config;
-mod file_api;
+pub mod file_api;
 
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
@@ -24,9 +24,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use shared::CoreOperation;
 use crate::executor::executor::NativeExecutor;
-// use crate::di_container::DiContainer;
-// use crate::executor::executor::NativeExecutor;
+use crate::di_container::DiContainer;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
+use crate::file_api::storage::FileStorage;
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
@@ -149,14 +149,24 @@ fn bincode_options() -> impl bincode::Options + Copy {
 
 #[wasm_bindgen]
 pub struct NativeProcessor {
-    executor: &'static NativeExecutor
+    executor: &'static NativeExecutor,
+    storage: FileStorage
 }
 
 #[wasm_bindgen]
 impl NativeProcessor {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        todo!()
+        let di_container = DiContainer::get_instance();
+        Self {
+            storage: di_container.file_storage(),
+            executor: di_container.get_native_executor()
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn storage(&self) -> FileStorage {
+        self.storage.clone()
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

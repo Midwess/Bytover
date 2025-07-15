@@ -32,6 +32,7 @@ use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
 use crate::executor::transfer::TransferNativeImpl;
+use crate::file_api::storage::FileStorage;
 use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::IdbPoolProvider;
 
@@ -43,6 +44,7 @@ pub struct DiContainer {
     shell: OnceCell<Arc<ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
+    file_storage: FileStorage,
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
@@ -60,6 +62,7 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
+                file_storage: FileStorage::new(),
                 auth_service: OnceCell::new(),
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
@@ -76,8 +79,12 @@ impl DiContainer {
         self.path_resolver.get().unwrap()
     }
 
-    pub fn get_net_stream(&self) -> impl NetStream {
-        todo!()
+    pub fn file_storage(&self) -> FileStorage {
+        self.file_storage.clone()
+    }
+
+    pub fn get_net_stream(&self) -> Box<dyn NetStream> {
+        todo!("")
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -179,7 +186,7 @@ impl DiContainer {
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
             repository: Arc::new(self.get_local_resource_repository()),
-            net_stream: Box::new(self.get_net_stream())
+            net_stream: self.get_net_stream()
         };
 
         let executor = NativeExecutor {

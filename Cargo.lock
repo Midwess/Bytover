@@ -7870,6 +7870,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "idb",
+ "js-sys",
  "log",
  "n0-future",
  "once_cell",
