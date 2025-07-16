@@ -82,6 +82,7 @@ once_cell = { version = "1.21.3", default-features = false }
 futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
 erased-serde = "0.4.6"
+instant = "0.1.13"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

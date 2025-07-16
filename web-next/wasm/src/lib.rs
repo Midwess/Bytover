@@ -7,6 +7,7 @@ pub mod di_container;
 pub mod executor;
 pub mod config;
 pub mod file_api;
+mod errors;
 
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
@@ -156,9 +157,9 @@ pub struct NativeProcessor {
 
 #[wasm_bindgen]
 impl NativeProcessor {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+    pub async fn init() -> Self {
         let di_container = DiContainer::get_instance();
+        di_container.init(Arc::new(ShellRuntime {})).await;
         Self {
             storage: di_container.file_storage(),
             executor: di_container.get_native_executor()

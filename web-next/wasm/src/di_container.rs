@@ -10,7 +10,6 @@ use shared::app::authentication::service::AuthenticationService;
 use shared::app::nearby::nearby_services::NearbyService;
 use shared::app::repository::auth_session::AuthSessionRepository;
 use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use shared::app::transfer::transfer_service::TransferService;
@@ -28,6 +27,7 @@ use tonic_web_wasm_client::Client;
 use core_services::utils::never_send::NeverSend;
 use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
+use crate::core_api_impl::net_stream::{NetStreamImpl, NetStreamInnerImpl};
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
@@ -40,7 +40,6 @@ static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::new();
 
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
-    path_resolver: OnceCell<Arc<dyn PathResolver>>,
     shell: OnceCell<Arc<ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
@@ -57,7 +56,6 @@ impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
-                path_resolver: OnceCell::new(),
                 shell: OnceCell::new(),
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
@@ -75,16 +73,12 @@ impl DiContainer {
         })
     }
 
-    pub fn path_resolver(&self) -> &Arc<dyn PathResolver> {
-        self.path_resolver.get().unwrap()
-    }
-
     pub fn file_storage(&self) -> FileStorage {
         self.file_storage.clone()
     }
 
     pub fn get_net_stream(&self) -> Box<dyn NetStream> {
-        todo!("")
+        Box::new(NetStreamImpl {})
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -114,20 +108,23 @@ impl DiContainer {
         }
     }
 
-    pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<ShellRuntime>) {
-        let _ = self.path_resolver.set(path_resolver);
+    pub async fn init(&self, shell: Arc<ShellRuntime>) {
+        log::info!("Initializing DI container");
         let _ = self.shell.set(shell);
         let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
 
         init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
 
+        log::info!("Initializing database pool");
         let pool = PoolBuilder::new(local_db)
             .max_pool_size(1)
             .min_pool_size(1)
             .resource_idle_timeout(Duration::from_secs(5))
             .build()
             .await;
+
+        log::info!("Database pool initialized");
 
         let _ = self.db.set(pool);
     }
@@ -150,7 +147,6 @@ impl DiContainer {
     pub fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
         LocalResourceRepositoryImpl {
             file_storage: self.file_storage.clone(),
-            path_resolver: self.path_resolver().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -160,7 +156,6 @@ impl DiContainer {
 
     pub fn get_transfer_session_repository(&self) -> impl TransferSessionRepository {
         TransferSessionRepositoryImpl {
-            path_resolver: self.path_resolver().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())

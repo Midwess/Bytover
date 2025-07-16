@@ -21,22 +21,21 @@ impl AuthenticationService {
 
     pub async fn update_signin_session(&self, ctx: AppCommandContext) {
         // Call API to update the user info
-        log::info!(target: "auth", "Updating sign in session");
         let mut user = match RpcOperation::get_me().into_future(ctx.clone()).await {
             Ok(user) => Some(user),
             Err(e) => {
-                log::error!(target: "auth", "Failed to get user info: {e:?}");
+                log::info!(target: "auth", "Failed to get user info: {e:?}");
                 None
             }
         };
 
+        log::info!(target: "auth", "Updated sign in session");
         if user.is_none() {
             let session = SessionPersistentOperation::get_session().into_future(ctx.clone()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {
                 user.replace(user_info);
             }
 
-            // User not signined in
             return;
         } else {
             SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;

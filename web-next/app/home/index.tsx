@@ -1,4 +1,3 @@
-import {StarsBackground} from "@/components/animate-ui/backgrounds/stars";
 import {TypingText} from "@/components/animate-ui/text/typing";
 import Header from "@/components/web/header";
 import {LiquidButton} from '@/components/animate-ui/buttons/liquid'

@@ -30,7 +30,9 @@ where
                 let response = self.auth_server().get_me().await;
                 match response {
                     Ok(user) => RpcOperationOutput::GetMe(user),
-                    Err(e) => RpcOperationOutput::NetworkError(e.into())
+                    Err(e) => {
+                        RpcOperationOutput::NetworkError(e.into())
+                    }
                 }
             }
         }

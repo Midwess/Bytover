@@ -97,4 +97,8 @@ impl FileStorage {
 
         Some(local_resource)
     }
+
+    pub(crate) async fn save(&self) {
+
+    }
 }

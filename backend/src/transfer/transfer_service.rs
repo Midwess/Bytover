@@ -22,7 +22,7 @@ pub enum TransferErrors {
     #[error("Upload error {0}")]
     TransferProgressError(#[from] TransferProgressErrors),
     #[error("Cloud storage error {0}")]
-    CloudStroageError(#[from] CloudStorageErrors),
+    CloudStorageError(#[from] CloudStorageErrors),
     #[error("Password of a session cannot exceed {0}")]
     PasswordLengthExceed(usize)
 }

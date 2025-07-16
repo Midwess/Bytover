@@ -14,14 +14,12 @@ use core_services::utils::pool::request::PoolRequest;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
-use shared::app::repository::path_resolver::PathResolver;
 use shared::core_api::{IOReader, IOWriter};
 use crate::file_api::storage::FileStorage;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
-    pub path_resolver: Arc<dyn PathResolver>,
     pub file_storage: FileStorage
 }
 
@@ -161,14 +159,15 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
-        let mut result = HashMap::new();
-        for resource_id in resource_ids.iter() {
-            let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;
-            let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
-            result.insert(*resource_id, path);
-        }
-
-        log::info!("Generated thumbnail paths: {:?}", result);
-        Ok(result)
+        // let mut result = HashMap::new();
+        // for resource_id in resource_ids.iter() {
+        //     let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;
+        //     let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
+        //     result.insert(*resource_id, path);
+        // }
+        //
+        // log::info!("Generated thumbnail paths: {:?}", result);
+        // Ok(result)
+        todo!("")
     }
 }
