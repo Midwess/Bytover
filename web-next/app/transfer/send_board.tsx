@@ -14,7 +14,6 @@ import * as React from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
-import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
 
 export default function SendBoard() {
     return <>

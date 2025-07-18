@@ -51,7 +51,8 @@ where
                 device_unique_key: device.unique_id,
                 platform: device.platform.into(),
                 device_type: device.device_type.into()
-            }
+            },
+            original_web_page_url: None
         };
 
         let auth_client = AuthServiceClient::new(channel);

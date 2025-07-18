@@ -2,6 +2,7 @@ import { DM_Mono, Inter } from 'next/font/google';
 import type { Metadata } from "next";
 import "./globals.css";
 import localFont from 'next/font/local';
+import CoreStart from "@/app/core_start";
 
 const dmSans = localFont({
   src: [
@@ -68,6 +69,7 @@ export default function RootLayout({
     <html lang="en">
       <body
           className={`h-screen ${dmSans.variable} ${dmMono.variable} ${inter.variable} antialiased dark`}>
+        <CoreStart/>
         {children}
       </body>
     </html>

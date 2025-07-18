@@ -9,5 +9,6 @@ pub mod core_transfer_protocol;
 pub mod entities;
 pub mod errors;
 pub mod rpc;
+pub mod utils;
 
 pub use app::CoreOperation;

@@ -38,8 +38,8 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
         open_request.on_upgrade_needed(|event| {
             let database = event.database().unwrap();
             let mut store_params = ObjectStoreParams::new();
-            store_params.auto_increment(true);
-            store_params.key_path(Some(KeyPath::new_single("id")));
+            store_params.auto_increment(false);
+            store_params.key_path(None);
 
             database.create_object_store(
                 "authSession",

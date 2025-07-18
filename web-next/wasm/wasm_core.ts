@@ -1,3 +1,5 @@
+'use client'
+
 import {
     CoreOperationVariantDelay,
     Effect,
@@ -36,19 +38,56 @@ import {
     MessageToShellResponseVariantVoidResponse,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
-    EnvironmentEventVariantAppLaunched,
+    EnvironmentEventVariantAppLaunched, AuthenticationViewModel, EnvironmentViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
-import init_core from "core_wasm"
+import init_core, {view} from "core_wasm"
 import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
+import {Observable} from "@/utils/observable";
+import {useEffect, useState} from "react";
 
 class WasmCore {
     nativeProcessor: NativeProcessor | null;
+    isCoreReady: Observable<boolean> = new Observable(false)
+    authenticationState: Observable<AuthenticationViewModel> = new Observable()
+    environmentState: Observable<EnvironmentViewModel> = new Observable()
 
     constructor() {
         this.nativeProcessor = null;
+    }
+
+    public useCoreReady() {
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const [isReady, setIsReady] = useState(this.isCoreReady.get());
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+            return this.isCoreReady.subscribe(setIsReady)
+        }, [])
+        return isReady
+    }
+
+    public useEnvironmentState() {
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const [state, setState] = useState(this.environmentState.get());
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+            return this.environmentState.subscribe(setState)
+        }, []);
+
+        return state
+    }
+
+    public useAuthenticationState() {
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const [state, setState] = useState(this.authenticationState.get());
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+            return this.authenticationState.subscribe(setState)
+        }, []);
+
+        return state
     }
 
     public async launch() {
@@ -57,8 +96,9 @@ class WasmCore {
     }
 
     public async update(event: AppEvent) {
-        let effects_bytes = process_event(serialize(event));
-        let requests = deserializeRequests(effects_bytes);
+        console.log('tiendang-debug', 'update', event)
+        const effects_bytes = process_event(serialize(event));
+        const requests = deserializeRequests(effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
             if (!request) break;
@@ -74,6 +114,7 @@ class WasmCore {
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
                 this.nativeProcessor = await NativeProcessor.init()
+                this.isCoreReady.set(true)
                 return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantWebView: {
@@ -93,19 +134,17 @@ class WasmCore {
                         )))));
                     }
                     case DeviceOperationVariantOpen: {
-                        let open = device.value as DeviceOperationVariantOpen;
+                        const open = device.value as DeviceOperationVariantOpen;
                         console.log(`Opening ${open}`)
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
-                        let operation = device.value as DeviceOperationVariantLoadThumbnailPng;
+                        const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
                         console.log(`Loading thumbnail for ${operation.value}`)
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng([]))))
                     }
                     case DeviceOperationVariantGetGeoLocation: {
-                        let operation = device.value as DeviceOperationVariantGetGeoLocation
-                        console.log('Received load location')
-                        let location = new GeoLocation(10, 10.2);
+                        const location = new GeoLocation(10, 10.2);
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
                     }
                 }
@@ -135,18 +174,18 @@ class WasmCore {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantNotified: {
-                let operation = coreOperation as CoreOperationVariantNotified;
+                const operation = coreOperation as CoreOperationVariantNotified;
                 this.update(operation.value)
                 return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantDialog: {
-                let operation = coreOperation as CoreOperationVariantDialog;
+                const operation = coreOperation as CoreOperationVariantDialog;
                 console.log(`Opening dialog ${operation.value}`)
                 return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantDelay: {
-                let delay = coreOperation as CoreOperationVariantDelay;
-                let ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
+                const delay = coreOperation as CoreOperationVariantDelay;
+                const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
                 await BPromise.delay(ms)
                 return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
@@ -155,17 +194,23 @@ class WasmCore {
         return serialize(new CoreOperationOutputVariantVoid())
     }
 
-    async updateView() {}
+    async updateView() {
+        const viewData = view();
+        const viewModel = deserializeView(viewData);
+
+        this.environmentState.set(viewModel.environment!)
+        this.authenticationState.set(viewModel.authentication!)
+    }
 
     async handleMsgToShell(data: Uint8Array): Promise<Uint8Array> {
-        let msgToShell = deserializeMsgToShell(data);
+        const msgToShell = deserializeMsgToShell(data);
         switch(msgToShell.constructor) {
             case MessageToShellVariantHandleResponse: {
-                let msg = msgToShell as MessageToShellVariantHandleResponse;
-                let id = msg.field0;
-                let operationData = serialize(msg.field1);
-                let requestsData = handle_response(id, operationData)
-                let requests = deserializeRequests(requestsData);
+                const msg = msgToShell as MessageToShellVariantHandleResponse;
+                const id = msg.field0;
+                const operationData = serialize(msg.field1);
+                const requestsData = handle_response(id, operationData)
+                const requests = deserializeRequests(requestsData);
                 while (requests.length > 0) {
                     const request = requests.shift();
                     if (!request) break;
