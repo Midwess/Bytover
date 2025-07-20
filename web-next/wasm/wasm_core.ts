@@ -48,7 +48,7 @@ import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
 
-class WasmCore {
+export class WasmCore {
     nativeProcessor: NativeProcessor | null;
     isCoreReady: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()

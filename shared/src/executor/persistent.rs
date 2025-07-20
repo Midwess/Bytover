@@ -26,7 +26,6 @@ pub trait NativePersistent: Send + Sync {
     async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
         match effect {
             PersistentOperation::Session(SessionPersistentOperation::WriteToken(token)) => {
-                log::info!("Writing token to database, delete first 2");
                 if let Err(err) = self
                     .auth_session_repository()
                     .delete_one(&AuthSessionId {
