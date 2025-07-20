@@ -38,7 +38,7 @@ import {
     MessageToShellResponseVariantVoidResponse,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
-    EnvironmentEventVariantAppLaunched, AuthenticationViewModel, EnvironmentViewModel,
+    EnvironmentEventVariantAppLaunched, AuthenticationViewModel, EnvironmentViewModel, NearbyViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -53,6 +53,7 @@ export class WasmCore {
     isCoreReady: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
+    nearbyState: Observable<NearbyViewModel> = new Observable()
 
     constructor() {
         this.nativeProcessor = null;
@@ -85,6 +86,17 @@ export class WasmCore {
         // eslint-disable-next-line react-hooks/rules-of-hooks
         useEffect(() => {
             return this.authenticationState.subscribe(setState)
+        }, []);
+
+        return state
+    }
+
+    public useNearbyState() {
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const [state, setState] = useState(this.nearbyState.get());
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+            return this.nearbyState.subscribe(setState)
         }, []);
 
         return state
@@ -200,6 +212,7 @@ export class WasmCore {
 
         this.environmentState.set(viewModel.environment!)
         this.authenticationState.set(viewModel.authentication!)
+        this.nearbyState.set(viewModel.nearby!)
     }
 
     async msg_from_native(data: Uint8Array): Promise<Uint8Array> {

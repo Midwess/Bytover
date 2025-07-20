@@ -34,7 +34,7 @@ impl Peer {
         let rng = (Utc::now().timestamp_millis() % (animals.len() as i64)) as usize;
         let chosen_animal = animals[rng];
 
-        format!("https://cdn.devlog.studio/public/animal_avatars/{chosen_animal}.png")
+        format!("https://storage.devlog.studio/public/animal_avatars/{chosen_animal}.png")
     }
 }
 

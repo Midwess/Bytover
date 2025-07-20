@@ -14,6 +14,7 @@ import * as React from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
+import {PeerViewModel} from "../../../shared_types/generated/typescript/types/shared_types";
 
 export default function SendBoard() {
     return <>
@@ -141,7 +142,21 @@ function PublicSend() {
 }
 
 function NearbySend() {
+    const nearbyState = window.core.useNearbyState()
+    const nearbyPeers = nearbyState?.peers || []
+
     return <>
-        <div className={""}></div>
+        <div className={"w-full h-full flex-col p-2"}>
+            {nearbyPeers.map(peer => (<NearbyPeer key={peer.id} peer={peer}/>))}
+        </div>
     </>
 }
+
+function NearbyPeer({peer}: { peer: PeerViewModel }) {
+    return <>
+        <div className={"flex flex-row gap-2"}>
+            <p>{peer.display_name}</p>
+        </div>
+    </>
+}
+
