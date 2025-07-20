@@ -96,7 +96,6 @@ class WasmCore {
     }
 
     public async update(event: AppEvent) {
-        console.log('tiendang-debug', 'update', event)
         const effects_bytes = process_event(serialize(event));
         const requests = deserializeRequests(effects_bytes);
         while (requests.length > 0) {
@@ -104,6 +103,7 @@ class WasmCore {
             if (!request) break;
 
             const nextRequest = await this.processEffect(request.id, request.effect);
+            if (nextRequest.length === 0) continue;
             requests.push(...deserializeRequests(nextRequest));
         }
     }

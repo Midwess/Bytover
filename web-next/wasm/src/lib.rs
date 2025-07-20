@@ -122,10 +122,7 @@ pub fn process_event(data: Vec<u8>) -> Vec<u8> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
-    match CORE.handle_response(id, data) {
-        Ok(effects) => effects,
-        Err(e) => panic!("{e}"),
-    }
+    CORE.handle_response(id, data).unwrap_or_default()
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]

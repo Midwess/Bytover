@@ -29,7 +29,7 @@ once_cell = { workspace = true }
 log = "0.4.27"
 anyhow = { workspace = true }
 bytes = { workspace = true }
-web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window"] }
+web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location"] }
 futures-timer = {workspace = true, features = ["wasm-bindgen"]}
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.77"

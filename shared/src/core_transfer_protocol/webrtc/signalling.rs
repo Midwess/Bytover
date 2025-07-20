@@ -67,7 +67,7 @@ impl SharedContext {
     }
 
     pub fn set_current_id(&self, id: PeerId) {
-        self.current_id.set(id).unwrap();
+        let _ = self.current_id.set(id);
     }
 
     pub fn get_current_id(&self) -> PeerId {

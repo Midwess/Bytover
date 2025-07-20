@@ -43,7 +43,7 @@ impl SignallingClient {
         let mut msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
         let min_keep_alive = Duration::from_secs(3);
-        let mut last_keep_alive = Instant::now() - min_keep_alive;
+        let mut last_keep_alive = None::<Instant>;
         let handle = spawn(async move {
             loop {
                 log::info!("Starting signalling client at {addr}");
@@ -58,7 +58,7 @@ impl SignallingClient {
 
                 let receiver = Arc::new(Mutex::new(receiver));
 
-                log::info!("websocket connected");
+                let mut connected = false;
                 loop {
                     let receiver = receiver.clone();
                     Delay::new(Duration::from_millis(10)).await;
@@ -69,6 +69,11 @@ impl SignallingClient {
                     };
 
                     if let Some(msg) = msg_opt {
+                        if let WsEvent::Opened = msg {
+                            connected = true;
+                            log::info!("websocket opened");
+                        }
+
                         if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
                             let Ok(msg) = Message::decode(&bytes[..]) else {
                                 continue;
@@ -89,11 +94,23 @@ impl SignallingClient {
                         }
                     }
 
+                    if !connected {
+                        Delay::new(Duration::from_millis(100)).await;
+                        continue;
+                    }
+
                     if let Ok(Some(msg_to_send)) = signal_receiver.try_next() {
-                        if msg_to_send.join.is_some() && last_keep_alive.elapsed() <= min_keep_alive {
-                            last_keep_alive = Instant::now();
-                            // We avoid sending too much keep a live message
-                            continue;
+                        if msg_to_send.join.is_some() {
+                            if let Some(last) = last_keep_alive {
+                                if last.elapsed() <= min_keep_alive {
+                                    last_keep_alive = Some(Instant::now());
+                                    // We avoid sending too much keep a live message
+                                    continue;
+                                }
+                            }
+                            else {
+                                last_keep_alive = Some(Instant::now());
+                            }
                         }
 
                         let mut bytes = vec![];

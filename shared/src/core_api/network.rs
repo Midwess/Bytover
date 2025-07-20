@@ -3,11 +3,12 @@ use futures_timer::Delay;
 use futures_util::lock::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use n0_future::time::Instant;
 
 #[derive(Clone)]
 pub struct InternetConnection {
-    last_passed: Arc<Mutex<Instant>>
+    last_passed: Arc<Mutex<Option<Instant>>>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -24,7 +25,7 @@ impl Default for InternetConnection {
 impl InternetConnection {
     pub fn new() -> Self {
         Self {
-            last_passed: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(5)))
+            last_passed: Arc::new(Mutex::new(None))
         }
     }
 
@@ -52,8 +53,10 @@ impl InternetConnection {
 
     pub async fn is_connected(&self) -> bool {
         let mut last_passed = self.last_passed.lock().await;
-        if last_passed.elapsed() < Duration::from_secs(5) {
-            return true;
+        if let Some(last_passed) = last_passed.as_ref() {
+            if last_passed.elapsed() < Duration::from_secs(5) {
+                return true;
+            }
         }
 
         let ns = "internet-check";
@@ -62,14 +65,14 @@ impl InternetConnection {
 
         match client.get(addr).timeout(Duration::from_millis(5000)).send().await {
             Ok(_) => {
-                *last_passed = Instant::now();
+                *last_passed = Some(Instant::now());
                 true
             }
             Err(err) => {
                 log::info!(
                     target: ns,
-                    "No internet connection in the last {} seconds: {:?}",
-                    last_passed.elapsed().as_secs(),
+                    "No internet connection in the last {:?}: {:?}",
+                    last_passed.as_ref(),
                     err
                 );
                 false

@@ -1,7 +1,7 @@
 use core_services::logger;
 use devlog_sdk::api_gateway::client::ApiGatewayClient;
 use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
-use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayServiceBuilder};
+use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
 use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudServiceServer;
 use tonic::transport::Server;
@@ -57,15 +57,17 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
 
     let service = GatewayServiceBuilder::new()
         .grpc(tcp.public_host.clone(), tcp.port)
-        .name("devlog-bitbridge-rpc-server")
+        .name("bitbridge-grpc-server")
         .routes(vec![
             GatewayRouteBuilder::new()
                 .grpc()
-                .path("~/devlog.bitbridge.*")
+                .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
+                .priority(1)
+                .enable_web()
                 .strip_path(false)
-                .public(true)
+                .public(false)
                 .preserve_host(false)
-                .name("devlog-bitbridge-rpc-server-path")
+                .name("bitbridge-grpc-server-path")
                 .build(),
         ])
         .build();
