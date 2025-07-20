@@ -202,7 +202,7 @@ export class WasmCore {
         this.authenticationState.set(viewModel.authentication!)
     }
 
-    async handleMsgToShell(data: Uint8Array): Promise<Uint8Array> {
+    async msg_from_native(data: Uint8Array): Promise<Uint8Array> {
         const msgToShell = deserializeMsgToShell(data);
         switch(msgToShell.constructor) {
             case MessageToShellVariantHandleResponse: {
@@ -215,6 +215,7 @@ export class WasmCore {
                     const request = requests.shift();
                     if (!request) break;
                     const nextRequest = await this.processEffect(request.id, request.effect);
+                    if (nextRequest.length === 0) break;
                     requests.push(...deserializeRequests(nextRequest));
                 }
 
