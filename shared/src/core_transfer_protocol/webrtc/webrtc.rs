@@ -20,6 +20,7 @@ use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing_subscriber::util::SubscriberInitExt;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -95,9 +96,13 @@ impl WebRtc {
 
     pub async fn start_peer_core_stream(&self, peer_id: String, core_id: u32) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
+        log::info!("Starting peer core stream with peer_id = {peer_id:?}");
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.start_core_stream(core_id);
             return Ok(());
+        }
+        else {
+            log::info!("Peer not found");
         }
 
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
@@ -113,7 +118,7 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_secs(3)))
+            .signaling_keep_alive_interval(Some(Duration::from_secs(1)))
             .build();
 
         let loop_fut = loop_fut.fuse();
@@ -140,8 +145,11 @@ impl WebRtc {
                         continue;
                     }
 
-                    if peer_id < current_user.peer_id() {
-                        let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
+                    if peer_id > current_user.peer_id() {
+                        let direct_message_channel = DirectMessageChannel::new(
+                            peer_id,
+                            outbound_msg_sender.clone()
+                        );
                         let core_bridge = self.core_bridge.clone();
                         let current_user = current_user.clone();
                         let outbound_data_sender = outbound_data_sender.clone();
@@ -178,7 +186,8 @@ impl WebRtc {
                                 .await;
                         }));
                     }
-                } else {
+                }
+                else {
                     log::info!("Peer {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }

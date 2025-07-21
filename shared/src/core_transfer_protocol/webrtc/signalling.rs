@@ -269,8 +269,9 @@ impl WebSignaller {
         };
 
         // Send the join msg right after the socket connected
+        let result = self.client.start().await;
         self.client.send(first_msg).await.map_err(Into::<WebRtcErrors>::into)?;
-        self.client.start().await
+        result
     }
 }
 
@@ -299,12 +300,13 @@ impl Signaller for WebSignaller {
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer(ref peer_id) = peer_event {
-                if peer_id.0 >= self.peer_id.0 {
+                if peer_id.0 <= self.peer_id.0 {
                     continue;
                 }
 
                 if !self.shared_context.is_peer_connected_or_connecting(peer_id).await {
                     self.shared_context.add_peer_place_holder(*peer_id).await;
+                    log::info!("New peer found: {peer_id:?}, connecting...");
                     return Ok(peer_event);
                 }
             } else {

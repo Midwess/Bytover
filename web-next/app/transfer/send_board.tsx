@@ -15,6 +15,8 @@ import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
 import {PeerViewModel} from "../../../shared_types/generated/typescript/types/shared_types";
+import CircleProgress from "@/components/ui/progress";
+import {Avatar, AvatarImage} from "@/components/ui/avatar";
 
 export default function SendBoard() {
     return <>
@@ -81,7 +83,7 @@ function Board() {
                         <ChevronsUpDown className="ml-auto"/>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className={"font-medium w-[300px]"}>
+                <DropdownMenuContent className={"font-medium w-[200px]"}>
                     <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
                                               checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
                         setActiveMethod(activeMethods[0])
@@ -153,10 +155,26 @@ function NearbySend() {
 }
 
 function NearbyPeer({peer}: { peer: PeerViewModel }) {
+    const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
+    console.log(color)
     return <>
-        <div className={"flex flex-row gap-2"}>
-            <p>{peer.display_name}</p>
-        </div>
+        <Button
+            className={"h-fit w-full hover:bg-muted-foreground/30 flex flex-row bg-muted rounded-3xl items-center px-2 py-2 max-h-[60px] border-1 border-muted shadow-xl justify-between"}>
+            <div className={"flex flex-row items-center gap-3"}>
+                <div
+                    className={"rounded-full aspect-square justify-center items-center flex h-auto w-auto"}>
+                    <Avatar className="border-3 p-0.5" style={{backgroundColor: color}}>
+                        <AvatarImage src={peer.avatar.url}/>
+                    </Avatar>
+                </div>
+                <div className={"flex flex-col gap-0"}>
+                    <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
+                </div>
+            </div>
+            {
+                peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={30}/> : <></>
+            }
+        </Button>
     </>
 }
 

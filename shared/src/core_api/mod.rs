@@ -1,5 +1,6 @@
 pub mod network;
 
+use std::pin::Pin;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
@@ -12,6 +13,7 @@ use n0_future::task::JoinHandle;
 use n0_future::StreamExt;
 use std::time::Duration;
 use url::Url;
+use futures::task::{noop_waker, Context, Poll};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -63,7 +65,9 @@ pub trait NetStreamInner: Send + Sync {
 pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
     async fn recv_timeout(&mut self, timeout: Duration) -> Option<T>;
     async fn recv_default_timeout(&mut self) -> Option<T>;
+    fn poll_next_now(&mut self) -> Option<T>;
 }
+
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
@@ -78,6 +82,16 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
 
     async fn recv_default_timeout(&mut self) -> Option<T> {
         self.recv_timeout(Duration::from_secs(10)).await
+    }
+
+    fn poll_next_now(&mut self) -> Option<T> {
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let mut pinned = Pin::new(self);
+        match pinned.as_mut().poll_next(&mut cx) {
+            Poll::Ready(Some(item)) => Some(item),
+            _ => None,
+        }
     }
 }
 

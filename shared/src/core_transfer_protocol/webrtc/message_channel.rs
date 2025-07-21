@@ -54,7 +54,7 @@ impl DirectMessageChannel {
     }
 
     pub async fn send(&self, request: peer_message_body::Request, request_id: Option<uuid::Uuid>) -> Result<Response, WebRtcErrors> {
-        let request_id = request_id.unwrap_or(uuid::Uuid::new_v4()).to_string();
+        let request_id = request_id.unwrap_or(uuid::Uuid::now_v7()).to_string();
         let msg = PeerMessageBody {
             request: Some(request),
             request_id: request_id.clone(),
@@ -83,7 +83,7 @@ impl DirectMessageChannel {
     }
 
     pub async fn notify(&self, request: peer_message_body::Request) -> Result<String, WebRtcErrors> {
-        let request_id = uuid::Uuid::new_v4().to_string();
+        let request_id = uuid::Uuid::now_v7().to_string();
         let msg = PeerMessageBody {
             request: Some(request),
             request_id: request_id.clone(),

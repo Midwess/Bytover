@@ -183,7 +183,9 @@ export class WasmCore {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                let p2pOperation = coreOperation as CoreOperationVariantP2P
+                console.log("Processing P2P event", p2pOperation.value)
+                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
@@ -227,9 +229,13 @@ export class WasmCore {
                 while (requests.length > 0) {
                     const request = requests.shift();
                     if (!request) break;
+
                     const nextRequest = await this.processEffect(request.id, request.effect);
-                    if (nextRequest.length === 0) break;
-                    requests.push(...deserializeRequests(nextRequest));
+
+                    if (nextRequest.length === 0) continue;
+
+                    const newRequests = deserializeRequests(nextRequest);
+                    requests.push(...newRequests);
                 }
 
                 return serialize(new MessageToShellResponseVariantVoidResponse())

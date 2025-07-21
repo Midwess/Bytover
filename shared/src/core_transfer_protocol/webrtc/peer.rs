@@ -131,7 +131,8 @@ impl WebRtcPeer {
     }
 
     pub fn start_core_stream(&self, core_stream_id: u32) {
-        self.core_id.store(core_stream_id, Ordering::Relaxed)
+        self.core_id.store(core_stream_id, Ordering::Relaxed);
+        log::info!("Saved core stream id {}", self.core_id.load(Ordering::Relaxed));
     }
 
     pub async fn process_request(&self, request_id: String, msg: Request) {
@@ -380,7 +381,7 @@ impl WebRtcPeer {
         core_request_id: u32,
         mut session: TransferSession
     ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let request_id = uuid::Uuid::new_v4();
+        let request_id = uuid::Uuid::now_v7();
         self.transfers_context.start_transfer(session.order_id, request_id.to_string()).await;
 
         let session_id = session.order_id;

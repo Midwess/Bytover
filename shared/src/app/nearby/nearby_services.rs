@@ -26,7 +26,7 @@ impl NearbyService {
     pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
         let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
 
-        let peer_id = Uuid::new_v4().to_string();
+        let peer_id = Uuid::now_v7().to_string();
 
         let peer = match user {
             Some(user) => Peer {
@@ -106,7 +106,6 @@ impl NearbyService {
 
     pub async fn handle_peer_connection(&'static self, peer: Peer, ctx: AppCommandContext) {
         let ns = format!("peer-id+{}", peer.id);
-        log::info!(target: ns.as_str(), "Handle peer connection: {}", peer.id);
         let request = CoreOperation::P2P(P2POperation::PeerEvents(peer.id.clone()));
         let mut stream = ctx.stream_from_shell(request);
 

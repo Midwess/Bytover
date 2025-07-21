@@ -4,14 +4,14 @@ use ewebsock::{connect, Options, WsEvent, WsMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
-use futures_util::SinkExt;
+use futures_util::{SinkExt, StreamExt};
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::time::Instant;
-use n0_future::StreamExt;
 use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::core_api::TimeoutReceiver;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -61,7 +61,7 @@ impl SignallingClient {
                 let mut connected = false;
                 loop {
                     let receiver = receiver.clone();
-                    Delay::new(Duration::from_millis(10)).await;
+                    Delay::new(Duration::from_millis(50)).await;
 
                     let msg_opt = {
                         let receiver = receiver.lock().await;
@@ -72,6 +72,7 @@ impl SignallingClient {
                         if let WsEvent::Opened = msg {
                             connected = true;
                             log::info!("websocket opened");
+                            continue;
                         }
 
                         if let WsEvent::Message(WsMessage::Binary(bytes)) = msg {
@@ -79,6 +80,7 @@ impl SignallingClient {
                                 continue;
                             };
 
+                            log::info!("received message: {:?}", msg);
                             let _ = msg_sender.send(msg).await;
                             continue;
                         }
@@ -95,21 +97,16 @@ impl SignallingClient {
                     }
 
                     if !connected {
-                        Delay::new(Duration::from_millis(100)).await;
                         continue;
                     }
 
-                    if let Ok(Some(msg_to_send)) = signal_receiver.try_next() {
+                    if let Some(msg_to_send) = signal_receiver.poll_next_now() {
                         if msg_to_send.join.is_some() {
                             if let Some(last) = last_keep_alive {
                                 if last.elapsed() <= min_keep_alive {
-                                    last_keep_alive = Some(Instant::now());
                                     // We avoid sending too much keep a live message
                                     continue;
                                 }
-                            }
-                            else {
-                                last_keep_alive = Some(Instant::now());
                             }
                         }
 
@@ -120,10 +117,10 @@ impl SignallingClient {
                         }
 
                         sender.send(WsMessage::Binary(bytes));
+                        log::info!("sent message: {:?}", msg_to_send);
+                        last_keep_alive = Some(Instant::now());
                     }
                 }
-
-                Delay::new(Duration::from_secs(3)).await;
             }
         });
 

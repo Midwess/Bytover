@@ -83,6 +83,8 @@ futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
 erased-serde = "0.4.6"
 instant = "0.1.13"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+tracing = { version = "0.1.41" }
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

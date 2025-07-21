@@ -1822,6 +1822,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "idb",
+ "js-sys",
  "jsonwebtoken",
  "lazy_static",
  "lettre",
@@ -1846,6 +1847,7 @@ dependencies = [
  "tonic 0.13.1",
  "tonic-middleware 0.1.4",
  "wasm-bindgen",
+ "web-sys",
  "zip",
 ]
 
@@ -6290,6 +6292,8 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tonic 0.13.1",
+ "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
 ]
