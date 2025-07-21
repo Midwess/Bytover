@@ -42,8 +42,6 @@ impl SignallingClient {
 
         let mut msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
-        let min_keep_alive = Duration::from_secs(3);
-        let mut last_keep_alive = None::<Instant>;
         let handle = spawn(async move {
             loop {
                 log::info!("Starting signalling client at {addr}");
@@ -61,7 +59,7 @@ impl SignallingClient {
                 let mut connected = false;
                 loop {
                     let receiver = receiver.clone();
-                    Delay::new(Duration::from_millis(50)).await;
+                    Delay::new(Duration::from_millis(20)).await;
 
                     let msg_opt = {
                         let receiver = receiver.lock().await;
@@ -80,7 +78,6 @@ impl SignallingClient {
                                 continue;
                             };
 
-                            log::info!("received message: {:?}", msg);
                             let _ = msg_sender.send(msg).await;
                             continue;
                         }
@@ -101,15 +98,6 @@ impl SignallingClient {
                     }
 
                     if let Some(msg_to_send) = signal_receiver.poll_next_now() {
-                        if msg_to_send.join.is_some() {
-                            if let Some(last) = last_keep_alive {
-                                if last.elapsed() <= min_keep_alive {
-                                    // We avoid sending too much keep a live message
-                                    continue;
-                                }
-                            }
-                        }
-
                         let mut bytes = vec![];
                         let _ = msg_to_send.encode(&mut bytes);
                         if bytes.is_empty() {
@@ -117,8 +105,6 @@ impl SignallingClient {
                         }
 
                         sender.send(WsMessage::Binary(bytes));
-                        log::info!("sent message: {:?}", msg_to_send);
-                        last_keep_alive = Some(Instant::now());
                     }
                 }
             }

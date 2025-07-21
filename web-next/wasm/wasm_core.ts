@@ -183,13 +183,11 @@ export class WasmCore {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
-                let p2pOperation = coreOperation as CoreOperationVariantP2P
-                console.log("Processing P2P event", p2pOperation.value)
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
-                this.update(operation.value)
+                this.update(operation.value).then(r => {})
                 return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantDialog: {
