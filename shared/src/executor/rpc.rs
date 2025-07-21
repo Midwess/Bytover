@@ -1,7 +1,6 @@
-use std::future::Future;
 use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::rpc::auth_server::AuthServer;
-use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
+use core_services::utils::maybe::MaybeSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -13,7 +12,7 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     fn auth_server(&self) -> &AuthServer<T>;
 
@@ -30,9 +29,7 @@ where
                 let response = self.auth_server().get_me().await;
                 match response {
                     Ok(user) => RpcOperationOutput::GetMe(user),
-                    Err(e) => {
-                        RpcOperationOutput::NetworkError(e.into())
-                    }
+                    Err(e) => RpcOperationOutput::NetworkError(e.into())
                 }
             }
         }

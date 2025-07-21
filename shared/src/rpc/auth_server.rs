@@ -3,13 +3,13 @@ use crate::entities::user::User;
 use crate::rpc::auth_provider::AuthProvider;
 use crate::rpc::connection::RpcNetworkModule;
 use crate::rpc::errors::RpcErrors;
+use core_services::utils::maybe::MaybeSend;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
-use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 
 pub struct AuthServer<T>
 where

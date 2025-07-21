@@ -1,10 +1,10 @@
 use crate::errors::NetworkError;
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
+use n0_future::time::Instant;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use n0_future::time::Instant;
 
 #[derive(Clone)]
 pub struct InternetConnection {

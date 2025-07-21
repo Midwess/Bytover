@@ -1,19 +1,19 @@
 pub mod network;
 
-use std::pin::Pin;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
 use futures::channel::mpsc::UnboundedReceiver;
+use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::StreamExt;
+use std::pin::Pin;
 use std::time::Duration;
 use url::Url;
-use futures::task::{noop_waker, Context, Poll};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -68,7 +68,6 @@ pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
     fn poll_next_now(&mut self) -> Option<T>;
 }
 
-
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
@@ -90,7 +89,7 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
         let mut pinned = Pin::new(self);
         match pinned.as_mut().poll_next(&mut cx) {
             Poll::Ready(Some(item)) => Some(item),
-            _ => None,
+            _ => None
         }
     }
 }

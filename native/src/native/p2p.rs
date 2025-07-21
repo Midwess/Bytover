@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use shared::executor::p2p::P2PNativeExecutor;
+use std::sync::Arc;
 
 pub struct P2PNativeExecutorImpl {
     pub web_rtc: Arc<WebRtc>

@@ -1,6 +1,6 @@
 use crate::rpc::errors::RpcErrors;
+use core_services::utils::maybe::MaybeSend;
 use tonic::client::GrpcService;
-use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]

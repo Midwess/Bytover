@@ -3,9 +3,8 @@ use crate::app::operations::CoreOperationOutput;
 use crate::core_transfer_protocol::public_cloud::cloud_service::CloudService;
 use crate::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use crate::errors::NetworkError;
+use core_services::utils::maybe::MaybeSend;
 use std::sync::Arc;
-use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
-use core_services::utils::never_send::NeverSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -17,7 +16,7 @@ where
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
-    T::Future: MaybeSend,
+    T::Future: MaybeSend
 {
     fn web_rtc(&self) -> &Arc<WebRtc>;
 

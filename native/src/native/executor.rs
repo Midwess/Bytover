@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::time::sleep;
-use tonic::transport::Channel;
 use crate::{process_event, ShellRuntime};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
@@ -11,6 +9,8 @@ use shared::executor::p2p::P2PNativeExecutor;
 use shared::executor::persistent::NativePersistent;
 use shared::executor::rpc::NativeRpc;
 use shared::executor::transfer::TransferNative;
+use tokio::time::sleep;
+use tonic::transport::Channel;
 
 // Handle the effect coming from the platform
 // This is the placed where we can put Rust logic to share across platform

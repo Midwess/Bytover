@@ -1,6 +1,6 @@
+use shared::executor::rpc::NativeRpc;
 use shared::rpc::auth_server::AuthServer;
 use tonic::transport::Channel;
-use shared::executor::rpc::NativeRpc;
 
 pub struct NativeRpcImpl {
     pub auth_server: AuthServer<Channel>

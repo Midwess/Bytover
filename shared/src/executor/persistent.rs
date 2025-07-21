@@ -1,5 +1,3 @@
-use core_services::utils::maybe::MaybeSendSync;
-use devlog_sdk::distributed_id::gen_id;
 use crate::app::operations::persistent::{
     LocalResourcePersistentOperation,
     LocalResourcePersistentOperationOutput,
@@ -15,6 +13,7 @@ use crate::app::repository::local_resource::{LocalResourceId, LocalResourceRepos
 use crate::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::app::transfer::session::TransferType;
 use crate::entities::session::{Session, SessionType};
+use devlog_sdk::distributed_id::gen_id;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]

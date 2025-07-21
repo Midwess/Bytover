@@ -53,9 +53,9 @@ impl KeepAliveTicker {
             Self::Now() => {
                 *self = Self::Delayed(Instant::now());
                 true
-            },
+            }
             Self::Delayed(instant) => {
-                if (instant.elapsed().as_secs() > 3) {
+                if instant.elapsed().as_secs() > 3 {
                     *instant = Instant::now();
                     return true;
                 }
@@ -72,7 +72,7 @@ pub struct SharedContext {
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: OnceCell<PeerId>,
-    keep_alive_ticker: Arc<Mutex<KeepAliveTicker>>,
+    keep_alive_ticker: Arc<Mutex<KeepAliveTicker>>
 }
 
 impl Default for SharedContext {
@@ -88,7 +88,7 @@ impl SharedContext {
             finding_scopes: Default::default(),
             peers: Default::default(),
             peer_msg_channels: Default::default(),
-            keep_alive_ticker: Arc::new(Mutex::new(KeepAliveTicker::Now())),
+            keep_alive_ticker: Arc::new(Mutex::new(KeepAliveTicker::Now()))
         }
     }
 
@@ -304,8 +304,8 @@ impl WebSignaller {
         let result = self.client.start().await;
         // Somehow the first msg not being sent to the server
         // We warm it up by sending duple msg at first
-        self.client.send(first_msg.clone()).await.map_err(Into::<WebRtcErrors>::into)?;
-        self.client.send(first_msg).await.map_err(Into::<WebRtcErrors>::into)?;
+        self.client.send(first_msg.clone()).await?;
+        self.client.send(first_msg).await?;
         result
     }
 }
@@ -323,10 +323,8 @@ impl Signaller for WebSignaller {
             }
         };
 
-        if message.join.is_some() {
-           if !self.shared_context.should_send_keep_alive().await {
-               return Ok(())
-           }
+        if message.join.is_some() && !self.shared_context.should_send_keep_alive().await {
+            return Ok(())
         }
 
         message.scopes = self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>();
@@ -364,7 +362,7 @@ impl Signaller for WebSignaller {
 
 #[derive(Debug)]
 pub struct WebSignallerBuilder {
-    shared_context: SharedContext,
+    shared_context: SharedContext
 }
 
 impl WebSignallerBuilder {

@@ -1,3 +1,13 @@
+use crate::app::operations::transfer::TransferOperationOutput;
+use crate::app::operations::CoreOperationOutput;
+use crate::app::repository::errors::PersistenceError;
+use crate::app::repository::local_resource::LocalResourceRepository;
+use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
+use crate::app::transfer::target::TransferTarget;
+use crate::core_api::{CoreBridge, IOReader, NetStream};
+use crate::rpc::cloud_server::CloudServer;
+use crate::rpc::errors::RpcErrors;
+use core_services::utils::maybe::MaybeSend;
 use futures::channel::oneshot;
 use futures_util::future::join_all;
 use futures_util::join;
@@ -8,16 +18,6 @@ use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use core_services::utils::maybe::{MaybeSend, MaybeSendSync};
-use crate::app::operations::transfer::TransferOperationOutput;
-use crate::app::operations::CoreOperationOutput;
-use crate::app::repository::errors::PersistenceError;
-use crate::app::repository::local_resource::LocalResourceRepository;
-use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
-use crate::app::transfer::target::TransferTarget;
-use crate::core_api::{CoreBridge, IOReader, NetStream};
-use crate::rpc::cloud_server::CloudServer;
-use crate::rpc::errors::RpcErrors;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {

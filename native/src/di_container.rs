@@ -2,6 +2,10 @@ use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
+use crate::native::p2p::P2PNativeExecutorImpl;
+use crate::native::persistent::NativePersistentImpl;
+use crate::native::rpc::NativeRpcImpl;
+use crate::native::transfer::TransferNativeImpl;
 use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
@@ -30,14 +34,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-use crate::native::rpc::NativeRpcImpl;
-use shared::executor::rpc::NativeRpc;
-use shared::executor::persistent::NativePersistent;
-use shared::executor::transfer::TransferNative;
-use shared::executor::p2p::P2PNativeExecutor;
-use crate::native::p2p::P2PNativeExecutorImpl;
-use crate::native::persistent::NativePersistentImpl;
-use crate::native::transfer::TransferNativeImpl;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 
@@ -201,9 +197,7 @@ impl DiContainer {
                 web_rtc: web_rtc.clone(),
                 cloud_service
             }),
-            p2p: Box::new(P2PNativeExecutorImpl {
-                web_rtc,
-            })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
         };
 
         let _ = self.native_executor.set(executor);

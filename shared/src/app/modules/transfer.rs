@@ -306,7 +306,11 @@ impl AppModule<BitBridge> for TransferModule {
                 transfer_service.received_session_request(remote_session, peer, it).await;
                 log::info!(target: "transfer", "Done download, shell should done");
             }),
-            TransferEvent::UpdateTransferSessions { loaded, added: new, removed } => {
+            TransferEvent::UpdateTransferSessions {
+                loaded,
+                added: new,
+                removed
+            } => {
                 let mut command = Command::new(|_| async move {});
 
                 for loaded in loaded {

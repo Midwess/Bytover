@@ -1,6 +1,6 @@
-use shared::app::repository::auth_session::{AuthSessionRepository};
-use shared::app::repository::local_resource::{LocalResourceRepository};
-use shared::app::repository::transfer_session::{TransferSessionRepository};
+use shared::app::repository::auth_session::AuthSessionRepository;
+use shared::app::repository::local_resource::LocalResourceRepository;
+use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::executor::persistent::NativePersistent;
 
 pub struct NativePersistentImpl {
