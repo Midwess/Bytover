@@ -5,8 +5,9 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
-    Globe,
-    Users
+    AlertCircleIcon,
+    Globe, ImageUpIcon,
+    Users, XIcon
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -17,6 +18,7 @@ import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
 import {PeerViewModel} from "../../../shared_types/generated/typescript/types/shared_types";
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
+import {useFileUpload} from "@/hooks/use-file-upload";
 
 export default function SendBoard() {
     return <>
@@ -26,7 +28,7 @@ export default function SendBoard() {
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-8 h-full"}>
+                <div className={"col-span-9 h-full"}>
                     <FileSelections/>
                 </div>
             </div>
@@ -35,8 +37,88 @@ export default function SendBoard() {
 }
 
 function FileSelections() {
-    return <div className={"flex flex-col w-full h-full bg-blackBase rounded-2xl"}>
-    </div>
+    const [
+        { files, isDragging, errors },
+        {
+            handleDragEnter,
+            handleDragLeave,
+            handleDragOver,
+            handleDrop,
+            openFileDialog,
+            removeFile,
+            getInputProps,
+        },
+    ] = useFileUpload({
+        accept: "*",
+    })
+
+    const previewUrl = files[0]?.preview || null
+
+    return (
+        <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5"}>
+            <div className="relative w-full flex flex-col">
+                <div
+                    role="button"
+                    onClick={openFileDialog}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    data-dragging={isDragging || undefined}
+                    className="bg-muted border-input w-full hover:bg-muted-foreground/40 data-[dragging=true]:bg-muted-foreground/40 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                >
+                    <input
+                        {...getInputProps()}
+                        className="sr-only"
+                        aria-label="Upload file"
+                    />
+                    {previewUrl ? (
+                        <div className="absolute inset-0">
+                            <img
+                                src={previewUrl}
+                                alt={files[0]?.file?.name || "Uploaded image"}
+                                className="size-full object-cover"
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                            <div
+                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                                aria-hidden="true"
+                            >
+                                <ImageUpIcon className="size-4 opacity-60" />
+                            </div>
+                            <p className="mb-1.5 text-sm font-medium">
+                                Drop your image here or click to browse
+                            </p>
+                        </div>
+                    )}
+                </div>
+                {previewUrl && (
+                    <div className="absolute top-4 right-4">
+                        <button
+                            type="button"
+                            className="focus-visible:border-ring focus-visible:ring-ring/50 z-50 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white transition-[color,box-shadow] outline-none hover:bg-black/80 focus-visible:ring-[3px]"
+                            onClick={() => removeFile(files[0]?.id)}
+                            aria-label="Remove image"
+                        >
+                            <XIcon className="size-4" aria-hidden="true" />
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {errors.length > 0 && (
+                <div
+                    className="text-destructive flex items-center gap-1 text-xs"
+                    role="alert"
+                >
+                    <AlertCircleIcon className="size-3 shrink-0" />
+                    <span>{errors[0]}</span>
+                </div>
+            )}
+        </div>
+    )
 }
 
 enum TransferType {
@@ -100,7 +182,7 @@ function Board() {
                     </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <div className={"px-2 flex flex-col items-center justify-center pt-8 px-1"}>
+            <div className={"px-2 flex flex-col items-center justify-center pt-8"}>
                 {
                     content
                 }
@@ -138,7 +220,7 @@ function PublicSend() {
             delay={0.2 + 1 * 0.1}>
             <Label htmlFor={"password"}>Password (optional)</Label>
             <Input id={"password"} type={"password"} maxLength={20} placeholder={"pwd@123"}/>
-            <Button className={"w-fit h-[35px]"}>Upload</Button>
+            <Button className="w-fit h-[35px] bg-bluePrimary text-primary">Upload</Button>
         </MotionEffect>
     </div>
 }
@@ -148,22 +230,49 @@ function NearbySend() {
     const nearbyPeers = nearbyState?.peers || []
 
     return <>
-        <div className={"w-full h-full flex-col p-2"}>
-            {nearbyPeers.map(peer => (<NearbyPeer key={peer.id} peer={peer}/>))}
-        </div>
+        <MotionEffect
+            className="flex flex-col w-full gap-3"
+            key={0}
+            slide={{ direction: 'down' }}
+            fade
+            zoom
+            inView
+            delay={0.2}>
+
+            <p className="text-start w-full text-primaryText/70 text-sm pb-1">
+                Send files directly to a friend’s email
+            </p>
+
+            <div className="flex flex-col w-full gap-3">
+                <Input id="email" type="email" maxLength={20} placeholder="someone@company" />
+                <Button className="w-fit h-[35px] bg-bluePrimary text-primary">Send</Button>
+            </div>
+
+            <div className="flex flex-col w-full gap-3 mt-5">
+                <p className="text-start w-full text-primaryText/70 text-sm pb-1">
+                    Or share with nearby friends and devices
+                </p>
+                {nearbyPeers.map(peer => (
+                    <NearbyPeer key={peer.id} peer={peer} />
+                ))}
+            </div>
+        </MotionEffect>
     </>
 }
 
-function NearbyPeer({peer}: { peer: PeerViewModel }) {
+function NearbyPeer({
+                        peer
+                    }: {
+    peer: PeerViewModel
+}) {
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
-    console.log(color)
     return <>
         <Button
-            className={"h-fit w-full hover:bg-muted-foreground/30 flex flex-row bg-muted rounded-3xl items-center px-2 py-2 max-h-[60px] border-1 border-muted shadow-xl justify-between"}>
+            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 rounded-2xl items-center px-2 py-2 h-fit w-full border-1 border-primaryText/5 justify-between"}>
             <div className={"flex flex-row items-center gap-3"}>
                 <div
-                    className={"rounded-full aspect-square justify-center items-center flex h-auto w-auto"}>
-                    <Avatar className="border-3 p-0.5" style={{backgroundColor: color}}>
+                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
+                    <Avatar className={"p-1 rounded-xl"} style={{backgroundColor: color}}>
                         <AvatarImage src={peer.avatar.url}/>
                     </Avatar>
                 </div>
@@ -177,4 +286,3 @@ function NearbyPeer({peer}: { peer: PeerViewModel }) {
         </Button>
     </>
 }
-

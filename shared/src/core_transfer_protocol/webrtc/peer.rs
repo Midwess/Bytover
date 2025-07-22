@@ -261,7 +261,6 @@ impl WebRtcPeer {
                     return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
                 }
 
-                first_delimiter.resource_id;
                 let index = thumbnail_paths.iter().position(|it| it.0 == first_delimiter.resource_id);
 
                 if index.is_none() {
