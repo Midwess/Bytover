@@ -2,8 +2,6 @@ use url::Url;
 use wasm_bindgen::JsValue;
 use web_sys::window;
 
-pub const DEVLOG_WITH_SSL: &str = env!("DEVLOG_WITH_SSL");
-
 pub struct HostInfo {
     pub host: String,
     pub port: u16,

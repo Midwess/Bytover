@@ -38,7 +38,13 @@ import {
     MessageToShellResponseVariantVoidResponse,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
-    EnvironmentEventVariantAppLaunched, AuthenticationViewModel, EnvironmentViewModel, NearbyViewModel,
+    EnvironmentEventVariantAppLaunched,
+    AuthenticationViewModel,
+    EnvironmentViewModel,
+    NearbyViewModel,
+    LocalResourcePath,
+    TransferViewModel,
+    ResourceSelection,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -47,6 +53,7 @@ import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
+import {FileMetadata} from "@/hooks/use-file-upload";
 
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
@@ -54,15 +61,14 @@ export class WasmCore {
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
     nearbyState: Observable<NearbyViewModel> = new Observable()
+    transferState: Observable<TransferViewModel> = new Observable()
 
     constructor() {
         this.nativeProcessor = null;
     }
 
     public useCoreReady() {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         const [isReady, setIsReady] = useState(this.isCoreReady.get());
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         useEffect(() => {
             return this.isCoreReady.subscribe(setIsReady)
         }, [])
@@ -70,9 +76,7 @@ export class WasmCore {
     }
 
     public useEnvironmentState() {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         const [state, setState] = useState(this.environmentState.get());
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         useEffect(() => {
             return this.environmentState.subscribe(setState)
         }, []);
@@ -81,9 +85,7 @@ export class WasmCore {
     }
 
     public useAuthenticationState() {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         const [state, setState] = useState(this.authenticationState.get());
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         useEffect(() => {
             return this.authenticationState.subscribe(setState)
         }, []);
@@ -91,10 +93,17 @@ export class WasmCore {
         return state
     }
 
+    public useTransferState() {
+        const [state, setState] = useState(this.transferState.get());
+        useEffect(() => {
+            return this.transferState.subscribe(setState)
+        })
+
+        return state
+    }
+
     public useNearbyState() {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         const [state, setState] = useState(this.nearbyState.get());
-        // eslint-disable-next-line react-hooks/rules-of-hooks
         useEffect(() => {
             return this.nearbyState.subscribe(setState)
         }, []);
@@ -109,14 +118,14 @@ export class WasmCore {
 
     public async update(event: AppEvent) {
         const effects_bytes = process_event(serialize(event));
-        const requests = deserializeRequests(effects_bytes);
+        const requests = deserializeArray<Request>(Request, effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
             if (!request) break;
 
             const nextRequest = await this.processEffect(request.id, request.effect);
             if (nextRequest.length === 0) continue;
-            requests.push(...deserializeRequests(nextRequest));
+            requests.push(...deserializeArray<Request>(Request, nextRequest));
         }
     }
 
@@ -153,7 +162,7 @@ export class WasmCore {
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
                         console.log(`Loading thumbnail for ${operation.value}`)
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng([]))))
+                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng())))
                     }
                     case DeviceOperationVariantGetGeoLocation: {
                         const location = new GeoLocation(10, 10.2);
@@ -206,24 +215,32 @@ export class WasmCore {
         return serialize(new CoreOperationOutputVariantVoid())
     }
 
+    async addFiles(files: (File | FileMetadata) []) {
+        const files_only = files.filter(f => f instanceof File) as File[]
+        const data = await this.nativeProcessor?.add_device_files(files_only)
+        if (!data) return [];
+
+        return deserializeArray<ResourceSelection>(ResourceSelection, data)
+    }
+
     async updateView() {
-        const viewData = view();
-        const viewModel = deserializeView(viewData);
+        const viewModel = AppViewModel.deserialize(new BincodeDeserializer(view()));
 
         this.environmentState.set(viewModel.environment!)
         this.authenticationState.set(viewModel.authentication!)
         this.nearbyState.set(viewModel.nearby!)
+        this.transferState.set(viewModel.transfer!)
     }
 
     async msg_from_native(data: Uint8Array): Promise<Uint8Array> {
-        const msgToShell = deserializeMsgToShell(data);
+        const msgToShell = MessageToShell.deserialize(new BincodeDeserializer(data));
         switch(msgToShell.constructor) {
             case MessageToShellVariantHandleResponse: {
                 const msg = msgToShell as MessageToShellVariantHandleResponse;
                 const id = msg.field0;
                 const operationData = serialize(msg.field1);
                 const requestsData = handle_response(id, operationData)
-                const requests = deserializeRequests(requestsData);
+                const requests = deserializeArray<Request>(Request, requestsData);
                 while (requests.length > 0) {
                     const request = requests.shift();
                     if (!request) break;
@@ -232,7 +249,7 @@ export class WasmCore {
 
                     if (nextRequest.length === 0) continue;
 
-                    const newRequests = deserializeRequests(nextRequest);
+                    const newRequests = deserializeArray<Request>(Request, nextRequest);
                     requests.push(...newRequests);
                 }
 
@@ -245,26 +262,16 @@ export class WasmCore {
     }
 }
 
-const core = new WasmCore();
-
-function deserializeRequests(bytes: Uint8Array): Request[] {
-    const deserializer = new BincodeDeserializer(bytes);
+function deserializeArray<T>(clss: any, data: Uint8Array): T[] {
+    const deserializer = new BincodeDeserializer(data);
     const len = deserializer.deserializeLen();
-    const requests: Request[] = [];
+    const values: T[] = [];
     for (let i = 0; i < len; i++) {
-        const request = Request.deserialize(deserializer);
-        requests.push(request);
+        const value = clss.deserialize(deserializer);
+        values.push(value);
     }
 
-    return requests;
-}
-
-function deserializeView(bytes: Uint8Array): AppViewModel {
-    return AppViewModel.deserialize(new BincodeDeserializer(bytes));
-}
-
-function deserializeMsgToShell(bytes: Uint8Array): MessageToShell {
-    return MessageToShell.deserialize(new BincodeDeserializer(bytes));
+    return values
 }
 
 function serialize(object: any): Uint8Array {
@@ -272,5 +279,7 @@ function serialize(object: any): Uint8Array {
     object.serialize(serializer);
     return serializer.getBytes();
 }
+
+const core = new WasmCore();
 
 export default core

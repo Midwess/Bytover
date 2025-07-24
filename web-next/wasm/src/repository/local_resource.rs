@@ -117,21 +117,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
-        let db = self.get_db().await;
-        let store = "thumbnails";
-        let name = format!("{}.png", resource_id);
+        let Some(saved_path) = self.file_storage.save_thumbnail(resource_id, png_bytes).await else {
+            return Err(PersistenceError::IOError("Unable to save thumbnail".to_owned()))
+        };
 
-        let transaction = db.transaction(&[store], TransactionMode::ReadWrite)
-            .map_err(|it| RepositoryError::from(it))?;
-        let store = transaction.object_store(store).map_err(|it| RepositoryError::from(it))?;
-        let value = JsValue::from(png_bytes);
-        let key = JsValue::from(name.clone());
-        let _ = store.put(&value, Some(&key))
-            .map_err(|it| RepositoryError::from(it))?
-            .await
-            .map_err(|it| RepositoryError::from(it))?;
-
-        Ok(LocalResourcePath::PlatformIdentifier(format!("thumbnails/{}", name)))
+        Ok(saved_path)
     }
 
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {

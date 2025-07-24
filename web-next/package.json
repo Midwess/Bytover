@@ -16,18 +16,21 @@
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
-    "@studio-freight/lenis": "^1.0.42",
     "@tailwindcss/typography": "^0.5.16",
     "bluebird": "^3.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "core_wasm": "file:./wasm/pkg",
+    "filepond": "^4.32.8",
+    "filepond-plugin-file-poster": "^2.5.2",
+    "filepond-plugin-image-preview": "^4.6.12",
     "lucide-react": "^0.525.0",
     "motion": "^12.23.6",
     "next": "15.3.5",
     "radix-ui": "^1.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-filepond": "^7.1.3",
     "react-hot-toast": "^2.5.2",
     "react-use-measure": "^2.1.7",
     "schema-ts": "file:../libs/schema/typescript",
@@ -45,6 +48,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
     "tailwindcss": "^4",
-    "tw-animate-css": "^1.3.5"
+    "tw-animate-css": "^1.3.5",
+    "typescript": "^5.3.3"
   }
 }

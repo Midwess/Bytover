@@ -475,7 +475,7 @@ impl WebRtcPeer {
 
             let mut total_sent_bytes = 0u64;
             let progress_update = session.resource_mut_progress(order_id).unwrap();
-            let delimiter = TransferDelimiterShema::new(order_id, true).as_bytes()?;
+            let delimiter = TransferDelimiterShema::start(order_id).as_bytes()?;
             log::info!("Sending delimiter to peer {peer_id:?} len {}", delimiter.len());
             if let Err(e) = self.data_channel.lock().await.send((peer_id, delimiter)).await {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
@@ -501,7 +501,7 @@ impl WebRtcPeer {
                 }
             }
 
-            let end_delimiter = TransferDelimiterShema::new(order_id, false).as_bytes()?;
+            let end_delimiter = TransferDelimiterShema::end(order_id).as_bytes()?;
             if let Err(e) = self.data_channel.lock().await.send((peer_id, end_delimiter)).await {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
@@ -514,6 +514,7 @@ impl WebRtcPeer {
                 progress_update.status,
                 total_sent_bytes
             );
+
             progress_update.complete();
             self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
         }

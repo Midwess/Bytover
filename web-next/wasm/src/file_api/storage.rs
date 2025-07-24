@@ -2,10 +2,16 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use futures::lock::Mutex;
-use web_sys::File;
+use idb::{Database, TransactionMode};
+use js_sys::Uint8Array;
+use wasm_bindgen::JsValue;
+use web_sys::{File, IdbTransactionMode};
 use web_sys::js_sys::Array;
+use core_services::utils::never_send::NeverSend;
 use devlog_sdk::distributed_id::gen_id;
+use core_services::utils::pool::request::PoolRequest;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::app::transfer::file_selection_service::ResourceSelection;
 
 #[derive(Clone)]
 pub struct WasmFile(File);
@@ -35,30 +41,47 @@ impl Deref for WasmFile {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FileStorage {
     device_files: Arc<Mutex<HashMap<u64, WasmFile>>>,
+    db: PoolRequest<NeverSend<Database>>
 }
 
 impl FileStorage {
-    pub fn new() -> FileStorage {
+    pub fn new(db: PoolRequest<NeverSend<Database>>) -> FileStorage {
         FileStorage {
             device_files: Arc::new(Mutex::new(HashMap::new())),
+            db
         }
     }
 
-    pub async fn add_device_wasm_files(&self, files: &Array) -> Vec<LocalResourcePath> {
+    pub async fn add_device_wasm_files(&self, files: &Array) -> Vec<ResourceSelection> {
         let mut device_files = self.device_files.lock().await;
-        let mut returned_paths = vec![];
+        let mut selections = vec![];
         for file in files.iter() {
             let f = File::from(file);
+            let mime_type = f.type_();
             let id = gen_id().await;
             device_files.insert(id, WasmFile(f));
             let path = LocalResourcePath::PlatformIdentifier(format!("device://{}", id));
-            returned_paths.push(path);
+
+            let resource_type = if mime_type.starts_with("image/") {
+                ResourceType::Image
+            } else if mime_type.starts_with("video/") {
+                ResourceType::Video
+            } else {
+                ResourceType::File
+            };
+
+            let selection = ResourceSelection {
+                path,
+                r#type: Some(resource_type)
+            };
+
+            selections.push(selection);
         }
 
-        returned_paths
+        selections
     }
 
     pub(crate) async fn load(&self, path: LocalResourcePath) -> Option<LocalResource> {
@@ -98,7 +121,20 @@ impl FileStorage {
         Some(local_resource)
     }
 
-    pub(crate) async fn save(&self) {
+    pub(crate) async fn save_thumbnail(&self, resource_id: u64, png_bytes: Vec<u8>) -> Option<LocalResourcePath> {
+        let Some(db) = self.db.retrieve().await else {
+            log::error!("Failed to get db");
+            return None;
+        };
 
+        let tx = db.transaction(&["thumbnail"], TransactionMode::ReadWrite).ok()?;
+        let store = tx.object_store("thumbnail").ok()?;
+        let key = JsValue::from(format!("{resource_id}"));
+        let value = Uint8Array::from(&png_bytes[..]);
+
+        store.put(&value, Some(&key)).ok()?;
+        tx.commit().ok()?;
+
+        Some(LocalResourcePath::PlatformIdentifier(format!("idb://thumbnail/{}", resource_id)))
     }
 }

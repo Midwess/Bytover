@@ -29,7 +29,6 @@ impl NetStream for NetStreamImpl {
         let handle = spawn(async move {
             let reader = reader.clone();
             let stream_closure = Closure::wrap(Box::new(move |controller_val: JsValue| {
-                // Clone immediately
                 let controller_val_clone = controller_val.clone();
                 let mut reader = reader.clone();
 

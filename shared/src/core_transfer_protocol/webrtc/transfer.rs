@@ -16,6 +16,14 @@ impl TransferDelimiterShema {
         Self { resource_id, is_start }
     }
 
+    pub fn start(resource_id: u64) -> Self {
+        Self::new(resource_id, true)
+    }
+
+    pub fn end(resource_id: u64) -> Self {
+        Self::new(resource_id, false)
+    }
+
     pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {
         let bytes = bincode::serialize(self).unwrap();
         let mut buffer = vec![0u8; 1024];

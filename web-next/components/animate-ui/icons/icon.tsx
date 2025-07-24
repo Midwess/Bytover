@@ -129,7 +129,7 @@ function AnimateIcon({
     currentAnimation.current =
       typeof animate === 'string' ? animate : animation;
     setLocalAnimate(!!animate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [animate]);
 
   React.useEffect(
@@ -285,7 +285,7 @@ function getVariants<
   V extends { default: T; [key: string]: T },
   T extends Record<string, Variants>,
 >(animations: V): T {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const { animation: animationType, loop, loopDelay } = useAnimateIconContext();
 
   let result: T;

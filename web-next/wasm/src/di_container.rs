@@ -43,7 +43,7 @@ pub struct DiContainer {
     shell: OnceCell<Arc<ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    file_storage: FileStorage,
+    file_storage: OnceCell<FileStorage>,
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
@@ -60,7 +60,7 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                file_storage: FileStorage::new(),
+                file_storage: OnceCell::new(),
                 auth_service: OnceCell::new(),
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
@@ -74,7 +74,7 @@ impl DiContainer {
     }
 
     pub fn file_storage(&self) -> FileStorage {
-        self.file_storage.clone()
+        self.file_storage.get().unwrap().clone()
     }
 
     pub fn get_net_stream(&self) -> Box<dyn NetStream> {
@@ -127,6 +127,11 @@ impl DiContainer {
         log::info!("Database pool initialized");
 
         let _ = self.db.set(pool);
+        let request = PoolRequestBuilder::new()
+            .retrieving_timeout(Duration::from_secs(30))
+            .pool(self.db.get().unwrap().clone())
+            .build();
+        let _ = self.file_storage.set(FileStorage::new(request));
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {
@@ -146,7 +151,7 @@ impl DiContainer {
 
     pub fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
         LocalResourceRepositoryImpl {
-            file_storage: self.file_storage.clone(),
+            file_storage: self.file_storage.get().unwrap().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())

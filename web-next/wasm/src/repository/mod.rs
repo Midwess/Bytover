@@ -57,6 +57,10 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
                 "transferSession",
                 store_params.clone()
             ).unwrap();
+            database.create_object_store(
+                "thumbnail",
+                store_params.clone()
+            ).unwrap();
         });
 
         NeverSend(open_request.await.unwrap())

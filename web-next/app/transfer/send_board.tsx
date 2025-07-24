@@ -15,10 +15,16 @@ import * as React from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
-import {PeerViewModel} from "../../../shared_types/generated/typescript/types/shared_types";
+import {
+    AppEventVariantTransfer,
+    PeerViewModel,
+    TransferEventVariantAddResources
+} from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useFileUpload} from "@/hooks/use-file-upload";
+import {useEffect} from "react";
+import core from "@/wasm/wasm_core";
 
 export default function SendBoard() {
     return <>
@@ -52,6 +58,21 @@ function FileSelections() {
         accept: "*",
     })
 
+    const transfer_state = core.useTransferState()
+    console.log(transfer_state)
+
+    useEffect(() => {
+        if (files.length) {
+            core.addFiles(files.map(file => file.file))
+                .then((selections) => {
+                    console.log('tiendang-debug', selections)
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
+                        selections
+                    )))
+                })
+        }
+    }, [files]);
+
     const previewUrl = files[0]?.preview || null
 
     return (
@@ -65,7 +86,7 @@ function FileSelections() {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     data-dragging={isDragging || undefined}
-                    className="bg-muted border-input w-full hover:bg-muted-foreground/40 data-[dragging=true]:bg-muted-foreground/40 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
                 >
                     <input
                         {...getInputProps()}

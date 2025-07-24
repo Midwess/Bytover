@@ -108,7 +108,7 @@ pub trait NativePersistent: Send + Sync {
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Find(path)) => {
                 let id = LocalResourceId {
-                    path: Some(path),
+                    path: Some(path.as_string()),
                     ..Default::default()
                 };
 
