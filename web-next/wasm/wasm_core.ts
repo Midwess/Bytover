@@ -42,9 +42,9 @@ import {
     AuthenticationViewModel,
     EnvironmentViewModel,
     NearbyViewModel,
-    LocalResourcePath,
     TransferViewModel,
     ResourceSelection,
+    LocalResourcePathVariantPlatformIdentifier,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -54,6 +54,7 @@ import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
 import {FileMetadata} from "@/hooks/use-file-upload";
+import {getThumbnailFromFile} from "@/utils/thumbnail";
 
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
@@ -161,8 +162,23 @@ export class WasmCore {
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
-                        console.log(`Loading thumbnail for ${operation.value}`)
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng())))
+                        const path = operation.value as LocalResourcePathVariantPlatformIdentifier;
+                        const resourceId = BigInt(path.value.split("://")[1])
+                        const file = await this.nativeProcessor?.get_device_file(resourceId)
+                        if (!file) {
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                        }
+
+                        console.log(`Loading thumbnail for ${resourceId}, ${file.name}`)
+                        try {
+                            const pngBytes = await getThumbnailFromFile(file)
+                            const buffer = await pngBytes.arrayBuffer();
+                            console.log('Loaded png', buffer)
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(Array.from(new Uint8Array(buffer))))))
+                        }
+                        catch (e) {
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                        }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
                         const location = new GeoLocation(10, 10.2);

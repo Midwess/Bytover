@@ -219,7 +219,7 @@ function FileView(props: {
 
             {/* Metadata */}
             <div className="flex flex-col text-white items-center mt-1">
-                <p className="text-sm text-center text-sm font-poppins">{model.name}</p>
+                <p className="text-sm text-center font-poppins break-words w-full">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
         </div>

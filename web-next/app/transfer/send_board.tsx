@@ -5,9 +5,9 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
-    AlertCircleIcon,
-    Globe, ImageUpIcon,
-    Users, XIcon
+    AlertCircleIcon, Delete, Download, File,
+    Globe, ImageUpIcon, Play, Trash,
+    Users, X, XIcon
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -16,15 +16,24 @@ import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
 import {
-    AppEventVariantTransfer,
+    AppEventVariantTransfer, FileReceiveResourceViewModel,
+    ImageReceiveResourceViewModel, LocalResourcePathVariantAbsolutePath,
     PeerViewModel,
-    TransferEventVariantAddResources
+    ResourceTypeVariantFile, ResourceTypeVariantFolder,
+    ResourceTypeVariantImage,
+    ResourceTypeVariantVideo,
+    SelectedResourceViewModel,
+    TransferEventVariantAddResources, TransferEventVariantRemoveResource,
+    VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useFileUpload} from "@/hooks/use-file-upload";
-import {useEffect} from "react";
+import {useEffect, useState} from "react";
 import core from "@/wasm/wasm_core";
+import {useIsMobile} from "@/hooks/use-mobile";
+import clsx from "clsx";
+import Image from "next/image";
 
 export default function SendBoard() {
     return <>
@@ -44,7 +53,7 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        { files, isDragging, errors },
+        {files, isDragging, errors},
         {
             handleDragEnter,
             handleDragLeave,
@@ -59,13 +68,13 @@ function FileSelections() {
     })
 
     const transfer_state = core.useTransferState()
-    console.log(transfer_state)
+    const selectedResources = transfer_state?.selected_resources || []
+    console.log('selectedResources', selectedResources)
 
     useEffect(() => {
         if (files.length) {
             core.addFiles(files.map(file => file.file))
                 .then((selections) => {
-                    console.log('tiendang-debug', selections)
                     core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
                         selections
                     )))
@@ -76,7 +85,7 @@ function FileSelections() {
     const previewUrl = files[0]?.preview || null
 
     return (
-        <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5"}>
+        <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
             <div className="relative w-full flex flex-col">
                 <div
                     role="button"
@@ -93,40 +102,18 @@ function FileSelections() {
                         className="sr-only"
                         aria-label="Upload file"
                     />
-                    {previewUrl ? (
-                        <div className="absolute inset-0">
-                            <img
-                                src={previewUrl}
-                                alt={files[0]?.file?.name || "Uploaded image"}
-                                className="size-full object-cover"
-                            />
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
-                            <div
-                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
-                                aria-hidden="true"
-                            >
-                                <ImageUpIcon className="size-4 opacity-60" />
-                            </div>
-                            <p className="mb-1.5 text-sm font-medium">
-                                Drop your image here or click to browse
-                            </p>
-                        </div>
-                    )}
-                </div>
-                {previewUrl && (
-                    <div className="absolute top-4 right-4">
-                        <button
-                            type="button"
-                            className="focus-visible:border-ring focus-visible:ring-ring/50 z-50 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white transition-[color,box-shadow] outline-none hover:bg-black/80 focus-visible:ring-[3px]"
-                            onClick={() => removeFile(files[0]?.id)}
-                            aria-label="Remove image"
+                    <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                        <div
+                            className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                            aria-hidden="true"
                         >
-                            <XIcon className="size-4" aria-hidden="true" />
-                        </button>
+                            <ImageUpIcon className="size-4 opacity-60"/>
+                        </div>
+                        <p className="mb-1.5 text-sm font-medium">
+                            Drop your image here or click to browse
+                        </p>
                     </div>
-                )}
+                </div>
             </div>
 
             {errors.length > 0 && (
@@ -134,12 +121,169 @@ function FileSelections() {
                     className="text-destructive flex items-center gap-1 text-xs"
                     role="alert"
                 >
-                    <AlertCircleIcon className="size-3 shrink-0" />
+                    <AlertCircleIcon className="size-3 shrink-0"/>
                     <span>{errors[0]}</span>
                 </div>
             )}
+            <div
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full">
+                {
+                    selectedResources.map((resource, index) => (
+                        <div className={"h-[220px] flex items-start flex-row"} key={resource.order_id}>
+                            <ResourceView model={resource}/>
+                        </div>
+                    ))
+                }
+            </div>
         </div>
     )
+}
+
+function ResourceView(props: {
+    model: SelectedResourceViewModel
+}) {
+    const {model} = props;
+
+    const isFile = model.type.constructor == ResourceTypeVariantFile
+
+    if(isFile) {
+        return <FileView model={model}/>
+    }
+    else {
+        return <MediaView model={model}/>
+    }
+}
+
+function FileView(props: {
+    model: SelectedResourceViewModel
+}) {
+    const {model} = props;
+    const isMobile = useIsMobile();
+
+    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    if (!thumbnailPath) {
+        thumbnailPath = "/file.svg";
+    }
+
+    let displaySize = `${model.size_mb} MB`;
+    if (model.size_gb > 0) {
+        displaySize = `${model.size_gb} GB`;
+    }
+
+    return (
+        <div
+            className="px-2 w-full h-full overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5">
+            <div
+                className={clsx(
+                    "absolute z-20 inset-0 flex items-center justify-center",
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
+                )}>
+                <Button className={"rounded-xl"} onClick={() => {
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
+                }}>
+                    <X/>
+                </Button>
+            </div>
+
+            <div className="relative aspect-square w-full max-h-[80px]">
+                <Image
+                    className="w-full h-auto text-primaryText"
+                    layout="fill"
+                    alt={`${model.type}`}
+                    src={thumbnailPath}
+                />
+            </div>
+
+            {/* Metadata */}
+            <div className="flex flex-1 flex-col text-white items-center mt-3">
+                <p className="text-sm text-center font-poppins break-words w-full line-clamp-3-ellipsis">{model.name}</p>
+                <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
+            </div>
+        </div>
+    );
+}
+
+function MediaView(props: {
+    model: SelectedResourceViewModel,
+}) {
+    const {model} = props;
+
+    let isMobile = useIsMobile()
+    let isVideo = model.type.constructor == ResourceTypeVariantVideo
+    let isImage = model.type.constructor == ResourceTypeVariantImage
+    let defaultThumbnail = <Image
+        className="w-full h-auto text-primaryText p-10"
+        layout="fill"
+        alt={`${model.name}`}
+        src={'/file.svg'}
+    />
+
+    let [thumbnail, setThumbnail] = useState(defaultThumbnail)
+
+    useEffect(() => {
+        if (isVideo || isImage) {
+            core.nativeProcessor?.load_thumbnail_bytes(model.order_id).then((it) => {
+                if (it) {
+                    const blob = new Blob([it], {type: 'image/png'});
+                    setThumbnail(<Image className={"w-full h-full"} src={URL.createObjectURL(blob)} alt={model.name}
+                                        layout={"fill"}/>)
+                }
+            })
+        }
+    }, []);
+
+    let displaySize = `${model.size_mb} MB`;
+    if (model.size_gb > 0) {
+        displaySize = `${model.size_gb} GB`;
+    }
+
+    return (
+        <div className="w-full h-full overflow-hidden rounded-2xl relative group">
+            <div
+                className={clsx(
+                    "z-3 w-full h-[90%] absolute bg-gradient-to-t from-blackBase/70 bottom-0",
+                    isMobile
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                )}
+            ></div>
+
+            {
+                isVideo && <div className={"absolute z-10 flex w-full h-full justify-center items-center"}>
+                    <Button>
+                        <Play/>
+                    </Button>
+                </div>
+            }
+
+            <div
+                className={clsx(
+                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between",
+                    isMobile
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                )}
+            >
+                <div className="flex flex-col items-start gap-1">
+                    <p className="text-primaryText text-md">
+                        {model.name}
+                    </p>
+                    <p className="text-sm text-primaryText/80">
+                        {displaySize}
+                    </p>
+                </div>
+                <Button className={"rounded-xl"} onClick={() => {
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
+                }}>
+                    <X/>
+                </Button>
+            </div>
+
+            {
+                thumbnail
+            }
+        </div>
+    );
 }
 
 enum TransferType {
@@ -254,7 +398,7 @@ function NearbySend() {
         <MotionEffect
             className="flex flex-col w-full gap-3"
             key={0}
-            slide={{ direction: 'down' }}
+            slide={{direction: 'down'}}
             fade
             zoom
             inView
@@ -265,7 +409,7 @@ function NearbySend() {
             </p>
 
             <div className="flex flex-col w-full gap-3">
-                <Input id="email" type="email" maxLength={20} placeholder="someone@company" />
+                <Input id="email" type="email" maxLength={20} placeholder="someone@company"/>
                 <Button className="w-fit h-[35px] bg-bluePrimary text-primary">Send</Button>
             </div>
 
@@ -274,7 +418,7 @@ function NearbySend() {
                     Or share with nearby friends and devices
                 </p>
                 {nearbyPeers.map(peer => (
-                    <NearbyPeer key={peer.id} peer={peer} />
+                    <NearbyPeer key={peer.id} peer={peer}/>
                 ))}
             </div>
         </MotionEffect>

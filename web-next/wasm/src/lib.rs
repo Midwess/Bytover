@@ -9,6 +9,7 @@ pub mod config;
 pub mod file_api;
 mod errors;
 
+use std::panic::resume_unwind;
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
 use n0_future::task::{spawn, JoinHandle};
@@ -24,6 +25,8 @@ use wasm_bindgen::prelude::*;
 use shared::app::BitBridge;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
+use web_sys::File;
+use shared::app::file_system::file::LocalResourcePath;
 use shared::CoreOperation;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
@@ -167,6 +170,15 @@ impl NativeProcessor {
         let paths = self.storage.add_device_wasm_files(files).await;
 
         serialize(&paths)
+    }
+
+    pub async fn get_device_file(&self, resource_id: u64) -> Option<File> {
+        let file = self.storage.get_file(resource_id).await;
+        file
+    }
+
+    pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
+        self.storage.read_thumbnail_bytes(resource_id).await
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

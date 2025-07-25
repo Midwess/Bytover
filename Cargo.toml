@@ -85,6 +85,7 @@ erased-serde = "0.4.6"
 instant = "0.1.13"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 tracing = { version = "0.1.41" }
+indexmap = "2.10.0"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }
