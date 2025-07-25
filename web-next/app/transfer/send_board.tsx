@@ -171,7 +171,7 @@ function FileView(props: {
 
     return (
         <div
-            className="px-2 w-full h-full overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5">
+            className="px-2 w-full h-full overflow-hidden gap-3 justify-center rounded-2xl flex flex-col relative group bg-muted p-4 border-1 border-primaryText/5">
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center",
@@ -184,7 +184,7 @@ function FileView(props: {
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-full max-h-[80px]">
+            <div className="relative aspect-square w-auto h-[40%]">
                 <Image
                     className="w-full h-auto text-primaryText"
                     layout="fill"
@@ -194,7 +194,7 @@ function FileView(props: {
             </div>
 
             {/* Metadata */}
-            <div className="flex flex-1 flex-col text-white items-center mt-3">
+            <div className="flex h-fit flex-col text-white items-center mt-3">
                 <p className="text-sm text-center font-poppins break-words w-full line-clamp-3-ellipsis">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
