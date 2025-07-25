@@ -146,10 +146,9 @@ function ResourceView(props: {
 
     const isFile = model.type.constructor == ResourceTypeVariantFile
 
-    if(isFile) {
+    if (isFile) {
         return <FileView model={model}/>
-    }
-    else {
+    } else {
         return <MediaView model={model}/>
     }
 }
@@ -241,19 +240,27 @@ function MediaView(props: {
         <div className="w-full h-full overflow-hidden rounded-2xl relative group">
             <div
                 className={clsx(
-                    "z-3 w-full h-[90%] absolute bg-gradient-to-t from-blackBase/70 bottom-0",
+                    "z-3 w-full h-[90%] absolute items-center flex justify-center bg-gradient-to-t from-blackBase/70 bottom-0",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}
-            ></div>
+            >
+                {
+                    <Button className={"z-20 rounded-xl bg-white"} onClick={() => {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
+                    }}>
+                        <X/>
+                    </Button>
+                }
+            </div>
 
             {
-                isVideo && <div className={"absolute z-10 flex w-full h-full justify-center items-center"}>
-                    <Button>
-                        <Play/>
-                    </Button>
-                </div>
+                isVideo
+                    ? <div>
+                        <Play className={"w-5 h-5 bg-muted p-1 z-20 rounded-sm absolute top-2 right-2"}/>
+                    </div>
+                    : <></>
             }
 
             <div
@@ -265,18 +272,13 @@ function MediaView(props: {
                 )}
             >
                 <div className="flex flex-col items-start gap-1">
-                    <p className="text-primaryText text-md">
+                    <p className="text-primaryText text-sm">
                         {model.name}
                     </p>
                     <p className="text-sm text-primaryText/80">
                         {displaySize}
                     </p>
                 </div>
-                <Button className={"rounded-xl"} onClick={() => {
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
-                }}>
-                    <X/>
-                </Button>
             </div>
 
             {
