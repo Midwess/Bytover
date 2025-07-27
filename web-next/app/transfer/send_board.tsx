@@ -24,7 +24,8 @@ import {
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
-    VideoReceiveResourceViewModel
+    VideoReceiveResourceViewModel,
+    TransferEventVariantStartPublicTransfer,
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -81,8 +82,6 @@ function FileSelections() {
                 })
         }
     }, [files]);
-
-    const previewUrl = files[0]?.preview || null
 
     return (
         <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
@@ -359,6 +358,7 @@ function Board() {
 }
 
 function PublicSend() {
+    const [password, setPassword] = useState('')
     return <div className={"flex flex-col w-full h-full items-center gap-8 justify-center px-2"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
@@ -369,7 +369,7 @@ function PublicSend() {
             fade
             zoom
             inView
-            delay={0.2 + 0 * 0.1}>
+            delay={0.2}>
             <p className="text-start w-full text-primaryText/70 text-sm pb-1 text-center">
                 Create a sharable URL. Protect access by setting a password to keep your content safe.
             </p>
@@ -384,10 +384,12 @@ function PublicSend() {
             fade
             zoom
             inView
-            delay={0.2 + 1 * 0.1}>
+            delay={0.2 + 0.1}>
             <Label htmlFor={"password"}>Password (optional)</Label>
-            <Input id={"password"} type={"password"} maxLength={20} placeholder={"pwd@123"}/>
-            <Button className="w-fit h-[35px] bg-bluePrimary text-primary">Upload</Button>
+            <Input id={"password"} value={password} onChange={(it) => setPassword(it.target.value)} type={"password"} maxLength={20} placeholder={"pwd@123"}/>
+            <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
+                core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
+            }}>Upload</Button>
         </MotionEffect>
     </div>
 }

@@ -86,6 +86,7 @@ instant = "0.1.13"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 tracing = { version = "0.1.41" }
 indexmap = "2.10.0"
+tonic-web = "0.13.1"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

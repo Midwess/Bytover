@@ -39,6 +39,7 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
     let di = di_container::DiContainer::instance().await;
     log::info!("Start server at {}", connection.port);
     Server::builder()
+        .accept_http1(true)
         .add_service(InterceptorFor::new(
             BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
             di.get_auth_middleware()
@@ -63,10 +64,10 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
                 .grpc()
                 .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
                 .priority(1)
-                .enable_web()
                 .strip_path(false)
-                .public(false)
+                .public(true)
                 .preserve_host(false)
+                .grpc_web()
                 .name("bitbridge-grpc-server-path")
                 .build(),
         ])

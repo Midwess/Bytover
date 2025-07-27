@@ -21,5 +21,6 @@ chrono = { workspace = true }
 tonic-middleware = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }
+tonic-web = { workspace = true }
 async-trait = { workspace = true }
 lazy_static = { workspace = true }

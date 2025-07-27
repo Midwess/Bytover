@@ -1140,6 +1140,7 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "tonic-middleware 0.3.0",
+ "tonic-web",
 ]
 
 [[package]]
@@ -7375,6 +7376,24 @@ dependencies = [
  "futures-util",
  "tonic 0.13.1",
  "tower 0.4.13",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "774cad0f35370f81b6c59e3a1f5d0c3188bdb4a2a1b8b7f0921c860bfbd3aec6"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "pin-project",
+ "tokio-stream",
+ "tonic 0.13.1",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
