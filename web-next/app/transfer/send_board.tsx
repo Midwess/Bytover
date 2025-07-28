@@ -26,6 +26,7 @@ import {
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     VideoReceiveResourceViewModel,
     TransferEventVariantStartPublicTransfer,
+    TransferEventVariantCancelTransfer
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -35,6 +36,7 @@ import core from "@/wasm/wasm_core";
 import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
 import Image from "next/image";
+import {Progress, ProgressLabel, ProgressValue, ProgressTrack} from "@/components/animate-ui/base/progress";
 
 export default function SendBoard() {
     return <>
@@ -358,6 +360,20 @@ function Board() {
 
 function PublicSend() {
     const [password, setPassword] = useState('')
+    const cloudSession = core.useTransferState()?.cloud_session
+    const [isInProgress, setIsInProgress] = useState(false)
+    const progress = (cloudSession?.progress ?? 0) * 100
+
+    useEffect(() => {
+        if (cloudSession?.is_in_progress) {
+            setIsInProgress(true)
+        }
+        else {
+            setTimeout(() => setIsInProgress(false), 2400)
+        }
+
+    }, [cloudSession?.is_in_progress])
+
     return <div className={"flex flex-col w-full h-full items-center gap-8 justify-center px-2"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
@@ -369,26 +385,35 @@ function PublicSend() {
             zoom
             inView
             delay={0.2}>
-            <p className="text-start w-full text-primaryText/70 text-sm pb-1 text-center">
+            <p className="text-start w-full text-primaryText/70 text-sm pb-1">
                 Create a sharable URL. Protect access by setting a password to keep your content safe.
             </p>
-        </MotionEffect>
-
-        <MotionEffect
-            className={"flex flex-col w-full gap-3"}
-            key={1}
-            slide={{
-                direction: 'down',
-            }}
-            fade
-            zoom
-            inView
-            delay={0.2 + 0.1}>
-            <Label htmlFor={"password"}>Password (optional)</Label>
-            <Input id={"password"} value={password} onChange={(it) => setPassword(it.target.value)} type={"password"} maxLength={20} placeholder={"pwd@123"}/>
-            <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
-            }}>Upload</Button>
+            <div className={"flex flex-col w-full gap-3"}>
+                <Label htmlFor={"password"}>Password (optional)</Label>
+                <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
+                       type={"password"} maxLength={20} placeholder={"pwd@123"}/>
+                {
+                    isInProgress
+                        ? <div className={"flex flex-col w-full gap-2"}>
+                            <Progress value={progress} className="w-full space-y-2">
+                                <div className="flex items-center justify-between gap-1">
+                                    <span className="text-sm">
+                                        {cloudSession?.display_download_speed}
+                                    </span>
+                                </div>
+                                <ProgressTrack/>
+                            </Progress>
+                            <Button className="mt-2 w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
+                                if (cloudSession?.is_in_progress) {
+                                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id)))
+                                }
+                            }}>Cancel</Button>
+                        </div>
+                        : <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
+                        }}>Upload</Button>
+                }
+            </div>
         </MotionEffect>
     </div>
 }

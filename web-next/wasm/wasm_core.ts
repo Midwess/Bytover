@@ -1,5 +1,6 @@
 'use client'
 
+import toast from 'react-hot-toast';
 import {
     CoreOperationVariantDelay,
     Effect,
@@ -45,6 +46,11 @@ import {
     TransferViewModel,
     ResourceSelection,
     LocalResourcePathVariantPlatformIdentifier,
+    DialogOperationOutputVariantToast,
+    CoreOperationOutputVariantDialog,
+    DialogOperationVariantAlert,
+    DialogOperationOutputVariantAlert,
+    DialogOperationVariantToast
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -216,8 +222,17 @@ export class WasmCore {
             }
             case CoreOperationVariantDialog: {
                 const operation = coreOperation as CoreOperationVariantDialog;
-                console.log(`Opening dialog ${operation.value}`)
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                switch(operation.value.constructor) {
+                    case DialogOperationVariantToast: {
+                        const toastOp = operation.value as DialogOperationVariantToast;
+                        toast(toastOp.value)
+                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantToast())))
+                    }
+                    case DialogOperationVariantAlert: {
+                        // No alert on web, will automatically confirmed
+                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantAlert(true))))
+                    }
+                }
             }
             case CoreOperationVariantDelay: {
                 const delay = coreOperation as CoreOperationVariantDelay;
@@ -248,32 +263,41 @@ export class WasmCore {
     }
 
     async msg_from_native(data: Uint8Array): Promise<Uint8Array> {
-        const msgToShell = MessageToShell.deserialize(new BincodeDeserializer(data));
-        switch(msgToShell.constructor) {
-            case MessageToShellVariantHandleResponse: {
-                const msg = msgToShell as MessageToShellVariantHandleResponse;
-                const id = msg.field0;
-                const operationData = serialize(msg.field1);
-                const requestsData = handle_response(id, operationData)
-                const requests = deserializeArray<Request>(Request, requestsData);
-                while (requests.length > 0) {
-                    const request = requests.shift();
-                    if (!request) break;
+        try {
+            const msgToShell = MessageToShell.deserialize(new BincodeDeserializer(data));
+            switch (msgToShell.constructor) {
+                case MessageToShellVariantHandleResponse: {
+                    const msg = msgToShell as MessageToShellVariantHandleResponse;
+                    const id = msg.field0;
+                    const operationData = serialize(msg.field1);
+                    const requestsData = handle_response(id, operationData)
+                    if (requestsData.length === 0) return serialize(new MessageToShellResponseVariantVoidResponse())
 
-                    const nextRequest = await this.processEffect(request.id, request.effect);
+                    const requests = deserializeArray<Request>(Request, requestsData);
+                    while (requests.length > 0) {
+                        const request = requests.shift();
+                        if (!request) break;
 
-                    if (nextRequest.length === 0) continue;
+                        const nextRequest = await this.processEffect(request.id, request.effect);
 
-                    const newRequests = deserializeArray<Request>(Request, nextRequest);
-                    requests.push(...newRequests);
+                        if (nextRequest.length === 0) continue;
+
+                        const newRequests = deserializeArray<Request>(Request, nextRequest);
+                        requests.push(...newRequests);
+                    }
+
+                    return serialize(new MessageToShellResponseVariantVoidResponse())
                 }
-
-                return serialize(new MessageToShellResponseVariantVoidResponse())
-            }
-            default: {
-                throw new Error(`Unknown message type ${msgToShell.constructor}`)
+                default: {
+                    throw new Error(`Unknown message type ${msgToShell.constructor}`)
+                }
             }
         }
+        catch(ignored) {
+            console.error(ignored)
+        }
+
+        return serialize(new MessageToShellResponseVariantVoidResponse())
     }
 }
 

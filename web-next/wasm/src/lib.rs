@@ -93,7 +93,7 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
 
                 if let Some(event) = event_to_send {
                     let serialized_event = serialize(&event);
-                    // shell_runtime_clone.clone().msg_from_native_bg(serialized_event);
+                    shell_runtime_clone.clone().msg_from_native_bg(serialized_event);
                 }
             }
         });

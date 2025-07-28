@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import localFont from 'next/font/local';
 import CoreStart from "@/app/core_start";
+import {Toaster} from "react-hot-toast";
 
 const dmSans = localFont({
   src: [
@@ -70,6 +71,7 @@ export default function RootLayout({
       <body
           className={`h-screen ${dmSans.variable} ${dmMono.variable} ${inter.variable} antialiased dark`}>
         <CoreStart/>
+        <Toaster position={"top-right"}/>
         {children}
       </body>
     </html>

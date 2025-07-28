@@ -35,8 +35,8 @@ impl Display for TransferSessionStatus {
                     write!(f, "{:.1} MB/s", kb_per_second / 1024.0)
                 }
             }
-            TransferSessionStatus::Success => write!(f, "Success"),
-            TransferSessionStatus::Failed(msg) => write!(f, "Failed {msg}"),
+            TransferSessionStatus::Success => write!(f, "Done ☺️!"),
+            TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
             TransferSessionStatus::Canceled => write!(f, "Canceled")
         }
     }
@@ -150,13 +150,13 @@ impl TransferProgress {
         self.bytes_sec_counter += bytes_count;
 
         if elapsed >= 1000 {
+            self.bytes_per_second = self.bytes_sec_counter;
             self.start_time_utc_ms = Utc::now().timestamp_millis() as u64;
             self.bytes_sec_counter = bytes_count;
         }
 
-        self.bytes_per_second = self.bytes_sec_counter;
-
         if self.percentage() == 1.0 {
+            self.bytes_per_second = self.bytes_sec_counter;
             self.success();
         }
     }

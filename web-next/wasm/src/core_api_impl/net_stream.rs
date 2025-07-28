@@ -147,11 +147,14 @@ impl NetStreamInner for NetStreamInnerImpl {
                 .map_err(|it| anyhow!("Upload file errors {it:?}"))?;
         }
 
+        self.xhr = Some(xhr);
+
         Ok(rx)
     }
 
     async fn end(&mut self) -> anyhow::Result<()> {
         if let Some(xhr) = self.xhr.take() {
+            log::info!("Aborting upload");
             xhr.abort().map_err(|it| anyhow!("Abort upload errors {it:?}"))?;
         }
 
