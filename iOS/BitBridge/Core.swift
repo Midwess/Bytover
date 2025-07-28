@@ -132,7 +132,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 let thumbnail = await self.getThumbnailData(for: identifier)
                 return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
             default:
-                let errorMessage = "Loading thumbnail for non-platform identifier paths is unsupported"
                 return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(nil)).bincodeSerialize()))
             }
         case .appCapabilities(.device(.open(.open(let path)))):

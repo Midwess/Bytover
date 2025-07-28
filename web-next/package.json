@@ -24,6 +24,7 @@
     "filepond": "^4.32.8",
     "filepond-plugin-file-poster": "^2.5.2",
     "filepond-plugin-image-preview": "^4.6.12",
+    "heic2any": "^0.0.4",
     "lucide-react": "^0.525.0",
     "motion": "^12.23.6",
     "next": "15.3.5",

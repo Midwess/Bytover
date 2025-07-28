@@ -29,14 +29,30 @@ once_cell = { workspace = true }
 log = "0.4.27"
 anyhow = { workspace = true }
 bytes = { workspace = true }
-web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location"] }
-futures-timer = {workspace = true, features = ["wasm-bindgen"]}
+web-sys = { version = "0.3.77", features = [
+    "File",
+    "Blob",
+    "FileReader",
+    "RequestMode",
+    "RequestInit",
+    "Headers",
+    "Window",
+    "Location",
+    "ProgressEvent",
+    "XmlHttpRequest",
+    "XmlHttpRequestUpload",
+    "AbortController",
+    "Document"
+]}
+
+futures-timer = { workspace = true, features = ["wasm-bindgen"] }
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.77"
 mime_guess = { workspace = true }
 reqwest = { workspace = true, features = ["json", "stream"] }
 url = { workspace = true }
 indexmap = { workspace = true }
+futures-channel = "0.3.31"
 
 
 [package.metadata.wasm-pack.profile.release]

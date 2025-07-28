@@ -249,4 +249,15 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         log::info!("Generated thumbnail paths: {:?}", result);
         Ok(result)
     }
+
+    async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
+        let absolute_path = self.path_resolver.get_absolute_path(path).await;
+        let path = PathBuf::from(absolute_path);
+        if path.is_dir() {
+            let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+            return folder.calculate_tar_size().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
+        };
+
+        fs::metadata(&path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}"))).map(|it| it.len())
+    }
 }

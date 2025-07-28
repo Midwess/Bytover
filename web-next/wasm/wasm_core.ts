@@ -169,7 +169,6 @@ export class WasmCore {
                             return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
 
-                        console.log(`Loading thumbnail for ${resourceId}, ${file.name}`)
                         try {
                             const pngBytes = await getThumbnailFromFile(file)
                             const buffer = await pngBytes.arrayBuffer();

@@ -4,7 +4,7 @@ use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
-use crate::core_api::{CoreBridge, IOReader, NetStream};
+use crate::core_api::{CoreBridge, IOReader, NetStream, NetStreamEvent, NetStreamInner};
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
@@ -18,6 +18,7 @@ use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use tonic::codegen::tokio_stream::StreamExt;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -171,23 +172,25 @@ where
 
             drop(session_guard);
 
-            let Ok(mut cursor) = self.repository.read(thumbnail_file_path, 1024 * 1024).await else {
-                continue;
-            };
-
-            let Ok(size) = cursor.total_size().await else {
+            let Ok(size) = self.repository.size(thumbnail_file_path.clone()).await else {
                 continue;
             };
 
             log::info!("Uploading thumbnail to {}", request.upload_url);
             let url = (request.upload_url.clone()).parse::<url::Url>().unwrap();
-            let Ok(mut net_stream) = self.net_stream.start(url, size).await else {
+            let Ok(mut net_stream) = self.net_stream.upload_resource(
+                url, thumbnail_file_path, size).await else {
                 continue;
             };
 
-            while let Ok(Some(bytes)) = cursor.next().await {
-                if let Err(e) = net_stream.write(bytes).await {
+            let mut rx = net_stream.start().await?;
+            while let Some(event) = rx.next().await {
+                if let NetStreamEvent::Error(e) = event {
                     log::warn!("Failed to upload thumbnail: {e:?}");
+                    break
+                }
+
+                if let NetStreamEvent::Completed = event {
                     break
                 }
             }
@@ -221,20 +224,15 @@ where
             let resource_path = resource.path.clone();
             let repository = self.repository.clone();
             futures.push(async move {
-                let cursor = match repository.read(resource_path, 1024 * 1024).await {
-                    Ok(cursor) => cursor,
+                let size = match repository.size(resource_path).await {
+                    Ok(size) => size,
                     Err(e) => {
                         let _ = tx.send(Err(CloudTransferErrors::from(e)));
                         return;
                     }
                 };
 
-                if let Err(e) = cursor.total_size().await {
-                    let _ = tx.send(Err(CloudTransferErrors::from(e)));
-                    return;
-                };
-
-                let _ = tx.send(Ok(cursor));
+                let _ = tx.send(Ok(size));
             });
         }
 
@@ -253,7 +251,7 @@ where
             let order_id = request.resource_order_id as u64;
             let upload_url = request.upload_url.clone();
 
-            let cursor = match resource_size_tasks.remove(&order_id) {
+            let size = match resource_size_tasks.remove(&order_id) {
                 Some(rx) => match rx.await {
                     Ok(size) => size?,
                     Err(_) => continue
@@ -261,7 +259,7 @@ where
                 None => continue
             };
 
-            current_upload_request = match self.upload_resource(session, order_id, upload_url, cursor, core_request_id).await {
+            current_upload_request = match self.upload_resource(session, order_id, upload_url, size, core_request_id).await {
                 Ok(_) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
@@ -298,45 +296,56 @@ where
         transfer_session: &Arc<Mutex<TransferSession>>,
         resource_order_id: u64,
         upload_url: String,
-        mut cursor: Box<dyn IOReader>,
+        size: u64,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
         let resource_path = match transfer_session.lock().await.resources.iter().find(|it| it.order_id == resource_order_id) {
-            Some(resource) => resource.path.as_string(),
+            Some(resource) => resource.path.clone(),
             None => return Err(CloudTransferErrors::ResourceNotFound)
         };
 
-        let total_size = cursor.total_size().await?;
-        log::info!("Uploading resource {resource_path} size = {total_size}");
         let mut total_sent = 0;
         let url = (upload_url.clone()).parse::<url::Url>().unwrap();
-        let mut net_stream = self.net_stream.start(url, total_size).await?;
-        while let Some(chunk) = cursor.next().await.map_err(|it| CloudTransferErrors::FileError(it.to_string()))? {
-            total_sent += chunk.len();
-            let count = chunk.len();
-
+        let mut net_stream = self.net_stream.upload_resource(url, resource_path.clone(), size).await?;
+        let mut rx = net_stream.start().await?;
+        log::info!("Uploading resource {resource_path:?} size = {size}");
+        while let Some(event) = rx.next().await {
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
+                net_stream.end().await?;
                 return Err(CloudTransferErrors::SessionCancelled);
             }
 
             let progress = session_guard.resource_mut_progress(resource_order_id).expect("Progress not found");
-            progress.update_progress(count as u64);
+
+            match event {
+                NetStreamEvent::Progress {
+                    uploaded_bytes
+                } => {
+                    let count = uploaded_bytes - total_sent;
+                    progress.update_progress(count);
+                    total_sent = uploaded_bytes;
+                },
+                NetStreamEvent::Error(e) => {
+                    log::warn!("Failed to upload resource: {e:?}");
+                    net_stream.end().await?;
+                    return Err(CloudTransferErrors::from(e));
+                },
+                NetStreamEvent::Completed => {
+                    log::info!("Resource {resource_path:?} uploaded");
+                    progress.success();
+                    break;
+                }
+            }
+
             let progress_update_event =
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-            drop(session_guard);
 
             self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
-
-            net_stream
-                .write(chunk)
-                .await
-                .map_err(|it| CloudTransferErrors::UploadProcessError(it.to_string()))?;
         }
 
         net_stream.end().await?;
-
-        log::info!("Resource {resource_path} uploaded, total sent = {total_sent} bytes");
+        log::info!("Resource {resource_path:?} uploaded, total sent = {total_sent} bytes");
 
         let session_guard = transfer_session.lock().await;
         let progress = session_guard.resource_progress(resource_order_id).expect("Progress not found");

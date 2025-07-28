@@ -36,6 +36,7 @@ anyhow = { workspace = true }
 mime_guess = { workspace = true }
 tokio-util = {workspace = true}
 redb = { workspace = true }
+futures = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }

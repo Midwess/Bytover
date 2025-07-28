@@ -78,7 +78,9 @@ impl DiContainer {
     }
 
     pub fn get_net_stream(&self) -> Box<dyn NetStream> {
-        Box::new(NetStreamImpl {})
+        Box::new(NetStreamImpl {
+            storage: self.file_storage.get().unwrap().clone()
+        })
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {

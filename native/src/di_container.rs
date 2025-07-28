@@ -76,8 +76,10 @@ impl DiContainer {
         self.path_resolver.get().unwrap()
     }
 
-    pub fn get_net_stream(&self) -> impl NetStream {
-        NetStreamImpl {}
+    pub fn get_net_stream(&self, repository: Arc<dyn LocalResourceRepository>) -> impl NetStream {
+        NetStreamImpl {
+            repository
+        }
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -170,18 +172,20 @@ impl DiContainer {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
-
+        let local_resource_repo = Arc::new(self.get_local_resource_repository());
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
-            Arc::new(self.get_local_resource_repository())
+            local_resource_repo.clone()
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
-            repository: Arc::new(self.get_local_resource_repository()),
-            net_stream: Box::new(self.get_net_stream())
+            repository: local_resource_repo.clone(),
+            net_stream: Box::new(self.get_net_stream(
+                local_resource_repo.clone(),
+            ))
         };
 
         let executor = NativeExecutor {

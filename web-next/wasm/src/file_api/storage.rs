@@ -14,7 +14,7 @@ use web_sys::js_sys::Array;
 use web_sys::{File, IdbTransactionMode};
 
 #[derive(Clone)]
-pub struct WasmFile(File);
+pub struct WasmFile(pub File);
 
 unsafe impl Send for WasmFile {}
 
@@ -87,6 +87,15 @@ impl FileStorage {
     pub(crate) async fn get_file(&self, id: u64) -> Option<File> {
         let device_files = self.device_files.lock().await;
         device_files.get(&id)?.0.clone().into()
+    }
+
+    pub(crate) async fn get_file_by_path(&self, path: &LocalResourcePath) -> Option<File> {
+        let LocalResourcePath::PlatformIdentifier(platform_identifier) = path else {
+            return None;
+        };
+
+        let resource_id = platform_identifier.split_once("device://")?.1.to_string().parse::<u64>().ok()?;
+        self.get_file(resource_id).await
     }
 
     pub(crate) async fn load(&self, path: LocalResourcePath) -> Option<LocalResource> {

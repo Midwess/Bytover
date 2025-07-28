@@ -70,7 +70,6 @@ function FileSelections() {
 
     const transfer_state = core.useTransferState()
     const selectedResources = transfer_state?.selected_resources || []
-    console.log('selectedResources', selectedResources)
 
     useEffect(() => {
         if (files.length) {

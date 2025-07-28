@@ -8,6 +8,7 @@ use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use idb::Database;
 use wasm_bindgen::JsValue;
+use web_sys::StorageType::Default;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
@@ -109,15 +110,15 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 #[async_trait::async_trait(?Send)]
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn update_progresses(&self, order_id: u64, progresses: Vec<TransferProgress>) -> Result<Option<TransferSession>, PersistenceError> {
-        todo!()
+        Ok(None)
     }
 
     async fn update_resource(&self, session_id: TransferSessionId, resource: LocalResource) -> Result<Option<TransferSession>, PersistenceError> {
-        todo!()
+        Ok(None)
     }
 
     async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
-        todo!()
+        Ok(())
     }
 
     async fn generate_resource_paths(&self, session_order_id: u64, resource_names: HashMap<u64, String>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {

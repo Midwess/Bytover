@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use futures::lock::Mutex;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -15,7 +16,8 @@ use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceT
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::core_api::{IOReader, IOWriter};
-use crate::file_api::storage::FileStorage;
+use crate::core_api_impl::io::IOReaderImpl;
+use crate::file_api::storage::{FileStorage, WasmFile};
 use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {
@@ -149,8 +151,16 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
-        todo!()
+    async fn read(&self, path: LocalResourcePath, _max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+        let Some(file) = self.file_storage.get_file_by_path(&path).await else {
+            return Err(PersistenceError::NotFound(format!("{:?}", path)));
+        };
+
+        Ok(Box::new(IOReaderImpl {
+            file: Mutex::new(WasmFile(file)),
+            position: 0,
+            chunk_size: 63 * 1024
+        }))
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
@@ -162,15 +172,30 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
-        // let mut result = HashMap::new();
-        // for resource_id in resource_ids.iter() {
-        //     let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;
-        //     let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
-        //     result.insert(*resource_id, path);
-        // }
-        //
-        // log::info!("Generated thumbnail paths: {:?}", result);
-        // Ok(result)
-        todo!("")
+        let mut result = HashMap::new();
+        for resource_id in resource_ids.iter() {
+            let path = LocalResourcePath::PlatformIdentifier(format!("idb://thumbnail/{resource_id}"));
+            result.insert(*resource_id, path);
+        }
+
+        Ok(result)
+    }
+
+    async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
+        let LocalResourcePath::PlatformIdentifier(path) = path else {
+            return Err(PersistenceError::NotFound(format!("Expected platform identifier got {:?}", path)));
+        };
+
+        if let Ok(resource_id) = path.trim_start_matches("idb://thumbnail/").parse::<u64>() {
+            if let Some(resource) = self.file_storage.read_thumbnail_bytes(resource_id).await {
+                return Ok(resource.length() as u64);
+            };
+        };
+
+        if let Some(file) = self.file_storage.get_file_by_path(&LocalResourcePath::PlatformIdentifier(path.clone())).await {
+            return Ok(file.size() as u64)
+        };
+
+        Err(PersistenceError::NotFound(format!("Not found file at path {path:?}")))
     }
 }
