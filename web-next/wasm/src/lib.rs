@@ -9,7 +9,6 @@ pub mod config;
 pub mod file_api;
 mod errors;
 
-use std::panic::resume_unwind;
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
 use n0_future::task::{spawn, JoinHandle};
@@ -26,7 +25,6 @@ use shared::app::BitBridge;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::File;
-use shared::app::file_system::file::LocalResourcePath;
 use shared::CoreOperation;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;

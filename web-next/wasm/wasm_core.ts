@@ -163,7 +163,6 @@ export class WasmCore {
                     }
                     case DeviceOperationVariantOpen: {
                         const open = device.value as DeviceOperationVariantOpen;
-                        console.log(`Opening ${open}`)
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {

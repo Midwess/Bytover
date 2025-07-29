@@ -1,6 +1,6 @@
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use schema::value::static_resource::StaticResource;
-
+use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
@@ -44,7 +44,8 @@ pub struct TransferResourcesResponse {
 
 pub struct TransferService {
     pub transfer_repository: Box<dyn TransferSessionRepository>,
-    pub cloud_storage: Box<dyn CloudStorage>
+    pub cloud_storage: Box<dyn CloudStorage>,
+    pub markov_generator: Box<dyn Markov>
 }
 
 impl TransferService {

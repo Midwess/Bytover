@@ -15,6 +15,7 @@ pub mod grpc;
 pub mod infrastructure;
 pub mod repositories;
 pub mod transfer;
+pub mod app_gateway;
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {

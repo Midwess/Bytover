@@ -27,19 +27,25 @@ pub enum TransferSessionErrors {
 pub struct TransferSession {
     order_id: u64,
     owner_user_order_id: u64,
+    alias: String,
     password: Option<String>,
     resources: Vec<TransferResource>,
     progress: Vec<TransferProgress>
 }
 
 impl TransferSession {
-    pub async fn public(password: Option<String>, from_user: u64) -> Self {
+    pub async fn public(
+        password: Option<String>,
+        from_user: u64,
+        alias: String
+    ) -> Self {
         Self {
             order_id: gen_id().await,
             owner_user_order_id: from_user,
             password,
             resources: Default::default(),
-            progress: Default::default()
+            progress: Default::default(),
+            alias
         }
     }
 

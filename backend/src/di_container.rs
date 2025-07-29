@@ -7,10 +7,11 @@ use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-
+use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
+use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
@@ -26,7 +27,7 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
-    pub devlog_sdk: DevlogSdk
+    pub devlog_sdk: DevlogSdk,
 }
 
 impl DiContainer {
@@ -39,7 +40,7 @@ impl DiContainer {
 
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
-            devlog_sdk
+            devlog_sdk,
         }
     }
 
@@ -51,6 +52,12 @@ impl DiContainer {
 
     pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {
         self.devlog_sdk.db("bitbridge".to_owned()).await
+    }
+
+    pub fn markov_generator(&self) -> impl Markov {
+        AppGatewayImpl {
+            channel: self.grpc_gateway_channel.clone()
+        }
     }
 
     pub fn get_grpc_gateway_channel(&self) -> &GrpcGatewayChannel {
