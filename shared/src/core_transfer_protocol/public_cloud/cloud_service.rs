@@ -15,9 +15,10 @@ use futures_util::lock::Mutex;
 use n0_future::task::spawn;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
-use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
+use schema::devlog::bitbridge::{cloud_resource_message, ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use n0_future::time::Instant;
 use tonic::codegen::tokio_stream::StreamExt;
 
 #[derive(Debug, thiserror::Error)]
@@ -113,14 +114,14 @@ where
             .map(|it| CloudResourceMessage {
                 r#type: ResourceTypeSchema::from(&it.r#type).into(),
                 name: it.name.clone(),
-                order_id: it.order_id as i64,
-                size: it.size as i64
+                order_id: it.order_id,
+                size: it.size as i64,
             })
             .collect();
 
         drop(session_guard);
 
-        let response = self.server.add_resources(session_order_id as i64, resources).await?;
+        let response = self.server.add_resources(session_order_id, resources).await?;
 
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
@@ -209,7 +210,7 @@ where
         first_upload_request: ClientUploadRequest,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
-        let session_order_id = session.lock().await.order_id as i64;
+        let session_order_id = session.lock().await.order_id ;
         let mut current_upload_request = Some(first_upload_request);
 
         let mut resource_size_tasks = HashMap::new();
@@ -271,7 +272,7 @@ where
                     log::info!("Resource {order_id:?} uploaded, response to {core_request_id:?} done");
 
                     self.server
-                        .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Success, None)
+                        .commit_file_upload(session_order_id, order_id , UploadStatus::Success, None)
                         .await?
                 }
                 Err(e) => {
@@ -284,7 +285,7 @@ where
                     let _ = self.core_bridge.response(core_request_id, msg).await;
 
                     self.server
-                        .commit_file_upload(session_order_id, order_id as i64, UploadStatus::Failed, Some(e.to_string()))
+                        .commit_file_upload(session_order_id, order_id , UploadStatus::Failed, Some(e.to_string()))
                         .await?
                 }
             }
@@ -301,16 +302,23 @@ where
         size: u64,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
-        let resource_path = match transfer_session.lock().await.resources.iter().find(|it| it.order_id == resource_order_id) {
+        let session_guard = transfer_session.lock().await;
+        let resource_path = match session_guard.resources.iter().find(|it| it.order_id == resource_order_id) {
             Some(resource) => resource.path.clone(),
             None => return Err(CloudTransferErrors::ResourceNotFound)
         };
+
+        let session_order_id = session_guard.order_id;
+
+        drop(session_guard);
 
         let mut total_sent = 0;
         let url = (upload_url.clone()).parse::<url::Url>().unwrap();
         let mut net_stream = self.net_stream.upload_resource(url, resource_path.clone(), size).await?;
         let mut rx = net_stream.start().await?;
         log::info!("Uploading resource {resource_path:?} size = {size}");
+        let mut ticker = Instant::now();
+        let progress_update_interval = std::time::Duration::from_millis(5000);
         while let Some(event) = rx.next().await {
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
@@ -327,6 +335,14 @@ where
                     let count = uploaded_bytes - total_sent;
                     progress.update_progress(count);
                     total_sent = uploaded_bytes;
+                    if ticker.elapsed() > progress_update_interval {
+                        ticker = Instant::now();
+                        self.server.update_transfer_progress(
+                            session_order_id,
+                            resource_order_id,
+                            total_sent,
+                        ).await?;
+                    }
                 },
                 NetStreamEvent::Error(e) => {
                     log::warn!("Failed to upload resource: {e:?}");
@@ -369,7 +385,7 @@ where
                 session.cancel();
                 drop(session);
 
-                if let Err(e) = self.server.cancel_session(session_id as i64).await {
+                if let Err(e) = self.server.cancel_session(session_id ).await {
                     log::error!("Failed to cancel session: {e:?}");
                 }
 

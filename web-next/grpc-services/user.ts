@@ -12,7 +12,6 @@ export default class UserService extends Client.Base<typeof UserClient> {
     }
 
     public async getMe(): Promise<User | null> {
-        console.log('tiendang-debug', 'getMe')
         const accessToken = localStorage.getItem('access_token')
         if (!accessToken) return null
 

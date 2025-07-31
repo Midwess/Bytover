@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
@@ -6,7 +7,7 @@ use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::SurrealResponseError;
 use surrealdb::sql::{Array, Thing, Value};
-
+use core_services::db::repository::abstraction::errors::RepositoryError;
 use crate::entities::transfer_session::TransferSession;
 
 #[derive(Clone, Default)]
@@ -31,7 +32,7 @@ impl SurrealDeserializer for TransferSessionId {
                 user_order_id: SurrealDeserializer::deserialize(&array.0[0])?,
                 order_id: SurrealDeserializer::deserialize(&array.0[1])?
             }),
-            _ => Err(SurrealResponseError::ExpectedAnArray)
+            _ => Err(SurrealResponseError::ExpectedAnArray(format!("{:?}", value)))
         }
     }
 }
@@ -73,4 +74,7 @@ impl SurrealId for TransferSession {
     }
 }
 
-pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {}
+#[async_trait::async_trait]
+pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
+    async fn find_session_by_alias(&self, alias: String) -> Result<Option<TransferSession>, RepositoryError>;
+}

@@ -134,11 +134,11 @@ impl TransferSession {
     }
 
     pub fn is_completed(&self) -> bool {
-        let is_all_completd = self
+        let is_all_completed = self
             .progress
             .iter()
             .all(|it| matches!(it.status(), TransferProgressStatus::Success | TransferProgressStatus::Failed(_)));
-        is_all_completd
+        is_all_completed
     }
 
     pub fn user_order_id(&self) -> u64 {
@@ -149,6 +149,22 @@ impl TransferSession {
         self.order_id
     }
 
+    pub fn resources(&self) -> &Vec<TransferResource> {
+        &self.resources
+    }
+
+    pub fn progresses(&self) -> &Vec<TransferProgress> {
+        &self.progress
+    }
+
+    pub fn update_transferred_progress(&mut self, resource_id: u64, transferred_size: u64) {
+        let Some(progress) = self.progress.iter_mut().find(|it| it.resource_id() == resource_id) else {
+            return;
+        };
+
+        let _ = progress.update_transfered_bytes(transferred_size);
+    }
+
     pub fn access_url(&self) -> String {
         let website = env::var("DEVLOG_BITBRIDGE_WEBSITE_URL").unwrap_or("http://localhost:8000".to_owned());
         format!("{}/sessions/{}", website, self.order_id)
@@ -156,6 +172,18 @@ impl TransferSession {
 
     pub fn password(&self) -> Option<String> {
         self.password.clone()
+    }
+
+    pub fn validate_access(&self, entered_password: Option<String>) -> bool {
+        if let Some(password) = &self.password {
+            let Some(entered_password) = entered_password else {
+                return false
+            };
+
+            return entered_password.eq(password);
+        };
+
+        true
     }
 
     pub fn thumbnail_resources(&self) -> Vec<(u64, StaticResource)> {

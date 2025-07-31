@@ -1,6 +1,6 @@
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use schema::value::static_resource::StaticResource;
-use crate::app_gateway::markov::Markov;
+use crate::app_gateway::markov::{Markov, MarkovErrors};
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
@@ -24,7 +24,9 @@ pub enum TransferErrors {
     #[error("Cloud storage error {0}")]
     CloudStorageError(#[from] CloudStorageErrors),
     #[error("Password of a session cannot exceed {0}")]
-    PasswordLengthExceed(usize)
+    PasswordLengthExceed(usize),
+    #[error("Failed to generate alias {}", .0)]
+    MarkovError(#[from] MarkovErrors),
 }
 
 pub struct TransferResourceRequest {
@@ -60,11 +62,39 @@ impl TransferService {
             }
         }
 
-        let session = TransferSession::public(password, user_id).await;
+        let alias = self.markov_generator.generate_name().await?;
+
+        let session = TransferSession::public(password, user_id, alias).await;
 
         let session = self.transfer_repository.create(session).await?;
 
         Ok(session)
+    }
+
+    pub async fn update_transfer_progress(
+        &self,
+        user_id: u64,
+        session_id: u64,
+        resource_id: u64,
+        transferred_amount_in_bytes: u64
+    ) -> Result<(), TransferErrors> {
+        let session_id = TransferSessionId {
+            order_id: Some(session_id),
+            user_order_id: Some(user_id)
+        };
+
+        let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
+            return Err(TransferErrors::SessionNotFound)
+        };
+
+        session.update_transferred_progress(
+            resource_id,
+            transferred_amount_in_bytes
+        );
+
+        self.transfer_repository.update_one(session).await?;
+
+        Ok(())
     }
 
     pub async fn add_resources(

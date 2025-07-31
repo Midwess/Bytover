@@ -20,7 +20,7 @@ pub enum TransferProgressStatus {
 pub struct TransferProgress {
     resource_id: u64,
     resource_size: u64,
-    transferred_amount: u64,
+    transfered_amount: u64,
     status: TransferProgressStatus
 }
 
@@ -35,13 +35,32 @@ impl TransferProgress {
         Self {
             resource_id: resource.order_id(),
             status: TransferProgressStatus::InProgress(0f32),
-            transferred_amount: 0,
+            transfered_amount: 0,
             resource_size: resource.size_in_bytes()
         }
     }
 
     pub fn resource_id(&self) -> u64 {
         self.resource_id
+    }
+
+    pub fn completion(&self) -> f32 {
+        match &self.status {
+            TransferProgressStatus::InProgress(progress) => *progress,
+            TransferProgressStatus::Success => 1f32,
+            TransferProgressStatus::Failed(_) => 1f32
+        }
+    }
+
+    pub fn error_message(&self) -> Option<&str> {
+        match &self.status {
+            TransferProgressStatus::Failed(message) => Some(message),
+            _ => None
+        }
+    }
+
+    pub fn transfered_amount(&self) -> u64 {
+        self.transfered_amount
     }
 
     pub fn status(&self) -> &TransferProgressStatus {
@@ -59,8 +78,8 @@ impl TransferProgress {
             return Err(TransferProgressErrors::AlreadyCommitted)
         }
 
-        self.transferred_amount = (self.transferred_amount + new_amount).max(self.resource_size);
-        self.status = TransferProgressStatus::InProgress(self.resource_size as f32 / self.transferred_amount as f32);
+        self.transfered_amount = new_amount.min(self.resource_size);
+        self.status = TransferProgressStatus::InProgress(self.transfered_amount as f32 / self.resource_size as f32);
 
         Ok(())
     }

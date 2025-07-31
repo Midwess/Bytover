@@ -4,16 +4,7 @@ use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
-use schema::devlog::bitbridge::{
-    AddResourcesRequest,
-    AddResourcesResponse,
-    CancelSessionRequest,
-    ClientUploadRequest,
-    CloudResourceMessage,
-    CommitFileUploadRequest,
-    CreatePublicTransferSessionRequest,
-    PublicTransferSessionMessage
-};
+use schema::devlog::bitbridge::{AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage, CommitFileUploadRequest, CreatePublicTransferSessionRequest, PublicTransferSessionMessage, UpdateTransferProgressRequest};
 use tonic::Request;
 
 pub struct CloudServer<T>
@@ -60,7 +51,7 @@ where
 
     pub async fn add_resources(
         &self,
-        session_order_id: i64,
+        session_order_id: u64,
         resources: Vec<CloudResourceMessage>
     ) -> Result<AddResourcesResponse, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
@@ -79,8 +70,8 @@ where
 
     pub async fn commit_file_upload(
         &self,
-        session_order_id: i64,
-        resource_order_id: i64,
+        session_order_id: u64,
+        resource_order_id: u64,
         status: UploadStatus,
         failed_reason: Option<String>
     ) -> Result<Option<ClientUploadRequest>, RpcErrors> {
@@ -102,7 +93,7 @@ where
         Ok(response.next_upload_request)
     }
 
-    pub async fn cancel_session(&self, session_order_id: i64) -> Result<(), RpcErrors> {
+    pub async fn cancel_session(&self, session_order_id: u64) -> Result<(), RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request_body = CancelSessionRequest { session_order_id };
 
@@ -112,6 +103,29 @@ where
 
         let client = BitBridgeCloudServiceClient::new(channel);
         let _ = client.clone().cancel_session(request).await.map(|it| it.into_inner())?;
+
+        Ok(())
+    }
+
+    pub async fn update_transfer_progress(
+        &self,
+        session_order_id: u64,
+        resource_order_id: u64,
+        uploaded_bytes: u64,
+    ) -> Result<(), RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let request_body = UpdateTransferProgressRequest {
+            session_order_id,
+            resource_order_id,
+            transferred_amount_in_bytes: uploaded_bytes
+        };
+
+        let mut request = Request::new(request_body);
+
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let client = BitBridgeCloudServiceClient::new(channel);
+        let _ = client.clone().update_transfer_progress(request).await.map(|it| it.into_inner())?;
 
         Ok(())
     }

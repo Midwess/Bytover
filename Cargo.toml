@@ -47,8 +47,8 @@ serde_derive = { version = "1.0.203", default-features = false }
 serde_json = { version = "1.0.117", default-features = false }
 chrono = { version = "0.4.41", default-features = false }
 wasm-bindgen = { version = "0.2.100", default-features = false }
-surreal_derive_plus = { version = "2.2.3", default-features = false }
-surreal_devl = { version = "2.2.2", default-features = false }
+surreal_derive_plus = { version = "2.2.5", default-features = false }
+surreal_devl = { version = "2.2.4", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
 tonic-middleware = { version = "0.3.0", default-features = false }
 tokio = { version = "1.46.0", default-features = false }

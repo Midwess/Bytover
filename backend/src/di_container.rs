@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use core_services::db::surrealdb::connection::SurrealDbConnection;
 use core_services::utils::pool::request::PoolRequest;
 use devlog_sdk::distributed_id::init_id_generator;
@@ -7,6 +8,7 @@ use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
+use devlog_sdk::live_query::live_query::LiveQuery;
 use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
@@ -28,6 +30,7 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
+    live_query: Arc<LiveQuery>
 }
 
 impl DiContainer {
@@ -38,9 +41,11 @@ impl DiContainer {
 
         init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
 
+        let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
+            live_query: Arc::new(LiveQuery::new(app_db).await)
         }
     }
 
@@ -79,14 +84,17 @@ impl DiContainer {
     pub async fn get_transfer_service(&'static self) -> TransferService {
         TransferService {
             transfer_repository: Box::new(self.get_transfer_session_repository().await),
-            cloud_storage: Box::new(self.get_cloud_storage())
+            cloud_storage: Box::new(self.get_cloud_storage()),
+            markov_generator: Box::new(self.markov_generator()),
         }
     }
 
     pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
         CloudGrpcService {
             transfer_service: self.get_transfer_service().await,
-            cloud_storage: Box::new(self.get_cloud_storage())
+            cloud_storage: Box::new(self.get_cloud_storage()),
+            live_query: self.live_query.clone(),
+            session_repository: Box::new(self.get_transfer_session_repository().await)
         }
     }
 
