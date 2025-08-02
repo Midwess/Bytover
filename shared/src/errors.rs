@@ -18,7 +18,7 @@ pub enum NetworkError {
     #[error("Unauthorized")]
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
-    #[error("Please check your internet connection")]
+    #[error("Connection failed {0}")]
     Network(String)
 }
 

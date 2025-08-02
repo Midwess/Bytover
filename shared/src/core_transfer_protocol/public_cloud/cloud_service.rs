@@ -5,21 +5,21 @@ use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
 use crate::core_api::{CoreBridge, IOReader, NetStream, NetStreamEvent, NetStreamInner};
+use crate::entities::user::User;
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use futures::channel::oneshot;
 use futures_util::future::join_all;
-use futures_util::join;
 use futures_util::lock::Mutex;
+use futures_util::{join, StreamExt};
 use n0_future::task::spawn;
+use n0_future::time::Instant;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{cloud_resource_message, ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use n0_future::time::Instant;
-use tonic::codegen::tokio_stream::StreamExt;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -80,12 +80,19 @@ where
             _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
         };
 
+        let user = match session.target {
+            TransferTarget::Internet { from_user, .. } => from_user,
+            _ => return Err(CloudTransferErrors::InvalidSessionTarget)
+        };
+
         let response = self.server.create_public_transfer_session(password).await?;
 
         session.order_id = response.order_id as u64;
         session.target = TransferTarget::Internet {
+            is_required_password: response.password.is_some(),
             password: response.password,
-            access_url: Some(response.access_url)
+            access_url: Some(response.access_url),
+            from_user: user
         };
 
         Ok(session)
@@ -116,6 +123,8 @@ where
                 name: it.name.clone(),
                 order_id: it.order_id,
                 size: it.size as i64,
+                thumbnail_download_url: None,
+                download_url: "".to_string()
             })
             .collect();
 
@@ -179,8 +188,7 @@ where
 
             log::info!("Uploading thumbnail to {}", request.upload_url);
             let url = (request.upload_url.clone()).parse::<url::Url>().unwrap();
-            let Ok(mut net_stream) = self.net_stream.upload_resource(
-                url, thumbnail_file_path, size).await else {
+            let Ok(mut net_stream) = self.net_stream.upload_resource(url, thumbnail_file_path, size).await else {
                 continue;
             };
 
@@ -210,7 +218,7 @@ where
         first_upload_request: ClientUploadRequest,
         core_request_id: u32
     ) -> Result<(), CloudTransferErrors> {
-        let session_order_id = session.lock().await.order_id ;
+        let session_order_id = session.lock().await.order_id;
         let mut current_upload_request = Some(first_upload_request);
 
         let mut resource_size_tasks = HashMap::new();
@@ -271,9 +279,7 @@ where
                     let _ = self.core_bridge.response(core_request_id, msg).await;
                     log::info!("Resource {order_id:?} uploaded, response to {core_request_id:?} done");
 
-                    self.server
-                        .commit_file_upload(session_order_id, order_id , UploadStatus::Success, None)
-                        .await?
+                    self.server.commit_file_upload(session_order_id, order_id, UploadStatus::Success, None).await?
                 }
                 Err(e) => {
                     log::error!("Upload resource failed with status: {e:?}");
@@ -285,7 +291,7 @@ where
                     let _ = self.core_bridge.response(core_request_id, msg).await;
 
                     self.server
-                        .commit_file_upload(session_order_id, order_id , UploadStatus::Failed, Some(e.to_string()))
+                        .commit_file_upload(session_order_id, order_id, UploadStatus::Failed, Some(e.to_string()))
                         .await?
                 }
             }
@@ -329,26 +335,20 @@ where
             let progress = session_guard.resource_mut_progress(resource_order_id).expect("Progress not found");
 
             match event {
-                NetStreamEvent::Progress {
-                    uploaded_bytes
-                } => {
+                NetStreamEvent::Progress { uploaded_bytes } => {
                     let count = uploaded_bytes - total_sent;
                     progress.update_progress(count);
                     total_sent = uploaded_bytes;
                     if ticker.elapsed() > progress_update_interval {
                         ticker = Instant::now();
-                        self.server.update_transfer_progress(
-                            session_order_id,
-                            resource_order_id,
-                            total_sent,
-                        ).await?;
+                        self.server.update_transfer_progress(session_order_id, resource_order_id, total_sent).await?;
                     }
-                },
+                }
                 NetStreamEvent::Error(e) => {
                     log::warn!("Failed to upload resource: {e:?}");
                     net_stream.end().await?;
                     return Err(CloudTransferErrors::from(e));
-                },
+                }
                 NetStreamEvent::Completed => {
                     log::info!("Resource {resource_path:?} uploaded");
                     progress.success();
@@ -385,7 +385,7 @@ where
                 session.cancel();
                 drop(session);
 
-                if let Err(e) = self.server.cancel_session(session_id ).await {
+                if let Err(e) = self.server.cancel_session(session_id).await {
                     log::error!("Failed to cancel session: {e:?}");
                 }
 
@@ -394,5 +394,30 @@ where
         }
 
         false
+    }
+
+    pub async fn fetch_public_session(
+        &self,
+        core_request_id: u32,
+        session_id: u64,
+        user_id: u64,
+        password: Option<String>
+    ) -> Result<(), CloudTransferErrors> {
+        let mut stream = self.server.subscribe_public_session_events(user_id, session_id, password).await?;
+        while let Some(Ok(value)) = stream.next().await {
+            let mut session = value.session;
+            let resources = session.resources.drain(..).collect::<Vec<_>>();
+            let progresses = session.progresses.drain(..).collect::<Vec<_>>();
+
+            let _ = self.core_bridge.response(
+                core_request_id,
+                CoreOperationOutput::Transfer(TransferOperationOutput::PublicTransferSessionUpdated((
+                    resources.into_iter().map(|it| it.into()).collect(),
+                    progresses.into_iter().map(|it| it.into()).collect()
+                )))
+            ).await;
+        }
+
+        Ok(())
     }
 }

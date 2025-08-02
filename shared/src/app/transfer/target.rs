@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entities::peer::Peer;
+use crate::entities::user::User;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TransferTarget {
     Nearby(Peer),
     Internet {
         password: Option<String>,
-        // When it still loading it will be None
-        access_url: Option<String>
+        access_url: Option<String>,
+        from_user: User,
+        is_required_password: bool
     }
 }
 

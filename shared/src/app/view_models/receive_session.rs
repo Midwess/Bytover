@@ -6,18 +6,21 @@ use super::selected_resource::SelectedResourceViewModel;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
+    pub completion: f32,
     pub is_completed: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VideoReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
+    pub completion: f32,
     pub is_completed: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FileReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
+    pub completion: f32,
     pub is_completed: bool
 }
 
@@ -35,4 +38,18 @@ pub struct ReceiveSessionViewModel {
     pub display_download_speed: String,
     pub progress: f64,
     pub display_datetime: String
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ReceiveCloudSessionViewModel {
+    pub id: u64,
+    pub password: Option<String>,
+    pub avatar_url: String,
+    pub sender_name: String,
+    pub image_resources: Vec<ImageReceiveResourceViewModel>,
+    pub video_resources: Vec<VideoReceiveResourceViewModel>,
+    pub file_resources: Vec<FileReceiveResourceViewModel>,
+    pub display_datetime: String,
+    pub access_url: String,
+    pub is_required_password: bool
 }

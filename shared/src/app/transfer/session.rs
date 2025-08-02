@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::file_system::file::LocalResource;
 use crate::entities::peer::Peer;
-
+use crate::entities::user::User;
 use super::target::TransferTarget;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -203,15 +203,32 @@ impl TransferSession {
         }
     }
 
-    pub fn public(password: Option<String>, resources: Vec<LocalResource>) -> Self {
+    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>) -> Self {
         Self {
             order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
             target: TransferTarget::Internet {
+                is_required_password: password.is_some(),
                 password,
-                access_url: None
+                access_url: None,
+                from_user: current_user
+            }
+        }
+    }
+
+    pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, is_required_password: bool) -> Self {
+        Self {
+            order_id,
+            progress: vec![],
+            resources: vec![],
+            transfer_type: TransferType::Receive,
+            target: TransferTarget::Internet {
+                is_required_password,
+                password: None,
+                access_url: Some(access_url),
+                from_user
             }
         }
     }
@@ -258,7 +275,9 @@ impl TransferSession {
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
-        if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+        if let Some(index) = self.progress
+            .iter()
+            .position(|it| it.resource_order_id == progress.resource_order_id) {
             self.progress[index] = progress;
         } else {
             self.progress.push(progress);

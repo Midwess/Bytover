@@ -1,17 +1,18 @@
 'use client'
 import * as React from "react";
 import {
+    AppEventVariantTransfer,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    LocalResourcePathVariantAbsolutePath,
+    LocalResourcePathVariantAbsolutePath, MessageReasonVariantFailedToFindPublicSession, ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
-    SelectedResourceViewModel,
+    SelectedResourceViewModel, TransferEventVariantFindPublicSession, TransferEventVariantViewPublicSession,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
     ChevronsUpDown, Download,
-    Globe, Play
+    Globe, LoaderCircle, LoaderCircleIcon, Lock, Play
 } from 'lucide-react'
 import {receiveList} from "@/app/mock_data";
 import {Button} from '@/components/ui/button'
@@ -20,7 +21,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
-import {ReactElement, useState} from "react";
+import {ReactElement, useEffect, useState} from "react";
 import {MotionEffect} from '@/components/animate-ui/effects/motion-effect';
 import Image from "next/image";
 import {useIsMobile} from "@/hooks/use-mobile";
@@ -28,10 +29,9 @@ import clsx from "clsx";
 import {Input} from "@/components/ui/input";
 import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
 import CircleProgress from "@/components/ui/progress";
+import core from "@/wasm/wasm_core";
 
 export default function ReceiveBoard() {
-    const [selectedSession] = useState(receiveList[0])
-
     return <>
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
@@ -39,66 +39,126 @@ export default function ReceiveBoard() {
                 <div className={"col-span-4 lg:col-span-3 h-full"}>
                     <Board />
                 </div>
-                <div className={"col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20"}>
-                    <Collapsible
-                        className={`w-full ${selectedSession.image_resources.length ? 'visible' : 'hidden'}`}>
-                        <ReceiveCategory
-                            title={`${selectedSession.image_resources.length} Image${selectedSession.image_resources.length !== 1 ? 's' : ''}`}/>
-                        <CollapsibleContent className={"space-y-2"}>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
-                                {
-                                    selectedSession.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
-                                        return <ItemEffect key={index} index={index}>
-                                            <div className={"h-[200px]"}>
-                                                <MediaView key={index} media={image}/>
-                                            </div>
-                                        </ItemEffect>
-                                    })
-                                }
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-                    <Collapsible
-                        className={`w-full ${selectedSession.video_resources.length ? 'visible' : 'hidden'}`}>
-                        <ReceiveCategory
-                            title={`${selectedSession.video_resources.length} Video${selectedSession.video_resources.length !== 1 ? 's' : ''}`}/>
-                        <CollapsibleContent className={"space-y-2"}>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
-                                {
-                                    selectedSession.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
-                                        return <ItemEffect key={index} index={index}>
-                                            <div className={"h-[200px]"}>
-                                                <MediaView key={index} media={video}/>
-                                            </div>
-                                        </ItemEffect>
-                                    })
-                                }
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-                    <Collapsible
-                        className={`w-full ${selectedSession.file_resources.length ? 'visible' : 'hidden'}`}>
-                        <ReceiveCategory
-                            title={`${selectedSession.file_resources.length} File${selectedSession.file_resources.length !== 1 ? 's' : ''}`}/>
-                        <CollapsibleContent className={"space-y-2"}>
-                            <div
-                                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-x-4 gap-y-4 pb-8">
-                                {
-                                    selectedSession.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
-                                        return <ItemEffect key={index} index={index}>
-                                            <div className={"h-fit"}>
-                                                <FileView key={index} file={file}/>
-                                            </div>
-                                        </ItemEffect>
-                                    })
-                                }
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
+                <div className={`col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20`}>
+                    <ContentBoard/>
                 </div>
             </div>
         </div>
     </>
+}
+
+function ContentBoard() {
+    const selectedSession = core.useSelectedSession()
+    const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
+    const [enteredPassword, setEnteredPassword] = useState<string>('')
+    const onSelected = () => {
+        if (!selectedSession) {
+            return
+        }
+
+        core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
+            enteredPassword ? null : enteredPassword, selectedSession!.id
+        )))
+    }
+
+    useEffect(() => {
+        if (selectedSession instanceof ReceiveCloudSessionViewModel) {
+            let cloud = selectedSession as ReceiveCloudSessionViewModel
+            if (!cloud.is_required_password && isLoading) {
+                core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
+                    null,
+                    cloud.id
+                )))
+            }
+        }
+    }, [selectedSession, isLoading]);
+
+    if (!selectedSession) {
+        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
+            <p>No session selected</p>
+        </div>
+    }
+
+    if (selectedSession instanceof ReceiveCloudSessionViewModel) {
+        const cloud = selectedSession as ReceiveCloudSessionViewModel
+        if (cloud.is_required_password) {
+            return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
+                <div className={"w-[50%] flex flex-col gap-4"}>
+                    <p className={"font-poppins text-muted-foreground flex flex-row gap-1"}><Lock
+                        className={"w-4"}/> This session is password protected</p>
+                    <Input className={""} placeholder={"Enter password"} value={enteredPassword} onChange={(it) => {
+                        setEnteredPassword(it.target.value)
+                    }} type={"password"}/>
+                    <Button onClick={onSelected} className={"w-fit"}>Continue</Button>
+                </div>
+            </div>
+        }
+    }
+
+    if (isLoading) {
+        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
+            <LoaderCircle className={"animate-spin"}/>
+            <p>Loading...</p>
+        </div>
+    }
+
+    return <div>
+        <Collapsible
+            className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
+            <ReceiveCategory
+                title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
+            <CollapsibleContent className={"space-y-2"}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
+                    {
+                        selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
+                            return <ItemEffect key={index} index={index}>
+                                <div className={"h-[200px]"}>
+                                    <MediaView key={index} media={image}/>
+                                </div>
+                            </ItemEffect>
+                        })
+                    }
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+        <Collapsible
+            className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
+            <ReceiveCategory
+                title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
+            <CollapsibleContent className={"space-y-2"}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
+                    {
+                        selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
+                            return <ItemEffect key={index} index={index}>
+                                <div className={"h-[200px]"}>
+                                    <MediaView key={index} media={video}/>
+                                </div>
+                            </ItemEffect>
+                        })
+                    }
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+        <Collapsible
+            className={`w-full ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
+            <ReceiveCategory
+                title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
+            <CollapsibleContent className={"space-y-2"}>
+                <div
+                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-x-4 gap-y-4 pb-8">
+                    {
+                        selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
+                            return <ItemEffect key={index} index={index}>
+                                <div className={"h-fit"}>
+                                    <FileView key={index} file={file}/>
+                                </div>
+                            </ItemEffect>
+                        })
+                    }
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+    </div>
 }
 
 function ItemEffect(props: { children: ReactElement, index: number }) {
@@ -132,18 +192,39 @@ function ReceiveCategory(props: {
 }
 
 function Board() {
+    const transferState = core.useTransferState()
+    const sessions = transferState?.received_cloud_sessions || []
+    const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
+    const [keywords, setKeywords] = useState<string>('')
+
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
             <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
-            <div className={"flex flex-col justify-start text-primaryText gap-2"}>
-                <p className={"opacity-80 text-sm pl-2"}>Search session</p>
-                <Input className={"rounded-xl font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}/>
+            <div className={"flex flex-col justify-start text-primaryText gap-4"}>
+                <p className={"opacity-80 text-sm"}>Search session</p>
+                <Input className={"rounded-md font-poppins"} placeholder={"Enter an id or an url, eg: 123123"} onChange={(it) => setKeywords(it.target.value)}/>
+                {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
+                <Button className={"w-fit"} onClick={() => {
+                    message?.resolveMessage()
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
+                }}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
-                <MotionHighlight hover className={"flex flex-col gap-2 rounded-3xl bg-primaryText/10"}>
+                {!!sessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
+                <MotionHighlight hover className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
-                        receiveList.map((item, index) => {
-                            return <TransferSession session={item} key={index}/>
+                        sessions.map((item, index) => {
+                            return <TransferSession
+                                onPress={() => {
+                                    core.updateSelectedSession(item)
+                                }}
+                                name={item.sender_name}
+                                display_datetime={item.display_datetime}
+                                key={index}
+                                is_public={true}
+                                avatar_url={item.avatar_url}
+                                is_required_password={item.is_required_password}
+                            />
                         })
                     }
                 </MotionHighlight>
@@ -152,27 +233,34 @@ function Board() {
     </>
 }
 
-function TransferSession(props: {
-    session: ReceiveSessionViewModel
-}) {
-    const {session} = props;
+function TransferSession(props: any) {
+    const {
+        name,
+        display_datetime,
+        progress,
+        avatar_url,
+        is_public,
+        is_required_password,
+        onPress = () => {}
+    } = props;
 
     return <>
-        <div
-            className={"flex flex-row bg-muted rounded-3xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
+        <button
+            onClick={onPress}
+            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
             <div className={"flex flex-row items-center gap-3"}>
-
                 <div
-                    className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
-                    <Globe className={"text-primaryText w-full h-full m-2"}/>
+                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
+                    {is_public && <Globe className={"text-primaryText w-full h-full m-2"}/>}
                 </div>
                 <div className={"flex flex-col gap-0"}>
-                    <p className={"text-primaryText text-sm"}>{session.peer_name}</p>
-                    <p className={"text-primaryText/70 text-xs"}>{session.display_datetime}</p>
+                    <p className={"text-primaryText text-sm"}>{name}</p>
+                    <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            <CircleProgress progress={session.progress} size={30}/>
-        </div>
+            {progress && <CircleProgress progress={progress} size={30}/>}
+            {is_required_password && <Lock className={"w-4 bg-muted text-muted"} color={'gray'}/>}
+        </button>
     </>
 }
 

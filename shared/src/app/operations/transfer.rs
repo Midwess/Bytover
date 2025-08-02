@@ -4,7 +4,7 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::file_system::file::LocalResourcePath;
+use crate::app::file_system::file::{LocalResource, LocalResourcePath};
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
@@ -21,7 +21,15 @@ pub enum TransferOperation {
         session: Option<TransferSession>,
         session_id: u64
     },
-    CancelSession(Option<String>, u64)
+    CancelSession(Option<String>, u64),
+    FindPublicSession {
+        alias: String
+    },
+    SubscribeToPublicSessionTransferProgress {
+        session_owner_user_id: u64,
+        session_order_id: u64,
+        password: Option<String>
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,7 +42,11 @@ pub enum TransferOperationOutput {
         resource_id: u64,
         session_id: u64
     },
-    TransferCanceled
+    TransferCanceled,
+    FindPublicSession(Option<TransferSession>),
+    PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
+    UnauthenticatedToSubscribeSession,
+    SubscribeSessionEnded
 }
 
 impl Operation for TransferOperation {
@@ -71,5 +83,18 @@ impl TransferOperation {
             CoreOperationOutput::ConnectionError(error) => Err(error),
             _ => panic!("Mismatch in response type, expected Void, got {it:?}")
         })
+    }
+
+    pub fn find_transfer_session(
+        alias: String
+    ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, NetworkError>>> {
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::FindPublicSession { alias }))
+            .map(|it| {
+                match it {
+                    CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(session)) => Ok(session),
+                    CoreOperationOutput::ConnectionError(error) => Err(error),
+                    _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+                }
+            })
     }
 }

@@ -1,11 +1,16 @@
+use async_stream::stream;
+use futures::Stream;
+use futures_util::StreamExt;
 use crate::rpc::auth_provider::AuthProvider;
 use crate::rpc::connection::RpcNetworkModule;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
-use schema::devlog::bitbridge::{AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage, CommitFileUploadRequest, CreatePublicTransferSessionRequest, PublicTransferSessionMessage, UpdateTransferProgressRequest};
-use tonic::Request;
+use schema::devlog::bitbridge::{AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage, CommitFileUploadRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse, PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest};
+use tonic::{Request, Streaming};
+use crate::app::file_system::file::LocalResource;
+use crate::app::transfer::session::{TransferProgress, TransferSession};
 
 pub struct CloudServer<T>
 where
@@ -128,5 +133,36 @@ where
         let _ = client.clone().update_transfer_progress(request).await.map(|it| it.into_inner())?;
 
         Ok(())
+    }
+
+    pub async fn find_public_session(&self, alias: String) -> Result<FindSessionResponse, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let request_body = FindSessionRequest {
+            alias: Some(alias)
+        };
+
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(request_body);
+        self.auth_provider.with_auth(&mut request).await?;
+        let response = client.find_session(request).await?;
+
+        Ok(response.into_inner())
+    }
+
+    pub async fn subscribe_public_session_events(&self, user_id: u64, session_order_id: u64, password: Option<String>) -> Result<Streaming<SubscribeSessionInfoResponse>, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(SubscribeSessionInfoRequest {
+            id: PublicSessionId {
+                user_id,
+                order_id: session_order_id,
+            },
+            password,
+        });
+        self.auth_provider.with_auth(&mut request).await?;
+        let response = client.subscribe_session_info(request).await?;
+        let response = response.into_inner();
+
+        Ok(response)
     }
 }

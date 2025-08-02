@@ -33,7 +33,8 @@ impl From<TransferProgress> for Progress {
     fn from(value: TransferProgress) -> Self {
         Self {
             resource_order_id: value.resource_id(),
-            completion: value.completion(),
+            total_size: value.size(),
+            transfered_amount: value.transfered_amount(),
             error_message: value.error_message().map(|it| it.to_owned()),
         }
     }
@@ -46,6 +47,8 @@ impl From<TransferResource> for CloudResourceMessage {
             name: value.name().to_owned(),
             order_id: value.order_id(),
             size: value.size_in_bytes() as i64,
+            thumbnail_download_url: Some("".to_string()),
+            download_url: "".to_string(),
         }
     }
 }

@@ -7,14 +7,14 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
-
+use crate::entities::user::User;
 use super::session::TransferSession;
 use super::target::TransferTarget;
 
@@ -44,7 +44,8 @@ impl TransferService {
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: receive_sessions,
             added: vec![],
-            removed: vec![]
+            removed: vec![],
+            updated: vec![]
         });
 
         cmd.notify_event(event);
@@ -67,11 +68,12 @@ impl TransferService {
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![],
-            removed: vec![transfer_session.order_id]
+            removed: vec![transfer_session.order_id],
+            updated: vec![]
         }));
     }
 
-    pub async fn transfer(&self, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
+    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
         if selected_resources.is_empty() {
             DialogOperation::toast("No valid resources selected".to_string()).into_future(cmd.clone()).await;
             return;
@@ -80,7 +82,7 @@ impl TransferService {
         let transfer_target_id = transfer_target.id();
         let mut transfer_session = match transfer_target {
             TransferTarget::Internet { password, .. } => {
-                let session = TransferSession::public(password, selected_resources);
+                let session = TransferSession::public(user, password, selected_resources);
                 let result = match TransferOperation::create_cloud_session(session).into_future(cmd.clone()).await {
                     Err(err) => {
                         DialogOperation::toast(format!("{err} please try again")).into_future(cmd.clone()).await;
@@ -106,7 +108,8 @@ impl TransferService {
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![transfer_session.clone()],
-            removed: vec![]
+            removed: vec![],
+            updated: vec![]
         }));
 
         log::info!(target: "transfer", "Sending resources to peer: {transfer_target_id:?}");
@@ -175,7 +178,8 @@ impl TransferService {
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![],
-            removed: vec![transfer_session.order_id]
+            removed: vec![transfer_session.order_id],
+            updated: vec![]
         }));
     }
 
@@ -231,7 +235,8 @@ impl TransferService {
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![transfer_session.clone()],
-            removed: vec![]
+            removed: vec![],
+            updated: vec![]
         });
 
         cmd.notify_event(event);
@@ -314,7 +319,8 @@ impl TransferService {
             cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
                 loaded: vec![],
                 added: vec![],
-                removed: vec![transfer_session.order_id]
+                removed: vec![transfer_session.order_id],
+                updated: vec![]
             }));
         } else {
             let progresses = transfer_session.progress.clone();
@@ -323,5 +329,96 @@ impl TransferService {
                 progresses
             }));
         }
+    }
+
+    pub async fn find_transfer_session(&self, keywords: String, cmd: AppCommandContext) {
+        let session_overview = match TransferOperation::find_transfer_session(
+            keywords
+        ).into_future(cmd.clone()).await {
+            Err(e) => {
+                log::error!(target: "transfer", "Failed to find transfer session: {e:?}");
+                DialogOperation::toast(format!("{e}")).into_future(cmd.clone()).await;
+                return;
+            }
+            Ok(session_overview) => session_overview
+        };
+
+        let Some(session) = session_overview else {
+            DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession).into_future(cmd.clone()).await;
+            return;
+        };
+
+        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+            loaded: vec![],
+            added: vec![session],
+            removed: vec![],
+            updated: vec![]
+        }))
+    }
+
+    pub async fn view_public_session(
+        &self,
+        mut transfer_session: TransferSession,
+        entered_password: Option<String>,
+        cmd: AppCommandContext
+    ) {
+        let (password, user_id) = match &mut transfer_session.target {
+            TransferTarget::Internet {
+                password,
+                from_user,
+                ..
+            } => {
+                if let Some(entered_password) = entered_password {
+                    password.replace(entered_password);
+                };
+
+                (password.clone(), from_user.id)
+            },
+            _ => {
+               return;
+            }
+        };
+
+        let request = CoreOperation::Transfer(TransferOperation::SubscribeToPublicSessionTransferProgress {
+            password,
+            session_owner_user_id: user_id,
+            session_order_id: transfer_session.order_id
+        });
+
+        let mut stream = cmd.stream_from_shell(request);
+        log::info!(target: "transfer", "Subscribing to public transfer session: {transfer_session:?}");
+        while let Some(output) = stream.next().await {
+            match output {
+                CoreOperationOutput::Transfer(transfer) => match transfer {
+                    TransferOperationOutput::PublicTransferSessionUpdated((resources, progress)) => {
+                        transfer_session.resources = resources;
+                        transfer_session.progress = progress;
+
+                        log::info!(target: "transfer", "Received public transfer session update: {transfer_session:?}");
+                        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+                            added: vec![],
+                            loaded: vec![],
+                            removed: vec![],
+                            updated: vec![transfer_session.clone()]
+                        }));
+                    },
+                    TransferOperationOutput::SubscribeSessionEnded => {
+                        log::info!(target: "transfer", "Public transfer session ended 1");
+                        break;
+                    }
+                    TransferOperationOutput::UnauthenticatedToSubscribeSession => {
+                        DialogOperation::message("Password is not correct".to_owned(), MessageReason::PublicSessionUnauthenticated).into_future(cmd.clone()).await;
+                        return;
+                    },
+                    _ => return,
+                }
+                CoreOperationOutput::ConnectionError(error) => {
+                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
+                    return;
+                }
+                _ => return
+            };
+        }
+        log::info!(target: "transfer", "Public transfer session ended");
     }
 }

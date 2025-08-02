@@ -45,14 +45,19 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         let Some(session) = self.session_repository.find_session_by_alias(alias).await? else {
-            return Ok(Response::new(FindSessionResponse::default()))
+            return Ok(Response::new(FindSessionResponse {
+                session: None,
+                access_url: "".to_string(),
+                is_required_password: false
+            }))
         };
 
         let response = FindSessionResponse {
             session: Some(PublicSessionId {
                 order_id: session.order_id(),
-                user_id: session.user_order_id()
+                user_id: session.user_order_id(),
             }),
+            access_url: session.access_url(),
             is_required_password: session.password().is_some()
         };
 

@@ -6,10 +6,11 @@ use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::auth_gateway::rpc::{MeRequest, SigninRequest};
+use schema::devlog::auth_gateway::rpc::{FindUserRequest, MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
+use schema::devlog::auth_gateway::rpc::people_service_client::PeopleServiceClient;
 
 pub struct AuthServer<T>
 where
@@ -73,9 +74,35 @@ where
         let response = user_client.clone().me(request).await.map(|it| it.into_inner())?;
 
         Ok(User {
+            id: response.user.order_id,
             email: response.user.email.clone(),
             name: response.user.display_name.clone(),
             avatar: response.user.avatar_url.clone().unwrap_or_default()
         })
+    }
+
+    pub async fn find_user(&self, user_order_id: u64) -> Result<Option<User>, RpcErrors> {
+        let req = FindUserRequest {
+            order_id: Some(user_order_id),
+        };
+
+        let mut request = Request::new(req);
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let channel = self.rpc_module.connect().await?;
+        let mut client = PeopleServiceClient::new(channel);
+        let response = client.find_user(request).await?;
+        let Some(public_user) = response.into_inner().user else {
+            return Ok(None);
+        };
+
+        let user = User {
+            id: public_user.order_id.unwrap_or_default(),
+            email: public_user.user_name.unwrap_or_default(),
+            name: public_user.display_name.unwrap_or_default(),
+            avatar: public_user.avatar_url.unwrap_or_default()
+        };
+
+        Ok(Some(user))
     }
 }

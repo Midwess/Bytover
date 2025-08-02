@@ -203,7 +203,9 @@ impl DiContainer {
             }),
             transfer: Box::new(TransferNativeImpl {
                 web_rtc: web_rtc.clone(),
-                cloud_service
+                cloud_service,
+                cloud_server: self.get_cloud_server(),
+                auth_server: self.get_authentication_server()
             }),
             p2p: Box::new(P2PNativeExecutorImpl {
                 web_rtc,

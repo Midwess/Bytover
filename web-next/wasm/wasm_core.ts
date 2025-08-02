@@ -50,7 +50,11 @@ import {
     CoreOperationOutputVariantDialog,
     DialogOperationVariantAlert,
     DialogOperationOutputVariantAlert,
-    DialogOperationVariantToast
+    DialogOperationVariantToast,
+    DialogOperationVariantMessage,
+    DialogOperationOutputVariantMessage,
+    MessageReason,
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -58,7 +62,7 @@ import init_core, {view} from "core_wasm"
 import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {FileMetadata} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
 
@@ -70,8 +74,42 @@ export class WasmCore {
     nearbyState: Observable<NearbyViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
 
+    alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
+
+    selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
+
     constructor() {
         this.nativeProcessor = null;
+    }
+
+    public useSelectedSession() {
+        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
+
+        useEffect(() => {
+            return this.selectedSession.subscribe(setSelectedSession)
+        }, []);
+
+        return selectedSession
+    }
+
+    public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
+        this.selectedSession.set(session)
+    }
+
+    public useMessage(type: string) {
+        const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
+
+        useEffect(() => {
+            return this.alertMessageState.subscribe((it) => setMessages(it || []))
+        }, []);
+
+        return {
+            message: messages.find((it) => it.field1.constructor.name === type),
+            resolveMessage: useCallback(() => {
+                messages.splice(messages.findIndex((it) => it.field1.constructor.name === type), 1)
+                setMessages(messages)
+            }, [messages, messages.length])
+        }
     }
 
     public useCoreReady() {
@@ -231,7 +269,16 @@ export class WasmCore {
                         // No alert on web, will automatically confirmed
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantAlert(true))))
                     }
+                    case DialogOperationVariantMessage: {
+                        const op = operation.value as DialogOperationVariantMessage;
+                        this.alertMessageState.set([
+                            ...(this.alertMessageState.get() || []),
+                            op
+                        ])
+                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantMessage())))
+                    }
                 }
+                break
             }
             case CoreOperationVariantDelay: {
                 const delay = coreOperation as CoreOperationVariantDelay;
@@ -259,6 +306,12 @@ export class WasmCore {
         this.authenticationState.set(viewModel.authentication!)
         this.nearbyState.set(viewModel.nearby!)
         this.transferState.set(viewModel.transfer!)
+        const selectedSession = this.selectedSession.get()
+        if (selectedSession) {
+            const newSession = viewModel.transfer?.received_sessions.find(it => it.id === selectedSession.id) ||
+                viewModel.transfer?.received_cloud_sessions.find(it => it.id === selectedSession.id)
+            this.selectedSession.set(newSession)
+        }
     }
 
     async msg_from_native(data: Uint8Array): Promise<Uint8Array> {

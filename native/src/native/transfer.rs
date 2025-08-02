@@ -3,6 +3,8 @@ use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use shared::executor::transfer::TransferNative;
 use std::sync::Arc;
 use tonic::transport::Channel;
+use shared::rpc::auth_server::AuthServer;
+use shared::rpc::cloud_server::CloudServer;
 
 pub struct TransferNativeImpl {
     pub web_rtc: Arc<WebRtc>,
@@ -17,5 +19,13 @@ impl TransferNative<Channel> for TransferNativeImpl {
 
     fn cloud_service(&self) -> &CloudService<Channel> {
         &self.cloud_service
+    }
+
+    fn cloud_server(&self) -> &CloudServer<Channel> {
+        todo!()
+    }
+
+    fn auth_server(&self) -> &AuthServer<Channel> {
+        todo!()
     }
 }

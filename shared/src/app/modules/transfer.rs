@@ -13,12 +13,7 @@ use crate::app::transfer::transfer_service::TransferService;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::view_models::receive_session::{
-    FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel,
-    ReceiveSessionViewModel,
-    VideoReceiveResourceViewModel
-};
+use crate::app::view_models::receive_session::{FileReceiveResourceViewModel, ImageReceiveResourceViewModel, ReceiveCloudSessionViewModel, ReceiveSessionViewModel, VideoReceiveResourceViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::peer::Peer;
@@ -33,7 +28,7 @@ pub struct TransferModel {
     is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
     transfer_sessions: Vec<TransferSession>,
-    transfer_targets: Vec<TransferTarget>
+    transfer_targets: Vec<TransferTarget>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -43,6 +38,7 @@ pub struct TransferViewModel {
     transfer_method_selection: TransferMethodSelection,
     nearby_peers: Vec<PeerViewModel>,
     received_sessions: Vec<ReceiveSessionViewModel>,
+    received_cloud_sessions: Vec<ReceiveCloudSessionViewModel>,
     cloud_session: Option<CloudSession>
 }
 
@@ -90,7 +86,9 @@ pub enum TransferEvent {
         // New sessions
         added: Vec<TransferSession>,
         // Removed sessions
-        removed: Vec<u64>
+        removed: Vec<u64>,
+        // Updated sessions
+        updated: Vec<TransferSession>
     },
     UpdateResourcesModel {
         loaded: Vec<LocalResource>,
@@ -117,6 +115,13 @@ pub enum TransferEvent {
     UpdateResourceTransferProgresses {
         session_id: u64,
         progresses: Vec<TransferProgress>
+    },
+    FindPublicSession {
+        keywords: String
+    },
+    ViewPublicSession {
+        password: Option<String>,
+        session_id: u64
     }
 }
 
@@ -139,7 +144,7 @@ impl AppModule<BitBridge> for TransferModule {
             }),
             TransferEvent::BeginLoadingResources() => {
                 model.transfer.is_loading_selected_resources = true;
-                Command::new(async |it| {
+                Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
                 })
             }
@@ -262,17 +267,26 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::StartPublicTransfer { password } => {
                 let selected_resources = model.transfer.selected_resources.clone();
+                if let Some(user) = model.authentication.user.clone() {
+                    return Command::new(|it| async move {
+                        transfer_service
+                            .transfer(
+                                user.clone(),
+                                selected_resources,
+                                TransferTarget::Internet {
+                                    is_required_password: password.is_some(),
+                                    password,
+                                    access_url: None,
+                                    from_user: user,
+                                },
+                                it
+                            )
+                            .await;
+                    })
+                }
+
                 Command::new(|it| async move {
-                    transfer_service
-                        .transfer(
-                            selected_resources,
-                            TransferTarget::Internet {
-                                password,
-                                access_url: None
-                            },
-                            it
-                        )
-                        .await;
+                    it.notify_shell(CoreOperation::Dialog(DialogOperation::Toast("Unauthenticated".to_owned())));
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
@@ -291,6 +305,12 @@ impl AppModule<BitBridge> for TransferModule {
                     .find(|it| it.peer_id().map(|id| id.to_string()) == Some(target.id()))
                     .cloned();
 
+                let Some(user) = model.authentication.user.clone() else {
+                    return Command::new(|it| async move {
+                        DialogOperation::toast("unauthenticated".to_owned()).into_future(it).await;
+                    })
+                };
+
                 Command::new(|it| async move {
                     if let Some(duplicated_session) = duplicated_session {
                         it.send_event(AppEvent::Transfer(TransferEvent::CancelTransfer {
@@ -299,7 +319,7 @@ impl AppModule<BitBridge> for TransferModule {
                         return;
                     }
 
-                    transfer_service.transfer(selected_resources, target, it).await;
+                    transfer_service.transfer(user, selected_resources, target, it).await;
                 })
             }
             TransferEvent::TransferRequest { remote_session, peer } => Command::new(|it| async move {
@@ -309,7 +329,8 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::UpdateTransferSessions {
                 loaded,
                 added: new,
-                removed
+                removed,
+                updated
             } => {
                 let mut command = Command::new(|_| async move {});
 
@@ -342,6 +363,15 @@ impl AppModule<BitBridge> for TransferModule {
                     command = command.and(Command::new(|it| async move {
                         TransferSessionPersistentOperation::remove(removed).into_future(it.clone()).await;
                     }));
+                }
+
+                for updated in updated {
+                    let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == updated.order_id) else {
+                        continue;
+                    };
+
+                    log::info!("Update transfer session {:?}", updated.order_id);
+                    *session = updated;
                 }
 
                 model.transfer.transfer_sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
@@ -427,6 +457,31 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::done()
             }
+            TransferEvent::FindPublicSession {
+                keywords
+            } => {
+                let transfer_service = self.transfer_service.clone();
+                Command::new(|it| async move {
+                    transfer_service.find_transfer_session(keywords, it.clone()).await;
+                })
+            }
+            TransferEvent::ViewPublicSession {
+                password,
+                session_id
+            } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+                    return Command::done()
+                };
+
+                let transfer_service = self.transfer_service.clone();
+                Command::new(|it| async move {
+                    transfer_service.view_public_session(
+                        session,
+                        password,
+                        it
+                    ).await;
+                })
+            }
             TransferEvent::UpdateResourceTransferProgresses { session_id, progresses } => {
                 let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
                     return Command::done();
@@ -460,6 +515,105 @@ impl AppModule<BitBridge> for TransferModule {
             is_loading_selected_resources: model.transfer.is_loading_selected_resources,
             selected_resources: model.transfer.selected_resources.iter().map(SelectedResourceViewModel::from).collect(),
             transfer_method_selection: model.transfer.transfer_method_selection.clone(),
+            received_cloud_sessions: model
+                .transfer
+                .transfer_sessions
+                .iter()
+                .filter(|it| it.transfer_type == TransferType::Receive)
+                .filter_map(|it| {
+                    let (password, avatar, name, access_url, is_required_password) = match &it.target {
+                        TransferTarget::Internet {
+                            password,
+                            from_user,
+                            access_url,
+                            is_required_password
+                        } => {
+                            if access_url.is_none() {
+                                return None;
+                            }
+
+                            (password.clone(), from_user.avatar.clone(), from_user.name.clone(), access_url.clone().unwrap(), *is_required_password)
+                        },
+                        _ => return None
+                    };
+
+                    let image_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::Image {
+                                return None;
+                            }
+
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
+
+                            Some(ImageReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
+                                is_completed: progress.status.is_completed()
+                            })
+                        })
+                        .collect();
+
+                    let video_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::Video {
+                                return None;
+                            }
+
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
+
+                            Some(VideoReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
+                                is_completed: progress.status.is_completed()
+                            })
+                        })
+                        .collect();
+
+                    let file_resources = it
+                        .resources
+                        .iter()
+                        .filter_map(|resource| {
+                            if resource.r#type != ResourceType::File && resource.r#type != ResourceType::Folder {
+                                return None;
+                            }
+
+                            let Some(progress) = it.progress.iter().find(|it| it.resource_order_id == resource.order_id) else {
+                                return None;
+                            };
+
+                            Some(FileReceiveResourceViewModel {
+                                model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
+                                is_completed: progress.status.is_completed()
+                            })
+                        })
+                        .collect();
+
+
+                    Some(ReceiveCloudSessionViewModel {
+                        id: it.order_id,
+                        password,
+                        avatar_url: avatar,
+                        sender_name: name,
+                        access_url,
+                        is_required_password,
+                        image_resources,
+                        video_resources,
+                        file_resources,
+                        display_datetime: id_to_datetime(it.order_id)
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
+                    })
+                }).collect::<Vec<_>>(),
             received_sessions: model
                 .transfer
                 .transfer_sessions
@@ -484,6 +638,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                             Some(ImageReceiveResourceViewModel {
                                 model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
                                 is_completed: progress.status.is_completed()
                             })
                         })
@@ -503,6 +658,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                             Some(VideoReceiveResourceViewModel {
                                 model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
                                 is_completed: progress.status.is_completed()
                             })
                         })
@@ -522,6 +678,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                             Some(FileReceiveResourceViewModel {
                                 model: SelectedResourceViewModel::from(resource),
+                                completion: progress.percentage() as f32,
                                 is_completed: progress.status.is_completed()
                             })
                         })
@@ -548,7 +705,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .collect(),
             cloud_session: model.transfer.transfer_sessions.iter().filter(|it| it.target.is_public()).find_map(|it| {
                 let (access_url, password) = match &it.target {
-                    TransferTarget::Internet { access_url, password } => (access_url.clone(), password.clone()),
+                    TransferTarget::Internet { access_url, password, .. } => (access_url.clone(), password.clone()),
                     _ => return None
                 };
 

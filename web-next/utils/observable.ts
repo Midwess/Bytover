@@ -22,8 +22,8 @@ export class Observable<T> {
         return this.value
     }
 
-    set(newValue: T): void {
-        if (Object.is(this.value, newValue)) return // avoid unnecessary updates
+    set(newValue: T | undefined): void {
+        if (Object.is(this.value, newValue)) return
         this.value = newValue
         this.listeners.forEach(listener => listener(this.value))
     }

@@ -14,7 +14,7 @@ use shared::app::modules::nearby::NearbyEvent;
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
 use shared::app::nearby::finding_scope::FindingScope;
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation, OpenOperation};
-use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput};
+use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput, MessageReason};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::persistent::{
@@ -35,6 +35,7 @@ use shared::app::transfer::session::{TransferSessionStatus, TransferStatus, Tran
 use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::BitBridge;
+use shared::app::view_models::receive_session::ReceiveCloudSessionViewModel;
 use shared::entities::session::{Session, SessionType};
 use shared::entities::token::Token;
 use shared::entities::user::User;
@@ -59,6 +60,8 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<FindingScope>()?;
     gen.register_type::<GeoLocation>()?;
     gen.register_type::<AlertDialog>()?;
+    gen.register_type::<MessageReason>()?;
+    gen.register_type::<ReceiveCloudSessionViewModel>()?;
 
     // Register operation enums
     gen.register_type::<DialogOperation>()?;

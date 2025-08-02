@@ -34,15 +34,23 @@ impl AlertDialog {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MessageReason {
+    FailedToFindPublicSession,
+    PublicSessionUnauthenticated
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DialogOperation {
     Toast(String),
-    Alert(AlertDialog)
+    Alert(AlertDialog),
+    Message(String, MessageReason)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DialogOperationOutput {
     Toast,
-    Alert { is_confirmed: bool }
+    Alert { is_confirmed: bool },
+    Message,
 }
 
 impl Operation for DialogOperation {
@@ -52,8 +60,7 @@ impl Operation for DialogOperation {
 impl DialogOperation {
     pub fn toast(message: String) -> AppRequestBuilder<impl Future<Output = ()>> {
         Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|it| match it {
-            CoreOperationOutput::Dialog(DialogOperationOutput::Toast) => {}
-            _ => panic!("Invalid output for DialogOperation::Toast")
+            _ => {}
         })
     }
 
@@ -61,6 +68,12 @@ impl DialogOperation {
         Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Alert(dialog))).map(|it| match it {
             CoreOperationOutput::Dialog(DialogOperationOutput::Alert { is_confirmed }) => is_confirmed,
             _ => panic!("Invalid output for DialogOperation::Alert")
+        })
+    }
+
+    pub fn message(message: String, reason: MessageReason) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|it| match it {
+            _ => {}
         })
     }
 }

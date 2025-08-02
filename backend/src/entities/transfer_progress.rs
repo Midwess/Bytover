@@ -44,6 +44,10 @@ impl TransferProgress {
         self.resource_id
     }
 
+    pub fn size(&self) -> u64 {
+        self.resource_size
+    }
+
     pub fn completion(&self) -> f32 {
         match &self.status {
             TransferProgressStatus::InProgress(progress) => *progress,
