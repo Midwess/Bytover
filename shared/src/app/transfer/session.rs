@@ -3,10 +3,10 @@ use std::fmt::Display;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
+use super::target::TransferTarget;
 use crate::app::file_system::file::LocalResource;
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
-use super::target::TransferTarget;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -275,9 +275,7 @@ impl TransferSession {
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
-        if let Some(index) = self.progress
-            .iter()
-            .position(|it| it.resource_order_id == progress.resource_order_id) {
+        if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
             self.progress[index] = progress;
         } else {
             self.progress.push(progress);

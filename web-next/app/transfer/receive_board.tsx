@@ -30,7 +30,6 @@ import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight"
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
-import {Overlock_SC} from "next/dist/compiled/@next/font/dist/google";
 
 export default function ReceiveBoard() {
     return <>

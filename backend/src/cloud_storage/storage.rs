@@ -1,5 +1,4 @@
 use schema::value::static_resource::StaticResource;
-use crate::entities::transfer_session::TransferSession;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudStorageErrors {

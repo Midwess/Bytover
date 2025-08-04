@@ -1,14 +1,13 @@
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::CoreOperationOutput;
+use crate::app::transfer::session::TransferSession;
 use crate::core_transfer_protocol::public_cloud::cloud_service::CloudService;
 use crate::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use crate::errors::NetworkError;
-use core_services::utils::maybe::MaybeSend;
-use std::sync::Arc;
-use futures_util::StreamExt;
-use crate::app::transfer::session::TransferSession;
 use crate::rpc::auth_server::AuthServer;
 use crate::rpc::cloud_server::CloudServer;
+use core_services::utils::maybe::MaybeSend;
+use std::sync::Arc;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -82,40 +81,32 @@ where
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferCanceled)
             }
             TransferOperation::FindPublicSession { alias } => {
-                let (is_required_password, session_order_id, user_id, access_url) = match self.cloud_server().find_public_session(alias).await {
-                    Ok(response) => {
-                        let Some(session_key) = response.session else {
-                            return CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(None));
-                        };
+                let (is_required_password, session_order_id, user_id, access_url) =
+                    match self.cloud_server().find_public_session(alias).await {
+                        Ok(response) => {
+                            let Some(session_key) = response.session else {
+                                return CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(None));
+                            };
 
-                        (
-                            response.is_required_password,
-                            session_key.order_id,
-                            session_key.user_id,
-                            response.access_url
-                        )
-                    },
-                    Err(e) => {
-                        return CoreOperationOutput::ConnectionError(e.into())
-                    }
-                };
+                            (
+                                response.is_required_password,
+                                session_key.order_id,
+                                session_key.user_id,
+                                response.access_url
+                            )
+                        }
+                        Err(e) => return CoreOperationOutput::ConnectionError(e.into())
+                    };
 
                 let user = match self.auth_server().find_user(user_id).await {
                     Ok(Some(user)) => user,
                     Ok(None) => {
                         return CoreOperationOutput::ConnectionError(NetworkError::BadRequest("Not found session".to_owned()));
                     }
-                    Err(e) => {
-                        return CoreOperationOutput::ConnectionError(e.into())
-                    }
+                    Err(e) => return CoreOperationOutput::ConnectionError(e.into())
                 };
 
-                let transfer_session = TransferSession::from_public_overview(
-                    session_order_id,
-                    user,
-                    access_url,
-                    is_required_password
-                );
+                let transfer_session = TransferSession::from_public_overview(session_order_id, user, access_url, is_required_password);
 
                 CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(Some(transfer_session)))
             }
@@ -124,12 +115,11 @@ where
                 session_owner_user_id,
                 session_order_id
             } => {
-                if let Err(e) = self.cloud_service().fetch_public_session(
-                    request_id,
-                    session_order_id,
-                    session_owner_user_id,
-                    password
-                ).await {
+                if let Err(e) = self
+                    .cloud_service()
+                    .fetch_public_session(request_id, session_order_id, session_owner_user_id, password)
+                    .await
+                {
                     log::error!("Fetch public session error: {e:?}");
                     return CoreOperationOutput::ConnectionError(e.into());
                 }

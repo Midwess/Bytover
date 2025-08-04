@@ -4,6 +4,8 @@ use std::sync::OnceLock;
 use futures_util::StreamExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
+use super::session::TransferSession;
+use super::target::TransferTarget;
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
@@ -15,8 +17,6 @@ use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
-use super::session::TransferSession;
-use super::target::TransferTarget;
 
 pub struct TransferService {}
 
@@ -73,7 +73,13 @@ impl TransferService {
         }));
     }
 
-    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget, cmd: AppCommandContext) {
+    pub async fn transfer(
+        &self,
+        user: User,
+        selected_resources: Vec<LocalResource>,
+        transfer_target: TransferTarget,
+        cmd: AppCommandContext
+    ) {
         if selected_resources.is_empty() {
             DialogOperation::toast("No valid resources selected".to_string()).into_future(cmd.clone()).await;
             return;
@@ -332,9 +338,7 @@ impl TransferService {
     }
 
     pub async fn find_transfer_session(&self, keywords: String, cmd: AppCommandContext) {
-        let session_overview = match TransferOperation::find_transfer_session(
-            keywords
-        ).into_future(cmd.clone()).await {
+        let session_overview = match TransferOperation::find_transfer_session(keywords).into_future(cmd.clone()).await {
             Err(e) => {
                 log::error!(target: "transfer", "Failed to find transfer session: {e:?}");
                 DialogOperation::toast(format!("{e}")).into_future(cmd.clone()).await;
@@ -344,7 +348,9 @@ impl TransferService {
         };
 
         let Some(session) = session_overview else {
-            DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession).into_future(cmd.clone()).await;
+            DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession)
+                .into_future(cmd.clone())
+                .await;
             return;
         };
 
@@ -363,19 +369,15 @@ impl TransferService {
         cmd: AppCommandContext
     ) {
         let (password, user_id) = match &mut transfer_session.target {
-            TransferTarget::Internet {
-                password,
-                from_user,
-                ..
-            } => {
+            TransferTarget::Internet { password, from_user, .. } => {
                 if let Some(entered_password) = entered_password {
                     password.replace(entered_password);
                 };
 
                 (password.clone(), from_user.id)
-            },
+            }
             _ => {
-               return;
+                return;
             }
         };
 
@@ -397,15 +399,17 @@ impl TransferService {
                             };
 
                             *resource = resources.remove(updated_index);
-                        };
+                        }
 
                         for progress in transfer_session.progress.iter_mut() {
-                            let Some(updated_index) = progresses.iter().position(|r| r.resource_order_id == progress.resource_order_id) else {
+                            let Some(updated_index) =
+                                progresses.iter().position(|r| r.resource_order_id == progress.resource_order_id)
+                            else {
                                 continue;
                             };
 
                             *progress = progresses.remove(updated_index);
-                        };
+                        }
 
                         transfer_session.resources.append(&mut resources);
                         transfer_session.progress.append(&mut progresses);
@@ -417,17 +421,22 @@ impl TransferService {
                             removed: vec![],
                             updated: vec![transfer_session.clone()]
                         }));
-                    },
+                    }
                     TransferOperationOutput::SubscribeSessionEnded => {
                         log::info!(target: "transfer", "Public transfer session ended 1");
                         break;
                     }
                     TransferOperationOutput::UnauthenticatedToSubscribeSession => {
-                        DialogOperation::message("Password is not correct".to_owned(), MessageReason::PublicSessionUnauthenticated).into_future(cmd.clone()).await;
+                        DialogOperation::message(
+                            "Password is not correct".to_owned(),
+                            MessageReason::PublicSessionUnauthenticated
+                        )
+                        .into_future(cmd.clone())
+                        .await;
                         return;
-                    },
-                    _ => return,
-                }
+                    }
+                    _ => return
+                },
                 CoreOperationOutput::ConnectionError(error) => {
                     DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
                     return;

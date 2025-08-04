@@ -51,7 +51,7 @@ impl TransferResource {
     pub fn order_id(&self) -> u64 {
         self.order_id
     }
-    
+
     pub fn r#type(&self) -> TransferResourceType {
         self.r#type.clone()
     }

@@ -1,16 +1,11 @@
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use schema::devlog::bitbridge::{CloudResourceMessage, ResourceMessage, ResourceTypeMessage};
-use schema::devlog::bitbridge::cloud_resource_message;
-use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use crate::app::transfer::session::{TransferProgress, TransferType};
+use schema::devlog::bitbridge::public_transfer_session_message::Progress;
+use schema::devlog::bitbridge::{cloud_resource_message, CloudResourceMessage, ResourceMessage, ResourceTypeMessage};
 
 impl From<Progress> for TransferProgress {
     fn from(value: Progress) -> Self {
-        let mut this = Self::new(
-            value.resource_order_id,
-            value.total_size,
-            TransferType::Receive
-        );
+        let mut this = Self::new(value.resource_order_id, value.total_size, TransferType::Receive);
 
         this.update_progress(value.transfered_amount);
         this
@@ -35,8 +30,8 @@ impl From<CloudResourceMessage> for LocalResource {
             name: value.name,
             size: value.size as u64,
             path: LocalResourcePath::AbsolutePath(value.download_url),
-            thumbnail_path: value.thumbnail_download_url.map(|url| LocalResourcePath::AbsolutePath(url)),
-            r#type: cloud_resource_message::ResourceType::try_from(value.r#type).unwrap().into(),
+            thumbnail_path: value.thumbnail_download_url.map(LocalResourcePath::AbsolutePath),
+            r#type: cloud_resource_message::ResourceType::try_from(value.r#type).unwrap().into()
         }
     }
 }

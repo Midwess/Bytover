@@ -88,13 +88,10 @@ impl TransferOperation {
     pub fn find_transfer_session(
         alias: String
     ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, NetworkError>>> {
-        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::FindPublicSession { alias }))
-            .map(|it| {
-                match it {
-                    CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(session)) => Ok(session),
-                    CoreOperationOutput::ConnectionError(error) => Err(error),
-                    _ => panic!("Mismatch in response type, expected Void, got {it:?}")
-                }
-            })
+        Command::request_from_shell(CoreOperation::Transfer(TransferOperation::FindPublicSession { alias })).map(|it| match it {
+            CoreOperationOutput::Transfer(TransferOperationOutput::FindPublicSession(session)) => Ok(session),
+            CoreOperationOutput::ConnectionError(error) => Err(error),
+            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
+        })
     }
 }

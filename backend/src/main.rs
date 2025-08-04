@@ -7,6 +7,7 @@ use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudSe
 use tonic::transport::Server;
 use tonic_middleware::InterceptorFor;
 
+pub mod app_gateway;
 pub mod cloud_storage;
 pub mod di_container;
 pub mod entities;
@@ -15,7 +16,6 @@ pub mod grpc;
 pub mod infrastructure;
 pub mod repositories;
 pub mod transfer;
-pub mod app_gateway;
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {

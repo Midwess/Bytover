@@ -5,12 +5,12 @@ use crate::rpc::connection::RpcNetworkModule;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::auth_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::auth_gateway::rpc::{FindUserRequest, MeRequest, SigninRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
-use schema::devlog::auth_gateway::rpc::people_service_client::PeopleServiceClient;
 
 pub struct AuthServer<T>
 where
@@ -83,7 +83,7 @@ where
 
     pub async fn find_user(&self, user_order_id: u64) -> Result<Option<User>, RpcErrors> {
         let req = FindUserRequest {
-            order_id: Some(user_order_id),
+            order_id: Some(user_order_id)
         };
 
         let mut request = Request::new(req);

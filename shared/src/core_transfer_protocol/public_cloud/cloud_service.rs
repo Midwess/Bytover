@@ -5,7 +5,6 @@ use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
 use crate::core_api::{CoreBridge, IOReader, NetStream, NetStreamEvent, NetStreamInner};
-use crate::entities::user::User;
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
@@ -17,10 +16,10 @@ use n0_future::task::spawn;
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
-use schema::devlog::bitbridge::{cloud_resource_message, ClientUploadRequest, CloudResourceMessage};
+use schema::devlog::bitbridge::subscribe_session_info_response::Event;
+use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use schema::devlog::bitbridge::subscribe_session_info_response::Event;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -171,7 +170,7 @@ where
                 return Ok(());
             }
 
-            let resource = match session_guard.resources.iter().find(|it| it.order_id == request.resource_order_id as u64) {
+            let resource = match session_guard.resources.iter().find(|it| it.order_id == request.resource_order_id) {
                 Some(resource) => resource,
                 None => continue
             };
@@ -258,7 +257,7 @@ where
                 return Ok(());
             }
 
-            let order_id = request.resource_order_id as u64;
+            let order_id = request.resource_order_id;
             let upload_url = request.upload_url.clone();
 
             let size = match resource_size_tasks.remove(&order_id) {
@@ -406,32 +405,31 @@ where
     ) -> Result<(), CloudTransferErrors> {
         let mut stream = self.server.subscribe_public_session_events(user_id, session_id, password).await?;
         while let Some(Ok(value)) = stream.next().await {
-            let Some(mut event) = value.event else {
+            let Some(event) = value.event else {
                 break;
             };
-            
+
             let (progresses, resources) = match event {
-                Event::ProgressUpdated(mut s) => {
-                    (s.progress_update.drain(..).collect::<Vec<_>>(), vec![])
-                }
-                Event::SessionUpdated(mut s) => {
+                Event::ProgressUpdated(mut s) => (s.progress_update.drain(..).collect::<Vec<_>>(), vec![]),
+                Event::SessionUpdated(s) => {
                     let mut session = s.session_updated;
                     let resources = session.resources.drain(..).collect::<Vec<_>>();
                     let progresses = session.progresses.drain(..).collect::<Vec<_>>();
                     (progresses, resources)
                 }
-                Event::ResourceUpdated(mut s) => {
-                    (vec![], s.resource_update.drain(..).collect::<Vec<_>>())
-                }
+                Event::ResourceUpdated(mut s) => (vec![], s.resource_update.drain(..).collect::<Vec<_>>())
             };
-            
-            let _ = self.core_bridge.response(
-                core_request_id,
-                CoreOperationOutput::Transfer(TransferOperationOutput::PublicTransferSessionUpdated((
-                    resources.into_iter().map(|it| it.into()).collect(),
-                    progresses.into_iter().map(|it| it.into()).collect()
-                )))
-            ).await;
+
+            let _ = self
+                .core_bridge
+                .response(
+                    core_request_id,
+                    CoreOperationOutput::Transfer(TransferOperationOutput::PublicTransferSessionUpdated((
+                        resources.into_iter().map(|it| it.into()).collect(),
+                        progresses.into_iter().map(|it| it.into()).collect()
+                    )))
+                )
+                .await;
         }
 
         Ok(())

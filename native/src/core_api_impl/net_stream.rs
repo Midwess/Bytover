@@ -1,15 +1,15 @@
-use std::sync::Arc;
 use anyhow::anyhow;
-use futures_util::future::join_all;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver};
+use futures_util::future::join_all;
+use shared::app::file_system::file::LocalResourcePath;
+use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use std::sync::Arc;
 use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 use url::Url;
-use shared::app::file_system::file::LocalResourcePath;
-use shared::app::repository::local_resource::LocalResourceRepository;
 
 pub struct NetStreamImpl {
     pub repository: Arc<dyn LocalResourceRepository>
@@ -38,9 +38,7 @@ impl NetStream for NetStreamImpl {
 
 #[async_trait::async_trait]
 impl NetStreamInner for NetStreamInnerImpl {
-    async fn start(
-        &mut self,
-    ) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>> {
+    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>> {
         let size = self.size;
         let (nt, nx) = unbounded();
         let (mut writer, reader) = duplex(1024 * 512);
@@ -66,11 +64,7 @@ impl NetStreamInner for NetStreamInnerImpl {
                     return Ok(())
                 }
 
-                let msg = format!(
-                    "STATUS {:?}, msg: {:?}",
-                    response.status(),
-                    response.text().await
-                );
+                let msg = format!("STATUS {:?}, msg: {:?}", response.status(), response.text().await);
 
                 let _ = nt.unbounded_send(NetStreamEvent::Error(anyhow!(msg.clone())));
 
@@ -85,13 +79,16 @@ impl NetStreamInner for NetStreamInnerImpl {
                 while let Ok(Some(chunk)) = cursor.next().await {
                     if let Err(e) = writer.write_all(&chunk).await {
                         let _ = nt.unbounded_send(NetStreamEvent::Error(anyhow!("Error while wring chunk to stream {e:?}")));
-                        return Err(CloudTransferErrors::UploadProcessError(format!("Error writing chunk to stream: {:?}", e.to_string())))
+                        return Err(CloudTransferErrors::UploadProcessError(format!(
+                            "Error writing chunk to stream: {:?}",
+                            e.to_string()
+                        )))
                     }
 
                     written_bytes += chunk.len();
 
                     let _ = nt.unbounded_send(NetStreamEvent::Progress {
-                        uploaded_bytes: written_bytes as u64,
+                        uploaded_bytes: written_bytes as u64
                     });
                 }
 
@@ -101,7 +98,11 @@ impl NetStreamInner for NetStreamInnerImpl {
         };
 
         let handle = tokio::spawn(async move {
-            let result = join_all(vec![upload_handle, reader_handle]).await;
+            let result = join_all(vec![
+                upload_handle,
+                reader_handle,
+            ])
+            .await;
 
             for r in result {
                 if let Err(e) = r {
@@ -113,7 +114,7 @@ impl NetStreamInner for NetStreamInnerImpl {
                 }
             }
 
-            return Ok(())
+            Ok(())
         });
 
         self.handle = Some(handle);

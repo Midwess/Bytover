@@ -1,4 +1,5 @@
-use async_trait::async_trait;
+use crate::entities::transfer_session::TransferSession;
+use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
@@ -7,8 +8,6 @@ use surreal_devl::proxy::default::{SurrealDeserializer, SurrealSerializer};
 use surreal_devl::surreal_id::SurrealId;
 use surreal_devl::surreal_qr::SurrealResponseError;
 use surrealdb::sql::{Array, Thing, Value};
-use core_services::db::repository::abstraction::errors::RepositoryError;
-use crate::entities::transfer_session::TransferSession;
 
 #[derive(Clone, Default)]
 pub struct TransferSessionId {
@@ -32,7 +31,7 @@ impl SurrealDeserializer for TransferSessionId {
                 user_order_id: SurrealDeserializer::deserialize(&array.0[0])?,
                 order_id: SurrealDeserializer::deserialize(&array.0[1])?
             }),
-            _ => Err(SurrealResponseError::ExpectedAnArray(format!("{:?}", value)))
+            _ => Err(SurrealResponseError::ExpectedAnArray(format!("{value:?}")))
         }
     }
 }

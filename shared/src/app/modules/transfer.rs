@@ -13,7 +13,13 @@ use crate::app::transfer::transfer_service::TransferService;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::view_models::receive_session::{FileReceiveResourceViewModel, ImageReceiveResourceViewModel, ReceiveCloudSessionViewModel, ReceiveSessionViewModel, VideoReceiveResourceViewModel};
+use crate::app::view_models::receive_session::{
+    FileReceiveResourceViewModel,
+    ImageReceiveResourceViewModel,
+    ReceiveCloudSessionViewModel,
+    ReceiveSessionViewModel,
+    VideoReceiveResourceViewModel
+};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::peer::Peer;
@@ -28,7 +34,7 @@ pub struct TransferModel {
     is_loading_selected_resources: bool,
     transfer_method_selection: TransferMethodSelection,
     transfer_sessions: Vec<TransferSession>,
-    transfer_targets: Vec<TransferTarget>,
+    transfer_targets: Vec<TransferTarget>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -277,7 +283,7 @@ impl AppModule<BitBridge> for TransferModule {
                                     is_required_password: password.is_some(),
                                     password,
                                     access_url: None,
-                                    from_user: user,
+                                    from_user: user
                                 },
                                 it
                             )
@@ -457,29 +463,20 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::done()
             }
-            TransferEvent::FindPublicSession {
-                keywords
-            } => {
-                let transfer_service = self.transfer_service.clone();
+            TransferEvent::FindPublicSession { keywords } => {
+                let transfer_service = self.transfer_service;
                 Command::new(|it| async move {
                     transfer_service.find_transfer_session(keywords, it.clone()).await;
                 })
             }
-            TransferEvent::ViewPublicSession {
-                password,
-                session_id
-            } => {
+            TransferEvent::ViewPublicSession { password, session_id } => {
                 let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
                     return Command::done()
                 };
 
-                let transfer_service = self.transfer_service.clone();
+                let transfer_service = self.transfer_service;
                 Command::new(|it| async move {
-                    transfer_service.view_public_session(
-                        session,
-                        password,
-                        it
-                    ).await;
+                    transfer_service.view_public_session(session, password, it).await;
                 })
             }
             TransferEvent::UpdateResourceTransferProgresses { session_id, progresses } => {
@@ -532,8 +529,14 @@ impl AppModule<BitBridge> for TransferModule {
                                 return None;
                             }
 
-                            (password.clone(), from_user.avatar.clone(), from_user.name.clone(), access_url.clone().unwrap(), *is_required_password)
-                        },
+                            (
+                                password.clone(),
+                                from_user.avatar.clone(),
+                                from_user.name.clone(),
+                                access_url.clone().unwrap(),
+                                *is_required_password
+                            )
+                        }
                         _ => return None
                     };
 
@@ -597,7 +600,6 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
-
                     Some(ReceiveCloudSessionViewModel {
                         id: it.order_id,
                         password,
@@ -613,7 +615,8 @@ impl AppModule<BitBridge> for TransferModule {
                             .format("%Y-%m-%d %H:%M")
                             .to_string()
                     })
-                }).collect::<Vec<_>>(),
+                })
+                .collect::<Vec<_>>(),
             received_sessions: model
                 .transfer
                 .transfer_sessions

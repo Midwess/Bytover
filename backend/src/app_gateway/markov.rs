@@ -7,7 +7,7 @@ pub enum MarkovErrors {
     #[error("Connection error: {0}")]
     ConnectionError(#[from] tonic::transport::Error),
     #[error("Generation error: {0}")]
-    GenerationError(#[from] Status),
+    GenerationError(#[from] Status)
 }
 
 #[async_trait]

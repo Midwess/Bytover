@@ -1,5 +1,6 @@
 pub mod network;
 
+use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
@@ -14,7 +15,6 @@ use n0_future::StreamExt;
 use std::pin::Pin;
 use std::time::Duration;
 use url::Url;
-use crate::app::file_system::file::LocalResourcePath;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -48,32 +48,23 @@ pub trait CoreBridge: Send + Sync {
 
 #[derive(Debug)]
 pub enum NetStreamEvent {
-    Progress {
-        uploaded_bytes: u64
-    },
+    Progress { uploaded_bytes: u64 },
     Completed,
-    Error(anyhow::Error),
+    Error(anyhow::Error)
 }
 
 // Abstraction open stream to http server
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStream: Send + Sync {
-    async fn upload_resource(
-        &self,
-        http_url: Url,
-        path: LocalResourcePath,
-        size: u64
-    ) -> anyhow::Result<Box<dyn NetStreamInner>>;
+    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStreamInner: Send + Sync {
     // Upload the resource to url
-    async fn start(
-        &mut self,
-    ) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>>;
+    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>>;
 
     async fn end(&mut self) -> anyhow::Result<()>;
 }

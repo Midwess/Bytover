@@ -50,7 +50,7 @@ pub enum DialogOperation {
 pub enum DialogOperationOutput {
     Toast,
     Alert { is_confirmed: bool },
-    Message,
+    Message
 }
 
 impl Operation for DialogOperation {
@@ -59,9 +59,7 @@ impl Operation for DialogOperation {
 
 impl DialogOperation {
     pub fn toast(message: String) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|it| match it {
-            _ => {}
-        })
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|it| {})
     }
 
     pub fn alert(dialog: AlertDialog) -> AppRequestBuilder<impl Future<Output = bool>> {
@@ -72,8 +70,6 @@ impl DialogOperation {
     }
 
     pub fn message(message: String, reason: MessageReason) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|it| match it {
-            _ => {}
-        })
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|it| {})
     }
 }

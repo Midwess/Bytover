@@ -258,6 +258,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             return folder.calculate_tar_size().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
         };
 
-        fs::metadata(&path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}"))).map(|it| it.len())
+        fs::metadata(&path)
+            .await
+            .map_err(|e| PersistenceError::IOError(format!("{e:?}")))
+            .map(|it| it.len())
     }
 }

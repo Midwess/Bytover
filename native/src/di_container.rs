@@ -77,9 +77,7 @@ impl DiContainer {
     }
 
     pub fn get_net_stream(&self, repository: Arc<dyn LocalResourceRepository>) -> impl NetStream {
-        NetStreamImpl {
-            repository
-        }
+        NetStreamImpl { repository }
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -183,9 +181,7 @@ impl DiContainer {
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
             repository: local_resource_repo.clone(),
-            net_stream: Box::new(self.get_net_stream(
-                local_resource_repo.clone(),
-            ))
+            net_stream: Box::new(self.get_net_stream(local_resource_repo.clone()))
         };
 
         let executor = NativeExecutor {

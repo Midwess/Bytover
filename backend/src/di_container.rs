@@ -1,14 +1,3 @@
-use std::sync::Arc;
-use core_services::db::surrealdb::connection::SurrealDbConnection;
-use core_services::utils::pool::request::PoolRequest;
-use devlog_sdk::distributed_id::init_id_generator;
-use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
-use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
-use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
-use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
-use tokio::sync::OnceCell;
-use tonic::transport::Channel;
-use devlog_sdk::live_query::live_query::LiveQuery;
 use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
@@ -18,6 +7,17 @@ use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
+use core_services::db::surrealdb::connection::SurrealDbConnection;
+use core_services::utils::pool::request::PoolRequest;
+use devlog_sdk::distributed_id::init_id_generator;
+use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
+use devlog_sdk::live_query::live_query::LiveQuery;
+use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
+use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
+use tonic::transport::Channel;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -30,7 +30,7 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
-    live_query: Arc<LiveQuery>,
+    live_query: Arc<LiveQuery>
 }
 
 impl DiContainer {
@@ -85,7 +85,7 @@ impl DiContainer {
         TransferService {
             transfer_repository: Box::new(self.get_transfer_session_repository().await),
             cloud_storage: Box::new(self.get_cloud_storage()),
-            markov_generator: Box::new(self.markov_generator()),
+            markov_generator: Box::new(self.markov_generator())
         }
     }
 
@@ -105,7 +105,7 @@ impl DiContainer {
     pub fn get_cloud_storage(&'static self) -> impl CloudStorage {
         S3CloudStorageImpl {
             s3_client: self.devlog_sdk.s3_client(),
-            cached_sign: Arc::new(Default::default()),
+            cached_sign: Arc::new(Default::default())
         }
     }
 

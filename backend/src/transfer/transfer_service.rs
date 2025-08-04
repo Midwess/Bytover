@@ -1,11 +1,11 @@
-use core_services::db::repository::abstraction::errors::RepositoryError;
-use schema::value::static_resource::StaticResource;
 use crate::app_gateway::markov::{Markov, MarkovErrors};
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
+use core_services::db::repository::abstraction::errors::RepositoryError;
+use schema::value::static_resource::StaticResource;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -26,7 +26,7 @@ pub enum TransferErrors {
     #[error("Password of a session cannot exceed {0}")]
     PasswordLengthExceed(usize),
     #[error("Failed to generate alias {}", .0)]
-    MarkovError(#[from] MarkovErrors),
+    MarkovError(#[from] MarkovErrors)
 }
 
 pub struct TransferResourceRequest {
@@ -87,10 +87,7 @@ impl TransferService {
             return Err(TransferErrors::SessionNotFound)
         };
 
-        session.update_transferred_progress(
-            resource_id,
-            transferred_amount_in_bytes
-        );
+        session.update_transferred_progress(resource_id, transferred_amount_in_bytes);
 
         self.transfer_repository.update_one(session).await?;
 

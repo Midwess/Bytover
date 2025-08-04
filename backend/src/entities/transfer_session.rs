@@ -34,11 +34,7 @@ pub struct TransferSession {
 }
 
 impl TransferSession {
-    pub async fn public(
-        password: Option<String>,
-        from_user: u64,
-        alias: String
-    ) -> Self {
+    pub async fn public(password: Option<String>, from_user: u64, alias: String) -> Self {
         Self {
             order_id: gen_id().await,
             owner_user_order_id: from_user,
@@ -176,9 +172,7 @@ impl TransferSession {
 
     pub fn validate_access(&self, entered_password: Option<String>) -> bool {
         if let Some(password) = &self.password {
-            let Some(entered_password) = entered_password else {
-                return false
-            };
+            let Some(entered_password) = entered_password else { return false };
 
             return entered_password.eq(password);
         };
