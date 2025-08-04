@@ -390,9 +390,25 @@ impl TransferService {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(transfer) => match transfer {
-                    TransferOperationOutput::PublicTransferSessionUpdated((resources, progress)) => {
-                        transfer_session.resources = resources;
-                        transfer_session.progress = progress;
+                    TransferOperationOutput::PublicTransferSessionUpdated((mut resources, mut progresses)) => {
+                        for resource in transfer_session.resources.iter_mut() {
+                            let Some(updated_index) = resources.iter().position(|r| r.order_id == resource.order_id) else {
+                                continue;
+                            };
+
+                            *resource = resources.remove(updated_index);
+                        };
+
+                        for progress in transfer_session.progress.iter_mut() {
+                            let Some(updated_index) = progresses.iter().position(|r| r.resource_order_id == progress.resource_order_id) else {
+                                continue;
+                            };
+
+                            *progress = progresses.remove(updated_index);
+                        };
+
+                        transfer_session.resources.append(&mut resources);
+                        transfer_session.progress.append(&mut progresses);
 
                         log::info!(target: "transfer", "Received public transfer session update: {transfer_session:?}");
                         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {

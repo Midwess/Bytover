@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -18,6 +19,7 @@ use tonic::codegen::tokio_stream;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::db::surrealdb::id::SurrealDbId;
 use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
+use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};
 use crate::cloud_storage::storage::CloudStorage;
 use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
@@ -27,7 +29,7 @@ use crate::transfer::transfer_service::{TransferResourceRequest, TransferService
 
 pub struct CloudGrpcService {
     pub transfer_service: TransferService,
-    pub cloud_storage: Box<dyn CloudStorage>,
+    pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Box<dyn TransferSessionRepository>,
     pub live_query: Arc<LiveQuery>,
 }
@@ -77,7 +79,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         let thing = session_id.clone().id(tb);
         let live_id = LiveId::Record(thing);
         let live_stream = self.live_query.subscribe(live_id).await?;
-        let mut subscription = live_stream.subscribe().await;
+        let subscription = live_stream.subscribe().await;
         let value = subscription.borrow().clone();
 
         let initial_session = match value {
@@ -99,7 +101,9 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let is_completed = initial_session.is_completed();
         tx.send(Ok(SubscribeSessionInfoResponse {
-            session: initial_session.into(),
+            event: Some(Event::SessionUpdated(SessionUpdated {
+                session_updated: initial_session.into_msg(&self.cloud_storage).await
+            }))
         })).await.map_err(|_| Status::internal("Cannot send initial session"))?;
 
         if is_completed {
@@ -107,8 +111,12 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
         }
 
+        let cloud_storage = self.cloud_storage.clone();
         tokio::spawn(async move {
-            let mut stream = live_stream.subscribe().await;
+            let mut stream = live_stream
+                .subscribe()
+                .await;
+            let mut curr_session = initial_session.clone();
             loop {
                 if let Err(e) = stream.changed().await {
                     log::error!("Error: {}", e);
@@ -124,12 +132,17 @@ impl BitBridgeCloudService for CloudGrpcService {
                 };
 
                 let is_completed = session.is_completed();
-                if tx.send(Ok(SubscribeSessionInfoResponse {
-                    session: session.into(),
-                })).await.is_err() {
-                    log::error!("Cannot send session, closing");
-                    break;
+                let events = curr_session.get_events(&session, &cloud_storage).await;
+                for event in events {
+                    if let Err(e) = tx.send(Ok(SubscribeSessionInfoResponse {
+                        event: Some(event)
+                    })).await {
+                        log::error!("Cannot send session, closing");
+                        break;
+                    };
                 }
+
+                curr_session = session;
 
                 if is_completed {
                     log::info!("Session is completed");
@@ -156,11 +169,11 @@ impl BitBridgeCloudService for CloudGrpcService {
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
-            session: new_session.into()
+            session: new_session.into_msg(&self.cloud_storage).await
         };
 
         let response = Response::new(response_body);
-        return Ok(response)
+        Ok(response)
     }
 
     async fn add_resources(&self, request: Request<AddResourcesRequest>) -> Result<Response<AddResourcesResponse>, Status> {

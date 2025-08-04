@@ -20,6 +20,7 @@ use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{cloud_resource_message, ClientUploadRequest, CloudResourceMessage};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use schema::devlog::bitbridge::subscribe_session_info_response::Event;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -405,10 +406,25 @@ where
     ) -> Result<(), CloudTransferErrors> {
         let mut stream = self.server.subscribe_public_session_events(user_id, session_id, password).await?;
         while let Some(Ok(value)) = stream.next().await {
-            let mut session = value.session;
-            let resources = session.resources.drain(..).collect::<Vec<_>>();
-            let progresses = session.progresses.drain(..).collect::<Vec<_>>();
-
+            let Some(mut event) = value.event else {
+                break;
+            };
+            
+            let (progresses, resources) = match event {
+                Event::ProgressUpdated(mut s) => {
+                    (s.progress_update.drain(..).collect::<Vec<_>>(), vec![])
+                }
+                Event::SessionUpdated(mut s) => {
+                    let mut session = s.session_updated;
+                    let resources = session.resources.drain(..).collect::<Vec<_>>();
+                    let progresses = session.progresses.drain(..).collect::<Vec<_>>();
+                    (progresses, resources)
+                }
+                Event::ResourceUpdated(mut s) => {
+                    (vec![], s.resource_update.drain(..).collect::<Vec<_>>())
+                }
+            };
+            
             let _ = self.core_bridge.response(
                 core_request_id,
                 CoreOperationOutput::Transfer(TransferOperationOutput::PublicTransferSessionUpdated((

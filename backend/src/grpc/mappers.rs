@@ -1,9 +1,12 @@
+use std::sync::Arc;
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::TransferSession;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::{CloudResourceMessage, PublicTransferSessionMessage, ResourceTypeMessage};
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
-use crate::entities::transfer_progress::TransferProgress;
+use schema::devlog::bitbridge::subscribe_session_info_response::{Event, ProgressUpdated, ResourceUpdated, SessionUpdated};
+use crate::cloud_storage::storage::CloudStorage;
+use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatus};
 
 impl From<&CloudResourceType> for TransferResourceType {
     fn from(value: &CloudResourceType) -> Self {
@@ -16,19 +19,6 @@ impl From<&CloudResourceType> for TransferResourceType {
     }
 }
 
-impl From<TransferSession> for PublicTransferSessionMessage {
-    fn from(value: TransferSession) -> Self {
-        Self {
-            order_id: value.order_id(),
-            user_id: value.user_order_id(),
-            access_url: value.access_url(),
-            resources: value.resources().iter().map(|it| it.clone().into()).collect(),
-            password: value.password(),
-            progresses: value.progresses().iter().map(|it| it.clone().into()).collect(),
-        }
-    }
-}
-
 impl From<TransferProgress> for Progress {
     fn from(value: TransferProgress) -> Self {
         Self {
@@ -36,19 +26,6 @@ impl From<TransferProgress> for Progress {
             total_size: value.size(),
             transfered_amount: value.transfered_amount(),
             error_message: value.error_message().map(|it| it.to_owned()),
-        }
-    }
-}
-
-impl From<TransferResource> for CloudResourceMessage {
-    fn from(value: TransferResource) -> Self {
-        Self {
-            r#type: Into::<ResourceTypeMessage>::into(value.r#type()).into(),
-            name: value.name().to_owned(),
-            order_id: value.order_id(),
-            size: value.size_in_bytes() as i64,
-            thumbnail_download_url: Some("".to_string()),
-            download_url: "".to_string(),
         }
     }
 }
@@ -69,5 +46,115 @@ impl From<TransferResourceType> for ResourceTypeMessage {
                 Self::Video
             }
         }
+    }
+}
+
+impl TransferResource {
+    pub async fn into_resource_msg(&self, progress: &TransferProgress, cloud_storage: &Arc<dyn CloudStorage>) -> CloudResourceMessage {
+        let mut source = self.source();
+        let mut thumbnail_source = self.thumbnail_source();
+        let download_url = match progress.status() {
+            TransferProgressStatus::InProgress(_) => {
+                "".to_string()
+            }
+            TransferProgressStatus::Success => {
+                cloud_storage.sign_download(&mut source).await.unwrap_or_default()
+            },
+            TransferProgressStatus::Failed(_) => {
+                "".to_string()
+            }
+        };
+
+        let download_thumbnail_url = match thumbnail_source {
+            Some(mut thumbnail_source) => {
+                cloud_storage.sign_download(&mut thumbnail_source).await.ok()
+            },
+            None => {
+                None
+            }
+        };
+
+        CloudResourceMessage {
+            r#type: Into::<ResourceTypeMessage>::into(self.r#type()).into(),
+            name: self.name().to_owned(),
+            order_id: self.order_id(),
+            size: self.size_in_bytes() as i64,
+            thumbnail_download_url: download_thumbnail_url,
+            download_url,
+        }
+    }
+}
+
+impl TransferSession {
+    pub async fn into_msg(&self, cloud_storage: &Arc<dyn CloudStorage>) -> PublicTransferSessionMessage {
+        let mut resources = vec![];
+        for resource in self.resources() {
+            let progress = self.progresses().iter().find(|it| it.resource_id() == resource.order_id()).unwrap();
+            resources.push(resource.clone().into_resource_msg(progress, cloud_storage).await);
+        }
+
+        let msg = PublicTransferSessionMessage {
+            order_id: self.order_id(),
+            user_id: self.user_order_id(),
+            password: self.password(),
+            access_url: self.access_url(),
+            resources,
+            progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
+        };
+
+        msg
+    }
+
+    pub async fn get_events(&self, new: &TransferSession, cloud_storage: &Arc<dyn CloudStorage>) -> Vec<Event> {
+        let mut events = vec![];
+
+        let resource_changes = new
+            .resources()
+            .iter()
+            .zip(self.resources().iter())
+            .filter(|(new, curr)| {
+                new.ne(curr)
+            })
+            .map(|(new, _)| new)
+            .collect::<Vec<_>>();
+
+        if resource_changes.len() > 0 {
+            let mut resources = vec![];
+            for resource in resource_changes {
+                let Some(progress) = new.progresses().iter().find(|it| it.resource_id() == resource.order_id()) else {
+                    continue;
+                };
+
+                resources.push(resource.clone().into_resource_msg(progress, cloud_storage).await);
+            };
+
+            events.push(Event::ResourceUpdated(ResourceUpdated {
+                resource_update: resources
+            }));
+        }
+
+        let progress_changes = new
+            .progresses()
+            .into_iter()
+            .zip(self.progresses().iter())
+            .filter(|(new, curr)| {
+                new.ne(curr)
+            })
+            .map(|(new, _)| new)
+            .collect::<Vec<_>>();
+
+        if progress_changes.len() > 0 {
+            events.push(Event::ProgressUpdated(ProgressUpdated {
+                progress_update: progress_changes.iter().map(|it| (*it).clone().into()).collect()
+            }));
+        }
+
+        if events.len() > 0 {
+            return events;
+        }
+
+        vec![Event::SessionUpdated(SessionUpdated {
+            session_updated: new.into_msg(cloud_storage).await
+        })]
     }
 }

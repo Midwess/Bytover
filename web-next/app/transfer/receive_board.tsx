@@ -4,17 +4,16 @@ import {
     AppEventVariantTransfer,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    LocalResourcePathVariantAbsolutePath, MessageReasonVariantFailedToFindPublicSession, ReceiveCloudSessionViewModel,
-    ReceiveSessionViewModel,
+    LocalResourcePathVariantAbsolutePath,
+    ReceiveCloudSessionViewModel,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel, TransferEventVariantFindPublicSession, TransferEventVariantViewPublicSession,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
-    ChevronsUpDown, Download,
-    Globe, LoaderCircle, LoaderCircleIcon, Lock, Play
+    ChevronsUpDown, Download, FileLock,
+    Globe, GlobeLock, LoaderCircle, LoaderCircleIcon, Lock, LockIcon, LockKeyholeIcon, LucideLock, Play
 } from 'lucide-react'
-import {receiveList} from "@/app/mock_data";
 import {Button} from '@/components/ui/button'
 import {
     Collapsible,
@@ -30,6 +29,8 @@ import {Input} from "@/components/ui/input";
 import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
+import {Avatar, AvatarImage} from "@/components/ui/avatar";
+import {Overlock_SC} from "next/dist/compiled/@next/font/dist/google";
 
 export default function ReceiveBoard() {
     return <>
@@ -37,7 +38,7 @@ export default function ReceiveBoard() {
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-12 w-full h-full gap-2"}>
                 <div className={"col-span-4 lg:col-span-3 h-full"}>
-                    <Board />
+                    <Board/>
                 </div>
                 <div className={`col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20`}>
                     <ContentBoard/>
@@ -57,7 +58,7 @@ function ContentBoard() {
         }
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
-            enteredPassword ? null : enteredPassword, selectedSession!.id
+            enteredPassword ? enteredPassword : null, selectedSession!.id
         )))
     }
 
@@ -81,12 +82,13 @@ function ContentBoard() {
 
     if (selectedSession instanceof ReceiveCloudSessionViewModel) {
         const cloud = selectedSession as ReceiveCloudSessionViewModel
-        if (cloud.is_required_password) {
+        if (cloud.is_required_password && !cloud.password && isLoading) {
             return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
                 <div className={"w-[50%] flex flex-col gap-4"}>
-                    <p className={"font-poppins text-muted-foreground flex flex-row gap-1"}><Lock
-                        className={"w-4"}/> This session is password protected</p>
-                    <Input className={""} placeholder={"Enter password"} value={enteredPassword} onChange={(it) => {
+                    <p className={"font-poppins text-muted-foreground flex flex-row items-center"}>
+                        <Image alt={"lock"} width={10} height={10} className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"} color={'white'}/>
+                        This session is password protected</p>
+                    <Input className={"h-10"} placeholder={"Enter password"} value={enteredPassword} onChange={(it) => {
                         setEnteredPassword(it.target.value)
                     }} type={"password"}/>
                     <Button onClick={onSelected} className={"w-fit"}>Continue</Button>
@@ -145,11 +147,11 @@ function ContentBoard() {
                 title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
             <CollapsibleContent className={"space-y-2"}>
                 <div
-                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-x-4 gap-y-4 pb-8">
+                    className="grid grid-cols-1 gap-x-4 gap-y-4 pb-8">
                     {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
-                                <div className={"h-fit"}>
+                                <div className={"h-fit bg-white"}>
                                     <FileView key={index} file={file}/>
                                 </div>
                             </ItemEffect>
@@ -202,7 +204,8 @@ function Board() {
             <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
                 <p className={"opacity-80 text-sm"}>Search session</p>
-                <Input className={"rounded-md font-poppins"} placeholder={"Enter an id or an url, eg: 123123"} onChange={(it) => setKeywords(it.target.value)}/>
+                <Input className={"rounded-md font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}
+                       onChange={(it) => setKeywords(it.target.value)}/>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
                 <Button className={"w-fit"} onClick={() => {
                     message?.resolveMessage()
@@ -211,7 +214,8 @@ function Board() {
             </div>
             <div className={"flex flex-col gap-3"}>
                 {!!sessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
-                <MotionHighlight hover className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                <MotionHighlight hover
+                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
                         sessions.map((item, index) => {
                             return <TransferSession
@@ -241,17 +245,21 @@ function TransferSession(props: any) {
         avatar_url,
         is_public,
         is_required_password,
-        onPress = () => {}
+        onPress = () => {
+        }
     } = props;
 
     return <>
         <button
             onClick={onPress}
             className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
-            <div className={"flex flex-row items-center gap-3"}>
+            <div className={"flex flex-row items-center gap-5"}>
                 <div
-                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
-                    {is_public && <Globe className={"text-primaryText w-full h-full m-2"}/>}
+                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
+                    <Avatar className={"p-1"}>
+                        <AvatarImage src={avatar_url}/>
+                    </Avatar>
+                    {is_public && <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>}
                 </div>
                 <div className={"flex flex-col gap-0"}>
                     <p className={"text-primaryText text-sm"}>{name}</p>
@@ -259,7 +267,7 @@ function TransferSession(props: any) {
                 </div>
             </div>
             {progress && <CircleProgress progress={progress} size={30}/>}
-            {is_required_password && <Lock className={"w-4 bg-muted text-muted"} color={'gray'}/>}
+            {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-5 text-white mr-2 bg-muted h-5"} src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
 }
@@ -279,37 +287,34 @@ function FileView(props: {
     }
 
     let displaySize = `${model.size_mb} MB`;
+    console.log(model)
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
 
     return (
         <div
-            className="w-full h-fit overflow-hidden rounded-2xl relative group bg-muted p-6 border-1 border-primaryText/5">
-            <div
-                className={clsx(
-                    "absolute z-20 inset-0 flex items-center justify-center",
-                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
-                )}>
-                <Button className={"rounded-xl"}>
-                    <Download/>
-                </Button>
-            </div>
-
-            <div className="relative aspect-square w-full scale-60">
+            className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5">
+            <div className={"flex flex-row gap-3"}>
+            <div className="relative aspect-square w-12 h-12">
                 <Image
-                    className="w-full h-auto text-primaryText"
+                    className="w-full h-auto bg-muted rounded-xl p-1.5"
                     layout="fill"
+                    color={'blue'}
                     alt={`${model.type}`}
                     src={thumbnailPath}
                 />
             </div>
 
             {/* Metadata */}
-            <div className="flex flex-col text-white items-center mt-1">
+            <div className="flex flex-col text-white items-start mt-1">
                 <p className="text-sm text-center font-poppins break-words w-full">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
+            </div>
+            <Button className={"rounded-lg bg-muted"}>
+                <Download color={'white'}/>
+            </Button>
         </div>
     );
 }
@@ -328,6 +333,11 @@ function MediaView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
+    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    if (!thumbnailPath) {
+        thumbnailPath = isVideo ? '/file-video.svg' : '/file-image.svg';
+    }
+
     return (
         <div className="w-full h-full overflow-hidden rounded-2xl relative group">
             <div
@@ -341,8 +351,8 @@ function MediaView(props: {
 
             {
                 isVideo && <div className={"absolute z-10 flex w-full h-full justify-center items-center"}>
-                    <Button>
-                        <Play/>
+                    <Button className={"bg-muted-foreground hover:bg-muted"}>
+                        <Play color={"white"} fill={"white"}/>
                     </Button>
                 </div>
             }
@@ -368,21 +378,11 @@ function MediaView(props: {
                 </Button>
             </div>
 
-            {
-                isVideo
-                    ? <video
-                        className="w-auto h-full rounded-2xl object-cover"
-                        muted>
-                        <source src={model.display_path}/>
-                        Your browser does not support the video tag.
-                    </video>
-                    : <Image
-                        layout="fill"
-                        className="rounded-2xl"
-                        alt={model.name}
-                        src={model.display_path}
-                    />
-            }
+            <img
+                className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
+                alt={model.name}
+                src={thumbnailPath}
+            />
         </div>
     );
 }
