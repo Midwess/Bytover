@@ -194,16 +194,23 @@ function ReceiveCategory(props: {
 
 function Board() {
     const transferState = core.useTransferState()
-    const sessions = transferState?.received_cloud_sessions || []
+
     const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
     const [keywords, setKeywords] = useState<string>('')
+    const sessions = transferState?.received_cloud_sessions.filter((it) => {
+        if (keywords) {
+            return it?.sender_name?.toLowerCase()?.includes(keywords.toLowerCase()) ?? false
+        }
+
+        return true
+    }) || []
 
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
             <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
                 <p className={"opacity-80 text-sm"}>Search session</p>
-                <Input className={"rounded-md font-poppins"} placeholder={"Enter an id or an url, eg: 123123"}
+                <Input className={"rounded-md font-poppins"} placeholder={"Enter an session name or using a url"}
                        onChange={(it) => setKeywords(it.target.value)}/>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
                 <Button className={"w-fit"} onClick={() => {
@@ -260,7 +267,7 @@ function TransferSession(props: any) {
                     </Avatar>
                     {is_public && <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>}
                 </div>
-                <div className={"flex flex-col gap-0"}>
+                <div className={"flex flex-col gap-0 items-start"}>
                     <p className={"text-primaryText text-sm"}>{name}</p>
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
@@ -310,7 +317,7 @@ function FileView(props: {
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
             </div>
-            <a className={"rounded-lg p-2"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
+            <a className={"rounded-lg p-2 bg-muted"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
                 <Download color={'white'}/>
             </a>
         </div>
@@ -348,7 +355,7 @@ function MediaView(props: {
             ></div>
 
             {
-                isVideo && <div className={"absolute z-10 flex w-full h-full justify-center items-center"}>
+                isVideo && <div className={"absolute z-2 flex w-full h-full justify-center items-center"}>
                     <Button className={"bg-muted-foreground hover:bg-muted"}>
                         <Play color={"white"} fill={"white"}/>
                     </Button>

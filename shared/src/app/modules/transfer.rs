@@ -530,11 +530,17 @@ impl AppModule<BitBridge> for TransferModule {
                                 return None;
                             }
 
+                            let access_url = access_url.clone().unwrap();
+                            let name = match access_url.split("/").last() {
+                                Some(url_name) => format!("{} ({})", from_user.name, url_name),
+                                None => from_user.name.to_string(),
+                            };
+
                             (
                                 password.clone(),
                                 from_user.avatar.clone(),
-                                from_user.name.clone(),
-                                access_url.clone().unwrap(),
+                                name,
+                                access_url,
                                 *is_required_password
                             )
                         }
