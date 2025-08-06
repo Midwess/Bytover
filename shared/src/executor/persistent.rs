@@ -173,6 +173,7 @@ pub trait NativePersistent: Send + Sync {
                 };
 
                 let result = self.transfer_session_repository().find_all(Some(&id), None, None).await;
+                log::info!("Found transfer sessions: {:?}", result.as_ref().map(|it| it.len()));
                 match result {
                     Ok(sessions) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
                     Err(err) => {

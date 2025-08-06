@@ -350,6 +350,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 for new in new {
                     if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id) {
+                        log::info!("Already exists transfer session {:?}", new.order_id);
                         continue;
                     }
 

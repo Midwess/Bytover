@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::authentication::service::AuthenticationService;
 use crate::app::{AppEvent, AppModel, BitBridge};
+use crate::app::core_utils::CoreCommandContextUtils;
+use crate::app::modules::transfer::TransferEvent;
 use crate::entities::user::User;
 
 use super::nearby::NearbyEvent;
@@ -53,7 +55,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
             AuthenticationEvent::OnSignInSuccess { user } => {
                 model.authentication.user.replace(user);
                 Command::new(|ctx| async move {
-                    ctx.send_event(AppEvent::Nearby(NearbyEvent::Launch()));
+                    ctx.notify_event(AppEvent::Transfer(TransferEvent::Launch()));
+                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::Launch()));
                 })
             }
         }

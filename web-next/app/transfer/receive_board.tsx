@@ -50,7 +50,7 @@ export default function ReceiveBoard() {
 function ContentBoard() {
     const selectedSession = core.useSelectedSession()
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
-    const [enteredPassword, setEnteredPassword] = useState<string>('')
+    const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as any)?.password ?? '')
     const onSelected = () => {
         if (!selectedSession) {
             return
@@ -150,7 +150,7 @@ function ContentBoard() {
                     {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
-                                <div className={"h-fit bg-white"}>
+                                <div className={"h-fit"}>
                                     <FileView key={index} file={file}/>
                                 </div>
                             </ItemEffect>
@@ -266,7 +266,7 @@ function TransferSession(props: any) {
                 </div>
             </div>
             {progress && <CircleProgress progress={progress} size={30}/>}
-            {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-5 text-white mr-2 bg-muted h-5"} src={"/lock.svg"} color={'white'}/>}
+            {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"} src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
 }
@@ -278,15 +278,13 @@ function FileView(props: {
     const isMobile = useIsMobile();
     const model = file.model;
 
-    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
-    if (!thumbnailPath) {
-        thumbnailPath = model.type instanceof ResourceTypeVariantFolder
-            ? "/folder.svg"
-            : "/file.svg";
-    }
+    const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    const fallbackThumbnail = model.type instanceof ResourceTypeVariantFolder
+        ? "/folder.svg"
+        : "/file.svg";
 
+    const [imgSrc, setImgSrc] = useState(thumbnailPath)
     let displaySize = `${model.size_mb} MB`;
-    console.log(model)
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
@@ -299,9 +297,10 @@ function FileView(props: {
                 <Image
                     className="w-full h-auto bg-muted rounded-xl p-1.5"
                     layout="fill"
-                    color={'blue'}
-                    alt={`${model.type}`}
-                    src={thumbnailPath}
+                    objectFit="cover"
+                    alt="Thumbnail"
+                    src={imgSrc}
+                    onError={() => setImgSrc(fallbackThumbnail)}
                 />
             </div>
 
@@ -311,9 +310,9 @@ function FileView(props: {
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
             </div>
-            <Button className={"rounded-lg bg-muted"}>
+            <a className={"rounded-lg p-2"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
                 <Download color={'white'}/>
-            </Button>
+            </a>
         </div>
     );
 }
@@ -372,9 +371,9 @@ function MediaView(props: {
                         {displaySize}
                     </p>
                 </div>
-                <Button className={"rounded-xl"}>
-                    <Download/>
-                </Button>
+                <a className={"rounded-lg bg-muted p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                    <Download color={'white'}/>
+                </a>
             </div>
 
             <img

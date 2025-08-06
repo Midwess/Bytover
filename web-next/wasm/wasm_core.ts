@@ -54,11 +54,11 @@ import {
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
     MessageReason,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, TransferEventVariantLaunch, AppEventVariantTransfer
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
-import init_core, {view} from "core_wasm"
+import init_core, {view, initSync} from "core_wasm"
 import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
