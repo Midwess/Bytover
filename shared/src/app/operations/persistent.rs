@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use crate::app::transfer::session::{TransferProgress, TransferSession};
+use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
 use crate::entities::token::Token;
@@ -80,7 +80,7 @@ pub enum SessionPersistentOperationOutput {
 pub enum TransferSessionPersistentOperation {
     Save(TransferSession),
     UpdateProgresses(u64, Vec<TransferProgress>),
-    Remove(u64),
+    Remove((u64, TransferType)),
     GetAllReceivedSessions(),
     UpdateResource {
         session_id: u64,
@@ -308,9 +308,9 @@ impl TransferSessionPersistentOperation {
         })
     }
 
-    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = bool>> {
+    pub fn remove(id: u64, transfer_type: TransferType) -> AppRequestBuilder<impl Future<Output = bool>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::Remove(id)
+            TransferSessionPersistentOperation::Remove((id, transfer_type))
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(

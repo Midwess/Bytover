@@ -2,7 +2,7 @@
 
 export async function getThumbnailFromFile(
     file: File,
-    size: number = 256
+    size: number = 300
 ): Promise<Blob> {
     const fileType = file.type;
 

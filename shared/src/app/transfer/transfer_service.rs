@@ -63,12 +63,12 @@ impl TransferService {
             }
         }
 
-        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id).into_future(cmd.clone()).await;
+        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone()).into_future(cmd.clone()).await;
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![],
-            removed: vec![transfer_session.order_id],
+            removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
             updated: vec![]
         }));
     }
@@ -184,7 +184,7 @@ impl TransferService {
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![],
-            removed: vec![transfer_session.order_id],
+            removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
             updated: vec![]
         }));
     }
@@ -325,7 +325,7 @@ impl TransferService {
             cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
                 loaded: vec![],
                 added: vec![],
-                removed: vec![transfer_session.order_id],
+                removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
                 updated: vec![]
             }));
         } else {

@@ -92,7 +92,7 @@ pub enum TransferEvent {
         // New sessions
         added: Vec<TransferSession>,
         // Removed sessions
-        removed: Vec<u64>,
+        removed: Vec<(u64, TransferType)>,
         // Updated sessions
         updated: Vec<TransferSession>
     },
@@ -341,7 +341,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let mut command = Command::new(|_| async move {});
 
                 for loaded in loaded {
-                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == loaded.order_id) {
+                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == loaded.order_id && it.transfer_type.eq(&loaded.transfer_type)) {
                         continue;
                     }
 
@@ -349,7 +349,7 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 for new in new {
-                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id) {
+                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id && it.transfer_type.eq(&new.transfer_type)) {
                         log::info!("Already exists transfer session {:?}", new.order_id);
                         continue;
                     }
@@ -364,16 +364,18 @@ impl AppModule<BitBridge> for TransferModule {
                     model.transfer.transfer_sessions.push(new);
                 }
 
-                model.transfer.transfer_sessions.retain(|it| !removed.contains(&it.order_id));
+                model.transfer.transfer_sessions.retain(|it| {
+                    !removed.contains(&(it.order_id, it.transfer_type.clone()))
+                });
 
-                for removed in removed {
+                for (order_id, transfer_type) in removed {
                     command = command.and(Command::new(|it| async move {
-                        TransferSessionPersistentOperation::remove(removed).into_future(it.clone()).await;
+                        TransferSessionPersistentOperation::remove(order_id, transfer_type).into_future(it.clone()).await;
                     }));
                 }
 
                 for updated in updated {
-                    let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == updated.order_id) else {
+                    let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == updated.order_id && it.transfer_type.eq(&updated.transfer_type)) else {
                         continue;
                     };
 
@@ -713,7 +715,11 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            cloud_session: model.transfer.transfer_sessions.iter().filter(|it| it.target.is_public()).find_map(|it| {
+            cloud_session: model.transfer.transfer_sessions
+                .iter()
+                .filter(|it| matches!(it.transfer_type, TransferType::Send))
+                .filter(|it| it.target.is_public())
+                .find_map(|it| {
                 let (access_url, password) = match &it.target {
                     TransferTarget::Internet { access_url, password, .. } => (access_url.clone(), password.clone()),
                     _ => return None

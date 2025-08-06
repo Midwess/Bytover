@@ -76,7 +76,9 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
     where
         LocalResource: 'async_trait
     {
-        IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::create(self, data).await
+        // On web, we don't save any local resource
+        // because the path will not be correct after reload
+        Ok(data)
     }
 
     async fn find_one(&self, id: &LocalResourceId) -> Resolve<Option<LocalResource>> {
@@ -119,22 +121,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
-        let id = LocalResourceId {
-            order_id: Some(resource_id),
-            ..Default::default()
-        };
-
-        let Some(mut resource) = IdbRepository::find_one(self, &IdbIdWrapper(id.clone())).await? else {
-            return Err(PersistenceError::NotFound(format!("Not found resource to insert thumbnail {:?}", id)));
-        };
-
         let Some(saved_path) = self.file_storage.save_thumbnail(resource_id, png_bytes).await else {
             return Err(PersistenceError::IOError("Unable to save thumbnail".to_owned()))
         };
-
-        resource.thumbnail_path = Some(saved_path.clone());
-
-        IdbRepository::update_one(self, resource).await?;
 
         Ok(saved_path)
     }
