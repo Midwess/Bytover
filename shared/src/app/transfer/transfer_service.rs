@@ -51,9 +51,16 @@ impl TransferService {
         cmd.notify_event(event);
     }
 
-    pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
+    pub async fn delete_session(&self, mut transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
             log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
+
+            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
+                loaded: vec![],
+                added: vec![],
+                removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
+                updated: vec![]
+            }));
 
             if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)
                 .into_future(cmd.clone())
@@ -63,7 +70,10 @@ impl TransferService {
             }
         }
 
-        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone()).into_future(cmd.clone()).await;
+        let _ = TransferSessionPersistentOperation::remove(
+            transfer_session.order_id,
+            transfer_session.transfer_type.clone()
+        ).into_future(cmd.clone()).await;
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
@@ -154,12 +164,14 @@ impl TransferService {
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
-                    transfer_session.force_complete(format!("Connection error: {error:?}"));
                     log::error!(target: "transfer", "Connection error: {error:?}");
+                    transfer_session.force_complete(format!("Connection error: {error:?}"));
+                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
+                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
                     log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
@@ -177,7 +189,7 @@ impl TransferService {
 
         // We not remove the public transfer, since user need to see the information
         // after transfer completed.
-        if transfer_session.target.is_public() {
+        if transfer_session.is_success() {
             return;
         }
 

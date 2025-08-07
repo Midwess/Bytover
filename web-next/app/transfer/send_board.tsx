@@ -26,12 +26,12 @@ import {
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     VideoReceiveResourceViewModel,
     TransferEventVariantStartPublicTransfer,
-    TransferEventVariantCancelTransfer
+    TransferEventVariantCancelTransfer, TransferTypeVariantSend
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useFileUpload} from "@/hooks/use-file-upload";
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import core from "@/wasm/wasm_core";
 import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
@@ -361,15 +361,24 @@ function Board() {
 function PublicSend() {
     const [password, setPassword] = useState('')
     const cloudSession = core.useTransferState()?.cloud_session
+    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const [isInProgress, setIsInProgress] = useState(false)
     const progress = (cloudSession?.progress ?? 0) * 100
+    const cloudRef = useRef(cloudSession)
+    cloudRef.current = cloudSession
 
     useEffect(() => {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
+            setIsInProgressDefer(true)
         }
         else {
-            setTimeout(() => setIsInProgress(false), 2400)
+            setIsInProgress(false)
+            setTimeout(() => {
+                if (!cloudRef?.current?.is_in_progress) {
+                    setIsInProgressDefer(false)
+                }
+            }, 2000)
         }
 
     }, [cloudSession?.is_in_progress])
@@ -393,8 +402,12 @@ function PublicSend() {
                 <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
                        type={"password"} maxLength={20} placeholder={"pwd@123"}/>
                 {
-                    isInProgress
-                        ? <div className={"flex flex-col w-full gap-2"}>
+                    cloudSession?.access_url &&
+                    <Input value={cloudSession?.access_url ?? ''} disabled={true}/>
+                }
+                {
+                    isInProgressDefer
+                        && <div className={"flex flex-col w-full gap-2"}>
                             <Progress value={progress} className="w-full space-y-2">
                                 <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm">
@@ -403,15 +416,29 @@ function PublicSend() {
                                 </div>
                                 <ProgressTrack/>
                             </Progress>
-                            <Button className="mt-2 w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                                if (cloudSession?.is_in_progress) {
-                                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id)))
-                                }
-                            }}>Cancel</Button>
                         </div>
-                        : <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
-                        }}>Upload</Button>
+                }
+                {
+                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                        if (cloudSession?.is_in_progress) {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id, new TransferTypeVariantSend())))
+                        }
+                    }}>Cancel</Button>
+                }
+                {
+                    !cloudSession &&
+                    <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
+                    }}>Upload</Button>
+                }
+                {
+                    cloudSession?.is_completed &&
+                    <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                            cloudSession?.session_id,
+                            new TransferTypeVariantSend()
+                        )))
+                    }}>Continue</Button>
                 }
             </div>
         </MotionEffect>

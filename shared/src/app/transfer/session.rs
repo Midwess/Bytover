@@ -312,6 +312,14 @@ impl TransferSession {
         self.progress.iter().any(|it| it.status == TransferStatus::Canceled)
     }
 
+    pub fn is_failed(&self) -> bool {
+        self.progress.iter().any(|it| matches!(it.status, TransferStatus::Fail(_)))
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.progress.iter().any(|it| matches!(it.status, TransferStatus::Success))
+    }
+
     pub fn cancel(&mut self) {
         self.progress.iter_mut().for_each(|it| {
             if it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending {

@@ -7,7 +7,10 @@ import {
     LocalResourcePathVariantAbsolutePath,
     ReceiveCloudSessionViewModel,
     ResourceTypeVariantFolder,
-    SelectedResourceViewModel, TransferEventVariantFindPublicSession, TransferEventVariantViewPublicSession,
+    SelectedResourceViewModel,
+    TransferEventVariantFindPublicSession,
+    TransferEventVariantViewPublicSession,
+    TransferTypeVariantReceive,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
@@ -57,7 +60,7 @@ function ContentBoard() {
         }
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
-            enteredPassword ? enteredPassword : null, selectedSession!.id
+            enteredPassword ? enteredPassword : null, selectedSession!.id, new TransferTypeVariantReceive()
         )))
     }
 
@@ -67,7 +70,8 @@ function ContentBoard() {
             if (!cloud.is_required_password && isLoading) {
                 core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
                     null,
-                    cloud.id
+                    cloud.id,
+                    new TransferTypeVariantReceive(),
                 )))
             }
         }
@@ -228,6 +232,7 @@ function Board() {
                                 onPress={() => {
                                     core.updateSelectedSession(item)
                                 }}
+                                accessUrl={item.access_url}
                                 name={item.sender_name}
                                 display_datetime={item.display_datetime}
                                 key={index}
@@ -246,6 +251,7 @@ function Board() {
 function TransferSession(props: any) {
     const {
         name,
+        accessUrl,
         display_datetime,
         progress,
         avatar_url,
@@ -258,7 +264,7 @@ function TransferSession(props: any) {
     return <>
         <button
             onClick={onPress}
-            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 max-h-[60px] border-1 border-primaryText/5 justify-between"}>
+            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between"}>
             <div className={"flex flex-row items-center gap-5"}>
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
@@ -267,8 +273,8 @@ function TransferSession(props: any) {
                     </Avatar>
                     {is_public && <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>}
                 </div>
-                <div className={"flex flex-col gap-0 items-start"}>
-                    <p className={"text-primaryText text-sm"}>{name}</p>
+                <div className={"flex flex-col gap-1 items-start"}>
+                    <p className={"text-primaryText text-sm text-start"}>{name}</p>
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>

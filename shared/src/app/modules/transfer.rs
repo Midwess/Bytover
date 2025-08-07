@@ -76,7 +76,8 @@ pub enum TransferEvent {
         target_id: String
     },
     CancelTransfer {
-        session_id: u64
+        session_id: u64,
+        transfer_type: TransferType
     },
     TransferCanceled {
         session_id: u64
@@ -127,7 +128,8 @@ pub enum TransferEvent {
     },
     ViewPublicSession {
         password: Option<String>,
-        session_id: u64
+        session_id: u64,
+        transfer_type: TransferType
     }
 }
 
@@ -164,11 +166,19 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_selection_service.add_resources(it.clone(), selections).await;
                 it.notify_shell(CoreOperation::Render);
             }),
-            TransferEvent::RemoveResource(id) => Command::new(|it| async move {
-                resource_selection_service.remove_resource(it, id).await;
-            }),
-            TransferEvent::CancelTransfer { session_id } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+            TransferEvent::RemoveResource(id) => {
+                model.transfer.selected_resources.retain(|it| it.order_id != id);
+                Command::new(|it| async move {
+                    it.notify_shell(CoreOperation::Render);
+                })
+            },
+            TransferEvent::CancelTransfer { session_id, transfer_type } => {
+                let Some(session) = model
+                    .transfer.transfer_sessions
+                    .iter()
+                    .find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type))
+                    .cloned() else
+                {
                     return Command::new(|it| async move {
                         DialogOperation::toast("Session not found".to_string()).into_future(it.clone()).await;
                     });
@@ -320,7 +330,8 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(|it| async move {
                     if let Some(duplicated_session) = duplicated_session {
                         it.send_event(AppEvent::Transfer(TransferEvent::CancelTransfer {
-                            session_id: duplicated_session.order_id
+                            session_id: duplicated_session.order_id,
+                            transfer_type: duplicated_session.transfer_type
                         }));
                         return;
                     }
@@ -375,12 +386,12 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 for updated in updated {
-                    let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == updated.order_id && it.transfer_type.eq(&updated.transfer_type)) else {
+                    let Some(session_pos) = model.transfer.transfer_sessions.iter_mut().position(|it| it.order_id == updated.order_id && it.transfer_type.eq(&updated.transfer_type)) else {
                         continue;
                     };
 
                     log::info!("Update transfer session {:?}", updated.order_id);
-                    *session = updated;
+                    model.transfer.transfer_sessions[session_pos] = updated;
                 }
 
                 model.transfer.transfer_sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
@@ -472,8 +483,8 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.find_transfer_session(keywords, it.clone()).await;
                 })
             }
-            TransferEvent::ViewPublicSession { password, session_id } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+            TransferEvent::ViewPublicSession { password, session_id, transfer_type } => {
+                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type)).cloned() else {
                     return Command::done()
                 };
 
@@ -702,7 +713,7 @@ impl AppModule<BitBridge> for TransferModule {
                         peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                         peer_description: "Nearby".to_owned(),
                         is_completed: it.is_completed(),
-                        is_in_progress: !it.is_completed(),
+                        is_in_progress: !it.is_completed() && !it.is_canceled(),
                         display_download_speed: it.status().to_string(),
                         progress: it.total_progress(),
                         image_resources,
@@ -733,7 +744,7 @@ impl AppModule<BitBridge> for TransferModule {
                     password,
                     session_id: it.order_id,
                     is_completed: it.is_completed(),
-                    is_in_progress: !it.is_completed(),
+                    is_in_progress: !it.is_completed() && !it.is_canceled(),
                     progress: it.total_progress(),
                     access_url
                 })
