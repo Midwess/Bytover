@@ -15,7 +15,7 @@ import {
 } from 'shared_types/types/shared_types'
 import {
     ChevronsUpDown, Download, FileLock,
-    Globe, GlobeLock, LoaderCircle, LoaderCircleIcon, Lock, LockIcon, LockKeyholeIcon, LucideLock, Play
+    Globe, GlobeLock, Link2, LoaderCircle, LoaderCircleIcon, Lock, LockIcon, LockKeyholeIcon, LucideLock, Play
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {
@@ -33,6 +33,7 @@ import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight"
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
+import Link from "next/link";
 
 export default function ReceiveBoard() {
     return <>
@@ -52,6 +53,7 @@ export default function ReceiveBoard() {
 
 function ContentBoard() {
     const selectedSession = core.useSelectedSession()
+    console.log('selected session', selectedSession)
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as any)?.password ?? '')
     const onSelected = () => {
@@ -145,12 +147,12 @@ function ContentBoard() {
             </CollapsibleContent>
         </Collapsible>
         <Collapsible
-            className={`w-full ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
+            className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
             <ReceiveCategory
                 title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
-            <CollapsibleContent className={"space-y-2"}>
+            <CollapsibleContent className={"h-full"}>
                 <div
-                    className="grid grid-cols-1 gap-x-4 gap-y-4 pb-8">
+                    className="flex flex-col gap-4 h-fit min-h-[400px]">
                     {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
@@ -323,9 +325,15 @@ function FileView(props: {
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
             </div>
-            <a className={"rounded-lg p-2 bg-muted"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
-                <Download color={'white'}/>
-            </a>
+            {
+                file.is_completed
+                    ? <a className={"rounded-xl p-2 bg-bluePrimary/80"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                        <Download color={'white'}/>
+                    </a>
+                    : <>
+                        <CircleProgress progress={file.completion} size={30}/>
+                    </>
+            }
         </div>
     );
 }
@@ -350,7 +358,7 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full overflow-hidden rounded-2xl relative group">
+        <div className="w-full h-full bg-muted-foreground overflow-hidden rounded-2xl relative group">
             <div
                 className={clsx(
                     "z-3 w-full h-[90%] absolute bg-gradient-to-t from-blackBase/70 bottom-0",
@@ -370,7 +378,7 @@ function MediaView(props: {
 
             <div
                 className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between",
+                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between py-2",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -384,9 +392,16 @@ function MediaView(props: {
                         {displaySize}
                     </p>
                 </div>
-                <a className={"rounded-lg bg-muted p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
-                    <Download color={'white'}/>
-                </a>
+                {
+                    media.is_completed
+                        ? <a className={"my-2 rounded-xl bg-bluePrimary/80 p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                            <Download color={'white'}/>
+                          </a>
+                        : <>
+                            <CircleProgress progress={media.completion} size={30}/>
+                        </>
+                }
+
             </div>
 
             <img

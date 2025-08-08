@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
 
 type Props = {
@@ -12,31 +12,37 @@ type Props = {
     color?: string;
     /** Background circle color */
     trackColor?: string;
+    /** Animation duration in ms */
+    duration?: number;
 };
 
 export default function CircleProgress({
-    progress,
-    size = 80,
-    strokeWidth = 2,
-}: Props) {
+                                           progress,
+                                           size = 80,
+                                           strokeWidth = 4,
+                                           duration = 800,
+                                       }: Props) {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    const offset = circumference * (1 - progress);
+
+    const [displayProgress, setDisplayProgress] = useState(progress);
+
+    // Update progress smoothly
+    useEffect(() => {
+        setDisplayProgress(progress);
+    }, [progress]);
+
+    const offset = circumference * (1 - displayProgress);
 
     return (
         <div
             className="relative flex items-center justify-center"
-            style={{width: size, height: size}}
+            style={{ width: size, height: size }}
         >
-            {/* SVG Circle Progress */}
-            <svg
-                className="transform -rotate-90"
-                width={size}
-                height={size}
-            >
+            <svg className="transform -rotate-90" width={size} height={size}>
                 {/* Background circle */}
                 <circle
-                    className={"stroke-bluePrimary"}
+                    className="stroke-muted-foreground"
                     fill="transparent"
                     strokeWidth={strokeWidth}
                     r={radius}
@@ -45,7 +51,7 @@ export default function CircleProgress({
                 />
                 {/* Progress arc */}
                 <circle
-                    className={"stroke-gray-400"}
+                    className="stroke-bluePrimary"
                     fill="transparent"
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
@@ -54,6 +60,9 @@ export default function CircleProgress({
                     r={radius}
                     cx={size / 2}
                     cy={size / 2}
+                    style={{
+                        transition: `stroke-dashoffset ${duration}ms ease-in-out`,
+                    }}
                 />
             </svg>
 
@@ -65,10 +74,9 @@ export default function CircleProgress({
                 style={{
                     width: size * 0.4,
                     height: size * 0.4,
-                    borderRadius: '24%'
+                    borderRadius: "24%",
                 }}
-            >
-            </div>
+            />
         </div>
     );
 }

@@ -4,7 +4,7 @@ import Image from "next/image";
 
 export default function Header() {
     return (
-        <div className="relative flex justify-between items-center w-full py-10 container">
+        <div className="z-2 relative flex justify-between items-center w-full py-10 container">
             <div className="flex flex-row gap-2 items-center">
                 <Image
                     width={35}

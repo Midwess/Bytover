@@ -101,6 +101,11 @@ impl TransferProgress {
 
         self.status = status;
 
+        match self.status {
+            TransferProgressStatus::Success => self.transfered_amount = self.resource_size,
+            _ => ()
+        }
+
         Ok(())
     }
 }

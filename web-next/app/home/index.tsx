@@ -8,13 +8,13 @@ import Image from 'next/image'
 import TransferBoard from "@/app/transfer";
 
 export default function Home() {
-    return <div className="flex flex-col w-full h-full items-center">
+    return <div className="flex flex-col w-full h-full items-center bg-blackBase">
         <div className={'relative flex flex-col w-full items-center gap-10 pb-16'}>
             <Header/>
             <div
-                className="absolute top-0 z-[-1] h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
+                className="absolute top-0 h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
             </div>
-            <div className={'flex flex-col items-center gap-4 container'}>
+            <div className={'flex flex-col items-center gap-4 container z-2'}>
                 <h2 className="text-lg tracking-widest  text-greenSecondary text-center">
                     Powering your productivity 👋
                 </h2>
@@ -49,7 +49,7 @@ export default function Home() {
                 </div>
             </div>
         </div>
-        <div className={"container flex flex-col mt-10"}>
+        <div className={"container flex flex-col pt-10"}>
             <TransferBoard/>
         </div>
         <div className={"h-36 w-full"}></div>

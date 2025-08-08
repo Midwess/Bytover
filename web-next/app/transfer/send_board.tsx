@@ -224,8 +224,7 @@ function MediaView(props: {
             core.nativeProcessor?.load_thumbnail_bytes(model.order_id).then((it) => {
                 if (it) {
                     const blob = new Blob([it], {type: 'image/png'});
-                    setThumbnail(<Image className={"w-full h-full"} src={URL.createObjectURL(blob)} alt={model.name}
-                                        layout={"fill"}/>)
+                    setThumbnail(<img className={"w-full h-full object-cover"} src={URL.createObjectURL(blob)} alt={model.name}/>)
                 }
             })
         }
@@ -237,7 +236,7 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full overflow-hidden rounded-2xl relative group">
+        <div className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
             <div
                 className={clsx(
                     "z-3 w-full h-[90%] absolute items-center flex justify-center bg-gradient-to-t from-blackBase/70 bottom-0",
@@ -265,7 +264,7 @@ function MediaView(props: {
 
             <div
                 className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between",
+                    "flex w-full flex-row z-4 bottom-0 absolute items-center p-2 justify-between",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"

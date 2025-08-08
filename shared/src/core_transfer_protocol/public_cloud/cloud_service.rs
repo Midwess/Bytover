@@ -324,7 +324,7 @@ where
         let mut rx = net_stream.start().await?;
         log::info!("Uploading resource {resource_path:?} size = {size}");
         let mut ticker = Instant::now();
-        let progress_update_interval = std::time::Duration::from_millis(5000);
+        let progress_update_interval = std::time::Duration::from_millis(3000);
         while let Some(event) = rx.next().await {
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
@@ -363,6 +363,7 @@ where
         }
 
         net_stream.end().await?;
+        self.server.update_transfer_progress(session_order_id, resource_order_id, total_sent).await?;
         log::info!("Resource {resource_path:?} uploaded, total sent = {total_sent} bytes");
 
         let session_guard = transfer_session.lock().await;
