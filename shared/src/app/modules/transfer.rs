@@ -27,6 +27,7 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -532,20 +533,28 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-                    let (password, avatar, name, access_url, is_required_password) = match &it.target {
+
+                    let (password, avatar, name, access_url, is_required_password, alias) = match &it.target {
                         TransferTarget::Internet {
                             password,
                             from_user,
                             access_url,
                             is_required_password
                         } => {
-                            if access_url.is_none() {
+                            let Some(access_url) = access_url else {
                                 return None;
-                            }
+                            };
 
-                            let access_url = access_url.clone().unwrap();
-                            let name = match access_url.split("/").last() {
-                                Some(url_name) => format!("{} ({})", from_user.name, url_name),
+                            let alias = match Url::parse(&access_url) {
+                                Ok(url) => {
+                                    let alias = url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string());
+                                    alias
+                                },
+                                Err(e) => None
+                            };
+
+                            let name = match &alias {
+                                Some(alias) => format!("{} ({})", from_user.name, alias),
                                 None => from_user.name.to_string(),
                             };
 
@@ -554,7 +563,8 @@ impl AppModule<BitBridge> for TransferModule {
                                 from_user.avatar.clone(),
                                 name,
                                 access_url,
-                                *is_required_password
+                                *is_required_password,
+                                alias
                             )
                         }
                         _ => return None
@@ -625,9 +635,10 @@ impl AppModule<BitBridge> for TransferModule {
                         password,
                         avatar_url: avatar,
                         sender_name: name,
-                        access_url,
+                        access_url: access_url.to_owned(),
                         is_required_password,
                         image_resources,
+                        alias,
                         video_resources,
                         file_resources,
                         display_datetime: id_to_datetime(it.order_id)

@@ -23,7 +23,7 @@ use std::sync::{Arc, Weak};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
-    #[error("Network error: {0}")]
+    #[error("{0}")]
     GrpcErrors(#[from] RpcErrors),
     #[error("Invalid session target")]
     InvalidSessionTarget,

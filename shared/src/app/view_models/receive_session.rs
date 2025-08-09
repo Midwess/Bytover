@@ -51,5 +51,6 @@ pub struct ReceiveCloudSessionViewModel {
     pub file_resources: Vec<FileReceiveResourceViewModel>,
     pub display_datetime: String,
     pub access_url: String,
-    pub is_required_password: bool
+    pub is_required_password: bool,
+    pub alias: Option<String>
 }

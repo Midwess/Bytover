@@ -34,6 +34,7 @@ import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import Link from "next/link";
+import {useUrlState} from "@/hooks/use-url";
 
 export default function ReceiveBoard() {
     return <>
@@ -53,9 +54,41 @@ export default function ReceiveBoard() {
 
 function ContentBoard() {
     const selectedSession = core.useSelectedSession()
-    console.log('selected session', selectedSession)
+    const transferState = core.useTransferState()
+    const coreReady = core.useCoreReady()
+    const [url, setUrl] = useUrlState(['session'])
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as any)?.password ?? '')
+
+    useEffect(() => {
+        if (selectedSession instanceof ReceiveCloudSessionViewModel) {
+            if (selectedSession.alias) {
+                setUrl({
+                    session: selectedSession.alias ?? ''
+                })
+            }
+        }
+    }, [selectedSession]);
+
+    useEffect(() => {
+        if (url.session && coreReady) {
+            core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(url.session)))
+        }
+    }, [coreReady]);
+
+    useEffect(() => {
+        if (!url?.session || !transferState?.received_cloud_sessions?.length) return
+
+        const session = transferState?.received_cloud_sessions?.find((it) => {
+            return it.alias === url!.session!
+        })
+
+        if (session) {
+            core.updateSelectedSession(session)
+        }
+
+    }, [transferState?.received_cloud_sessions?.length]);
+
     const onSelected = () => {
         if (!selectedSession) {
             return
@@ -93,9 +126,18 @@ function ContentBoard() {
                     <p className={"font-poppins text-muted-foreground flex flex-row items-center"}>
                         <Image alt={"lock"} width={10} height={10} className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"} color={'white'}/>
                         This session is password protected</p>
-                    <Input className={"h-10"} placeholder={"Enter password"} value={enteredPassword} onChange={(it) => {
-                        setEnteredPassword(it.target.value)
-                    }} type={"password"}/>
+                    <Input
+                        className="h-10"
+                        placeholder="Enter password"
+                        value={enteredPassword}
+                        onChange={(e) => setEnteredPassword(e.target.value)}
+                        type="password"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                onSelected()
+                            }
+                        }}
+                    />
                     <Button onClick={onSelected} className={"w-fit"}>Continue</Button>
                 </div>
             </div>
@@ -200,9 +242,17 @@ function ReceiveCategory(props: {
 
 function Board() {
     const transferState = core.useTransferState()
+    const [url] = useUrlState(['session'])
 
     const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
-    const [keywords, setKeywords] = useState<string>('')
+    const [keywords, setKeywords] = useState<string>()
+
+    useEffect(() => {
+        if (url.session) {
+            setKeywords(url.session)
+        }
+    }, []);
+
     const sessions = transferState?.received_cloud_sessions.filter((it) => {
         if (keywords) {
             return it?.sender_name?.toLowerCase()?.includes(keywords.toLowerCase()) ?? false
@@ -215,13 +265,13 @@ function Board() {
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
             <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
-                <p className={"opacity-80 text-sm"}>Search session</p>
-                <Input className={"rounded-md font-poppins"} placeholder={"Enter an session name or using a url"}
+                <p className={"opacity-80 text-sm"}>Find session</p>
+                <Input value={keywords || ''} className={"rounded-md font-poppins"} placeholder={"Session name or url"}
                        onChange={(it) => setKeywords(it.target.value)}/>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
                 <Button className={"w-fit"} onClick={() => {
                     message?.resolveMessage()
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
                 }}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>

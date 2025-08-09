@@ -18,19 +18,19 @@ pub enum NetworkError {
     #[error("Unauthorized")]
     Unauthorized(String),
     // Internet connection issue, ask user to check internet connection
-    #[error("Connection failed {0}")]
+    #[error("{0}")]
     Network(String)
 }
 
 impl From<CloudTransferErrors> for NetworkError {
     fn from(e: CloudTransferErrors) -> Self {
-        Self::Network(format!("{e:?}"))
+        Self::Network(format!("{e}"))
     }
 }
 
 impl From<RpcErrors> for NetworkError {
     fn from(e: RpcErrors) -> Self {
-        Self::Network(format!("{e:?}"))
+        Self::Network(format!("{e}"))
     }
 }
 

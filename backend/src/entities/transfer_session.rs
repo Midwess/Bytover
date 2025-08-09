@@ -163,7 +163,7 @@ impl TransferSession {
 
     pub fn access_url(&self) -> String {
         let website = env::var("DEVLOG_BITBRIDGE_WEBSITE_URL").unwrap_or("http://localhost:8000".to_owned());
-        format!("{}/sessions/{}", website, self.alias)
+        format!("{}?session={}", website, self.alias)
     }
 
     pub fn password(&self) -> Option<String> {

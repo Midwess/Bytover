@@ -4,7 +4,7 @@ use anyhow::anyhow;
 pub enum RpcErrors {
     #[error("Auth error {0}")]
     AuthError(anyhow::Error),
-    #[error("Bad request {0}")]
+    #[error("{0}")]
     BadRequest(String),
     #[error("Internal server error {0}")]
     InternalServerError(String)

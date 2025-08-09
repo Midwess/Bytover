@@ -69,6 +69,7 @@ import {getThumbnailFromFile} from "@/utils/thumbnail";
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
     isCoreReady: Observable<boolean> = new Observable(false)
+    isCoreLoaded: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
     nearbyState: Observable<NearbyViewModel> = new Observable()
@@ -111,6 +112,15 @@ export class WasmCore {
                 this.alertMessageState.set([...messages])
             })
         }
+    }
+
+    public useCoreLoaded() {
+        const [isLoaded, setIsLoaded] = useState(this.isCoreLoaded.get());
+        useEffect(() => {
+            return this.isCoreLoaded.subscribe(setIsLoaded)
+        }, [])
+
+        return isLoaded
     }
 
     public useCoreReady() {

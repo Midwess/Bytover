@@ -2,10 +2,14 @@
 import core from "@/wasm/wasm_core";
 import {Suspense, useEffect} from "react";
 import {useUrlState} from "@/hooks/use-url";
-import {AppEventVariantAuthentication, AuthenticationEventVariantOnRedirected} from "shared_types/types/shared_types";
+import {
+    AppEventVariantAuthentication,
+    AppEventVariantTransfer,
+    AuthenticationEventVariantOnRedirected, ReceiveCloudSessionViewModel, TransferEventVariantFindPublicSession
+} from "shared_types/types/shared_types";
 
 function CoreStartProcess() {
-    const [url, setUrl] = useUrlState(['access_token'])
+    const [url, setUrl] = useUrlState(['access_token', 'session'])
     const isReady = core.useCoreReady()
 
     useEffect(() => {
