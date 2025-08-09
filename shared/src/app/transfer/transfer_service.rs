@@ -51,7 +51,7 @@ impl TransferService {
         cmd.notify_event(event);
     }
 
-    pub async fn delete_session(&self, mut transfer_session: TransferSession, cmd: AppCommandContext) {
+    pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
             log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
 
@@ -70,10 +70,9 @@ impl TransferService {
             }
         }
 
-        let _ = TransferSessionPersistentOperation::remove(
-            transfer_session.order_id,
-            transfer_session.transfer_type.clone()
-        ).into_future(cmd.clone()).await;
+        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())
+            .into_future(cmd.clone())
+            .await;
 
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],

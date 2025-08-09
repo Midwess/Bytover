@@ -172,14 +172,15 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::new(|it| async move {
                     it.notify_shell(CoreOperation::Render);
                 })
-            },
+            }
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let Some(session) = model
-                    .transfer.transfer_sessions
+                    .transfer
+                    .transfer_sessions
                     .iter()
                     .find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type))
-                    .cloned() else
-                {
+                    .cloned()
+                else {
                     return Command::new(|it| async move {
                         DialogOperation::toast("Session not found".to_string()).into_future(it.clone()).await;
                     });
@@ -353,7 +354,12 @@ impl AppModule<BitBridge> for TransferModule {
                 let mut command = Command::new(|_| async move {});
 
                 for loaded in loaded {
-                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == loaded.order_id && it.transfer_type.eq(&loaded.transfer_type)) {
+                    if model
+                        .transfer
+                        .transfer_sessions
+                        .iter()
+                        .any(|it| it.order_id == loaded.order_id && it.transfer_type.eq(&loaded.transfer_type))
+                    {
                         continue;
                     }
 
@@ -361,7 +367,12 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 for new in new {
-                    if model.transfer.transfer_sessions.iter().any(|it| it.order_id == new.order_id && it.transfer_type.eq(&new.transfer_type)) {
+                    if model
+                        .transfer
+                        .transfer_sessions
+                        .iter()
+                        .any(|it| it.order_id == new.order_id && it.transfer_type.eq(&new.transfer_type))
+                    {
                         log::info!("Already exists transfer session {:?}", new.order_id);
                         continue;
                     }
@@ -376,9 +387,10 @@ impl AppModule<BitBridge> for TransferModule {
                     model.transfer.transfer_sessions.push(new);
                 }
 
-                model.transfer.transfer_sessions.retain(|it| {
-                    !removed.contains(&(it.order_id, it.transfer_type.clone()))
-                });
+                model
+                    .transfer
+                    .transfer_sessions
+                    .retain(|it| !removed.contains(&(it.order_id, it.transfer_type.clone())));
 
                 for (order_id, transfer_type) in removed {
                     command = command.and(Command::new(|it| async move {
@@ -387,7 +399,12 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 for updated in updated {
-                    let Some(session_pos) = model.transfer.transfer_sessions.iter_mut().position(|it| it.order_id == updated.order_id && it.transfer_type.eq(&updated.transfer_type)) else {
+                    let Some(session_pos) = model
+                        .transfer
+                        .transfer_sessions
+                        .iter_mut()
+                        .position(|it| it.order_id == updated.order_id && it.transfer_type.eq(&updated.transfer_type))
+                    else {
                         continue;
                     };
 
@@ -484,8 +501,18 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.find_transfer_session(keywords, it.clone()).await;
                 })
             }
-            TransferEvent::ViewPublicSession { password, session_id, transfer_type } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type)).cloned() else {
+            TransferEvent::ViewPublicSession {
+                password,
+                session_id,
+                transfer_type
+            } => {
+                let Some(session) = model
+                    .transfer
+                    .transfer_sessions
+                    .iter()
+                    .find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type))
+                    .cloned()
+                else {
                     return Command::done()
                 };
 
@@ -533,7 +560,6 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-
                     let (password, avatar, name, access_url, is_required_password, alias) = match &it.target {
                         TransferTarget::Internet {
                             password,
@@ -545,17 +571,17 @@ impl AppModule<BitBridge> for TransferModule {
                                 return None;
                             };
 
-                            let alias = match Url::parse(&access_url) {
+                            let alias = match Url::parse(access_url) {
                                 Ok(url) => {
                                     let alias = url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string());
                                     alias
-                                },
+                                }
                                 Err(e) => None
                             };
 
                             let name = match &alias {
                                 Some(alias) => format!("{} ({})", from_user.name, alias),
-                                None => from_user.name.to_string(),
+                                None => from_user.name.to_string()
                             };
 
                             (
@@ -737,29 +763,31 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            cloud_session: model.transfer.transfer_sessions
+            cloud_session: model
+                .transfer
+                .transfer_sessions
                 .iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_public())
                 .find_map(|it| {
-                let (access_url, password) = match &it.target {
-                    TransferTarget::Internet { access_url, password, .. } => (access_url.clone(), password.clone()),
-                    _ => return None
-                };
+                    let (access_url, password) = match &it.target {
+                        TransferTarget::Internet { access_url, password, .. } => (access_url.clone(), password.clone()),
+                        _ => return None
+                    };
 
-                Some(CloudSession {
-                    display_download_speed: match access_url.is_none() {
-                        true => "Initializing...".to_owned(),
-                        false => it.status().to_string()
-                    },
-                    password,
-                    session_id: it.order_id,
-                    is_completed: it.is_completed(),
-                    is_in_progress: !it.is_completed() && !it.is_canceled(),
-                    progress: it.total_progress(),
-                    access_url
-                })
-            }),
+                    Some(CloudSession {
+                        display_download_speed: match access_url.is_none() {
+                            true => "Initializing...".to_owned(),
+                            false => it.status().to_string()
+                        },
+                        password,
+                        session_id: it.order_id,
+                        is_completed: it.is_completed(),
+                        is_in_progress: !it.is_completed() && !it.is_canceled(),
+                        progress: it.total_progress(),
+                        access_url
+                    })
+                }),
             nearby_peers: model
                 .transfer
                 .transfer_targets

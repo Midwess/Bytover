@@ -2,9 +2,9 @@ use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
 use crate::app::authentication::service::AuthenticationService;
-use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::transfer::TransferEvent;
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::user::User;
 
 use super::nearby::NearbyEvent;

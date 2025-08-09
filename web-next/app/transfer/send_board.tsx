@@ -16,15 +16,14 @@ import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
 import {
-    AppEventVariantTransfer, FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel, LocalResourcePathVariantAbsolutePath,
+    AppEventVariantTransfer,
+    LocalResourcePathVariantAbsolutePath,
     PeerViewModel,
-    ResourceTypeVariantFile, ResourceTypeVariantFolder,
+    ResourceTypeVariantFile,
     ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
-    VideoReceiveResourceViewModel,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend
 } from 'shared_types/types/shared_types'
@@ -385,7 +384,6 @@ function PublicSend() {
     return <div className={"flex flex-col w-full h-full items-center gap-8 justify-center px-2"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
-            key={0}
             slide={{
                 direction: 'down',
             }}
@@ -451,7 +449,6 @@ function NearbySend() {
     return <>
         <MotionEffect
             className="flex flex-col w-full gap-3"
-            key={0}
             slide={{direction: 'down'}}
             fade
             zoom
