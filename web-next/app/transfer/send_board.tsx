@@ -5,9 +5,9 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
-    AlertCircleIcon, Delete, Download, File,
-    Globe, ImageUpIcon, Play, Trash,
-    Users, X, XIcon
+    AlertCircleIcon,
+    Globe, ImageUpIcon, Play,
+    Users, X,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -35,7 +35,7 @@ import core from "@/wasm/wasm_core";
 import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
 import Image from "next/image";
-import {Progress, ProgressLabel, ProgressValue, ProgressTrack} from "@/components/animate-ui/base/progress";
+import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 
 export default function SendBoard() {
     return <>
