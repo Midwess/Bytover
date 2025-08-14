@@ -3,9 +3,15 @@ use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
+use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
+use schema::crafter::email_template::Template::{self, SendFile};
+use schema::crafter::{EmailTemplate, SendFileTemplate};
+use schema::devlog::auth_gateway::models::User;
 use schema::value::static_resource::StaticResource;
+use schema::value::datetime::Datetime;
+use schema::crafter::FileResource as MailFileResource;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -47,15 +53,18 @@ pub struct TransferResourcesResponse {
 pub struct TransferService {
     pub transfer_repository: Box<dyn TransferSessionRepository>,
     pub cloud_storage: Box<dyn CloudStorage>,
-    pub markov_generator: Box<dyn Markov>
+    pub markov_generator: Box<dyn Markov>,
+    pub email_service: Box<dyn EmailService>
 }
 
 impl TransferService {
     pub async fn create_public_transfer_session(
         &self,
-        user_id: u64,
-        password: Option<String>
+        user: &User,
+        password: Option<String>,
+        to_email: Option<String>,
     ) -> Result<TransferSession, TransferErrors> {
+        let user_id = user.id.id;
         if let Some(ref password) = password {
             if password.len() > 20 {
                 return Err(TransferErrors::PasswordLengthExceed(20))
@@ -64,7 +73,7 @@ impl TransferService {
 
         let alias = self.markov_generator.generate_name().await?;
 
-        let session = TransferSession::public(password, user_id, alias).await;
+        let session = TransferSession::public(password, user_id, alias, to_email.clone()).await;
 
         let session = self.transfer_repository.create(session).await?;
 
@@ -96,7 +105,7 @@ impl TransferService {
 
     pub async fn add_resources(
         &self,
-        user_id: u64,
+        user: &User,
         session_order_id: u64,
         requests: Vec<TransferResourceRequest>
     ) -> Result<TransferResourcesResponse, TransferErrors> {
@@ -106,15 +115,15 @@ impl TransferService {
 
         let session_id = TransferSessionId {
             order_id: Some(session_order_id),
-            user_order_id: Some(user_id)
+            user_order_id: Some(user.order_id)
         };
 
         let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
             return Err(TransferErrors::SessionNotFound)
         };
 
-        for request in requests {
-            session.start_transfer(request.order_id, request.name, request.size, request.r#type).await?;
+        for request in requests.iter() {
+            session.start_transfer(request.order_id, request.name.clone(), request.size, request.r#type.clone()).await?;
         }
 
         let session = self.transfer_repository.update_one(session).await?;
@@ -130,9 +139,29 @@ impl TransferService {
             let _ = self.cloud_storage.sign_upload(&mut thumbnail.1).await;
         }
 
-        let Some(first_resource) = session.into_resource(first_resource_id) else {
+        let Some(first_resource) = session.resources().iter().find(|it| it.order_id() == first_resource_id).cloned() else {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
+
+        if let Some(ref to_email) = session.to_email() {
+            let download_url = session.access_url();
+            let resources = session.resources().iter().map(|it| MailFileResource {
+                name: it.name().to_string(),
+                size_in_bytes: it.size_in_bytes() as i32
+            }).collect();
+
+            if let Err(e) = self.email_service.send_email(&to_email, EmailTemplate {
+                template: Some(Template::SendFile(SendFileTemplate {
+                    sender_email: user.email.clone(),
+                    sender_display_name: Some(user.display_name.clone()),
+                    download_url,
+                    datetime: Datetime::now(),
+                    files: resources
+                }))
+            }).await {
+                log::info!("Failed to send email to {to_email}: {e}");
+            }
+        }
 
         let response = TransferResourcesResponse {
             session_id: session_order_id,

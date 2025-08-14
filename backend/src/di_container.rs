@@ -3,10 +3,13 @@ use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
+use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
+use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
+use crate::user::Token;
 use core_services::db::surrealdb::connection::SurrealDbConnection;
 use core_services::utils::pool::request::PoolRequest;
 use devlog_sdk::distributed_id::init_id_generator;
@@ -14,6 +17,7 @@ use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use devlog_sdk::live_query::live_query::LiveQuery;
 use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::auth_gateway::rpc::mail_service_client::MailServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -42,6 +46,7 @@ impl DiContainer {
         init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
 
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
+        
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
@@ -81,17 +86,23 @@ impl DiContainer {
         Ok(UserServiceClient::new(channel))
     }
 
-    pub async fn get_transfer_service(&'static self) -> TransferService {
+    pub async fn get_mail_service(&self) -> Result<MailServiceClient<Channel>, DiContainerError> {
+        let channel = self.get_grpc_gateway_channel().connect().await?;
+
+        Ok(MailServiceClient::new(channel))
+    }
+
+    pub async fn get_transfer_service(&'static self, token: Token) -> TransferService {
         TransferService {
             transfer_repository: Box::new(self.get_transfer_session_repository().await),
             cloud_storage: Box::new(self.get_cloud_storage()),
-            markov_generator: Box::new(self.markov_generator())
+            markov_generator: Box::new(self.markov_generator()),
+            email_service: Box::new(self.get_email_service(token).await.unwrap())
         }
     }
 
     pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
         CloudGrpcService {
-            transfer_service: self.get_transfer_service().await,
             cloud_storage: Arc::new(self.get_cloud_storage()),
             live_query: self.live_query.clone(),
             session_repository: Box::new(self.get_transfer_session_repository().await)
@@ -111,5 +122,11 @@ impl DiContainer {
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
         TransferSessionSurrealdbRepository { db: self.db().await }
+    }
+
+    pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
+        let mail_service = self.get_mail_service().await?;
+        
+        Ok(EmailServiceImpl::new(mail_service, Some(token)))
     }
 }

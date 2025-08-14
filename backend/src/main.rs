@@ -14,8 +14,10 @@ pub mod entities;
 pub mod errors;
 pub mod grpc;
 pub mod infrastructure;
+pub mod mail;
 pub mod repositories;
 pub mod transfer;
+pub mod user;
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {

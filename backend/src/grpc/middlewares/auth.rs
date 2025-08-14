@@ -6,6 +6,7 @@ use tonic::{async_trait, Status};
 use tonic_middleware::RequestInterceptor;
 
 use crate::di_container::DiContainer;
+use crate::user::Token;
 
 #[derive(Clone)]
 pub struct AuthInterceptor {}
@@ -33,12 +34,13 @@ impl RequestInterceptor for AuthInterceptor {
 
                 let mut request = tonic::Request::new(request_body);
                 let token_str = token.to_str().map_err(|_| Status::invalid_argument("Invalid token"))?.to_owned();
-                request.metadata_mut().insert("authorization", MetadataValue::try_from(token_str).unwrap());
+                request.metadata_mut().insert("authorization", MetadataValue::try_from(token_str.clone()).unwrap());
 
                 let user_info = user_service.me(request).await?;
                 let user = user_info.into_inner().user;
 
                 req.extensions_mut().insert(user);
+                req.extensions_mut().insert(Token(token_str));
                 Ok(req)
             }
             None => Ok(req)

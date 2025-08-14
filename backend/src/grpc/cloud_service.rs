@@ -1,9 +1,11 @@
 use crate::cloud_storage::storage::CloudStorage;
+use crate::di_container::DiContainer;
 use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
 use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::{TransferResourceRequest, TransferService};
+use crate::user::Token;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::db::surrealdb::id::SurrealDbId;
 use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
@@ -40,7 +42,6 @@ use tonic::codegen::tokio_stream;
 use tonic::{Request, Response, Status};
 
 pub struct CloudGrpcService {
-    pub transfer_service: TransferService,
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Box<dyn TransferSessionRepository>,
     pub live_query: Arc<LiveQuery>
@@ -172,14 +173,18 @@ impl BitBridgeCloudService for CloudGrpcService {
         &self,
         request: Request<CreatePublicTransferSessionRequest>
     ) -> Result<Response<CreatePublicTransferSessionResponse>, Status> {
+        let Some(token) = request.extensions().get::<Token>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
-        let new_session = self
-            .transfer_service
-            .create_public_transfer_session(user.order_id, request_body.password.clone())
+        let new_session = transfer_service
+            .create_public_transfer_session(user, request_body.password.clone(), request_body.to_email.clone())
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
@@ -191,10 +196,15 @@ impl BitBridgeCloudService for CloudGrpcService {
     }
 
     async fn add_resources(&self, request: Request<AddResourcesRequest>) -> Result<Response<AddResourcesResponse>, Status> {
+        let Some(token) = request.extensions().get::<Token>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
         let requests = request_body
             .resources
@@ -214,7 +224,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             })
             .collect::<Vec<_>>();
 
-        let response = self.transfer_service.add_resources(user.order_id, request_body.session_order_id, requests).await?;
+        let response = transfer_service.add_resources(user, request_body.session_order_id, requests).await?;
 
         let mut source = response.first_resource.source();
 
@@ -246,18 +256,22 @@ impl BitBridgeCloudService for CloudGrpcService {
         &self,
         request: Request<CommitFileUploadRequest>
     ) -> Result<Response<CommitFileUploadResponse>, Status> {
+        let Some(token) = request.extensions().get::<Token>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
 
         let resource_id = request_body.resource_id;
         let status = request_body.status();
         let err_msg = request_body.failed_reason.clone();
 
-        let Some(next_resource) = self
-            .transfer_service
+        let Some(next_resource) = transfer_service
             .commit_resource(
                 user.order_id,
                 request_body.session_order_id,
@@ -285,13 +299,18 @@ impl BitBridgeCloudService for CloudGrpcService {
     }
 
     async fn cancel_session(&self, request: Request<CancelSessionRequest>) -> Result<Response<CancelSessionResponse>, Status> {
+        let Some(token) = request.extensions().get::<Token>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
 
-        self.transfer_service.cancel_transfer(user.order_id, request_body.session_order_id).await?;
+        transfer_service.cancel_transfer(user.order_id, request_body.session_order_id).await?;
 
         let response_body = CancelSessionResponse {};
         let response = Response::new(response_body);
@@ -303,13 +322,18 @@ impl BitBridgeCloudService for CloudGrpcService {
         &self,
         request: Request<UpdateTransferProgressRequest>
     ) -> Result<Response<UpdateTransferProgressResponse>, Status> {
+        let Some(token) = request.extensions().get::<Token>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user_id) = request.extensions().get::<User>().map(|it| it.order_id) else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request = request.into_inner();
 
-        self.transfer_service
+        transfer_service
             .update_transfer_progress(
                 user_id,
                 request.session_order_id,

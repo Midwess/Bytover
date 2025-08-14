@@ -2257,6 +2257,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "lazy_static",
+ "lettre",
  "log",
  "n0-future",
  "regex",

@@ -92,7 +92,7 @@ where
                                 response.is_required_password,
                                 session_key.order_id,
                                 session_key.user_id,
-                                response.access_url
+                                response.access_url,
                             )
                         }
                         Err(e) => return CoreOperationOutput::ConnectionError(e.into())

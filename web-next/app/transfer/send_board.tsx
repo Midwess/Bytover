@@ -347,7 +347,7 @@ function Board() {
                     </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <div className={"px-2 flex flex-col items-center justify-center pt-8"}>
+            <div className={"px-2 flex flex-col items-center justify-center pt-5"}>
                 {
                     content
                 }
@@ -358,6 +358,7 @@ function Board() {
 
 function PublicSend() {
     const [password, setPassword] = useState('')
+    const [toEmail, setToEmail] = useState('')
     const cloudSession = core.useTransferState()?.cloud_session
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const [isInProgress, setIsInProgress] = useState(false)
@@ -381,7 +382,7 @@ function PublicSend() {
 
     }, [cloudSession?.is_in_progress])
 
-    return <div className={"flex flex-col w-full h-full items-center gap-8 justify-center px-2"}>
+    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center px-2 mt-4"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
             slide={{
@@ -391,9 +392,13 @@ function PublicSend() {
             zoom
             inView
             delay={0.2}>
-            <p className="text-start w-full text-primaryText/70 text-sm pb-1">
+            <p className="text-start w-full text-primaryText/70 text-sm">
                 Create a sharable URL. Protect access by setting a password to keep your content safe.
             </p>
+            <div className={"flex flex-col w-full gap-3"}>
+                <Label htmlFor={"email"}>To email (optional)</Label>
+                <Input id={"email"} type="email" maxLength={20} placeholder="someone@company" value={toEmail} onChange={(it) => setToEmail(it.target.value)}/>
+            </div>
             <div className={"flex flex-col w-full gap-3"}>
                 <Label htmlFor={"password"}>Password (optional)</Label>
                 <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
@@ -425,7 +430,7 @@ function PublicSend() {
                 {
                     !cloudSession &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password)))
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password, toEmail)))
                     }}>Upload</Button>
                 }
                 {

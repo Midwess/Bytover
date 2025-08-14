@@ -96,8 +96,23 @@ impl TransferService {
 
         let transfer_target_id = transfer_target.id();
         let mut transfer_session = match transfer_target {
-            TransferTarget::Internet { password, .. } => {
-                let session = TransferSession::public(user, password, selected_resources);
+            TransferTarget::Internet { password, to_email, .. } => {
+                if let Some(ref email) = to_email {
+                    let has_at = email.contains('@');
+                    let has_dot = email.contains('.');
+                    let has_valid_length = email.len() >= 3;
+                    let parts: Vec<&str> = email.split('@').collect();
+                    let valid_parts = parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty();
+                    let domain_parts: Vec<&str> = parts.get(1).unwrap_or(&"").split('.').collect();
+                    let valid_domain = domain_parts.len() >= 2 && domain_parts.iter().all(|p| !p.is_empty());
+
+                    if !(has_at && has_dot && has_valid_length && valid_parts && valid_domain) {
+                        DialogOperation::toast("Invalid email format".to_string()).into_future(cmd.clone()).await;
+                        return;
+                    }
+                }
+
+                let session = TransferSession::public(user, password, selected_resources, to_email);
                 let result = match TransferOperation::create_cloud_session(session).into_future(cmd.clone()).await {
                     Err(err) => {
                         DialogOperation::toast(format!("{err} please try again")).into_future(cmd.clone()).await;
