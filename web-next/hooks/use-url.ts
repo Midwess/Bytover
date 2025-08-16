@@ -32,7 +32,7 @@ export function useUrlState(paramNames: string[]): [
 
             // Add updated keys
             Object.entries(newState).forEach(([key, value]) => {
-                if (value != null && `${value}`.trim() !== '') {
+                if (value != null && value !== undefined) {
                     params.set(key, value)
                 }
             })

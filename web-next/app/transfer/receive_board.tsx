@@ -242,7 +242,7 @@ function ReceiveCategory(props: {
 
 function Board() {
     const transferState = core.useTransferState()
-    const [url] = useUrlState(['session'])
+    const [url, setUrl] = useUrlState(['session'])
 
     const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
     const [keywords, setKeywords] = useState<string>()
@@ -252,6 +252,23 @@ function Board() {
             setKeywords(url.session)
         }
     }, []);
+
+    const handleFind = () => {
+        message?.resolveMessage()
+        if (!keywords || keywords.trim() === '') {
+            setUrl({
+                session: ''
+            })
+
+            return
+        }
+
+        setUrl({
+            session: keywords
+        })
+
+        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
+    }
 
     const sessions = transferState?.received_cloud_sessions.filter((it) => {
         if (keywords) {
@@ -266,13 +283,32 @@ function Board() {
             <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
                 <p className={"opacity-80 text-sm"}>Find session</p>
-                <Input value={keywords || ''} className={"rounded-md font-poppins"} placeholder={"Session name or url"}
-                       onChange={(it) => setKeywords(it.target.value)}/>
+                <div className={"relative"}>
+                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8"} placeholder={"Session name or url"}
+                           onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
+                           onKeyDown={(e) => {
+                               if (e.key === 'Enter') {
+                                   handleFind()
+                               }
+                           }}/>
+                    {keywords && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={"absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"}
+                            onClick={() => {
+                                setKeywords('')
+                                setUrl({
+                                    session: ''
+                                })
+                            }}
+                        >
+                            ×
+                        </Button>
+                    )}
+                </div>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
-                <Button className={"w-fit"} onClick={() => {
-                    message?.resolveMessage()
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
-                }}>Find</Button>
+                <Button className={"w-fit"} onClick={handleFind}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
                 {!!sessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}

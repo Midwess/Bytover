@@ -25,7 +25,8 @@ import {
     SelectedResourceViewModel,
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     TransferEventVariantStartPublicTransfer,
-    TransferEventVariantCancelTransfer, TransferTypeVariantSend
+    TransferEventVariantCancelTransfer, TransferTypeVariantSend,
+    TransferEventVariantStartTransfer
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -481,15 +482,14 @@ function NearbySend() {
     </>
 }
 
-function NearbyPeer({
-                        peer
-                    }: {
-    peer: PeerViewModel
-}) {
+function NearbyPeer({peer}: {peer: PeerViewModel}) {
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
     return <>
         <Button
-            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 rounded-2xl items-center px-2 py-2 h-fit w-full border-1 border-primaryText/5 justify-between"}>
+            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 rounded-2xl items-center px-2 py-2 h-fit w-full border-1 border-primaryText/5 justify-between"}
+            onClick={() => {
+                core.update(new AppEventVariantTransfer(new TransferEventVariantStartTransfer(peer.id)))
+            }}>
             <div className={"flex flex-row items-center gap-3"}>
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
