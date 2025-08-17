@@ -470,23 +470,23 @@ function MediaView(props: {
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}
             >
-                <div className="flex flex-col items-start gap-1">
-                    <p className="text-primaryText text-md">
+                <div className="flex flex-col items-start gap-1 w-[80%]">
+                    <p className="text-primaryText text-md break-words w-full">
                         {model.name}
                     </p>
                     <p className="text-sm text-primaryText/80">
                         {displaySize}
                     </p>
                 </div>
-                {
-                    media.is_completed
-                        ? <a className={"my-2 rounded-xl bg-bluePrimary/80 p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                    <div className={"flex-1 w-fit flex"}>
+                    {media.is_completed
+                        ? <a className={"rounded-xl bg-bluePrimary/80 p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
                             <Download color={'white'}/>
                           </a>
                         : <>
                             <CircleProgress progress={media.completion} size={30}/>
                         </>
-                }
+                }</div>
 
             </div>
 

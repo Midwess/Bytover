@@ -13,9 +13,15 @@ import ReceiveBoard from "@/app/transfer/receive_board";
 import {useUrlState} from "@/hooks/use-url";
 
 export default function TransferBoard() {
-    const [url] = useUrlState(['session'])
+    const [url, setUrl] = useUrlState(['session'])
 
-    return <Tabs defaultValue={url.session ? 'Receive' : undefined} className={"flex flex-col w-full h-full items-center"}>
+    return <Tabs onValueChange={(it: any) => {
+        if (it === 'Send') {
+            setUrl({
+                session: undefined
+            })
+        }
+    }} defaultValue={url.session ? 'Receive' : undefined} className={"flex flex-col w-full h-full items-center"}>
         <TabsList defaultValue={'Receive'} className="grid grid-cols-2 mb-1">
             <TabsTrigger value="Send">Send</TabsTrigger>
             <TabsTrigger value="Receive">Receive</TabsTrigger>
