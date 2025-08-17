@@ -11,9 +11,28 @@ import SendBoard from "./send_board";
 import * as React from "react";
 import ReceiveBoard from "@/app/transfer/receive_board";
 import {useUrlState} from "@/hooks/use-url";
+import core from '@/wasm/wasm_core';
 
 export default function TransferBoard() {
     const [url, setUrl] = useUrlState(['session'])
+    const coreReady = core.useCoreReady()
+
+    if (!coreReady) {
+        return (
+            <div className="flex items-center justify-center w-full h-[300px]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="relative">
+                        <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-primary/40 rounded-full animate-spin animation-delay-75" />
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                        <h3 className="text-lg font-semibold text-foreground">Initializing Core</h3>
+                        <p className="text-sm text-muted-foreground animate-pulse">Setting up your transfer environment...</p>
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     return <Tabs onValueChange={(it: any) => {
         if (it === 'Send') {
