@@ -63,7 +63,6 @@ function FileSelections() {
             handleDragOver,
             handleDrop,
             openFileDialog,
-            removeFile,
             getInputProps,
         },
     ] = useFileUpload({
@@ -128,7 +127,7 @@ function FileSelections() {
             <div
                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full">
                 {
-                    selectedResources.map((resource, index) => (
+                    selectedResources.map((resource) => (
                         <div className={"h-[220px] flex items-start flex-row"} key={resource.order_id}>
                             <ResourceView model={resource}/>
                         </div>
@@ -207,24 +206,24 @@ function MediaView(props: {
 }) {
     const {model} = props;
 
-    let isMobile = useIsMobile()
-    let isVideo = model.type.constructor == ResourceTypeVariantVideo
-    let isImage = model.type.constructor == ResourceTypeVariantImage
-    let defaultThumbnail = <Image
+    const isMobile = useIsMobile()
+    const isVideo = model.type.constructor == ResourceTypeVariantVideo
+    const isImage = model.type.constructor == ResourceTypeVariantImage
+    const defaultThumbnail = <Image
         className="w-full h-auto text-primaryText p-10"
         layout="fill"
         alt={`${model.name}`}
         src={'/file.svg'}
     />
 
-    let [thumbnail, setThumbnail] = useState(defaultThumbnail)
+    const [thumbnail, setThumbnail] = useState(defaultThumbnail)
 
     useEffect(() => {
         if (isVideo || isImage) {
             core.nativeProcessor?.load_thumbnail_bytes(model.order_id).then((it) => {
                 if (it) {
                     const blob = new Blob([it], {type: 'image/png'});
-                    setThumbnail(<img className={"w-full h-full object-cover"} src={URL.createObjectURL(blob)} alt={model.name}/>)
+                    setThumbnail(<Image className={"w-full h-full object-cover"} fill src={URL.createObjectURL(blob)} alt={model.name}/>)
                 }
             })
         }

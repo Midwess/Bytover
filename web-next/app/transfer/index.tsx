@@ -34,13 +34,15 @@ export default function TransferBoard() {
         )
     }
 
-    return <Tabs onValueChange={(it: any) => {
+    return <Tabs
+    defaultValue={url.session ? 'Receive' : 'Send'}
+    onValueChange={(it: 'Send' | 'Receive') => {
         if (it === 'Send') {
             setUrl({
                 session: undefined
             })
         }
-    }} defaultValue={url.session ? 'Receive' : undefined} className={"flex flex-col w-full h-full items-center"}>
+    }} className={"flex flex-col w-full h-full items-center"}>
         <TabsList defaultValue={'Receive'} className="grid grid-cols-2 mb-1">
             <TabsTrigger value="Send">Send</TabsTrigger>
             <TabsTrigger value="Receive">Receive</TabsTrigger>

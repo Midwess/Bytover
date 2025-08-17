@@ -39,9 +39,9 @@ type UnControlledTabsProps<T extends string = string> = BaseTabsProps & {
 };
 
 type ControlledTabsProps<T extends string = string> = BaseTabsProps & {
-  value: T;
+  value?: T;
   onValueChange?: (value: T) => void;
-  defaultValue?: never;
+  defaultValue?: T;
 };
 
 type TabsProps<T extends string = string> =
@@ -89,7 +89,7 @@ function Tabs<T extends string = string>({
   };
 
   const handleValueChange = (val: T) => {
-    onValueChange?.(val);
+    onValueChange?.(val)
     if (!isControlled) setActiveValue(val);
   };
 

@@ -6,6 +6,7 @@ import apple from '@/public/apple.svg'
 import windows from '@/public/windows.svg'
 import Image from 'next/image'
 import TransferBoard from "@/app/transfer";
+import { Suspense } from "react";
 
 export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-blackBase">
@@ -50,7 +51,9 @@ export default function Home() {
             </div>
         </div>
         <div className={"container flex flex-col pt-10"}>
-            <TransferBoard/>
+            <Suspense fallback={null}>
+                <TransferBoard/>
+            </Suspense>
         </div>
         <div className={"h-36 w-full"}></div>
     </div>

@@ -153,7 +153,7 @@ export class WasmCore {
         const [state, setState] = useState(this.transferState.get());
         useEffect(() => {
             return this.transferState.subscribe(setState)
-        })
+        }, [])
 
         return state
     }

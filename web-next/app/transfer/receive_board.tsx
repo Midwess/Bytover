@@ -14,8 +14,8 @@ import {
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
-    ChevronsUpDown, Download, FileLock,
-    Globe, GlobeLock, Link2, LoaderCircle, LoaderCircleIcon, Lock, LockIcon, LockKeyholeIcon, LucideLock, Play
+    ChevronsUpDown, Download,
+    Globe, LoaderCircle, Play
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {
@@ -33,7 +33,6 @@ import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight"
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
-import Link from "next/link";
 import {useUrlState} from "@/hooks/use-url";
 
 export default function ReceiveBoard() {
@@ -58,7 +57,7 @@ function ContentBoard() {
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
-    const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as any)?.password ?? '')
+    const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
         if (selectedSession instanceof ReceiveCloudSessionViewModel) {
@@ -101,7 +100,7 @@ function ContentBoard() {
 
     useEffect(() => {
         if (selectedSession instanceof ReceiveCloudSessionViewModel) {
-            let cloud = selectedSession as ReceiveCloudSessionViewModel
+            const cloud = selectedSession as ReceiveCloudSessionViewModel
             if (!cloud.is_required_password && isLoading) {
                 core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
                     null,
@@ -320,8 +319,8 @@ function Board() {
                                 onPress={() => {
                                     core.updateSelectedSession(item)
                                 }}
-                                accessUrl={item.access_url}
                                 name={item.sender_name}
+                                progress={0}
                                 display_datetime={item.display_datetime}
                                 key={index}
                                 is_public={true}
@@ -336,10 +335,17 @@ function Board() {
     </>
 }
 
-function TransferSession(props: any) {
+function TransferSession(props: {
+    name: string,
+    display_datetime: string,
+    progress: number,
+    avatar_url: string,
+    is_public: boolean,
+    is_required_password: boolean,
+    onPress: () => void
+}) {
     const {
         name,
-        accessUrl,
         display_datetime,
         progress,
         avatar_url,
@@ -366,7 +372,7 @@ function TransferSession(props: any) {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {progress && <CircleProgress progress={progress} size={30}/>}
+            {!!progress && <CircleProgress progress={progress} size={30}/>}
             {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"} src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
@@ -376,7 +382,6 @@ function FileView(props: {
     file: FileReceiveResourceViewModel
 }) {
     const {file} = props;
-    const isMobile = useIsMobile();
     const model = file.model;
 
     const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
@@ -490,10 +495,12 @@ function MediaView(props: {
 
             </div>
 
-            <img
+            <Image
                 className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
                 alt={model.name}
                 src={thumbnailPath}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
         </div>
     );

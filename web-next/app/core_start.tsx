@@ -4,8 +4,7 @@ import {Suspense, useEffect} from "react";
 import {useUrlState} from "@/hooks/use-url";
 import {
     AppEventVariantAuthentication,
-    AppEventVariantTransfer,
-    AuthenticationEventVariantOnRedirected, ReceiveCloudSessionViewModel, TransferEventVariantFindPublicSession
+    AuthenticationEventVariantOnRedirected
 } from "shared_types/types/shared_types";
 
 function CoreStartProcess() {
