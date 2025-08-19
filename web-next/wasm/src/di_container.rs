@@ -25,6 +25,7 @@ use idb::Database;
 use once_cell::sync::OnceCell;
 use tonic_web_wasm_client::Client;
 use core_services::utils::never_send::NeverSend;
+use crate::browser_cache::cache::BrowserCache;
 use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::{NetStreamImpl, NetStreamInnerImpl};
@@ -133,7 +134,8 @@ impl DiContainer {
             .retrieving_timeout(Duration::from_secs(30))
             .pool(self.db.get().unwrap().clone())
             .build();
-        let _ = self.file_storage.set(FileStorage::new(request));
+        let cache = BrowserCache::open("thumbnails").await;
+        let _ = self.file_storage.set(FileStorage::new(request, cache));
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {

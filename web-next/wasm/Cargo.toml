@@ -16,6 +16,7 @@ crux_core = { workspace = true }
 tonic = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 prost = { workspace = true }
+thiserror = { workspace = true }
 n0-future = { workspace = true }
 futures = { workspace = true }
 erased-serde = { workspace = true }
@@ -42,7 +43,12 @@ web-sys = { version = "0.3.77", features = [
     "XmlHttpRequest",
     "XmlHttpRequestUpload",
     "AbortController",
-    "Document"
+    "Document",
+    "Cache",
+    "CacheStorage",
+    "Request",
+    "Response",
+    "ResponseInit",
 ]}
 
 futures-timer = { workspace = true, features = ["wasm-bindgen"] }

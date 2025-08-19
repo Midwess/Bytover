@@ -78,6 +78,11 @@ impl IOReader for IOReaderImpl {
     }
 }
 
+// This will first leverage the browser caches
+// to save files
+// But when there is a another stream that register, it will
+// take the data from caches and put into that stream.
+// when the cache is empty, it will forward all data into the stream.
 pub struct IOWriterImpl {
     storage: FileStorage
 }

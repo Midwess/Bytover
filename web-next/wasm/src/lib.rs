@@ -7,7 +7,9 @@ pub mod di_container;
 pub mod executor;
 pub mod config;
 pub mod file_api;
+pub mod browser_cache;
 mod errors;
+mod local_resource_path;
 
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
@@ -24,7 +26,8 @@ use wasm_bindgen::prelude::*;
 use shared::app::BitBridge;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
-use web_sys::File;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{window, File};
 use shared::CoreOperation;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
@@ -155,6 +158,30 @@ pub struct NativeProcessor {
 
 #[wasm_bindgen]
 impl NativeProcessor {
+    pub async fn is_compatible() -> bool {
+        let Some(with_browser) = window() else {
+            log::info!("No window");
+            return false
+        };
+
+        if with_browser.is_null() || with_browser.is_undefined() {
+            log::info!("Window is null");
+            return false
+        }
+
+        let Ok(with_cache) = with_browser.caches() else {
+            log::info!("No caches");
+            return false
+        };
+
+        if with_cache.is_null() || with_cache.is_undefined() {
+            log::info!("Caches is null");
+            return false
+        }
+
+        true
+    }
+
     pub async fn init() -> Self {
         let di_container = DiContainer::get_instance();
         di_container.init(Arc::new(ShellRuntime {})).await;

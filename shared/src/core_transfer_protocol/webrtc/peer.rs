@@ -177,7 +177,6 @@ impl WebRtcPeer {
         self.inbound_data_stream_sender.lock().await.take();
         self.transfers_context.stop_all().await;
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
-        log::info!("Peer disconnected response to {}", self.core_id.load(Ordering::Relaxed));
         let _ = self.core_bridge.response(self.core_id.load(Ordering::Relaxed), response).await;
         self.core_id.store(0, Ordering::Relaxed);
     }
@@ -399,7 +398,7 @@ impl WebRtcPeer {
         };
 
         let peer_id = session.peer().unwrap().peer_id();
-        log::info!(target: "peer", "Sending session to peer {peer_id:?}", );
+        log::info!(target: "peer", "Sending session to peer {peer_id:?}: {transfer_session_message:?}", );
         let request = Request::TransferRequest(TransferRequestMessage {
             session: transfer_session_message
         });

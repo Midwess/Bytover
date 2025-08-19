@@ -12,6 +12,8 @@ use std::sync::Arc;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::js_sys::Array;
 use web_sys::{File, IdbTransactionMode};
+use crate::browser_cache::cache::BrowserCache;
+use crate::local_resource_path::WebExtLocalResourcePath;
 
 #[derive(Clone)]
 pub struct WasmFile(pub File);
@@ -44,13 +46,15 @@ impl Deref for WasmFile {
 #[derive(Clone)]
 pub struct FileStorage {
     device_files: Arc<Mutex<HashMap<u64, WasmFile>>>,
-    db: PoolRequest<NeverSend<Database>>
+    db: PoolRequest<NeverSend<Database>>,
+    thumbnail_cache: BrowserCache
 }
 
 impl FileStorage {
-    pub fn new(db: PoolRequest<NeverSend<Database>>) -> FileStorage {
+    pub fn new(db: PoolRequest<NeverSend<Database>>, thumbnail_cache: BrowserCache) -> FileStorage {
         FileStorage {
             device_files: Arc::new(Mutex::new(HashMap::new())),
+            thumbnail_cache,
             db
         }
     }
@@ -134,37 +138,16 @@ impl FileStorage {
     }
 
     pub(crate) async fn read_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        let Some(db) = self.db.retrieve().await else {
-            return None;
-        };
-
-        let tx = db.transaction(&["thumbnail"], TransactionMode::ReadOnly).ok()?;
-        let store = tx.object_store("thumbnail").ok()?;
-        let key = JsValue::from(format!("{resource_id}"));
-        let key = Query::from(key);
-
-        log::info!("Reading thumbnail for resource id: {}", resource_id);
-        let value = store.get(key).ok()?.await.ok()??;
-        Some(value.dyn_into().ok()?)
+        let thumbnail_cache_key = resource_id.to_string();
+        let data = self.thumbnail_cache.get(thumbnail_cache_key.as_str(), false).await.ok()??;
+        Some(data)
     }
 
     pub(crate) async fn save_thumbnail(&self, resource_id: u64, png_bytes: Vec<u8>) -> Option<LocalResourcePath> {
-        let Some(db) = self.db.retrieve().await else {
-            log::error!("Failed to get db");
-            return None;
-        };
+        let key = resource_id.to_string();
 
-        let tx = db.transaction(&["thumbnail"], TransactionMode::ReadWrite).ok()?;
-        let store = tx.object_store("thumbnail").ok()?;
-        let key = JsValue::from(format!("{resource_id}"));
-        let value = Uint8Array::from(&png_bytes[..]);
+        self.thumbnail_cache.put(&key, png_bytes).await.ok()?;
 
-        store.put(&value, Some(&key)).ok()?;
-        tx.commit().ok()?;
-
-        Some(LocalResourcePath::PlatformIdentifier(format!(
-            "idb://thumbnail/{}",
-            resource_id
-        )))
+        Some(LocalResourcePath::cache(&self.thumbnail_cache.name, key))
     }
 }

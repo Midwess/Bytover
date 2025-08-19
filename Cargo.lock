@@ -8040,6 +8040,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "shared",
+ "thiserror 2.0.12",
  "tonic 0.13.1",
  "tonic-web-wasm-client",
  "url",

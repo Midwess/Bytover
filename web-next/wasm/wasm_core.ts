@@ -68,6 +68,9 @@ import {getThumbnailFromFile} from "@/utils/thumbnail";
 
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
+    // If it is not compatible, then the current browser is not supported.
+    // We should recommend user to download the app instead.
+    isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
@@ -167,8 +170,24 @@ export class WasmCore {
         return state
     }
 
+    public useIsCoreCompatible() {
+        const [isCompatible, setIsCompatible] = useState(this.isCoreCompatible.get());
+        useEffect(() => {
+            return this.isCoreCompatible.subscribe(setIsCompatible)
+        }, []);
+
+        return isCompatible
+    }
+
     public async launch() {
         await init_core();
+        const isCompatible = await NativeProcessor.is_compatible()
+        if (!isCompatible) {
+            console.log('This browser is not supported. Please download the app instead')
+            this.isCoreCompatible.set(false)
+            return;
+        }
+
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
     }
 

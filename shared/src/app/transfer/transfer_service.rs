@@ -90,7 +90,7 @@ impl TransferService {
         cmd: AppCommandContext
     ) {
         if selected_resources.is_empty() {
-            DialogOperation::toast("No valid resources selected".to_string()).into_future(cmd.clone()).await;
+            DialogOperation::toast("Please select at least one resource.".to_string()).into_future(cmd.clone()).await;
             return;
         }
 
