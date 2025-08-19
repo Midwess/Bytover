@@ -7,7 +7,6 @@ pub mod di_container;
 pub mod executor;
 pub mod config;
 pub mod file_api;
-pub mod browser_cache;
 mod errors;
 mod local_resource_path;
 
@@ -17,9 +16,10 @@ use n0_future::task::{spawn, JoinHandle};
 use std::time::Duration;
 use bincode::Options;
 pub use crux_core::{bridge::Bridge, Core, Request};
-use erased_serde::{Serialize};
+use erased_serde::Serialize;
 use futures::lock::Mutex;
-use js_sys::Array;
+use js_sys::{Array, Object, Reflect};
+use log::logger;
 use n0_future::time;
 use n0_future::time::Interval;
 use wasm_bindgen::prelude::*;
@@ -28,7 +28,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File};
+use core_services::logger;
 use shared::CoreOperation;
+use file_api::cache::BrowserCache;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
@@ -153,12 +155,14 @@ fn bincode_options() -> impl bincode::Options + Copy {
 #[wasm_bindgen]
 pub struct NativeProcessor {
     executor: &'static NativeExecutor,
-    storage: FileStorage
+    storage: FileStorage,
+    thumbnail_cache: BrowserCache
 }
 
 #[wasm_bindgen]
 impl NativeProcessor {
     pub async fn is_compatible() -> bool {
+        logger::setup();
         let Some(with_browser) = window() else {
             log::info!("No window");
             return false
@@ -179,6 +183,42 @@ impl NativeProcessor {
             return false
         }
 
+        let storage = with_browser.navigator().storage();
+
+        if storage.is_null() || storage.is_undefined() {
+            log::info!("Storage is null");
+            return false
+        }
+
+        let Ok(estimate_fut) = storage.estimate() else {
+            return false;
+        };
+
+        let Ok(quota) = JsFuture::from(estimate_fut).await else {
+            log::info!("Cannot estimate storage quota");
+            return false
+        };
+
+        if quota.is_null() || quota.is_undefined() {
+            log::info!("Quota is null");
+            return false
+        }
+
+        let quota_val = Reflect::get(&quota, &JsValue::from_str("quota"))
+            .unwrap_or(JsValue::UNDEFINED);
+
+        if quota_val.is_null() || quota_val.is_undefined() {
+            log::info!("quota field missing");
+            return false;
+        }
+
+        log::info!("Storage quota: {} bytes", quota_val.as_f64().unwrap_or(0.0));
+        let quota = quota_val.as_f64().unwrap_or(0.0);
+        if quota < 100.0 * 1024.0 * 1024.0 {
+            log::info!("Storage quota less than 100MB ({} MB)", quota / 1024.0 / 1024.0);
+            return false;
+        }
+
         true
     }
 
@@ -187,23 +227,24 @@ impl NativeProcessor {
         di_container.init(Arc::new(ShellRuntime {})).await;
         Self {
             storage: di_container.file_storage(),
-            executor: di_container.get_native_executor()
+            executor: di_container.get_native_executor().await,
+            thumbnail_cache: BrowserCache::open("thumbnails").await,
         }
     }
 
     pub async fn add_device_files(&self, files: &Array) -> Vec<u8> {
-        let paths = self.storage.add_device_wasm_files(files).await;
+        let paths = self.storage.add(files).await;
 
         serialize(&paths)
     }
 
     pub async fn get_device_file(&self, resource_id: u64) -> Option<File> {
-        let file = self.storage.get_file(resource_id).await;
-        file
+        let file = self.storage.get(resource_id).await;
+        file.map(|it| it.file.0)
     }
 
     pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        self.storage.read_thumbnail_bytes(resource_id).await
+        self.thumbnail_cache.get(resource_id.to_string().as_str(), false).await.ok()?
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

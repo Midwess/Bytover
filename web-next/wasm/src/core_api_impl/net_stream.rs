@@ -17,15 +17,19 @@ use core_services::utils::never_send::NeverSend;
 use shared::app::file_system::file::LocalResourcePath;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use crate::file_api::cache::BrowserCache;
 use crate::errors::JsError;
 use crate::file_api::storage::FileStorage;
+use crate::local_resource_path::WebExtLocalResourcePath;
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,
+    pub thumbnail_cache: BrowserCache
 }
 
 pub struct NetStreamInnerImpl {
     storage: FileStorage,
+    pub thumbnail_cache: BrowserCache,
     url: Url,
     size: u64,
     path: LocalResourcePath,
@@ -37,6 +41,7 @@ impl NetStream for NetStreamImpl {
     async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             storage: self.storage.clone(),
+            thumbnail_cache: self.thumbnail_cache.clone(),
             url: http_url,
             size,
             path,
@@ -129,7 +134,7 @@ impl NetStreamInner for NetStreamInnerImpl {
                 return Err(anyhow::anyhow!("Invalid thumbnail resource id"));
             };
 
-            let Some(bytes) = self.storage.read_thumbnail_bytes(thumbnail_resource_id).await else {
+            let Some(bytes) = self.thumbnail_cache.get(thumbnail_resource_id.to_string().as_str(), false).await? else {
                 return Err(anyhow!("Thumbnail not found for resource {thumbnail_resource_id}"));
             };
 
@@ -137,14 +142,17 @@ impl NetStreamInner for NetStreamInnerImpl {
             xhr.send_with_opt_js_u8_array(Some(&bytes))
                 .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
         }
-        else {
-            let Some(file) = self.storage.get_file_by_path(&LocalResourcePath::PlatformIdentifier(platform_identifier.clone())).await else {
+        else if let Some(device_file_id) = self.path.device_file_id() {
+            let Some(file) = self.storage.get(device_file_id).await.map(|it| it.file) else {
                 return Err(anyhow!("Not found any file located at {platform_identifier:?}"))
             };
 
             let xhr = xhr.clone();
             xhr.send_with_opt_blob(Some(&file))
                 .map_err(|it| anyhow!("Upload file errors {it:?}"))?;
+        }
+        else {
+            return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));
         }
 
         self.xhr = Some(xhr);

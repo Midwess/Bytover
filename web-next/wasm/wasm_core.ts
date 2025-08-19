@@ -245,7 +245,6 @@ export class WasmCore {
                         try {
                             const pngBytes = await getThumbnailFromFile(file)
                             const buffer = await pngBytes.arrayBuffer();
-                            console.log('Loaded png', buffer)
                             return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(Array.from(new Uint8Array(buffer))))))
                         }
                         catch (e) {

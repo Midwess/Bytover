@@ -1,11 +1,25 @@
 use shared::app::file_system::file::LocalResourcePath;
 
 pub trait WebExtLocalResourcePath {
+    fn device_file(id: u64) -> Self;
+    fn device_file_id(&self) -> Option<u64>;
     fn cache(store: impl Into<String>, key: impl Into<String>) -> Self;
     fn cache_store_key_pair(&self) -> Option<(String, String)>;
+    fn thumbnail_resource_id(&self) -> Option<u64>;
 }
 
 impl WebExtLocalResourcePath for LocalResourcePath {
+    fn device_file(id: u64) -> Self {
+        Self::PlatformIdentifier(format!("device://{}", id))
+    }
+
+    fn device_file_id(&self) -> Option<u64> {
+        match self {
+            Self::PlatformIdentifier(path) => path.split_once("device://")?.1.to_string().parse::<u64>().ok(),
+            _ => None
+        }
+    }
+
     fn cache(store: impl Into<String>, key: impl Into<String>) -> Self {
         let store_name: String = store.into();
         let key_name: String = key.into();
@@ -30,5 +44,17 @@ impl WebExtLocalResourcePath for LocalResourcePath {
             }
             _ => None,
         }
+    }
+
+    fn thumbnail_resource_id(&self) -> Option<u64> {
+        let Some((store, key)) = self.cache_store_key_pair() else {
+            return None;
+        };
+
+        if store != "thumbnails" {
+            return None;
+        }
+
+        key.trim_start_matches('/').parse::<u64>().ok()
     }
 }

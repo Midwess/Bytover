@@ -24,8 +24,9 @@ use std::time::Duration;
 use idb::Database;
 use once_cell::sync::OnceCell;
 use tonic_web_wasm_client::Client;
+use core_services::logger;
 use core_services::utils::never_send::NeverSend;
-use crate::browser_cache::cache::BrowserCache;
+use crate::file_api::cache::BrowserCache;
 use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::{NetStreamImpl, NetStreamInnerImpl};
@@ -78,9 +79,10 @@ impl DiContainer {
         self.file_storage.get().unwrap().clone()
     }
 
-    pub fn get_net_stream(&self) -> Box<dyn NetStream> {
+    pub async fn get_net_stream(&self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
-            storage: self.file_storage.get().unwrap().clone()
+            storage: self.file_storage.get().unwrap().clone(),
+            thumbnail_cache: BrowserCache::open("thumbnails").await
         })
     }
 
@@ -130,12 +132,7 @@ impl DiContainer {
         log::info!("Database pool initialized");
 
         let _ = self.db.set(pool);
-        let request = PoolRequestBuilder::new()
-            .retrieving_timeout(Duration::from_secs(30))
-            .pool(self.db.get().unwrap().clone())
-            .build();
-        let cache = BrowserCache::open("thumbnails").await;
-        let _ = self.file_storage.set(FileStorage::new(request, cache));
+        let _ = self.file_storage.set(FileStorage::new());
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {
@@ -153,9 +150,10 @@ impl DiContainer {
         }
     }
 
-    pub fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
+    pub async fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
         LocalResourceRepositoryImpl {
             file_storage: self.file_storage.get().unwrap().clone(),
+            thumbnail_cache: BrowserCache::open("thumbnails").await,
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -176,7 +174,7 @@ impl DiContainer {
         CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
     }
 
-    pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
+    pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
@@ -184,14 +182,14 @@ impl DiContainer {
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
-            Arc::new(self.get_local_resource_repository())
+            Arc::new(self.get_local_resource_repository().await)
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
-            repository: Arc::new(self.get_local_resource_repository()),
-            net_stream: self.get_net_stream()
+            repository: Arc::new(self.get_local_resource_repository().await),
+            net_stream: self.get_net_stream().await
         };
 
         let executor = NativeExecutor {
@@ -200,7 +198,7 @@ impl DiContainer {
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
-                local_resource_repository: Box::new(self.get_local_resource_repository()),
+                local_resource_repository: Box::new(self.get_local_resource_repository().await),
                 transfer_session_repository: Box::new(self.get_transfer_session_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
