@@ -142,6 +142,7 @@ impl WebRtcPeer {
                 self.transfers_context.stop_transfer(request.session_id as u64).await;
             }
             Request::TransferRequest(request) => {
+                log::info!("Received transfer request, starting transfer session {request:?}");
                 self.transfers_context.start_transfer(request.session.order_id, request_id).await;
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
                     remote_session: request.session
@@ -295,6 +296,7 @@ impl WebRtcPeer {
                     }
                 }
 
+                writer.end().await?;
                 let thumbnail_full_filled = ThumbnailFullFilled {
                     session_id,
                     resource_id: first_delimiter.resource_id,
@@ -359,6 +361,7 @@ impl WebRtcPeer {
                 self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
             }
 
+            writer.end().await?;
             log::info!("Downloaded resource {resource_path:?} len {total_written_bytes}");
 
             self.core_bridge.resource_progress_update(core_request_id, progress_update, true).await;

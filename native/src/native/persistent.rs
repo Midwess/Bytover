@@ -15,8 +15,8 @@ impl NativePersistent for NativePersistentImpl {
         &self.auth_session_repository
     }
 
-    fn local_resource_repository(&self) -> &Box<dyn LocalResourceRepository> {
-        &self.local_resource_repository
+    fn local_resource_repository(&self) -> &dyn LocalResourceRepository {
+        &*self.local_resource_repository
     }
 
     fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository> {

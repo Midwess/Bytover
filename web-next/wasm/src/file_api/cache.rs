@@ -126,7 +126,7 @@ impl CacheResource {
 }
 
 impl BrowserCache {
-    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 64;
+    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 16;
     const END_MARKER_CHUNK: usize = usize::MAX - 1;
 
     pub async fn open(db: PoolRequest<NeverSend<Database>>, table: &str, id: u64) -> Result<Self, BrowserCacheErrors> {
@@ -224,7 +224,7 @@ impl BrowserCache {
 
         let current_size = self.current_size.load(Ordering::SeqCst);
         if current_size + len > self.resource.total_size {
-            return Err(BrowserCacheErrors::FailedToPut(format!("Cache size exceeded: {} > {}", current_size + len, self.resource.total_size)));
+            // return Err(BrowserCacheErrors::FailedToPut(format!("Cache size exceeded: {} > {}", current_size + len, self.resource.total_size)));
         }
 
         let db = self.db.retrieve().await.unwrap();
@@ -271,7 +271,6 @@ impl BrowserCache {
         arr.push(&JsValue::from(Self::END_MARKER_CHUNK));
         let upper_bound: JsValue = arr.into();
 
-        log::info!("lower_bound: {:?}, upper_bound: {:?}", lower_bound, upper_bound);
         KeyRange::bound(&lower_bound, &upper_bound, Some(true), Some(true)).unwrap()
     }
     
@@ -413,6 +412,7 @@ impl IOWriter for BrowserCache {
             .map_err(|it| anyhow!("Failed to put while ending write {it:?}"))?;
         let _ = trans.commit().map_err(|it| anyhow!("Failed to commit while ending write {it:?}"))?.await
             .map_err(|it| anyhow!("Failed to commit while ending write {it:?}"))?;
+
         Ok(())
     }
 }

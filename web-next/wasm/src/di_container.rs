@@ -129,7 +129,7 @@ impl DiContainer {
 
         log::info!("Initializing database pool");
         let pool = PoolBuilder::new(local_db)
-            .max_pool_size(1)
+            .max_pool_size(5)
             .min_pool_size(1)
             .resource_idle_timeout(Duration::from_secs(5))
             .build()
