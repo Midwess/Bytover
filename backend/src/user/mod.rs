@@ -1,4 +1,4 @@
-use tonic::metadata::{MetadataValue, Ascii};
+use tonic::metadata::{Ascii, MetadataValue};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token(pub String);

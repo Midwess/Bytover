@@ -14,39 +14,28 @@ pub struct EmailServiceImpl {
 
 impl EmailServiceImpl {
     pub fn new(mail_service: MailServiceClient<Channel>, user_token: Option<Token>) -> Self {
-        Self {
-            mail_service,
-            user_token
-        }
+        Self { mail_service, user_token }
     }
 }
 
 #[async_trait::async_trait]
 impl EmailService for EmailServiceImpl {
-    async fn send_email(
-        &self,
-        user_email: &str,
-        template: EmailTemplate,
-    ) -> Result<(), EmailServiceErrors> {
+    async fn send_email(&self, user_email: &str, template: EmailTemplate) -> Result<(), EmailServiceErrors> {
         let request = Request::new(SendMailRequest {
             to: user_email.to_string(),
-            template,
+            template
         });
         let mut request = request;
         if let Some(token) = &self.user_token {
-            request.metadata_mut().insert(
-                "authorization", 
-                MetadataValue::try_from(token.as_str()).unwrap()
-            );
+            request.metadata_mut().insert("authorization", MetadataValue::try_from(token.as_str()).unwrap());
         }
 
         let mut mail_service = self.mail_service.clone();
-        let response = mail_service.send(request).await
-            .map_err(|e| EmailServiceErrors::SmtpErrors(
-                core_services::services::errors::Errors::FailedToSendEmail(
-                    format!("Failed to send email via mail service: {}", e)
-                )
-            ))?;
+        let response = mail_service.send(request).await.map_err(|e| {
+            EmailServiceErrors::SmtpErrors(core_services::services::errors::Errors::FailedToSendEmail(format!(
+                "Failed to send email via mail service: {e}"
+            )))
+        })?;
 
         let send_mail_response = response.into_inner();
         if !send_mail_response.success {

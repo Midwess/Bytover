@@ -214,7 +214,7 @@ impl TransferSession {
                 password,
                 access_url: None,
                 from_user: current_user,
-                to_email: to_email
+                to_email
             }
         }
     }

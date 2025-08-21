@@ -90,7 +90,9 @@ impl TransferService {
         cmd: AppCommandContext
     ) {
         if selected_resources.is_empty() {
-            DialogOperation::toast("Please select at least one resource.".to_string()).into_future(cmd.clone()).await;
+            DialogOperation::toast("Please select at least one resource.".to_string())
+                .into_future(cmd.clone())
+                .await;
             return;
         }
 
@@ -220,7 +222,7 @@ impl TransferService {
         let generate_file_paths_request = {
             let mut result = HashMap::new();
             for resource in remote_session.resources.iter() {
-                result.insert(resource.order_id as u64, resource.name.clone());
+                result.insert(resource.order_id, resource.name.clone());
             }
 
             result
@@ -243,7 +245,7 @@ impl TransferService {
 
         let mut resources = vec![];
         for resource_request in remote_session.resources {
-            let order_id = resource_request.order_id as u64;
+            let order_id = resource_request.order_id;
             let Some(saved_path) = generated_saved_paths.remove(&order_id) else {
                 continue;
             };
@@ -258,7 +260,7 @@ impl TransferService {
                 ),
                 name: resource_request.name.clone(),
                 size: resource_request.size as u64,
-                order_id: resource_request.order_id as u64
+                order_id: resource_request.order_id
             });
         }
 

@@ -51,7 +51,11 @@ where
         Self { rpc_module, auth_provider }
     }
 
-    pub async fn create_public_transfer_session(&self, password: Option<String>, to_email: Option<String>) -> Result<PublicTransferSessionMessage, RpcErrors> {
+    pub async fn create_public_transfer_session(
+        &self,
+        password: Option<String>,
+        to_email: Option<String>
+    ) -> Result<PublicTransferSessionMessage, RpcErrors> {
         let request_body = CreatePublicTransferSessionRequest { password, to_email };
         let channel = self.rpc_module.connect().await?;
 

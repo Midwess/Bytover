@@ -6,12 +6,11 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
-use schema::crafter::email_template::Template::{self, SendFile};
-use schema::crafter::{EmailTemplate, SendFileTemplate};
+use schema::crafter::email_template::Template::{self};
+use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
 use schema::devlog::auth_gateway::models::User;
-use schema::value::static_resource::StaticResource;
 use schema::value::datetime::Datetime;
-use schema::crafter::FileResource as MailFileResource;
+use schema::value::static_resource::StaticResource;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -62,7 +61,7 @@ impl TransferService {
         &self,
         user: &User,
         password: Option<String>,
-        to_email: Option<String>,
+        to_email: Option<String>
     ) -> Result<TransferSession, TransferErrors> {
         let user_id = user.id.id;
         if let Some(ref password) = password {
@@ -123,7 +122,9 @@ impl TransferService {
         };
 
         for request in requests.iter() {
-            session.start_transfer(request.order_id, request.name.clone(), request.size, request.r#type.clone()).await?;
+            session
+                .start_transfer(request.order_id, request.name.clone(), request.size, request.r#type.clone())
+                .await?;
         }
 
         let session = self.transfer_repository.update_one(session).await?;
@@ -145,20 +146,31 @@ impl TransferService {
 
         if let Some(ref to_email) = session.to_email() {
             let download_url = session.access_url();
-            let resources = session.resources().iter().map(|it| MailFileResource {
-                name: it.name().to_string(),
-                size_in_bytes: it.size_in_bytes() as i32
-            }).collect();
+            let resources = session
+                .resources()
+                .iter()
+                .map(|it| MailFileResource {
+                    name: it.name().to_string(),
+                    size_in_bytes: it.size_in_bytes() as i32
+                })
+                .collect();
 
-            if let Err(e) = self.email_service.send_email(&to_email, EmailTemplate {
-                template: Some(Template::SendFile(SendFileTemplate {
-                    sender_email: user.email.clone(),
-                    sender_display_name: Some(user.display_name.clone()),
-                    download_url,
-                    datetime: Datetime::now(),
-                    files: resources
-                }))
-            }).await {
+            if let Err(e) = self
+                .email_service
+                .send_email(
+                    to_email,
+                    EmailTemplate {
+                        template: Some(Template::SendFile(SendFileTemplate {
+                            sender_email: user.email.clone(),
+                            sender_display_name: Some(user.display_name.clone()),
+                            download_url,
+                            datetime: Datetime::now(),
+                            files: resources
+                        }))
+                    }
+                )
+                .await
+            {
                 log::info!("Failed to send email to {to_email}: {e}");
             }
         }

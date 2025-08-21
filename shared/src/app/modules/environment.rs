@@ -3,7 +3,6 @@ use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
-use core_services::logger;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 

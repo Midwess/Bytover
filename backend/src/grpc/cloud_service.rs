@@ -4,7 +4,7 @@ use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
 use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
-use crate::transfer::transfer_service::{TransferResourceRequest, TransferService};
+use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::db::surrealdb::id::SurrealDbId;

@@ -46,7 +46,7 @@ impl DiContainer {
         init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
 
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
-        
+
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
@@ -126,7 +126,7 @@ impl DiContainer {
 
     pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
         let mail_service = self.get_mail_service().await?;
-        
+
         Ok(EmailServiceImpl::new(mail_service, Some(token)))
     }
 }
