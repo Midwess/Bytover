@@ -35,8 +35,6 @@ impl IOReader for IOReaderImpl {
             .slice_with_f64_and_f64(self.position as f64, end as f64)
             .map_err(|e| anyhow::anyhow!("Failed to slice file: {e:?}"))?;
 
-        log::info!("Reading file bytes {} from {} to {}", blob.size(), self.position, end);
-
         let reader = FileReader::new().map_err(|_| anyhow::anyhow!("Failed to create FileReader"))?;
 
         // Setup oneshot channel to wait for `onloadend` event

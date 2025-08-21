@@ -17,24 +17,12 @@ use crate::file_api::extension::VecExtension;
 
 #[derive(Debug, Error)]
 pub enum BrowserCacheErrors {
-    #[error("Failed to open cache: {0}")]
-    FailedToOpenCache(String),
-    #[error("Cache not found: {0}")]
-    CacheNotFound(String),
     #[error("Cache data is incomplete - missing end marker")]
     IncompleteData,
     #[error("Failed to put: {0}")]
     FailedToPut(String),
     #[error("Failed to get: {0}")]
     FailedToGet(String),
-    #[error("Failed to delete: {0}")]
-    FailedToDelete(String),
-    #[error("Failed to clear: {0}")]
-    FailedToClear(String),
-    #[error("Failed to close: {0}")]
-    FailedToClose(String),
-    #[error("Failed to get all: {0}")]
-    FailedToGetAll(String),
     #[error("IndexDb storage error: {0}")]
     IndexDbStorageError(String)
 }
@@ -44,10 +32,6 @@ impl From<idb::Error> for BrowserCacheErrors {
         Self::IndexDbStorageError(e.to_string())
     }
 }
-
-unsafe impl Send for BrowserCache {}
-
-unsafe impl Sync for BrowserCache {}
 
 #[derive(Clone, Default)]
 pub struct MemBuffer {
@@ -67,8 +51,6 @@ impl MemBuffer {
         }
     }
 
-    // Push data to buffer,
-    // and return the flushed buffer if it exceeds the max chunk size
     pub fn extend(&mut self, bytes: &Vec<u8>) -> Option<Vec<u8>> {
         self.buffer.extend_from_slice(bytes);
         if self.buffer.len() >= self.max_chunk_size {
@@ -126,7 +108,7 @@ impl CacheResource {
 }
 
 impl BrowserCache {
-    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 16;
+    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 8;
     const END_MARKER_CHUNK: usize = usize::MAX - 1;
 
     pub async fn open(db: PoolRequest<NeverSend<Database>>, table: &str, id: u64) -> Result<Self, BrowserCacheErrors> {
@@ -373,10 +355,9 @@ impl IOWriter for BrowserCache {
         if mem_buffer.buffer.len() > 0 {
             let chunk_index = mem_buffer.chunk_index;
             let buffer_copy = mem_buffer.buffer.clone();
-            drop(mem_buffer); // Release lock before async operation
+            drop(mem_buffer);
             
-            // Split the buffer into 64MB chunks and write each one
-            let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE; // 64MB
+            let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE;
             let mut current_chunk_index = chunk_index;
             
             for chunk_data in buffer_copy.chunks(max_chunk_size) {
