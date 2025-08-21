@@ -8,7 +8,6 @@ pub mod executor;
 pub mod config;
 pub mod file_api;
 mod errors;
-mod local_resource_path;
 
 // /shared/src/lib.rs
 use std::sync::{Arc, LazyLock};
@@ -35,9 +34,9 @@ use shared::app::file_system::file::LocalResourcePath;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
-use crate::file_api::extension::VecExtension;
+use crate::file_api::file_extension::VecExtension;
 use crate::file_api::storage::FileStorage;
-use crate::local_resource_path::WebExtLocalResourcePath;
+use file_api::path_extension::WebExtLocalResourcePath;
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 

@@ -13,7 +13,7 @@ use wasm_bindgen::{JsCast, JsValue};
 use core_services::utils::pool::request::PoolRequest;
 use shared::core_api::{IOReader, IOWriter};
 use anyhow::{anyhow, Result};
-use crate::file_api::extension::VecExtension;
+use crate::file_api::file_extension::VecExtension;
 
 #[derive(Debug, Error)]
 pub enum BrowserCacheErrors {
@@ -55,16 +55,12 @@ impl MemBuffer {
         self.buffer.extend_from_slice(bytes);
         if self.buffer.len() >= self.max_chunk_size {
             let chunk = self.buffer.drain(..self.max_chunk_size).collect();
+            self.chunk_index += 1;
             Some(chunk)
         }
         else {
             None
         }
-    }
-
-    pub fn switch_next_chunk(&mut self) {
-        self.chunk_index += 1;
-        self.buffer.clear();
     }
 }
 
@@ -210,8 +206,10 @@ impl BrowserCache {
         }
 
         let db = self.db.retrieve().await.unwrap();
-        let trans = db.transaction(&[&self.resource.table], TransactionMode::ReadWrite).map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
-        let store = trans.object_store(&self.resource.table).map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
+        let trans = db.transaction(&[&self.resource.table], TransactionMode::ReadWrite)
+            .map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
+        let store = trans.object_store(&self.resource.table)
+            .map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
         let key: JsValue = self.chunk_id(chunk_index);
         let js_value: JsValue = bytes.into_js_value();
 
@@ -344,7 +342,6 @@ impl IOWriter for BrowserCache {
             self.write_chunk(chunk_index, &flushed_bytes).await
                 .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
             let mut mem_buffer = self.mem_buffer.lock().await;
-            mem_buffer.switch_next_chunk();
         }
 
         Ok(())

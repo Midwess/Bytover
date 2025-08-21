@@ -19,7 +19,7 @@ use shared::core_api::{IOReader, IOWriter};
 use crate::file_api::cache::{BrowserCache, CacheResource};
 use crate::core_api_impl::io::IOReaderImpl;
 use crate::file_api::storage::{FileStorage, WasmFile};
-use crate::local_resource_path::WebExtLocalResourcePath;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct LocalResourceRepositoryImpl {

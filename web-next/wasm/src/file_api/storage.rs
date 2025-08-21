@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use web_sys::js_sys::Array;
 use web_sys::{File, IdbTransactionMode};
-use crate::local_resource_path::WebExtLocalResourcePath;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 
 #[derive(Clone)]
 pub struct WasmFile(pub File);

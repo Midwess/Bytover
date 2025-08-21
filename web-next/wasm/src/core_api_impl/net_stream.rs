@@ -20,9 +20,9 @@ use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::file_api::cache::BrowserCache;
 use crate::errors::JsError;
-use crate::file_api::extension::VecExtension;
+use crate::file_api::file_extension::VecExtension;
 use crate::file_api::storage::FileStorage;
-use crate::local_resource_path::WebExtLocalResourcePath;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,

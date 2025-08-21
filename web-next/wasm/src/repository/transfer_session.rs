@@ -18,7 +18,7 @@ use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
 use shared::core_api::{IOReader, IOWriter};
-use crate::local_resource_path::WebExtLocalResourcePath;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct TransferSessionRepositoryImpl {
