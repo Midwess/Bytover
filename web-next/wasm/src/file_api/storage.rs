@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use web_sys::js_sys::Array;
-use web_sys::{File, IdbTransactionMode};
+use web_sys::File;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 
 #[derive(Clone)]

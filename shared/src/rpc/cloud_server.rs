@@ -2,7 +2,6 @@ use crate::rpc::auth_provider::AuthProvider;
 use crate::rpc::connection::RpcNetworkModule;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
-use futures_util::StreamExt;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::{

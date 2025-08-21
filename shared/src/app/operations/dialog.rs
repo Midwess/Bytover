@@ -59,7 +59,7 @@ impl Operation for DialogOperation {
 
 impl DialogOperation {
     pub fn toast(message: String) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|it| {})
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|_it| {})
     }
 
     pub fn alert(dialog: AlertDialog) -> AppRequestBuilder<impl Future<Output = bool>> {
@@ -70,6 +70,6 @@ impl DialogOperation {
     }
 
     pub fn message(message: String, reason: MessageReason) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|it| {})
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|_it| {})
     }
 }

@@ -26,7 +26,7 @@ impl IdbId for IdbIdWrapper<AuthSessionId> {
             return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
         }
 
-        let Some(mut json_array) = json.as_array_mut() else {
+        let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
         };
 

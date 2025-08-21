@@ -1,8 +1,7 @@
-use crate::file_api::storage::{FileStorage, WasmFile};
+use crate::file_api::storage::WasmFile;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use core_services::utils::never_send::NeverSend;
 use futures::lock::Mutex;
 use futures_channel::oneshot;
 use js_sys::{ArrayBuffer, Uint8Array};
@@ -11,7 +10,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, FileReader, ProgressEvent};
 pub struct IOReaderImpl {
     pub file: Mutex<WasmFile>,
@@ -82,7 +80,7 @@ impl IOWriterImpl {}
 
 #[async_trait(?Send)]
 impl IOWriter for IOWriterImpl {
-    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()> {
+    async fn write(&mut self, _data: bytes::Bytes) -> anyhow::Result<()> {
         Ok(())
     }
 }

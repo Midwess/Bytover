@@ -149,7 +149,7 @@ impl BitBridgeCloudService for CloudGrpcService {
                 let is_completed = session.is_completed();
                 let events = curr_session.get_events(&session, &cloud_storage).await;
                 for event in events {
-                    if let Err(e) = tx.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await {
+                    if let Err(_e) = tx.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await {
                         log::error!("Cannot send session, closing");
                         break;
                     };

@@ -563,7 +563,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-                    let (password, avatar, name, access_url, is_required_password, alias, to_email) = match &it.target {
+                    let (password, avatar, name, access_url, is_required_password, alias, _to_email) = match &it.target {
                         TransferTarget::Internet {
                             password,
                             from_user,
@@ -580,7 +580,7 @@ impl AppModule<BitBridge> for TransferModule {
                                     let alias = url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string());
                                     alias
                                 }
-                                Err(e) => None
+                                Err(_________e) => None
                             };
 
                             let name = match &alias {

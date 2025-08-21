@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::ShellRuntime;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
 use shared::executor::p2p::P2PNativeExecutor;
 

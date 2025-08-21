@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use futures::lock::{Mutex, MutexGuard};
+use futures::lock::Mutex;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -7,7 +7,6 @@ use core_services::db::repository::abstraction::errors::{RepositoryError, Resolv
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use idb::Database;
-use n0_future::StreamExt;
 use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
@@ -18,7 +17,7 @@ use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepo
 use shared::core_api::{IOReader, IOWriter};
 use crate::file_api::cache::{BrowserCache, CacheResource};
 use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::storage::{FileStorage, WasmFile};
+use crate::file_api::storage::FileStorage;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 
@@ -37,7 +36,7 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
             return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
         }
 
-        let Some(mut json_array) = json.as_array_mut() else {
+        let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
         };
 

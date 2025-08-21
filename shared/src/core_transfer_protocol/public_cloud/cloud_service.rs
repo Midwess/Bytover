@@ -4,7 +4,7 @@ use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
-use crate::core_api::{CoreBridge, IOReader, NetStream, NetStreamEvent, NetStreamInner};
+use crate::core_api::{CoreBridge, NetStream, NetStreamEvent};
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;

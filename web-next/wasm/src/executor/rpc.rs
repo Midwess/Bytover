@@ -1,5 +1,4 @@
 use tonic_web_wasm_client::Client;
-use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::rpc::auth_server::AuthServer;
 use shared::executor::rpc::NativeRpc;
 

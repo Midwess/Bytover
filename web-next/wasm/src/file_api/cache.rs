@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bytes::Bytes;
 use futures::lock::Mutex;
@@ -337,7 +337,6 @@ impl IOWriter for BrowserCache {
             drop(mem_buffer); // Release lock before async operation
             self.write_chunk(chunk_index, &flushed_bytes).await
                 .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
-            let mut mem_buffer = self.mem_buffer.lock().await;
         }
 
         Ok(())

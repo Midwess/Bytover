@@ -1,18 +1,7 @@
 use async_trait::async_trait;
-use core_services::db::repository::abstraction::table::Table;
-use futures::executor::block_on;
-use idb::{Database, DatabaseEvent, Factory, KeyPath, ObjectStoreParams};
+use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams};
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::allocator::PoolResourceProvider;
-use shared::app::file_system::file::LocalResource;
-use shared::app::repository::auth_session::AuthSessionId;
-use shared::app::repository::local_resource::LocalResourceId;
-use shared::app::repository::transfer_session::TransferSessionId;
-use shared::app::repository::user::UserId;
-use shared::app::transfer::session::TransferSession;
-use shared::entities::session::Session;
-use shared::entities::user::User;
-use crate::repository::id::IdbIdWrapper;
 
 pub mod path_resolver;
 pub mod id;

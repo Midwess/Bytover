@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
-use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
-use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::app::repository::auth_session::AuthSessionRepository;
+use shared::app::repository::local_resource::LocalResourceRepository;
+use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::executor::persistent::NativePersistent;
 
 pub struct NativePersistentImpl {
