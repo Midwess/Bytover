@@ -223,21 +223,6 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(Box::new(cursor))
     }
 
-    async fn new_thumbnail_writer(&self, resource_id: u64) -> Result<(Box<dyn IOWriter>, LocalResourcePath), PersistenceError> {
-        let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(resource_id).await;
-        let path = PathBuf::from(&thumbnail_absolute);
-        if path.exists() {
-            fs::remove_file(&path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        }
-
-        File::new(None, &path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        let cursor = IOWriterImpl::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-
-        let path = self.path_resolver.get_local_resource_path(thumbnail_absolute).await;
-
-        Ok((Box::new(cursor), path))
-    }
-
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {

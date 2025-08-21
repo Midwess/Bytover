@@ -18,6 +18,7 @@ use shared::app::repository::path_resolver::PathResolver;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
 use shared::core_api::{IOReader, IOWriter};
+use crate::local_resource_path::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct TransferSessionRepositoryImpl {
@@ -125,8 +126,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         let mut result = HashMap::new();
         
         for (resource_order_id, resource_name) in resource_names {
-            let path = format!("cache://{}/{}_{}", session_order_id, resource_name, resource_order_id);
-            result.insert(resource_order_id, LocalResourcePath::PlatformIdentifier(path));
+            result.insert(resource_order_id, LocalResourcePath::cache("resources", resource_order_id.to_string()));
         }
         
         Ok(result)

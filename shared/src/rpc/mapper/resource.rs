@@ -46,7 +46,7 @@ impl LocalResource {
         };
 
         ResourceMessage {
-            order_id: self.order_id as i64,
+            order_id: self.order_id,
             name: self.name.clone(),
             size: self.size as i64,
             r#type: proto_type as i32

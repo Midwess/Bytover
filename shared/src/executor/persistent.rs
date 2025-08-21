@@ -19,7 +19,7 @@ use devlog_sdk::distributed_id::gen_id;
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait NativePersistent: Send + Sync {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
-    fn local_resource_repository(&self) -> &Box<dyn LocalResourceRepository>;
+    fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository>;
 
     async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {

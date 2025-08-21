@@ -24,7 +24,6 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
     async fn read(&self, path: LocalResourcePath, max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError>;
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError>;
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError>;
-    async fn new_thumbnail_writer(&self, resource_id: u64) -> Result<(Box<dyn IOWriter>, LocalResourcePath), PersistenceError>;
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
 }
 

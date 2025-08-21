@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
@@ -5,7 +6,7 @@ use shared::executor::persistent::NativePersistent;
 
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,
-    pub local_resource_repository: Box<dyn LocalResourceRepository>,
+    pub local_resource_repository: Arc<dyn LocalResourceRepository>,
     pub transfer_session_repository: Box<dyn TransferSessionRepository>
 }
 
@@ -15,8 +16,8 @@ impl NativePersistent for NativePersistentImpl {
         &self.auth_session_repository
     }
 
-    fn local_resource_repository(&self) -> &Box<dyn LocalResourceRepository> {
-        &self.local_resource_repository
+    fn local_resource_repository(&self) -> &dyn LocalResourceRepository {
+        &*self.local_resource_repository
     }
 
     fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository> {

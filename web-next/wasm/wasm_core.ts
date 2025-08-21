@@ -53,8 +53,7 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
-    MessageReason,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, TransferEventVariantLaunch, AppEventVariantTransfer
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";

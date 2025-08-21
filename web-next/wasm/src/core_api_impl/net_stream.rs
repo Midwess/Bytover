@@ -15,21 +15,23 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, Headers, ProgressEvent, ReadableStream, ReadableStreamDefaultController, Request, RequestInit, RequestMode, XmlHttpRequest};
 use core_services::utils::never_send::NeverSend;
 use shared::app::file_system::file::LocalResourcePath;
+use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::file_api::cache::BrowserCache;
 use crate::errors::JsError;
+use crate::file_api::extension::VecExtension;
 use crate::file_api::storage::FileStorage;
 use crate::local_resource_path::WebExtLocalResourcePath;
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,
-    pub thumbnail_cache: BrowserCache
+    pub resource_repo: Arc<dyn LocalResourceRepository>,
 }
 
 pub struct NetStreamInnerImpl {
     storage: FileStorage,
-    pub thumbnail_cache: BrowserCache,
+    pub resource_repo: Arc<dyn LocalResourceRepository>,
     url: Url,
     size: u64,
     path: LocalResourcePath,
@@ -41,7 +43,7 @@ impl NetStream for NetStreamImpl {
     async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             storage: self.storage.clone(),
-            thumbnail_cache: self.thumbnail_cache.clone(),
+            resource_repo: self.resource_repo.clone(),
             url: http_url,
             size,
             path,
@@ -127,22 +129,7 @@ impl NetStreamInner for NetStreamInnerImpl {
             abort_cb.forget();
         }
 
-        let is_thumbnail = platform_identifier.starts_with("idb://thumbnail");
-
-        if is_thumbnail {
-            let Ok(thumbnail_resource_id) = platform_identifier.trim_start().trim_start_matches("idb://thumbnail/").parse::<u64>() else {
-                return Err(anyhow::anyhow!("Invalid thumbnail resource id"));
-            };
-
-            let Some(bytes) = self.thumbnail_cache.get(thumbnail_resource_id.to_string().as_str(), false).await? else {
-                return Err(anyhow!("Thumbnail not found for resource {thumbnail_resource_id}"));
-            };
-
-            let xhr = xhr.clone();
-            xhr.send_with_opt_js_u8_array(Some(&bytes))
-                .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
-        }
-        else if let Some(device_file_id) = self.path.device_file_id() {
+        if let Some(device_file_id) = self.path.device_file_id() {
             let Some(file) = self.storage.get(device_file_id).await.map(|it| it.file) else {
                 return Err(anyhow!("Not found any file located at {platform_identifier:?}"))
             };
@@ -150,6 +137,13 @@ impl NetStreamInner for NetStreamInnerImpl {
             let xhr = xhr.clone();
             xhr.send_with_opt_blob(Some(&file))
                 .map_err(|it| anyhow!("Upload file errors {it:?}"))?;
+        }
+        else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
+            let bytes = reader.read_all().await?;
+            let xhr = xhr.clone();
+            let vec: Vec<u8> = bytes.iter().map(|it| *it).collect();
+            xhr.send_with_opt_js_u8_array(Some(&bytes.into_uint_array()))
+                .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
         }
         else {
             return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));

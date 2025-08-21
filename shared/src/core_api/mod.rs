@@ -26,6 +26,12 @@ pub enum IOWriterError {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait IOWriter: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
+    async fn flush(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn end(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

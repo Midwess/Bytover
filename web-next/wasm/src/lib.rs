@@ -31,10 +31,13 @@ use web_sys::{window, File};
 use core_services::logger;
 use shared::CoreOperation;
 use file_api::cache::BrowserCache;
+use shared::app::file_system::file::LocalResourcePath;
 use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
+use crate::file_api::extension::VecExtension;
 use crate::file_api::storage::FileStorage;
+use crate::local_resource_path::WebExtLocalResourcePath;
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
@@ -156,7 +159,6 @@ fn bincode_options() -> impl bincode::Options + Copy {
 pub struct NativeProcessor {
     executor: &'static NativeExecutor,
     storage: FileStorage,
-    thumbnail_cache: BrowserCache
 }
 
 #[wasm_bindgen]
@@ -228,7 +230,6 @@ impl NativeProcessor {
         Self {
             storage: di_container.file_storage(),
             executor: di_container.get_native_executor().await,
-            thumbnail_cache: BrowserCache::open("thumbnails").await,
         }
     }
 
@@ -244,7 +245,17 @@ impl NativeProcessor {
     }
 
     pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        self.thumbnail_cache.get(resource_id.to_string().as_str(), false).await.ok()?
+        let repository = DiContainer::get_instance().get_local_resource_repository().await;
+        let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
+        let Ok(mut reader) = repository.read(path, 1024).await else {
+            return None
+        };
+
+        let Ok(data) =  reader.read_all().await else {
+            return None
+        };
+
+        Some(data.into_uint_array())
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

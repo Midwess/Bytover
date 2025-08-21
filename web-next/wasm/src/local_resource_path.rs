@@ -6,6 +6,7 @@ pub trait WebExtLocalResourcePath {
     fn cache(store: impl Into<String>, key: impl Into<String>) -> Self;
     fn cache_store_key_pair(&self) -> Option<(String, String)>;
     fn thumbnail_resource_id(&self) -> Option<u64>;
+    fn resource_id(&self) -> Option<u64>;
 }
 
 impl WebExtLocalResourcePath for LocalResourcePath {
@@ -18,6 +19,15 @@ impl WebExtLocalResourcePath for LocalResourcePath {
             Self::PlatformIdentifier(path) => path.split_once("device://")?.1.to_string().parse::<u64>().ok(),
             _ => None
         }
+    }
+
+    fn resource_id(&self) -> Option<u64> {
+        let (store, key) = self.cache_store_key_pair()?;
+        if store == "resources" {
+            return key.trim_start_matches('/').parse::<u64>().ok()
+        };
+
+        None
     }
 
     fn cache(store: impl Into<String>, key: impl Into<String>) -> Self {

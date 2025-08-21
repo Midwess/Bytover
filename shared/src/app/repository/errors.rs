@@ -7,5 +7,7 @@ pub enum PersistenceError {
     #[error("IO error: {0}")]
     IOError(String),
     #[error("Not found {0}")]
-    NotFound(String)
+    NotFound(String),
+    #[error("System error {0}")]
+    SystemError(#[from] anyhow::Error),
 }

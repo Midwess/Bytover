@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use futures::lock::Mutex;
+use futures::lock::{Mutex, MutexGuard};
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::{Database, TransactionMode};
+use idb::Database;
+use n0_future::StreamExt;
 use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
@@ -15,7 +16,7 @@ use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceT
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::core_api::{IOReader, IOWriter};
-use crate::file_api::cache::BrowserCache;
+use crate::file_api::cache::{BrowserCache, CacheResource};
 use crate::core_api_impl::io::IOReaderImpl;
 use crate::file_api::storage::{FileStorage, WasmFile};
 use crate::local_resource_path::WebExtLocalResourcePath;
@@ -24,7 +25,8 @@ use crate::repository::id::IdbIdWrapper;
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
     pub file_storage: FileStorage,
-    pub thumbnail_cache: BrowserCache
+    pub thumbnail_caches: Mutex<HashMap<u64, BrowserCache>>,
+    pub resource_caches: Mutex<HashMap<u64, BrowserCache>>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -128,7 +130,21 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
         let key = resource_id.to_string();
-        self.thumbnail_cache.put(&key, png_bytes).await?;
+        let mut thumbnail_caches = self.thumbnail_caches.lock().await;
+        let cache = match thumbnail_caches.get_mut(&resource_id) {
+            Some(it) => {
+                it
+            },
+            None => {
+                let new_resource = CacheResource::thumbnail(resource_id, png_bytes.len());
+                let new_cache = BrowserCache::create(self.db.clone(), new_resource).await?;
+                thumbnail_caches.insert(resource_id, new_cache);
+                thumbnail_caches.get_mut(&resource_id).unwrap()
+            }
+        };
+
+        cache.write(png_bytes.into()).await?;
+        cache.end().await?;
         let saved_path = LocalResourcePath::cache("thumbnails", key);
         Ok(saved_path)
     }
@@ -146,23 +162,51 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn read(&self, path: LocalResourcePath, _max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
-        let Some(device_file_id) = path.device_file_id() else {
-            return Err(PersistenceError::NotFound(format!("{:?}", path)));
+        if let Some(device_file_id) = path.device_file_id() {
+            let Some(file) = self.file_storage.get(device_file_id).await else {
+                return Err(PersistenceError::NotFound(format!("{:?}", path)));
+            };
+
+            return Ok(Box::new(IOReaderImpl {
+                file: Mutex::new(file.file.clone()),
+                position: 0,
+                chunk_size: 63 * 1024
+            }))
         };
 
-        let Some(file) = self.file_storage.get(device_file_id).await else {
-            return Err(PersistenceError::NotFound(format!("{:?}", path)));
-        };
+        if let Some(key) = path.thumbnail_resource_id() {
+            let thumbnail_caches = self.thumbnail_caches.lock().await;
+            let Some(cache) = thumbnail_caches.get(&key) else {
+                return Err(PersistenceError::NotFound(format!("{:?}", path)));
+            };
 
-        Ok(Box::new(IOReaderImpl {
-            file: Mutex::new(file.file.clone()),
-            position: 0,
-            chunk_size: 63 * 1024
-        }))
+            return Ok(Box::new(cache.get_reader()))
+        }
+
+        Err(PersistenceError::NotFound(format!("{:?}", path)))
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
-        todo!()
+        if let Some(resource_id) = path.resource_id() {
+            let mut caches = self.resource_caches.lock().await;
+            let resource = CacheResource::resource(resource_id);
+            let new_cache = BrowserCache::create(self.db.clone(), resource).await?;
+            let writer: Box<dyn IOWriter> = Box::new(new_cache.clone());
+            caches.insert(resource_id, new_cache.clone());
+
+            return Ok(writer);
+        }
+
+        if let Some(thumbnail_resource_id) = path.thumbnail_resource_id() {
+            let mut caches = self.thumbnail_caches.lock().await;
+            let resource = CacheResource::thumbnail(thumbnail_resource_id, 0);
+            let new_cache = BrowserCache::create(self.db.clone(), resource).await?;
+            let writer: Box<dyn IOWriter> = Box::new(new_cache.clone());
+            caches.insert(thumbnail_resource_id, new_cache.clone());
+            return Ok(writer);
+        }
+
+        Err(PersistenceError::NotFound(format!("Your path is not supported {:?}", path)))
     }
 
     async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
@@ -176,22 +220,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
-        if let Some(key) = path.thumbnail_resource_id() {
-            if let Some(resource) = self.thumbnail_cache.get(key.to_string().as_str(), false).await? {
-                return Ok(resource.length() as u64);
-            }
-
-            return Err(PersistenceError::NotFound(format!("Not found thumbnail at path {path:?}")));
-        }
-
-        let Some(device_file_id) = path.device_file_id() else {
-            return Err(PersistenceError::NotFound(format!("Not found file at path {path:?}")));
-        };
-
-        let Some(file) = self.file_storage.get(device_file_id).await else {
-            return Err(PersistenceError::NotFound(format!("Not found file at path {path:?}")));
-        };
-
-        Ok(file.resource.size)
+        let reader = self.read(path.clone(), 0).await?;
+        Ok(reader.total_size().await?)
     }
 }
+

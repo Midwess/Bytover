@@ -21,6 +21,8 @@ use shared::rpc::auth_server::AuthServer;
 use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
 use std::time::Duration;
+use crux_core::bridge::ResolveSerialized::Once;
+use futures::lock::Mutex;
 use idb::Database;
 use once_cell::sync::OnceCell;
 use tonic_web_wasm_client::Client;
@@ -50,6 +52,8 @@ pub struct DiContainer {
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
+    resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
+    transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
 
     rpc_connection: RpcNetworkModuleImpl
 }
@@ -67,7 +71,9 @@ impl DiContainer {
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url())
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
+                resource_repository: OnceCell::new(),
+                transfer_repository: OnceCell::new()
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -82,7 +88,7 @@ impl DiContainer {
     pub async fn get_net_stream(&self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
             storage: self.file_storage.get().unwrap().clone(),
-            thumbnail_cache: BrowserCache::open("thumbnails").await
+            resource_repo: self.get_local_resource_repository().await
         })
     }
 
@@ -150,15 +156,23 @@ impl DiContainer {
         }
     }
 
-    pub async fn get_local_resource_repository(&self) -> impl LocalResourceRepository {
-        LocalResourceRepositoryImpl {
+    pub async fn get_local_resource_repository(&self) -> Arc<dyn LocalResourceRepository> {
+        if let Some(repository) = self.resource_repository.get() {
+            return repository.clone();
+        }
+
+        let repo = Arc::new(LocalResourceRepositoryImpl {
             file_storage: self.file_storage.get().unwrap().clone(),
-            thumbnail_cache: BrowserCache::open("thumbnails").await,
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
-        }
+                .build(),
+            thumbnail_caches: Default::default(),
+            resource_caches: Default::default()
+        });
+
+        self.resource_repository.set(repo.clone());
+        repo
     }
 
     pub fn get_transfer_session_repository(&self) -> impl TransferSessionRepository {
@@ -182,13 +196,13 @@ impl DiContainer {
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
-            Arc::new(self.get_local_resource_repository().await)
+            self.get_local_resource_repository().await
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
-            repository: Arc::new(self.get_local_resource_repository().await),
+            repository: self.get_local_resource_repository().await,
             net_stream: self.get_net_stream().await
         };
 
@@ -198,7 +212,7 @@ impl DiContainer {
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
-                local_resource_repository: Box::new(self.get_local_resource_repository().await),
+                local_resource_repository: self.get_local_resource_repository().await,
                 transfer_session_repository: Box::new(self.get_transfer_session_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
