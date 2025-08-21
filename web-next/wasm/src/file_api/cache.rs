@@ -259,10 +259,6 @@ impl BrowserCache {
             .map_err(|e| BrowserCacheErrors::FailedToPut(format!("Failed to serialize ResourceInfo: {}", e)))
     }
     
-    fn data_chunks_range_query(&self) -> KeyRange {
-        Self::create_all_range_query(self.resource.id)
-    }
-
     fn merge_bytes(values: Vec<JsValue>) -> Vec<u8> {
         let mut merged: Vec<u8> = Vec::new();
 
@@ -348,7 +344,7 @@ impl IOWriter for BrowserCache {
     }
 
     async fn flush(&mut self) -> anyhow::Result<()> {
-        let mut mem_buffer = self.mem_buffer.lock().await;
+        let mem_buffer = self.mem_buffer.lock().await;
         if mem_buffer.buffer.len() > 0 {
             let chunk_index = mem_buffer.chunk_index;
             let buffer_copy = mem_buffer.buffer.clone();

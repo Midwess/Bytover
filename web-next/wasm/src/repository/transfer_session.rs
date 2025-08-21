@@ -110,22 +110,22 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 
 #[async_trait::async_trait(?Send)]
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
-    async fn update_progresses(&self, order_id: u64, progresses: Vec<TransferProgress>) -> Result<Option<TransferSession>, PersistenceError> {
+    async fn update_progresses(&self, _order_id: u64, progresses: Vec<TransferProgress>) -> Result<Option<TransferSession>, PersistenceError> {
         Ok(None)
     }
 
-    async fn update_resource(&self, session_id: TransferSessionId, resource: LocalResource) -> Result<Option<TransferSession>, PersistenceError> {
+    async fn update_resource(&self, _session_id: TransferSessionId, resource: LocalResource) -> Result<Option<TransferSession>, PersistenceError> {
         Ok(None)
     }
 
-    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
+    async fn delete_session(&self, _session_id: TransferSessionId) -> Result<(), PersistenceError> {
         Ok(())
     }
 
     async fn generate_resource_paths(&self, session_order_id: u64, resource_names: HashMap<u64, String>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         
-        for (resource_order_id, resource_name) in resource_names {
+        for (resource_order_id, _resource_name) in resource_names {
             result.insert(resource_order_id, LocalResourcePath::cache("resources", resource_order_id.to_string()));
         }
         

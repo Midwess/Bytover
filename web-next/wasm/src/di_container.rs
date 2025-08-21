@@ -171,7 +171,7 @@ impl DiContainer {
             resource_caches: Default::default()
         });
 
-        self.resource_repository.set(repo.clone());
+        let _ = self.resource_repository.set(repo.clone());
         repo
     }
 

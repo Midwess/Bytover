@@ -58,7 +58,7 @@ impl IOReader for IOReaderImpl {
 
         let array_buffer = reader
             .result()
-            .map_err(|it| anyhow::anyhow!("FileReader result was null"))?
+            .map_err(|it| anyhow::anyhow!("FileReader result was null {it:?}"))?
             .dyn_into::<ArrayBuffer>()
             .map_err(|e| anyhow::anyhow!("Failed to cast result to ArrayBuffer: {e:?}"))?;
 
@@ -76,15 +76,9 @@ impl IOReader for IOReaderImpl {
     }
 }
 
-pub struct IOWriterImpl {
-    storage: FileStorage
-}
+pub struct IOWriterImpl {}
 
-impl IOWriterImpl {
-    pub async fn new(storage: FileStorage) -> Result<Self> {
-        Ok(Self { storage })
-    }
-}
+impl IOWriterImpl {}
 
 #[async_trait(?Send)]
 impl IOWriter for IOWriterImpl {

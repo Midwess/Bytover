@@ -141,7 +141,6 @@ impl NetStreamInner for NetStreamInnerImpl {
         else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
             let bytes = reader.read_all().await?;
             let xhr = xhr.clone();
-            let vec: Vec<u8> = bytes.iter().map(|it| *it).collect();
             xhr.send_with_opt_js_u8_array(Some(&bytes.into_uint_array()))
                 .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
         }
