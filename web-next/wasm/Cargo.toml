@@ -10,36 +10,31 @@ crate-type = ["cdylib", "lib", "staticlib"]
 [dependencies]
 shared = { path = "../../shared" }
 devlog-sdk = { path = "../../libs/devlog-sdk" }
-wasm-bindgen = { version = "0.2.100" }
-tonic-web-wasm-client = "0.7.1"
 crux_core = { workspace = true }
-tonic = { workspace = true, default-features = false }
 async-trait = { workspace = true }
-prost = { workspace = true }
 thiserror = { workspace = true }
 n0-future = { workspace = true }
 futures = { workspace = true }
 erased-serde = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 bincode = { workspace = true }
-core-services = { workspace = true, default-features = false, features = ["db-idb", "wasm-logger"] }
-idb = { version = "0.6.4" }
+core-services = { workspace = true, features = ["db-idb", "wasm-logger"] }
 serde_json = { workspace = true, features = ["indexmap", "preserve_order"] }
-serde-wasm-bindgen = { version = "0.6.5" }
 once_cell = { workspace = true }
-log = "0.4.27"
 anyhow = { workspace = true }
 bytes = { workspace = true }
-web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager"] }
-
 futures-timer = { workspace = true, features = ["wasm-bindgen"] }
+mime_guess = { workspace = true }
+url = { workspace = true }
+wasm-bindgen = { version = "0.2.100" }
+tonic-web-wasm-client = "0.7.1"
+serde-wasm-bindgen = { version = "0.6.5" }
+idb = { version = "0.6.4" }
+log = "0.4.27"
+web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager"] }
+futures-channel = "0.3.31"
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.77"
-mime_guess = { workspace = true }
-reqwest = { workspace = true, features = ["json", "stream"] }
-url = { workspace = true }
-indexmap = { workspace = true }
-futures-channel = "0.3.31"
 
 
 [package.metadata.wasm-pack.profile.release]

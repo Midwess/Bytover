@@ -166,43 +166,6 @@ impl BrowserCache {
         IOReaderBrowserCacheImpl::new(self.clone())
     }
 
-    pub async fn read_chunk(&self, chunk_index: usize, offset: usize) -> Result<Option<Vec<u8>>, BrowserCacheErrors> {
-        let extract_from_buffer = |buffer: &[u8], offset: usize| -> Option<Vec<u8>> {
-            if buffer.len() >= offset {
-                Some(buffer[offset..].to_vec())
-            } else {
-                None
-            }
-        };
-
-        let mem_buffer = self.mem_buffer.lock().await;
-        if mem_buffer.chunk_index == chunk_index {
-            if let Some(result) = extract_from_buffer(&mem_buffer.buffer, offset) {
-                return Ok(Some(result));
-            }
-        }
-        drop(mem_buffer);
-
-        let db = self.db.retrieve().await.unwrap();
-        let trans = db.transaction(&[&self.resource.table], TransactionMode::ReadOnly)?;
-        let store = trans.object_store(&self.resource.table)?;
-        let query = Query::KeyRange(self.chunk_index_query(chunk_index));
-        if let Some(val) = store.get(query)?.await? {
-            let val = val.unchecked_into::<Uint8Array>().to_vec();
-            if let Some(result) = extract_from_buffer(&val, offset) {
-                return Ok(Some(result));
-            }
-        }
-
-        let end_marker_key = Self::create_chunk_id(self.resource.id, Self::END_MARKER_CHUNK);
-        let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key)?);
-        if store.get(end_marker_query)?.await?.is_some() {
-            return Ok(None);
-        }
-
-        Ok(Some(vec![]))
-    }
-
     async fn write_chunk(&self, chunk_index: usize, bytes: &Vec<u8>) -> Result<(), BrowserCacheErrors> {
         let len = bytes.len();
         if len > Self::MAX_CHUNK_SIZE {
@@ -297,21 +260,41 @@ impl IOReaderBrowserCacheImpl {
 #[async_trait::async_trait(?Send)]
 impl IOReader for IOReaderBrowserCacheImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
-        let Some(bytes) = self.cache.read_chunk(self.current_chunk_index, self.current_offset).await
-            .map_err(|e| anyhow::anyhow!("Cache error: {:?}", e))? else {
-            return Ok(None);
+        let extract_from_buffer= |buffer: &[u8], offset: usize| -> Option<Vec<u8>> {
+            if buffer.len() > offset {
+                Some(buffer[offset..].to_vec())
+            } else {
+                None
+            }
         };
 
-        let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE;
-        if self.current_offset + bytes.len() >= max_chunk_size {
-            self.current_chunk_index += 1;
-            self.current_offset = 0;
-        }
-        else {
-            self.current_offset += bytes.len();
+        let mem_buffer = self.cache.mem_buffer.lock().await;
+        if mem_buffer.chunk_index == self.current_chunk_index {
+            if let Some(result) = extract_from_buffer(&mem_buffer.buffer, self.current_offset) {
+                return Ok(Some(result.into()));
+            }
         }
 
-        Ok(Some(Bytes::from(bytes)))
+        drop(mem_buffer);
+
+        let db = self.cache.db.retrieve().await.unwrap();
+        let trans = db.transaction(&[&self.cache.resource.table], TransactionMode::ReadOnly).map_err(BrowserCacheErrors::from)?;
+        let store = trans.object_store(&self.cache.resource.table).map_err(BrowserCacheErrors::from)?;
+        let query = Query::KeyRange(self.cache.chunk_index_query(self.current_chunk_index));
+        if let Some(val) = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)? {
+            let val = val.unchecked_into::<Uint8Array>().to_vec();
+            if let Some(result) = extract_from_buffer(&val, self.current_offset) {
+                return Ok(Some(result.into()));
+            }
+        }
+
+        let end_marker_key = BrowserCache::create_chunk_id(self.cache.resource.id, BrowserCache::END_MARKER_CHUNK);
+        let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
+        if store.get(end_marker_query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)?.is_some() {
+            return Ok(None);
+        }
+
+        Ok(Some(Bytes::new()))
     }
 
     async fn total_size(&self) -> Result<u64> {
