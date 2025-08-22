@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use futures::channel::mpsc;
 
 use bytes::Bytes;
 use futures::lock::Mutex;
@@ -13,6 +14,7 @@ use wasm_bindgen::{JsCast, JsValue};
 use core_services::utils::pool::request::PoolRequest;
 use shared::core_api::{IOReader, IOWriter};
 use anyhow::{anyhow, Result};
+use async_broadcast::broadcast;
 use crate::file_api::file_extension::VecExtension;
 
 #[derive(Debug, Error)]
@@ -40,6 +42,7 @@ pub struct MemBuffer {
     // The chunk index of entire file
     pub(crate) chunk_index: usize,
     pub(crate) max_chunk_size: usize,
+    pub data_broadcast: Option<(async_broadcast::Sender<Vec<u8>>, async_broadcast::Receiver<Vec<u8>>)>
 }
 
 impl MemBuffer {
@@ -48,11 +51,23 @@ impl MemBuffer {
             buffer: Vec::with_capacity(BrowserCache::MAX_CHUNK_SIZE),
             chunk_index,
             max_chunk_size: BrowserCache::MAX_CHUNK_SIZE,
+            data_broadcast: None
         }
     }
 
-    pub fn extend(&mut self, bytes: &Vec<u8>) -> Option<Vec<u8>> {
+    pub async fn extend(&mut self, bytes: &Vec<u8>) -> Option<Vec<u8>> {
         self.buffer.extend_from_slice(bytes);
+        let broadcast = match &self.data_broadcast {
+            Some((sender, _)) => sender,
+            None => {
+                self.data_broadcast = Some(broadcast(1024));
+                let (sender, _) = self.data_broadcast.as_ref().unwrap();
+                sender
+            }
+        };
+
+        let _ = broadcast.broadcast(bytes.clone()).await;
+
         if self.buffer.len() >= self.max_chunk_size {
             let chunk = self.buffer.drain(..self.max_chunk_size).collect();
             self.chunk_index += 1;
@@ -61,6 +76,19 @@ impl MemBuffer {
         else {
             None
         }
+    }
+
+    pub fn subscribe(&mut self) -> async_broadcast::Receiver<Vec<u8>> {
+        let receiver = match &self.data_broadcast {
+            Some((_, receiver)) => receiver.clone(),
+            None => {
+                self.data_broadcast = Some(broadcast(1024));
+                let (_, receiver) = self.data_broadcast.as_ref().unwrap();
+                receiver.clone()
+            }
+        };
+
+        receiver
     }
 
     pub fn clear(&mut self) -> Vec<u8> {
@@ -73,7 +101,7 @@ pub struct BrowserCache {
     db: PoolRequest<NeverSend<Database>>,
     pub(crate) mem_buffer: Arc<Mutex<MemBuffer>>,
     pub resource: CacheResource,
-    pub current_size: Arc<AtomicUsize>
+    pub current_size: Arc<AtomicUsize>,
 }
 
 impl PartialEq for BrowserCache {
@@ -231,6 +259,8 @@ pub struct IOReaderBrowserCacheImpl {
     cache: BrowserCache,
     current_chunk_index: usize,
     current_offset: usize,
+    // Will have value when the reader caches the writer speed
+    receiver_stream: Option<async_broadcast::Receiver<Vec<u8>>>,
 }
 
 impl Clone for IOReaderBrowserCacheImpl {
@@ -239,7 +269,17 @@ impl Clone for IOReaderBrowserCacheImpl {
             cache: self.cache.clone(),
             current_chunk_index: 0,
             current_offset: 0,
+            receiver_stream: None
         }
+    }
+
+    fn clone_from(&mut self, source: &Self)
+    where
+        Self:
+    {
+        self.cache = source.cache.clone();
+        self.current_chunk_index = 0;
+        self.current_offset = 0;
     }
 }
 
@@ -249,6 +289,18 @@ impl IOReaderBrowserCacheImpl {
             cache,
             current_chunk_index: 0,
             current_offset: 0,
+            receiver_stream: None
+        }
+    }
+
+    fn update_position_after_read(&mut self, read_bytes_len: usize) {
+        let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE;
+
+        if self.current_offset + read_bytes_len >= max_chunk_size {
+            self.current_chunk_index += 1;
+            self.current_offset = 0;
+        } else {
+            self.current_offset += read_bytes_len;
         }
     }
 }
@@ -268,10 +320,26 @@ impl IOReader for IOReaderBrowserCacheImpl {
             }
         };
 
-        let mem_buffer = self.cache.mem_buffer.lock().await;
+        if let Some(receiver_stream) = &mut self.receiver_stream {
+            match receiver_stream.recv().await {
+                Ok(data) => {
+                    self.update_position_after_read(data.len());
+                    return Ok(Some(Bytes::from(data)));
+                }
+                Err(e) => {
+                    log::warn!("Failed to receive data from cache: {:?}", e);
+                }
+            }
+        }
+
+        let mut mem_buffer = self.cache.mem_buffer.lock().await;
         if mem_buffer.chunk_index == self.current_chunk_index {
+            self.receiver_stream.replace(mem_buffer.subscribe());
             if let Some(result) = extract_from_buffer(&mem_buffer.buffer, self.current_offset) {
-                return Ok(Some(result.into()));
+                let bytes = Bytes::from(result);
+                drop(mem_buffer);
+                self.update_position_after_read(bytes.len());
+                return Ok(Some(bytes));
             }
         }
 
@@ -284,7 +352,9 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if let Some(val) = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)? {
             let val = val.unchecked_into::<Uint8Array>().to_vec();
             if let Some(result) = extract_from_buffer(&val, self.current_offset) {
-                return Ok(Some(result.into()));
+                let bytes = Bytes::from(result);
+                self.update_position_after_read(bytes.len());
+                return Ok(Some(bytes));
             }
         }
 
@@ -294,6 +364,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             return Ok(None);
         }
 
+        // Return empty bytes but don't update position since no data was read
         Ok(Some(Bytes::new()))
     }
 
@@ -306,7 +377,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
 impl IOWriter for BrowserCache {
     async fn write(&mut self, data: Bytes) -> anyhow::Result<()> {
         let mut mem_buffer = self.mem_buffer.lock().await;
-        if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()) {
+        if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()).await {
             let chunk_index = mem_buffer.chunk_index;
             drop(mem_buffer);
             self.write_chunk(chunk_index, &flushed_bytes).await
