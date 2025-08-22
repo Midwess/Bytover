@@ -62,6 +62,10 @@ impl MemBuffer {
             None
         }
     }
+
+    pub fn clear(&mut self) -> Vec<u8> {
+        self.buffer.drain(..).collect()
+    }
 }
 
 #[derive(Clone)]
@@ -86,11 +90,11 @@ pub struct CacheResource {
 }
 
 impl CacheResource {
-    pub fn thumbnail(resource_id: u64, size: usize) -> Self {
+    pub fn thumbnail(resource_id: u64) -> Self {
         Self {
             table: "thumbnails".to_string(),
             id: resource_id,
-            total_size: size,
+            total_size: 0,
         }
     }
 
@@ -163,46 +167,46 @@ impl BrowserCache {
     }
 
     pub async fn read_chunk(&self, chunk_index: usize, offset: usize) -> Result<Option<Vec<u8>>, BrowserCacheErrors> {
+        let extract_from_buffer = |buffer: &[u8], offset: usize| -> Option<Vec<u8>> {
+            if buffer.len() >= offset {
+                Some(buffer[offset..].to_vec())
+            } else {
+                None
+            }
+        };
+
+        let mem_buffer = self.mem_buffer.lock().await;
+        if mem_buffer.chunk_index == chunk_index {
+            if let Some(result) = extract_from_buffer(&mem_buffer.buffer, offset) {
+                return Ok(Some(result));
+            }
+        }
+        drop(mem_buffer);
+
         let db = self.db.retrieve().await.unwrap();
         let trans = db.transaction(&[&self.resource.table], TransactionMode::ReadOnly)?;
         let store = trans.object_store(&self.resource.table)?;
         let query = Query::KeyRange(self.chunk_index_query(chunk_index));
-        let result = match store.get(query)?.await? {
-            Some(val) => {
-                Self::merge_bytes(vec![val])
-            },
-            None => {
-                let mem_buffer = self.mem_buffer.lock().await;
-                if mem_buffer.chunk_index == chunk_index {
-                    if mem_buffer.buffer.len() >= offset {
-                        mem_buffer.buffer[offset..].to_vec()
-                    }
-                    else {
-                        return Ok(None)
-                    }
-                }
-                else {
-                    return Ok(None);
-                }
+        if let Some(val) = store.get(query)?.await? {
+            let val = val.unchecked_into::<Uint8Array>().to_vec();
+            if let Some(result) = extract_from_buffer(&val, offset) {
+                return Ok(Some(result));
             }
-        };
+        }
 
-        if offset >= result.len() {
+        let end_marker_key = Self::create_chunk_id(self.resource.id, Self::END_MARKER_CHUNK);
+        let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key)?);
+        if store.get(end_marker_query)?.await?.is_some() {
             return Ok(None);
         }
 
-        Ok(Some(result[offset..].to_vec()))
+        Ok(Some(vec![]))
     }
 
     async fn write_chunk(&self, chunk_index: usize, bytes: &Vec<u8>) -> Result<(), BrowserCacheErrors> {
         let len = bytes.len();
         if len > Self::MAX_CHUNK_SIZE {
-            // return Err(BrowserCacheErrors::FailedToPut(format!("Chunk size exceeded: {} > {}", len, Self::MAX_CHUNK_SIZE)));
-        }
-
-        let current_size = self.current_size.load(Ordering::SeqCst);
-        if current_size + len > self.resource.total_size {
-            // return Err(BrowserCacheErrors::FailedToPut(format!("Cache size exceeded: {} > {}", current_size + len, self.resource.total_size)));
+            return Err(BrowserCacheErrors::FailedToPut(format!("Chunk size exceeded: {} > {}", len, Self::MAX_CHUNK_SIZE)));
         }
 
         let db = self.db.retrieve().await.unwrap();
@@ -258,24 +262,6 @@ impl BrowserCache {
         bincode::serialize(&self.resource)
             .map_err(|e| BrowserCacheErrors::FailedToPut(format!("Failed to serialize ResourceInfo: {}", e)))
     }
-    
-    fn merge_bytes(values: Vec<JsValue>) -> Vec<u8> {
-        let mut merged: Vec<u8> = Vec::new();
-
-        for val in values {
-            let u8arr = if val.is_instance_of::<Uint8Array>() {
-                val.unchecked_into::<Uint8Array>()
-            } else {
-                Uint8Array::new(&val)
-            };
-
-            let mut buf = vec![0; u8arr.length() as usize];
-            u8arr.copy_to(&mut buf[..]);
-            merged.extend_from_slice(&buf);
-        }
-
-        merged
-    }
 }
 
 pub struct IOReaderBrowserCacheImpl {
@@ -304,6 +290,10 @@ impl IOReaderBrowserCacheImpl {
     }
 }
 
+/// Reader stream for browser cache
+/// Noticed: Not support chunk size every read
+/// because it is not efficient, the reader chunk size must be equal to the writer chunk size
+/// to reduce read operation to the cache.
 #[async_trait::async_trait(?Send)]
 impl IOReader for IOReaderBrowserCacheImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
@@ -316,7 +306,8 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if self.current_offset + bytes.len() >= max_chunk_size {
             self.current_chunk_index += 1;
             self.current_offset = 0;
-        } else {
+        }
+        else {
             self.current_offset += bytes.len();
         }
 
@@ -334,7 +325,7 @@ impl IOWriter for BrowserCache {
         let mut mem_buffer = self.mem_buffer.lock().await;
         if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()) {
             let chunk_index = mem_buffer.chunk_index;
-            drop(mem_buffer); // Release lock before async operation
+            drop(mem_buffer);
             self.write_chunk(chunk_index, &flushed_bytes).await
                 .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
         }
@@ -343,10 +334,10 @@ impl IOWriter for BrowserCache {
     }
 
     async fn flush(&mut self) -> anyhow::Result<()> {
-        let mem_buffer = self.mem_buffer.lock().await;
+        let mut mem_buffer = self.mem_buffer.lock().await;
         if mem_buffer.buffer.len() > 0 {
             let chunk_index = mem_buffer.chunk_index;
-            let buffer_copy = mem_buffer.buffer.clone();
+            let buffer_copy = mem_buffer.clear();
             drop(mem_buffer);
             
             let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE;
@@ -374,11 +365,9 @@ impl IOWriter for BrowserCache {
         let store = trans.object_store(&self.resource.table)
             .map_err(|it| anyhow!("Failed to get store {it:?}"))?;
         let key: JsValue = self.chunk_id(Self::END_MARKER_CHUNK);
-        let current_size = self.current_size.load(Ordering::SeqCst);
-        if current_size != self.resource.total_size {
-            // return Err(anyhow!("Cache size mismatch: {} != {}", current_size, self.resource.total_size));
-        }
 
+        let current_size = self.current_size.load(Ordering::SeqCst);
+        self.resource.total_size = current_size;
         let end_marker_data = self.create_end_marker_data()?;
         let js_value = (&end_marker_data).into_js_value();
         store.put(&js_value, Some(&key)).map_err(|it| anyhow!("error while ending write {it:?}"))?.await
@@ -404,6 +393,6 @@ impl TryFrom<JsValue> for CacheResource {
         u8arr.copy_to(&mut bytes);
         
         bincode::deserialize(&bytes)
-            .map_err(|e| BrowserCacheErrors::FailedToGet(format!("Failed to deserialize CacheResource: {}", e)))
+            .map_err(|e| BrowserCacheErrors::IndexDbStorageError(format!("Incorrect format for CacheResource: {}", e)))
     }
 }

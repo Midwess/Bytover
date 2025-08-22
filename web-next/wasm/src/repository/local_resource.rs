@@ -135,7 +135,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 it
             },
             None => {
-                let new_resource = CacheResource::thumbnail(resource_id, png_bytes.len());
+                let new_resource = CacheResource::thumbnail(resource_id);
                 let new_cache = BrowserCache::create(self.db.clone(), new_resource).await?;
                 thumbnail_caches.insert(resource_id, new_cache);
                 thumbnail_caches.get_mut(&resource_id).unwrap()
@@ -198,7 +198,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         if let Some(thumbnail_resource_id) = path.thumbnail_resource_id() {
             let mut caches = self.thumbnail_caches.lock().await;
-            let resource = CacheResource::thumbnail(thumbnail_resource_id, 0);
+            let resource = CacheResource::thumbnail(thumbnail_resource_id);
             let new_cache = BrowserCache::create(self.db.clone(), resource).await?;
             let writer: Box<dyn IOWriter> = Box::new(new_cache.clone());
             caches.insert(thumbnail_resource_id, new_cache.clone());
