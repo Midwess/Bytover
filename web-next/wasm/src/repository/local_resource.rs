@@ -15,7 +15,7 @@ use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceT
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::core_api::{IOReader, IOWriter};
-use crate::file_api::cache::{BrowserCache, CacheResource};
+use crate::file_api::cache::{BrowserCache, CacheResource, IOReaderBrowserCacheImpl};
 use crate::core_api_impl::io::IOReaderImpl;
 use crate::file_api::storage::FileStorage;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
@@ -24,8 +24,8 @@ use crate::repository::id::IdbIdWrapper;
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
     pub file_storage: FileStorage,
-    pub thumbnail_caches: Mutex<HashMap<u64, BrowserCache>>,
-    pub resource_caches: Mutex<HashMap<u64, BrowserCache>>
+    pub thumbnail_caches: Mutex<HashMap<u64, IOReaderBrowserCacheImpl>>,
+    pub resource_caches: Mutex<HashMap<u64, IOReaderBrowserCacheImpl>>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -130,20 +130,12 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
         let key = resource_id.to_string();
         let mut thumbnail_caches = self.thumbnail_caches.lock().await;
-        let cache = match thumbnail_caches.get_mut(&resource_id) {
-            Some(it) => {
-                it
-            },
-            None => {
-                let new_resource = CacheResource::thumbnail(resource_id);
-                let new_cache = BrowserCache::create(self.db.clone(), new_resource).await?;
-                thumbnail_caches.insert(resource_id, new_cache);
-                thumbnail_caches.get_mut(&resource_id).unwrap()
-            }
-        };
+        let new_resource = CacheResource::thumbnail(resource_id);
+        let (mut writer, reader) = BrowserCache::create(self.db.clone(), new_resource).await?;
+        thumbnail_caches.insert(resource_id, reader);
 
-        cache.write(png_bytes.into()).await?;
-        cache.end().await?;
+        writer.write(png_bytes.into()).await?;
+        writer.end().await?;
         let saved_path = LocalResourcePath::cache("thumbnails", key);
         Ok(saved_path)
     }
@@ -179,7 +171,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 return Err(PersistenceError::NotFound(format!("{:?}", path)));
             };
 
-            return Ok(Box::new(cache.get_reader()))
+            return Ok(Box::new(cache.clone()))
         }
 
         Err(PersistenceError::NotFound(format!("{:?}", path)))
@@ -189,9 +181,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         if let Some(resource_id) = path.resource_id() {
             let mut caches = self.resource_caches.lock().await;
             let resource = CacheResource::resource(resource_id);
-            let new_cache = BrowserCache::create(self.db.clone(), resource).await?;
-            let writer: Box<dyn IOWriter> = Box::new(new_cache.clone());
-            caches.insert(resource_id, new_cache.clone());
+            let (writer, reader) = BrowserCache::create(self.db.clone(), resource).await?;
+            let writer: Box<dyn IOWriter> = Box::new(writer);
+            caches.insert(resource_id, reader);
 
             return Ok(writer);
         }
@@ -199,9 +191,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         if let Some(thumbnail_resource_id) = path.thumbnail_resource_id() {
             let mut caches = self.thumbnail_caches.lock().await;
             let resource = CacheResource::thumbnail(thumbnail_resource_id);
-            let new_cache = BrowserCache::create(self.db.clone(), resource).await?;
-            let writer: Box<dyn IOWriter> = Box::new(new_cache.clone());
-            caches.insert(thumbnail_resource_id, new_cache.clone());
+            let (writer, reader) = BrowserCache::create(self.db.clone(), resource).await?;
+            let writer: Box<dyn IOWriter> = Box::new(writer);
+            caches.insert(thumbnail_resource_id, reader);
             return Ok(writer);
         }
 

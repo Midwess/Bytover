@@ -110,7 +110,7 @@ export class WasmCore {
             message: messages.find((it) => it.field1.constructor.name === type),
             resolveMessage: (() => {
                 const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor.name === type)
-                const removed = messages.splice(resolveMsgIndex, 1)
+                messages.splice(resolveMsgIndex, 1)
                 this.alertMessageState.set([...messages])
             })
         }

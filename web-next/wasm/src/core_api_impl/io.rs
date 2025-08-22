@@ -5,7 +5,7 @@ use bytes::Bytes;
 use futures::lock::Mutex;
 use futures_channel::oneshot;
 use js_sys::{ArrayBuffer, Uint8Array};
-use shared::core_api::{IOReader, IOWriter};
+use shared::core_api::IOReader;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -71,16 +71,5 @@ impl IOReader for IOReaderImpl {
 
     async fn total_size(&self) -> Result<u64> {
         Ok(self.file.lock().await.size() as u64)
-    }
-}
-
-pub struct IOWriterImpl {}
-
-impl IOWriterImpl {}
-
-#[async_trait(?Send)]
-impl IOWriter for IOWriterImpl {
-    async fn write(&mut self, _data: bytes::Bytes) -> anyhow::Result<()> {
-        Ok(())
     }
 }
