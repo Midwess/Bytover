@@ -27,10 +27,8 @@ export function useUrlState(paramNames: string[]): [
         (newState: Record<string, string | null | undefined>) => {
             const params = new URLSearchParams(searchParams.toString())
 
-            // Remove existing tracked keys
             paramNames.forEach((key) => params.delete(key))
 
-            // Add updated keys
             Object.entries(newState).forEach(([key, value]) => {
                 if (value != null && value !== undefined) {
                     params.set(key, value)
@@ -39,8 +37,7 @@ export function useUrlState(paramNames: string[]): [
 
             params.sort()
 
-            // Replace URL with updated query string
-            router.replace(`?${params.toString()}`)
+            window.history.replaceState(null, "", `?${params.toString()}`);
         },
         [router, searchParams, paramNames]
     )

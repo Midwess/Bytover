@@ -6,32 +6,44 @@ use prost::{DecodeError, EncodeError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
-    #[error("Signalling client error: {0}")]
+    #[error("Something went wrong with the signalling client")]
     SignallingClientError(anyhow::Error),
-    #[error("Unsupported event from signalling server")]
+
+    #[error("Received an unsupported event from the signalling server")]
     UnSupportedEventFromSignallingServer,
-    #[error("Channel error")]
+
+    #[error("A communication channel failed")]
     ChannelErrors(#[from] ChannelError),
-    #[error("Message encode error")]
+
+    #[error("Could not send your message (encoding failed)")]
     MessageEncodeError(#[from] EncodeError),
-    #[error("Message decode error")]
+
+    #[error("Could not read an incoming message (decoding failed)")]
     MessageDecodeError(#[from] DecodeError),
-    #[error("Message channel error")]
+
+    #[error("The message channel encountered an error")]
     MessageChannelError(String),
-    #[error("Failed to introduce peer")]
+
+    #[error("Could not connect you with the peer")]
     FailedToIntroducePeer,
-    #[error("Session already in-progress")]
+
+    #[error("A session is already in progress. Please wait or end it before starting a new one.")]
     SessionAlreadyInProgress,
-    #[error("Persistent error {0}")]
+
+    #[error("A persistent storage error occurred")]
     PersistentError(#[from] PersistenceError),
-    #[error("Read file error {0}")]
+
+    #[error("The selected file is not valid")]
     ReadFileError(String),
-    #[error("Invalid delimiter")]
+
+    #[error("The delimiter you provided is invalid")]
     InvalidDelimiter(String),
-    #[error("Peer connection not found {0}")]
+
+    #[error("Could not find the peer connection")]
     ConnectionNotFound(PeerId),
-    #[error("System error")]
-    SystemError(#[from] anyhow::Error)
+
+    #[error("An unexpected system error occurred")]
+    SystemError(#[from] anyhow::Error),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {
@@ -42,6 +54,6 @@ impl From<WebRtcErrors> for matchbox_socket::SignalingError {
 
 impl From<WebRtcErrors> for NetworkError {
     fn from(err: WebRtcErrors) -> Self {
-        NetworkError::Network(format!("{err:?}"))
+        NetworkError::InternalServerError(format!("{err:?}"))
     }
 }

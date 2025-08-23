@@ -8,18 +8,21 @@ use serde::{Deserialize, Serialize};
 /// but it's must be detailed enough to be used for debugging (Debug trait)
 #[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum NetworkError {
-    // Unknown error from backend, should not happend
-    #[error("Error happened, please try again")]
+    /// Unknown error from backend, should not happen
+    #[error("Something went wrong, please try again.")]
     InternalServerError(String),
-    // The upstream has something to say
-    #[error("{0}")]
+
+    /// The upstream has something to say
+    #[error("The request could not be processed.")]
     BadRequest(String),
-    // Should signout in this case because user is not authenticated or session is expired
-    #[error("Unauthorized")]
+
+    /// User is not authenticated or session expired
+    #[error("Your are not authorized to perform this action.")]
     Unauthorized(String),
-    // Internet connection issue, ask user to check internet connection
-    #[error("{0}")]
-    Network(String)
+
+    /// Internet connection issue
+    #[error("Check your internet connection and try again.")]
+    Network(String),
 }
 
 impl From<CloudTransferErrors> for NetworkError {

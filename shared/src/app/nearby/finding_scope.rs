@@ -19,10 +19,6 @@ pub enum FindingScope {
 impl FindingScope {
     pub async fn local_network(ctx: AppCommandContext) -> Result<Self, NetworkError> {
         let local_ip = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await?;
-        let mut result = ctx.stream_from_shell(crate::app::operations::CoreOperation::InitNativeExecutor);
-        while let Some(response) = result.next().await {
-            println!("response: {response:?}");
-        }
 
         Ok(Self::Local(local_ip))
     }
