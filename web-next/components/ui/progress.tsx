@@ -42,7 +42,7 @@ export default function CircleProgress({
             <svg className="transform -rotate-90" width={size} height={size}>
                 {/* Background circle */}
                 <circle
-                    className="stroke-muted-foreground"
+                    className="stroke-foreground/90"
                     fill="transparent"
                     strokeWidth={strokeWidth}
                     r={radius}

@@ -27,7 +27,9 @@ pub enum BrowserCacheErrors {
     #[error("Failed to get: {0}")]
     FailedToGet(String),
     #[error("IndexDb storage error: {0}")]
-    IndexDbStorageError(String)
+    IndexDbStorageError(String),
+    #[error("Failed cache, the cache is no longer accessible")]
+    FailedCache(CacheState)
 }
 
 impl From<idb::Error> for BrowserCacheErrors {
@@ -290,31 +292,6 @@ pub struct IOReaderBrowserCacheImpl {
     read_chunk: Vec<u8>
 }
 
-impl Clone for IOReaderBrowserCacheImpl {
-    fn clone(&self) -> Self {
-        Self {
-            cache: self.cache.clone(),
-            current_chunk_index: 0,
-            current_offset: 0,
-            receiver_stream: None,
-            read_chunk_size: self.read_chunk_size,
-            read_chunk: Vec::with_capacity(self.read_chunk_size)
-        }
-    }
-
-    fn clone_from(&mut self, source: &Self)
-    where
-        Self:
-    {
-        self.cache = source.cache.clone();
-        self.current_chunk_index = 0;
-        self.current_offset = 0;
-        self.receiver_stream = None;
-        self.read_chunk_size = source.read_chunk_size;
-        self.read_chunk = Vec::with_capacity(self.read_chunk_size);
-    }
-}
-
 impl IOReaderBrowserCacheImpl {
     pub fn new(cache: Arc<BrowserCache>, chunk_size: usize) -> Self {
         Self {
@@ -336,6 +313,22 @@ impl IOReaderBrowserCacheImpl {
         } else {
             self.current_offset += read_bytes_len;
         }
+    }
+
+    pub async fn try_clone(&self) -> Result<Self, BrowserCacheErrors> {
+        let state = self.cache.state.lock().await;
+        if matches!(*state, CacheState::Failed) {
+            return Err(BrowserCacheErrors::FailedCache(CacheState::Failed))
+        }
+
+        Ok(Self {
+            cache: self.cache.clone(),
+            current_chunk_index: 0,
+            current_offset: 0,
+            receiver_stream: None,
+            read_chunk_size: self.read_chunk_size,
+            read_chunk: Vec::with_capacity(self.read_chunk_size)
+        })
     }
 }
 

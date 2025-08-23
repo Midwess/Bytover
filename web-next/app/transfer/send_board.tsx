@@ -48,11 +48,11 @@ export default function SendBoard() {
     return <>
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
-            <div className={"grid grid-cols-12 w-full h-full gap-2"}>
+            <div className={"grid grid-cols-11 w-full h-full gap-2"}>
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-9 h-full"}>
+                <div className={"col-span-8 h-full"}>
                     <FileSelections/>
                 </div>
             </div>

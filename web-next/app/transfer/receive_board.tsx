@@ -40,11 +40,11 @@ export default function ReceiveBoard() {
     return <>
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
-            <div className={"grid grid-cols-12 w-full h-full gap-2"}>
-                <div className={"col-span-4 lg:col-span-3 h-full"}>
+            <div className={"grid grid-cols-11 w-full h-full gap-2"}>
+                <div className={"col-span-3 lg:col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={`col-span-8 lg:col-span-9 h-full p-4 flex flex-col overflow-y-scroll pb-20`}>
+                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20`}>
                     <ContentBoard/>
                 </div>
             </div>
@@ -397,7 +397,7 @@ function FileView(props: {
 
     return (
         <div
-            className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5">
+            className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
             <div className={"flex flex-row gap-3"}>
             <div className="relative aspect-square w-12 h-12">
                 <Image
@@ -419,7 +419,7 @@ function FileView(props: {
             {
                 file.is_completed
                     ? <a className={"rounded-xl p-2 bg-bluePrimary/80"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
-                        <ArrowDown color={'white'}/>
+                        <ArrowDown color={'var(--foreground)'}/>
                     </a>
                     : <>
                         <CircleProgress progress={file.completion} size={30}/>
@@ -452,7 +452,7 @@ function MediaView(props: {
         <div className="w-full h-full bg-muted-foreground overflow-hidden rounded-2xl relative group">
             <div
                 className={clsx(
-                    "z-3 w-full h-[90%] absolute bg-gradient-to-t from-blackBase/70 bottom-0",
+                    "z-3 w-full h-[100%] absolute bg-gradient-to-t from-blackBase bottom-0",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -476,7 +476,7 @@ function MediaView(props: {
                 )}
             >
                 <div className="flex flex-col items-start gap-1 w-[80%]">
-                    <p className="text-primaryText text-md break-words w-full">
+                    <p className="text-primaryText text-sm break-words w-full">
                         {model.name}
                     </p>
                     <p className="text-sm text-primaryText/80">

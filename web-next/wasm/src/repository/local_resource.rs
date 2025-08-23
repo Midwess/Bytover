@@ -171,7 +171,16 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 return Err(PersistenceError::NotFound(format!("{:?}", path)));
             };
 
-            return Ok(Box::new(cache.clone()))
+            return Ok(Box::new(cache.try_clone().await?))
+        }
+
+        if let Some(key) = path.resource_id() {
+            let resource_caches = self.resource_caches.lock().await;
+            let Some(cache) = resource_caches.get(&key) else {
+                return Err(PersistenceError::NotFound(format!("{:?}", path)));
+            };
+
+            return Ok(Box::new(cache.try_clone().await?))
         }
 
         Err(PersistenceError::NotFound(format!("{:?}", path)))
