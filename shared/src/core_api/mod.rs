@@ -137,7 +137,7 @@ impl BufferExt for PeerBuffered {
     }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
-        for i in 0..self.channel_refs.len() {
+        for i in 0..self.len() {
             self.flush_timeout(i).await?;
         }
 

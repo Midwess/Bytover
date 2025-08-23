@@ -439,7 +439,6 @@ impl WebRtcPeer {
                 while let Ok(Some(bytes)) = reader.next().await {
                     let bytes = Packet::from(bytes.to_vec());
                     if !bytes.is_empty() {
-                        log::info!("Sending thumbnail {thumbnail_path:?} to peer {peer_id:?} len {}", bytes.len());
                         let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
                     }
 
@@ -496,7 +495,6 @@ impl WebRtcPeer {
                 let sent_bytes = bytes.len() as u64;
                 total_sent_bytes += sent_bytes;
                 if !bytes.is_empty() {
-                    // log::info!("Sending resource to peer {peer_id:?} len {}", bytes.len());
                     let packet = (peer_id, bytes);
                     let _ = self.data_channel.lock().await.send(packet).await;
                 }

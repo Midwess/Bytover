@@ -179,7 +179,7 @@ impl BrowserCache {
             state: Mutex::new(CacheState::Completed),
         });
 
-        Ok(IOReaderBrowserCacheImpl::new(this))
+        Ok(IOReaderBrowserCacheImpl::new(this, 63 * 1024))
     }
 
     pub async fn create(db: PoolRequest<NeverSend<Database>>, resource: CacheResource) -> Result<(IOWriterBrowserCacheImpl, IOReaderBrowserCacheImpl), BrowserCacheErrors> {
@@ -206,7 +206,7 @@ impl BrowserCache {
             current_size: AtomicUsize::new(0),
         });
 
-        Ok((IOWriterBrowserCacheImpl::new(this.clone()), IOReaderBrowserCacheImpl::new(this)))
+        Ok((IOWriterBrowserCacheImpl::new(this.clone()), IOReaderBrowserCacheImpl::new(this, 63 * 1024)))
     }
 
     async fn write_chunk(&self, chunk_index: usize, bytes: &Vec<u8>) -> Result<(), BrowserCacheErrors> {
@@ -336,6 +336,11 @@ impl IOReaderBrowserCacheImpl {
 impl IOReader for IOReaderBrowserCacheImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
         let cache = &self.cache;
+        if self.read_chunk.len() > 0 {
+            let max_read = self.read_chunk_size.min(self.read_chunk.len());
+            let bytes = Bytes::from(self.read_chunk.drain(..max_read).collect::<Vec<u8>>());
+            return Ok(Some(bytes));
+        }
 
         if matches!(*cache.state.lock().await, CacheState::Failed) {
             return Err(anyhow!("Cache is failed"));
@@ -353,7 +358,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             match receiver_stream.recv().await {
                 Ok(data) => {
                     self.update_position_after_read(data.len());
-                    return Ok(Some(Bytes::from(data)));
+                    return self.next().await;
                 }
                 Err(e) => {
                     log::warn!("Failed to receive data from cache: {:?}", e);
@@ -366,10 +371,11 @@ impl IOReader for IOReaderBrowserCacheImpl {
             if mem_buffer.chunk_index == self.current_chunk_index {
                 self.receiver_stream = mem_buffer.subscribe();
                 if let Some(result) = extract_from_buffer(&mem_buffer.buffer, self.current_offset) {
-                    let bytes = Bytes::from(result);
+                    let read_bytes_len = result.len();
+                    self.read_chunk.extend_from_slice(&result);
                     drop(mem_buffer);
-                    self.update_position_after_read(bytes.len());
-                    return Ok(Some(bytes));
+                    self.update_position_after_read(read_bytes_len);
+                    return self.next().await;
                 }
             }
         }
@@ -381,9 +387,10 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if let Some(val) = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)? {
             let val = val.unchecked_into::<Uint8Array>().to_vec();
             if let Some(result) = extract_from_buffer(&val, self.current_offset) {
-                let bytes = Bytes::from(result);
-                self.update_position_after_read(bytes.len());
-                return Ok(Some(bytes));
+                let read_bytes_len = result.len();
+                self.read_chunk.extend_from_slice(&result);
+                self.update_position_after_read(read_bytes_len);
+                return self.next().await;
             }
         }
 
