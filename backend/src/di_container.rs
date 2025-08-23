@@ -22,6 +22,7 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
+use crate::app_gateway::app_info::AppInfoService;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -97,7 +98,8 @@ impl DiContainer {
             transfer_repository: Box::new(self.get_transfer_session_repository().await),
             cloud_storage: Box::new(self.get_cloud_storage()),
             markov_generator: Box::new(self.markov_generator()),
-            email_service: Box::new(self.get_email_service(token).await.unwrap())
+            email_service: Box::new(self.get_email_service(token).await.unwrap()),
+            app_service: Box::new(self.get_app_service().await)
         }
     }
 
@@ -105,7 +107,14 @@ impl DiContainer {
         CloudGrpcService {
             cloud_storage: Arc::new(self.get_cloud_storage()),
             live_query: self.live_query.clone(),
-            session_repository: Box::new(self.get_transfer_session_repository().await)
+            session_repository: Box::new(self.get_transfer_session_repository().await),
+            app_service: Box::new(self.get_app_service().await)
+        }
+    }
+
+    pub async fn get_app_service(&'static self) -> impl AppInfoService {
+        AppGatewayImpl {
+            channel: self.grpc_gateway_channel.clone()
         }
     }
 

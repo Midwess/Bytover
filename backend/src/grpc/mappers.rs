@@ -7,6 +7,7 @@ use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, ProgressUpdated, ResourceUpdated, SessionUpdated};
 use schema::devlog::bitbridge::{CloudResourceMessage, PublicTransferSessionMessage, ResourceTypeMessage};
 use std::sync::Arc;
+use schema::devlog::auth_gateway::models::Application;
 
 impl From<&CloudResourceType> for TransferResourceType {
     fn from(value: &CloudResourceType) -> Self {
@@ -68,7 +69,7 @@ impl TransferResource {
 }
 
 impl TransferSession {
-    pub async fn into_msg(&self, cloud_storage: &Arc<dyn CloudStorage>) -> PublicTransferSessionMessage {
+    pub async fn into_msg(&self, cloud_storage: &Arc<dyn CloudStorage>, app: &Application) -> PublicTransferSessionMessage {
         let mut resources = vec![];
         for resource in self.resources() {
             let progress = self.progresses().iter().find(|it| it.resource_id() == resource.order_id()).unwrap();
@@ -79,7 +80,7 @@ impl TransferSession {
             order_id: self.order_id(),
             user_id: self.user_order_id(),
             password: self.password(),
-            access_url: self.access_url(),
+            access_url: self.access_url(app.link.clone()),
             resources,
             progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
             to_email: self.to_email()
@@ -88,7 +89,7 @@ impl TransferSession {
         msg
     }
 
-    pub async fn get_events(&self, new: &TransferSession, cloud_storage: &Arc<dyn CloudStorage>) -> Vec<Event> {
+    pub async fn get_events(&self, new: &TransferSession, cloud_storage: &Arc<dyn CloudStorage>, app: &Application) -> Vec<Event> {
         let mut events = vec![];
 
         let resource_changes = new
@@ -134,7 +135,7 @@ impl TransferSession {
 
         vec![
             Event::SessionUpdated(SessionUpdated {
-                session_updated: new.into_msg(cloud_storage).await
+                session_updated: new.into_msg(cloud_storage, &app).await
             }),
         ]
     }

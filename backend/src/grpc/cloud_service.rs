@@ -9,7 +9,7 @@ use crate::user::Token;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::db::surrealdb::id::SurrealDbId;
 use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
-use schema::devlog::auth_gateway::models::User;
+use schema::devlog::auth_gateway::models::{Application, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
@@ -40,11 +40,13 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
 use tonic::{Request, Response, Status};
+use crate::app_gateway::app_info::AppInfoService;
 
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Box<dyn TransferSessionRepository>,
-    pub live_query: Arc<LiveQuery>
+    pub live_query: Arc<LiveQuery>,
+    pub app_service: Box<dyn AppInfoService>
 }
 
 type SubscribeSessionResponseStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<SubscribeSessionInfoResponse, Status>> + Send>>;
@@ -59,7 +61,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::invalid_argument("Alias must be defined"))
         };
 
-        let Some(session) = self.session_repository.find_session_by_alias(alias).await? else {
+        let Some(mut session) = self.session_repository.find_session_by_alias(alias).await? else {
             return Ok(Response::new(FindSessionResponse {
                 session: None,
                 access_url: "".to_string(),
@@ -67,12 +69,13 @@ impl BitBridgeCloudService for CloudGrpcService {
             }))
         };
 
+        let app = self.app_service.get_app_info("BitBridge".to_owned()).await?;
         let response = FindSessionResponse {
             session: Some(PublicSessionId {
                 order_id: session.order_id(),
                 user_id: session.user_order_id()
             }),
-            access_url: session.access_url(),
+            access_url: session.access_url(app.unwrap().link),
             is_required_password: session.password().is_some()
         };
 
@@ -97,6 +100,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         let live_stream = self.live_query.subscribe(live_id).await?;
         let subscription = live_stream.subscribe().await;
         let value = subscription.borrow().clone();
+        let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
 
         let initial_session = match value {
             Some(value) => Some(
@@ -106,7 +110,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             None => self.session_repository.find_one(&session_id).await?
         };
 
-        let Some(initial_session) = initial_session else {
+        let Some(mut initial_session) = initial_session else {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         };
 
@@ -117,7 +121,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         let is_completed = initial_session.is_completed();
         tx.send(Ok(SubscribeSessionInfoResponse {
             event: Some(Event::SessionUpdated(SessionUpdated {
-                session_updated: initial_session.into_msg(&self.cloud_storage).await
+                session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
             }))
         }))
         .await
@@ -129,6 +133,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         }
 
         let cloud_storage = self.cloud_storage.clone();
+        let app = app.clone();
         tokio::spawn(async move {
             let mut stream = live_stream.subscribe().await;
             let mut curr_session = initial_session.clone();
@@ -142,12 +147,12 @@ impl BitBridgeCloudService for CloudGrpcService {
                     break;
                 };
 
-                let Ok(session) = TransferSession::deserialize(&value.data.into_inner()) else {
+                let Ok(mut session) = TransferSession::deserialize(&value.data.into_inner()) else {
                     break;
                 };
 
                 let is_completed = session.is_completed();
-                let events = curr_session.get_events(&session, &cloud_storage).await;
+                let events = curr_session.get_events(&session, &cloud_storage, &app).await;
                 for event in events {
                     if let Err(_e) = tx.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await {
                         log::error!("Cannot send session, closing");
@@ -181,6 +186,10 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let Some(app) = request.extensions().get::<Application>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
         let new_session = transfer_service
@@ -188,7 +197,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
-            session: new_session.into_msg(&self.cloud_storage).await
+            session: new_session.into_msg(&self.cloud_storage, &app).await
         };
 
         let response = Response::new(response_body);
@@ -201,6 +210,11 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         let Some(user) = request.extensions().get::<User>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+
+        let Some(app) = request.extensions().get::<Application>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
@@ -224,7 +238,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             })
             .collect::<Vec<_>>();
 
-        let response = transfer_service.add_resources(user, request_body.session_order_id, requests).await?;
+        let response = transfer_service.add_resources(user, app, request_body.session_order_id, requests).await?;
 
         let mut source = response.first_resource.source();
 

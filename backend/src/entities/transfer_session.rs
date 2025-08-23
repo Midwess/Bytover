@@ -1,5 +1,3 @@
-use std::env;
-
 use devlog_sdk::distributed_id::gen_id;
 use schema::value::static_resource::StaticResource;
 use serde::{Deserialize, Serialize};
@@ -23,7 +21,7 @@ pub enum TransferSessionErrors {
     MaxResourceExceed(usize)
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealDerive)]
 pub struct TransferSession {
     order_id: u64,
     owner_user_order_id: u64,
@@ -167,9 +165,8 @@ impl TransferSession {
         let _ = progress.update_transfered_bytes(transferred_size);
     }
 
-    pub fn access_url(&self) -> String {
-        let website = env::var("DEVLOG_BITBRIDGE_WEBSITE_URL").unwrap_or("http://localhost:8000".to_owned());
-        format!("{}?session={}", website, self.alias)
+    pub fn access_url(&self, base_url: String) -> String {
+        format!("{base_url}?session={}", self.alias)
     }
 
     pub fn password(&self) -> Option<String> {

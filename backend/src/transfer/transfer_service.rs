@@ -8,9 +8,10 @@ use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRe
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
-use schema::devlog::auth_gateway::models::User;
+use schema::devlog::auth_gateway::models::{Application, User};
 use schema::value::datetime::Datetime;
 use schema::value::static_resource::StaticResource;
+use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -31,7 +32,9 @@ pub enum TransferErrors {
     #[error("Password of a session cannot exceed {0}")]
     PasswordLengthExceed(usize),
     #[error("Failed to generate alias {}", .0)]
-    MarkovError(#[from] MarkovErrors)
+    MarkovError(#[from] MarkovErrors),
+    #[error("Application service error {0}")]
+    ApplicationServiceError(#[from] AppInfoErrors)
 }
 
 pub struct TransferResourceRequest {
@@ -52,6 +55,7 @@ pub struct TransferResourcesResponse {
 pub struct TransferService {
     pub transfer_repository: Box<dyn TransferSessionRepository>,
     pub cloud_storage: Box<dyn CloudStorage>,
+    pub app_service: Box<dyn AppInfoService>,
     pub markov_generator: Box<dyn Markov>,
     pub email_service: Box<dyn EmailService>
 }
@@ -105,6 +109,7 @@ impl TransferService {
     pub async fn add_resources(
         &self,
         user: &User,
+        app: &Application,
         session_order_id: u64,
         requests: Vec<TransferResourceRequest>
     ) -> Result<TransferResourcesResponse, TransferErrors> {
@@ -127,7 +132,7 @@ impl TransferService {
                 .await?;
         }
 
-        let session = self.transfer_repository.update_one(session).await?;
+        let mut session = self.transfer_repository.update_one(session).await?;
 
         let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
             log::warn!("The first resource must be defined, session id = {}", session.order_id());
@@ -145,7 +150,7 @@ impl TransferService {
         };
 
         if let Some(ref to_email) = session.to_email() {
-            let download_url = session.access_url();
+            let download_url = session.access_url(app.link.clone());
             let resources = session
                 .resources()
                 .iter()

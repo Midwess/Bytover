@@ -14,6 +14,7 @@ import {
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
+    ArrowDown,
     ChevronsUpDown, Download,
     Globe, LoaderCircle, Play
 } from 'lucide-react'
@@ -419,7 +420,7 @@ function FileView(props: {
             {
                 file.is_completed
                     ? <a className={"rounded-xl p-2 bg-bluePrimary/80"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
-                        <Download color={'white'}/>
+                        <ArrowDown color={'white'}/>
                     </a>
                     : <>
                         <CircleProgress progress={file.completion} size={30}/>
@@ -486,7 +487,7 @@ function MediaView(props: {
                     <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
                         ? <a className={"rounded-xl bg-bluePrimary/80 p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
-                            <Download color={'white'}/>
+                            <ArrowDown color={'white'}/>
                           </a>
                         : <>
                             <CircleProgress progress={media.completion} size={30}/>

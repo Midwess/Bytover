@@ -7,13 +7,19 @@ import {
 import {
     AlertCircleIcon,
     Globe, ImageUpIcon, Play,
-    Users, X,
+    Users, X, Copy, Check,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
 import * as React from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/animate-ui/radix/tooltip";
 import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
 import {
     AppEventVariantTransfer,
@@ -405,7 +411,10 @@ function PublicSend() {
                        type={"password"} maxLength={20} placeholder={"pwd@123"}/>
                 {
                     cloudSession?.access_url &&
-                    <Input value={cloudSession?.access_url ?? ''} disabled={true}/>
+                    <>
+                        <Label>Generated url</Label>
+                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
+                    </>
                 }
                 {
                     isInProgressDefer
@@ -445,6 +454,65 @@ function PublicSend() {
             </div>
         </MotionEffect>
     </div>
+}
+
+function UrlInputWithCopy({url}: {url: string}) {
+    const [isCopied, setIsCopied] = useState(false)
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(url)
+            setIsCopied(true)
+            setTimeout(() => setIsCopied(false), 2000) // Reset after 2 seconds
+        } catch (err) {
+            console.error('Failed to copy text: ', err)
+        }
+    }
+
+    // Function to trim from the center
+    const getTrimmedUrl = (url: string, maxLength: number = 40) => {
+        if (url.length <= maxLength) return url
+        
+        const ellipsis = '...'
+        const availableLength = maxLength - ellipsis.length
+        const frontLength = Math.ceil(availableLength / 2)
+        const backLength = Math.floor(availableLength / 2)
+        
+        return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
+    }
+
+    return (
+        <TooltipProvider>
+            <div className="relative">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Input 
+                            value={getTrimmedUrl(url)} 
+                            disabled={true}
+                            className="pr-12 cursor-default" // Add padding for the button and cursor
+                        />
+                    </TooltipTrigger>
+                    <TooltipContent 
+                        side="top" 
+                        className="max-w-xs break-all"
+                    >
+                        {url}
+                    </TooltipContent>
+                </Tooltip>
+                <button
+                    onClick={handleCopy}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    title={isCopied ? "Copied!" : "Copy to clipboard"}
+                >
+                    {isCopied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    )}
+                </button>
+            </div>
+        </TooltipProvider>
+    )
 }
 
 function NearbySend() {

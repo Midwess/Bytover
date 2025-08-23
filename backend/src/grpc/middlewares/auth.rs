@@ -37,9 +37,12 @@ impl RequestInterceptor for AuthInterceptor {
                 request.metadata_mut().insert("authorization", MetadataValue::try_from(token_str.clone()).unwrap());
 
                 let user_info = user_service.me(request).await?;
-                let user = user_info.into_inner().user;
+                let user_info = user_info.into_inner();
+                let user = user_info.user;
+                let app = user_info.app;
 
                 req.extensions_mut().insert(user);
+                req.extensions_mut().insert(app);
                 req.extensions_mut().insert(Token(token_str));
                 Ok(req)
             }

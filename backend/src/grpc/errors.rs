@@ -1,5 +1,5 @@
 use tonic::Status;
-
+use crate::app_gateway::app_info::AppInfoErrors;
 use crate::cloud_storage::storage::CloudStorageErrors;
 use crate::di_container::DiContainerError;
 use crate::transfer::transfer_service::TransferErrors;
@@ -27,6 +27,13 @@ impl From<TransferErrors> for Status {
 
 impl From<CloudStorageErrors> for Status {
     fn from(value: CloudStorageErrors) -> Self {
+        let value_msg = value.to_string();
+        Status::internal(value_msg)
+    }
+}
+
+impl From<AppInfoErrors> for Status {
+    fn from(value: AppInfoErrors) -> Self {
         let value_msg = value.to_string();
         Status::internal(value_msg)
     }
