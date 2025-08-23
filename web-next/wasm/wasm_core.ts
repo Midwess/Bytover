@@ -53,7 +53,7 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -167,6 +167,30 @@ export class WasmCore {
         }, []);
 
         return state
+    }
+
+    usePeerState(peerId: string | undefined) {
+        const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
+
+        useEffect(() => {
+            return this.transferState.subscribe((value) => {
+                let peer = value?.nearby_peers?.find((it) => {
+                    return it.id === peerId
+                })
+
+                const isChanged = currentPeer?.id !== peer?.id ||
+                    currentPeer?.display_name !== peer?.display_name ||
+                    currentPeer?.display_download_speed !== peer?.display_download_speed ||
+                    currentPeer?.display_upload_speed !== peer?.display_upload_speed ||
+                    currentPeer?.display_download_speed !== peer?.display_download_speed
+                if (isChanged) {
+                    console.log("Peer state changed", peer)
+                    setPeer(peer)
+                }
+            })
+        }, [currentPeer, peerId])
+
+        return currentPeer
     }
 
     public useIsCoreCompatible() {

@@ -549,10 +549,12 @@ function NearbySend() {
     </>
 }
 
-function NearbyPeer({peer}: {peer: PeerViewModel}) {
+function NearbyPeer(props: {peer: PeerViewModel}) {
+    const peer = core.usePeerState(props.peer?.id) || props.peer
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
+
     return <>
-        <Button
+        <div
             className={"flex flex-row bg-muted hover:bg-muted-foreground/30 rounded-2xl items-center px-2 py-2 h-fit w-full border-1 border-primaryText/5 justify-between"}
             onClick={() => {
                 core.update(new AppEventVariantTransfer(new TransferEventVariantStartTransfer(peer.id)))
@@ -564,13 +566,20 @@ function NearbyPeer({peer}: {peer: PeerViewModel}) {
                         <AvatarImage src={peer.avatar.url}/>
                     </Avatar>
                 </div>
-                <div className={"flex flex-col gap-0"}>
+                <div className={"flex flex-col gap-1 items-start"}>
                     <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
+                    {
+                        peer.display_upload_speed
+                            ? <p className={"text-primaryText/70 text-xs"}>{peer.display_upload_speed}</p>
+                            : <></>
+                    }
                 </div>
             </div>
             {
-                peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={30}/> : <></>
+                <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
+                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35}/> : <></>}
+                </div>
             }
-        </Button>
+        </div>
     </>
 }

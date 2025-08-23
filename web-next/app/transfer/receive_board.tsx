@@ -280,11 +280,10 @@ function Board() {
 
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
-            <h2 className={"text-lg font-bold pl-2"}>Receive sessions</h2>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
                 <p className={"opacity-80 text-sm"}>Find session</p>
                 <div className={"relative"}>
-                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8"} placeholder={"Session name or url"}
+                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"} placeholder={"Session name or url"}
                            onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
                            onKeyDown={(e) => {
                                if (e.key === 'Enter') {
@@ -308,7 +307,7 @@ function Board() {
                     )}
                 </div>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
-                <Button className={"w-fit"} onClick={handleFind}>Find</Button>
+                <Button className={"w-fit h-8"} onClick={handleFind}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
                 {!!sessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
