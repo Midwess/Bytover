@@ -58,16 +58,10 @@ impl MemBuffer {
 
     pub async fn extend(&mut self, bytes: &Vec<u8>) -> Option<Vec<u8>> {
         self.buffer.extend_from_slice(bytes);
-        let broadcast = match &self.data_broadcast {
-            Some((sender, _)) => sender,
-            None => {
-                self.data_broadcast = Some(broadcast(1024));
-                let (sender, _) = self.data_broadcast.as_ref().unwrap();
-                sender
-            }
-        };
 
-        let _ = broadcast.broadcast(bytes.clone()).await;
+        if let Some((sender, _)) = self.data_broadcast.as_mut() {
+            let _ = sender.broadcast(bytes.clone()).await;
+        }
 
         if self.buffer.len() >= self.max_chunk_size {
             let chunk = self.buffer.drain(..self.max_chunk_size).collect();
@@ -78,8 +72,16 @@ impl MemBuffer {
         }
     }
 
-    pub fn subscribe(&self) -> Option<async_broadcast::Receiver<Vec<u8>>> {
-        self.data_broadcast.as_ref().map(|(_, r)| r.clone())
+    pub fn subscribe(&mut self) -> async_broadcast::Receiver<Vec<u8>> {
+        match &self.data_broadcast {
+            Some((_, receiver)) => receiver.clone(),
+            None => {
+                log::info!("Create broadcast for mem buffer");
+                self.data_broadcast = Some(broadcast(1024));
+                let (_, receiver) = self.data_broadcast.as_ref().unwrap();
+                receiver.clone()
+            }
+        }
     }
 
     pub fn clear(&mut self) -> Vec<u8> {
@@ -376,9 +378,9 @@ impl IOReader for IOReaderBrowserCacheImpl {
         }
 
         {
-            let mem_buffer = cache.mem_buffer.lock().await;
+            let mut mem_buffer = cache.mem_buffer.lock().await;
             if mem_buffer.chunk_index == self.current_chunk_index {
-                self.receiver_stream = mem_buffer.subscribe();
+                self.receiver_stream = Some(mem_buffer.subscribe());
                 if let Some(result) = extract_from_buffer(&mem_buffer.buffer, self.current_offset) {
                     let read_bytes_len = result.len();
                     self.read_chunk.extend_from_slice(&result);

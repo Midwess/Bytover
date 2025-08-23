@@ -4,7 +4,7 @@ use shared::app::operations::CoreOperationOutput;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MessageToShell {
-    HandleResponse(u32, CoreOperationOutput),
+    HandleResponse(u32, Box<CoreOperationOutput>),
     PathResolver(PathResolverMessage)
 }
 

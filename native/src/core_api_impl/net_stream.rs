@@ -6,7 +6,7 @@ use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use std::sync::Arc;
-use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{duplex, AsyncWriteExt};
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 use url::Url;

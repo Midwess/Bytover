@@ -25,11 +25,11 @@ impl CoreBridge for CoreBridgeImpl {
     fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
         let shell = self.shell.clone();
         tokio::spawn(async move {
-            let _ = shell.notify(MessageToShell::HandleResponse(request_id, response)).await;
+            let _ = shell.notify(MessageToShell::HandleResponse(request_id, Box::new(response))).await;
         })
     }
 
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
-        self.throttle_shell_runtime.send(MessageToShell::HandleResponse(request_id, response)).await;
+        self.throttle_shell_runtime.send(MessageToShell::HandleResponse(request_id, Box::new(response))).await;
     }
 }
