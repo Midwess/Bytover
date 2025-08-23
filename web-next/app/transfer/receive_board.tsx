@@ -257,7 +257,7 @@ function Board() {
         message?.resolveMessage()
         if (!keywords || keywords.trim() === '') {
             setUrl({
-                session: ''
+                session: undefined
             })
 
             return
@@ -298,7 +298,7 @@ function Board() {
                             onClick={() => {
                                 setKeywords('')
                                 setUrl({
-                                    session: ''
+                                    session: undefined
                                 })
                             }}
                         >

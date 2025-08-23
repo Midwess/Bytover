@@ -47,7 +47,7 @@ import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 export default function SendBoard() {
     return <>
         <div
-            className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
+            className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
             <div className={"grid grid-cols-11 w-full h-full gap-2"}>
                 <div className={"col-span-3 h-full"}>
                     <Board/>
@@ -73,6 +73,7 @@ function FileSelections() {
         },
     ] = useFileUpload({
         accept: "*",
+        multiple: true,
     })
 
     const transfer_state = core.useTransferState()
@@ -115,7 +116,7 @@ function FileSelections() {
                             <ImageUpIcon className="size-4 opacity-60"/>
                         </div>
                         <p className="mb-1.5 text-sm font-medium">
-                            Drop your image here or click to browse
+                            Drop multiple files here or click to browse
                         </p>
                     </div>
                 </div>
@@ -242,41 +243,58 @@ function MediaView(props: {
 
     return (
         <div className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
+            {/* Thumbnail - lowest z-index */}
+            <div className="absolute inset-0 z-0">
+                {thumbnail}
+            </div>
+
+            {/* Video play icon */}
+            {isVideo && (
+                <div className="absolute top-2 right-2 z-20">
+                    <Play className="w-5 h-5 bg-muted p-1 rounded-sm"/>
+                </div>
+            )}
+
+            {/* Background overlay for hover effect */}
             <div
                 className={clsx(
-                    "z-3 w-full h-[90%] absolute items-center flex justify-center bg-gradient-to-t from-blackBase/70 bottom-0",
+                    "absolute inset-0 bg-gradient-to-t from-blackBase/70 via-transparent to-transparent z-10",
+                    isMobile
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                )}
+            />
+
+            {/* Remove button - centered with high z-index */}
+            <div
+                className={clsx(
+                    "absolute inset-0 flex items-center justify-center z-30",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}
             >
-                {
-                    <Button className={"z-20 rounded-xl bg-white"} onClick={() => {
+                <Button 
+                    className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
+                    onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
-                    }}>
-                        <X/>
-                    </Button>
-                }
+                    }}
+                >
+                    <X className="w-4 h-4"/>
+                </Button>
             </div>
 
-            {
-                isVideo
-                    ? <div>
-                        <Play className={"w-5 h-5 bg-muted p-1 z-20 rounded-sm absolute top-2 right-2"}/>
-                    </div>
-                    : <></>
-            }
-
+            {/* File info - positioned at bottom */}
             <div
                 className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center p-2 justify-between",
+                    "absolute bottom-0 left-0 right-0 p-2 z-20",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}
             >
                 <div className="flex flex-col items-start gap-1">
-                    <p className="text-primaryText text-sm">
+                    <p className="text-primaryText text-sm font-medium">
                         {model.name}
                     </p>
                     <p className="text-sm text-primaryText/80">
@@ -284,10 +302,6 @@ function MediaView(props: {
                     </p>
                 </div>
             </div>
-
-            {
-                thumbnail
-            }
         </div>
     );
 }
