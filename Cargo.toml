@@ -71,8 +71,8 @@ tar = { git = "https://github.com/dev-logs/tar-rs.git", default-features = false
 mime_guess = { version = "2.0.5", default-features = false }
 tokio-util = { version = "0.7.15", default-features = false }
 redb = { version = "3.0.0", default-features = false }
-matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
-matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
+matchbox_protocol = { path = "../matchbox/matchbox_protocol", default-features = false }
+matchbox_socket = { path = "../matchbox/matchbox_socket", default-features = false }
 ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
 futures-timer = { version = "3.0.3", default-features = false, features = ["wasm-bindgen"] }
 n0-future = { version = "0.2.0", default-features = false }

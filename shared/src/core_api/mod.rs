@@ -121,20 +121,26 @@ pub trait BufferExt: Send + Sync {
 impl BufferExt for PeerBuffered {
     async fn flush_timeout(&self, index: usize) -> anyhow::Result<()> {
         let buffered = self.buffered_amount(index).await;
-        let timeout = Duration::from_secs((buffered / 40).min(10) as u64);
+
+        // Assume min speed = 10 KB/s = 10,000 bytes/s
+        let est_secs = buffered as f64 / 10_000.0;
+
+        // Clamp between 5s and 10s
+        let secs = est_secs.clamp(5.0, 10.0);
+        let timeout = Duration::from_secs_f64(secs);
 
         select! {
-            _flused = self.flush(index).fuse() => Ok(()),
-            _timeout = Delay::new(timeout).fuse() => Err(anyhow::anyhow!("flush timeout")),
+            _ = self.flush(index).fuse() => Ok(()),
+            _ = Delay::new(timeout).fuse() => Err(anyhow::anyhow!("flush timeout after {:?}", timeout)),
             complete => Ok(()),
         }
     }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
-        select! {
-            _flused = self.flush_all().fuse() => Ok(()),
-            _timeout = Delay::new(Duration::from_secs(10)).fuse() => Err(anyhow::anyhow!("flush timeout")),
-            complete => Ok(()),
+        for i in 0..self.channel_refs.len() {
+            self.flush_timeout(i).await?;
         }
+
+        Ok(())
     }
 }

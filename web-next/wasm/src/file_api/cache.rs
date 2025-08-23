@@ -272,6 +272,11 @@ pub struct IOReaderBrowserCacheImpl {
     current_offset: usize,
     // Will have value when the reader caches the writer speed
     receiver_stream: Option<async_broadcast::Receiver<Vec<u8>>>,
+    // The client will allow to customize the chunk size
+    // but we don't want to query too much in storage
+    // so that we will maintain a mem cache
+    read_chunk_size: usize,
+    read_chunk: Vec<u8>
 }
 
 impl Clone for IOReaderBrowserCacheImpl {
@@ -280,7 +285,9 @@ impl Clone for IOReaderBrowserCacheImpl {
             cache: self.cache.clone(),
             current_chunk_index: 0,
             current_offset: 0,
-            receiver_stream: None
+            receiver_stream: None,
+            read_chunk_size: self.read_chunk_size,
+            read_chunk: Vec::with_capacity(self.read_chunk_size)
         }
     }
 
@@ -291,16 +298,21 @@ impl Clone for IOReaderBrowserCacheImpl {
         self.cache = source.cache.clone();
         self.current_chunk_index = 0;
         self.current_offset = 0;
+        self.receiver_stream = None;
+        self.read_chunk_size = source.read_chunk_size;
+        self.read_chunk = Vec::with_capacity(self.read_chunk_size);
     }
 }
 
 impl IOReaderBrowserCacheImpl {
-    pub fn new(cache: Arc<BrowserCache>) -> Self {
+    pub fn new(cache: Arc<BrowserCache>, chunk_size: usize) -> Self {
         Self {
             cache,
             current_chunk_index: 0,
             current_offset: 0,
-            receiver_stream: None
+            receiver_stream: None,
+            read_chunk_size: chunk_size,
+            read_chunk: Vec::with_capacity(chunk_size)
         }
     }
 
@@ -381,8 +393,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             return Ok(None);
         }
 
-        // Return empty bytes but don't update position since no data was read
-        Ok(Some(Bytes::new()))
+        self.next().await
     }
 
     async fn total_size(&self) -> Result<u64> {

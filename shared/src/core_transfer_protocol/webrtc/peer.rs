@@ -408,8 +408,6 @@ impl WebRtcPeer {
 
         let _ = self.msg_channel.send(request, Some(request_id)).await?;
 
-        log::info!("Transferring resources to peer {peer_id:?} {:?}", session.is_completed());
-
         // Transfer the thumbnails
         let session_thumbnail_paths = session
             .resources
@@ -440,7 +438,10 @@ impl WebRtcPeer {
 
                 while let Ok(Some(bytes)) = reader.next().await {
                     let bytes = Packet::from(bytes.to_vec());
-                    let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
+                    if !bytes.is_empty() {
+                        log::info!("Sending thumbnail {thumbnail_path:?} to peer {peer_id:?} len {}", bytes.len());
+                        let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
+                    }
 
                     if buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
                         buffer.flush_all_timeout().await?;
@@ -494,8 +495,12 @@ impl WebRtcPeer {
                 let bytes = Packet::from(bytes.to_vec());
                 let sent_bytes = bytes.len() as u64;
                 total_sent_bytes += sent_bytes;
-                let packet = (peer_id, bytes);
-                let _ = self.data_channel.lock().await.send(packet).await;
+                if !bytes.is_empty() {
+                    // log::info!("Sending resource to peer {peer_id:?} len {}", bytes.len());
+                    let packet = (peer_id, bytes);
+                    let _ = self.data_channel.lock().await.send(packet).await;
+                }
+
                 progress_update.update_progress(sent_bytes);
                 self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
                 if self.buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
