@@ -1,24 +1,24 @@
-use std::collections::HashMap;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::Database;
-use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
+use idb::Database;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use shared::app::transfer::session::{TransferProgress, TransferSession};
-use crate::file_api::path_extension::WebExtLocalResourcePath;
-use crate::repository::id::IdbIdWrapper;
+use std::collections::HashMap;
+use wasm_bindgen::JsValue;
 
 pub struct TransferSessionRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>,
+    pub db: PoolRequest<NeverSend<Database>>
 }
 
 impl IdbId for IdbIdWrapper<TransferSessionId> {
@@ -26,23 +26,23 @@ impl IdbId for IdbIdWrapper<TransferSessionId> {
         let mut json: serde_json::Value = serde_wasm_bindgen::from_value(value)?;
         let table_name = "transferSession";
         if !json.is_array() {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         };
 
         Ok(IdbIdWrapper(TransferSessionId {
-            r#type: json_array
-                .get(0)
-                .and_then(|it| serde_json::from_value(it.clone()).ok()),
-            target: json_array
-                .get(1)
-                .and_then(|it| serde_json::from_value(it.clone()).ok()),
-            order_id: json_array
-                .get(2)
-                .and_then(|it| serde_json::from_value(it.clone()).ok())
+            r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
+            target: json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()),
+            order_id: json_array.get(2).and_then(|it| serde_json::from_value(it.clone()).ok())
         }))
     }
 }
@@ -92,7 +92,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
             to_id.as_ref(),
             count
         )
-            .await
+        .await
     }
 
     async fn delete_one(&self, id: &TransferSessionId) -> Resolve<TransferSession> {
@@ -106,11 +106,19 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 
 #[async_trait::async_trait(?Send)]
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
-    async fn update_progresses(&self, _order_id: u64, _progresses: Vec<TransferProgress>) -> Result<Option<TransferSession>, PersistenceError> {
+    async fn update_progresses(
+        &self,
+        _order_id: u64,
+        _progresses: Vec<TransferProgress>
+    ) -> Result<Option<TransferSession>, PersistenceError> {
         Ok(None)
     }
 
-    async fn update_resource(&self, _session_id: TransferSessionId, _resource: LocalResource) -> Result<Option<TransferSession>, PersistenceError> {
+    async fn update_resource(
+        &self,
+        _session_id: TransferSessionId,
+        _resource: LocalResource
+    ) -> Result<Option<TransferSession>, PersistenceError> {
         Ok(None)
     }
 
@@ -118,13 +126,20 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         Ok(())
     }
 
-    async fn generate_resource_paths(&self, _session_order_id: u64, resource_names: HashMap<u64, String>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+    async fn generate_resource_paths(
+        &self,
+        _session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
-        
+
         for (resource_order_id, _resource_name) in resource_names {
-            result.insert(resource_order_id, LocalResourcePath::cache("resources", resource_order_id.to_string()));
+            result.insert(
+                resource_order_id,
+                LocalResourcePath::cache("resources", resource_order_id.to_string())
+            );
         }
-        
+
         Ok(result)
     }
 }

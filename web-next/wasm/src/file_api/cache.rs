@@ -1,22 +1,22 @@
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
+use crate::file_api::file_extension::VecExtension;
+use anyhow::{anyhow, Result};
+use async_broadcast::broadcast;
+use bincode;
 use bytes::Bytes;
+use core_services::utils::never_send::NeverSend;
+use core_services::utils::pool::request::PoolRequest;
 use futures::lock::Mutex;
 use idb::{Database, KeyRange, Query, TransactionMode};
 use js_sys::{Array, Uint8Array};
 use n0_future::task::spawn;
 use serde::{Deserialize, Serialize};
-use bincode;
-use core_services::utils::never_send::NeverSend;
+use shared::core_api::{IOReader, IOWriter};
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
-use core_services::utils::pool::request::PoolRequest;
-use shared::core_api::{IOReader, IOWriter};
-use anyhow::{anyhow, Result};
-use async_broadcast::broadcast;
-use crate::file_api::file_extension::VecExtension;
 
 #[derive(Debug, Error)]
 pub enum BrowserCacheErrors {
@@ -73,8 +73,7 @@ impl MemBuffer {
             let chunk = self.buffer.drain(..self.max_chunk_size).collect();
             self.chunk_index += 1;
             Some(chunk)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -123,7 +122,7 @@ impl PartialEq for BrowserCache {
 pub struct CacheResource {
     pub table: String,
     pub id: u64,
-    pub total_size: AtomicUsize,
+    pub total_size: AtomicUsize
 }
 
 impl CacheResource {
@@ -131,7 +130,7 @@ impl CacheResource {
         Self {
             table: "thumbnails".to_string(),
             id: resource_id,
-            total_size: AtomicUsize::new(0),
+            total_size: AtomicUsize::new(0)
         }
     }
 
@@ -145,57 +144,58 @@ impl CacheResource {
 }
 
 impl BrowserCache {
-    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 8;
     const END_MARKER_CHUNK: usize = usize::MAX - 1;
+    const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 8;
 
     /// Open a cache for reading
     /// it will not accept to open an in-complete cache
-    pub async fn open(db: PoolRequest<NeverSend<Database>>, table: &str, id: u64) -> Result<IOReaderBrowserCacheImpl, BrowserCacheErrors> {
+    pub async fn open(
+        db: PoolRequest<NeverSend<Database>>,
+        table: &str,
+        id: u64
+    ) -> Result<IOReaderBrowserCacheImpl, BrowserCacheErrors> {
         let db_handle = db.retrieve().await.unwrap();
         let trans = db_handle.transaction(&[&table], TransactionMode::ReadOnly)?;
         let store = trans.object_store(table)?;
 
         let end_marker_key = Self::create_chunk_id(id, Self::END_MARKER_CHUNK);
         let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).unwrap());
-        
+
         let end_marker_result = store.get(end_marker_query)?.await?;
 
         let resource = match end_marker_result {
-            Some(end_marker_data) => {
-                CacheResource::try_from(end_marker_data)?
-            },
+            Some(end_marker_data) => CacheResource::try_from(end_marker_data)?,
             None => {
                 return Err(BrowserCacheErrors::IncompleteData);
             }
         };
-        
+
         let this = Arc::new(Self {
-            current_size: AtomicUsize::new(
-                resource.total_size.load(Ordering::SeqCst)
-            ),
+            current_size: AtomicUsize::new(resource.total_size.load(Ordering::SeqCst)),
             db,
             mem_buffer: Mutex::new(MemBuffer::new(0)),
             resource,
-            state: Mutex::new(CacheState::Completed),
+            state: Mutex::new(CacheState::Completed)
         });
 
         Ok(IOReaderBrowserCacheImpl::new(this, 63 * 1024))
     }
 
-    pub async fn create(db: PoolRequest<NeverSend<Database>>, resource: CacheResource) -> Result<(IOWriterBrowserCacheImpl, IOReaderBrowserCacheImpl), BrowserCacheErrors> {
+    pub async fn create(
+        db: PoolRequest<NeverSend<Database>>,
+        resource: CacheResource
+    ) -> Result<(IOWriterBrowserCacheImpl, IOReaderBrowserCacheImpl), BrowserCacheErrors> {
         let db_handle = db.retrieve().await.unwrap();
         let trans = db_handle.transaction(&[&resource.table], TransactionMode::ReadWrite)?;
         let store = trans.object_store(&resource.table)?;
 
         let all_query = Query::KeyRange(Self::create_all_range_query(resource.id));
-        let existing_keys = store.get_all_keys(Some(all_query), None)?
-            .await?;
+        let existing_keys = store.get_all_keys(Some(all_query), None)?.await?;
 
         for key in existing_keys {
-            store.delete(Query::Key(key))?
-                .await?;
+            store.delete(Query::Key(key))?.await?;
         }
-        
+
         trans.commit()?.await?;
 
         let this = Arc::new(Self {
@@ -203,22 +203,31 @@ impl BrowserCache {
             mem_buffer: Mutex::new(MemBuffer::new(0)),
             resource,
             state: Mutex::new(CacheState::InProgress),
-            current_size: AtomicUsize::new(0),
+            current_size: AtomicUsize::new(0)
         });
 
-        Ok((IOWriterBrowserCacheImpl::new(this.clone()), IOReaderBrowserCacheImpl::new(this, 63 * 1024)))
+        Ok((
+            IOWriterBrowserCacheImpl::new(this.clone()),
+            IOReaderBrowserCacheImpl::new(this, 63 * 1024)
+        ))
     }
 
     async fn write_chunk(&self, chunk_index: usize, bytes: &Vec<u8>) -> Result<(), BrowserCacheErrors> {
         let len = bytes.len();
         if len > Self::MAX_CHUNK_SIZE {
-            return Err(BrowserCacheErrors::FailedToPut(format!("Chunk size exceeded: {} > {}", len, Self::MAX_CHUNK_SIZE)));
+            return Err(BrowserCacheErrors::FailedToPut(format!(
+                "Chunk size exceeded: {} > {}",
+                len,
+                Self::MAX_CHUNK_SIZE
+            )));
         }
 
         let db = self.db.retrieve().await.unwrap();
-        let trans = db.transaction(&[&self.resource.table], TransactionMode::ReadWrite)
+        let trans = db
+            .transaction(&[&self.resource.table], TransactionMode::ReadWrite)
             .map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
-        let store = trans.object_store(&self.resource.table)
+        let store = trans
+            .object_store(&self.resource.table)
             .map_err(|it| BrowserCacheErrors::FailedToPut(format!("Failed to write chunk: {it:?}")))?;
         let key: JsValue = self.chunk_id(chunk_index);
         let js_value: JsValue = bytes.into_js_value();
@@ -230,11 +239,11 @@ impl BrowserCache {
 
         Ok(())
     }
-    
+
     fn chunk_id(&self, chunk_index: usize) -> JsValue {
         Self::create_chunk_id(self.resource.id, chunk_index)
     }
-    
+
     fn create_chunk_id(resource_id: u64, chunk_index: usize) -> JsValue {
         let arr = Array::new();
         arr.push(&JsValue::from(resource_id.to_string()));
@@ -259,7 +268,7 @@ impl BrowserCache {
 
         KeyRange::bound(&lower_bound, &upper_bound, Some(true), Some(false)).unwrap()
     }
-    
+
     fn create_end_marker_data(&self) -> Result<Vec<u8>, BrowserCacheErrors> {
         bincode::serialize(&self.resource)
             .map_err(|e| BrowserCacheErrors::FailedToPut(format!("Failed to serialize ResourceInfo: {}", e)))
@@ -336,7 +345,7 @@ impl IOReaderBrowserCacheImpl {
 impl IOReader for IOReaderBrowserCacheImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
         let cache = &self.cache;
-        if self.read_chunk.len() > 0 {
+        if !self.read_chunk.is_empty() {
             let max_read = self.read_chunk_size.min(self.read_chunk.len());
             let bytes = Bytes::from(self.read_chunk.drain(..max_read).collect::<Vec<u8>>());
             return Ok(Some(bytes));
@@ -346,7 +355,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             return Err(anyhow!("Cache is failed"));
         }
 
-        let extract_from_buffer= |buffer: &[u8], offset: usize| -> Option<Vec<u8>> {
+        let extract_from_buffer = |buffer: &[u8], offset: usize| -> Option<Vec<u8>> {
             if buffer.len() > offset {
                 Some(buffer[offset..].to_vec())
             } else {
@@ -381,7 +390,9 @@ impl IOReader for IOReaderBrowserCacheImpl {
         }
 
         let db = cache.db.retrieve().await.unwrap();
-        let trans = db.transaction(&[&cache.resource.table], TransactionMode::ReadOnly).map_err(BrowserCacheErrors::from)?;
+        let trans = db
+            .transaction(&[&cache.resource.table], TransactionMode::ReadOnly)
+            .map_err(BrowserCacheErrors::from)?;
         let store = trans.object_store(&cache.resource.table).map_err(BrowserCacheErrors::from)?;
         let query = Query::KeyRange(cache.chunk_index_query(self.current_chunk_index));
         if let Some(val) = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)? {
@@ -396,7 +407,13 @@ impl IOReader for IOReaderBrowserCacheImpl {
 
         let end_marker_key = BrowserCache::create_chunk_id(cache.resource.id, BrowserCache::END_MARKER_CHUNK);
         let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
-        if store.get(end_marker_query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)?.is_some() {
+        if store
+            .get(end_marker_query)
+            .map_err(BrowserCacheErrors::from)?
+            .await
+            .map_err(BrowserCacheErrors::from)?
+            .is_some()
+        {
             return Ok(None);
         }
 
@@ -422,9 +439,7 @@ impl Deref for IOWriterBrowserCacheImpl {
 
 impl IOWriterBrowserCacheImpl {
     fn new(cache: Arc<BrowserCache>) -> Self {
-        Self {
-            cache
-        }
+        Self { cache }
     }
 
     async fn end(cache: &BrowserCache, is_failed: bool) -> Result<()> {
@@ -436,13 +451,14 @@ impl IOWriterBrowserCacheImpl {
         let db = cache.db.retrieve().await.unwrap();
 
         if is_failed {
-            let trans = db.transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
+            let trans = db
+                .transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
                 .map_err(|it| anyhow!("Failed to get transaction {it:?}"))?;
-            let store = trans.object_store(&cache.resource.table)
-                .map_err(|it| anyhow!("Failed to get store {it:?}"))?;
+            let store = trans.object_store(&cache.resource.table).map_err(|it| anyhow!("Failed to get store {it:?}"))?;
 
             let all_query = Query::KeyRange(BrowserCache::create_all_range_query(cache.resource.id));
-            let existing_keys = store.get_all_keys(Some(all_query), None)
+            let existing_keys = store
+                .get_all_keys(Some(all_query), None)
                 .map_err(|it| anyhow!("Failed to get keys {it:?}"))?
                 .await
                 .map_err(|it| anyhow!("Failed to get keys {it:?}"))?;
@@ -461,18 +477,24 @@ impl IOWriterBrowserCacheImpl {
         };
 
         Self::flush(cache).await?;
-        let trans = db.transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
+        let trans = db
+            .transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
             .map_err(|it| anyhow!("Failed to get transaction {it:?}"))?;
-        let store = trans.object_store(&cache.resource.table)
-            .map_err(|it| anyhow!("Failed to get store {it:?}"))?;
+        let store = trans.object_store(&cache.resource.table).map_err(|it| anyhow!("Failed to get store {it:?}"))?;
         let key: JsValue = cache.chunk_id(BrowserCache::END_MARKER_CHUNK);
         let current_size = cache.current_size.load(Ordering::SeqCst);
-        let _ = cache.resource.total_size.store(current_size, Ordering::SeqCst);
+        cache.resource.total_size.store(current_size, Ordering::SeqCst);
         let end_marker_data = cache.create_end_marker_data()?;
-        let js_value = (&end_marker_data).into_js_value();
-        store.put(&js_value, Some(&key)).map_err(|it| anyhow!("error while ending write {it:?}"))?.await
+        let js_value = end_marker_data.into_js_value();
+        store
+            .put(&js_value, Some(&key))
+            .map_err(|it| anyhow!("error while ending write {it:?}"))?
+            .await
             .map_err(|it| anyhow!("Failed to put while ending write {it:?}"))?;
-        let _ = trans.commit().map_err(|it| anyhow!("Failed to commit while ending write {it:?}"))?.await
+        let _ = trans
+            .commit()
+            .map_err(|it| anyhow!("Failed to commit while ending write {it:?}"))?
+            .await
             .map_err(|it| anyhow!("Failed to commit while ending write {it:?}"))?;
 
         *state = CacheState::Completed;
@@ -482,7 +504,7 @@ impl IOWriterBrowserCacheImpl {
 
     async fn flush(cache: &BrowserCache) -> Result<()> {
         let mut mem_buffer = cache.mem_buffer.lock().await;
-        if mem_buffer.buffer.len() > 0 {
+        if !mem_buffer.buffer.is_empty() {
             let chunk_index = mem_buffer.chunk_index;
             let buffer_copy = mem_buffer.clear();
             drop(mem_buffer);
@@ -491,7 +513,9 @@ impl IOWriterBrowserCacheImpl {
             let mut current_chunk_index = chunk_index;
 
             for chunk_data in buffer_copy.chunks(max_chunk_size) {
-                cache.write_chunk(current_chunk_index, &chunk_data.to_vec()).await
+                cache
+                    .write_chunk(current_chunk_index, &chunk_data.to_vec())
+                    .await
                     .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
                 current_chunk_index += 1;
             }
@@ -528,7 +552,8 @@ impl IOWriter for IOWriterBrowserCacheImpl {
         if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()).await {
             let chunk_index = mem_buffer.chunk_index;
             drop(mem_buffer);
-            self.write_chunk(chunk_index, &flushed_bytes).await
+            self.write_chunk(chunk_index, &flushed_bytes)
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
         }
 
@@ -537,7 +562,7 @@ impl IOWriter for IOWriterBrowserCacheImpl {
 
     async fn flush(&mut self) -> Result<()> {
         Self::flush(&self.cache).await
-   }
+    }
 
     async fn end(&mut self) -> Result<()> {
         Self::end(&self.cache, false).await
@@ -553,10 +578,10 @@ impl TryFrom<JsValue> for CacheResource {
         } else {
             Uint8Array::new(&js_value)
         };
-        
+
         let mut bytes = vec![0u8; u8arr.length() as usize];
         u8arr.copy_to(&mut bytes);
-        
+
         bincode::deserialize(&bytes)
             .map_err(|e| BrowserCacheErrors::IndexDbStorageError(format!("Incorrect format for CacheResource: {}", e)))
     }

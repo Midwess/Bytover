@@ -4,13 +4,13 @@ use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::Database;
-use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
+use idb::Database;
 use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use shared::entities::session::Session;
+use wasm_bindgen::JsValue;
 
 use crate::repository::id::IdbIdWrapper;
 
@@ -23,22 +23,27 @@ impl IdbId for IdbIdWrapper<AuthSessionId> {
         let mut json: serde_json::Value = serde_wasm_bindgen::from_value(value)?;
         let table_name = "authSession";
         if !json.is_array() {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         };
 
-        let Some(r#type) = json_array
-            .get(0)
-            .and_then(|it| serde_json::from_value(it.clone()).ok()) else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "Missing type in id".to_owned()));
+        let Some(r#type) = json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()) else {
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "Missing type in id".to_owned()
+            ));
         };
 
-        Ok(IdbIdWrapper(AuthSessionId {
-            r#type
-        }))
+        Ok(IdbIdWrapper(AuthSessionId { r#type }))
     }
 }
 

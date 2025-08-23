@@ -5,7 +5,7 @@ use web_sys::window;
 pub struct HostInfo {
     pub host: String,
     pub port: u16,
-    pub is_with_ssl: bool,
+    pub is_with_ssl: bool
 }
 
 pub fn get_host_info() -> Result<HostInfo, JsValue> {
@@ -16,7 +16,7 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
 
     let port = match url.port_or_known_default() {
         Some(p) => p,
-        None => return Err(JsValue::from_str("Could not determine port")),
+        None => return Err(JsValue::from_str("Could not determine port"))
     };
 
     let is_with_ssl = url.scheme() == "https";
@@ -24,7 +24,7 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
     Ok(HostInfo {
         host: url.host_str().unwrap_or_default().to_string(),
         port,
-        is_with_ssl,
+        is_with_ssl
     })
 }
 

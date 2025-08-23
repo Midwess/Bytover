@@ -1,39 +1,40 @@
 extern crate core;
 
-pub mod network;
-pub mod repository;
+pub mod config;
 pub mod core_api_impl;
 pub mod di_container;
-pub mod executor;
-pub mod config;
-pub mod file_api;
 mod errors;
+pub mod executor;
+pub mod file_api;
+pub mod network;
+pub mod repository;
 
 // /shared/src/lib.rs
-use std::sync::{Arc, LazyLock};
-use n0_future::task::{spawn, JoinHandle};
-use std::time::Duration;
-use bincode::Options;
-pub use crux_core::{bridge::Bridge, Core, Request};
-use erased_serde::Serialize;
-use futures::lock::Mutex;
-use js_sys::{Array, Reflect};
-use n0_future::time;
-use n0_future::time::Interval;
-use wasm_bindgen::prelude::*;
-use shared::app::BitBridge;
-use wasm_bindgen_futures::js_sys::Uint8Array;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{window, File};
-use core_services::logger;
-use shared::CoreOperation;
-use shared::app::file_system::file::LocalResourcePath;
-use crate::executor::executor::NativeExecutor;
 use crate::di_container::DiContainer;
+use crate::executor::executor::NativeExecutor;
 use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::storage::FileStorage;
+use bincode::Options;
+use core_services::logger;
+pub use crux_core::bridge::Bridge;
+pub use crux_core::{Core, Request};
+use erased_serde::Serialize;
 use file_api::path_extension::WebExtLocalResourcePath;
+use futures::lock::Mutex;
+use js_sys::{Array, Reflect};
+use n0_future::task::{spawn, JoinHandle};
+use n0_future::time;
+use n0_future::time::Interval;
+use shared::app::file_system::file::LocalResourcePath;
+use shared::app::BitBridge;
+use shared::CoreOperation;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::js_sys::Uint8Array;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{window, File};
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
@@ -117,7 +118,7 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
 pub fn process_event(data: Vec<u8>) -> Vec<u8> {
     match CORE.process_event(data.as_slice()) {
         Ok(effects) => effects,
-        Err(e) => panic!("{e}"),
+        Err(e) => panic!("{e}")
     }
 }
 
@@ -135,7 +136,7 @@ pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
 pub fn view() -> Vec<u8> {
     match CORE.view() {
         Ok(view) => view,
-        Err(e) => panic!("{e}"),
+        Err(e) => panic!("{e}")
     }
 }
 
@@ -154,7 +155,7 @@ fn bincode_options() -> impl bincode::Options + Copy {
 #[wasm_bindgen]
 pub struct NativeProcessor {
     executor: &'static NativeExecutor,
-    storage: FileStorage,
+    storage: FileStorage
 }
 
 #[wasm_bindgen]
@@ -202,8 +203,7 @@ impl NativeProcessor {
             return false
         }
 
-        let quota_val = Reflect::get(&quota, &JsValue::from_str("quota"))
-            .unwrap_or(JsValue::UNDEFINED);
+        let quota_val = Reflect::get(&quota, &JsValue::from_str("quota")).unwrap_or(JsValue::UNDEFINED);
 
         if quota_val.is_null() || quota_val.is_undefined() {
             log::info!("quota field missing");
@@ -225,7 +225,7 @@ impl NativeProcessor {
         di_container.init(Arc::new(ShellRuntime {})).await;
         Self {
             storage: di_container.file_storage(),
-            executor: di_container.get_native_executor().await,
+            executor: di_container.get_native_executor().await
         }
     }
 
@@ -247,9 +247,7 @@ impl NativeProcessor {
             return None
         };
 
-        let Ok(data) =  reader.read_all().await else {
-            return None
-        };
+        let Ok(data) = reader.read_all().await else { return None };
 
         Some(data.into_uint_array())
     }

@@ -1,6 +1,6 @@
 use anyhow::anyhow;
-use wasm_bindgen::JsValue;
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use wasm_bindgen::JsValue;
 
 #[derive(Debug)]
 pub struct JsError(pub JsValue);

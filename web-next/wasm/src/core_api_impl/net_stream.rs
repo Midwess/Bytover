@@ -1,22 +1,22 @@
-use std::sync::Arc;
+use crate::file_api::file_extension::VecExtension;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_api::storage::FileStorage;
 use anyhow::anyhow;
-use url::Url;
+use core_services::utils::never_send::NeverSend;
 use futures::channel::mpsc;
 use futures_channel::mpsc::UnboundedReceiver;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::Closure;
-use web_sys::{ProgressEvent, XmlHttpRequest};
-use core_services::utils::never_send::NeverSend;
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
-use crate::file_api::file_extension::VecExtension;
-use crate::file_api::storage::FileStorage;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use std::sync::Arc;
+use url::Url;
+use wasm_bindgen::prelude::Closure;
+use wasm_bindgen::JsCast;
+use web_sys::{ProgressEvent, XmlHttpRequest};
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,
-    pub resource_repo: Arc<dyn LocalResourceRepository>,
+    pub resource_repo: Arc<dyn LocalResourceRepository>
 }
 
 pub struct NetStreamInnerImpl {
@@ -25,7 +25,7 @@ pub struct NetStreamInnerImpl {
     url: Url,
     size: u64,
     path: LocalResourcePath,
-    xhr: Option<Arc<NeverSend<XmlHttpRequest>>>,
+    xhr: Option<Arc<NeverSend<XmlHttpRequest>>>
 }
 
 #[async_trait::async_trait(?Send)]
@@ -37,7 +37,7 @@ impl NetStream for NetStreamImpl {
             url: http_url,
             size,
             path,
-            xhr: None,
+            xhr: None
         }))
     }
 }
@@ -61,11 +61,13 @@ impl NetStreamInner for NetStreamInnerImpl {
             let onload_cb = Closure::<dyn FnMut()>::new(move || {
                 let status = xhr_clone.status().unwrap_or(0);
                 log::info!("The upload process is completed with status {status}");
-                if status >= 200 && status < 300 {
+                if (200..300).contains(&status) {
                     let _ = tx.unbounded_send(NetStreamEvent::Completed);
                 } else {
                     let text_response = xhr_clone.response_text();
-                    let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!("Server response status {status} - {text_response:?}")));
+                    let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!(
+                        "Server response status {status} - {text_response:?}"
+                    )));
                 }
             });
 
@@ -125,16 +127,13 @@ impl NetStreamInner for NetStreamInnerImpl {
             };
 
             let xhr = xhr.clone();
-            xhr.send_with_opt_blob(Some(&file))
-                .map_err(|it| anyhow!("Upload file errors {it:?}"))?;
-        }
-        else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
+            xhr.send_with_opt_blob(Some(&file)).map_err(|it| anyhow!("Upload file errors {it:?}"))?;
+        } else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
             let bytes = reader.read_all().await?;
             let xhr = xhr.clone();
             xhr.send_with_opt_js_u8_array(Some(&bytes.into_uint_array()))
                 .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
-        }
-        else {
+        } else {
             return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));
         }
 

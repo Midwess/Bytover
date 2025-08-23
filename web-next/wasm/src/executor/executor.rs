@@ -1,5 +1,4 @@
 use futures_timer::Delay;
-use tonic_web_wasm_client::Client;
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::core_api::network::InternetConnection;
@@ -7,6 +6,7 @@ use shared::executor::p2p::P2PNativeExecutor;
 use shared::executor::persistent::NativePersistent;
 use shared::executor::rpc::NativeRpc;
 use shared::executor::transfer::TransferNative;
+use tonic_web_wasm_client::Client;
 
 // Handle the effect coming from the platform
 // This is the placed where we can put Rust logic to share across a platform
@@ -24,9 +24,7 @@ impl NativeExecutor {
                 let response = self.rpc.handle(rpc_effect).await;
                 CoreOperationOutput::Rpc(response)
             }
-            CoreOperation::Void => {
-                CoreOperationOutput::Void
-            }
+            CoreOperation::Void => CoreOperationOutput::Void,
             CoreOperation::Persistent(database) => {
                 let response = self.persistent.handle(database).await;
                 CoreOperationOutput::Database(response)

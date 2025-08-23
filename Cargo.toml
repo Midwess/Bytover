@@ -50,7 +50,7 @@ wasm-bindgen = { version = "0.2.100", default-features = false }
 surreal_derive_plus = { version = "2.2.5", default-features = false }
 surreal_devl = { version = "2.2.4", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
-tonic-middleware = { version = "0.4.0", default-features = false }
+tonic-middleware = { version = "0.3.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }
 reqwest = { version = "0.12.23", default-features = false }
 async-trait = { version = "0.1.89", default-features = false }

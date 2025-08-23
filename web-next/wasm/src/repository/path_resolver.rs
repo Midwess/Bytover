@@ -1,9 +1,9 @@
+use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::ShellRuntime;
 use serde::{Deserialize, Serialize};
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::path_resolver::PathResolver;
 use std::sync::Arc;
-use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PathResolverMessage {

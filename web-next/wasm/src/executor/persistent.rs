@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use shared::app::repository::auth_session::AuthSessionRepository;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::executor::persistent::NativePersistent;
+use std::sync::Arc;
 
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,

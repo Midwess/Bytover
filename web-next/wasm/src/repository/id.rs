@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct IdbIdWrapper<T: Sized>(pub T) where T: DbId + Debug;
+pub struct IdbIdWrapper<T: Sized>(pub T)
+where
+    T: DbId + Debug;
 
 impl<T: Sized> DbId for IdbIdWrapper<T>
 where
@@ -22,8 +24,10 @@ where
     }
 }
 
-impl<T: Sized> std::ops::Deref for IdbIdWrapper<T> where
-    T: DbId + Debug {
+impl<T: Sized> std::ops::Deref for IdbIdWrapper<T>
+where
+    T: DbId + Debug
+{
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -31,8 +35,10 @@ impl<T: Sized> std::ops::Deref for IdbIdWrapper<T> where
     }
 }
 
-impl<T: Sized> std::ops::DerefMut for IdbIdWrapper<T> where
-    T: DbId + Debug {
+impl<T: Sized> std::ops::DerefMut for IdbIdWrapper<T>
+where
+    T: DbId + Debug
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

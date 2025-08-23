@@ -1,11 +1,24 @@
+use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
+use crate::core_api_impl::bridge::CoreBridgeImpl;
+use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::executor::executor::NativeExecutor;
+use crate::executor::p2p::P2PNativeExecutorImpl;
+use crate::executor::persistent::NativePersistentImpl;
+use crate::executor::rpc::NativeRpcImpl;
+use crate::executor::transfer::TransferNativeImpl;
+use crate::file_api::storage::FileStorage;
+use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
+use crate::repository::IdbPoolProvider;
 use crate::ShellRuntime;
+use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
+use idb::Database;
+use once_cell::sync::OnceCell;
 use shared::app::authentication::service::AuthenticationService;
 use shared::app::nearby::nearby_services::NearbyService;
 use shared::app::repository::auth_session::AuthSessionRepository;
@@ -21,20 +34,7 @@ use shared::rpc::auth_server::AuthServer;
 use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
 use std::time::Duration;
-use idb::Database;
-use once_cell::sync::OnceCell;
 use tonic_web_wasm_client::Client;
-use core_services::utils::never_send::NeverSend;
-use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
-use crate::core_api_impl::bridge::CoreBridgeImpl;
-use crate::core_api_impl::net_stream::NetStreamImpl;
-use crate::executor::p2p::P2PNativeExecutorImpl;
-use crate::executor::persistent::NativePersistentImpl;
-use crate::executor::rpc::NativeRpcImpl;
-use crate::executor::transfer::TransferNativeImpl;
-use crate::file_api::storage::FileStorage;
-use crate::network::grpc::RpcNetworkModuleImpl;
-use crate::repository::IdbPoolProvider;
 
 static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::new();
 
@@ -217,9 +217,7 @@ impl DiContainer {
                 cloud_server: self.get_cloud_server(),
                 auth_server: self.get_authentication_server()
             }),
-            p2p: Box::new(P2PNativeExecutorImpl {
-                web_rtc,
-            })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
         };
 
         let _ = self.native_executor.set(executor);

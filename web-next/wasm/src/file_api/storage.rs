@@ -1,3 +1,4 @@
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 use devlog_sdk::distributed_id::gen_id;
 use futures::lock::Mutex;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
@@ -7,7 +8,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use web_sys::js_sys::Array;
 use web_sys::File;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
 
 #[derive(Clone)]
 pub struct WasmFile(pub File);
@@ -16,7 +16,7 @@ unsafe impl Send for WasmFile {}
 
 impl WasmFile {
     pub fn resource_type(&self) -> ResourceType {
-        let mime_type = mime_guess::from_path(&self.name()).first_or_octet_stream();
+        let mime_type = mime_guess::from_path(self.name()).first_or_octet_stream();
         let resource_type = if mime_type.type_() == mime_guess::mime::IMAGE {
             ResourceType::Image
         } else if mime_type.type_() == mime_guess::mime::VIDEO {
@@ -64,19 +64,28 @@ impl DeviceFile {
             order_id
         };
 
-        Self { file: WasmFile(file), resource }
+        Self {
+            file: WasmFile(file),
+            resource
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct FileStorage {
-    files: Arc<Mutex<HashMap<u64, DeviceFile>>>,
+    files: Arc<Mutex<HashMap<u64, DeviceFile>>>
+}
+
+impl Default for FileStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FileStorage {
     pub fn new() -> FileStorage {
         FileStorage {
-            files: Arc::new(Mutex::new(HashMap::new())),
+            files: Arc::new(Mutex::new(HashMap::new()))
         }
     }
 

@@ -1,25 +1,25 @@
-use std::collections::HashMap;
-use futures::lock::Mutex;
+use crate::core_api_impl::io::IOReaderImpl;
+use crate::file_api::cache::{BrowserCache, CacheResource, IOReaderBrowserCacheImpl};
+use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_api::storage::FileStorage;
+use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::Database;
-use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
+use futures::lock::Mutex;
+use idb::Database;
 use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::core_api::{IOReader, IOWriter};
-use crate::file_api::cache::{BrowserCache, CacheResource, IOReaderBrowserCacheImpl};
-use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::storage::FileStorage;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
-use crate::repository::id::IdbIdWrapper;
+use std::collections::HashMap;
+use wasm_bindgen::JsValue;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
@@ -33,23 +33,23 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
         let mut json: serde_json::Value = serde_wasm_bindgen::from_value(value)?;
         let table_name = "localResource";
         if !json.is_array() {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         };
 
         Ok(IdbIdWrapper(LocalResourceId {
-            r#type: json_array
-                .get(0)
-                .and_then(|it| serde_json::from_value(it.clone()).ok()),
-            path: json_array
-                .get(1)
-                .and_then(|it| serde_json::from_value(it.clone()).ok()),
-            order_id: json_array
-                .get(2)
-                .and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
+            r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
+            path: json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()),
+            order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
         }))
     }
 }
@@ -101,7 +101,7 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
             to_id.as_ref(),
             count
         )
-            .await
+        .await
     }
 
     async fn delete_one(&self, id: &LocalResourceId) -> Resolve<LocalResource> {
@@ -215,4 +215,3 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(reader.total_size().await?)
     }
 }
-

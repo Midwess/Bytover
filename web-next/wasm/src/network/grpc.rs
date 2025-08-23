@@ -1,6 +1,6 @@
-use tonic_web_wasm_client::Client;
 use shared::rpc::connection::RpcNetworkModule;
 use shared::rpc::errors::RpcErrors;
+use tonic_web_wasm_client::Client;
 
 #[derive(Clone)]
 pub struct RpcNetworkModuleImpl {
@@ -9,9 +9,7 @@ pub struct RpcNetworkModuleImpl {
 
 impl RpcNetworkModuleImpl {
     pub fn new(endpoint: String) -> Self {
-        Self {
-            endpoint
-        }
+        Self { endpoint }
     }
 
     pub fn connect(&self) -> Client {

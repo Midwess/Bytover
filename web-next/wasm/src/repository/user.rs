@@ -1,17 +1,17 @@
+use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
 use core_services::db::repository::abstraction::errors::{RepositoryError, Resolve};
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use idb::Database;
-use wasm_bindgen::JsValue;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
+use idb::Database;
 use shared::app::repository::user::{UserId, UserRepository};
 use shared::entities::user::User;
-use crate::repository::id::IdbIdWrapper;
+use wasm_bindgen::JsValue;
 
 pub struct UserRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>
@@ -22,22 +22,27 @@ impl IdbId for IdbIdWrapper<UserId> {
         let mut json: serde_json::Value = serde_wasm_bindgen::from_value(value)?;
         let table_name = "user";
         if !json.is_array() {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         };
 
-        let Some(email) = json_array
-            .get(1)
-            .and_then(|it| serde_json::from_value(it.clone()).ok()) else {
-            return Err(RepositoryError::Conflict(table_name.to_owned(), "The id must be an array of primitive types".to_owned()));
+        let Some(email) = json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()) else {
+            return Err(RepositoryError::Conflict(
+                table_name.to_owned(),
+                "The id must be an array of primitive types".to_owned()
+            ));
         };
 
-        Ok(IdbIdWrapper(UserId {
-            email
-        }))
+        Ok(IdbIdWrapper(UserId { email }))
     }
 }
 
@@ -73,12 +78,7 @@ impl Repository<User, UserId> for UserRepositoryImpl {
         IdbRepository::<User, IdbIdWrapper<UserId>>::find_one(self, &IdbIdWrapper(id.clone())).await
     }
 
-    async fn find_all(
-        &self,
-        from_id: Option<&UserId>,
-        to_id: Option<&UserId>,
-        count: Option<usize>
-    ) -> Resolve<Vec<User>> {
+    async fn find_all(&self, from_id: Option<&UserId>, to_id: Option<&UserId>, count: Option<usize>) -> Resolve<Vec<User>> {
         let to_id = to_id.map(|it| IdbIdWrapper(it.clone()));
         IdbRepository::<User, IdbIdWrapper<UserId>>::find_all(
             self,
@@ -86,7 +86,7 @@ impl Repository<User, UserId> for UserRepositoryImpl {
             to_id.as_ref(),
             count
         )
-            .await
+        .await
     }
 
     async fn delete_one(&self, id: &UserId) -> Resolve<User> {
