@@ -1,3 +1,4 @@
+use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 use crate::app_gateway::markov::{Markov, MarkovErrors};
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
@@ -11,7 +12,6 @@ use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileT
 use schema::devlog::auth_gateway::models::{Application, User};
 use schema::value::datetime::Datetime;
 use schema::value::static_resource::StaticResource;
-use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -132,7 +132,7 @@ impl TransferService {
                 .await?;
         }
 
-        let mut session = self.transfer_repository.update_one(session).await?;
+        let session = self.transfer_repository.update_one(session).await?;
 
         let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
             log::warn!("The first resource must be defined, session id = {}", session.order_id());

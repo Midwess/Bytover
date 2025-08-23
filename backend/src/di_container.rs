@@ -1,3 +1,4 @@
+use crate::app_gateway::app_info::AppInfoService;
 use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
@@ -22,7 +23,6 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-use crate::app_gateway::app_info::AppInfoService;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {

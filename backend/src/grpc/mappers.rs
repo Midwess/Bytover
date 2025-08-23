@@ -2,12 +2,12 @@ use crate::cloud_storage::storage::CloudStorage;
 use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::TransferSession;
+use schema::devlog::auth_gateway::models::Application;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, ProgressUpdated, ResourceUpdated, SessionUpdated};
 use schema::devlog::bitbridge::{CloudResourceMessage, PublicTransferSessionMessage, ResourceTypeMessage};
 use std::sync::Arc;
-use schema::devlog::auth_gateway::models::Application;
 
 impl From<&CloudResourceType> for TransferResourceType {
     fn from(value: &CloudResourceType) -> Self {
@@ -135,7 +135,7 @@ impl TransferSession {
 
         vec![
             Event::SessionUpdated(SessionUpdated {
-                session_updated: new.into_msg(cloud_storage, &app).await
+                session_updated: new.into_msg(cloud_storage, app).await
             }),
         ]
     }

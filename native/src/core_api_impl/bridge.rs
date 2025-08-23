@@ -30,6 +30,8 @@ impl CoreBridge for CoreBridgeImpl {
     }
 
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
-        self.throttle_shell_runtime.send(MessageToShell::HandleResponse(request_id, Box::new(response))).await;
+        self.throttle_shell_runtime
+            .send(MessageToShell::HandleResponse(request_id, Box::new(response)))
+            .await;
     }
 }

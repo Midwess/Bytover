@@ -1,8 +1,8 @@
-use tonic::Status;
 use crate::app_gateway::app_info::AppInfoErrors;
 use crate::cloud_storage::storage::CloudStorageErrors;
 use crate::di_container::DiContainerError;
 use crate::transfer::transfer_service::TransferErrors;
+use tonic::Status;
 
 impl From<DiContainerError> for Status {
     fn from(value: DiContainerError) -> Self {

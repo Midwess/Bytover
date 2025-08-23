@@ -1,2 +1,2 @@
-pub mod markov;
 pub mod app_info;
+pub mod markov;

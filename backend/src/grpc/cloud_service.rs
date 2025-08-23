@@ -1,3 +1,4 @@
+use crate::app_gateway::app_info::AppInfoService;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
 use crate::entities::transfer_progress::TransferProgressStatus;
@@ -40,7 +41,6 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
 use tonic::{Request, Response, Status};
-use crate::app_gateway::app_info::AppInfoService;
 
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
@@ -61,7 +61,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::invalid_argument("Alias must be defined"))
         };
 
-        let Some(mut session) = self.session_repository.find_session_by_alias(alias).await? else {
+        let Some(session) = self.session_repository.find_session_by_alias(alias).await? else {
             return Ok(Response::new(FindSessionResponse {
                 session: None,
                 access_url: "".to_string(),
@@ -110,7 +110,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             None => self.session_repository.find_one(&session_id).await?
         };
 
-        let Some(mut initial_session) = initial_session else {
+        let Some(initial_session) = initial_session else {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         };
 
@@ -147,7 +147,7 @@ impl BitBridgeCloudService for CloudGrpcService {
                     break;
                 };
 
-                let Ok(mut session) = TransferSession::deserialize(&value.data.into_inner()) else {
+                let Ok(session) = TransferSession::deserialize(&value.data.into_inner()) else {
                     break;
                 };
 
@@ -197,7 +197,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
-            session: new_session.into_msg(&self.cloud_storage, &app).await
+            session: new_session.into_msg(&self.cloud_storage, app).await
         };
 
         let response = Response::new(response_body);
@@ -212,7 +212,6 @@ impl BitBridgeCloudService for CloudGrpcService {
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
-
 
         let Some(app) = request.extensions().get::<Application>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));

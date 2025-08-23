@@ -43,7 +43,7 @@ pub enum WebRtcErrors {
     ConnectionNotFound(PeerId),
 
     #[error("An unexpected system error occurred")]
-    SystemError(#[from] anyhow::Error),
+    SystemError(#[from] anyhow::Error)
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

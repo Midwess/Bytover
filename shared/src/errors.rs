@@ -22,7 +22,7 @@ pub enum NetworkError {
 
     /// Internet connection issue
     #[error("Check your internet connection and try again.")]
-    Network(String),
+    Network(String)
 }
 
 impl From<CloudTransferErrors> for NetworkError {
