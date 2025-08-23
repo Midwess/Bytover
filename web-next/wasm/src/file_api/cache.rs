@@ -370,7 +370,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             }
         }
 
-        {
+        if matches!(*cache.state.lock().await, CacheState::InProgress) {
             let mut mem_buffer = cache.mem_buffer.lock().await;
             if mem_buffer.chunk_index == self.current_chunk_index {
                 self.receiver_stream = Some(mem_buffer.subscribe());
@@ -443,9 +443,8 @@ impl IOWriterBrowserCacheImpl {
             return Ok(())
         }
 
-        let db = cache.db.retrieve().await.unwrap();
-
         if is_failed {
+            let db = cache.db.retrieve().await.unwrap();
             let trans = db
                 .transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
                 .map_err(|it| anyhow!("Failed to get transaction {it:?}"))?;
@@ -472,6 +471,8 @@ impl IOWriterBrowserCacheImpl {
         };
 
         Self::flush(cache).await?;
+        
+        let db = cache.db.retrieve().await.unwrap();
         let trans = db
             .transaction(&[&cache.resource.table], TransactionMode::ReadWrite)
             .map_err(|it| anyhow!("Failed to get transaction {it:?}"))?;

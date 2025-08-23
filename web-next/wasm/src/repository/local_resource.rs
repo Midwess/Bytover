@@ -166,9 +166,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         };
 
         if let Some(key) = path.thumbnail_resource_id() {
-            let thumbnail_caches = self.thumbnail_caches.lock().await;
-            let Some(cache) = thumbnail_caches.get(&key) else {
-                return Err(PersistenceError::NotFound(format!("{:?}", path)));
+            let mut thumbnail_caches = self.thumbnail_caches.lock().await;
+            let cache = match thumbnail_caches.get(&key) {
+                Some(cache) => cache,
+                None => {
+                    let new_cache = BrowserCache::open(self.db.clone(), "thumbnails", key).await?;
+                    thumbnail_caches.insert(key, new_cache);
+                    thumbnail_caches.get(&key).unwrap()
+                }
             };
 
             return Ok(Box::new(cache.try_clone().await?))

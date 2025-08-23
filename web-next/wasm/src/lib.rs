@@ -243,13 +243,48 @@ impl NativeProcessor {
     pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
         let repository = DiContainer::get_instance().get_local_resource_repository().await;
         let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
-        let Ok(mut reader) = repository.read(path, 1024).await else {
+        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
             return None
         };
 
         let Ok(data) = reader.read_all().await else { return None };
 
         Some(data.into_uint_array())
+    }
+
+    pub async fn load_thumbnail_source(&self, path: Vec<u8>) -> Option<String> {
+        let options = bincode_options();
+        let mut deser = bincode::Deserializer::from_slice(&path, options);
+        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+
+        if let LocalResourcePath::AbsolutePath(path) = path {
+            return Some(path)
+        }
+
+        let Some(resource_id) = path.thumbnail_resource_id() else {
+            return None
+        };
+
+        let Some(data) = self.load_thumbnail_bytes(resource_id).await else {
+            return None
+        };
+
+        let blob_options = web_sys::BlobPropertyBag::new();
+        blob_options.set_type("image/png");
+        
+        let parts = js_sys::Array::new();
+        parts.push(&data);
+        
+        let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
+            return None
+        };
+
+        let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
+            return None
+        };
+
+        Some(url)
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

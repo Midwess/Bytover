@@ -53,7 +53,7 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel, LocalResourcePath
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -349,6 +349,11 @@ export class WasmCore {
         if (!data) return [];
 
         return deserializeArray<ResourceSelection>(ResourceSelection, data)
+    }
+
+    async loadThumbnailSource(path: LocalResourcePath): Promise<string | undefined> {
+        const data = serialize(path)
+        return this.nativeProcessor?.load_thumbnail_source(data)
     }
 
     async updateView() {

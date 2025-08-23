@@ -16,7 +16,7 @@ import {
 import {
     ArrowDown,
     ChevronsUpDown, Download,
-    Globe, LoaderCircle, Play
+    Globe, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {
@@ -270,9 +270,17 @@ function Board() {
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
     }
 
-    const sessions = transferState?.received_cloud_sessions.filter((it) => {
+    const publicSessions = transferState?.received_cloud_sessions.filter((it) => {
         if (keywords) {
             return it?.sender_name?.toLowerCase()?.includes(keywords.toLowerCase()) ?? false
+        }
+
+        return true
+    }) || []
+
+    const neerbySessions = transferState?.received_sessions.filter(() => {
+        if (keywords) {
+            return false
         }
 
         return true
@@ -310,11 +318,33 @@ function Board() {
                 <Button className={"w-fit h-8"} onClick={handleFind}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
-                {!!sessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
+                {!!publicSessions.length && <p className={"font-poppins text-muted-foreground"}>Nearby</p>}
                 <MotionHighlight hover
                                  className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
-                        sessions.map((item, index) => {
+                        neerbySessions.map((item, index) => {
+                            return <TransferSession
+                                onPress={() => {
+                                    core.updateSelectedSession(item)
+                                }}
+                                name={item.peer_name}
+                                progress={item.progress}
+                                display_datetime={item.display_datetime}
+                                key={index}
+                                is_public={true}
+                                avatar_url={item.peer_avatar.url}
+                                is_required_password={false}
+                            />
+                        })
+                    }
+                </MotionHighlight>
+            </div>
+            <div className={"flex flex-col gap-3"}>
+                {!!publicSessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
+                <MotionHighlight hover
+                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                    {
+                        publicSessions.map((item, index) => {
                             return <TransferSession
                                 onPress={() => {
                                     core.updateSelectedSession(item)
@@ -365,7 +395,10 @@ function TransferSession(props: {
                     <Avatar className={"p-1"}>
                         <AvatarImage src={avatar_url}/>
                     </Avatar>
-                    {is_public && <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>}
+                    {   is_public
+                        ? <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                        : <Wifi className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                    }
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
                     <p className={"text-primaryText text-sm text-start"}>{name}</p>
@@ -437,16 +470,21 @@ function MediaView(props: {
     const model: SelectedResourceViewModel = media.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
     const isMobile = useIsMobile();
+    const [thumbnailSource, setThumbnailSource] = useState<string | null>(null);
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
 
-    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
-    if (!thumbnailPath) {
-        thumbnailPath = isVideo ? '/file-video.svg' : '/file-image.svg';
-    }
+    useEffect(() => {
+        if (model.thumbnail_path) {
+            core.loadThumbnailSource(model.thumbnail_path)
+                .then((value) => {
+                    setThumbnailSource(value)
+                })
+        }
+    }, [model.thumbnail_path]);
 
     return (
         <div className="w-full h-full bg-muted-foreground overflow-hidden rounded-2xl relative group">
@@ -495,13 +533,17 @@ function MediaView(props: {
 
             </div>
 
-            <Image
-                className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
-                alt={model.name}
-                src={thumbnailPath}
-                fill
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            />
+            {
+                thumbnailSource
+                ?   <Image
+                    className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
+                    alt={model.name}
+                    src={thumbnailSource || ''}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+                : <></>
+            }
         </div>
     );
 }

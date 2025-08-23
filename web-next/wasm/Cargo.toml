@@ -31,7 +31,7 @@ tonic-web-wasm-client = "0.7.1"
 serde-wasm-bindgen = { version = "0.6.5" }
 idb = { version = "0.6.4" }
 log = "0.4.27"
-web-sys = { version = "0.3.77", features = ["File", "Blob", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager"] }
+web-sys = { version = "0.3.77", features = ["File", "Blob", "BlobPropertyBag", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager", "Url"] }
 futures-channel = "0.3.31"
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.77"
