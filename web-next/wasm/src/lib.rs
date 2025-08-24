@@ -272,10 +272,10 @@ impl NativeProcessor {
 
         let blob_options = web_sys::BlobPropertyBag::new();
         blob_options.set_type("image/png");
-        
+
         let parts = js_sys::Array::new();
         parts.push(&data);
-        
+
         let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
             return None
         };

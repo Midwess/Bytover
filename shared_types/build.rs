@@ -30,6 +30,7 @@ use shared::app::operations::persistent::{
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
+use shared::app::repository::transfer_session::{TransferSessionId, TransferTargetId};
 use shared::app::transfer::file_selection_service::ResourceSelection;
 use shared::app::transfer::session::{TransferSessionStatus, TransferStatus, TransferType};
 use shared::app::transfer::target::TransferTarget;
@@ -45,6 +46,23 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");
 
     let mut gen = TypeGen::new();
+
+    // Register module types
+    gen.register_type::<EnvironmentEvent>()?;
+    gen.register_type::<EnvironmentModel>()?;
+    gen.register_type::<AuthenticationEvent>()?;
+    gen.register_type::<AuthenticationModel>()?;
+    gen.register_type::<TransferEvent>()?;
+    gen.register_type::<TransferSessionId>()?;
+    gen.register_type::<TransferTargetId>()?;
+    gen.register_type::<TransferTarget>()?;
+    gen.register_type::<TransferModel>()?;
+    gen.register_type::<TransferMethodSelection>()?;
+    gen.register_type::<DeviceType>()?;
+    gen.register_type::<TransferStatus>()?;
+    gen.register_type::<TransferType>()?;
+    gen.register_type::<Response>()?;
+    gen.register_type::<TransferSessionStatus>()?;
 
     // Register base types
     gen.register_type::<Token>()?;
@@ -89,20 +107,6 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<PathResolverMessage>()?;
     gen.register_type::<PathResolverResponseMessage>()?;
 
-    // Register module types
-    gen.register_type::<EnvironmentEvent>()?;
-    gen.register_type::<EnvironmentModel>()?;
-    gen.register_type::<AuthenticationEvent>()?;
-    gen.register_type::<AuthenticationModel>()?;
-    gen.register_type::<TransferEvent>()?;
-    gen.register_type::<TransferModel>()?;
-    gen.register_type::<TransferMethodSelection>()?;
-    gen.register_type::<DeviceType>()?;
-    gen.register_type::<TransferStatus>()?;
-    gen.register_type::<TransferType>()?;
-    gen.register_type::<Response>()?;
-    gen.register_type::<TransferSessionStatus>()?;
-
     gen.register_type::<CoreOperationOutput>()?;
 
     gen.register_type::<Source>()?;
@@ -110,8 +114,6 @@ fn main() -> anyhow::Result<()> {
     // Register executor msg
     gen.register_type::<MessageToShellResponse>()?;
     gen.register_type::<MessageToShell>()?;
-
-    gen.register_type::<TransferTarget>()?;
 
     gen.register_app::<BitBridge>()?;
 

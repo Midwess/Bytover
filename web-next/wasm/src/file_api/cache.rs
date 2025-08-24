@@ -384,13 +384,25 @@ impl IOReader for IOReaderBrowserCacheImpl {
             }
         }
 
-        let db = cache.db.retrieve().await.unwrap();
-        let trans = db
-            .transaction(&[&cache.resource.table], TransactionMode::ReadOnly)
-            .map_err(BrowserCacheErrors::from)?;
-        let store = trans.object_store(&cache.resource.table).map_err(BrowserCacheErrors::from)?;
-        let query = Query::KeyRange(cache.chunk_index_query(self.current_chunk_index));
-        if let Some(val) = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)? {
+        let (val, end_marker) = {
+            let db = cache.db.retrieve().await.unwrap();
+            let trans = db
+                .transaction(&[&cache.resource.table], TransactionMode::ReadOnly)
+                .map_err(BrowserCacheErrors::from)?;
+            let store = trans.object_store(&cache.resource.table).map_err(BrowserCacheErrors::from)?;
+            let query = Query::KeyRange(cache.chunk_index_query(self.current_chunk_index));
+            let end_marker_key = BrowserCache::create_chunk_id(cache.resource.id, BrowserCache::END_MARKER_CHUNK);
+            let val = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)?;
+            let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
+            let end_marker = store
+                .get(end_marker_query)
+                .map_err(BrowserCacheErrors::from)?
+                .await
+                .map_err(BrowserCacheErrors::from)?;
+            (val, end_marker)
+        };
+
+        if let Some(val) = val {
             let val = val.unchecked_into::<Uint8Array>().to_vec();
             if let Some(result) = extract_from_buffer(&val, self.current_offset) {
                 let read_bytes_len = result.len();
@@ -400,15 +412,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
             }
         }
 
-        let end_marker_key = BrowserCache::create_chunk_id(cache.resource.id, BrowserCache::END_MARKER_CHUNK);
-        let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
-        if store
-            .get(end_marker_query)
-            .map_err(BrowserCacheErrors::from)?
-            .await
-            .map_err(BrowserCacheErrors::from)?
-            .is_some()
-        {
+        if end_marker.is_some() {
             return Ok(None);
         }
 
@@ -471,7 +475,7 @@ impl IOWriterBrowserCacheImpl {
         };
 
         Self::flush(cache).await?;
-        
+
         let db = cache.db.retrieve().await.unwrap();
         let trans = db
             .transaction(&[&cache.resource.table], TransactionMode::ReadWrite)

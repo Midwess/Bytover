@@ -30,10 +30,12 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
             store_params.auto_increment(false);
             store_params.key_path(None);
 
+            // === Model stores ===
             database.create_object_store("authSession", store_params.clone()).unwrap();
-            database.create_object_store("user", store_params.clone()).unwrap();
-            database.create_object_store("localResource", store_params.clone()).unwrap();
             database.create_object_store("transferSession", store_params.clone()).unwrap();
+            database.create_object_store("localResource", store_params.clone()).unwrap();
+
+            // === Binary stores ===
             database.create_object_store("thumbnails", store_params.clone()).unwrap();
             database.create_object_store("resources", store_params.clone()).unwrap();
         });

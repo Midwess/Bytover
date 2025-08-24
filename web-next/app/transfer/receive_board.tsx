@@ -41,10 +41,10 @@ export default function ReceiveBoard() {
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-11 w-full h-full gap-2"}>
-                <div className={"col-span-3 lg:col-span-3 h-full"}>
+                <div className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8"}>
                     <Board/>
                 </div>
-                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20`}>
+                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 overflow-scroll`}>
                     <ContentBoard/>
                 </div>
             </div>
@@ -151,7 +151,7 @@ function ContentBoard() {
         </div>
     }
 
-    return <div>
+    return <>
         <Collapsible
             className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
             <ReceiveCategory
@@ -207,7 +207,7 @@ function ContentBoard() {
                 </div>
             </CollapsibleContent>
         </Collapsible>
-    </div>
+    </>
 }
 
 function ItemEffect(props: { children: ReactElement, index: number }) {
@@ -278,7 +278,7 @@ function Board() {
         return true
     }) || []
 
-    const neerbySessions = transferState?.received_sessions.filter(() => {
+    const nearbySessions = transferState?.received_sessions.filter(() => {
         if (keywords) {
             return false
         }
@@ -287,7 +287,7 @@ function Board() {
     }) || []
 
     return <>
-        <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-4 gap-8"}>
+        <>
             <div className={"flex flex-col justify-start text-primaryText gap-4"}>
                 <p className={"opacity-80 text-sm"}>Find session</p>
                 <div className={"relative"}>
@@ -318,11 +318,11 @@ function Board() {
                 <Button className={"w-fit h-8"} onClick={handleFind}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
-                {!!publicSessions.length && <p className={"font-poppins text-muted-foreground"}>Nearby</p>}
+                {!!nearbySessions.length && <p className={"font-poppins text-muted-foreground"}>Nearby</p>}
                 <MotionHighlight hover
                                  className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
-                        neerbySessions.map((item, index) => {
+                        nearbySessions.map((item, index) => {
                             return <TransferSession
                                 onPress={() => {
                                     core.updateSelectedSession(item)
@@ -331,7 +331,8 @@ function Board() {
                                 progress={item.progress}
                                 display_datetime={item.display_datetime}
                                 key={index}
-                                is_public={true}
+                                is_public={false}
+                                is_completed={item.is_completed}
                                 avatar_url={item.peer_avatar.url}
                                 is_required_password={false}
                             />
@@ -354,6 +355,7 @@ function Board() {
                                 display_datetime={item.display_datetime}
                                 key={index}
                                 is_public={true}
+                                is_completed={false}
                                 avatar_url={item.avatar_url}
                                 is_required_password={item.is_required_password}
                             />
@@ -361,7 +363,7 @@ function Board() {
                     }
                 </MotionHighlight>
             </div>
-        </div>
+        </>
     </>
 }
 
@@ -372,6 +374,7 @@ function TransferSession(props: {
     avatar_url: string,
     is_public: boolean,
     is_required_password: boolean,
+    is_completed: boolean,
     onPress: () => void
 }) {
     const {
@@ -381,6 +384,7 @@ function TransferSession(props: {
         avatar_url,
         is_public,
         is_required_password,
+        is_completed,
         onPress = () => {
         }
     } = props;
@@ -405,7 +409,7 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {!!progress && <CircleProgress progress={progress} size={30}/>}
+            {!!progress && !is_completed && <CircleProgress progress={progress} size={30}/>}
             {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"} src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
@@ -422,7 +426,7 @@ function FileView(props: {
         ? "/folder.svg"
         : "/file.svg";
 
-    const [imgSrc, setImgSrc] = useState(thumbnailPath)
+    const [imgSrc, setImgSrc] = useState(thumbnailPath || fallbackThumbnail);
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;

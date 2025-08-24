@@ -42,7 +42,7 @@ impl IdbId for IdbIdWrapper<TransferSessionId> {
         Ok(IdbIdWrapper(TransferSessionId {
             r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
             target: json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()),
-            order_id: json_array.get(2).and_then(|it| serde_json::from_value(it.clone()).ok())
+            order_id: json_array.get(2).and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
         }))
     }
 }
@@ -108,21 +108,51 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn update_progresses(
         &self,
-        _order_id: u64,
-        _progresses: Vec<TransferProgress>
+        order_id: u64,
+        progresses: Vec<TransferProgress>
     ) -> Result<Option<TransferSession>, PersistenceError> {
-        Ok(None)
+        log::info!("Updating {order_id}");
+        let id = TransferSessionId {
+            order_id: Some(order_id),
+            ..Default::default()
+        };
+        let session = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(id)).await?;
+        log::info!("Database updating session {session:?}");
+
+        if let Some(session) = session {
+            let mut session = session;
+            session.progress = progresses;
+            let result = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn update_resource(
         &self,
-        _session_id: TransferSessionId,
-        _resource: LocalResource
+        session_id: TransferSessionId,
+        resource: LocalResource
     ) -> Result<Option<TransferSession>, PersistenceError> {
-        Ok(None)
+        let session =
+            IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(session_id.clone()))
+                .await?;
+
+        if let Some(mut session) = session {
+            session.replace_resource(resource);
+            let result = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn delete_session(&self, _session_id: TransferSessionId) -> Result<(), PersistenceError> {
+    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
+        IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(session_id.clone())).await?;
+
+        // Note: In WASM environment, we don't need to delete filesystem directories
+        // as the browser manages the storage differently than native filesystem
+
         Ok(())
     }
 

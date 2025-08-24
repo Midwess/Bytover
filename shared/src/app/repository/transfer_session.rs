@@ -14,7 +14,7 @@ pub enum TransferTargetId {
     Nearby
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct TransferSessionId {
     pub r#type: Option<TransferType>,
     pub target: Option<TransferTargetId>,

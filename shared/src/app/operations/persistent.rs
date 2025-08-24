@@ -1,6 +1,8 @@
 use std::future::Future;
 
+use super::{CoreOperation, CoreOperationOutput};
 use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::app::repository::transfer_session::TransferSessionId;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::app::AppRequestBuilder;
 use crate::entities::session::Session;
@@ -10,8 +12,6 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-use super::{CoreOperation, CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperation {
@@ -83,7 +83,7 @@ pub enum TransferSessionPersistentOperation {
     Remove((u64, TransferType)),
     GetAllReceivedSessions(),
     UpdateResource {
-        session_id: u64,
+        session_id: TransferSessionId,
         resource: LocalResource
     },
     GenerateResourcePath {
@@ -282,7 +282,7 @@ impl TransferSessionPersistentOperation {
     }
 
     pub fn update_resource(
-        session_id: u64,
+        session_id: TransferSessionId,
         resource: LocalResource
     ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(

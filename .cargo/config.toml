@@ -2,5 +2,3 @@
 binstall = ["bin", "cargo-binstall"]
 run-bin = ["bin", "cargo-run-bin"]
 xcode = ["bin", "cargo-xcode"]
-
-[build]

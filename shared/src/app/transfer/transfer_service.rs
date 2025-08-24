@@ -264,8 +264,10 @@ impl TransferService {
             });
         }
 
-        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
+        let response_transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
+        let mut transfer_session = response_transfer_session.clone();
+        transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![transfer_session.clone()],
@@ -277,7 +279,7 @@ impl TransferService {
 
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
-            session: Some(transfer_session.clone()),
+            session: Some(response_transfer_session),
             session_id: transfer_session.order_id
         });
 

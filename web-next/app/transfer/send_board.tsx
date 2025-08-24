@@ -70,6 +70,7 @@ function FileSelections() {
             handleDrop,
             openFileDialog,
             getInputProps,
+            clearFiles
         },
     ] = useFileUpload({
         accept: "*",
@@ -87,6 +88,7 @@ function FileSelections() {
                         selections
                     )))
                 })
+            clearFiles()
         }
     }, [files]);
 

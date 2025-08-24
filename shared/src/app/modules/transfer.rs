@@ -5,6 +5,7 @@ use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::persistent::{LocalResourcePersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::CoreOperation;
+use crate::app::repository::transfer_session::TransferSessionId;
 use crate::app::transfer::file_selection_service::{ResourceSelection, ResourceTransferSelectionService};
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferStatus, TransferType};
 use crate::app::transfer::target::TransferTarget;
@@ -480,7 +481,12 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_id,
                 path
             } => {
-                let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
+                let Some(session) = model
+                    .transfer
+                    .transfer_sessions
+                    .iter_mut()
+                    .find(|it| it.order_id == session_id && matches!(it.transfer_type, TransferType::Receive))
+                else {
                     return Command::done();
                 };
 
@@ -489,6 +495,12 @@ impl AppModule<BitBridge> for TransferModule {
                     resource.thumbnail_path = Some(path.clone());
                     let resource = resource.clone();
                     return Command::new(|it| async move {
+                        let session_id = TransferSessionId {
+                            r#type: Some(TransferType::Receive),
+                            order_id: Some(session_id),
+                            ..Default::default()
+                        };
+
                         TransferSessionPersistentOperation::update_resource(session_id, resource)
                             .into_future(it.clone())
                             .await;
