@@ -58,6 +58,8 @@ impl SignallingClient {
                 let mut connected = false;
                 loop {
                     let receiver = receiver.clone();
+
+                    // Reduce CPU usage
                     Delay::new(Duration::from_millis(20)).await;
 
                     let msg_opt = {
@@ -88,6 +90,7 @@ impl SignallingClient {
 
                         if let WsEvent::Error(err) = msg {
                             log::error!("websocket error: {err:?}");
+                            Delay::new(Duration::from_secs(3)).await;
                             break;
                         }
                     }

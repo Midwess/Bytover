@@ -1,9 +1,11 @@
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
+use n0_future::time::sleep;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransferDelimiterShema {
@@ -111,6 +113,17 @@ impl TransfersContext {
     pub async fn is_active(&self, session_id: u64) -> bool {
         let actives = self.active_transfers.lock().await;
         actives.iter().any(|it| it.session_id == session_id)
+    }
+
+    pub async fn wait_for_inactive(&self, session_id: u64) {
+        loop {
+            if self.is_active(session_id).await {
+                sleep(Duration::from_millis(100)).await;
+                continue
+            }
+
+            break;
+        }
     }
 
     pub async fn rtc_request_id(&self, session_id: u64) -> Option<String> {

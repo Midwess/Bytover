@@ -80,10 +80,10 @@ impl TransferProgress {
     }
 
     pub fn complete(&mut self) {
-        self.status = if self.percentage() == 1.0 {
-            TransferStatus::Success
+        if self.percentage() == 1.0 {
+            self.status = TransferStatus::Success
         } else {
-            TransferStatus::Fail(format!(
+            self.status = TransferStatus::Fail(format!(
                 "Data corrupted transfer for resource {} received {}/1.0",
                 self.resource_order_id,
                 self.percentage()
@@ -131,9 +131,7 @@ impl TransferProgress {
     }
 
     pub fn update_progress(&mut self, bytes_count: u64) {
-        if bytes_count > 0 {
-            self.last_update_time_ms = Utc::now().timestamp_millis() as u64;
-        }
+        self.last_update_time_ms = Utc::now().timestamp_millis() as u64;
 
         if self.status == TransferStatus::Pending {
             self.status = TransferStatus::InProgress;
@@ -157,7 +155,7 @@ impl TransferProgress {
 
         if self.percentage() == 1.0 {
             self.bytes_per_second = self.bytes_sec_counter;
-            self.success();
+            self.complete();
         }
     }
 
@@ -307,19 +305,19 @@ impl TransferSession {
     }
 
     pub fn is_completed(&self) -> bool {
-        self.progress.iter().all(|it| it.status.is_completed())
+        self.progress.iter().all(|it| it.is_completed())
     }
 
     pub fn is_canceled(&self) -> bool {
-        self.progress.iter().any(|it| it.status == TransferStatus::Canceled)
+        self.progress.iter().any(|it| it.is_canceled())
     }
 
     pub fn is_failed(&self) -> bool {
-        self.progress.iter().any(|it| matches!(it.status, TransferStatus::Fail(_)))
+        self.progress.iter().any(|it| it.is_failed())
     }
 
     pub fn is_success(&self) -> bool {
-        self.progress.iter().any(|it| matches!(it.status, TransferStatus::Success))
+        self.progress.iter().any(|it| it.is_success())
     }
 
     pub fn cancel(&mut self) {

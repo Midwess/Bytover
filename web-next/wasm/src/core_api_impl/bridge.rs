@@ -1,14 +1,14 @@
-use crate::executor::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
-use n0_future::task::{spawn, JoinHandle};
+use n0_future::task::JoinHandle;
 use shared::app::operations::CoreOperationOutput;
+use shared::app::AppEvent;
 use shared::core_api::CoreBridge;
 use std::sync::Arc;
 use std::time::Duration;
 
 pub struct CoreBridgeImpl {
     pub shell: Arc<ShellRuntime>,
-    pub throttle_shell_runtime: ThrottleShellRuntime<MessageToShell>
+    pub throttle_shell_runtime: ThrottleShellRuntime
 }
 
 impl CoreBridgeImpl {
@@ -24,12 +24,14 @@ impl CoreBridgeImpl {
 impl CoreBridge for CoreBridgeImpl {
     fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
         let shell = self.shell.clone();
-        spawn(async move {
-            let _ = shell.notify(MessageToShell::HandleResponse(request_id, response)).await;
-        })
+        shell.forward_core_operation_output(request_id, response)
     }
 
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
-        self.throttle_shell_runtime.send(MessageToShell::HandleResponse(request_id, response)).await;
+        let _ = self.throttle_shell_runtime.send(request_id, response).await;
+    }
+
+    async fn notify(&self, event: AppEvent) {
+        let _ = self.shell.clone().update(event).await;
     }
 }

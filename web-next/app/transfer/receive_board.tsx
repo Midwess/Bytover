@@ -474,7 +474,7 @@ function MediaView(props: {
     const model: SelectedResourceViewModel = media.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
     const isMobile = useIsMobile();
-    const [thumbnailSource, setThumbnailSource] = useState<string | null>(null);
+    const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {

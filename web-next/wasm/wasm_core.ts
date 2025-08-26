@@ -53,7 +53,7 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel, LocalResourcePath
+    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel, LocalResourcePath, MessageToShellVariantNotify
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -64,6 +64,7 @@ import {Observable} from "@/utils/observable";
 import {useCallback, useEffect, useState} from "react";
 import {FileMetadata} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
+import {deserialize} from "v8";
 
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
@@ -184,7 +185,6 @@ export class WasmCore {
                     currentPeer?.display_upload_speed !== peer?.display_upload_speed ||
                     currentPeer?.display_download_speed !== peer?.display_download_speed
                 if (isChanged) {
-                    console.log("Peer state changed", peer)
                     setPeer(peer)
                 }
             })
@@ -206,7 +206,6 @@ export class WasmCore {
         await init_core();
         const isCompatible = await NativeProcessor.is_compatible()
         if (!isCompatible) {
-            console.log('This browser is not supported. Please download the app instead')
             this.isCoreCompatible.set(false)
             return;
         }
@@ -371,36 +370,30 @@ export class WasmCore {
         }
     }
 
-    async msg_from_native(data: Uint8Array): Promise<Uint8Array> {
+    async update_app_event(appEvent: Uint8Array) {
+        let event = AppEvent.deserialize(new BincodeDeserializer(appEvent));
+        await this.update(event);
+    }
+
+    async forward_core_operation_output(id: number, operationData: Uint8Array): Promise<Uint8Array> {
         try {
-            const msgToShell = MessageToShell.deserialize(new BincodeDeserializer(data));
-            switch (msgToShell.constructor) {
-                case MessageToShellVariantHandleResponse: {
-                    const msg = msgToShell as MessageToShellVariantHandleResponse;
-                    const id = msg.field0;
-                    const operationData = serialize(msg.field1);
-                    const requestsData = handle_response(id, operationData)
-                    if (requestsData.length === 0) return serialize(new MessageToShellResponseVariantVoidResponse())
+            const requestsData = handle_response(id, operationData)
+            if (requestsData.length === 0) return serialize(new MessageToShellResponseVariantVoidResponse())
 
-                    const requests = deserializeArray<Request>(Request, requestsData);
-                    while (requests.length > 0) {
-                        const request = requests.shift();
-                        if (!request) break;
+            const requests = deserializeArray<Request>(Request, requestsData);
+            while (requests.length > 0) {
+                const request = requests.shift();
+                if (!request) break;
 
-                        const nextRequest = await this.processEffect(request.id, request.effect);
+                const nextRequest = await this.processEffect(request.id, request.effect);
 
-                        if (nextRequest.length === 0) continue;
+                if (nextRequest.length === 0) continue;
 
-                        const newRequests = deserializeArray<Request>(Request, nextRequest);
-                        requests.push(...newRequests);
-                    }
-
-                    return serialize(new MessageToShellResponseVariantVoidResponse())
-                }
-                default: {
-                    throw new Error(`Unknown message type ${msgToShell.constructor}`)
-                }
+                const newRequests = deserializeArray<Request>(Request, nextRequest);
+                requests.push(...newRequests);
             }
+
+            return serialize(new MessageToShellResponseVariantVoidResponse())
         }
         catch(ignored) {
             console.error(ignored)

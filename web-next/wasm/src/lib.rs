@@ -12,7 +12,6 @@ pub mod repository;
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
 use crate::executor::executor::NativeExecutor;
-use crate::executor::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::storage::FileStorage;
 use bincode::Options;
@@ -27,7 +26,8 @@ use n0_future::task::{spawn, JoinHandle};
 use n0_future::time;
 use n0_future::time::Interval;
 use shared::app::file_system::file::LocalResourcePath;
-use shared::app::BitBridge;
+use shared::app::operations::CoreOperationOutput;
+use shared::app::{AppEvent, BitBridge};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -41,44 +41,37 @@ static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::ne
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = core)]
-    async fn msg_from_native(event: &Uint8Array) -> Uint8Array;
+    async fn forward_core_operation_output(request_id: u32, core_operation_output: Vec<u8>);
+    #[wasm_bindgen(js_namespace = core)]
+    async fn update_app_event(app_event: Vec<u8>);
 }
 
 pub struct ShellRuntime {}
 
 impl ShellRuntime {
-    async fn msg_from_native(&self, event: Vec<u8>) -> Vec<u8> {
-        let uint8_array = Uint8Array::from(event.as_slice());
-        let response = msg_from_native(&uint8_array).await;
-        response.to_vec()
+    fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) -> JoinHandle<()> {
+        spawn(async move {
+            let serialized_output = serialize(&output);
+            forward_core_operation_output(request_id, serialized_output).await;
+        })
     }
 
-    fn msg_from_native_bg(self: Arc<Self>, event: Vec<u8>) -> JoinHandle<Vec<u8>> {
-        let self_clone = self.clone();
-        spawn(async move { self_clone.msg_from_native(event).await })
-    }
-
-    async fn request(&self, event: MessageToShell) -> MessageToShellResponse {
-        let data = serialize(&event);
-        let response_data = self.msg_from_native(data).await;
-        let response: MessageToShellResponse = bincode::deserialize(&response_data).unwrap();
-        response
-    }
-
-    fn notify(self: Arc<Self>, msg: MessageToShell) -> JoinHandle<MessageToShellResponse> {
-        let self_clone = self.clone();
-        spawn(async move { self_clone.request(msg).await })
+    fn update(self: Arc<Self>, event: AppEvent) -> JoinHandle<()> {
+        spawn(async move {
+            let serialized_event = serialize(&event);
+            update_app_event(serialized_event).await;
+        })
     }
 }
 
-pub struct ThrottleShellRuntime<E: Serialize + Send + 'static> {
-    latest_event: Arc<Mutex<Option<E>>>,
+pub struct ThrottleShellRuntime {
+    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>,
     join_handle: JoinHandle<()>
 }
 
-impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
+impl ThrottleShellRuntime {
     pub fn new(shell_runtime: Arc<ShellRuntime>, delay: Duration) -> Self {
-        let latest_event = Arc::new(Mutex::new(None::<E>));
+        let latest_event = Arc::new(Mutex::new(None::<(u32, CoreOperationOutput)>));
         let latest_event_clone = latest_event.clone();
         let shell_runtime_clone = shell_runtime.clone();
 
@@ -95,8 +88,7 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
                 };
 
                 if let Some(event) = event_to_send {
-                    let serialized_event = serialize(&event);
-                    shell_runtime_clone.clone().msg_from_native_bg(serialized_event);
+                    let _ = shell_runtime_clone.clone().forward_core_operation_output(event.0, event.1).await;
                 }
             }
         });
@@ -104,15 +96,12 @@ impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
         Self { latest_event, join_handle }
     }
 
-    pub async fn send(&self, event: E) {
+    pub async fn send(&self, request_id: u32, event: CoreOperationOutput) {
         let mut latest = self.latest_event.lock().await;
-        *latest = Some(event);
+        *latest = Some((request_id, event));
     }
 }
 
-/// Ask the core to process an event
-/// # Panics
-/// If the core fails to process the event
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub fn process_event(data: Vec<u8>) -> Vec<u8> {
@@ -122,13 +111,10 @@ pub fn process_event(data: Vec<u8>) -> Vec<u8> {
     }
 }
 
-/// Ask the core to handle a response
-/// # Panics
-/// If the core fails to handle the response
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
-    CORE.handle_response(id, data).unwrap_or_default()
+    CORE.handle_response(id, data).unwrap_or_else(|e| vec![])
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -148,7 +134,7 @@ pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
     buffer
 }
 
-fn bincode_options() -> impl bincode::Options + Copy {
+fn bincode_options() -> impl Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
 
@@ -273,7 +259,7 @@ impl NativeProcessor {
         let blob_options = web_sys::BlobPropertyBag::new();
         blob_options.set_type("image/png");
 
-        let parts = js_sys::Array::new();
+        let parts = Array::new();
         parts.push(&data);
 
         let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {

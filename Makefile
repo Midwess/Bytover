@@ -24,7 +24,7 @@ ffmt:
 	swiftlint lint --fix || true
 
 gen:
-	cargo build -p shared_types
+	cargo build -p shared_types --target wasm32-unknown-unknown
 
 gsu:
 	git submodule update --init --recursive

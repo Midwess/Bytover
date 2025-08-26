@@ -1,6 +1,7 @@
 use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use shared::app::operations::CoreOperationOutput;
+use shared::app::AppEvent;
 use shared::core_api::CoreBridge;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,5 +34,9 @@ impl CoreBridge for CoreBridgeImpl {
         self.throttle_shell_runtime
             .send(MessageToShell::HandleResponse(request_id, Box::new(response)))
             .await;
+    }
+
+    async fn notify(&self, event: AppEvent) {
+        self.throttle_shell_runtime.send(MessageToShell::Notify(Box::new(event))).await;
     }
 }

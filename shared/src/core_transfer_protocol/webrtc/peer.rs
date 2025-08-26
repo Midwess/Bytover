@@ -1,10 +1,11 @@
-use crate::app::file_system::file::ResourceType;
+use crate::app::file_system::file::{LocalResourcePath, ResourceType};
+use crate::app::modules::transfer::TransferEvent::SessionResourceThumbnailFullFilled;
 use crate::app::operations::p2p::P2POperationOutput;
-use crate::app::operations::transfer::TransferOperationOutput::ThumbnailFullFilled;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
+use crate::app::AppEvent;
 use crate::core_api::{BufferExt, CoreBridge, TimeoutReceiver};
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
@@ -200,13 +201,7 @@ impl WebRtcPeer {
         session_id: u64,
         session: Option<TransferSession>
     ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let (dat_tx, mut data_rx) = mpsc::unbounded();
-        let (th_tx, mut thumbnail_rx) = mpsc::unbounded();
-
-        self.inbound_data_stream_sender.lock().await.replace(dat_tx);
-        self.inbound_thumbnail_stream_sender.lock().await.replace(th_tx);
-
-        if session.is_none() {
+        let Some(mut session) = session else {
             // Denied
             if let Some(rtc_request_id) = self.transfers_context.rtc_request_id(session_id).await {
                 let response = TransferResponseMessage {};
@@ -214,11 +209,14 @@ impl WebRtcPeer {
             };
 
             return Ok(TransferSessionStatus::Canceled);
-        }
+        };
 
-        let mut session = session.unwrap();
+        let (resource_tx, mut resource_rx) = mpsc::unbounded();
+        let (thumbnail_tx, mut thumbnail_rx) = mpsc::unbounded();
 
-        log::info!("Downloading transfer session {session_id} to peer {}", self.peer.peer_id());
+        self.inbound_data_stream_sender.lock().await.replace(resource_tx);
+        self.inbound_thumbnail_stream_sender.lock().await.replace(thumbnail_tx);
+
         let msg_channel = self.msg_channel.clone();
         let peer_id = session.peer().unwrap().peer_id();
         let context = self.transfers_context.clone();
@@ -230,32 +228,36 @@ impl WebRtcPeer {
             }
         }
 
-        // Thumbnails download
         let mut thumbnail_paths = session
             .resources
             .iter()
             .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
-            .collect::<Vec<_>>();
+            .collect::<Vec<(u64, LocalResourcePath)>>();
         let repo = self.resource_repo.clone();
         let context = self.transfers_context.clone();
         let bridge = self.core_bridge.clone();
+        let abort_signal = {
+            let context = context.clone();
+            async move || {
+                context.wait_for_inactive(session_id).await;
+            }
+        };
+
+        let abort_signal_cloned = abort_signal.clone();
         let thumbnail_handle = spawn(async move {
+            let abort_signal = abort_signal_cloned;
+
             if thumbnail_paths.is_empty() {
                 log::info!("Session {session_id} has no thumbnails to download");
-                return Ok(())
+                return Ok(thumbnail_paths)
             }
 
-            // First delimiter
-            loop {
-                if !context.is_active(session_id).await {
-                    return Ok(())
-                }
-
+            while context.is_active(session_id).await {
                 if thumbnail_paths.is_empty() {
-                    return Ok(())
+                    return Ok(thumbnail_paths)
                 }
 
-                let first_delimiter = thumbnail_rx.recv_default_timeout().await.unwrap_or_default();
+                let first_delimiter = thumbnail_rx.recv_with_abort_signal(abort_signal.clone()).await.unwrap_or_default();
                 let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter)?;
                 if !first_delimiter.is_start {
                     return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
@@ -271,18 +273,14 @@ impl WebRtcPeer {
 
                 let resource_path = thumbnail_paths.swap_remove(index.unwrap()).1;
                 if !context.is_active(session_id).await {
-                    return Ok(())
+                    return Ok(thumbnail_paths)
                 }
 
                 let mut writer = repo.write(resource_path.clone()).await?;
 
                 // Then we will download
-                log::info!("Downloading thumbnail {resource_path:?} for session {session_id}");
-                while let Some(bytes) = thumbnail_rx.recv_default_timeout().await {
-                    if !context.is_active(session_id).await {
-                        return Ok(());
-                    }
-
+                log::info!("Begin downloading thumbnail {resource_path:?} for session {session_id}");
+                while let Some(bytes) = thumbnail_rx.recv_with_abort_signal(abort_signal.clone()).await {
                     writer
                         .write(bytes.to_vec().into())
                         .await
@@ -297,14 +295,18 @@ impl WebRtcPeer {
                 }
 
                 writer.end().await?;
-                let thumbnail_full_filled = ThumbnailFullFilled {
+                log::info!("Completed downloading thumbnail {resource_path:?}");
+
+                let thumbnail_full_filled = SessionResourceThumbnailFullFilled {
                     session_id,
                     resource_id: first_delimiter.resource_id,
-                    local_resource_path: resource_path
+                    path: resource_path
                 };
 
-                let _ = bridge.response(core_request_id, CoreOperationOutput::Transfer(thumbnail_full_filled)).await;
+                let _ = bridge.notify(AppEvent::Transfer(thumbnail_full_filled)).await;
             }
+
+            Ok(thumbnail_paths)
         });
 
         while !session.is_completed() {
@@ -313,29 +315,29 @@ impl WebRtcPeer {
                 break;
             }
 
-            let first_delimiter = data_rx.recv_default_timeout().await.unwrap_or_default();
+            let first_delimiter = resource_rx.recv_default_timeout().await.unwrap_or_default();
             let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter)?;
             if !first_delimiter.is_start {
                 return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
             }
 
-            let Some(resource_path) = session
+            let Some((resource_path, resource_size)) = session
                 .resources
                 .iter()
                 .find(|it| it.order_id == first_delimiter.resource_id)
-                .map(|it| it.path.clone())
+                .map(|it| (it.path.clone(), it.size))
             else {
                 return Err(WebRtcErrors::InvalidDelimiter(format!(
                     "The first delimiter is not match with any resource {first_delimiter:?}"
                 )));
             };
 
-            log::info!("Downloading resource {resource_path:?}");
+            log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             let mut writer = self.resource_repo.write(resource_path.clone()).await?;
 
             let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
-            while let Some(packet) = data_rx.recv_default_timeout().await {
+            while let Some(packet) = resource_rx.recv_with_abort_signal(abort_signal.clone()).await {
                 if !self.transfers_context.is_active(session_id).await {
                     progress_update.fail("The session is canceled".to_string());
                     break;
@@ -362,14 +364,12 @@ impl WebRtcPeer {
             }
 
             writer.end().await?;
-            log::info!("Downloaded resource {resource_path:?} len {total_written_bytes}");
+            log::info!("Complete Downloading resource {:?} len {total_written_bytes}", resource_path);
 
             self.core_bridge.resource_progress_update(core_request_id, progress_update, true).await;
         }
 
-        if let Err(err) = thumbnail_handle.await.unwrap() {
-            log::error!("Failed to download thumbnails for session {session_id}: {err:?}");
-        }
+        let _ = thumbnail_handle.await;
 
         self.transfers_context.stop_transfer(session_id).await;
 
@@ -409,7 +409,7 @@ impl WebRtcPeer {
         let _ = self.msg_channel.send(request, Some(request_id)).await?;
 
         // Transfer the thumbnails
-        let session_thumbnail_paths = session
+        let mut session_thumbnail_paths = session
             .resources
             .iter()
             .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
@@ -419,12 +419,12 @@ impl WebRtcPeer {
         let context = self.transfers_context.clone();
         let buffer = self.buffer.clone();
         let thumbnail_handle = spawn(async move {
-            for (id, thumbnail_path) in session_thumbnail_paths {
-                log::info!("Transferring thumbnail {thumbnail_path:?} for session {session_id}");
+            while let Some((id, thumbnail_path)) = session_thumbnail_paths.pop() {
                 if !context.is_active(session_id).await {
                     break;
                 }
 
+                log::info!("Begin transferring thumbnail {thumbnail_path:?} for session {session_id}");
                 let Ok(mut reader) = repo.read(thumbnail_path.clone(), 63 * 1024).await else {
                     continue;
                 };
@@ -454,9 +454,10 @@ impl WebRtcPeer {
                 }
 
                 buffer.flush_all_timeout().await?;
+                log::info!("Complete transferring thumbnail {thumbnail_path:?} for session {session_id}");
             }
 
-            Ok(())
+            Ok(session_thumbnail_paths)
         });
 
         while !session.is_completed() {
@@ -473,12 +474,11 @@ impl WebRtcPeer {
             };
 
             let mut reader = self.resource_repo.read(resource_path.clone(), 63 * 1024).await?;
-            log::info!("Transferring resource {resource_path:?} size {size} bytes");
+            log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
 
             let mut total_sent_bytes = 0u64;
             let progress_update = session.resource_mut_progress(order_id).unwrap();
             let delimiter = TransferDelimiterShema::start(order_id).as_bytes()?;
-            log::info!("Sending delimiter to peer {peer_id:?} len {}", delimiter.len());
             if let Err(e) = self.data_channel.lock().await.send((peer_id, delimiter)).await {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
@@ -515,22 +515,19 @@ impl WebRtcPeer {
             }
 
             log::info!(
-                "Transfer resource {resource_path:?} completed with status {:?} total_sent {:?}",
+                "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?}",
                 progress_update.status,
                 total_sent_bytes
             );
 
-            progress_update.complete();
             self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
         }
 
         self.buffer.flush_all_timeout().await?;
+
+        let _ = thumbnail_handle.await;
+
         self.transfers_context.stop_transfer(session_id).await;
-
-        if let Err(e) = thumbnail_handle.await.unwrap() {
-            log::error!("Failed to transfer thumbnails for session {session_id}: {e:?}");
-        }
-
         log::info!("Transfer session {session_id} completed");
 
         Ok(session.status())

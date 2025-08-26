@@ -6,7 +6,6 @@ use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams};
 pub mod auth_session;
 pub mod id;
 pub mod local_resource;
-pub mod path_resolver;
 pub mod transfer_session;
 
 mod errors;

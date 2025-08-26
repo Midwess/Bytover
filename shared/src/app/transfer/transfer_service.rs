@@ -37,8 +37,6 @@ impl TransferService {
     }
 
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
-        log::info!(target: "transfer", "Loading transfer sessions");
-
         let receive_sessions = TransferSessionPersistentOperation::get_all_received_sessions().into_future(cmd.clone()).await;
 
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
@@ -53,7 +51,7 @@ impl TransferService {
 
     pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
-            log::info!(target: "transfer", "Cancelling transfer: {:?}", transfer_session.order_id);
+            log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
             cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
                 loaded: vec![],
@@ -66,7 +64,7 @@ impl TransferService {
                 .into_future(cmd.clone())
                 .await
             {
-                log::error!(target: "transfer", "Failed to cancel transfer: {error:?}");
+                log::error!("Failed to cancel transfer: {error:?}");
             }
         }
 
@@ -126,10 +124,8 @@ impl TransferService {
                 result
             }
             TransferTarget::Nearby(_) => {
-                log::info!("Creating nearby session");
                 let order_id = PersistentOperation::gen_id().into_future(cmd.clone()).await;
                 let result = TransferSession::send(order_id, selected_resources, transfer_target).await;
-                log::info!("Created nearby session");
 
                 result
             }
@@ -144,7 +140,7 @@ impl TransferService {
             updated: vec![]
         }));
 
-        log::info!(target: "transfer", "Sending resources to peer: {transfer_target_id:?}");
+        log::info!("Begin transferring session to peer: {transfer_target_id:?}");
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -156,9 +152,10 @@ impl TransferService {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         if progress.status.is_completed() {
                             log::info!(
-                                target: "transfer",
                                 "Resource {:?} completed with status {:?}",
-                                progress.resource_order_id, progress.status);
+                                progress.resource_order_id,
+                                progress.status
+                            );
                         }
 
                         transfer_session.update_progress(progress.clone());
@@ -175,12 +172,12 @@ impl TransferService {
                         break;
                     }
                     other => {
-                        log::error!(target: "transfer", "Unexpected transfer output: {other:?}");
+                        log::error!("Unexpected transfer output: {other:?}");
                         break;
                     }
                 },
                 CoreOperationOutput::ConnectionError(error) => {
-                    log::error!(target: "transfer", "Connection error: {error:?}");
+                    log::error!("Connection error: {error:?}");
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
                     DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
                     break;
@@ -188,7 +185,7 @@ impl TransferService {
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
                     DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
-                    log::error!(target: "transfer", "Device error: {error:?}");
+                    log::error!("Device error: {error:?}");
                     break;
                 }
                 _ => {
@@ -201,9 +198,9 @@ impl TransferService {
             }
         }
 
-        log::info!(target: "transfer", "Transfer session completed");
+        log::info!("Complete transferring session");
 
-        // We not remove the public transfer, since user need to see the information
+        // We do not remove the public transfer since the user needs to see the information
         // after transfer completed.
         if transfer_session.is_success() && transfer_session.target.is_public() {
             return;
@@ -222,7 +219,9 @@ impl TransferService {
         let generate_file_paths_request = {
             let mut result = HashMap::new();
             for resource in remote_session.resources.iter() {
-                result.insert(resource.order_id, resource.name.clone());
+                if resource.is_thumbnail_included {
+                    result.insert(resource.order_id, resource.name.clone());
+                }
             }
 
             result
@@ -237,11 +236,6 @@ impl TransferService {
             TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)
                 .into_future(cmd.clone())
                 .await;
-
-        log::info!(
-            target: "transfer",
-            "Received session request from peer: {peer_id:?}: {remote_session:?}"
-        );
 
         let mut resources = vec![];
         for resource_request in remote_session.resources {
@@ -267,6 +261,7 @@ impl TransferService {
         let response_transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
         let mut transfer_session = response_transfer_session.clone();
+        // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
         transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
         let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
@@ -288,14 +283,6 @@ impl TransferService {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        if progress.status.is_completed() {
-                            log::info!(
-                                target: "transfer",
-                                "Resource {:?} completed with status {:?}",
-                                progress.resource_order_id, progress.status
-                            );
-                        }
-
                         transfer_session.update_progress(progress.clone());
                         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
                             session_id: transfer_session.order_id,
@@ -309,20 +296,6 @@ impl TransferService {
 
                         log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
                         break;
-                    }
-                    TransferOperationOutput::ThumbnailFullFilled {
-                        session_id,
-                        local_resource_path,
-                        resource_id
-                    } => {
-                        log::info!("Received thumbnail full filled for resource {resource_id}");
-                        let request = AppEvent::Transfer(TransferEvent::SessionResourceThumbnailFullFilled {
-                            session_id,
-                            resource_id,
-                            path: local_resource_path
-                        });
-
-                        cmd.notify_shell(CoreOperation::Notified(request));
                     }
                     _ => {
                         continue;
@@ -418,7 +391,7 @@ impl TransferService {
         });
 
         let mut stream = cmd.stream_from_shell(request);
-        log::info!(target: "transfer", "Subscribing to public transfer session: {transfer_session:?}");
+        log::info!(target: "transfer", "Begin subscribing to public transfer session: {transfer_session:?}");
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(transfer) => match transfer {
@@ -444,7 +417,6 @@ impl TransferService {
                         transfer_session.resources.append(&mut resources);
                         transfer_session.progress.append(&mut progresses);
 
-                        log::info!(target: "transfer", "Received public transfer session update: {transfer_session:?}");
                         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
                             added: vec![],
                             loaded: vec![],
@@ -453,7 +425,6 @@ impl TransferService {
                         }));
                     }
                     TransferOperationOutput::SubscribeSessionEnded => {
-                        log::info!(target: "transfer", "Public transfer session ended 1");
                         break;
                     }
                     TransferOperationOutput::UnauthenticatedToSubscribeSession => {
@@ -474,6 +445,7 @@ impl TransferService {
                 _ => return
             };
         }
-        log::info!(target: "transfer", "Public transfer session ended");
+
+        log::info!(target: "transfer", "Complete subscribing to public transfer session");
     }
 }

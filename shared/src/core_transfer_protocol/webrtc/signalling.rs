@@ -302,9 +302,6 @@ impl WebSignaller {
 
         // Send the join msg right after the socket connected
         let result = self.client.start().await;
-        // Somehow the first msg not being sent to the server
-        // We warm it up by sending duple msg at first
-        self.client.send(first_msg.clone()).await?;
         self.client.send(first_msg).await?;
         result
     }

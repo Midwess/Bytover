@@ -4,7 +4,7 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::file_system::file::{LocalResource, LocalResourcePath};
+use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
@@ -37,11 +37,6 @@ pub enum TransferOperationOutput {
     CreateCloudSession(TransferSession),
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted(TransferSessionStatus),
-    ThumbnailFullFilled {
-        local_resource_path: LocalResourcePath,
-        resource_id: u64,
-        session_id: u64
-    },
     TransferCanceled,
     FindPublicSession(Option<TransferSession>),
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),

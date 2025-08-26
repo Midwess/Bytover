@@ -49,7 +49,8 @@ impl LocalResource {
             order_id: self.order_id,
             name: self.name.clone(),
             size: self.size as i64,
-            r#type: proto_type as i32
+            r#type: proto_type as i32,
+            is_thumbnail_included: self.thumbnail_path.is_some()
         }
     }
 }

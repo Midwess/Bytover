@@ -133,6 +133,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let new_resource = CacheResource::thumbnail(resource_id);
         let (mut writer, reader) = BrowserCache::create(self.db.clone(), new_resource).await?;
         thumbnail_caches.insert(resource_id, reader);
+        drop(thumbnail_caches);
 
         writer.write(png_bytes.into()).await?;
         writer.end().await?;

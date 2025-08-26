@@ -4,6 +4,7 @@ use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
+use crate::app::AppEvent;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::task::{noop_waker, Context, Poll};
@@ -12,6 +13,7 @@ use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::StreamExt;
+use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 use url::Url;
@@ -50,6 +52,8 @@ pub trait CoreBridge: Send + Sync {
             self.response_throttle(request_id, response).await;
         }
     }
+
+    async fn notify(&self, event: AppEvent);
 }
 
 #[derive(Debug)]
@@ -81,6 +85,18 @@ pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
     async fn recv_timeout(&mut self, timeout: Duration) -> Option<T>;
     async fn recv_default_timeout(&mut self) -> Option<T>;
     fn poll_next_now(&mut self) -> Option<T>;
+    async fn recv_with_abort_signal<F, Fut>(&mut self, abort: F) -> Option<T>
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = ()> + Send
+    {
+        let recv_fn = self.recv_default_timeout();
+        select! {
+            _ = abort().fuse() => None,
+            res = recv_fn.fuse() => res,
+            complete => None,
+        }
+    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

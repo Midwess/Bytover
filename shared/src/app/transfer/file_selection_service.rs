@@ -48,7 +48,7 @@ impl ResourceTransferSelectionService {
                 .into_future(ctx.clone())
                 .await
             else {
-                log::error!(target: "transfer", "File not exists: {:?}", selection.path);
+                log::error!("File not exists: {:?}", selection.path);
                 continue;
             };
 
@@ -64,7 +64,7 @@ impl ResourceTransferSelectionService {
 
             let mut new_resources = LocalResourcePersistentOperation::add(vec![local_resource.clone()]).into_future(ctx.clone()).await;
             if new_resources.is_empty() {
-                log::info!(target: "transfer", "File already exists: {:?}", selection.path);
+                log::info!("File already exists: {:?}", selection.path);
                 continue;
             }
 
