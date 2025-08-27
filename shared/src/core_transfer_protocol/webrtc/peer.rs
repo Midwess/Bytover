@@ -19,7 +19,6 @@ use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
 use n0_future::task::spawn;
-use n0_future::StreamExt;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
@@ -77,12 +76,9 @@ impl WebRtcPeer {
             }
         };
 
-        log::info!("Sending introduce request to other peer");
         let IntroduceResponse(response) = msg_channel.send(Request::IntroduceRequest(introduce_request), None).await? else {
             return Err(WebRtcErrors::FailedToIntroducePeer)
         };
-
-        log::info!("Received introduce response from other peer {response:?}");
 
         let peer: PeerEntity = response.peer.into();
 
@@ -142,17 +138,14 @@ impl WebRtcPeer {
 
     pub fn start_core_stream(&self, core_stream_id: u32) {
         self.core_id.store(core_stream_id, Ordering::Relaxed);
-        log::info!("Saved core stream id {}", self.core_id.load(Ordering::Relaxed));
     }
 
     pub async fn process_request(&self, request_id: String, msg: Request) {
         match msg {
             Request::CancelRequest(request) => {
-                log::info!("Received request, cancelling transfer session {request:?}");
                 self.transfers_context.stop_transfer(request.session_id as u64).await;
             }
             Request::TransferRequest(request) => {
-                log::info!("Received transfer request, starting transfer session {request:?}");
                 self.transfers_context.start_transfer(request.session.order_id, request_id).await;
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
                     remote_session: request.session
@@ -168,7 +161,6 @@ impl WebRtcPeer {
         let mut tx_opt = self.inbound_data_stream_sender.lock().await.clone();
         if let Some(tx) = tx_opt.as_mut() {
             if let Err(e) = tx.unbounded_send(packet) {
-                log::error!("Failed to send data to peer {e:?}");
                 tx_opt.take();
             }
         }
@@ -253,12 +245,8 @@ impl WebRtcPeer {
         let bridge = self.core_bridge.clone();
 
         let thumbnail_cancel_signal = cancellation_signal.clone();
+        log::info!("Begin downloading thumbnails for session {session_id}");
         let thumbnail_handle = spawn(async move {
-            if thumbnail_paths.is_empty() {
-                log::info!("Session {session_id} has no thumbnails to download");
-                return Ok(thumbnail_paths)
-            }
-
             while context.is_active(session_id).await {
                 if thumbnail_paths.is_empty() {
                     return Ok(thumbnail_paths)
@@ -321,10 +309,18 @@ impl WebRtcPeer {
         });
 
         let resource_cancel_signal = cancellation_signal.clone();
+        log::info!(
+            "Begin downloading resources for session {session_id} {}",
+            session.is_completed()
+        );
         while !session.is_completed() {
             if !self.transfers_context.is_active(session_id).await {
                 session.cancel();
                 break;
+            }
+
+            if resource_cancel_signal.is_aborted() {
+                log::info!("Session is canceled");
             }
 
             let first_delimiter = resource_rx
@@ -407,7 +403,6 @@ impl WebRtcPeer {
         };
 
         let session_id = session.order_id;
-        log::info!("Sending transfer session {session_id} to peer {}", self.peer.peer_id());
 
         for resource in session.resources.iter_mut() {
             // We transfer folder as .tar file
@@ -422,7 +417,6 @@ impl WebRtcPeer {
         };
 
         let peer_id = session.peer().unwrap().peer_id();
-        log::info!(target: "peer", "Sending session to peer {peer_id:?}: {transfer_session_message:?}", );
         let request = Request::TransferRequest(TransferRequestMessage {
             session: transfer_session_message
         });
@@ -439,6 +433,7 @@ impl WebRtcPeer {
         let thumbnail_channel = self.thumbnail_channel.clone();
         let context = self.transfers_context.clone();
         let buffer = self.buffer.clone();
+        let thumbnail_cancel_signal = cancellation_signal.clone();
         let thumbnail_handle = spawn(async move {
             while let Some((id, thumbnail_path)) = session_thumbnail_paths.pop() {
                 if !context.is_active(session_id).await {
@@ -446,7 +441,8 @@ impl WebRtcPeer {
                 }
 
                 log::info!("Begin transferring thumbnail {thumbnail_path:?} for session {session_id}");
-                let Ok(mut reader) = repo.read(thumbnail_path.clone(), 63 * 1024).await else {
+                let Ok(Ok(mut reader)) = repo.read(thumbnail_path.clone(), 63 * 1024).abort_with(&thumbnail_cancel_signal).await
+                else {
                     continue;
                 };
 
@@ -457,7 +453,7 @@ impl WebRtcPeer {
                     return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                 }
 
-                while let Ok(Some(bytes)) = reader.next().await {
+                while let Ok(Ok(Some(bytes))) = reader.next().abort_with(&thumbnail_cancel_signal).await {
                     let bytes = Packet::from(bytes.to_vec());
                     if !bytes.is_empty() {
                         let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
@@ -481,6 +477,7 @@ impl WebRtcPeer {
             Ok(session_thumbnail_paths)
         });
 
+        let resource_cancel_signal = cancellation_signal.clone();
         while !session.is_completed() {
             if !self.transfers_context.is_active(session_id).await {
                 log::info!("Session is canceled");
@@ -494,7 +491,11 @@ impl WebRtcPeer {
                 break;
             };
 
-            let mut reader = self.resource_repo.read(resource_path.clone(), 63 * 1024).await?;
+            let mut reader = self
+                .resource_repo
+                .read(resource_path.clone(), 63 * 1024)
+                .abort_with(resource_cancel_signal.clone())
+                .await??;
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
 
             let mut total_sent_bytes = 0u64;
@@ -507,7 +508,12 @@ impl WebRtcPeer {
                 continue;
             }
 
-            while let Some(bytes) = reader.next().await.map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))? {
+            while let Some(bytes) = reader
+                .next()
+                .abort_with(&resource_cancel_signal)
+                .await?
+                .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
+            {
                 if !self.transfers_context.is_active(session_id).await {
                     break;
                 }

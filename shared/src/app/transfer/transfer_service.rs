@@ -140,7 +140,10 @@ impl TransferService {
             updated: vec![]
         }));
 
-        log::info!("Begin transferring session to peer: {transfer_target_id:?}");
+        log::info!(
+            "Begin transferring session to peer: {transfer_target_id:?} {:?}",
+            transfer_session
+        );
 
         let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
             transfer_session.clone()
@@ -216,15 +219,17 @@ impl TransferService {
 
     pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
         let peer_id = peer.id();
-        let generate_file_paths_request = {
+        let (generate_file_paths_request, generate_thumbnail_paths_request) = {
             let mut result = HashMap::new();
+            let mut thumbnail_paths = HashMap::new();
             for resource in remote_session.resources.iter() {
+                result.insert(resource.order_id, resource.name.clone());
                 if resource.is_thumbnail_included {
-                    result.insert(resource.order_id, resource.name.clone());
+                    thumbnail_paths.insert(resource.order_id, resource.name.clone());
                 }
             }
 
-            result
+            (result, thumbnail_paths)
         };
 
         let mut generated_thumbnails_paths =
@@ -290,7 +295,10 @@ impl TransferService {
                         }));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
-                        if status == TransferSessionStatus::Canceled {
+                        if matches!(
+                            status,
+                            TransferSessionStatus::InProgress { .. } | TransferSessionStatus::Initializing
+                        ) {
                             transfer_session.cancel();
                         }
 
@@ -322,7 +330,13 @@ impl TransferService {
             }
         }
 
-        if matches!(transfer_session.status(), TransferSessionStatus::Canceled) {
+        if matches!(transfer_session.status(), TransferSessionStatus::Success) {
+            let progresses = transfer_session.progress.clone();
+            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
+                session_id: transfer_session.order_id,
+                progresses
+            }));
+        } else {
             DialogOperation::toast("Transfer session canceled".to_string());
 
             cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
@@ -330,12 +344,6 @@ impl TransferService {
                 added: vec![],
                 removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
                 updated: vec![]
-            }));
-        } else {
-            let progresses = transfer_session.progress.clone();
-            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
-                session_id: transfer_session.order_id,
-                progresses
             }));
         }
     }

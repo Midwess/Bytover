@@ -95,7 +95,6 @@ impl WebRtc {
 
     pub async fn start_peer_core_stream(&self, peer_id: String, core_id: u32) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
-        log::info!("Starting peer core stream with peer_id = {peer_id:?}");
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.start_core_stream(core_id);
             return Ok(());

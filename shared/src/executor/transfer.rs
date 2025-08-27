@@ -58,8 +58,6 @@ where
             } => {
                 let result = self.web_rtc().answer_session(request_id, peer_id, session, session_id).await;
 
-                log::info!(target: "transfer", "Answered session request: {result:?}");
-
                 match result {
                     Ok(status) => CoreOperationOutput::Transfer(TransferOperationOutput::TransferCompleted(status)),
                     Err(error) => CoreOperationOutput::ConnectionError(error.into())

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, {ReactElement, useEffect, useState} from "react";
 import clsx from "clsx";
 
 type Props = {
+    center?: ReactElement;
     /** Progress value from 0 to 1 */
     progress: number;
     /** Diameter of the circle in pixels */
@@ -14,14 +15,17 @@ type Props = {
     trackColor?: string;
     /** Animation duration in ms */
     duration?: number;
+    onClick?: () => void;
 };
 
 export default function CircleProgress({
-                                           progress,
-                                           size = 80,
-                                           strokeWidth = 4,
-                                           duration = 800,
-                                       }: Props) {
+    progress,
+    size = 80,
+    strokeWidth = 4,
+    duration = 800,
+    onClick = () => {},
+    center
+}: Props) {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
 
@@ -66,17 +70,26 @@ export default function CircleProgress({
                 />
             </svg>
 
-            <div
-                className={clsx(
-                    "absolute flex items-center justify-center",
-                    "cursor-pointer bg-bluePrimary m-3"
-                )}
-                style={{
-                    width: size * 0.4,
-                    height: size * 0.4,
-                    borderRadius: "24%",
-                }}
-            />
+            {
+                center
+                    ? <div onClick={onClick} className={clsx(
+                        "absolute flex items-center justify-center",
+                        "cursor-pointer bg-bluePrimary m-3"
+                    )}>{center}</div>
+                    :
+                    <div
+                    onClick={onClick}
+                    className={clsx(
+                        "absolute flex items-center justify-center",
+                        "cursor-pointer bg-bluePrimary m-3"
+                    )}
+                    style={{
+                        width: size * 0.4,
+                        height: size * 0.4,
+                        borderRadius: "24%",
+                    }}
+                />
+            }
         </div>
     );
 }

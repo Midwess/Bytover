@@ -7,7 +7,7 @@ import {
     LocalResourcePathVariantAbsolutePath,
     ReceiveCloudSessionViewModel,
     ResourceTypeVariantFolder,
-    SelectedResourceViewModel,
+    SelectedResourceViewModel, TransferEventVariantCancelTransfer,
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewPublicSession,
     TransferTypeVariantReceive,
@@ -15,7 +15,7 @@ import {
 } from 'shared_types/types/shared_types'
 import {
     ArrowDown,
-    ChevronsUpDown, Download,
+    ChevronsUpDown, Dog, Download,
     Globe, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
@@ -327,6 +327,7 @@ function Board() {
                                 onPress={() => {
                                     core.updateSelectedSession(item)
                                 }}
+                                id={item.id}
                                 name={item.peer_name}
                                 progress={item.progress}
                                 display_datetime={item.display_datetime}
@@ -350,6 +351,7 @@ function Board() {
                                 onPress={() => {
                                     core.updateSelectedSession(item)
                                 }}
+                                id={item.id}
                                 name={item.sender_name}
                                 progress={0}
                                 display_datetime={item.display_datetime}
@@ -369,6 +371,7 @@ function Board() {
 
 function TransferSession(props: {
     name: string,
+    id: bigint,
     display_datetime: string,
     progress: number,
     avatar_url: string,
@@ -379,6 +382,7 @@ function TransferSession(props: {
 }) {
     const {
         name,
+        id,
         display_datetime,
         progress,
         avatar_url,
@@ -409,7 +413,11 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {!!progress && !is_completed && <CircleProgress progress={progress} size={30}/>}
+            {!!progress && !is_completed && <CircleProgress center={is_public ? <Download/> : undefined} progress={progress} size={30} onClick={() => {
+                if (!is_public) {
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(id, new TransferTypeVariantReceive())))
+                }
+            }}/>}
             {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"} src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
