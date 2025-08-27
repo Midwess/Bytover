@@ -35,7 +35,6 @@ impl IOReader for IOReaderImpl {
 
         let reader = FileReader::new().map_err(|_| anyhow::anyhow!("Failed to create FileReader"))?;
 
-        // Setup oneshot channel to wait for `onloadend` event
         let (tx, rx) = oneshot::channel::<()>();
         let tx = Rc::new(RefCell::new(Some(tx)));
 
@@ -49,9 +48,8 @@ impl IOReader for IOReaderImpl {
         reader
             .read_as_array_buffer(&blob)
             .map_err(|_| anyhow::anyhow!("Failed to read blob as array buffer"))?;
-        onloadend.forget(); // Keep alive until called
+        onloadend.forget();
 
-        // Wait for the read to complete
         rx.await.map_err(|_| anyhow::anyhow!("Failed to await file read"))?;
 
         let array_buffer = reader

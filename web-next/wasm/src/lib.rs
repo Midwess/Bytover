@@ -34,7 +34,7 @@ use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{window, File};
+use web_sys::{window, File, FileSystemWritableFileStream};
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
@@ -270,6 +270,32 @@ impl NativeProcessor {
         };
 
         Some(url)
+    }
+
+    pub async fn download_file_from_cache(&self, path: Vec<u8>, writer: FileSystemWritableFileStream) {
+        let options = bincode_options();
+        let mut deser = bincode::Deserializer::from_slice(&path, options);
+        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+        let repository = DiContainer::get_instance().get_local_resource_repository().await;
+        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
+            let _ = JsFuture::from(writer.close()).await;
+            return;
+        };
+
+        while let Ok(Some(data)) = reader.next().await {
+            let array = data.into_uint_array();
+            let Ok(fut) = writer.write_with_js_u8_array(&array) else {
+                break;
+            };
+
+            if let Err(e) = JsFuture::from(fut).await {
+                log::error!("Failed to write to file: {:?}", e);
+                break;
+            }
+        }
+
+        let _ = JsFuture::from(writer.close()).await;
     }
 
     pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {

@@ -41,7 +41,7 @@ function MultiEmailInput({
             setInputValue("")
         }
         else {
-            toast("Invalid email address");
+            toast("Invalid email address or already exists");
         }
     }
 
