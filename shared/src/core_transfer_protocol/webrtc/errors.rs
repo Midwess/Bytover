@@ -1,5 +1,6 @@
 use crate::app::repository::errors::PersistenceError;
 use crate::errors::NetworkError;
+use core_services::utils::cancellation::AbortError;
 use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use prost::{DecodeError, EncodeError};
@@ -43,7 +44,10 @@ pub enum WebRtcErrors {
     ConnectionNotFound(PeerId),
 
     #[error("An unexpected system error occurred")]
-    SystemError(#[from] anyhow::Error)
+    SystemError(#[from] anyhow::Error),
+
+    #[error("Canceled")]
+    Canceled(#[from] AbortError)
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

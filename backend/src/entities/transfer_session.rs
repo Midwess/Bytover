@@ -27,13 +27,13 @@ pub struct TransferSession {
     owner_user_order_id: u64,
     alias: String,
     password: Option<String>,
-    to_email: Option<String>,
+    to_emails: Vec<String>,
     resources: Vec<TransferResource>,
     progress: Vec<TransferProgress>
 }
 
 impl TransferSession {
-    pub async fn public(password: Option<String>, from_user: u64, alias: String, to_email: Option<String>) -> Self {
+    pub async fn public(password: Option<String>, from_user: u64, alias: String, to_emails: Vec<String>) -> Self {
         Self {
             order_id: gen_id().await,
             owner_user_order_id: from_user,
@@ -41,12 +41,12 @@ impl TransferSession {
             resources: Default::default(),
             progress: Default::default(),
             alias,
-            to_email
+            to_emails
         }
     }
 
-    pub fn to_email(&self) -> Option<String> {
-        self.to_email.clone()
+    pub fn to_emails(&self) -> &Vec<String> {
+        self.to_emails.as_ref()
     }
 
     pub async fn start_transfer(

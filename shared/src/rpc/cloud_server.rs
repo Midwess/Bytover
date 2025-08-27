@@ -55,7 +55,10 @@ where
         password: Option<String>,
         to_email: Option<String>
     ) -> Result<PublicTransferSessionMessage, RpcErrors> {
-        let request_body = CreatePublicTransferSessionRequest { password, to_email };
+        let request_body = CreatePublicTransferSessionRequest {
+            password,
+            to_emails: to_email.map(|it| vec![it]).unwrap_or_default()
+        };
         let channel = self.rpc_module.connect().await?;
 
         let mut request = Request::new(request_body);

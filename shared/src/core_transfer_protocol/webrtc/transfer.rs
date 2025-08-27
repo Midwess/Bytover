@@ -1,4 +1,5 @@
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
+use core_services::utils::cancellation::{AbortSignal, CancellationToken};
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::sleep;
@@ -68,15 +69,21 @@ impl TransferDelimiterShema {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SessionContext {
     session_id: u64,
-    rtc_request_id: String
+    rtc_request_id: String,
+    token: CancellationToken
 }
 
 impl SessionContext {
     pub fn new(session_id: u64, rtc_request_id: String) -> Self {
         Self {
             session_id,
-            rtc_request_id
+            rtc_request_id,
+            token: CancellationToken::new()
         }
+    }
+
+    pub fn signal(&self) -> AbortSignal {
+        self.token.signal()
     }
 }
 
@@ -134,5 +141,10 @@ impl TransfersContext {
     pub async fn stop_all(&self) {
         let mut actives = self.active_transfers.lock().await;
         actives.clear();
+    }
+
+    pub async fn signal(&self, session_id: u64) -> Option<AbortSignal> {
+        let actives = self.active_transfers.lock().await;
+        actives.iter().find(|it| it.session_id == session_id).map(|it| it.signal())
     }
 }

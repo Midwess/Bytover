@@ -121,7 +121,7 @@ impl WebRtc {
 
         let loop_fut = loop_fut.fuse();
         futures::pin_mut!(loop_fut);
-        let timeout = Delay::new(Duration::from_millis(10));
+        let timeout = Delay::new(Duration::from_millis(5));
         futures::pin_mut!(timeout);
 
         let connection_timeout = Delay::new(Duration::from_secs(10));
@@ -255,7 +255,6 @@ impl WebRtc {
 
             for (peer_id, data) in socket.channel_mut(TRANSFER_RESOURCE_CHANNEL_ID).receive() {
                 let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
-                    log::info!("Not found any peer, why ?");
                     continue;
                 };
 
@@ -264,7 +263,6 @@ impl WebRtc {
 
             for (peer_id, data) in socket.channel_mut(TRANSFER_THUMBNAIL_CHANNEL_ID).receive() {
                 let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
-                    log::info!("Not found any peer, why ?");
                     continue;
                 };
 
@@ -273,7 +271,7 @@ impl WebRtc {
 
             select! {
                 _ = (&mut timeout).fuse() => {
-                    timeout.reset(Duration::from_millis(10));
+                    timeout.reset(Duration::from_millis(5));
                 }
                 _ = (&mut connection_timeout).fuse() => {
                     self.shared_context.poll_timeout().await;

@@ -93,7 +93,7 @@ where
             password: response.password,
             access_url: Some(response.access_url),
             from_user: user,
-            to_email: response.to_email.clone()
+            to_email: response.to_emails.first().cloned()
         };
 
         Ok(session)

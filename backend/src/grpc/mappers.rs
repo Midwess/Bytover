@@ -83,7 +83,7 @@ impl TransferSession {
             access_url: self.access_url(app.link.clone()),
             resources,
             progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
-            to_email: self.to_email()
+            to_emails: self.to_emails().clone()
         };
 
         msg

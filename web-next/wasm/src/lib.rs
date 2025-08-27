@@ -65,8 +65,7 @@ impl ShellRuntime {
 }
 
 pub struct ThrottleShellRuntime {
-    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>,
-    join_handle: JoinHandle<()>
+    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>
 }
 
 impl ThrottleShellRuntime {
@@ -75,7 +74,7 @@ impl ThrottleShellRuntime {
         let latest_event_clone = latest_event.clone();
         let shell_runtime_clone = shell_runtime.clone();
 
-        let join_handle = spawn(async move {
+        spawn(async move {
             let mut interval: Interval = time::interval(delay);
             interval.tick().await;
 
@@ -93,7 +92,7 @@ impl ThrottleShellRuntime {
             }
         });
 
-        Self { latest_event, join_handle }
+        Self { latest_event }
     }
 
     pub async fn send(&self, request_id: u32, event: CoreOperationOutput) {
@@ -114,7 +113,7 @@ pub fn process_event(data: Vec<u8>) -> Vec<u8> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
-    CORE.handle_response(id, data).unwrap_or_else(|e| vec![])
+    CORE.handle_response(id, data).unwrap_or_else(|_e| vec![])
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]

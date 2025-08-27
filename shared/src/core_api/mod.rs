@@ -104,7 +104,7 @@ pub trait TimeoutReceiver<T: Send + Sync>: Send + Sync {
 impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
     async fn recv_timeout(&mut self, timeout: Duration) -> Option<T> {
         select! {
-            msg = self.next().fuse() => msg,
+            msg = futures::StreamExt::next(self).fuse() => msg,
             _ = Delay::new(timeout).fuse() => None,
             complete => None,
         }

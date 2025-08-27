@@ -65,7 +65,7 @@ impl TransferService {
         &self,
         user: &User,
         password: Option<String>,
-        to_email: Option<String>
+        to_emails: Vec<String>
     ) -> Result<TransferSession, TransferErrors> {
         let user_id = user.id.id;
         if let Some(ref password) = password {
@@ -76,7 +76,7 @@ impl TransferService {
 
         let alias = self.markov_generator.generate_name().await?;
 
-        let session = TransferSession::public(password, user_id, alias, to_email.clone()).await;
+        let session = TransferSession::public(password, user_id, alias, to_emails).await;
 
         let session = self.transfer_repository.create(session).await?;
 
@@ -149,33 +149,27 @@ impl TransferService {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
 
-        if let Some(ref to_email) = session.to_email() {
-            let download_url = session.access_url(app.link.clone());
-            let resources = session
-                .resources()
-                .iter()
-                .map(|it| MailFileResource {
-                    name: it.name().to_string(),
-                    size_in_bytes: it.size_in_bytes() as i32
-                })
-                .collect();
+        let download_url = session.access_url(app.link.clone());
+        let resources = session
+            .resources()
+            .iter()
+            .map(|it| MailFileResource {
+                name: it.name().to_string(),
+                size_in_bytes: it.size_in_bytes() as i32
+            })
+            .collect::<Vec<_>>();
+        let template = EmailTemplate {
+            template: Some(Template::SendFile(SendFileTemplate {
+                sender_email: user.email.clone(),
+                sender_display_name: Some(user.display_name.clone()),
+                download_url,
+                datetime: Datetime::now(),
+                files: resources
+            }))
+        };
 
-            if let Err(e) = self
-                .email_service
-                .send_email(
-                    to_email,
-                    EmailTemplate {
-                        template: Some(Template::SendFile(SendFileTemplate {
-                            sender_email: user.email.clone(),
-                            sender_display_name: Some(user.display_name.clone()),
-                            download_url,
-                            datetime: Datetime::now(),
-                            files: resources
-                        }))
-                    }
-                )
-                .await
-            {
+        for to_email in session.to_emails() {
+            if let Err(e) = self.email_service.send_email(to_email, template.clone()).await {
                 log::info!("Failed to send email to {to_email}: {e}");
             }
         }

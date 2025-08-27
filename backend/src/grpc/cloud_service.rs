@@ -193,7 +193,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
         let new_session = transfer_service
-            .create_public_transfer_session(user, request_body.password.clone(), request_body.to_email.clone())
+            .create_public_transfer_session(user, request_body.password.clone(), request_body.to_emails.clone())
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {

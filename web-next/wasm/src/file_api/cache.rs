@@ -79,7 +79,7 @@ impl MemBuffer {
             Some((_, receiver)) => receiver.clone(),
             None => {
                 log::info!("Create broadcast for mem buffer");
-                self.data_broadcast = Some(broadcast(1024));
+                self.data_broadcast = Some(broadcast(64));
                 let (_, receiver) = self.data_broadcast.as_ref().unwrap();
                 receiver.clone()
             }
@@ -548,14 +548,14 @@ impl Drop for IOWriterBrowserCacheImpl {
 #[async_trait::async_trait(?Send)]
 impl IOWriter for IOWriterBrowserCacheImpl {
     async fn write(&mut self, data: Bytes) -> Result<()> {
-        let mut mem_buffer = self.mem_buffer.lock().await;
-        if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()).await {
-            let chunk_index = mem_buffer.chunk_index;
-            drop(mem_buffer);
-            self.write_chunk(chunk_index, &flushed_bytes)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
-        }
+        // let mut mem_buffer = self.mem_buffer.lock().await;
+        // if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()).await {
+        //     let chunk_index = mem_buffer.chunk_index;
+        //     drop(mem_buffer);
+        //     self.write_chunk(chunk_index, &flushed_bytes)
+        //         .await
+        //         .map_err(|e| anyhow::anyhow!("Failed to write chunk: {:?}", e))?;
+        // }
 
         Ok(())
     }
