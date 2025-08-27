@@ -532,6 +532,28 @@ function NearbySend() {
     const nearbyState = window.core.useNearbyState()
     const nearbyPeers = nearbyState?.peers || []
     const [emails, setEmails] = React.useState<string[]>([])
+    const cloudSession = core.useTransferState()?.cloud_session
+    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
+    const [isInProgress, setIsInProgress] = useState(false)
+    const progress = (cloudSession?.progress ?? 0) * 100
+    const cloudRef = useRef(cloudSession)
+    cloudRef.current = cloudSession
+
+    useEffect(() => {
+        if (cloudSession?.is_in_progress) {
+            setIsInProgress(true)
+            setIsInProgressDefer(true)
+        }
+        else {
+            setIsInProgress(false)
+            setTimeout(() => {
+                if (!cloudRef?.current?.is_in_progress) {
+                    setIsInProgressDefer(false)
+                }
+            }, 2000)
+        }
+
+    }, [cloudSession?.is_in_progress])
 
     return <>
         <MotionEffect
@@ -552,16 +574,49 @@ function NearbySend() {
                     onEmailsChange={setEmails}
                     placeholder="Enter email addresses..."
                     maxEmails={10}
+                    disabled={isInProgress}
                 />
-                <Button 
-                    className="w-fit h-[35px] bg-bluePrimary text-primary"
-                    disabled={emails.length === 0}
-                    onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
-                    }}
-                >
-                    Send to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
-                </Button>
+                {
+                    isInProgressDefer
+                        && <div className={"flex flex-col w-full gap-2"}>
+                            <Progress value={progress} className="w-full space-y-2">
+                                <div className="flex items-center justify-between gap-1">
+                                    <span className="text-sm">
+                                        {cloudSession?.display_download_speed}
+                                    </span>
+                                </div>
+                                <ProgressTrack/>
+                            </Progress>
+                        </div>
+                }
+                {
+                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                        if (cloudSession?.is_in_progress) {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id, new TransferTypeVariantSend())))
+                        }
+                    }}>Cancel</Button>
+                }
+                {
+                    !cloudSession &&
+                    <Button 
+                        className="w-fit h-[35px] bg-bluePrimary text-primary"
+                        disabled={emails.length === 0}
+                        onClick={() => {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
+                        }}
+                    >
+                        Send to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
+                    </Button>
+                }
+                {
+                    cloudSession?.is_completed &&
+                    <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                            cloudSession?.session_id,
+                            new TransferTypeVariantSend()
+                        )))
+                    }}>Continue</Button>
+                }
             </div>
 
             <div className="flex flex-col w-full gap-3 mt-5">
