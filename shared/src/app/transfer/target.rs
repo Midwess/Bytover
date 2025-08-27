@@ -10,7 +10,7 @@ pub enum TransferTarget {
         password: Option<String>,
         access_url: Option<String>,
         from_user: User,
-        to_email: Option<String>,
+        to_emails: Vec<String>,
         is_required_password: bool
     }
 }

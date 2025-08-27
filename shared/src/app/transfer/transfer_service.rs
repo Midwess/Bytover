@@ -96,8 +96,8 @@ impl TransferService {
 
         let transfer_target_id = transfer_target.id();
         let mut transfer_session = match transfer_target {
-            TransferTarget::Internet { password, to_email, .. } => {
-                if let Some(ref email) = to_email {
+            TransferTarget::Internet { password, to_emails, .. } => {
+                for email in to_emails.iter() {
                     let has_at = email.contains('@');
                     let has_dot = email.contains('.');
                     let has_valid_length = email.len() >= 3;
@@ -112,7 +112,7 @@ impl TransferService {
                     }
                 }
 
-                let session = TransferSession::public(user, password, selected_resources, to_email);
+                let session = TransferSession::public(user, password, selected_resources, to_emails);
                 let result = match TransferOperation::create_cloud_session(session).into_future(cmd.clone()).await {
                     Err(err) => {
                         DialogOperation::toast(format!("{err} please try again")).into_future(cmd.clone()).await;

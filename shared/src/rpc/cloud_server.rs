@@ -53,11 +53,11 @@ where
     pub async fn create_public_transfer_session(
         &self,
         password: Option<String>,
-        to_email: Option<String>
+        to_emails: Vec<String>
     ) -> Result<PublicTransferSessionMessage, RpcErrors> {
         let request_body = CreatePublicTransferSessionRequest {
             password,
-            to_emails: to_email.map(|it| vec![it]).unwrap_or_default()
+            to_emails
         };
         let channel = self.rpc_module.connect().await?;
 

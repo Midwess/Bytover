@@ -13,6 +13,7 @@ import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
 import * as React from "react";
 import {Input} from "@/components/ui/input";
+import {MultiEmailInput} from "@/components/ui/multi-email-input";
 import {Label} from "@/components/ui/label";
 import {
     Tooltip,
@@ -380,7 +381,6 @@ function Board() {
 
 function PublicSend() {
     const [password, setPassword] = useState('')
-    const [toEmail, setToEmail] = useState('')
     const cloudSession = core.useTransferState()?.cloud_session
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const [isInProgress, setIsInProgress] = useState(false)
@@ -417,10 +417,7 @@ function PublicSend() {
             <p className="text-start w-full text-primaryText/70 text-sm">
                 Create a sharable URL. Protect access by setting a password to keep your content safe.
             </p>
-            <div className={"flex flex-col w-full gap-3"}>
-                <Label htmlFor={"email"}>To email (optional)</Label>
-                <Input id={"email"} type="email" maxLength={20} placeholder="someone@company" value={toEmail} onChange={(it) => setToEmail(it.target.value)}/>
-            </div>
+
             <div className={"flex flex-col w-full gap-3"}>
                 <Label htmlFor={"password"}>Password (optional)</Label>
                 <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
@@ -455,7 +452,7 @@ function PublicSend() {
                 {
                     !cloudSession &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password, toEmail)))
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password, [])))
                     }}>Upload</Button>
                 }
                 {
@@ -534,6 +531,7 @@ function UrlInputWithCopy({url}: {url: string}) {
 function NearbySend() {
     const nearbyState = window.core.useNearbyState()
     const nearbyPeers = nearbyState?.peers || []
+    const [emails, setEmails] = React.useState<string[]>([])
 
     return <>
         <MotionEffect
@@ -549,15 +547,28 @@ function NearbySend() {
             </p>
 
             <div className="flex flex-col w-full gap-3">
-                <Input id="email" type="email" maxLength={20} placeholder="someone@company"/>
-                <Button className="w-fit h-[35px] bg-bluePrimary text-primary">Send</Button>
+                <MultiEmailInput
+                    emails={emails}
+                    onEmailsChange={setEmails}
+                    placeholder="Enter email addresses..."
+                    maxEmails={10}
+                />
+                <Button 
+                    className="w-fit h-[35px] bg-bluePrimary text-primary"
+                    disabled={emails.length === 0}
+                    onClick={() => {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
+                    }}
+                >
+                    Send to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
+                </Button>
             </div>
 
             <div className="flex flex-col w-full gap-3 mt-5">
                 <p className="text-start w-full text-primaryText/70 text-sm pb-1">
                     Or share with nearby friends and devices
                 </p>
-                {nearbyPeers.map(peer => (
+                {nearbyPeers.map((peer) => (
                     <NearbyPeer key={peer.id} peer={peer}/>
                 ))}
             </div>

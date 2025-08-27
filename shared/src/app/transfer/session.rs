@@ -201,7 +201,7 @@ impl TransferSession {
         }
     }
 
-    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_email: Option<String>) -> Self {
+    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>) -> Self {
         Self {
             order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
@@ -212,7 +212,7 @@ impl TransferSession {
                 password,
                 access_url: None,
                 from_user: current_user,
-                to_email
+                to_emails
             }
         }
     }
@@ -228,7 +228,7 @@ impl TransferSession {
                 password: None,
                 access_url: Some(access_url),
                 from_user,
-                to_email: None
+                to_emails: vec![]
             }
         }
     }

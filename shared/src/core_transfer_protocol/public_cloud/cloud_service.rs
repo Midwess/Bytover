@@ -75,8 +75,8 @@ where
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
-        let (password, to_email) = match &session.target {
-            TransferTarget::Internet { password, to_email, .. } => (password.clone(), to_email.clone()),
+        let (password, to_emails) = match &session.target {
+            TransferTarget::Internet { password, to_emails, .. } => (password.clone(), to_emails.clone()),
             _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
         };
 
@@ -85,7 +85,7 @@ where
             _ => return Err(CloudTransferErrors::InvalidSessionTarget)
         };
 
-        let response = self.server.create_public_transfer_session(password, to_email).await?;
+        let response = self.server.create_public_transfer_session(password, to_emails).await?;
 
         session.order_id = response.order_id as u64;
         session.target = TransferTarget::Internet {
@@ -93,7 +93,7 @@ where
             password: response.password,
             access_url: Some(response.access_url),
             from_user: user,
-            to_email: response.to_emails.first().cloned()
+            to_emails: response.to_emails
         };
 
         Ok(session)

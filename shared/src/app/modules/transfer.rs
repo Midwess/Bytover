@@ -73,7 +73,7 @@ pub enum TransferEvent {
     },
     StartPublicTransfer {
         password: Option<String>,
-        to_email: Option<String>
+        to_emails: Vec<String>
     },
     StartTransfer {
         target_id: String
@@ -285,7 +285,8 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.delete_session(session, it.clone()).await;
                 })
             }
-            TransferEvent::StartPublicTransfer { password, to_email } => {
+            TransferEvent::StartPublicTransfer { password, to_emails } => {
+                log::info!("Start public transfer {to_emails:?}");
                 let selected_resources = model.transfer.selected_resources.clone();
 
                 if let Some(user) = model.authentication.user.clone() {
@@ -299,7 +300,7 @@ impl AppModule<BitBridge> for TransferModule {
                                     password,
                                     access_url: None,
                                     from_user: user,
-                                    to_email
+                                    to_emails
                                 },
                                 it
                             )
@@ -575,13 +576,13 @@ impl AppModule<BitBridge> for TransferModule {
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
-                    let (password, avatar, name, access_url, is_required_password, alias, _to_email) = match &it.target {
+                    let (password, avatar, name, access_url, is_required_password, alias, _to_emails) = match &it.target {
                         TransferTarget::Internet {
                             password,
                             from_user,
                             access_url,
                             is_required_password,
-                            to_email
+                            to_emails
                         } => {
                             let Some(access_url) = access_url else {
                                 return None;
@@ -607,7 +608,7 @@ impl AppModule<BitBridge> for TransferModule {
                                 access_url,
                                 *is_required_password,
                                 alias,
-                                to_email.clone()
+                                to_emails.clone()
                             )
                         }
                         _ => return None
