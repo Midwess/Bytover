@@ -219,7 +219,7 @@ impl TransferService {
 
     pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
         let peer_id = peer.id();
-        let (generate_file_paths_request, generate_thumbnail_paths_request) = {
+        let (generate_file_paths_request, _generate_thumbnail_paths_request) = {
             let mut result = HashMap::new();
             let mut thumbnail_paths = HashMap::new();
             for resource in remote_session.resources.iter() {

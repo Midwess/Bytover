@@ -6,7 +6,7 @@ use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::AppEvent;
-use crate::core_api::{BufferExt, CoreBridge, TimeoutReceiver};
+use crate::core_api::{BufferExt, CoreBridge};
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::core_transfer_protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
@@ -15,6 +15,7 @@ use crate::entities::peer::Peer as PeerEntity;
 use core_services::utils::cancellation::{AbortError, AbortableExt};
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::StreamExt;
 use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
@@ -49,8 +50,8 @@ pub struct WebRtcPeer {
 
     pub transfers_context: TransfersContext,
 
-    pub inbound_thumbnail_stream_sender: Mutex<Option<mpsc::UnboundedSender<Packet>>>,
-    pub inbound_data_stream_sender: Mutex<Option<mpsc::UnboundedSender<Packet>>>,
+    pub inbound_thumbnail_stream_sender: Mutex<Option<mpsc::Sender<Packet>>>,
+    pub inbound_data_stream_sender: Mutex<Option<mpsc::Sender<Packet>>>,
 
     // Connect to the core stream, where all state is stored
     pub core_id: AtomicU32
@@ -160,7 +161,8 @@ impl WebRtcPeer {
     pub async fn process_data_packet(&self, packet: Packet) {
         let mut tx_opt = self.inbound_data_stream_sender.lock().await.clone();
         if let Some(tx) = tx_opt.as_mut() {
-            if let Err(e) = tx.unbounded_send(packet) {
+            if let Err(err) = tx.try_send(packet) {
+                log::error!("Failed to send resource to peer {err:?}");
                 tx_opt.take();
             }
         }
@@ -169,7 +171,7 @@ impl WebRtcPeer {
     pub async fn process_thumbnail_packet(&self, packet: Packet) {
         let mut tx_opt = self.inbound_thumbnail_stream_sender.lock().await.clone();
         if let Some(tx) = tx_opt.as_mut() {
-            if let Err(err) = tx.unbounded_send(packet) {
+            if let Err(err) = tx.try_send(packet) {
                 log::error!("Failed to send thumbnail to peer {err:?}");
                 tx_opt.take();
             }
@@ -218,8 +220,8 @@ impl WebRtcPeer {
             return Err(WebRtcErrors::Canceled(AbortError::Cancelled))
         };
 
-        let (resource_tx, mut resource_rx) = mpsc::unbounded();
-        let (thumbnail_tx, mut thumbnail_rx) = mpsc::unbounded();
+        let (resource_tx, mut resource_rx) = mpsc::channel(1024);
+        let (thumbnail_tx, mut thumbnail_rx) = mpsc::channel(1024);
 
         self.inbound_data_stream_sender.lock().await.replace(resource_tx);
         self.inbound_thumbnail_stream_sender.lock().await.replace(thumbnail_tx);
@@ -252,11 +254,7 @@ impl WebRtcPeer {
                     return Ok(thumbnail_paths)
                 }
 
-                let first_delimiter = thumbnail_rx
-                    .recv_default_timeout()
-                    .abort_with(thumbnail_cancel_signal.clone())
-                    .await?
-                    .unwrap_or_default();
+                let first_delimiter = thumbnail_rx.next().abort_with(thumbnail_cancel_signal.clone()).await?.unwrap_or_default();
                 let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter)?;
                 if !first_delimiter.is_start {
                     return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
@@ -279,7 +277,7 @@ impl WebRtcPeer {
 
                 // Then we will download
                 log::info!("Begin downloading thumbnail {resource_path:?} for session {session_id}");
-                while let Ok(Some(bytes)) = thumbnail_rx.recv_default_timeout().abort_with(thumbnail_cancel_signal.clone()).await {
+                while let Ok(Some(bytes)) = thumbnail_rx.next().abort_with(thumbnail_cancel_signal.clone()).await {
                     writer
                         .write(bytes.to_vec().into())
                         .await
@@ -320,7 +318,7 @@ impl WebRtcPeer {
             }
 
             let first_delimiter = resource_rx
-                .recv_default_timeout()
+                .next()
                 .abort_with(resource_cancel_signal.clone())
                 .await
                 .unwrap_or_default()
@@ -346,7 +344,7 @@ impl WebRtcPeer {
 
             let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
-            while let Ok(Some(packet)) = resource_rx.recv_default_timeout().abort_with(resource_cancel_signal.clone()).await {
+            while let Ok(Some(packet)) = resource_rx.next().abort_with(resource_cancel_signal.clone()).await {
                 if let Ok(end_delimiter) = TransferDelimiterShema::from_bytes(&packet) {
                     if end_delimiter.is_start {
                         return Err(WebRtcErrors::InvalidDelimiter("The end must is_start = false".to_string()));

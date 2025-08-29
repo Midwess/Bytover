@@ -1,25 +1,60 @@
 # BitBridge
 
 # Prerequisites:
-1. Rust `1.81`
-2. Android NDK `28.0.12916984`
+1. Rust `1.89`
+2. Android NDK `28`
 
 # Development workflow:
-## Installation:
+## Installation
+### Openssl
+```bash
+# Mac
+$ brew install openssl@3
+```
+
+### Enable target build
+```
+$ rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+```
+
+### (Optional) Use cache to speed up build process:
+Use sccache
+```
+$ brew install sccache
+```
+Enable sccache for cargo
+```bash
+$ export RUSTC_WRAPPER=$(which sccache)
+$ export SCCACHE_CACHE_SIZE="50G"
+$ sccache --stop-server
+$ sccache --start-server
+```
+
+## Run
+
+### Generate shared types
+This will generate entity code in multiple language (swift, kotlin, typescript, etc...).
+```bash
+$ make gen
+```
+
+### Backend
+```bash
+$ cd backend
+$ cargo run
+```
 
 ### Web
 ```bash
 # Web
-$ cd web-leptos
+$ cd web-next
 # Install js dependencies
-$ yarn install
-# To start tailwind styling
-$ yarn style
+$ pnpm install
 # To start web in dev mode
-$ make web
+$ pnpm dev
 ```
 
-### Android NDK:
+### Android:
 Install correct Android NDK via `Android Studio > tools > Android Sdk Manager`
 
 ### Environments:
@@ -35,36 +70,6 @@ export PATH=$ANDROID_HOME:$PATH
 export PATH=$PATH:$TOOLCHAIN/bin
 ```
 
-### Openssl
-#### MacOS
-```bash
-$ brew install openssl@3
-```
-
-### Enable target build
-```
-$ rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-```
-
-### 4. Use cache to speed up build and compile times (optional):
-Use sccache
-```
-$ brew install sccache
-```
-Enable sccache for cargo
-```bash
-$ export RUSTC_WRAPPER=$(which sccache)
-$ export SCCACHE_CACHE_SIZE="50G"
-$ sccache --stop-server
-$ sccache --start-server
-```
-
-## Build:
-Generate shared types
-```bash
-$ make gen
-```
-
 ### 1. Android
 Build the rust binary by selecting the `shared` module, and `press build in Android Studio`
 ### 2. Desktop
@@ -74,10 +79,13 @@ $ cd Desktop; cargo build
 ### 3. iOS
 Open xcode and trigger run
 
-### Format code
-```bash
-$ make ffmt
-```
+##### Output architect:
+Set variable `CARGO_XCODE_TARGET_ARCH`, search in shared project and adjusted it according to your choice
 
-#### Output architect:
-It is decided via variable `CARGO_XCODE_TARGET_ARCH`, search in shared project and adjusted it according to your choice
+# Other commands:
+```bash
+# Format code
+$ make ffmt
+# Sync submodule
+$ make gsu
+```
