@@ -49,11 +49,11 @@ pub struct MemBuffer {
 }
 
 impl MemBuffer {
-    pub fn new(chunk_index: usize) -> Self {
+    pub fn new(chunk_index: usize, max_chunk_size: usize) -> Self {
         Self {
-            buffer: Vec::with_capacity(BrowserCache::MAX_CHUNK_SIZE),
+            buffer: Vec::with_capacity(max_chunk_size),
             chunk_index,
-            max_chunk_size: BrowserCache::MAX_CHUNK_SIZE,
+            max_chunk_size,
             data_broadcast: None
         }
     }
@@ -91,7 +91,10 @@ impl MemBuffer {
             sender.close();
         }
 
-        self.buffer.drain(..).collect()
+        let data_left = self.buffer.drain(..).collect();
+        self.buffer.shrink_to_fit();
+        log::info!("The buffer shrinked down to {}", self.buffer.len());
+        data_left
     }
 }
 
@@ -177,7 +180,7 @@ impl BrowserCache {
         let this = Arc::new(Self {
             current_size: AtomicUsize::new(resource.total_size.load(Ordering::SeqCst)),
             db,
-            mem_buffer: Mutex::new(MemBuffer::new(0)),
+            mem_buffer: Mutex::new(MemBuffer::new(0, 0)),
             resource,
             state: Mutex::new(CacheState::Completed)
         });
@@ -204,7 +207,7 @@ impl BrowserCache {
 
         let this = Arc::new(Self {
             db,
-            mem_buffer: Mutex::new(MemBuffer::new(0)),
+            mem_buffer: Mutex::new(MemBuffer::new(0, Self::MAX_CHUNK_SIZE)),
             resource,
             state: Mutex::new(CacheState::InProgress),
             current_size: AtomicUsize::new(0)
@@ -343,10 +346,12 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if !self.read_chunk.is_empty() {
             let max_read = self.read_chunk_size.min(self.read_chunk.len());
             let bytes = Bytes::from(self.read_chunk.drain(..max_read).collect::<Vec<u8>>());
+            self.read_chunk.shrink_to_fit();
             return Ok(Some(bytes));
         }
 
         if matches!(*cache.state.lock().await, CacheState::Failed) {
+            self.read_chunk.shrink_to_fit();
             return Err(anyhow!("Cache is failed"));
         }
 
@@ -413,6 +418,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
         }
 
         if end_marker.is_some() {
+            self.read_chunk.shrink_to_fit();
             return Ok(None);
         }
 

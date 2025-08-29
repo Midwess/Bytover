@@ -177,7 +177,7 @@ impl WebRtcPeer {
     }
 
     pub async fn peer_disconnected(&self) {
-        log::info!("Peer disconnected, handling canceling all transfers");
+        log::info!("Peer disconnected, will cancel all transfers");
         self.inbound_thumbnail_stream_sender.lock().await.take();
         self.inbound_data_stream_sender.lock().await.take();
         self.transfers_context.stop_all().await;
@@ -319,10 +319,6 @@ impl WebRtcPeer {
                 break;
             }
 
-            if resource_cancel_signal.is_aborted() {
-                log::info!("Session is canceled");
-            }
-
             let first_delimiter = resource_rx
                 .recv_default_timeout()
                 .abort_with(resource_cancel_signal.clone())
@@ -351,11 +347,6 @@ impl WebRtcPeer {
             let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
             while let Ok(Some(packet)) = resource_rx.recv_default_timeout().abort_with(resource_cancel_signal.clone()).await {
-                if !self.transfers_context.is_active(session_id).await {
-                    progress_update.fail("The session is canceled".to_string());
-                    break;
-                }
-
                 if let Ok(end_delimiter) = TransferDelimiterShema::from_bytes(&packet) {
                     if end_delimiter.is_start {
                         return Err(WebRtcErrors::InvalidDelimiter("The end must is_start = false".to_string()));
@@ -378,9 +369,9 @@ impl WebRtcPeer {
             }
 
             writer.end().await?;
-            log::info!("Complete Downloading resource {:?} len {total_written_bytes}", resource_path);
-
+            progress_update.complete();
             self.core_bridge.resource_progress_update(core_request_id, progress_update, true).await;
+            log::info!("Complete Downloading resource {:?} len {total_written_bytes}", resource_path);
         }
 
         let _ = thumbnail_handle.await;
@@ -423,7 +414,6 @@ impl WebRtcPeer {
 
         let _ = self.msg_channel.send(request, Some(request_id)).await?;
 
-        // Transfer the thumbnails
         let mut session_thumbnail_paths = session
             .resources
             .iter()
@@ -496,8 +486,8 @@ impl WebRtcPeer {
                 .read(resource_path.clone(), 63 * 1024)
                 .abort_with(resource_cancel_signal.clone())
                 .await??;
-            log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
 
+            log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
             let mut total_sent_bytes = 0u64;
             let progress_update = session.resource_mut_progress(order_id).unwrap();
             let delimiter = TransferDelimiterShema::start(order_id).as_bytes()?;
@@ -514,10 +504,6 @@ impl WebRtcPeer {
                 .await?
                 .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
             {
-                if !self.transfers_context.is_active(session_id).await {
-                    break;
-                }
-
                 let bytes = Packet::from(bytes.to_vec());
                 let sent_bytes = bytes.len() as u64;
                 total_sent_bytes += sent_bytes;
@@ -541,19 +527,18 @@ impl WebRtcPeer {
                 continue;
             }
 
+            progress_update.complete();
+            self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
+
             log::info!(
                 "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?}",
                 progress_update.status,
                 total_sent_bytes
             );
-
-            self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
         }
 
         self.buffer.flush_all_timeout().await?;
-
         let _ = thumbnail_handle.await;
-
         self.transfers_context.stop_transfer(session_id).await;
         log::info!("Transfer session {session_id} completed");
 
