@@ -111,13 +111,12 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         order_id: u64,
         progresses: Vec<TransferProgress>
     ) -> Result<Option<TransferSession>, PersistenceError> {
-        log::info!("Updating {order_id}");
         let id = TransferSessionId {
             order_id: Some(order_id),
             ..Default::default()
         };
+
         let session = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(id)).await?;
-        log::info!("Database updating session {session:?}");
 
         if let Some(session) = session {
             let mut session = session;

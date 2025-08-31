@@ -6,7 +6,7 @@
 
 # Development workflow:
 ## Installation
-### Openssl
+#### Openssl
 ```bash
 # Mac
 $ brew install openssl@3

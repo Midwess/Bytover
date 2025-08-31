@@ -284,8 +284,7 @@ impl NativeProcessor {
         };
 
         while let Ok(Some(data)) = reader.next().await {
-            let array = data.into_uint_array();
-            let Ok(fut) = writer.write_with_js_u8_array(&array) else {
+            let Ok(fut) = writer.write_with_u8_array(&data) else {
                 break;
             };
 

@@ -502,7 +502,7 @@ impl WebRtcPeer {
                 .await?
                 .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
             {
-                let bytes = Packet::from(bytes.to_vec());
+                let bytes = Packet::from(&bytes[..]);
                 let sent_bytes = bytes.len() as u64;
                 total_sent_bytes += sent_bytes;
                 if !bytes.is_empty() {

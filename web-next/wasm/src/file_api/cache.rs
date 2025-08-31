@@ -510,11 +510,11 @@ impl IOWriterBrowserCacheImpl {
 
     async fn flush(cache: &BrowserCache) -> Result<()> {
         let mut mem_buffer = cache.mem_buffer.lock().await;
-        if !mem_buffer.buffer.is_empty() {
-            let chunk_index = mem_buffer.chunk_index;
-            let buffer_copy = mem_buffer.clear();
-            drop(mem_buffer);
+        let chunk_index = mem_buffer.chunk_index;
+        let buffer_copy = mem_buffer.clear();
+        drop(mem_buffer);
 
+        if !buffer_copy.is_empty() {
             let max_chunk_size = BrowserCache::MAX_CHUNK_SIZE;
             let mut current_chunk_index = chunk_index;
 
@@ -528,7 +528,6 @@ impl IOWriterBrowserCacheImpl {
 
             let mut mem_buffer = cache.mem_buffer.lock().await;
             mem_buffer.chunk_index = current_chunk_index;
-            mem_buffer.buffer.clear();
         }
 
         Ok(())

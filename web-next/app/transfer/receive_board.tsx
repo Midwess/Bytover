@@ -463,7 +463,10 @@ function FileView(props: {
             </div>
             {
                 file.is_completed
-                    ? <a className={"rounded-xl p-2 bg-bluePrimary/80"} href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                    ? <a
+                        className={"rounded-xl p-2 bg-bluePrimary/80"}
+                        href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}
+                    >
                         <ArrowDown color={'var(--foreground)'}/>
                     </a>
                     : <>
