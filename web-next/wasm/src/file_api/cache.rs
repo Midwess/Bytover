@@ -389,22 +389,16 @@ impl IOReader for IOReaderBrowserCacheImpl {
             }
         }
 
-        let (val, end_marker) = {
+        let val = {
             let db = cache.db.retrieve().await.unwrap();
             let trans = db
                 .transaction(&[&cache.resource.table], TransactionMode::ReadOnly)
                 .map_err(BrowserCacheErrors::from)?;
             let store = trans.object_store(&cache.resource.table).map_err(BrowserCacheErrors::from)?;
             let query = Query::KeyRange(cache.chunk_index_query(self.current_chunk_index));
-            let end_marker_key = BrowserCache::create_chunk_id(cache.resource.id, BrowserCache::END_MARKER_CHUNK);
             let val = store.get(query).map_err(BrowserCacheErrors::from)?.await.map_err(BrowserCacheErrors::from)?;
-            let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
-            let end_marker = store
-                .get(end_marker_query)
-                .map_err(BrowserCacheErrors::from)?
-                .await
-                .map_err(BrowserCacheErrors::from)?;
-            (val, end_marker)
+
+            val
         };
 
         if let Some(val) = val {
@@ -416,6 +410,22 @@ impl IOReader for IOReaderBrowserCacheImpl {
                 return self.next().await;
             }
         }
+
+        let end_marker = {
+            let db = cache.db.retrieve().await.unwrap();
+            let trans = db
+                .transaction(&[&cache.resource.table], TransactionMode::ReadOnly)
+                .map_err(BrowserCacheErrors::from)?;
+            let store = trans.object_store(&cache.resource.table).map_err(BrowserCacheErrors::from)?;
+            let end_marker_key = BrowserCache::create_chunk_id(cache.resource.id, BrowserCache::END_MARKER_CHUNK);
+            let end_marker_query = Query::KeyRange(KeyRange::only(&end_marker_key).map_err(BrowserCacheErrors::from)?);
+            let end_marker = store
+                .get(end_marker_query)
+                .map_err(BrowserCacheErrors::from)?
+                .await
+                .map_err(BrowserCacheErrors::from)?;
+            end_marker
+        };
 
         if end_marker.is_some() {
             self.read_chunk.shrink_to_fit();
@@ -554,8 +564,8 @@ impl Drop for IOWriterBrowserCacheImpl {
 impl IOWriter for IOWriterBrowserCacheImpl {
     async fn write(&mut self, data: Bytes) -> Result<()> {
         let mut mem_buffer = self.mem_buffer.lock().await;
+        let chunk_index = mem_buffer.chunk_index;
         if let Some(flushed_bytes) = mem_buffer.extend(&data.to_vec()).await {
-            let chunk_index = mem_buffer.chunk_index;
             drop(mem_buffer);
             self.write_chunk(chunk_index, &flushed_bytes)
                 .await
