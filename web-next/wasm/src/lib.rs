@@ -277,13 +277,17 @@ impl NativeProcessor {
         let mut deser = bincode::Deserializer::from_slice(&path, options);
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
         let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+        log::info!("Saving file {path:?}");
         let repository = DiContainer::get_instance().get_local_resource_repository().await;
         let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
+            log::info!("not found any");
             let _ = JsFuture::from(writer.close()).await;
             return;
         };
 
-        while let Ok(Some(data)) = reader.next().await {
+        log::info!("Reading");
+        while let Some(data) = reader.next().await.unwrap() {
+            log::info!("Writing data {}", data.len());
             let Ok(fut) = writer.write_with_u8_array(&data) else {
                 break;
             };
@@ -294,6 +298,7 @@ impl NativeProcessor {
             }
         }
 
+        log::info!("Reading done");
         let _ = JsFuture::from(writer.close()).await;
     }
 

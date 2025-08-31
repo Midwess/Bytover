@@ -440,6 +440,24 @@ function FileView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
+    const handleDownload = async () => {
+        if (model.path instanceof LocalResourcePathVariantAbsolutePath) {
+            // Current behavior - direct download link
+            const link = document.createElement('a');
+            link.href = model.path.value;
+            link.download = model.name;
+            link.click();
+        } else {
+            // New behavior - download from cache
+            try {
+                await core.downloadFileFromCache(model.path, model.name);
+            } catch (error) {
+                console.error('Failed to download file:', error);
+                // Fallback to showing an error or toast
+            }
+        }
+    };
+
     return (
         <div
             className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
@@ -463,12 +481,12 @@ function FileView(props: {
             </div>
             {
                 file.is_completed
-                    ? <a
+                    ? <button
                         className={"rounded-xl p-2 bg-bluePrimary/80"}
-                        href={(file.model.path as LocalResourcePathVariantAbsolutePath).value}
+                        onClick={handleDownload}
                     >
                         <ArrowDown color={'var(--foreground)'}/>
-                    </a>
+                    </button>
                     : <>
                         <CircleProgress progress={file.completion} size={30}/>
                     </>
@@ -491,6 +509,24 @@ function MediaView(props: {
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
+
+    const handleDownload = async () => {
+        if (model.path instanceof LocalResourcePathVariantAbsolutePath) {
+            // Current behavior - direct download link
+            const link = document.createElement('a');
+            link.href = model.path.value;
+            link.download = model.name;
+            link.click();
+        } else {
+            // New behavior - download from cache
+            try {
+                await core.downloadFileFromCache(model.path, model.name);
+            } catch (error) {
+                console.error('Failed to download file:', error);
+                // Fallback to showing an error or toast
+            }
+        }
+    };
 
     useEffect(() => {
         if (model.thumbnail_path) {
@@ -538,9 +574,9 @@ function MediaView(props: {
                 </div>
                     <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
-                        ? <a className={"rounded-xl bg-bluePrimary/80 p-2"} href={(media.model.path as LocalResourcePathVariantAbsolutePath).value}>
+                        ? <button className={"rounded-xl bg-bluePrimary/80 p-2"} onClick={handleDownload}>
                             <ArrowDown color={'white'}/>
-                          </a>
+                          </button>
                         : <>
                             <CircleProgress progress={media.completion} size={30}/>
                         </>

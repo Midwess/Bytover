@@ -181,9 +181,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
 
         if let Some(key) = path.resource_id() {
-            let resource_caches = self.resource_caches.lock().await;
-            let Some(cache) = resource_caches.get(&key) else {
-                return Err(PersistenceError::NotFound(format!("{:?}", path)));
+            let mut resource_caches = self.resource_caches.lock().await;
+            let cache = match resource_caches.get(&key) {
+                Some(cache) => cache,
+                None => {
+                    let new_cache = BrowserCache::open(self.db.clone(), "resources", key).await?;
+                    resource_caches.insert(key, new_cache);
+                    resource_caches.get(&key).unwrap()
+                }
             };
 
             return Ok(Box::new(cache.try_clone().await?))
