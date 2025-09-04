@@ -151,7 +151,7 @@ impl CacheResource {
 }
 
 impl BrowserCache {
-    const END_MARKER_CHUNK: usize = usize::MAX - 1;
+    const END_MARKER_CHUNK: usize = (u32::MAX - 1) as usize;
     const MAX_CHUNK_SIZE: usize = 1024 * 1024 * 8;
 
     /// Open a cache for reading
@@ -324,14 +324,7 @@ impl IOReaderBrowserCacheImpl {
             return Err(BrowserCacheErrors::FailedCache(CacheState::Failed))
         }
 
-        Ok(Self {
-            cache: self.cache.clone(),
-            current_chunk_index: 0,
-            current_offset: 0,
-            receiver_stream: None,
-            read_chunk_size: self.read_chunk_size,
-            read_chunk: Vec::with_capacity(self.read_chunk_size)
-        })
+        Ok(Self::new(self.cache.clone(), self.read_chunk_size))
     }
 }
 
@@ -381,10 +374,12 @@ impl IOReader for IOReaderBrowserCacheImpl {
                 self.receiver_stream = Some(mem_buffer.subscribe());
                 if let Some(result) = extract_from_buffer(&mem_buffer.buffer, self.current_offset) {
                     let read_bytes_len = result.len();
-                    self.read_chunk.extend_from_slice(&result);
-                    drop(mem_buffer);
-                    self.update_position_after_read(read_bytes_len);
-                    return self.next().await;
+                    if read_bytes_len > 0 {
+                        self.read_chunk.extend_from_slice(&result);
+                        drop(mem_buffer);
+                        self.update_position_after_read(read_bytes_len);
+                        return self.next().await;
+                    }
                 }
             }
         }
@@ -404,10 +399,12 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if let Some(val) = val {
             let val = val.unchecked_into::<Uint8Array>().to_vec();
             if let Some(result) = extract_from_buffer(&val, self.current_offset) {
-                let read_bytes_len = result.len();
-                self.read_chunk.extend_from_slice(&result);
-                self.update_position_after_read(read_bytes_len);
-                return self.next().await;
+                if result.len() > 0 {
+                    let read_bytes_len = result.len();
+                    self.read_chunk.extend_from_slice(&result);
+                    self.update_position_after_read(read_bytes_len);
+                    return self.next().await;
+                }
             }
         }
 
@@ -432,7 +429,8 @@ impl IOReader for IOReaderBrowserCacheImpl {
             return Ok(None);
         }
 
-        self.next().await
+        log::info!("Cache is not completed {} {} - {}, ending it", cache.resource.id, self.current_offset, self.current_chunk_index);
+        Err(anyhow!("Cache is not completed, ended at chunk index: {}, offset: {}", self.current_chunk_index, self.current_offset))
     }
 
     async fn total_size(&self) -> Result<u64> {

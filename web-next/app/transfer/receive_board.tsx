@@ -574,7 +574,7 @@ function MediaView(props: {
                 </div>
                     <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
-                        ? <button className={"rounded-xl bg-bluePrimary/80 p-2"} onClick={handleDownload}>
+                        ? <button className={"rounded-lg bg-muted border border-muted-foreground p-2 hover:cursor-pointer"} onClick={handleDownload}>
                             <ArrowDown color={'white'}/>
                           </button>
                         : <>
