@@ -38,6 +38,10 @@ edition = "2021"
 core-services = { path = "libs/core-services", default-features = false }
 devlog-sdk = { path = "libs/devlog-sdk", default-features = false }
 schema = { path = "libs/schema/rust", default-features = false }
+tar = { git = "https://github.com/dev-logs/tar-rs.git", default-features = false }
+matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch="main" }
+matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
+ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
 anyhow = { version = "1.0.99", default-features = false }
 crux_core = { version = "0.15.0", default-features = false }
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
@@ -66,14 +70,9 @@ url = { version = "2.5.6", default-features = false }
 uuid = { version = "1.18.0", default-features = false }
 h3o = { version = "0.9.0", default-features = false }
 bytes = { version = "1.10.1", default-features = false }
-flate2 = { version = "1.1.1", default-features = false }
-tar = { git = "https://github.com/dev-logs/tar-rs.git", default-features = false }
 mime_guess = { version = "2.0.5", default-features = false }
 tokio-util = { version = "0.7.15", default-features = false }
 redb = { version = "3.0.0", default-features = false }
-matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch="main" }
-matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
-ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
 futures-timer = { version = "3.0.3", default-features = false, features = ["wasm-bindgen"] }
 n0-future = { version = "0.2.0", default-features = false }
 http = { version = "1.3.1", default-features = false }
@@ -82,10 +81,7 @@ once_cell = { version = "1.21.3", default-features = false }
 futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
 erased-serde = "0.4.6"
-instant = "0.1.13"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
-tracing = { version = "0.1.41" }
-indexmap = "2.10.0"
+indexmap = "2.11.0"
 tonic-web = "0.14.1"
 
 [workspace.metadata.bin]

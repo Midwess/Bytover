@@ -315,7 +315,7 @@ function Board() {
                     )}
                 </div>
                 {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
-                <Button className={"w-fit h-8"} onClick={handleFind}>Find</Button>
+                <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
             </div>
             <div className={"flex flex-col gap-3"}>
                 {!!nearbySessions.length && <p className={"font-poppins text-muted-foreground"}>Nearby</p>}
@@ -482,10 +482,10 @@ function FileView(props: {
             {
                 file.is_completed
                     ? <button
-                        className={"rounded-xl p-2 bg-bluePrimary/80"}
+                        className={"rounded-lg p-2 border bg-muted hover:cursor-pointer"}
                         onClick={handleDownload}
                     >
-                        <ArrowDown color={'var(--foreground)'}/>
+                        <ArrowDown color={'var(--primary)'}/>
                     </button>
                     : <>
                         <CircleProgress progress={file.completion} size={30}/>
