@@ -1,6 +1,8 @@
 'use client'
 
 import toast from 'react-hot-toast';
+import isEqual from 'lodash/isEqual'
+
 import {
     CoreOperationVariantDelay,
     Effect,
@@ -96,6 +98,27 @@ export class WasmCore {
         return selectedSession
     }
 
+    public useSession(id: bigint) {
+        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(() => {
+            const transferState = this.transferState.get()
+            return transferState?.received_sessions?.find(it => it.id === id) ||
+                   transferState?.received_cloud_sessions?.find(it => it.id === id)
+        })
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
+                                   transferState?.received_cloud_sessions?.find(it => it.id === id)
+                
+                if (foundSession && !isEqual(session, foundSession)) {
+                    setSession(foundSession)
+                }
+            })
+        }, [id, session])
+
+        return session
+    }
+
     public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
         this.selectedSession.set(session)
     }
@@ -159,6 +182,37 @@ export class WasmCore {
         }, [])
 
         return state
+    }
+
+    public useCloudSessionsList() {
+        const [clouds, setClouds] = useState(this.transferState.get()?.received_cloud_sessions ?? []);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.received_cloud_sessions?.length != clouds.length)
+                {
+                    setClouds(
+                        transferState?.received_cloud_sessions ?? []
+                    )
+                }
+            })
+        }, [])
+
+        return clouds
+    }
+
+    public useNearbySessionsList() {
+        const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.received_sessions?.length != sessions.length) {
+                    setSessions(
+                        transferState?.received_sessions ?? []
+                    )
+                }
+            })
+        }, [])
+
+        return sessions
     }
 
     public useNearbyState() {

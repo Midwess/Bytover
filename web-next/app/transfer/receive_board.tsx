@@ -6,6 +6,7 @@ import {
     ImageReceiveResourceViewModel,
     LocalResourcePathVariantAbsolutePath,
     ReceiveCloudSessionViewModel,
+    ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel, TransferEventVariantCancelTransfer,
     TransferEventVariantFindPublicSession,
@@ -54,7 +55,7 @@ export default function ReceiveBoard() {
 
 function ContentBoard() {
     const selectedSession = core.useSelectedSession()
-    const transferState = core.useTransferState()
+    const cloudSessions = core.useCloudSessionsList()
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
@@ -77,9 +78,9 @@ function ContentBoard() {
     }, [coreReady]);
 
     useEffect(() => {
-        if (!url?.session || !transferState?.received_cloud_sessions?.length) return
+        if (!url?.session || !cloudSessions?.length) return
 
-        const session = transferState?.received_cloud_sessions?.find((it) => {
+        const session = cloudSessions?.find((it) => {
             return it.alias === url!.session!
         })
 
@@ -87,7 +88,7 @@ function ContentBoard() {
             core.updateSelectedSession(session)
         }
 
-    }, [transferState?.received_cloud_sessions?.length]);
+    }, [cloudSessions?.length]);
 
     const onSelected = () => {
         if (!selectedSession) {
@@ -241,7 +242,9 @@ function ReceiveCategory(props: {
 }
 
 function Board() {
-    const transferState = core.useTransferState()
+    let publicSessions = core.useCloudSessionsList()
+    let nearbySessions = core.useNearbySessionsList()
+
     const [url, setUrl] = useUrlState(['session'])
 
     const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
@@ -270,7 +273,7 @@ function Board() {
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
     }
 
-    const publicSessions = transferState?.received_cloud_sessions.filter((it) => {
+    publicSessions = publicSessions.filter((it) => {
         if (keywords) {
             return it?.sender_name?.toLowerCase()?.includes(keywords.toLowerCase()) ?? false
         }
@@ -278,7 +281,7 @@ function Board() {
         return true
     }) || []
 
-    const nearbySessions = transferState?.received_sessions.filter(() => {
+    nearbySessions = nearbySessions.filter(() => {
         if (keywords) {
             return false
         }
@@ -328,14 +331,7 @@ function Board() {
                                     core.updateSelectedSession(item)
                                 }}
                                 id={item.id}
-                                name={item.peer_name}
-                                progress={item.progress}
-                                display_datetime={item.display_datetime}
                                 key={index}
-                                is_public={false}
-                                is_completed={item.is_completed}
-                                avatar_url={item.peer_avatar.url}
-                                is_required_password={false}
                             />
                         })
                     }
@@ -352,14 +348,7 @@ function Board() {
                                     core.updateSelectedSession(item)
                                 }}
                                 id={item.id}
-                                name={item.sender_name}
-                                progress={0}
-                                display_datetime={item.display_datetime}
                                 key={index}
-                                is_public={true}
-                                is_completed={false}
-                                avatar_url={item.avatar_url}
-                                is_required_password={item.is_required_password}
                             />
                         })
                     }
@@ -370,28 +359,40 @@ function Board() {
 }
 
 function TransferSession(props: {
-    name: string,
     id: bigint,
-    display_datetime: string,
-    progress: number,
-    avatar_url: string,
-    is_public: boolean,
-    is_required_password: boolean,
-    is_completed: boolean,
     onPress: () => void
 }) {
     const {
-        name,
         id,
-        display_datetime,
-        progress,
-        avatar_url,
-        is_public,
-        is_required_password,
-        is_completed,
         onPress = () => {
         }
     } = props;
+    
+    const session = core.useSession(id);
+    
+    if (!session) {
+        return null;
+    }
+    
+    const is_public = session instanceof ReceiveCloudSessionViewModel;
+    
+    const name = is_public 
+        ? (session as ReceiveCloudSessionViewModel).sender_name 
+        : (session as ReceiveSessionViewModel).peer_name;
+    const display_datetime = session.display_datetime;
+    const avatar_url = is_public 
+        ? (session as ReceiveCloudSessionViewModel).avatar_url 
+        : (session as ReceiveSessionViewModel).peer_avatar?.url;
+    const is_required_password = is_public 
+        ? (session as ReceiveCloudSessionViewModel).is_required_password 
+        : false;
+    
+    const progress = is_public 
+        ? 0
+        : (session as ReceiveSessionViewModel).progress || 0;
+    const is_completed = is_public 
+        ? false
+        : (session as ReceiveSessionViewModel).is_completed || false;
 
     return <>
         <button
@@ -558,14 +559,14 @@ function MediaView(props: {
 
             <div
                 className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between py-2",
+                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between py-1",
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}
             >
                 <div className="flex flex-col items-start gap-1 w-[80%]">
-                    <p className="text-primaryText text-sm break-words w-full">
+                    <p className="text-primaryText text-sm line-clamp-3 w-full">
                         {model.name}
                     </p>
                     <p className="text-sm text-primaryText/80">
@@ -574,7 +575,7 @@ function MediaView(props: {
                 </div>
                     <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
-                        ? <button className={"rounded-lg bg-muted border border-muted-foreground p-2 hover:cursor-pointer"} onClick={handleDownload}>
+                        ? <button className={"rounded-lg ml-2 bg-muted border border-muted-foreground p-1 hover:cursor-pointer"} onClick={handleDownload}>
                             <ArrowDown color={'white'}/>
                           </button>
                         : <>
