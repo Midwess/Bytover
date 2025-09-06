@@ -319,9 +319,9 @@ export class WasmCore {
                         }
 
                         try {
-                            const pngBytes = await getThumbnailFromFile(file)
-                            const buffer = await pngBytes.arrayBuffer();
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(Array.from(new Uint8Array(buffer))))))
+                            const buffer = await getThumbnailFromFile(file)
+                            const response = handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(Array.from(buffer)))))
+                            return response
                         }
                         catch (e) {
                             return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))

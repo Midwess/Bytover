@@ -93,7 +93,6 @@ impl MemBuffer {
 
         let data_left = self.buffer.drain(..).collect();
         self.buffer.shrink_to_fit();
-        log::info!("The buffer shrinked down to {}", self.buffer.len());
         data_left
     }
 }
