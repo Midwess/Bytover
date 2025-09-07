@@ -8,6 +8,7 @@ pub mod executor;
 pub mod file_api;
 pub mod network;
 pub mod repository;
+pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
@@ -35,6 +36,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
+use crate::web_worker::WriterWebWorker;
+use gloo::worker::{Registrable, Spawnable};
+use gloo_worker::WorkerBridge;
 
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 

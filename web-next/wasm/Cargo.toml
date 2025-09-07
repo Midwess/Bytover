@@ -7,6 +7,21 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib", "lib", "staticlib"]
 
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.dev]
+opt-level = 3
+debug = true
+
 [dependencies]
 shared = { path = "../../shared" }
 devlog-sdk = { path = "../../libs/devlog-sdk" }
@@ -31,11 +46,13 @@ tonic-web-wasm-client = "0.7.1"
 serde-wasm-bindgen = { version = "0.6.5" }
 idb = { version = "0.6.4" }
 log = "0.4.27"
-web-sys = { version = "0.3.77", features = ["File", "Blob", "BlobPropertyBag", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager", "Url", "FileSystemWritableFileStream"] }
+web-sys = { version = "0.3.77", features = ["File", "Blob", "BlobPropertyBag", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager", "Url", "FileSystemWritableFileStream", "FileSystemSyncAccessHandle", "FileSystemFileHandle", "FileSystemHandle", "FileSystemDirectoryHandle", "FileSystemWritableFileStream"] }
 futures-channel = "0.3.31"
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.77"
 async-broadcast = "0.7.2"
+gloo = { version = "0.11.0", features = ["worker", "gloo-worker"] }
+gloo-worker = "0.5.0"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

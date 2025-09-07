@@ -1,7 +1,9 @@
-import Wasm_core, {WasmCore} from "@/wasm/wasm_core";
+import {type WasmCore} from "@/wasm/wasm_core";
 
 declare global {
+    var core: WasmCore;
+    self: any;
     interface Window {
-        core: WasmCore
+        core: WasmCore;
     }
 }

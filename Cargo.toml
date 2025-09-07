@@ -5,7 +5,7 @@ members = [
     # "Desktop/src-tauri",
     "backend",
     "native",
-    "web-next/wasm",
+    "web-next/wasm", "web-next/worker",
 ]
 
 resolver = "2"

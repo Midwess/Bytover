@@ -7,7 +7,7 @@ const KONG_ADMIN_URL = process.env.DEVLOG_KONG_GATEWAY_ADMIN_URL ||
   'http://localhost:8001'
 const HOST_NAME = process.env.DEVLOG_SERVICE_HOST || 'host.docker.internal'
 const PORT = process.env.PORT
-const DOMAIN = 'bitbridge.local'
+const DOMAIN = 'localhost'
 
 let isRegistered = false
 

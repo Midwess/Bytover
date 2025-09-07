@@ -63,10 +63,9 @@ import init_core, {view, initSync} from "core_wasm"
 import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
-import {useCallback, useEffect, useState} from "react";
+import {useEffect, useState} from "react";
 import {FileMetadata} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
-import {deserialize} from "v8";
 
 export class WasmCore {
     nativeProcessor: NativeProcessor | null;
