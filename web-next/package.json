@@ -5,7 +5,9 @@
   "scripts": {
     "schema:compile": "pnpm --dir ../libs/schema/typescript build; rm -r node_modules/schema-ts; pnpm install -f ./schema/typescript",
     "wasm:build": "cd wasm && wasm-pack build --target web --dev",
-    "dev": "next dev",
+    "worker:build": "cd worker && wasm-pack build --target no-modules --dev",
+    "postinstall": "mkdir -p ./public/worker && cp -r ./worker/pkg/*.js ./worker/pkg/*.wasm ./public/worker/ 2>/dev/null || true",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint --fix"
@@ -23,7 +25,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "core_wasm": "file:./wasm/pkg",
-    "worker": "file:./worker/pkg",
     "filepond": "^4.32.8",
     "filepond-plugin-file-poster": "^2.5.2",
     "filepond-plugin-image-preview": "^4.6.12",

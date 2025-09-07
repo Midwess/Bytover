@@ -19,3 +19,4 @@ rustc-ice-*.txt
 **/*.xcworkspace/xcuserdata/
 .fleet
 web-leptos/assets/style.css
+**/public/worker

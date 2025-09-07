@@ -1,4 +1,3 @@
-import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -22,24 +21,7 @@ const nextConfig: NextConfig = {
                 ],
             },
         ];
-    },
-    webpack: (config, { isServer }) => {
-        if (!isServer) {
-            config.resolve.fallback = {
-                ...config.resolve.fallback,
-                fs: false,
-                net: false,
-                tls: false,
-            };
-        }
-
-        config.resolve.alias = {
-            ...config.resolve.alias,
-            "/worker.js$": path.resolve(__dirname, "node_modules/worker/worker.js"),
-        };
-
-        return config;
-    },
+    }
 };
 
 export default nextConfig;

@@ -212,6 +212,7 @@ impl NativeProcessor {
     pub async fn init() -> Self {
         let di_container = DiContainer::get_instance();
         di_container.init(Arc::new(ShellRuntime {})).await;
+        WriterWebWorker::spawner().spawn("/worker/worker.js");
         Self {
             storage: di_container.file_storage(),
             executor: di_container.get_native_executor().await

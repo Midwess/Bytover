@@ -20,3 +20,4 @@ rustc-ice-*.txt
 .fleet
 iOS
 Android
+**/public/worker
