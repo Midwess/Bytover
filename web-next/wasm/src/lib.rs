@@ -25,29 +25,35 @@ use futures::lock::Mutex;
 use js_sys::{Array, Reflect};
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::time;
-use n0_future::time::Interval;
+use n0_future::time::{sleep, Interval};
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::{AppEvent, BitBridge};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+use async_once_cell::OnceCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
-use crate::web_worker::WriterWebWorker;
 use gloo::worker::{Registrable, Spawnable};
 use gloo_worker::WorkerBridge;
+use serde::Deserialize;
+use core_services::utils::never_send::NeverSend;
+use crate::web_worker::codec::WorkerMessageCodec;
+use crate::web_worker::core::{CoreRequest, CoreWorker};
+use crate::web_worker::executor::{ExecutingWorker, ExecutingWorkerInput};
+use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
 
-static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
+static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn()));
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = core)]
-    async fn forward_core_operation_output(request_id: u32, core_operation_output: Vec<u8>);
+    async fn forward_core_operation_output(request_id: u32, core_operation_output: Uint8Array);
     #[wasm_bindgen(js_namespace = core)]
-    async fn update_app_event(app_event: Vec<u8>);
+    async fn update_app_event(app_event: Uint8Array);
 }
 
 pub struct ShellRuntime {}
@@ -107,34 +113,41 @@ impl ThrottleShellRuntime {
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
-pub fn process_event(data: Vec<u8>) -> Vec<u8> {
-    match CORE.process_event(data.as_slice()) {
-        Ok(effects) => effects,
-        Err(e) => panic!("{e}")
-    }
+pub async fn process_event(data: Uint8Array) -> Uint8Array {
+    let msg = WorkerMessage::new(CoreRequest::Update(data));
+    let Some(response) = CORE_WORKER.send(msg).await else {
+        return Uint8Array::default()
+    };
+
+    response.message.0
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
-pub fn handle_response(id: u32, data: &[u8]) -> Vec<u8> {
-    CORE.handle_response(id, data).unwrap_or_else(|_e| vec![])
+pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::HandleResponse(id, data))).await else {
+        return Uint8Array::default()
+    };
+
+    response.message.0
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
-pub fn view() -> Vec<u8> {
-    match CORE.view() {
-        Ok(view) => view,
-        Err(e) => panic!("{e}")
-    }
+pub async fn view() -> Uint8Array {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::View)).await else {
+        return Uint8Array::default()
+    };
+
+    response.message.0
 }
 
-pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
+pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
     let options = bincode_options();
     let mut buffer = Vec::new();
     let mut serializer = bincode::Serializer::new(&mut buffer, options);
     erased_serde::serialize(data, &mut serializer).unwrap();
-    buffer
+    buffer.into_uint_array()
 }
 
 fn bincode_options() -> impl Options + Copy {
@@ -212,14 +225,14 @@ impl NativeProcessor {
     pub async fn init() -> Self {
         let di_container = DiContainer::get_instance();
         di_container.init(Arc::new(ShellRuntime {})).await;
-        WriterWebWorker::spawner().spawn("/worker/worker.js");
+
         Self {
             storage: di_container.file_storage(),
             executor: di_container.get_native_executor().await
         }
     }
 
-    pub async fn add_device_files(&self, files: &Array) -> Vec<u8> {
+    pub async fn add_device_files(&self, files: &Array) -> Uint8Array {
         let paths = self.storage.add(files).await;
 
         serialize(&paths)
@@ -302,12 +315,18 @@ impl NativeProcessor {
         let _ = JsFuture::from(writer.close()).await;
     }
 
-    pub async fn execute(&self, request_id: u32, effect: Vec<u8>) -> Vec<u8> {
-        let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(&effect, options);
-        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-        let effect: CoreOperation = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+    pub async fn execute(&self, request_id: u32, effect: Uint8Array) -> Uint8Array {
+        let effect: CoreOperation = deserialize(&effect);
         let output = self.executor.handle(request_id, effect).await;
-        handle_response(request_id, serialize(&output).as_slice())
+        handle_response(request_id, serialize(&output)).await
     }
+}
+
+pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deserialize<'de> {
+    let vec = data.to_vec();
+    let options = bincode_options();
+    let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);
+    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+    let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+    data
 }

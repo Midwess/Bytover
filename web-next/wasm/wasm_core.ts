@@ -55,7 +55,12 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     DialogOperationOutputVariantMessage,
-    ReceiveSessionViewModel, ReceiveCloudSessionViewModel, PeerViewModel, LocalResourcePath, MessageToShellVariantNotify
+    ReceiveSessionViewModel,
+    ReceiveCloudSessionViewModel,
+    PeerViewModel,
+    LocalResourcePath,
+    MessageToShellVariantNotify,
+    LocalResourcePersistentOperationVariantAdd
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -267,7 +272,7 @@ export class WasmCore {
     }
 
     public async update(event: AppEvent) {
-        const effects_bytes = process_event(serialize(event));
+        const effects_bytes = await process_event(serialize(event));
         const requests = deserializeArray<Request>(Request, effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
@@ -286,18 +291,18 @@ export class WasmCore {
             case CoreOperationVariantInitNativeExecutor: {
                 this.nativeProcessor = await NativeProcessor.init()
                 this.isCoreReady.set(true)
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantWebView: {
                 const operation = coreOperation as CoreOperationVariantWebView;
                 console.log(`Opening ${operation.value}`)
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantWebView(new WebViewOperationOutputVariantOpenUrl())))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantWebView(new WebViewOperationOutputVariantOpenUrl())))
             }
             case CoreOperationVariantDevice: {
                 const device = coreOperation as CoreOperationVariantDevice;
                 switch(device.value.constructor) {
                     case DeviceOperationVariantGetDeviceInfo: {
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantDeviceInfo(new DeviceInfo(
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantDeviceInfo(new DeviceInfo(
                             new PlatformVariantWeb(),
                             "Browser",
                             Date.now().toString(),
@@ -306,7 +311,7 @@ export class WasmCore {
                     }
                     case DeviceOperationVariantOpen: {
                         const open = device.value as DeviceOperationVariantOpen;
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
@@ -314,7 +319,7 @@ export class WasmCore {
                         const resourceId = BigInt(path.value.split("://")[1])
                         const file = await this.nativeProcessor?.get_device_file(resourceId)
                         if (!file) {
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
 
                         try {
@@ -323,12 +328,12 @@ export class WasmCore {
                             return response
                         }
                         catch (e) {
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
                         const location = new GeoLocation(10, 10.2);
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
                     }
                 }
 
@@ -341,11 +346,11 @@ export class WasmCore {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantVoid: {
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantRender: {
                 await this.updateView()
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantTransfer: {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
@@ -359,7 +364,7 @@ export class WasmCore {
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
                 this.update(operation.value).then(r => {})
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantDialog: {
                 const operation = coreOperation as CoreOperationVariantDialog;
@@ -367,11 +372,11 @@ export class WasmCore {
                     case DialogOperationVariantToast: {
                         const toastOp = operation.value as DialogOperationVariantToast;
                         toast(toastOp.value)
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantToast())))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantToast())))
                     }
                     case DialogOperationVariantAlert: {
                         // No alert on web, will automatically confirmed
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantAlert(true))))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantAlert(true))))
                     }
                     case DialogOperationVariantMessage: {
                         const op = operation.value as DialogOperationVariantMessage;
@@ -379,7 +384,7 @@ export class WasmCore {
                             ...(this.alertMessageState.get() || []),
                             op
                         ])
-                        return handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantMessage())))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantMessage())))
                     }
                 }
                 break
@@ -388,7 +393,7 @@ export class WasmCore {
                 const delay = coreOperation as CoreOperationVariantDelay;
                 const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
                 await BPromise.delay(ms)
-                return handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
         }
 
@@ -400,7 +405,8 @@ export class WasmCore {
         const data = await this.nativeProcessor?.add_device_files(files_only)
         if (!data) return [];
 
-        return deserializeArray<ResourceSelection>(ResourceSelection, data)
+        const selections = deserializeArray<ResourceSelection>(ResourceSelection, data)
+        return selections
     }
 
     async loadThumbnailSource(path: LocalResourcePath): Promise<string | undefined> {
@@ -431,7 +437,7 @@ export class WasmCore {
     }
 
     async updateView() {
-        const viewModel = AppViewModel.deserialize(new BincodeDeserializer(view()));
+        const viewModel = AppViewModel.deserialize(new BincodeDeserializer(await view()));
 
         this.environmentState.set(viewModel.environment!)
         this.authenticationState.set(viewModel.authentication!)
@@ -452,7 +458,7 @@ export class WasmCore {
 
     async forward_core_operation_output(id: number, operationData: Uint8Array): Promise<Uint8Array> {
         try {
-            const requestsData = handle_response(id, operationData)
+            const requestsData = await handle_response(id, operationData)
             if (requestsData.length === 0) return serialize(new MessageToShellResponseVariantVoidResponse())
 
             const requests = deserializeArray<Request>(Request, requestsData);

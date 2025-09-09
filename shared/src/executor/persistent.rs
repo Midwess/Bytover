@@ -115,7 +115,6 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().find_one(&id).await;
                 match result {
                     Ok(resource) => {
-                        log::info!("Found local resource: {resource:?}");
                         PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(resource))
                     }
                     Err(err) => {
