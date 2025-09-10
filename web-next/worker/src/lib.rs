@@ -13,7 +13,7 @@ pub async fn start_worker() {
         CoreWorker::registrar().encoding::<WorkerMessageCodec>().register();
     }
 
-    #[cfg(feature = "native-executor")]
+    #[cfg(feature = "native_executor")]
     {
         use wasm::web_worker::executor::ExecutingWorker;
         ExecutingWorker::registrar().encoding::<WorkerMessageCodec>().register();

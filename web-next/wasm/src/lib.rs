@@ -95,7 +95,10 @@ pub async fn view() -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn init() {
-    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::Init)).await;
+    let host_info = config::get_host_info().unwrap();
+    log::info!("Host info: {:?}", host_info);
+    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::Init(host_info))).await;
+    log::info!("Initialized");
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -250,5 +253,6 @@ pub async fn is_compatible() -> bool {
         return false;
     }
 
+    log::info!("Storage quota is OK");
     true
 }

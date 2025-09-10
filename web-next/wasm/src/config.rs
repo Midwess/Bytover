@@ -1,47 +1,59 @@
+use serde::{Deserialize, Serialize};
 use url::Url;
 use wasm_bindgen::JsValue;
-use web_sys::window;
+use wasm_bindgen::JsCast;
+use web_sys::{window, WorkerGlobalScope};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostInfo {
     pub host: String,
     pub port: u16,
-    pub is_with_ssl: bool
+    pub is_with_ssl: bool,
 }
 
 pub fn get_host_info() -> Result<HostInfo, JsValue> {
-    let window = window().ok_or_else(|| JsValue::from_str("No window found"))?;
-    let href = window.location().href().map_err(|_| JsValue::from_str("Failed to get href"))?;
-
-    let url = Url::parse(&href).map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?;
-
-    let port = match url.port_or_known_default() {
-        Some(p) => p,
-        None => return Err(JsValue::from_str("Could not determine port"))
+    let href = if let Some(win) = window() {
+        win.location().href()?
+    } else {
+        let global = js_sys::global().unchecked_into::<WorkerGlobalScope>();
+        global.location().href()
     };
 
-    let is_with_ssl = url.scheme() == "https";
+    let url = Url::parse(&href)
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?;
+
+    let port = match url.port() {
+        Some(p) => p,
+        None => match url.scheme() {
+            "https" | "wss" => 443,
+            "http" | "ws" => 80,
+            scheme => return Err(JsValue::from_str(&format!("Unsupported scheme {scheme}"))),
+        },
+    };
+
+    let is_with_ssl = url.scheme() == "https" || url.scheme() == "wss";
 
     Ok(HostInfo {
         host: url.host_str().unwrap_or_default().to_string(),
         port,
-        is_with_ssl
+        is_with_ssl,
     })
 }
 
-pub fn get_gateway_grpc_url() -> String {
-    let host_info = get_host_info().unwrap();
-    if host_info.is_with_ssl {
-        format!("https://{}:{}", host_info.host, host_info.port)
-    } else {
-        format!("http://{}:{}", host_info.host, host_info.port)
+impl HostInfo {
+    pub fn get_gateway_grpc_url(&self) -> String {
+        if self.is_with_ssl {
+            format!("https://{}:{}", self.host, self.port)
+        } else {
+            format!("http://{}:{}", self.host, self.port)
+        }
     }
-}
 
-pub fn get_signalling_server_ws_url() -> String {
-    let host_info = get_host_info().unwrap();
-    if host_info.is_with_ssl {
-        format!("wss://{}:{}/rpc-signalling", host_info.host, host_info.port)
-    } else {
-        format!("ws://{}:{}/rpc-signalling", host_info.host, host_info.port)
+    pub fn get_signalling_server_ws_url(&self) -> String {
+        if self.is_with_ssl {
+            format!("wss://{}:{}/rpc-signalling", self.host, self.port)
+        } else {
+            format!("ws://{}:{}/rpc-signalling", self.host, self.port)
+        }
     }
 }

@@ -1,4 +1,5 @@
-use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
+use std::iter::Once;
+use crate::config::{HostInfo};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::executor::executor::NativeExecutor;
@@ -50,14 +51,16 @@ pub struct DiContainer {
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
     transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
+    host_info: OnceCell<HostInfo>,
 
-    rpc_connection: RpcNetworkModuleImpl
+    rpc_connection: OnceCell<RpcNetworkModuleImpl>
 }
 
 impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
+                host_info: OnceCell::new(),
                 shell: OnceCell::new(),
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
@@ -67,7 +70,7 @@ impl DiContainer {
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
+                rpc_connection: OnceCell::new(),
                 resource_repository: OnceCell::new(),
                 transfer_repository: OnceCell::new()
             };
@@ -101,7 +104,7 @@ impl DiContainer {
     }
 
     pub fn get_authentication_server(&'static self) -> AuthServer<Client> {
-        AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
+        AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.get().cloned().unwrap()))
     }
 
     pub fn get_transfer_service(&'static self) -> &'static TransferService {
@@ -115,10 +118,12 @@ impl DiContainer {
         }
     }
 
-    pub async fn init(&self, shell: Arc<ShellRuntime>) {
+    pub async fn init(&self, host_info: HostInfo, shell: Arc<ShellRuntime>) {
         log::info!("Initializing DI container");
+        let _ = self.host_info.set(host_info.clone());
         let _ = self.shell.set(shell);
         let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
+        let _ = self.rpc_connection.set(RpcNetworkModuleImpl::new(host_info.get_gateway_grpc_url()));
 
         init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
@@ -181,7 +186,7 @@ impl DiContainer {
     }
 
     pub fn get_cloud_server(&self) -> CloudServer<Client> {
-        CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
+        CloudServer::new(Box::new(self.rpc_connection.get().unwrap().clone()), self.get_auth_provider())
     }
 
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
@@ -191,7 +196,7 @@ impl DiContainer {
 
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
-            get_signalling_server_ws_url(),
+            self.host_info.get().unwrap().get_signalling_server_ws_url(),
             self.get_local_resource_repository()
         ));
         let cloud_service = CloudService {
