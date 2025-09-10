@@ -38,7 +38,7 @@ import {
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useFileUpload} from "@/hooks/use-file-upload";
-import {useEffect, useReducer, useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import core from "@/wasm/wasm_core";
 import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";

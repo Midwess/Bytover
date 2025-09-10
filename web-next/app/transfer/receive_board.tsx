@@ -16,7 +16,7 @@ import {
 } from 'shared_types/types/shared_types'
 import {
     ArrowDown,
-    ChevronsUpDown, Dog, Download,
+    ChevronsUpDown, Download,
     Globe, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
