@@ -38,7 +38,6 @@ impl ResourceTransferSelectionService {
     }
 
     pub async fn add_resources(&self, ctx: AppCommandContext, mut selections: Vec<ResourceSelection>) {
-        log::info!("Adding {} resources", selections.len());
         while let Some(selection) = selections.pop() {
             let existing_resource = LocalResourcePersistentOperation::find(selection.path.clone()).into_future(ctx.clone()).await;
             if existing_resource.is_some() {
@@ -64,9 +63,7 @@ impl ResourceTransferSelectionService {
                 }
             };
 
-            log::info!("Adding resource");
             let mut new_resources = LocalResourcePersistentOperation::add(vec![local_resource.clone()]).into_future(ctx.clone()).await;
-            log::info!("Adding done");
             if new_resources.is_empty() {
                 log::info!("File already exists: {:?}", selection.path);
                 continue;

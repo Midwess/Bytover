@@ -81,10 +81,10 @@ impl DiContainer {
         self.file_storage.get().unwrap().clone()
     }
 
-    pub async fn get_net_stream(&self) -> Box<dyn NetStream> {
+    pub fn get_net_stream(&self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
             storage: self.file_storage.get().unwrap().clone(),
-            resource_repo: self.get_local_resource_repository().await
+            resource_repo: self.get_local_resource_repository()
         })
     }
 
@@ -152,7 +152,7 @@ impl DiContainer {
         }
     }
 
-    pub async fn get_local_resource_repository(&self) -> Arc<dyn LocalResourceRepository> {
+    pub fn get_local_resource_repository(&self) -> Arc<dyn LocalResourceRepository> {
         if let Some(repository) = self.resource_repository.get() {
             return repository.clone();
         }
@@ -184,7 +184,7 @@ impl DiContainer {
         CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
     }
 
-    pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
+    pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
@@ -192,14 +192,14 @@ impl DiContainer {
         let web_rtc = Arc::new(WebRtc::new(
             self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
-            self.get_local_resource_repository().await
+            self.get_local_resource_repository()
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
-            repository: self.get_local_resource_repository().await,
-            net_stream: self.get_net_stream().await
+            repository: self.get_local_resource_repository(),
+            net_stream: self.get_net_stream()
         };
 
         let executor = NativeExecutor {
@@ -208,7 +208,7 @@ impl DiContainer {
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
-                local_resource_repository: self.get_local_resource_repository().await,
+                local_resource_repository: self.get_local_resource_repository(),
                 transfer_session_repository: Box::new(self.get_transfer_session_repository())
             }),
             transfer: Box::new(TransferNativeImpl {

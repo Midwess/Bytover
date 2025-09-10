@@ -43,10 +43,12 @@ use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
 use crate::web_worker::codec::WorkerMessageCodec;
 use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker, ExecutingWorkerInput};
+use crate::web_worker::executor::{ExecutingWorker};
 use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
 
-static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn()));
+static NATIVE_EXECUTOR_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("native-executor")));
+
+static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core")));
 
 #[wasm_bindgen]
 extern "C" {
@@ -228,7 +230,7 @@ impl NativeProcessor {
 
         Self {
             storage: di_container.file_storage(),
-            executor: di_container.get_native_executor().await
+            executor: di_container.get_native_executor()
         }
     }
 
@@ -244,7 +246,7 @@ impl NativeProcessor {
     }
 
     pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        let repository = DiContainer::get_instance().get_local_resource_repository().await;
+        let repository = DiContainer::get_instance().get_local_resource_repository();
         let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
         let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
             return None
@@ -295,7 +297,7 @@ impl NativeProcessor {
         let mut deser = bincode::Deserializer::from_slice(&path, options);
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
         let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-        let repository = DiContainer::get_instance().get_local_resource_repository().await;
+        let repository = DiContainer::get_instance().get_local_resource_repository();
         let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
             let _ = JsFuture::from(writer.close()).await;
             return;

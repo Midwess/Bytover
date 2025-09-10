@@ -36,7 +36,7 @@ impl Worker for CoreWorker {
     type Output = WorkerMessage<CoreResponse>;
 
     fn create(_: &gloo_worker::WorkerScope<Self>) -> Self {
-        logger::setup();
+        log::info!("Core worker created");
         CoreWorker {}
     }
 

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use futures::lock::Mutex;
 use gloo_worker::{Spawnable, Worker, WorkerBridge};
@@ -18,6 +19,17 @@ where
 {
     id: String,
     pub(crate) message: R,
+}
+
+impl<R> Deref for WorkerMessage<R>
+where
+    R: Serialize,
+{
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.message
+    }
 }
 
 unsafe impl<R> Send for WorkerMessage<R> where R: Serialize {}
@@ -70,7 +82,7 @@ where
     W::Output: TrustedWorkerMessage,
     W: 'static
 {
-    pub fn spawn() -> WebWorkerBridge<W> {
+    pub fn spawn(name: &str) -> WebWorkerBridge<W> {
         let (callback_call, mut callback) = mpsc::channel::<W::Output>(1024);
         let bridge = W::spawner()
             .encoding::<WorkerMessageCodec>()
@@ -79,7 +91,7 @@ where
                      log::warn!("Failed to send message to main thread: {:?}", e);
                  }
             })
-            .spawn("/worker/worker.js");
+            .spawn(&format!("/{name}/worker.js"));
 
         let response_streams = Arc::new(Mutex::new(HashMap::<String, oneshot::Sender<W::Output>>::new()));
         spawn({
