@@ -69,7 +69,6 @@ impl ResourceTransferSelectionService {
                 continue;
             }
 
-
             let mut new_resource = new_resources.pop().unwrap();
 
             if let Some(thumbnail_png) = DeviceOperation::load_thumbnail_png(selection.path.clone()).into_future(ctx.clone()).await {

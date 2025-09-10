@@ -3,8 +3,6 @@ use std::sync::LazyLock;
 use crux_core::bridge::Bridge;
 use crux_core::{App, Core};
 use js_sys::Uint8Array;
-use web_sys;
-use core_services::logger;
 use shared::app::BitBridge;
 use crate::file_api::file_extension::VecExtension;
 use crate::web_worker::main::{TrustedWorkerMessage, WorkerMessage};

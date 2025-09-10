@@ -5,6 +5,14 @@ declare namespace wasm_bindgen {
 	export function process_event(data: Uint8Array): Promise<Uint8Array>;
 	export function handle_response(id: number, data: Uint8Array): Promise<Uint8Array>;
 	export function view(): Promise<Uint8Array>;
+	export function init(): Promise<void>;
+	export function add_device_files(files: Array<any>): Promise<Uint8Array>;
+	export function get_device_file(resource_id: bigint): Promise<File | undefined>;
+	export function load_thumbnail_bytes(resource_id: bigint): Promise<Uint8Array | undefined>;
+	export function load_thumbnail_source(path: Uint8Array): Promise<string | undefined>;
+	export function download_file_from_cache(path: Uint8Array, writer: FileSystemWritableFileStream): Promise<void>;
+	export function execute(request_id: number, effect: Uint8Array): Promise<Uint8Array>;
+	export function is_compatible(): Promise<boolean>;
 	/**
 	 * The `ReadableStreamType` enum.
 	 *
@@ -33,18 +41,6 @@ declare namespace wasm_bindgen {
 	  pull(controller: ReadableStreamDefaultController): Promise<any>;
 	  cancel(): void;
 	}
-	export class NativeProcessor {
-	  private constructor();
-	  free(): void;
-	  static is_compatible(): Promise<boolean>;
-	  static init(): Promise<NativeProcessor>;
-	  add_device_files(files: Array<any>): Promise<Uint8Array>;
-	  get_device_file(resource_id: bigint): Promise<File | undefined>;
-	  load_thumbnail_bytes(resource_id: bigint): Promise<Uint8Array | undefined>;
-	  load_thumbnail_source(path: Uint8Array): Promise<string | undefined>;
-	  download_file_from_cache(path: Uint8Array, writer: FileSystemWritableFileStream): Promise<void>;
-	  execute(request_id: number, effect: Uint8Array): Promise<Uint8Array>;
-	}
 	
 }
 
@@ -56,15 +52,14 @@ declare interface InitOutput {
   readonly process_event: (a: any) => any;
   readonly handle_response: (a: number, b: any) => any;
   readonly view: () => any;
-  readonly __wbg_nativeprocessor_free: (a: number, b: number) => void;
-  readonly nativeprocessor_is_compatible: () => any;
-  readonly nativeprocessor_init: () => any;
-  readonly nativeprocessor_add_device_files: (a: number, b: any) => any;
-  readonly nativeprocessor_get_device_file: (a: number, b: bigint) => any;
-  readonly nativeprocessor_load_thumbnail_bytes: (a: number, b: bigint) => any;
-  readonly nativeprocessor_load_thumbnail_source: (a: number, b: number, c: number) => any;
-  readonly nativeprocessor_download_file_from_cache: (a: number, b: number, c: number, d: any) => any;
-  readonly nativeprocessor_execute: (a: number, b: number, c: any) => any;
+  readonly init: () => any;
+  readonly add_device_files: (a: any) => any;
+  readonly get_device_file: (a: bigint) => any;
+  readonly load_thumbnail_bytes: (a: bigint) => any;
+  readonly load_thumbnail_source: (a: any) => any;
+  readonly download_file_from_cache: (a: any, b: any) => any;
+  readonly execute: (a: number, b: any) => any;
+  readonly is_compatible: () => any;
   readonly __wbg_intounderlyingbytesource_free: (a: number, b: number) => void;
   readonly intounderlyingbytesource_type: (a: number) => number;
   readonly intounderlyingbytesource_autoAllocateChunkSize: (a: number) => number;
@@ -78,29 +73,17 @@ declare interface InitOutput {
   readonly __wbg_intounderlyingsource_free: (a: number, b: number) => void;
   readonly intounderlyingsource_pull: (a: number, b: any) => any;
   readonly intounderlyingsource_cancel: (a: number) => void;
-  readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
-  readonly __wbindgen_export_2: WebAssembly.Table;
+  readonly __wbindgen_export_1: WebAssembly.Table;
+  readonly __wbindgen_exn_store: (a: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
-  readonly closure313_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure314_externref_shim: (a: number, b: number, c: any) => void;
-  readonly wasm_bindgen__convert__closures_____invoke__h4190fd15aa7955cc: (a: number, b: number) => void;
-  readonly closure9723_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9720_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9721_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9722_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9865_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9866_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9864_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure9915_externref_shim: (a: number, b: number, c: any) => void;
-  readonly wasm_bindgen__convert__closures_____invoke__h57e2ffa9d5864f11: (a: number, b: number) => void;
+  readonly closure113_externref_shim: (a: number, b: number, c: any) => void;
   readonly wasm_bindgen__convert__closures_____invoke__h933ca4df983b9f21: (a: number, b: number) => void;
-  readonly closure10240_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure10389_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure10396_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure6705_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure6712_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

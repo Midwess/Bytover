@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use futures::lock::Mutex;
-use gloo_worker::{Spawnable, Worker, WorkerBridge};
+use gloo_worker::{Spawnable, Worker, WorkerBridge, WorkerSpawner};
 use n0_future::task::spawn;
 use serde::{Deserialize, Serialize};
 use futures::channel::{oneshot, mpsc};
 use futures::StreamExt;
+use once_cell::sync::OnceCell;
 use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use crate::web_worker::codec::WorkerMessageCodec;
@@ -18,7 +19,7 @@ where
     R: Serialize,
 {
     id: String,
-    pub(crate) message: R,
+    pub message: R,
 }
 
 impl<R> Deref for WorkerMessage<R>
@@ -74,6 +75,7 @@ where
 {
     bridge: WorkerBridge<W>,
     streams: Arc<Mutex<HashMap<String, oneshot::Sender<W::Output>>>>,
+    exhausted_callback: Arc<OnceCell<Box<dyn Fn(W::Output) + 'static>>>
 }
 
 impl<W: Worker> WebWorkerBridge<W>
@@ -84,6 +86,7 @@ where
 {
     pub fn spawn(name: &str) -> WebWorkerBridge<W> {
         let (callback_call, mut callback) = mpsc::channel::<W::Output>(1024);
+        let exhausted_callback = Arc::new(OnceCell::<Box<dyn Fn(W::Output) + 'static>>::new());
         let bridge = W::spawner()
             .encoding::<WorkerMessageCodec>()
             .callback(move |o| {
@@ -96,9 +99,15 @@ where
         let response_streams = Arc::new(Mutex::new(HashMap::<String, oneshot::Sender<W::Output>>::new()));
         spawn({
             let response_streams = response_streams.clone();
+            let exhausted_callback = exhausted_callback.clone();
             async move {
                 while let Some(msg) = callback.next().await {
                     let Some(response_stream) = response_streams.lock().await.remove(msg.id()) else {
+                        let Some(exhausted_callback) = exhausted_callback.get() else {
+                            continue;
+                        };
+
+                        exhausted_callback(msg);
                         continue;
                     };
 
@@ -113,7 +122,15 @@ where
         Self {
             bridge,
             streams: response_streams,
+            exhausted_callback
         }
+    }
+
+    pub fn on_exhausted<F>(&self, callback: F)
+    where
+        F: Fn(W::Output) + 'static
+    {
+        let _ = self.exhausted_callback.set(Box::new(callback));
     }
 
     pub async fn send(&self, msg: W::Input) -> Option<W::Output> {

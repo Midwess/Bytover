@@ -11,42 +11,50 @@ pub mod repository;
 pub mod web_worker;
 
 // /shared/src/lib.rs
-use crate::di_container::DiContainer;
-use crate::executor::executor::NativeExecutor;
 use crate::file_api::file_extension::VecExtension;
-use crate::file_api::storage::FileStorage;
 use bincode::Options;
 use core_services::logger;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 use erased_serde::Serialize;
-use file_api::path_extension::WebExtLocalResourcePath;
 use futures::lock::Mutex;
 use js_sys::{Array, Reflect};
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::time;
-use n0_future::time::{sleep, Interval};
-use shared::app::file_system::file::LocalResourcePath;
+use n0_future::time::Interval;
 use shared::app::operations::CoreOperationOutput;
-use shared::app::{AppEvent, BitBridge};
-use shared::CoreOperation;
+use shared::app::AppEvent;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use async_once_cell::OnceCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
-use gloo::worker::{Registrable, Spawnable};
-use gloo_worker::WorkerBridge;
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
-use crate::web_worker::codec::WorkerMessageCodec;
 use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker};
+use crate::web_worker::executor::{ExecutingWorker, NativeExecutorOperation, NativeExecutorOutput};
 use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
 
-static NATIVE_EXECUTOR_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("native-executor")));
+static WORKER: LazyLock<NeverSend<WebWorkerBridge<ExecutingWorker>>> = LazyLock::new(|| {
+    let worker = NeverSend(WebWorkerBridge::spawn("native-executor"));
+    worker.on_exhausted(|msg: WorkerMessage<NativeExecutorOutput>| {
+        let msg = msg.message;
+        spawn(async move {
+            match msg {
+                NativeExecutorOutput::ForwardCoreOperationOutput(request_id, data) => {
+                    forward_core_operation_output(request_id, data).await;
+                },
+                NativeExecutorOutput::UpdateAppEvent(data) => {
+                    update_app_event(data).await;
+                }
+                _ => {}
+            }
+        });
+    });
+
+    worker
+});
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core")));
 
@@ -144,6 +152,83 @@ pub async fn view() -> Uint8Array {
     response.message.0
 }
 
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn init() {
+    let _ = WORKER.send(WorkerMessage::new(NativeExecutorOperation::Init)).await;
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn add_device_files(files: &Array) -> Uint8Array {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::AddDeviceFiles(files.clone()))).await else {
+        return Uint8Array::default()
+    };
+
+    match response.message {
+        NativeExecutorOutput::DeviceFiles(data) => data,
+        _ => Uint8Array::default()
+    }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn get_device_file(resource_id: u64) -> Option<File> {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::GetDeviceFile(resource_id))).await else {
+        return None
+    };
+
+    match response.message {
+        NativeExecutorOutput::DeviceFile(file) => Some(file),
+        _ => None
+    }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn load_thumbnail_bytes(resource_id: u64) -> Option<Uint8Array> {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::LoadThumbnailBytes(resource_id))).await else {
+        return None
+    };
+
+    match response.message {
+        NativeExecutorOutput::ThumbnailBytes(data) => Some(data),
+        _ => None
+    }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn load_thumbnail_source(path: Uint8Array) -> Option<String> {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::LoadThumbnailSource(path))).await else {
+        return None
+    };
+
+    match response.message {
+        NativeExecutorOutput::ThumbnailSource(source) => source,
+        _ => None
+    }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn download_file_from_cache(path: Uint8Array, writer: FileSystemWritableFileStream) {
+    let _ = WORKER.send(WorkerMessage::new(NativeExecutorOperation::DownloadFileFromCache { path, writer })).await;
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::Execute(request_id, effect))).await else {
+        return Uint8Array::default()
+    };
+
+    match response.message {
+        NativeExecutorOutput::ExecuteResult(data) => data,
+        _ => Uint8Array::default()
+    }
+}
+
 pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
     let options = bincode_options();
     let mut buffer = Vec::new();
@@ -156,173 +241,6 @@ fn bincode_options() -> impl Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
 
-#[wasm_bindgen]
-pub struct NativeProcessor {
-    executor: &'static NativeExecutor,
-    storage: FileStorage
-}
-
-#[wasm_bindgen]
-impl NativeProcessor {
-    pub async fn is_compatible() -> bool {
-        logger::setup();
-        let Some(with_browser) = window() else {
-            log::info!("No window");
-            return false
-        };
-
-        if with_browser.is_null() || with_browser.is_undefined() {
-            log::info!("Window is null");
-            return false
-        }
-
-        let Ok(with_cache) = with_browser.caches() else {
-            log::info!("No caches");
-            return false
-        };
-
-        if with_cache.is_null() || with_cache.is_undefined() {
-            log::info!("Caches is null");
-            return false
-        }
-
-        let storage = with_browser.navigator().storage();
-
-        if storage.is_null() || storage.is_undefined() {
-            log::info!("Storage is null");
-            return false
-        }
-
-        let Ok(estimate_fut) = storage.estimate() else {
-            return false;
-        };
-
-        let Ok(quota) = JsFuture::from(estimate_fut).await else {
-            log::info!("Cannot estimate storage quota");
-            return false
-        };
-
-        if quota.is_null() || quota.is_undefined() {
-            log::info!("Quota is null");
-            return false
-        }
-
-        let quota_val = Reflect::get(&quota, &JsValue::from_str("quota")).unwrap_or(JsValue::UNDEFINED);
-
-        if quota_val.is_null() || quota_val.is_undefined() {
-            log::info!("quota field missing");
-            return false;
-        }
-
-        log::info!("Storage quota: {} bytes", quota_val.as_f64().unwrap_or(0.0));
-        let quota = quota_val.as_f64().unwrap_or(0.0);
-        if quota < 100.0 * 1024.0 * 1024.0 {
-            log::info!("Storage quota less than 100MB ({} MB)", quota / 1024.0 / 1024.0);
-            return false;
-        }
-
-        true
-    }
-
-    pub async fn init() -> Self {
-        let di_container = DiContainer::get_instance();
-        di_container.init(Arc::new(ShellRuntime {})).await;
-
-        Self {
-            storage: di_container.file_storage(),
-            executor: di_container.get_native_executor()
-        }
-    }
-
-    pub async fn add_device_files(&self, files: &Array) -> Uint8Array {
-        let paths = self.storage.add(files).await;
-
-        serialize(&paths)
-    }
-
-    pub async fn get_device_file(&self, resource_id: u64) -> Option<File> {
-        let file = self.storage.get(resource_id).await;
-        file.map(|it| it.file.0)
-    }
-
-    pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        let repository = DiContainer::get_instance().get_local_resource_repository();
-        let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
-        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
-            return None
-        };
-
-        let Ok(data) = reader.read_all().await else { return None };
-
-        Some(data.into_uint_array())
-    }
-
-    pub async fn load_thumbnail_source(&self, path: Vec<u8>) -> Option<String> {
-        let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(&path, options);
-        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-
-        if let LocalResourcePath::AbsolutePath(path) = path {
-            return Some(path)
-        }
-
-        let Some(resource_id) = path.thumbnail_resource_id() else {
-            return None
-        };
-
-        let Some(data) = self.load_thumbnail_bytes(resource_id).await else {
-            return None
-        };
-
-        let blob_options = web_sys::BlobPropertyBag::new();
-        blob_options.set_type("image/png");
-
-        let parts = Array::new();
-        parts.push(&data);
-
-        let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
-            return None
-        };
-
-        let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
-            return None
-        };
-
-        Some(url)
-    }
-
-    pub async fn download_file_from_cache(&self, path: Vec<u8>, writer: FileSystemWritableFileStream) {
-        let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(&path, options);
-        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-        let repository = DiContainer::get_instance().get_local_resource_repository();
-        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
-            let _ = JsFuture::from(writer.close()).await;
-            return;
-        };
-
-        while let Some(data) = reader.next().await.unwrap() {
-            let Ok(fut) = writer.write_with_u8_array(&data) else {
-                break;
-            };
-
-            if let Err(e) = JsFuture::from(fut).await {
-                log::error!("Failed to write to file: {:?}", e);
-                break;
-            }
-        }
-
-        let _ = JsFuture::from(writer.close()).await;
-    }
-
-    pub async fn execute(&self, request_id: u32, effect: Uint8Array) -> Uint8Array {
-        let effect: CoreOperation = deserialize(&effect);
-        let output = self.executor.handle(request_id, effect).await;
-        handle_response(request_id, serialize(&output)).await
-    }
-}
 
 pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deserialize<'de> {
     let vec = data.to_vec();
@@ -331,4 +249,66 @@ pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deser
     let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
     let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
     data
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub async fn is_compatible() -> bool {
+    logger::setup();
+    let Some(with_browser) = window() else {
+        log::info!("No window");
+        return false
+    };
+
+    if with_browser.is_null() || with_browser.is_undefined() {
+        log::info!("Window is null");
+        return false
+    }
+
+    let Ok(with_cache) = with_browser.caches() else {
+        log::info!("No caches");
+        return false
+    };
+
+    if with_cache.is_null() || with_cache.is_undefined() {
+        log::info!("Caches is null");
+        return false
+    }
+
+    let storage = with_browser.navigator().storage();
+
+    if storage.is_null() || storage.is_undefined() {
+        log::info!("Storage is null");
+        return false
+    }
+
+    let Ok(estimate_fut) = storage.estimate() else {
+        return false;
+    };
+
+    let Ok(quota) = JsFuture::from(estimate_fut).await else {
+        log::info!("Cannot estimate storage quota");
+        return false
+    };
+
+    if quota.is_null() || quota.is_undefined() {
+        log::info!("Quota is null");
+        return false
+    }
+
+    let quota_val = Reflect::get(&quota, &JsValue::from_str("quota")).unwrap_or(JsValue::UNDEFINED);
+
+    if quota_val.is_null() || quota_val.is_undefined() {
+        log::info!("quota field missing");
+        return false;
+    }
+
+    log::info!("Storage quota: {} bytes", quota_val.as_f64().unwrap_or(0.0));
+    let quota = quota_val.as_f64().unwrap_or(0.0);
+    if quota < 100.0 * 1024.0 * 1024.0 {
+        log::info!("Storage quota less than 100MB ({} MB)", quota / 1024.0 / 1024.0);
+        return false;
+    }
+
+    true
 }
