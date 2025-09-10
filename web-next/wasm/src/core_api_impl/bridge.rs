@@ -1,5 +1,5 @@
 use crate::{ShellRuntime, ThrottleShellRuntime};
-use n0_future::task::JoinHandle;
+use n0_future::task::{spawn, JoinHandle};
 use shared::app::operations::CoreOperationOutput;
 use shared::app::AppEvent;
 use shared::core_api::CoreBridge;
@@ -24,7 +24,9 @@ impl CoreBridgeImpl {
 impl CoreBridge for CoreBridgeImpl {
     fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
         let shell = self.shell.clone();
-        shell.forward_core_operation_output(request_id, response)
+        spawn(async move {
+            let _ = shell.forward_core_operation_output(request_id, response);
+        })
     }
 
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
@@ -32,6 +34,6 @@ impl CoreBridge for CoreBridgeImpl {
     }
 
     async fn notify(&self, event: AppEvent) {
-        let _ = self.shell.clone().update(event).await;
+        let _ = self.shell.clone().update(event);
     }
 }

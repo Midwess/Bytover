@@ -33,7 +33,7 @@ use web_sys::{window, File, FileSystemWritableFileStream};
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
 use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker, NativeExecutorOperation, NativeExecutorOutput};
+use crate::web_worker::executor::{ExecutingWorker, NativeExecutorOperation, NativeExecutorOutput, ShellRuntime, ThrottleShellRuntime};
 use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
 
 static WORKER: LazyLock<NeverSend<WebWorkerBridge<ExecutingWorker>>> = LazyLock::new(|| {
@@ -66,60 +66,6 @@ extern "C" {
     async fn update_app_event(app_event: Uint8Array);
 }
 
-pub struct ShellRuntime {}
-
-impl ShellRuntime {
-    fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) -> JoinHandle<()> {
-        spawn(async move {
-            let serialized_output = serialize(&output);
-            forward_core_operation_output(request_id, serialized_output).await;
-        })
-    }
-
-    fn update(self: Arc<Self>, event: AppEvent) -> JoinHandle<()> {
-        spawn(async move {
-            let serialized_event = serialize(&event);
-            update_app_event(serialized_event).await;
-        })
-    }
-}
-
-pub struct ThrottleShellRuntime {
-    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>
-}
-
-impl ThrottleShellRuntime {
-    pub fn new(shell_runtime: Arc<ShellRuntime>, delay: Duration) -> Self {
-        let latest_event = Arc::new(Mutex::new(None::<(u32, CoreOperationOutput)>));
-        let latest_event_clone = latest_event.clone();
-        let shell_runtime_clone = shell_runtime.clone();
-
-        spawn(async move {
-            let mut interval: Interval = time::interval(delay);
-            interval.tick().await;
-
-            loop {
-                interval.tick().await;
-
-                let event_to_send = {
-                    let mut latest = latest_event_clone.lock().await;
-                    latest.take()
-                };
-
-                if let Some(event) = event_to_send {
-                    let _ = shell_runtime_clone.clone().forward_core_operation_output(event.0, event.1).await;
-                }
-            }
-        });
-
-        Self { latest_event }
-    }
-
-    pub async fn send(&self, request_id: u32, event: CoreOperationOutput) {
-        let mut latest = self.latest_event.lock().await;
-        *latest = Some((request_id, event));
-    }
-}
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]

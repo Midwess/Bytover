@@ -1,9 +1,12 @@
 use std::ops::Deref;
 use gloo::worker::{HandlerId, Worker, WorkerScope};
 use js_sys::{Array, Uint8Array};
-use n0_future::task::spawn;
+use n0_future::task::{spawn, JoinHandle};
+use n0_future::time::{Interval, interval};
 use serde::{Deserialize, Serialize};
 use shared::CoreOperation;
+use shared::app::operations::CoreOperationOutput;
+use shared::app::AppEvent;
 use crate::{deserialize, serialize};
 use crate::di_container::DiContainer;
 use crate::executor::executor::NativeExecutor;
@@ -13,6 +16,11 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::File;
 use shared::app::file_system::file::LocalResourcePath;
 use std::sync::Arc;
+use std::time::Duration;
+use crux_core::bridge::ResolveSerialized::Once;
+use futures::lock::Mutex;
+use once_cell::sync::OnceCell;
+use core_services::utils::never_send::NeverSend;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::file_api::file_extension::VecExtension;
 
@@ -54,9 +62,76 @@ pub enum NativeExecutorOutput {
 unsafe impl Send for NativeExecutorOutput {}
 unsafe impl Sync for NativeExecutorOutput {}
 
+pub struct ShellRuntime {
+    scope: NeverSend<WorkerScope<ExecutingWorker>>,
+    handler_id: OnceCell<HandlerId>
+}
+
+impl ShellRuntime {
+    pub fn new(scope: WorkerScope<ExecutingWorker>) -> Self {
+        Self { scope: NeverSend(scope), handler_id: OnceCell::new() }
+    }
+
+    pub fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) {
+        let Some(handler_id) = self.handler_id.get() else {
+            return;
+        };
+
+        let serialized_output = serialize(&output);
+        self.scope.respond(handler_id.clone(), WorkerMessage::new(NativeExecutorOutput::ForwardCoreOperationOutput(request_id, serialized_output)));
+    }
+
+    pub fn update(self: Arc<Self>, event: AppEvent) {
+        let Some(handler_id) = self.handler_id.get() else {
+            return;
+        };
+
+        let serialized_event = serialize(&event);
+        self.scope.respond(handler_id.clone(), WorkerMessage::new(NativeExecutorOutput::UpdateAppEvent(serialized_event)));
+    }
+}
+
+pub struct ThrottleShellRuntime {
+    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>,
+}
+
+impl ThrottleShellRuntime {
+    pub fn new(shell_runtime: Arc<ShellRuntime>, delay: Duration) -> Self {
+        let latest_event = Arc::new(Mutex::new(None::<(u32, CoreOperationOutput)>));
+        let latest_event_clone = latest_event.clone();
+        let shell_runtime_clone = shell_runtime.clone();
+
+        spawn(async move {
+            let mut interval: Interval = interval(delay);
+            interval.tick().await;
+
+            loop {
+                interval.tick().await;
+
+                let event_to_send = {
+                    let mut latest = latest_event_clone.lock().await;
+                    latest.take()
+                };
+
+                if let Some(event) = event_to_send {
+                    let _ = shell_runtime_clone.clone().forward_core_operation_output(event.0, event.1);
+                }
+            }
+        });
+
+        Self { latest_event }
+    }
+
+    pub async fn send(&self, request_id: u32, event: CoreOperationOutput) {
+        let mut latest = self.latest_event.lock().await;
+        *latest = Some((request_id, event));
+    }
+}
+
 pub struct ExecutingWorker {
     storage: FileStorage,
     native_executor: &'static NativeExecutor,
+    shell_runtime: Arc<ShellRuntime>,
 }
 
 impl Worker for ExecutingWorker {
@@ -68,10 +143,12 @@ impl Worker for ExecutingWorker {
         log::info!("Creating worker");
 
         let di_instance = DiContainer::get_instance();
+        let mut shell_runtime = Arc::new(ShellRuntime::new(scope.clone()));
 
         Self {
             storage: di_instance.file_storage(),
-            native_executor: di_instance.get_native_executor()
+            native_executor: di_instance.get_native_executor(),
+            shell_runtime,
         }
     }
 
@@ -83,6 +160,7 @@ impl Worker for ExecutingWorker {
         let scope = scope.clone();
         let native_executor = self.native_executor;
         let storage = self.storage.clone();
+        let shell_runtime = self.shell_runtime.clone();
         spawn(async move {
             match msg.deref() {
                 NativeExecutorOperation::HandleEffect(request_id, data) => {
@@ -92,7 +170,7 @@ impl Worker for ExecutingWorker {
                 }
                 NativeExecutorOperation::Init => {
                     let di_container = DiContainer::get_instance();
-                    di_container.init(Arc::new(crate::ShellRuntime {})).await;
+                    di_container.init(shell_runtime).await;
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::Void));
                 }
                 NativeExecutorOperation::AddDeviceFiles(files) => {
