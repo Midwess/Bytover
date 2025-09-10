@@ -1,0 +1,14 @@
+{
+  "name": "worker",
+  "collaborators": [
+    "Jimmy"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "worker_bg.wasm",
+    "worker.js",
+    "worker.d.ts"
+  ],
+  "browser": "worker.js",
+  "types": "worker.d.ts"
+}

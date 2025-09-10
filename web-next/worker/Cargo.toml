@@ -7,7 +7,14 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib", "lib", "staticlib"]
 
+[features]
+core = []
+native_executor = []
+default = ["core"]
+
 [dependencies]
+core-services = { workspace = true }
+log = { workspace = true }
 wasm = { path = "../wasm" }
 gloo-worker = { version = "0.5", features = [ "futures" ] }
 wasm-bindgen = "0.2.101"
