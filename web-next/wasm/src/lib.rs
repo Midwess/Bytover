@@ -17,15 +17,9 @@ use core_services::logger;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 use erased_serde::Serialize;
-use futures::lock::Mutex;
 use js_sys::{Array, Reflect};
-use n0_future::task::{spawn, JoinHandle};
-use n0_future::time;
-use n0_future::time::Interval;
-use shared::app::operations::CoreOperationOutput;
-use shared::app::AppEvent;
-use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use n0_future::task::spawn;
+use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
@@ -33,7 +27,7 @@ use web_sys::{window, File, FileSystemWritableFileStream};
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
 use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker, NativeExecutorOperation, NativeExecutorOutput, ShellRuntime, ThrottleShellRuntime};
+use crate::web_worker::executor::{ExecutingWorker, NativeExecutorInput, NativeExecutorOutput, ShellRuntime, ThrottleShellRuntime};
 use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
 
 static WORKER: LazyLock<NeverSend<WebWorkerBridge<ExecutingWorker>>> = LazyLock::new(|| {
@@ -101,13 +95,13 @@ pub async fn view() -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn init() {
-    let _ = WORKER.send(WorkerMessage::new(NativeExecutorOperation::Init)).await;
+    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::Init)).await;
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn add_device_files(files: &Array) -> Uint8Array {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::AddDeviceFiles(files.clone()))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::AddDeviceFiles(files.clone()))).await else {
         return Uint8Array::default()
     };
 
@@ -120,7 +114,7 @@ pub async fn add_device_files(files: &Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn get_device_file(resource_id: u64) -> Option<File> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::GetDeviceFile(resource_id))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::GetDeviceFile(resource_id))).await else {
         return None
     };
 
@@ -133,7 +127,7 @@ pub async fn get_device_file(resource_id: u64) -> Option<File> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn load_thumbnail_bytes(resource_id: u64) -> Option<Uint8Array> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::LoadThumbnailBytes(resource_id))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::LoadThumbnailBytes(resource_id))).await else {
         return None
     };
 
@@ -146,7 +140,7 @@ pub async fn load_thumbnail_bytes(resource_id: u64) -> Option<Uint8Array> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn load_thumbnail_source(path: Uint8Array) -> Option<String> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::LoadThumbnailSource(path))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::LoadThumbnailSource(path))).await else {
         return None
     };
 
@@ -159,13 +153,13 @@ pub async fn load_thumbnail_source(path: Uint8Array) -> Option<String> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn download_file_from_cache(path: Uint8Array, writer: FileSystemWritableFileStream) {
-    let _ = WORKER.send(WorkerMessage::new(NativeExecutorOperation::DownloadFileFromCache { path, writer })).await;
+    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::DownloadFileFromCache { path, writer })).await;
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorOperation::Execute(request_id, effect))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::Execute(request_id, effect))).await else {
         return Uint8Array::default()
     };
 

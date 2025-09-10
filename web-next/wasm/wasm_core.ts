@@ -64,8 +64,15 @@ import {
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
-import init_core, {view} from "core_wasm"
-import {process_event, NativeProcessor, handle_response} from "core_wasm";
+import init_core, {
+    add_device_files,
+    download_file_from_cache, execute, get_device_file,
+    init,
+    is_compatible,
+    load_thumbnail_source,
+    view
+} from "core_wasm"
+import {process_event, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
@@ -73,7 +80,6 @@ import {FileMetadata} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
 
 export class WasmCore {
-    nativeProcessor: NativeProcessor | null;
     // If it is not compatible, then the current browser is not supported.
     // We should recommend user to download the app instead.
     isCoreCompatible: Observable<boolean> = new Observable(true)
@@ -88,9 +94,7 @@ export class WasmCore {
 
     selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
 
-    constructor() {
-        this.nativeProcessor = null;
-    }
+    constructor() {}
 
     public useSelectedSession() {
         const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
@@ -262,7 +266,7 @@ export class WasmCore {
 
     public async launch() {
         await init_core();
-        const isCompatible = await NativeProcessor.is_compatible()
+        const isCompatible = await is_compatible()
         if (!isCompatible) {
             this.isCoreCompatible.set(false)
             return;
@@ -289,7 +293,7 @@ export class WasmCore {
         const coreOperation = appEffect.value;
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
-                this.nativeProcessor = await NativeProcessor.init()
+                await init()
                 this.isCoreReady.set(true)
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
@@ -317,7 +321,7 @@ export class WasmCore {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
                         const path = operation.value as LocalResourcePathVariantPlatformIdentifier;
                         const resourceId = BigInt(path.value.split("://")[1])
-                        const file = await this.nativeProcessor?.get_device_file(resourceId)
+                        const file = await get_device_file(resourceId)
                         if (!file) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
@@ -340,10 +344,10 @@ export class WasmCore {
                 break;
             }
             case CoreOperationVariantPersistent: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantRpc: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantVoid: {
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
@@ -353,13 +357,13 @@ export class WasmCore {
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantTransfer: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantInternet: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array()
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
@@ -402,7 +406,7 @@ export class WasmCore {
 
     async addFiles(files: (File | FileMetadata) []) {
         const files_only = files.filter(f => f instanceof File) as File[]
-        const data = await this.nativeProcessor?.add_device_files(files_only)
+        const data = await add_device_files(files_only)
         if (!data) return [];
 
         const selections = deserializeArray<ResourceSelection>(ResourceSelection, data)
@@ -411,14 +415,10 @@ export class WasmCore {
 
     async loadThumbnailSource(path: LocalResourcePath): Promise<string | undefined> {
         const data = serialize(path)
-        return this.nativeProcessor?.load_thumbnail_source(data)
+        return load_thumbnail_source(data)
     }
 
     async downloadFileFromCache(path: LocalResourcePath, filename: string): Promise<void> {
-        if (!this.nativeProcessor) {
-            throw new Error('Native processor not initialized')
-        }
-
         const data = serialize(path)
         
         // Create a file picker to save the file
@@ -429,7 +429,7 @@ export class WasmCore {
         const writable = await fileHandle.createWritable()
         
         try {
-            await this.nativeProcessor.download_file_from_cache(data, writable)
+            await download_file_from_cache(data, writable)
         } catch (error) {
             await writable.close()
             throw error

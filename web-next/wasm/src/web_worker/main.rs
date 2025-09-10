@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use futures::lock::Mutex;
-use gloo_worker::{Spawnable, Worker, WorkerBridge, WorkerSpawner};
+use gloo_worker::{Spawnable, Worker, WorkerBridge};
 use n0_future::task::spawn;
 use serde::{Deserialize, Serialize};
 use futures::channel::{oneshot, mpsc};

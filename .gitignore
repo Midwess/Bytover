@@ -20,3 +20,5 @@ rustc-ice-*.txt
 .fleet
 web-leptos/assets/style.css
 **/public/worker
+**/public/native-executor/
+**/public/core/

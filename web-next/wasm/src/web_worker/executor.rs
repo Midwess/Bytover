@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use gloo::worker::{HandlerId, Worker, WorkerScope};
 use js_sys::{Array, Uint8Array};
-use n0_future::task::{spawn, JoinHandle};
+use n0_future::task::spawn;
 use n0_future::time::{Interval, interval};
 use serde::{Deserialize, Serialize};
 use shared::CoreOperation;
@@ -17,7 +17,6 @@ use web_sys::File;
 use shared::app::file_system::file::LocalResourcePath;
 use std::sync::Arc;
 use std::time::Duration;
-use crux_core::bridge::ResolveSerialized::Once;
 use futures::lock::Mutex;
 use once_cell::sync::OnceCell;
 use core_services::utils::never_send::NeverSend;
@@ -25,7 +24,7 @@ use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::file_api::file_extension::VecExtension;
 
 #[derive(Serialize, Deserialize)]
-pub enum NativeExecutorOperation {
+pub enum NativeExecutorInput {
     HandleEffect(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     Init,
     AddDeviceFiles(#[serde(with = "serde_wasm_bindgen::preserve")] Array),
@@ -41,8 +40,8 @@ pub enum NativeExecutorOperation {
     Execute(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
 }
 
-unsafe impl Send for NativeExecutorOperation {}
-unsafe impl Sync for NativeExecutorOperation {}
+unsafe impl Send for NativeExecutorInput {}
+unsafe impl Sync for NativeExecutorInput {}
 
 #[derive(Serialize, Deserialize)]
 pub enum NativeExecutorOutput {
@@ -136,14 +135,14 @@ pub struct ExecutingWorker {
 
 impl Worker for ExecutingWorker {
     type Message = ();
-    type Input = WorkerMessage<NativeExecutorOperation>;
+    type Input = WorkerMessage<NativeExecutorInput>;
     type Output = WorkerMessage<NativeExecutorOutput>;
 
     fn create(scope: &WorkerScope<Self>) -> Self {
         log::info!("Creating worker");
 
         let di_instance = DiContainer::get_instance();
-        let mut shell_runtime = Arc::new(ShellRuntime::new(scope.clone()));
+        let shell_runtime = Arc::new(ShellRuntime::new(scope.clone()));
 
         Self {
             storage: di_instance.file_storage(),
@@ -163,21 +162,21 @@ impl Worker for ExecutingWorker {
         let shell_runtime = self.shell_runtime.clone();
         spawn(async move {
             match msg.deref() {
-                NativeExecutorOperation::HandleEffect(request_id, data) => {
+                NativeExecutorInput::HandleEffect(request_id, data) => {
                     let effect: CoreOperation = deserialize(&data);
                     let output = native_executor.handle(*request_id, effect).await;
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::Effects(*request_id, serialize(&output))));
                 }
-                NativeExecutorOperation::Init => {
+                NativeExecutorInput::Init => {
                     let di_container = DiContainer::get_instance();
                     di_container.init(shell_runtime).await;
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::Void));
                 }
-                NativeExecutorOperation::AddDeviceFiles(files) => {
+                NativeExecutorInput::AddDeviceFiles(files) => {
                     let paths = storage.add(files).await;
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::DeviceFiles(serialize(&paths))));
                 }
-                NativeExecutorOperation::GetDeviceFile(resource_id) => {
+                NativeExecutorInput::GetDeviceFile(resource_id) => {
                     let file = storage.get(*resource_id).await;
                     let result = file.map(|it| it.file.0);
                     if let Some(result) = result {
@@ -187,7 +186,7 @@ impl Worker for ExecutingWorker {
                         scope.respond(id, WorkerMessage::new(NativeExecutorOutput::Void));
                     }
                 }
-                NativeExecutorOperation::LoadThumbnailBytes(resource_id) => {
+                NativeExecutorInput::LoadThumbnailBytes(resource_id) => {
                     let repository = DiContainer::get_instance().get_local_resource_repository();
                     let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
                     let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
@@ -200,7 +199,7 @@ impl Worker for ExecutingWorker {
                     };
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::ThumbnailBytes(data.into_uint_array())))
                 }
-                NativeExecutorOperation::LoadThumbnailSource(path_data) => {
+                NativeExecutorInput::LoadThumbnailSource(path_data) => {
                     let path_vec = path_data.to_vec();
                     let options = crate::bincode_options();
                     let mut deser = bincode::Deserializer::from_slice(&path_vec, options);
@@ -246,7 +245,7 @@ impl Worker for ExecutingWorker {
                     
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::ThumbnailSource(Some(url))))
                 }
-                NativeExecutorOperation::DownloadFileFromCache { path, writer } => {
+                NativeExecutorInput::DownloadFileFromCache { path, writer } => {
                     let path_vec = path.to_vec();
                     let options = crate::bincode_options();
                     let mut deser = bincode::Deserializer::from_slice(&path_vec, options);
@@ -273,7 +272,7 @@ impl Worker for ExecutingWorker {
                     let _ = JsFuture::from(writer.close()).await;
                     scope.respond(id, WorkerMessage::new(NativeExecutorOutput::Void))
                 }
-                NativeExecutorOperation::Execute(request_id, effect) => {
+                NativeExecutorInput::Execute(request_id, effect) => {
                     let effect: CoreOperation = deserialize(&effect);
                     let output = native_executor.handle(*request_id, effect).await;
                     let result = crate::handle_response(*request_id, serialize(&output)).await;
