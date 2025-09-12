@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::file_system::file::LocalResourcePath;
 use crate::app::AppRequestBuilder;
+use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
 use crate::entities::device::DeviceInfo;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -28,6 +29,7 @@ pub enum DeviceOperation {
 pub enum DeviceOperationOutput {
     DeviceInfo(DeviceInfo),
     GetGeoLocation(Option<GeoLocation>),
+    /// It could be Data, or the path to the thumbnail file.
     LoadThumbnailPng(Option<Vec<u8>>)
 }
 
@@ -56,10 +58,11 @@ impl DeviceOperation {
         })
     }
 
-    pub fn load_thumbnail_png(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<Vec<u8>>>> {
+    pub fn load_thumbnail_png(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
         Command::request_from_shell(CoreOperation::Device(DeviceOperation::LoadThumbnailPng(path))).map(|output| match output {
-            CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(path)) => path,
-            _ => None
+            CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(data)) => (data, None),
+            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::AddThumbnail(path))) => (None, Some(path)),
+            _ => (None, None)
         })
     }
 }

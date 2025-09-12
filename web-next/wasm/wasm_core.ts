@@ -60,7 +60,8 @@ import {
     PeerViewModel,
     LocalResourcePath,
     MessageToShellVariantNotify,
-    LocalResourcePersistentOperationVariantAdd
+    LocalResourcePersistentOperationVariantAdd, PersistentOperationVariantLocalResource,
+    LocalResourcePersistentOperationOutputVariantAddThumbnail, LocalResourcePersistentOperationVariantAddThumbnail
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -324,8 +325,13 @@ export class WasmCore {
 
                         try {
                             const buffer = await getThumbnailFromFile(file)
-                            const response = handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(Array.from(buffer)))))
-                            return response
+                            const ops = new CoreOperationVariantPersistent(new PersistentOperationVariantLocalResource(new LocalResourcePersistentOperationVariantAddThumbnail(Array.from(buffer), resourceId)));
+                            const opsOut = await this.nativeProcessor?.execute_operation(serialize(ops));
+                            if (!opsOut) {
+                                throw new Error("Failed to save thumbnail")
+                            }
+
+                            return handle_response(request_id, opsOut)
                         }
                         catch (e) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))

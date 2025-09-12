@@ -38,6 +38,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
+use shared::app::operations::persistent::{LocalResourcePersistentOperation, LocalResourcePersistentOperationOutput, PersistentOperation, PersistentOperationOutput};
 use crate::web_worker::core::{CoreWorkerOperation, CoreWorker};
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 
@@ -307,6 +308,12 @@ impl NativeProcessor {
         }
 
         let _ = JsFuture::from(writer.close()).await;
+    }
+
+    pub async fn execute_operation(&self, effect: Uint8Array) -> Uint8Array {
+        let effect: CoreOperation = deserialize(&effect);
+        let output = self.executor.handle(u32::MAX, effect).await;
+        serialize(&output)
     }
 
     pub async fn execute(&self, request_id: u32, effect: Uint8Array) -> Uint8Array {

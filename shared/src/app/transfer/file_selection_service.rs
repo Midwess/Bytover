@@ -71,13 +71,19 @@ impl ResourceTransferSelectionService {
 
             let mut new_resource = new_resources.pop().unwrap();
 
-            if let Some(thumbnail_png) = DeviceOperation::load_thumbnail_png(selection.path.clone()).into_future(ctx.clone()).await {
-                let thumbnail = LocalResourcePersistentOperation::add_thumbnail(thumbnail_png, local_resource.order_id)
-                    .into_future(ctx.clone())
-                    .await;
+            match DeviceOperation::load_thumbnail_png(selection.path.clone()).into_future(ctx.clone()).await {
+                (Some(thumbnail_png), _) => {
+                    let thumbnail = LocalResourcePersistentOperation::add_thumbnail(thumbnail_png, local_resource.order_id)
+                        .into_future(ctx.clone())
+                        .await;
 
-                new_resource.thumbnail_path = Some(thumbnail);
-            }
+                    new_resource.thumbnail_path = Some(thumbnail);
+                }
+                (_, Some(thumbnail_path)) => {
+                    new_resource.thumbnail_path = Some(thumbnail_path);
+                }
+                _ => {}
+            };
 
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                 loaded: vec![],
