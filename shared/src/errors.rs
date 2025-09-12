@@ -1,5 +1,5 @@
-use crate::app::file_system::file::LocalResourcePath;
 use crate::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use crate::entities::file_system::file::LocalResourcePath;
 use crate::rpc::errors::RpcErrors;
 use serde::{Deserialize, Serialize};
 

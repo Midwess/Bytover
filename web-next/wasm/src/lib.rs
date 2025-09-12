@@ -15,34 +15,27 @@ use crate::di_container::DiContainer;
 use crate::executor::executor::NativeExecutor;
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::storage::FileStorage;
+use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
+use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
 use bincode::Options;
 use core_services::logger;
+use core_services::utils::never_send::NeverSend;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 use erased_serde::Serialize;
 use file_api::path_extension::WebExtLocalResourcePath;
-use futures::lock::Mutex;
 use js_sys::{Array, Reflect};
-use n0_future::task::{spawn, JoinHandle};
-use n0_future::time;
-use n0_future::time::Interval;
-use shared::app::file_system::file::LocalResourcePath;
-use shared::app::operations::CoreOperationOutput;
-use shared::app::AppEvent;
+use serde::Deserialize;
+use shared::entities::file_system::file::LocalResourcePath;
 use shared::CoreOperation;
-use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
-use serde::Deserialize;
-use core_services::utils::never_send::NeverSend;
-use shared::app::operations::persistent::{LocalResourcePersistentOperation, LocalResourcePersistentOperationOutput, PersistentOperation, PersistentOperationOutput};
-use crate::web_worker::core::{CoreWorkerOperation, CoreWorker};
-use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 
-static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
+static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
+    LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
 
 #[wasm_bindgen]
 extern "C" {
@@ -50,61 +43,6 @@ extern "C" {
     async fn forward_core_operation_output(request_id: u32, core_operation_output: Uint8Array);
     #[wasm_bindgen(js_namespace = core)]
     async fn update_app_event(app_event: Uint8Array);
-}
-
-pub struct ShellRuntime {}
-
-impl ShellRuntime {
-    fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) -> JoinHandle<()> {
-        spawn(async move {
-            let serialized_output = serialize(&output);
-            forward_core_operation_output(request_id, serialized_output).await;
-        })
-    }
-
-    fn update(self: Arc<Self>, event: AppEvent) -> JoinHandle<()> {
-        spawn(async move {
-            let serialized_event = serialize(&event);
-            update_app_event(serialized_event).await;
-        })
-    }
-}
-
-pub struct ThrottleShellRuntime {
-    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>
-}
-
-impl ThrottleShellRuntime {
-    pub fn new(shell_runtime: Arc<ShellRuntime>, delay: Duration) -> Self {
-        let latest_event = Arc::new(Mutex::new(None::<(u32, CoreOperationOutput)>));
-        let latest_event_clone = latest_event.clone();
-        let shell_runtime_clone = shell_runtime.clone();
-
-        spawn(async move {
-            let mut interval: Interval = time::interval(delay);
-            interval.tick().await;
-
-            loop {
-                interval.tick().await;
-
-                let event_to_send = {
-                    let mut latest = latest_event_clone.lock().await;
-                    latest.take()
-                };
-
-                if let Some(event) = event_to_send {
-                    let _ = shell_runtime_clone.clone().forward_core_operation_output(event.0, event.1).await;
-                }
-            }
-        });
-
-        Self { latest_event }
-    }
-
-    pub async fn send(&self, request_id: u32, event: CoreOperationOutput) {
-        let mut latest = self.latest_event.lock().await;
-        *latest = Some((request_id, event));
-    }
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -219,7 +157,7 @@ impl NativeProcessor {
 
     pub async fn init() -> Self {
         let di_container = DiContainer::get_instance();
-        di_container.init(Arc::new(ShellRuntime {})).await;
+        di_container.init().await;
 
         Self {
             storage: di_container.file_storage(),
@@ -323,7 +261,10 @@ impl NativeProcessor {
     }
 }
 
-pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deserialize<'de> {
+pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E
+where
+    E: for<'de> Deserialize<'de>
+{
     let vec = data.to_vec();
     let options = bincode_options();
     let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);

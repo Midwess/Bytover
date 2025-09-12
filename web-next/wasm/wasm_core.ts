@@ -9,7 +9,6 @@ import {
     EffectVariantAppCapabilities,
     Request,
     AppViewModel,
-    MessageToShell,
     AppEvent,
     CoreOperationVariantInitNativeExecutor,
     CoreOperationOutputVariantVoid,
@@ -37,7 +36,6 @@ import {
     CoreOperationVariantInternet,
     CoreOperationVariantP2P,
     CoreOperationVariantNotified,
-    MessageToShellVariantHandleResponse,
     MessageToShellResponseVariantVoidResponse,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
@@ -59,9 +57,8 @@ import {
     ReceiveCloudSessionViewModel,
     PeerViewModel,
     LocalResourcePath,
-    MessageToShellVariantNotify,
-    LocalResourcePersistentOperationVariantAdd, PersistentOperationVariantLocalResource,
-    LocalResourcePersistentOperationOutputVariantAddThumbnail, LocalResourcePersistentOperationVariantAddThumbnail
+    PersistentOperationVariantLocalResource,
+    LocalResourcePersistentOperationVariantAddThumbnail
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";

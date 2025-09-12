@@ -12,7 +12,6 @@ use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::IdbPoolProvider;
-use crate::ShellRuntime;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -40,7 +39,6 @@ static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::new();
 
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
-    shell: OnceCell<Arc<ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
     file_storage: OnceCell<FileStorage>,
@@ -58,7 +56,6 @@ impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
-                shell: OnceCell::new(),
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
@@ -115,9 +112,8 @@ impl DiContainer {
         }
     }
 
-    pub async fn init(&self, shell: Arc<ShellRuntime>) {
-        let _ = self.shell.set(shell);
-        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
+    pub async fn init(&self) {
+        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new()));
 
         init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });

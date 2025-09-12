@@ -1,5 +1,4 @@
 use crate::app::core_utils::CoreCommandUtils;
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
@@ -23,6 +22,7 @@ use crate::app::view_models::receive_session::{
 };
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
+use crate::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
@@ -412,7 +412,6 @@ impl AppModule<BitBridge> for TransferModule {
                         continue;
                     };
 
-                    log::info!("Update transfer session {:?}", updated.order_id);
                     model.transfer.transfer_sessions[session_pos] = updated;
                 }
 

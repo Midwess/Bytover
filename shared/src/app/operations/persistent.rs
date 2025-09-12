@@ -1,10 +1,10 @@
 use std::future::Future;
 
 use super::{CoreOperation, CoreOperationOutput};
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::repository::transfer_session::TransferSessionId;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::app::AppRequestBuilder;
+use crate::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::user::User;

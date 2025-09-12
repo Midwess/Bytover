@@ -1,5 +1,5 @@
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::transfer::session::{TransferProgress, TransferType};
+use crate::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::{cloud_resource_message, CloudResourceMessage, ResourceMessage, ResourceTypeMessage};
 

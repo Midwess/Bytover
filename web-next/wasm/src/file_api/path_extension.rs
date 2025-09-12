@@ -1,4 +1,4 @@
-use shared::app::file_system::file::LocalResourcePath;
+use shared::entities::file_system::file::LocalResourcePath;
 
 pub trait WebExtLocalResourcePath {
     fn device_file(id: u64) -> Self;

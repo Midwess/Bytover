@@ -4,9 +4,9 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::file_system::file::LocalResource;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::app::AppRequestBuilder;
+use crate::entities::file_system::file::LocalResource;
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};

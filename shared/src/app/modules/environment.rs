@@ -35,7 +35,6 @@ impl AppModule<BitBridge> for EnvironmentModule {
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             EnvironmentEvent::AppLaunched => {
-                log::info!("Received AppLaunched event, starting core executor");
                 let authentication_service = self.authentication_service;
                 Command::new(|ctx| async move {
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;

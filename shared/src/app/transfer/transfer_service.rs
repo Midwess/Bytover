@@ -7,7 +7,6 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 use super::session::TransferSession;
 use super::target::TransferTarget;
 use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::file_system::file::{LocalResource, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
@@ -15,6 +14,7 @@ use crate::app::operations::transfer::{TransferOperation, TransferOperationOutpu
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
+use crate::entities::file_system::file::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
 
@@ -399,7 +399,6 @@ impl TransferService {
         });
 
         let mut stream = cmd.stream_from_shell(request);
-        log::info!(target: "transfer", "Begin subscribing to public transfer session: {transfer_session:?}");
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(transfer) => match transfer {
@@ -453,7 +452,5 @@ impl TransferService {
                 _ => return
             };
         }
-
-        log::info!(target: "transfer", "Complete subscribing to public transfer session");
     }
 }

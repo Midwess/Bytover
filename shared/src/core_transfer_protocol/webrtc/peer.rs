@@ -1,4 +1,3 @@
-use crate::app::file_system::file::{LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent::SessionResourceThumbnailFullFilled;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
@@ -11,6 +10,7 @@ use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use crate::core_transfer_protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::core_transfer_protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::core_transfer_protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
+use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use core_services::utils::cancellation::{AbortError, AbortableExt};
 use futures::channel::mpsc;

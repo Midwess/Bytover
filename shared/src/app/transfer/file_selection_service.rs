@@ -2,12 +2,12 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::file_system::file::{LocalResourcePath, ResourceType};
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
+use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {

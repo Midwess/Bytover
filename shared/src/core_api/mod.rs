@@ -1,10 +1,10 @@
 pub mod network;
 
-use crate::app::file_system::file::LocalResourcePath;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::app::AppEvent;
+use crate::entities::file_system::file::LocalResourcePath;
 pub use core_services::local_storage::abstraction::IOCursor as IOReader;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::task::{noop_waker, Context, Poll};

@@ -398,7 +398,7 @@ impl IOReader for IOReaderBrowserCacheImpl {
         if let Some(val) = val {
             let val = val.unchecked_into::<Uint8Array>().to_vec();
             if let Some(result) = extract_from_buffer(&val, self.current_offset) {
-                if result.len() > 0 {
+                if !result.is_empty() {
                     let read_bytes_len = result.len();
                     self.read_chunk.extend_from_slice(&result);
                     self.update_position_after_read(read_bytes_len);
@@ -428,8 +428,17 @@ impl IOReader for IOReaderBrowserCacheImpl {
             return Ok(None);
         }
 
-        log::info!("Cache is not completed {} {} - {}, ending it", cache.resource.id, self.current_offset, self.current_chunk_index);
-        Err(anyhow!("Cache is not completed, ended at chunk index: {}, offset: {}", self.current_chunk_index, self.current_offset))
+        log::info!(
+            "Cache is not completed {} {} - {}, ending it",
+            cache.resource.id,
+            self.current_offset,
+            self.current_chunk_index
+        );
+        Err(anyhow!(
+            "Cache is not completed, ended at chunk index: {}, offset: {}",
+            self.current_chunk_index,
+            self.current_offset
+        ))
     }
 
     async fn total_size(&self) -> Result<u64> {

@@ -1,7 +1,7 @@
-use crate::app::file_system::file::{LocalResource, LocalResourcePath};
 use crate::app::repository::errors::PersistenceError;
 use crate::app::transfer::session::{TransferProgress, TransferSession, TransferType};
 use crate::app::transfer::target::TransferTarget;
+use crate::entities::file_system::file::{LocalResource, LocalResourcePath};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;

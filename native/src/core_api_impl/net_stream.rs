@@ -1,10 +1,10 @@
 use anyhow::anyhow;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::future::join_all;
-use shared::app::file_system::file::LocalResourcePath;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
+use shared::entities::file_system::file::LocalResourcePath;
 use std::sync::Arc;
 use tokio::io::{duplex, AsyncWriteExt};
 use tokio::task::JoinHandle;

@@ -4,10 +4,10 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::file_system::file::LocalResourcePath;
-use crate::app::AppRequestBuilder;
 use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
+use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
+use crate::entities::file_system::file::LocalResourcePath;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -58,10 +58,14 @@ impl DeviceOperation {
         })
     }
 
-    pub fn load_thumbnail_png(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
+    pub fn load_thumbnail_png(
+        path: LocalResourcePath
+    ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
         Command::request_from_shell(CoreOperation::Device(DeviceOperation::LoadThumbnailPng(path))).map(|output| match output {
             CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(data)) => (data, None),
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::AddThumbnail(path))) => (None, Some(path)),
+            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+                LocalResourcePersistentOperationOutput::AddThumbnail(path)
+            )) => (None, Some(path)),
             _ => (None, None)
         })
     }

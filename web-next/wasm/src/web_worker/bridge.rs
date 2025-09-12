@@ -1,30 +1,30 @@
+use crate::web_worker::codec::WorkerMessageCodec;
+use futures::channel::{mpsc, oneshot};
+use futures::lock::Mutex;
+use futures::StreamExt;
+use gloo_worker::{Spawnable, Worker, WorkerBridge};
+use n0_future::task::spawn;
+use once_cell::sync::OnceCell;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use futures::lock::Mutex;
-use gloo_worker::{Spawnable, Worker, WorkerBridge};
-use n0_future::task::spawn;
-use serde::{Deserialize, Serialize};
-use futures::channel::{oneshot, mpsc};
-use futures::StreamExt;
-use once_cell::sync::OnceCell;
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
-use crate::web_worker::codec::WorkerMessageCodec;
 
 /// To control worker on main threads
 #[derive(Serialize, Deserialize)]
 pub struct WorkerMessage<R>
 where
-    R: Serialize,
+    R: Serialize
 {
     id: String,
-    pub message: R,
+    pub message: R
 }
 
 impl<R> Deref for WorkerMessage<R>
 where
-    R: Serialize,
+    R: Serialize
 {
     type Target = R;
 
@@ -36,19 +36,19 @@ where
 unsafe impl<R> Send for WorkerMessage<R> where R: Serialize {}
 unsafe impl<R> Sync for WorkerMessage<R> where R: Serialize {}
 
-impl<R> WorkerMessage<R> where R: Serialize {
+impl<R> WorkerMessage<R>
+where
+    R: Serialize
+{
     pub fn new(message: R) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
-            message,
+            message
         }
     }
 
     pub fn response(id: String, message: R) -> Self {
-        Self {
-            id,
-            message
-        }
+        Self { id, message }
     }
 }
 
@@ -57,7 +57,10 @@ pub trait TrustedWorkerMessage: Serialize + DeserializeOwned + Send + Sync + 'st
     fn set_id(&mut self, request_id: String);
 }
 
-impl<R> TrustedWorkerMessage for WorkerMessage<R> where R: Serialize + DeserializeOwned + Send + Sync + 'static {
+impl<R> TrustedWorkerMessage for WorkerMessage<R>
+where
+    R: Serialize + DeserializeOwned + Send + Sync + 'static
+{
     fn id(&self) -> &str {
         &self.id
     }

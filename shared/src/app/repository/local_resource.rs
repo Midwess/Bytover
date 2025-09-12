@@ -1,6 +1,6 @@
-use crate::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use crate::app::repository::errors::PersistenceError;
 use crate::core_api::{IOReader, IOWriter};
+use crate::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;

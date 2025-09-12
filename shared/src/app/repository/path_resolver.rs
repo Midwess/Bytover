@@ -1,4 +1,4 @@
-use crate::app::file_system::file::LocalResourcePath;
+use crate::entities::file_system::file::LocalResourcePath;
 use std::path::PathBuf;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

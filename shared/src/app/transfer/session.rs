@@ -4,7 +4,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use super::target::TransferTarget;
-use crate::app::file_system::file::LocalResource;
+use crate::entities::file_system::file::LocalResource;
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
 

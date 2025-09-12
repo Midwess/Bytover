@@ -1,8 +1,8 @@
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use devlog_sdk::distributed_id::gen_id;
 use futures::lock::Mutex;
-use shared::app::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use shared::app::transfer::file_selection_service::ResourceSelection;
+use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
