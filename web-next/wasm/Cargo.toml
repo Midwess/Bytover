@@ -7,10 +7,6 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib", "lib", "staticlib"]
 
-[[bin]]
-name = "worker"
-path = "src/bin/worker.rs"
-
 [profile.release]
 opt-level = 3
 lto = true
@@ -51,9 +47,7 @@ futures-channel = "0.3.31"
 wasm-bindgen-futures = { version = "0.4.50" }
 js-sys = "0.3.78"
 async-broadcast = "0.7.2"
-gloo = { version = "0.11.0", features = ["worker", "gloo-worker"] }
 gloo-worker = "0.5.0"
-async-once-cell = "0.5.4"
 uuid = { version = "1.18.0", features = ["v4"] }
 
 [package.metadata.wasm-pack.profile.release]

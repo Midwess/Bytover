@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,
     pub local_resource_repository: Arc<dyn LocalResourceRepository>,
-    pub transfer_session_repository: Box<dyn TransferSessionRepository>
+    pub transfer_session_repository: Arc<dyn TransferSessionRepository>
 }
 
 #[async_trait::async_trait(?Send)]
@@ -20,7 +20,7 @@ impl NativePersistent for NativePersistentImpl {
         &*self.local_resource_repository
     }
 
-    fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository> {
-        &self.transfer_session_repository
+    fn transfer_session_repository(&self) -> &dyn TransferSessionRepository {
+        &*self.transfer_session_repository
     }
 }

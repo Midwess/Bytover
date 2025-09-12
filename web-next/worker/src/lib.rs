@@ -6,5 +6,4 @@ use wasm::web_worker::core::CoreWorker;
 #[wasm_bindgen(start)]
 pub async fn start_worker() {
     CoreWorker::registrar().encoding::<WorkerMessageCodec>().register();
-    // ExecutingWorker::registrar().encoding::<WorkerMessageCodec>().register();
 }

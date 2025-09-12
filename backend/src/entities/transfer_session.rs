@@ -81,14 +81,11 @@ impl TransferSession {
     }
 
     pub fn current_resource(&self) -> Option<&TransferResource> {
-        let Some(in_progress_resource_id) = self
+        let in_progress_resource_id = self
             .progress
             .iter()
             .find(|it| matches!(it.status(), TransferProgressStatus::InProgress(_)))
-            .map(|it| it.resource_id())
-        else {
-            return None
-        };
+            .map(|it| it.resource_id())?;
 
         let in_progress_resource = self.resources.iter().find(|resource| resource.order_id() == in_progress_resource_id);
 

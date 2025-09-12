@@ -60,7 +60,6 @@ impl NetStreamInner for NetStreamInnerImpl {
             let tx = tx.clone();
             let onload_cb = Closure::<dyn FnMut()>::new(move || {
                 let status = xhr_clone.status().unwrap_or(0);
-                log::info!("The upload process is completed with status {status}");
                 if (200..300).contains(&status) {
                     let _ = tx.unbounded_send(NetStreamEvent::Completed);
                 } else {
@@ -144,7 +143,6 @@ impl NetStreamInner for NetStreamInnerImpl {
 
     async fn end(&mut self) -> anyhow::Result<()> {
         if let Some(xhr) = self.xhr.take() {
-            log::info!("Aborting upload");
             xhr.abort().map_err(|it| anyhow!("Abort upload errors {it:?}"))?;
         }
 

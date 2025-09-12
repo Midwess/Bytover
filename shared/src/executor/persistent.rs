@@ -20,7 +20,7 @@ use devlog_sdk::distributed_id::gen_id;
 pub trait NativePersistent: Send + Sync {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
-    fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository>;
+    fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
 
     async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
         match effect {
@@ -114,9 +114,7 @@ pub trait NativePersistent: Send + Sync {
 
                 let result = self.local_resource_repository().find_one(&id).await;
                 match result {
-                    Ok(resource) => {
-                        PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(resource))
-                    }
+                    Ok(resource) => PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(resource)),
                     Err(err) => {
                         log::error!("Failed to find local resource: {err:?}");
                         PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(None))
@@ -172,7 +170,6 @@ pub trait NativePersistent: Send + Sync {
                 };
 
                 let result = self.transfer_session_repository().find_all(Some(&id), None, None).await;
-                log::info!("Found transfer sessions: {:?}", result.as_ref().map(|it| it.len()));
                 match result {
                     Ok(sessions) => PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(sessions)),
                     Err(err) => {

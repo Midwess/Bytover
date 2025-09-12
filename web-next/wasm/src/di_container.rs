@@ -116,22 +116,18 @@ impl DiContainer {
     }
 
     pub async fn init(&self, shell: Arc<ShellRuntime>) {
-        log::info!("Initializing DI container");
         let _ = self.shell.set(shell);
         let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
 
         init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
 
-        log::info!("Initializing database pool");
         let pool = PoolBuilder::new(local_db)
             .max_pool_size(5)
             .min_pool_size(1)
             .resource_idle_timeout(Duration::from_secs(5))
             .build()
             .await;
-
-        log::info!("Database pool initialized");
 
         let _ = self.db.set(pool);
         let _ = self.file_storage.set(FileStorage::new());
@@ -171,13 +167,20 @@ impl DiContainer {
         repo
     }
 
-    pub fn get_transfer_session_repository(&self) -> impl TransferSessionRepository {
-        TransferSessionRepositoryImpl {
+    pub fn get_transfer_session_repository(&self) -> Arc<dyn TransferSessionRepository> {
+        if let Some(repository) = self.transfer_repository.get() {
+            return repository.clone();
+        }
+
+        let repo = Arc::new(TransferSessionRepositoryImpl {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
                 .build()
-        }
+        });
+
+        let _ = self.transfer_repository.set(repo.clone());
+        repo
     }
 
     pub fn get_cloud_server(&self) -> CloudServer<Client> {
@@ -209,7 +212,7 @@ impl DiContainer {
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
                 local_resource_repository: self.get_local_resource_repository().await,
-                transfer_session_repository: Box::new(self.get_transfer_session_repository())
+                transfer_session_repository: self.get_transfer_session_repository()
             }),
             transfer: Box::new(TransferNativeImpl {
                 web_rtc: web_rtc.clone(),

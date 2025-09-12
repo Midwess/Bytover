@@ -286,7 +286,6 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
-                log::info!("Start public transfer {to_emails:?}");
                 let selected_resources = model.transfer.selected_resources.clone();
 
                 if let Some(user) = model.authentication.user.clone() {

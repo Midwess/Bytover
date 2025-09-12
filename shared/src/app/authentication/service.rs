@@ -29,7 +29,6 @@ impl AuthenticationService {
             }
         };
 
-        log::info!(target: "auth", "Updated sign in session");
         if user.is_none() {
             let session = SessionPersistentOperation::get_session().into_future(ctx.clone()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {

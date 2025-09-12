@@ -43,7 +43,6 @@ impl SignallingClient {
         let addr = self.socket_addr.clone();
         let handle = spawn(async move {
             loop {
-                log::info!("Starting signalling client at {addr}");
                 let (mut sender, receiver) = match connect(addr.clone(), options.clone()) {
                     Ok(socket) => socket,
                     Err(err) => {

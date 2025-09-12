@@ -19,7 +19,7 @@ impl NativePersistent for NativePersistentImpl {
         &*self.local_resource_repository
     }
 
-    fn transfer_session_repository(&self) -> &Box<dyn TransferSessionRepository> {
-        &self.transfer_session_repository
+    fn transfer_session_repository(&self) -> &dyn TransferSessionRepository {
+        &*self.transfer_session_repository
     }
 }

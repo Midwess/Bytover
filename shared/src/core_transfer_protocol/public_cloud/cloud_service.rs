@@ -276,9 +276,7 @@ where
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    log::info!("Resource {order_id:?} uploaded, response to {core_request_id:?}");
                     let _ = self.core_bridge.response(core_request_id, msg).await;
-                    log::info!("Resource {order_id:?} uploaded, response to {core_request_id:?} done");
 
                     self.server.commit_file_upload(session_order_id, order_id, UploadStatus::Success, None).await?
                 }
@@ -351,7 +349,6 @@ where
                     return Err(CloudTransferErrors::from(e));
                 }
                 NetStreamEvent::Completed => {
-                    log::info!("Resource {resource_path:?} uploaded");
                     progress.success();
                     break;
                 }

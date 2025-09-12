@@ -50,7 +50,6 @@ impl NearbyService {
         let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
         let mut start_p2p_server_stream = ctx.stream_from_shell(start_p2p_server_request);
 
-        log::info!(target: "nearby", "Starting nearby server");
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {

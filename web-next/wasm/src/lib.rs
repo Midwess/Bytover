@@ -25,28 +25,23 @@ use futures::lock::Mutex;
 use js_sys::{Array, Reflect};
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::time;
-use n0_future::time::{sleep, Interval};
+use n0_future::time::Interval;
 use shared::app::file_system::file::LocalResourcePath;
 use shared::app::operations::CoreOperationOutput;
-use shared::app::{AppEvent, BitBridge};
+use shared::app::AppEvent;
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use async_once_cell::OnceCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
-use gloo::worker::{Registrable, Spawnable};
-use gloo_worker::WorkerBridge;
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
-use crate::web_worker::codec::WorkerMessageCodec;
-use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker, ExecutingWorkerInput};
-use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
+use crate::web_worker::core::{CoreWorkerOperation, CoreWorker};
+use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 
-static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn()));
+static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
 
 #[wasm_bindgen]
 extern "C" {
@@ -114,7 +109,7 @@ impl ThrottleShellRuntime {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn process_event(data: Uint8Array) -> Uint8Array {
-    let msg = WorkerMessage::new(CoreRequest::Update(data));
+    let msg = WorkerMessage::new(CoreWorkerOperation::Update(data));
     let Some(response) = CORE_WORKER.send(msg).await else {
         return Uint8Array::default()
     };
@@ -125,7 +120,7 @@ pub async fn process_event(data: Uint8Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
-    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::HandleResponse(id, data))).await else {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::HandleResponse(id, data))).await else {
         return Uint8Array::default()
     };
 
@@ -135,7 +130,7 @@ pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn view() -> Uint8Array {
-    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::View)).await else {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::View)).await else {
         return Uint8Array::default()
     };
 
@@ -212,7 +207,6 @@ impl NativeProcessor {
             return false;
         }
 
-        log::info!("Storage quota: {} bytes", quota_val.as_f64().unwrap_or(0.0));
         let quota = quota_val.as_f64().unwrap_or(0.0);
         if quota < 100.0 * 1024.0 * 1024.0 {
             log::info!("Storage quota less than 100MB ({} MB)", quota / 1024.0 / 1024.0);
