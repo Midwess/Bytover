@@ -5,7 +5,7 @@ use shared::executor::persistent::NativePersistent;
 use std::sync::Arc;
 
 pub struct NativePersistentImpl {
-    pub auth_session_repository: Box<dyn AuthSessionRepository>,
+    pub auth_session_repository: &'static Box<dyn AuthSessionRepository>,
     pub local_resource_repository: Arc<dyn LocalResourceRepository>,
     pub transfer_session_repository: Box<dyn TransferSessionRepository>
 }

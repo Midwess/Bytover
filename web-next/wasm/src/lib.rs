@@ -26,20 +26,32 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, File, FileSystemWritableFileStream};
 use serde::Deserialize;
 use core_services::utils::never_send::NeverSend;
-use crate::web_worker::core::{CoreRequest, CoreWorker};
-use crate::web_worker::executor::{ExecutingWorker, NativeExecutorInput, NativeExecutorOutput, ShellRuntime, ThrottleShellRuntime};
-use crate::web_worker::main::{WebWorkerBridge, WorkerMessage};
+use crate::web_worker::core::{CoreWorkerOperation, CoreWorker};
+use crate::web_worker::shell::{ShellWorker, ShellWorkerOperation, ShellWorkerOperationOutput, ShellRuntime, ThrottleShellRuntime};
+use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 
-static WORKER: LazyLock<NeverSend<WebWorkerBridge<ExecutingWorker>>> = LazyLock::new(|| {
+pub type CoreRequestId = u32;
+pub type CoreOperationOutputEncoded = Uint8Array;
+pub type CoreOperationEncoded = Uint8Array;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = core)]
+    async fn forward_core_operation_output(request_id: u32, core_operation_output: Uint8Array);
+    #[wasm_bindgen(js_namespace = core)]
+    async fn update_app_event(app_event: Uint8Array);
+}
+
+static WORKER: LazyLock<NeverSend<WebWorkerBridge<ShellWorker>>> = LazyLock::new(|| {
     let worker = NeverSend(WebWorkerBridge::spawn("native-executor"));
-    worker.on_exhausted(|msg: WorkerMessage<NativeExecutorOutput>| {
+    worker.on_exhausted(|msg: WorkerMessage<ShellWorkerOperationOutput>| {
         let msg = msg.message;
         spawn(async move {
             match msg {
-                NativeExecutorOutput::ForwardCoreOperationOutput(request_id, data) => {
+                ShellWorkerOperationOutput::ForwardCoreOperationOutput(request_id, data) => {
                     forward_core_operation_output(request_id, data).await;
                 },
-                NativeExecutorOutput::UpdateAppEvent(data) => {
+                ShellWorkerOperationOutput::UpdateAppEvent(data) => {
                     update_app_event(data).await;
                 }
                 _ => {}
@@ -52,19 +64,10 @@ static WORKER: LazyLock<NeverSend<WebWorkerBridge<ExecutingWorker>>> = LazyLock:
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> = LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core")));
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = core)]
-    async fn forward_core_operation_output(request_id: u32, core_operation_output: Uint8Array);
-    #[wasm_bindgen(js_namespace = core)]
-    async fn update_app_event(app_event: Uint8Array);
-}
-
-
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn process_event(data: Uint8Array) -> Uint8Array {
-    let msg = WorkerMessage::new(CoreRequest::Update(data));
+    let msg = WorkerMessage::new(CoreWorkerOperation::Update(data));
     let Some(response) = CORE_WORKER.send(msg).await else {
         return Uint8Array::default()
     };
@@ -75,7 +78,7 @@ pub async fn process_event(data: Uint8Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
-    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::HandleResponse(id, data))).await else {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::HandleResponse(id, data))).await else {
         return Uint8Array::default()
     };
 
@@ -85,7 +88,7 @@ pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn view() -> Uint8Array {
-    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreRequest::View)).await else {
+    let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::View)).await else {
         return Uint8Array::default()
     };
 
@@ -97,19 +100,19 @@ pub async fn view() -> Uint8Array {
 pub async fn init() {
     let host_info = config::get_host_info().unwrap();
     log::info!("Host info: {:?}", host_info);
-    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::Init(host_info))).await;
+    let _ = WORKER.send(WorkerMessage::new(ShellWorkerOperation::Init(host_info))).await;
     log::info!("Initialized");
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn add_device_files(files: &Array) -> Uint8Array {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::AddDeviceFiles(files.clone()))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(ShellWorkerOperation::AddDeviceFiles(files.clone()))).await else {
         return Uint8Array::default()
     };
 
     match response.message {
-        NativeExecutorOutput::DeviceFiles(data) => data,
+        ShellWorkerOperationOutput::DeviceFiles(data) => data,
         _ => Uint8Array::default()
     }
 }
@@ -117,12 +120,12 @@ pub async fn add_device_files(files: &Array) -> Uint8Array {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn get_device_file(resource_id: u64) -> Option<File> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::GetDeviceFile(resource_id))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(ShellWorkerOperation::GetDeviceFile(resource_id.to_string()))).await else {
         return None
     };
 
     match response.message {
-        NativeExecutorOutput::DeviceFile(file) => Some(file),
+        ShellWorkerOperationOutput::DeviceFile(file) => Some(file),
         _ => None
     }
 }
@@ -130,12 +133,12 @@ pub async fn get_device_file(resource_id: u64) -> Option<File> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn load_thumbnail_bytes(resource_id: u64) -> Option<Uint8Array> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::LoadThumbnailBytes(resource_id))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(ShellWorkerOperation::LoadThumbnailBytes(resource_id.to_string()))).await else {
         return None
     };
 
     match response.message {
-        NativeExecutorOutput::ThumbnailBytes(data) => Some(data),
+        ShellWorkerOperationOutput::ThumbnailBytes(data) => Some(data),
         _ => None
     }
 }
@@ -143,12 +146,12 @@ pub async fn load_thumbnail_bytes(resource_id: u64) -> Option<Uint8Array> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn load_thumbnail_source(path: Uint8Array) -> Option<String> {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::LoadThumbnailSource(path))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(ShellWorkerOperation::LoadThumbnailSource(path))).await else {
         return None
     };
 
     match response.message {
-        NativeExecutorOutput::ThumbnailSource(source) => source,
+        ShellWorkerOperationOutput::ThumbnailSource(source) => source,
         _ => None
     }
 }
@@ -156,42 +159,22 @@ pub async fn load_thumbnail_source(path: Uint8Array) -> Option<String> {
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn download_file_from_cache(path: Uint8Array, writer: FileSystemWritableFileStream) {
-    let _ = WORKER.send(WorkerMessage::new(NativeExecutorInput::DownloadFileFromCache { path, writer })).await;
+    let _ = WORKER.send(WorkerMessage::new(ShellWorkerOperation::DownloadFileFromCache { path, writer })).await;
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 #[must_use]
 pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
-    let Some(response) = WORKER.send(WorkerMessage::new(NativeExecutorInput::Execute(request_id, effect))).await else {
+    let Some(response) = WORKER.send(WorkerMessage::new(ShellWorkerOperation::HandleCoreOperation(request_id, effect))).await else {
         return Uint8Array::default()
     };
 
     match response.message {
-        NativeExecutorOutput::ExecuteResult(data) => data,
+        ShellWorkerOperationOutput::CoreOperationOutput(request_id, data) => {
+            handle_response(request_id, data).await
+        },
         _ => Uint8Array::default()
     }
-}
-
-pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
-    let options = bincode_options();
-    let mut buffer = Vec::new();
-    let mut serializer = bincode::Serializer::new(&mut buffer, options);
-    erased_serde::serialize(data, &mut serializer).unwrap();
-    buffer.into_uint_array()
-}
-
-fn bincode_options() -> impl Options + Copy {
-    bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
-}
-
-
-pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deserialize<'de> {
-    let vec = data.to_vec();
-    let options = bincode_options();
-    let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);
-    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-    let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-    data
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -256,3 +239,25 @@ pub async fn is_compatible() -> bool {
     log::info!("Storage quota is OK");
     true
 }
+
+pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
+    let options = bincode_options();
+    let mut buffer = Vec::new();
+    let mut serializer = bincode::Serializer::new(&mut buffer, options);
+    erased_serde::serialize(data, &mut serializer).unwrap();
+    buffer.into_uint_array()
+}
+
+fn bincode_options() -> impl Options + Copy {
+    bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
+}
+
+pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E where E: for<'de> Deserialize<'de> {
+    let vec = data.to_vec();
+    let options = bincode_options();
+    let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);
+    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+    let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+    data
+}
+

@@ -8,26 +8,24 @@ use crate::entities::session::SessionType;
 use crate::rpc::errors::RpcErrors;
 
 pub struct AuthProvider {
-    pub session_repository: Box<dyn AuthSessionRepository>
+    pub session_repository: &'static Box<dyn AuthSessionRepository>
 }
 
 impl AuthProvider {
     pub async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), RpcErrors> {
-        let session = self
-            .session_repository
+        let repo = self.session_repository;
+        let session = repo
             .find_one(&AuthSessionId {
                 r#type: SessionType::Access
             })
             .await
             .map_err(|e| RpcErrors::AuthError(anyhow!("Failed to load authentication session {e:?}")))?;
 
-        if session.is_none() {
+        let Some(session) = session else {
             return Err(RpcErrors::AuthError(anyhow!("Session not found")));
-        }
+        };
 
-        let token = session.unwrap().token;
-
-        if let Ok(token) = MetadataValue::from_str(&token.value) {
+        if let Ok(token) = MetadataValue::from_str(&session.token.value) {
             request.metadata_mut().insert("authorization", token);
         }
 

@@ -3,9 +3,10 @@ use std::sync::LazyLock;
 use crux_core::bridge::Bridge;
 use crux_core::{App, Core};
 use js_sys::Uint8Array;
+use devlog_sdk::distributed_id::init_scoped_id_generator;
 use shared::app::BitBridge;
 use crate::file_api::file_extension::VecExtension;
-use crate::web_worker::main::{TrustedWorkerMessage, WorkerMessage};
+use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 
 /// A web worker that dedicated to Core only
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
@@ -13,28 +14,29 @@ static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::ne
 pub struct CoreWorker {}
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum CoreRequest {
+pub enum CoreWorkerOperation {
     Update(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     HandleResponse(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     View,
 }
 
-unsafe impl Send for CoreRequest {}
-unsafe impl Sync for CoreRequest {}
+unsafe impl Send for CoreWorkerOperation {}
+unsafe impl Sync for CoreWorkerOperation {}
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct CoreResponse(#[serde(with = "serde_wasm_bindgen::preserve")] pub Uint8Array);
+pub struct CoreWorkerOperationOutput(#[serde(with = "serde_wasm_bindgen::preserve")] pub Uint8Array);
 
-unsafe impl Send for CoreResponse {}
-unsafe impl Sync for CoreResponse {}
+unsafe impl Send for CoreWorkerOperationOutput {}
+unsafe impl Sync for CoreWorkerOperationOutput {}
 
 impl Worker for CoreWorker {
     type Message = ();
-    type Input = WorkerMessage<CoreRequest>;
-    type Output = WorkerMessage<CoreResponse>;
+    type Input = WorkerMessage<CoreWorkerOperation>;
+    type Output = WorkerMessage<CoreWorkerOperationOutput>;
 
     fn create(_: &gloo_worker::WorkerScope<Self>) -> Self {
         log::info!("Core worker created");
+        init_scoped_id_generator("Bitbridge".to_owned());
         CoreWorker {}
     }
 
@@ -43,17 +45,17 @@ impl Worker for CoreWorker {
     fn received(&mut self, scope: &gloo_worker::WorkerScope<Self>, msg: Self::Input, id: gloo_worker::HandlerId) {
         let msg_id = msg.id().to_string();
         match msg.message {
-            CoreRequest::Update(event_data) => {
+            CoreWorkerOperation::Update(event_data) => {
                 let data = CORE.process_event(event_data.to_vec().as_slice()).unwrap_or_default();
-                scope.respond(id, WorkerMessage::response(msg_id, CoreResponse(data.into_uint_array())));
+                scope.respond(id, WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())));
             }
-            CoreRequest::HandleResponse(request_id, response_data) => {
+            CoreWorkerOperation::HandleResponse(request_id, response_data) => {
                 let data = CORE.handle_response(request_id, response_data.to_vec().as_slice()).unwrap_or_default();
-                scope.respond(id, WorkerMessage::response(msg_id, CoreResponse(data.into_uint_array())));
+                scope.respond(id, WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())));
             }
-            CoreRequest::View => {
+            CoreWorkerOperation::View => {
                 let data = CORE.view().unwrap_or_default();
-                scope.respond(id, WorkerMessage::response(msg_id, CoreResponse(data.into_uint_array())));
+                scope.respond(id, WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())));
             }
         }
     }

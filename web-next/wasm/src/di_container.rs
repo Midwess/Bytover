@@ -51,6 +51,7 @@ pub struct DiContainer {
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
     transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
+    auth_repository: OnceCell<Box<dyn AuthSessionRepository>>,
     host_info: OnceCell<HostInfo>,
 
     rpc_connection: OnceCell<RpcNetworkModuleImpl>
@@ -60,6 +61,7 @@ impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
+                auth_repository: OnceCell::new(),
                 host_info: OnceCell::new(),
                 shell: OnceCell::new(),
                 core_bridge: OnceCell::new(),
@@ -120,12 +122,12 @@ impl DiContainer {
 
     pub async fn init(&self, host_info: HostInfo, shell: Arc<ShellRuntime>) {
         log::info!("Initializing DI container");
+        init_scoped_id_generator("bitbridge-web".to_string());
         let _ = self.host_info.set(host_info.clone());
         let _ = self.shell.set(shell);
         let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
         let _ = self.rpc_connection.set(RpcNetworkModuleImpl::new(host_info.get_gateway_grpc_url()));
 
-        init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
 
         log::info!("Initializing database pool");
@@ -142,19 +144,26 @@ impl DiContainer {
         let _ = self.file_storage.set(FileStorage::new());
     }
 
-    pub fn get_auth_provider(&self) -> AuthProvider {
+    pub fn get_auth_provider(&'static self) -> AuthProvider {
         AuthProvider {
-            session_repository: Box::new(self.get_auth_session_repository())
+            session_repository: self.get_auth_session_repository()
         }
     }
 
-    pub fn get_auth_session_repository(&self) -> impl AuthSessionRepository {
-        AuthSessionRepositoryImpl {
+    pub fn get_auth_session_repository(&'static self) -> &'static Box<dyn AuthSessionRepository> {
+        if let Some(repository) = self.auth_repository.get() {
+            return repository
+        }
+
+        let repo = Box::new(AuthSessionRepositoryImpl {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
                 .build()
-        }
+        });
+
+        let _ = self.auth_repository.set(repo);
+        self.auth_repository.get().unwrap()
     }
 
     pub fn get_local_resource_repository(&self) -> Arc<dyn LocalResourceRepository> {
@@ -185,7 +194,7 @@ impl DiContainer {
         }
     }
 
-    pub fn get_cloud_server(&self) -> CloudServer<Client> {
+    pub fn get_cloud_server(&'static self) -> CloudServer<Client> {
         CloudServer::new(Box::new(self.rpc_connection.get().unwrap().clone()), self.get_auth_provider())
     }
 
@@ -212,7 +221,7 @@ impl DiContainer {
                 auth_server: self.get_authentication_server()
             }),
             persistent: Box::new(NativePersistentImpl {
-                auth_session_repository: Box::new(self.get_auth_session_repository()),
+                auth_session_repository: self.get_auth_session_repository(),
                 local_resource_repository: self.get_local_resource_repository(),
                 transfer_session_repository: Box::new(self.get_transfer_session_repository())
             }),
