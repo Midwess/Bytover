@@ -232,10 +232,12 @@ impl TransferService {
             (result, thumbnail_paths)
         };
 
-        let mut generated_thumbnails_paths =
-            TransferSessionPersistentOperation::generate_thumbnail_paths(Some(remote_session.order_id), generate_file_paths_request.keys().copied().collect())
-                .into_future(cmd.clone())
-                .await;
+        let mut generated_thumbnails_paths = TransferSessionPersistentOperation::generate_thumbnail_paths(
+            Some(remote_session.order_id),
+            generate_file_paths_request.keys().copied().collect()
+        )
+        .into_future(cmd.clone())
+        .await;
 
         let mut generated_saved_paths =
             TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)

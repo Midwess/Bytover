@@ -154,7 +154,7 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build(),
+                .build()
         });
 
         let _ = self.resource_repository.set(repo.clone());

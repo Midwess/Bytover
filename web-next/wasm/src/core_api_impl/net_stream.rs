@@ -1,6 +1,6 @@
+use crate::file_api::device_file::FileStorage;
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
-use crate::file_api::device_file::FileStorage;
 use anyhow::anyhow;
 use core_services::utils::never_send::NeverSend;
 use futures::channel::mpsc;

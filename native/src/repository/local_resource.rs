@@ -223,7 +223,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(Box::new(cursor))
     }
 
-    async fn generate_thumbnail_paths(&self, _: Option<u64>, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+    async fn generate_thumbnail_paths(
+        &self,
+        _: Option<u64>,
+        resource_ids: Vec<u64>
+    ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {
             let thumbnail_absolute = self.path_resolver.get_thumbnail_file_path(*resource_id).await;

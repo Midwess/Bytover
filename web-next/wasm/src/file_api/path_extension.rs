@@ -21,10 +21,10 @@ impl WebExtLocalResourcePath for LocalResourcePath {
         }
     }
 
-    fn resource_thumbnail(session_id: Option<u64>,resource_id: u64) -> Self {
+    fn resource_thumbnail(session_id: Option<u64>, resource_id: u64) -> Self {
         match session_id {
             None => Self::PlatformIdentifier(format!("opfs://thumbnails/{}.png", resource_id)),
-            Some(session_id) => Self::PlatformIdentifier(format!("opfs://sessions-{session_id}/thumbnails/{}.png", resource_id)),
+            Some(session_id) => Self::PlatformIdentifier(format!("opfs://sessions-{session_id}/thumbnails/{}.png", resource_id))
         }
     }
 

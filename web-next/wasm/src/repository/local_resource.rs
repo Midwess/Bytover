@@ -1,6 +1,7 @@
 use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::file_api::device_file::FileStorage;
+use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl};
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
@@ -19,11 +20,10 @@ use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
-use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl};
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
-    pub file_storage: FileStorage,
+    pub file_storage: FileStorage
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -177,10 +177,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Err(PersistenceError::NotFound(format!("Your path is not supported {:?}", path)))
     }
 
-    async fn generate_thumbnail_paths(&self, session_id: Option<u64>, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+    async fn generate_thumbnail_paths(
+        &self,
+        session_id: Option<u64>,
+        resource_ids: Vec<u64>
+    ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {
-            let path = LocalResourcePath::resource_thumbnail(session_id.clone(), *resource_id);
+            let path = LocalResourcePath::resource_thumbnail(session_id, *resource_id);
             result.insert(*resource_id, path);
         }
 

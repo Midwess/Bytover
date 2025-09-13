@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use crate::{process_event, ShellRuntime};
+use crate::ShellRuntime;
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
-use shared::app::AppEvent;
 use shared::core_api::network::InternetConnection;
 use shared::executor::p2p::P2PNativeExecutor;
 use shared::executor::persistent::NativePersistent;

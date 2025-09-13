@@ -163,7 +163,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         let mut result = HashMap::new();
 
         for (resource_order_id, resource_name) in resource_names {
-            let extension = resource_name.split('.').last().unwrap_or("unknown").to_string();
+            let extension = resource_name.split('.').next_back().unwrap_or("unknown").to_string();
             result.insert(
                 resource_order_id,
                 LocalResourcePath::session_resource(session_order_id, resource_order_id, extension)
