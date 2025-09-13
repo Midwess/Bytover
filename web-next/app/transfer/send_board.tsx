@@ -229,8 +229,8 @@ function MediaView(props: {
     const [thumbnail, setThumbnail] = useState(defaultThumbnail)
 
     useEffect(() => {
-        if (isVideo || isImage) {
-            core.loadThumbnailSource(model.path).then((it) => {
+        if ((isVideo || isImage) && model.thumbnail_path) {
+            core.loadThumbnailSource(model.thumbnail_path).then((it) => {
                 if (it) {
                     setThumbnail(<Image className={"w-full h-full object-cover"} fill src={it} alt={model.name}/>)
                 }

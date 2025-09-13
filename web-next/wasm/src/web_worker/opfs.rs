@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger::setup;
 use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
-use js_sys::Uint8Array;
+use js_sys::{Array, Uint8Array};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
@@ -52,7 +52,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpfsOperation {
     pub file_path: String,
-    pub operation: FileOperation,
+    pub operation: FileOperation
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,15 +61,16 @@ pub enum FileOperation {
     Write {
         #[serde(with = "serde_wasm_bindgen::preserve")]
         data: Uint8Array,
-        position: usize,
+        position: usize
     },
     Read {
         position: usize,
-        amount: usize,
+        amount: usize
     },
     Flush,
     Size,
-    Close
+    Close,
+    GenerateSource
 }
 
 unsafe impl Send for OpfsOperation {}
@@ -81,7 +82,8 @@ pub enum OpfsOperationOutput {
     Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
     Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     Written(usize),
-    Size(u64)
+    Size(u64),
+    DownloadUrl(String)
 }
 
 unsafe impl Send for OpfsOperationOutput {}
@@ -108,19 +110,20 @@ impl OpfsWorker {
                     let root_future = JsFuture::from(get_directory());
                     let root: FileSystemDirectoryHandle = root_future.await?.into();
                     let file_handle = root.open_file(&file_path).await?;
-                    log::info!("File opened {file_path}");
                     self.file_handles.lock().await.insert(file_path.clone(), Arc::new(Mutex::new(file_handle)));
                     Ok::<(), JsValue>(())
-                }.await {
+                }
+                .await
+                {
                     Ok(_) => OpfsOperationOutput::Void,
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
-            },
+            }
             FileOperation::Write { data, position } => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
-                
+
                 let file_guard = file_handle.lock().await;
                 let options = FileSystemReadWriteOptions::new();
                 options.set_at(position as f64);
@@ -128,12 +131,12 @@ impl OpfsWorker {
                     Ok(written) => OpfsOperationOutput::Written(written as usize),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
-            },
+            }
             FileOperation::Read { position, amount } => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
-                
+
                 let file_guard = file_handle.lock().await;
                 let options = FileSystemReadWriteOptions::new();
                 options.set_at(position as f64);
@@ -142,45 +145,75 @@ impl OpfsWorker {
                     Ok(bytes_read) => OpfsOperationOutput::Binary(buffer.subarray(0, bytes_read as u32)),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
-            },
+            }
             FileOperation::Size => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
-                
+
                 let file_guard = file_handle.lock().await;
                 match file_guard.get_size() {
                     Ok(size) => OpfsOperationOutput::Size(size as u64),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
-            },
+            }
             FileOperation::Flush => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Void;
                 };
-                
+
                 let file_guard = file_handle.lock().await;
                 let _ = file_guard.flush();
                 OpfsOperationOutput::Void
-            },
+            }
             FileOperation::Close => {
                 let Some(file_handle) = self.file_handles.lock().await.remove(&file_path) else {
                     return OpfsOperationOutput::Void;
                 };
-                
+
                 let file_guard = file_handle.lock().await;
                 let _ = file_guard.flush();
                 file_guard.close();
                 log::info!("File closed {file_path}");
                 OpfsOperationOutput::Void
             }
+            FileOperation::GenerateSource => {
+                let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
+                    return OpfsOperationOutput::Error("No file handle open".into());
+                };
+
+                let file_guard = file_handle.lock().await;
+                let Ok(size) = file_guard.get_size() else {
+                    return OpfsOperationOutput::Error("File size is 0".into());
+                };
+
+                let buffer = Uint8Array::new_with_length(size as u32);
+                let options = FileSystemReadWriteOptions::new();
+                options.set_at(0.0);
+                let _ = file_guard.read_with_js_u8_array_and_options(&buffer, &options);
+                let blob_options = web_sys::BlobPropertyBag::new();
+                blob_options.set_type("image/png");
+
+                let parts = Array::new();
+                parts.push(&buffer);
+
+                let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
+                    return OpfsOperationOutput::Error("Failed to create blob".into());
+                };
+
+                let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
+                    return OpfsOperationOutput::Error("Failed to create url".into());
+                };
+
+                OpfsOperationOutput::DownloadUrl(url)
+            }
         }
     }
 }
 
 impl Worker for OpfsWorker {
-    type Message = ();
     type Input = WorkerMessage<OpfsOperation>;
+    type Message = ();
     type Output = WorkerMessage<OpfsOperationOutput>;
 
     fn create(_: &WorkerScope<Self>) -> Self {

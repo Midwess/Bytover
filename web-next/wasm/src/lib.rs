@@ -15,8 +15,11 @@ use crate::di_container::DiContainer;
 use crate::executor::executor::NativeExecutor;
 use crate::file_api::device_file::FileStorage;
 use crate::file_api::file_extension::VecExtension;
+use crate::file_api::opfs::OPFS_WORKER;
+use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
@@ -164,38 +167,36 @@ impl NativeProcessor {
         file.map(|it| it.file.0)
     }
 
-    pub async fn load_thumbnail_source(&self, path: Vec<u8>) -> Option<String> {
-        let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(&path, options);
-        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+    pub async fn load_thumbnail_source(&self, path: Uint8Array) -> Option<String> {
+        let path: LocalResourcePath = deserialize(&path);
+        log::info!("Loading thumbnail source for path {path:?}");
+        let opfs_path = match path {
+            LocalResourcePath::AbsolutePath(path) => return Some(path),
+            LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
+            _ => return None
+        };
 
-        if let LocalResourcePath::AbsolutePath(path) = path {
-            return Some(path)
+        log::info!("Generating download url for file {opfs_path}");
+        let _ = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: opfs_path.clone(),
+                operation: FileOperation::Open
+            }))
+            .await;
+
+        log::info!("Generating thumbnail url");
+        let response = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: opfs_path,
+                operation: FileOperation::GenerateSource
+            }))
+            .await?;
+
+        log::info!("Generated thumbnail url");
+        match response.message {
+            OpfsOperationOutput::DownloadUrl(url) => Some(url),
+            _ => None
         }
-
-        let repository = DiContainer::get_instance().get_local_resource_repository().await;
-        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
-            return None
-        };
-
-        let Ok(data) = reader.read_all().await else { return None };
-
-        let blob_options = web_sys::BlobPropertyBag::new();
-        blob_options.set_type("image/png");
-
-        let parts = Array::new();
-        parts.push(&data.into_uint_array());
-
-        let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
-            return None
-        };
-
-        let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
-            return None
-        };
-
-        Some(url)
     }
 
     pub async fn download_file_from_cache(&self, path: Vec<u8>, writer: FileSystemWritableFileStream) {
