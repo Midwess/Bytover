@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger::setup;
@@ -49,10 +50,23 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum OpfsOperation {
-    Open(String),
-    Write(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array, u64),
-    Read(usize, u64),
+pub struct OpfsOperation {
+    pub file_path: String,
+    pub operation: FileOperation,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FileOperation {
+    Open,
+    Write {
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        data: Uint8Array,
+        position: usize,
+    },
+    Read {
+        position: usize,
+        amount: usize,
+    },
     Flush,
     Size,
     Close
@@ -73,20 +87,106 @@ pub enum OpfsOperationOutput {
 unsafe impl Send for OpfsOperationOutput {}
 unsafe impl Sync for OpfsOperationOutput {}
 
+pub type AMutex<T> = Arc<Mutex<T>>;
+
 #[derive(Clone)]
 pub struct OpfsWorker {
-    file_handle: Arc<Mutex<Option<FileSystemSyncAccessHandle>>>
+    file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>
+}
+
+impl OpfsWorker {
+    async fn handle_operation(&self, operation: OpfsOperation) -> OpfsOperationOutput {
+        let OpfsOperation { file_path, operation } = operation;
+        match operation {
+            FileOperation::Open => {
+                log::info!("Opening file {file_path}");
+                match async {
+                    if self.file_handles.lock().await.contains_key(&file_path) {
+                        return Ok::<(), JsValue>(());
+                    }
+
+                    let root_future = JsFuture::from(get_directory());
+                    let root: FileSystemDirectoryHandle = root_future.await?.into();
+                    let file_handle = root.open_file(&file_path).await?;
+                    log::info!("File opened {file_path}");
+                    self.file_handles.lock().await.insert(file_path.clone(), Arc::new(Mutex::new(file_handle)));
+                    Ok::<(), JsValue>(())
+                }.await {
+                    Ok(_) => OpfsOperationOutput::Void,
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            },
+            FileOperation::Write { data, position } => {
+                let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
+                    return OpfsOperationOutput::Error("No file handle open".into());
+                };
+                
+                let file_guard = file_handle.lock().await;
+                let options = FileSystemReadWriteOptions::new();
+                options.set_at(position as f64);
+                match file_guard.write_with_u8_array_and_options(data.to_vec().as_slice(), &options) {
+                    Ok(written) => OpfsOperationOutput::Written(written as usize),
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            },
+            FileOperation::Read { position, amount } => {
+                let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
+                    return OpfsOperationOutput::Error("No file handle open".into());
+                };
+                
+                let file_guard = file_handle.lock().await;
+                let options = FileSystemReadWriteOptions::new();
+                options.set_at(position as f64);
+                let buffer = Uint8Array::new_with_length(amount as u32);
+                match file_guard.read_with_js_u8_array_and_options(&buffer, &options) {
+                    Ok(bytes_read) => OpfsOperationOutput::Binary(buffer.subarray(0, bytes_read as u32)),
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            },
+            FileOperation::Size => {
+                let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
+                    return OpfsOperationOutput::Error("No file handle open".into());
+                };
+                
+                let file_guard = file_handle.lock().await;
+                match file_guard.get_size() {
+                    Ok(size) => OpfsOperationOutput::Size(size as u64),
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            },
+            FileOperation::Flush => {
+                let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
+                    return OpfsOperationOutput::Void;
+                };
+                
+                let file_guard = file_handle.lock().await;
+                let _ = file_guard.flush();
+                OpfsOperationOutput::Void
+            },
+            FileOperation::Close => {
+                let Some(file_handle) = self.file_handles.lock().await.remove(&file_path) else {
+                    return OpfsOperationOutput::Void;
+                };
+                
+                let file_guard = file_handle.lock().await;
+                let _ = file_guard.flush();
+                file_guard.close();
+                log::info!("File closed {file_path}");
+                OpfsOperationOutput::Void
+            }
+        }
+    }
 }
 
 impl Worker for OpfsWorker {
-    type Input = WorkerMessage<OpfsOperation>;
     type Message = ();
+    type Input = WorkerMessage<OpfsOperation>;
     type Output = WorkerMessage<OpfsOperationOutput>;
 
     fn create(_: &WorkerScope<Self>) -> Self {
         setup();
         Self {
-            file_handle: Default::default()
+            file_handles: Default::default()
         }
     }
 
@@ -95,75 +195,10 @@ impl Worker for OpfsWorker {
     fn received(&mut self, scope: &WorkerScope<Self>, msg: Self::Input, id: HandlerId) {
         let scope = scope.clone();
         let worker = self.clone();
+
         wasm_bindgen_futures::spawn_local(async move {
             let msg_id = msg.id().to_owned();
-            let mut file_guard = worker.file_handle.lock().await;
-            let result = match msg.message {
-                OpfsOperation::Open(path) => {
-                    log::info!("Opening file {path}");
-                    match async {
-                        let root_future = JsFuture::from(get_directory());
-                        let root: FileSystemDirectoryHandle = root_future.await?.into();
-                        let file_handle = root.open_file(&path).await?;
-                        log::info!("File opened {path}");
-                        *file_guard = Some(file_handle);
-                        Ok::<(), JsValue>(())
-                    }
-                    .await
-                    {
-                        Ok(_) => OpfsOperationOutput::Void,
-                        Err(e) => OpfsOperationOutput::Error(e)
-                    }
-                }
-                OpfsOperation::Write(data, position) => match file_guard.as_ref() {
-                    Some(file_handle) => {
-                        let options = FileSystemReadWriteOptions::new();
-                        options.set_at(position as f64);
-                        match file_handle.write_with_u8_array_and_options(data.to_vec().as_slice(), &options) {
-                            Ok(written) => OpfsOperationOutput::Written(written as usize),
-                            Err(e) => OpfsOperationOutput::Error(e)
-                        }
-                    }
-                    None => OpfsOperationOutput::Error("No file handle open".into())
-                },
-                OpfsOperation::Read(size, position) => match file_guard.as_ref() {
-                    Some(file_handle) => {
-                        let options = FileSystemReadWriteOptions::new();
-                        options.set_at(position as f64);
-                        let buffer = Uint8Array::new(&JsValue::from(size as f64));
-                        match file_handle.read_with_js_u8_array_and_options(&buffer, &options) {
-                            Ok(s) => OpfsOperationOutput::Binary(buffer.subarray(0, s as u32)),
-                            Err(e) => OpfsOperationOutput::Error(e)
-                        }
-                    }
-                    None => OpfsOperationOutput::Error("No file handle open".into())
-                },
-                OpfsOperation::Size => match file_guard.as_ref() {
-                    Some(file_handle) => match file_handle.get_size() {
-                        Ok(size) => OpfsOperationOutput::Size(size as u64),
-                        Err(e) => OpfsOperationOutput::Error(e)
-                    },
-                    None => OpfsOperationOutput::Error("No file handle open".into())
-                },
-                OpfsOperation::Flush => match file_guard.as_ref() {
-                    Some(file_handle) => {
-                        let _ = file_handle.flush();
-                        OpfsOperationOutput::Void
-                    }
-                    None => OpfsOperationOutput::Void
-                },
-                OpfsOperation::Close => match file_guard.as_ref() {
-                    Some(file_handle) => {
-                        let _ = file_handle.flush();
-                        file_handle.close();
-                        *file_guard = None;
-                        log::info!("File closed");
-                        OpfsOperationOutput::Void
-                    }
-                    None => OpfsOperationOutput::Void
-                }
-            };
-
+            let result = worker.handle_operation(msg.message).await;
             scope.respond(id, WorkerMessage::response(msg_id, result));
         });
     }

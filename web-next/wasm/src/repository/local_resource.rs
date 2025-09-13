@@ -169,7 +169,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
-        if let Some((_, path)) = path.opfs_path() {
+        if let Some(path) = path.opfs_path() {
             let writer = IOWriterOpfsImpl::new(path.into()).await?;
             return Ok(Box::new(writer));
         }

@@ -1,5 +1,5 @@
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
-use crate::web_worker::opfs::{OpfsOperation, OpfsOperationOutput, OpfsWorker};
+use crate::web_worker::opfs::{OpfsOperation, OpfsOperationOutput, OpfsWorker, FileOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
-static OPFS_WORKERS: LazyLock<Mutex<HashMap<PathBuf, Arc<NeverSend<WebWorkerBridge<OpfsWorker>>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
+    LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
 
 pub struct IOReaderOpfsImpl {
     path: PathBuf,
@@ -22,42 +22,34 @@ pub struct IOReaderOpfsImpl {
 impl IOReaderOpfsImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
-
-        let mut workers = OPFS_WORKERS.lock().await;
-        if let None = workers.get(&path) {
-            log::info!("Opening file for read: {}", path_str);
-            let new_worker = Arc::new(NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
-            workers.insert(path.clone(), new_worker.clone());
-            let msg = WorkerMessage::new(OpfsOperation::Open(path_str.clone()));
-            let response = new_worker.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file"))?;
-
-            match response.message {
-                OpfsOperationOutput::Void => {
-                    log::info!("Opened file");
-                }
-                _ => {
-                    workers.remove(&path);
-                    return Err(anyhow::anyhow!("Failed to open file"));
-                }
-            }
-        };
-
-        Ok(Self { path, position: 0 })
-    }
-
-    async fn worker(&self) -> Arc<NeverSend<WebWorkerBridge<OpfsWorker>>> {
-        let workers = OPFS_WORKERS.lock().await;
-        workers.get(&self.path).unwrap().clone()
+        log::info!("Opening file for read: {}", path_str);
+        
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: path_str,
+            operation: FileOperation::Open,
+        });
+        
+        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file"))?;
+        
+        match response.message {
+            OpfsOperationOutput::Void => Ok(Self { path, position: 0 }),
+            OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file: {:?}", e)),
+            _ => Err(anyhow::anyhow!("Unexpected response"))
+        }
     }
 }
 
 #[async_trait(?Send)]
 impl IOReader for IOReaderOpfsImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
-        let chunk_size = 1024 * 64;
-
-        let msg = WorkerMessage::new(OpfsOperation::Read(chunk_size, self.position as u64));
-        let response = self.worker().await.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: self.path.to_string_lossy().to_string(),
+            operation: FileOperation::Read {
+                position: self.position,
+                amount: 1024 * 64,
+            },
+        });
+        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
 
         match response.message {
             OpfsOperationOutput::Binary(data) => {
@@ -74,8 +66,11 @@ impl IOReader for IOReaderOpfsImpl {
     }
 
     async fn total_size(&self) -> Result<u64> {
-        let msg = WorkerMessage::new(OpfsOperation::Size);
-        let response = self.worker().await.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"))?;
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: self.path.to_string_lossy().to_string(),
+            operation: FileOperation::Size,
+        });
+        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"))?;
 
         match response.message {
             OpfsOperationOutput::Size(size) => Ok(size),
@@ -87,36 +82,26 @@ impl IOReader for IOReaderOpfsImpl {
 
 pub struct IOWriterOpfsImpl {
     path: PathBuf,
-    position: u64
+    position: usize
 }
 
 impl IOWriterOpfsImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
-
-        let mut workers = OPFS_WORKERS.lock().await;
-        if let None = workers.get(&path) {
-            log::info!("Opening file for write: {}", path_str);
-            let new_worker = Arc::new(NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
-            workers.insert(path.clone(), new_worker.clone());
-            let msg = WorkerMessage::new(OpfsOperation::Open(path_str.clone()));
-            let response = new_worker.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file for writing"))?;
-
-            match response.message {
-                OpfsOperationOutput::Void => {}
-                _ => {
-                    workers.remove(&path);
-                    return Err(anyhow::anyhow!("Unexpected response"))
-                }
-            }
-        };
-
-        Ok(Self { path, position: 0 })
-    }
-
-    async fn worker(&self) -> Arc<NeverSend<WebWorkerBridge<OpfsWorker>>> {
-        let workers = OPFS_WORKERS.lock().await;
-        workers.get(&self.path).unwrap().clone()
+        log::info!("Opening file for write: {}", path_str);
+        
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: path_str,
+            operation: FileOperation::Open,
+        });
+        
+        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file for writing"))?;
+        
+        match response.message {
+            OpfsOperationOutput::Void => Ok(Self { path, position: 0 }),
+            OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file for writing: {:?}", e)),
+            _ => Err(anyhow::anyhow!("Unexpected response"))
+        }
     }
 }
 
@@ -125,13 +110,18 @@ impl IOWriter for IOWriterOpfsImpl {
     async fn write(&mut self, data: Bytes) -> Result<()> {
         let uint8_array = Uint8Array::from(data.as_ref());
 
-        let msg = WorkerMessage::new(OpfsOperation::Write(uint8_array, self.position));
-        let response = self.worker().await.send(msg).await.ok_or(anyhow::anyhow!("Failed to write"))?;
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: self.path.to_string_lossy().to_string(),
+            operation: FileOperation::Write {
+                data: uint8_array,
+                position: self.position,
+            },
+        });
+        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to write"))?;
 
         match response.message {
             OpfsOperationOutput::Written(written) => {
-                self.position += written as u64;
-                log::info!("Written {} bytes at position {}", written, self.position);
+                self.position += written;
                 Ok(())
             }
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Write error: {:?}", e)),
@@ -145,11 +135,11 @@ impl IOWriter for IOWriterOpfsImpl {
     }
 
     async fn flush(&mut self) -> Result<()> {
-        self.worker()
-            .await
-            .send(WorkerMessage::new(OpfsOperation::Flush))
-            .await
-            .ok_or(anyhow::anyhow!("Failed to flush"))?;
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: self.path.to_string_lossy().to_string(),
+            operation: FileOperation::Flush,
+        });
+        OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to flush"))?;
         Ok(())
     }
 }
