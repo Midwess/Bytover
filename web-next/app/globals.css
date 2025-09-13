@@ -224,6 +224,7 @@ input[type=number] {
 
 /* WebKit browsers (Chrome, Edge, Safari) */
 *::-webkit-scrollbar {
+  background-color: rgba(255, 255, 255, 0.5);
   width: 8px;
   height: 8px;
 }

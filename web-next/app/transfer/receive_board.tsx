@@ -16,7 +16,7 @@ import {
 } from 'shared_types/types/shared_types'
 import {
     ArrowDown,
-    ChevronsUpDown, Dog, Download,
+    ChevronsUpDown, Download,
     Globe, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
@@ -42,10 +42,10 @@ export default function ReceiveBoard() {
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-11 w-full h-full gap-2"}>
-                <div className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8"}>
+                <div className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8 scrollbar-dark"}>
                     <Board/>
                 </div>
-                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 overflow-scroll`}>
+                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 scrollbar-dark`}>
                     <ContentBoard/>
                 </div>
             </div>
@@ -163,7 +163,7 @@ function ContentBoard() {
                         selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} media={image}/>
+                                    <MediaView key={index} id={image.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -181,7 +181,7 @@ function ContentBoard() {
                         selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} media={video}/>
+                                    <MediaView key={index} id={video.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -200,7 +200,7 @@ function ContentBoard() {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-fit"}>
-                                    <FileView key={index} file={file}/>
+                                    <FileView key={index} id={file.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -425,9 +425,13 @@ function TransferSession(props: {
 }
 
 function FileView(props: {
-    file: FileReceiveResourceViewModel
+    id: bigint
 }) {
-    const {file} = props;
+    const {id} = props;
+    const file = core.useReceiveResource(id);
+    
+    if (!file) return null;
+    
     const model = file.model;
 
     const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
@@ -449,12 +453,10 @@ function FileView(props: {
             link.download = model.name;
             link.click();
         } else {
-            // New behavior - download from cache
             try {
                 await core.downloadFileFromCache(model.path, model.name);
             } catch (error) {
                 console.error('Failed to download file:', error);
-                // Fallback to showing an error or toast
             }
         }
     };
@@ -474,7 +476,6 @@ function FileView(props: {
                 />
             </div>
 
-            {/* Metadata */}
             <div className="flex flex-col text-white items-start mt-1">
                 <p className="text-sm text-center font-poppins break-words w-full">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
@@ -497,9 +498,12 @@ function FileView(props: {
 }
 
 function MediaView(props: {
-    media: ImageReceiveResourceViewModel | VideoReceiveResourceViewModel,
+    id: bigint
 }) {
-    const {media} = props;
+    const {id} = props;
+    const media = core.useReceiveResource(id);
+    
+    if (!media) return null;
 
     const model: SelectedResourceViewModel = media.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
@@ -519,12 +523,10 @@ function MediaView(props: {
             link.download = model.name;
             link.click();
         } else {
-            // New behavior - download from cache
             try {
                 await core.downloadFileFromCache(model.path, model.name);
             } catch (error) {
                 console.error('Failed to download file:', error);
-                // Fallback to showing an error or toast
             }
         }
     };

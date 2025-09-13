@@ -169,30 +169,26 @@ impl NativeProcessor {
 
     pub async fn load_thumbnail_source(&self, path: Uint8Array) -> Option<String> {
         let path: LocalResourcePath = deserialize(&path);
-        log::info!("Loading thumbnail source for path {path:?}");
-        let opfs_path = match path {
+        let opfsPath = match path {
             LocalResourcePath::AbsolutePath(path) => return Some(path),
             LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
             _ => return None
         };
 
-        log::info!("Generating download url for file {opfs_path}");
         let _ = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfs_path.clone(),
+                file_path: opfsPath.clone(),
                 operation: FileOperation::Open
             }))
             .await;
 
-        log::info!("Generating thumbnail url");
         let response = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfs_path,
+                file_path: opfsPath,
                 operation: FileOperation::GenerateSource
             }))
             .await?;
 
-        log::info!("Generated thumbnail url");
         match response.message {
             OpfsOperationOutput::DownloadUrl(url) => Some(url),
             _ => None

@@ -120,10 +120,52 @@ export class WasmCore {
         return session
     }
 
+    public useReceiveResource(id: bigint) {
+        const [resource, setResource] = useState<any>(() => {
+            const transferState = this.transferState.get()
+            if (!transferState) return undefined
+            
+            // Search in all resource arrays
+            return transferState.received_sessions?.flatMap(session => [
+                ...session.file_resources,
+                ...session.image_resources,
+                ...session.video_resources
+            ]).find(r => r.model.order_id === id) ||
+            transferState.received_cloud_sessions?.flatMap(session => [
+                ...session.file_resources,
+                ...session.image_resources,
+                ...session.video_resources
+            ]).find(r => r.model.order_id === id)
+        })
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (!transferState) return
+                
+                const foundResource = transferState.received_sessions?.flatMap(session => [
+                    ...session.file_resources,
+                    ...session.image_resources,
+                    ...session.video_resources
+                ]).find(r => r.model.order_id === id) ||
+                transferState.received_cloud_sessions?.flatMap(session => [
+                    ...session.file_resources,
+                    ...session.image_resources,
+                    ...session.video_resources
+                ]).find(r => r.model.order_id === id)
+                
+                if (foundResource && !isEqual(resource, foundResource)) {
+                    setResource(foundResource)
+                }
+            })
+        }, [id, resource])
+
+        return resource
+    }
+
     public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
         this.selectedSession.set(session)
     }
-
+    
     public useMessage(type: string) {
         const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
 
