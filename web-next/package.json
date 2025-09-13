@@ -5,8 +5,9 @@
   "scripts": {
     "schema:compile": "pnpm --dir ../libs/schema/typescript build; rm -r node_modules/schema-ts; pnpm install -f ./schema/typescript",
     "wasm:build": "cd wasm && wasm-pack build --target web --dev",
-    "worker:core": "cd worker && wasm-pack build --target no-modules --dev && mkdir -p ./public/core-worker && cp -r pkg/ ../public/core-worker/",
-    "wasm:all": "pnpm wasm:build && pnpm worker:core",
+    "worker:core": "cd worker && wasm-pack build --target no-modules --dev --features core && mkdir -p ./public/core-worker && cp -r pkg/ ../public/core-worker/",
+    "worker:opfs": "cd worker && wasm-pack build --target no-modules --dev --features opfs && mkdir -p ./public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
+    "wasm:all": "pnpm wasm:build && pnpm worker:core && pnpm worker:opfs",
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",

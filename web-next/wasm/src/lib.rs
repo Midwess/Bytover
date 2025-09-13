@@ -14,9 +14,10 @@ pub mod web_worker;
 use crate::di_container::DiContainer;
 use crate::executor::executor::NativeExecutor;
 use crate::file_api::file_extension::VecExtension;
-use crate::file_api::storage::FileStorage;
+use crate::file_api::device_file::FileStorage;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
+use crate::web_worker::opfs::OpfsWorker;
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
@@ -24,7 +25,7 @@ pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 use erased_serde::Serialize;
 use file_api::path_extension::WebExtLocalResourcePath;
-use js_sys::{Array, Reflect};
+use js_sys::{Array, Promise};
 use serde::Deserialize;
 use shared::entities::file_system::file::LocalResourcePath;
 use shared::CoreOperation;
@@ -43,6 +44,10 @@ extern "C" {
     async fn forward_core_operation_output(request_id: u32, core_operation_output: Uint8Array);
     #[wasm_bindgen(js_namespace = core)]
     async fn update_app_event(app_event: Uint8Array);
+
+    /// OPFS
+    #[wasm_bindgen(js_namespace = ["navigator", "storage"], js_name = getDirectory)]
+    fn get_directory() -> Promise;
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -74,6 +79,18 @@ pub async fn view() -> Uint8Array {
     };
 
     response.message.0
+}
+
+pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E
+where
+    E: for<'de> Deserialize<'de>
+{
+    let vec = data.to_vec();
+    let options = bincode_options();
+    let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);
+    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
+    let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
+    data
 }
 
 pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
@@ -125,33 +142,6 @@ impl NativeProcessor {
             return false
         }
 
-        let Ok(estimate_fut) = storage.estimate() else {
-            return false;
-        };
-
-        let Ok(quota) = JsFuture::from(estimate_fut).await else {
-            log::info!("Cannot estimate storage quota");
-            return false
-        };
-
-        if quota.is_null() || quota.is_undefined() {
-            log::info!("Quota is null");
-            return false
-        }
-
-        let quota_val = Reflect::get(&quota, &JsValue::from_str("quota")).unwrap_or(JsValue::UNDEFINED);
-
-        if quota_val.is_null() || quota_val.is_undefined() {
-            log::info!("quota field missing");
-            return false;
-        }
-
-        let quota = quota_val.as_f64().unwrap_or(0.0);
-        if quota < 100.0 * 1024.0 * 1024.0 {
-            log::info!("Storage quota less than 100MB ({} MB)", quota / 1024.0 / 1024.0);
-            return false;
-        }
-
         true
     }
 
@@ -176,18 +166,6 @@ impl NativeProcessor {
         file.map(|it| it.file.0)
     }
 
-    pub async fn load_thumbnail_bytes(&self, resource_id: u64) -> Option<Uint8Array> {
-        let repository = DiContainer::get_instance().get_local_resource_repository().await;
-        let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
-        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
-            return None
-        };
-
-        let Ok(data) = reader.read_all().await else { return None };
-
-        Some(data.into_uint_array())
-    }
-
     pub async fn load_thumbnail_source(&self, path: Vec<u8>) -> Option<String> {
         let options = bincode_options();
         let mut deser = bincode::Deserializer::from_slice(&path, options);
@@ -198,19 +176,18 @@ impl NativeProcessor {
             return Some(path)
         }
 
-        let Some(resource_id) = path.thumbnail_resource_id() else {
+        let repository = DiContainer::get_instance().get_local_resource_repository().await;
+        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
             return None
         };
 
-        let Some(data) = self.load_thumbnail_bytes(resource_id).await else {
-            return None
-        };
+        let Ok(data) = reader.read_all().await else { return None };
 
         let blob_options = web_sys::BlobPropertyBag::new();
         blob_options.set_type("image/png");
 
         let parts = Array::new();
-        parts.push(&data);
+        parts.push(&data.into_uint_array());
 
         let Ok(blob) = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &blob_options) else {
             return None
@@ -259,16 +236,4 @@ impl NativeProcessor {
         let output = self.executor.handle(request_id, effect).await;
         handle_response(request_id, serialize(&output)).await
     }
-}
-
-pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E
-where
-    E: for<'de> Deserialize<'de>
-{
-    let vec = data.to_vec();
-    let options = bincode_options();
-    let mut deser = bincode::Deserializer::from_slice(vec.as_slice(), options);
-    let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-    let data: E = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-    data
 }

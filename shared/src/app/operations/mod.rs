@@ -35,7 +35,6 @@ pub enum CoreOperation {
     Internet(InternetOperation),
     Render,
     InitNativeExecutor,
-    Void,
     Notified(AppEvent),
     Dialog(DialogOperation),
     Delay(Duration)

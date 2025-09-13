@@ -157,15 +157,16 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
 
     async fn generate_resource_paths(
         &self,
-        _session_order_id: u64,
+        session_order_id: u64,
         resource_names: HashMap<u64, String>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
 
-        for (resource_order_id, _resource_name) in resource_names {
+        for (resource_order_id, resource_name) in resource_names {
+            let extension = resource_name.split('.').last().unwrap_or("unknown").to_string();
             result.insert(
                 resource_order_id,
-                LocalResourcePath::cache("resources", resource_order_id.to_string())
+                LocalResourcePath::session_resource(session_order_id, resource_order_id, extension)
             );
         }
 

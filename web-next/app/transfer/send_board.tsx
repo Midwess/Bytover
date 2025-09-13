@@ -230,10 +230,9 @@ function MediaView(props: {
 
     useEffect(() => {
         if (isVideo || isImage) {
-            core.nativeProcessor?.load_thumbnail_bytes(model.order_id).then((it) => {
+            core.loadThumbnailSource(model.path).then((it) => {
                 if (it) {
-                    const blob = new Blob([it], {type: 'image/png'});
-                    setThumbnail(<Image className={"w-full h-full object-cover"} fill src={URL.createObjectURL(blob)} alt={model.name}/>)
+                    setThumbnail(<Image className={"w-full h-full object-cover"} fill src={it} alt={model.name}/>)
                 }
             })
         }

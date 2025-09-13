@@ -30,7 +30,6 @@ import {
     GeoLocation,
     DeviceOperationOutputVariantGetGeoLocation,
     CoreOperationVariantRpc,
-    CoreOperationVariantVoid,
     CoreOperationVariantRender,
     CoreOperationVariantTransfer,
     CoreOperationVariantInternet,
@@ -348,9 +347,6 @@ export class WasmCore {
             case CoreOperationVariantRpc: {
                 return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
-            case CoreOperationVariantVoid: {
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
-            }
             case CoreOperationVariantRender: {
                 await this.updateView()
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
@@ -499,7 +495,7 @@ function deserializeArray<T>(clss: any, data: Uint8Array): T[] {
     return values
 }
 
-function serialize(object: any): Uint8Array {
+export function serialize(object: any): Uint8Array {
     const serializer = new BincodeSerializer();
     object.serialize(serializer);
     return serializer.getBytes();

@@ -8,6 +8,11 @@ use js_sys::Uint8Array;
 use shared::app::BitBridge;
 use std::sync::LazyLock;
 
+pub trait Handler<T> {
+    type Output;
+    fn handle(&self, input: T) -> Self::Output;
+}
+
 /// A web worker that dedicated to Core only
 static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 

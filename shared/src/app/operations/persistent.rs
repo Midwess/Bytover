@@ -91,6 +91,7 @@ pub enum TransferSessionPersistentOperation {
         resource_names: HashMap<u64, String>
     },
     GenerateThumbnailPath {
+        session_id: Option<u64>,
         resource_ids: Vec<u64>
     }
 }
@@ -321,10 +322,11 @@ impl TransferSessionPersistentOperation {
     }
 
     pub fn generate_thumbnail_paths(
+        session_id: Option<u64>,
         resource_ids: Vec<u64>
     ) -> AppRequestBuilder<impl Future<Output = HashMap<u64, LocalResourcePath>>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::GenerateThumbnailPath { resource_ids }
+            TransferSessionPersistentOperation::GenerateThumbnailPath { session_id, resource_ids }
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(

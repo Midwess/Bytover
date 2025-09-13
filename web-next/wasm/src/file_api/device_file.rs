@@ -37,6 +37,7 @@ impl Deref for WasmFile {
     }
 }
 
+/// Keep track of files that are being chosen by the user from their device.
 #[derive(Clone)]
 pub struct DeviceFile {
     pub(crate) file: WasmFile,

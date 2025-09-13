@@ -1,7 +1,6 @@
 use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::cache::{BrowserCache, CacheResource, IOReaderBrowserCacheImpl};
 use crate::file_api::path_extension::WebExtLocalResourcePath;
-use crate::file_api::storage::FileStorage;
+use crate::file_api::device_file::FileStorage;
 use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
@@ -20,12 +19,11 @@ use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
+use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl};
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
     pub file_storage: FileStorage,
-    pub thumbnail_caches: Mutex<HashMap<u64, IOReaderBrowserCacheImpl>>,
-    pub resource_caches: Mutex<HashMap<u64, IOReaderBrowserCacheImpl>>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -128,17 +126,13 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
-        let key = resource_id.to_string();
-        let mut thumbnail_caches = self.thumbnail_caches.lock().await;
-        let new_resource = CacheResource::thumbnail(resource_id);
-        let (mut writer, reader) = BrowserCache::create(self.db.clone(), new_resource).await?;
-        thumbnail_caches.insert(resource_id, reader);
-        drop(thumbnail_caches);
+        let save_path = LocalResourcePath::resource_thumbnail(None, resource_id);
+        let (_, path) = save_path.opfs_key_pair().unwrap();
 
+        let mut writer = IOWriterOpfsImpl::new(path.into()).await?;
         writer.write(png_bytes.into()).await?;
         writer.end().await?;
-        let saved_path = LocalResourcePath::cache("thumbnails", key);
-        Ok(saved_path)
+        Ok(save_path)
     }
 
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {
@@ -166,64 +160,27 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             }))
         };
 
-        if let Some(key) = path.thumbnail_resource_id() {
-            let mut thumbnail_caches = self.thumbnail_caches.lock().await;
-            let cache = match thumbnail_caches.get(&key) {
-                Some(cache) => cache,
-                None => {
-                    let new_cache = BrowserCache::open(self.db.clone(), "thumbnails", key).await?;
-                    thumbnail_caches.insert(key, new_cache);
-                    thumbnail_caches.get(&key).unwrap()
-                }
-            };
-
-            return Ok(Box::new(cache.try_clone().await?))
-        }
-
-        if let Some(key) = path.resource_id() {
-            let mut resource_caches = self.resource_caches.lock().await;
-            let cache = match resource_caches.get(&key) {
-                Some(cache) => cache,
-                None => {
-                    let new_cache = BrowserCache::open(self.db.clone(), "resources", key).await?;
-                    resource_caches.insert(key, new_cache);
-                    resource_caches.get(&key).unwrap()
-                }
-            };
-
-            return Ok(Box::new(cache.try_clone().await?))
+        if let Some((_, path)) = path.opfs_key_pair() {
+            let reader = IOReaderOpfsImpl::new(path.into()).await?;
+            return Ok(Box::new(reader))
         }
 
         Err(PersistenceError::NotFound(format!("{:?}", path)))
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
-        if let Some(resource_id) = path.resource_id() {
-            let mut caches = self.resource_caches.lock().await;
-            let resource = CacheResource::resource(resource_id);
-            let (writer, reader) = BrowserCache::create(self.db.clone(), resource).await?;
-            let writer: Box<dyn IOWriter> = Box::new(writer);
-            caches.insert(resource_id, reader);
-
-            return Ok(writer);
-        }
-
-        if let Some(thumbnail_resource_id) = path.thumbnail_resource_id() {
-            let mut caches = self.thumbnail_caches.lock().await;
-            let resource = CacheResource::thumbnail(thumbnail_resource_id);
-            let (writer, reader) = BrowserCache::create(self.db.clone(), resource).await?;
-            let writer: Box<dyn IOWriter> = Box::new(writer);
-            caches.insert(thumbnail_resource_id, reader);
-            return Ok(writer);
+        if let Some((_, path)) = path.opfs_key_pair() {
+            let writer = IOWriterOpfsImpl::new(path.into()).await?;
+            return Ok(Box::new(writer));
         }
 
         Err(PersistenceError::NotFound(format!("Your path is not supported {:?}", path)))
     }
 
-    async fn generate_thumbnail_paths(&self, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
+    async fn generate_thumbnail_paths(&self, session_id: Option<u64>, resource_ids: Vec<u64>) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {
-            let path = LocalResourcePath::cache("thumbnails", resource_id.to_string());
+            let path = LocalResourcePath::resource_thumbnail(session_id.clone(), *resource_id);
             result.insert(*resource_id, path);
         }
 

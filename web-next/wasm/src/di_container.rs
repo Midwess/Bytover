@@ -6,7 +6,7 @@ use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
 use crate::executor::transfer::TransferNativeImpl;
-use crate::file_api::storage::FileStorage;
+use crate::file_api::device_file::FileStorage;
 use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
@@ -155,8 +155,6 @@ impl DiContainer {
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
                 .build(),
-            thumbnail_caches: Default::default(),
-            resource_caches: Default::default()
         });
 
         let _ = self.resource_repository.set(repo.clone());

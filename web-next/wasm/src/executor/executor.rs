@@ -24,7 +24,6 @@ impl NativeExecutor {
                 let response = self.rpc.handle(rpc_effect).await;
                 CoreOperationOutput::Rpc(response)
             }
-            CoreOperation::Void => CoreOperationOutput::Void,
             CoreOperation::Persistent(database) => {
                 let response = self.persistent.handle(database).await;
                 CoreOperationOutput::Database(response)
