@@ -8,7 +8,6 @@ pub mod id;
 pub mod local_resource;
 pub mod transfer_session;
 
-mod errors;
 pub mod user;
 
 pub struct IdbPoolProvider {
@@ -33,10 +32,6 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
             database.create_object_store("authSession", store_params.clone()).unwrap();
             database.create_object_store("transferSession", store_params.clone()).unwrap();
             database.create_object_store("localResource", store_params.clone()).unwrap();
-
-            // === Binary stores ===
-            database.create_object_store("thumbnails", store_params.clone()).unwrap();
-            database.create_object_store("resources", store_params.clone()).unwrap();
         });
 
         NeverSend(open_request.await.unwrap())

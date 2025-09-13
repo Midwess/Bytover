@@ -1,4 +1,3 @@
-pub mod cache;
 pub mod device_file;
 pub mod file_extension;
 pub mod opfs;
