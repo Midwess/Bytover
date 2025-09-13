@@ -139,6 +139,11 @@ impl IOWriter for IOWriterOpfsImpl {
         }
     }
 
+    async fn end(&mut self) -> Result<()> {
+        self.flush().await?;
+        Ok(())
+    }
+
     async fn flush(&mut self) -> Result<()> {
         self.worker()
             .await

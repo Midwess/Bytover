@@ -5,8 +5,7 @@ pub trait WebExtLocalResourcePath {
     fn device_file_id(&self) -> Option<u64>;
     fn session_resource(session_id: u64, resource_id: u64, extension: String) -> Self;
     fn resource_thumbnail(session_id: Option<u64>, resource_id: u64) -> Self;
-    fn opfs_key_pair(&self) -> Option<(String, String)>;
-    fn resource_id(&self) -> Option<u64>;
+    fn opfs_path(&self) -> Option<String>;
 }
 
 impl WebExtLocalResourcePath for LocalResourcePath {
@@ -32,26 +31,14 @@ impl WebExtLocalResourcePath for LocalResourcePath {
         Self::PlatformIdentifier(format!("opfs://sessions-{session_id}/{resource_id}.{extension}"))
     }
 
-    fn resource_id(&self) -> Option<u64> {
-        let (store, key) = self.opfs_key_pair()?;
-        if store == "resources" {
-            return key.trim_start_matches('/').parse::<u64>().ok()
-        };
-
-        None
-    }
-
-    fn opfs_key_pair(&self) -> Option<(String, String)> {
+    fn opfs_path(&self) -> Option<String> {
         match self {
             Self::PlatformIdentifier(path) => {
                 if !path.starts_with("opfs://") {
                     return None;
                 }
 
-                let path = path.trim_start_matches("opfs://");
-                let parts: Vec<&str> = path.split('/').collect();
-                let store_name = parts[0];
-                Some((store_name.to_string(), path.trim_start_matches(store_name).to_string()))
+                Some(path.trim_start_matches("opfs://").to_string())
             }
             _ => None
         }

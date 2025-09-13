@@ -127,7 +127,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
         let save_path = LocalResourcePath::resource_thumbnail(None, resource_id);
-        let (_, path) = save_path.opfs_key_pair().unwrap();
+        let path = save_path.opfs_path().unwrap();
 
         let mut writer = IOWriterOpfsImpl::new(path.into()).await?;
         writer.write(png_bytes.into()).await?;
@@ -160,7 +160,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             }))
         };
 
-        if let Some((_, path)) = path.opfs_key_pair() {
+        if let Some(path) = path.opfs_path() {
             let reader = IOReaderOpfsImpl::new(path.into()).await?;
             return Ok(Box::new(reader))
         }
@@ -169,7 +169,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
-        if let Some((_, path)) = path.opfs_key_pair() {
+        if let Some((_, path)) = path.opfs_path() {
             let writer = IOWriterOpfsImpl::new(path.into()).await?;
             return Ok(Box::new(writer));
         }
