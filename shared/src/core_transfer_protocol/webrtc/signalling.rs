@@ -42,37 +42,12 @@ impl WebRtcPeerConnectionProcess {
     }
 }
 
-pub enum KeepAliveTicker {
-    Now(),
-    Delayed(Instant)
-}
-
-impl KeepAliveTicker {
-    pub fn should_send(&mut self) -> bool {
-        match self {
-            Self::Now() => {
-                *self = Self::Delayed(Instant::now());
-                true
-            }
-            Self::Delayed(instant) => {
-                if instant.elapsed().as_secs() > 3 {
-                    *instant = Instant::now();
-                    return true;
-                }
-
-                false
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct SharedContext {
     peers: Arc<Mutex<HashMap<PeerId, WebRtcPeerConnectionProcess>>>,
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
-    current_id: OnceCell<PeerId>,
-    keep_alive_ticker: Arc<Mutex<KeepAliveTicker>>
+    current_id: OnceCell<PeerId>
 }
 
 impl Default for SharedContext {
@@ -87,17 +62,12 @@ impl SharedContext {
             current_id: Default::default(),
             finding_scopes: Default::default(),
             peers: Default::default(),
-            peer_msg_channels: Default::default(),
-            keep_alive_ticker: Arc::new(Mutex::new(KeepAliveTicker::Now()))
+            peer_msg_channels: Default::default()
         }
     }
 
     pub fn set_current_id(&self, id: PeerId) {
         let _ = self.current_id.set(id);
-    }
-
-    pub async fn should_send_keep_alive(&self) -> bool {
-        self.keep_alive_ticker.lock().await.should_send()
     }
 
     pub fn get_current_id(&self) -> PeerId {
@@ -108,8 +78,6 @@ impl SharedContext {
         let mut finding_scopes = self.finding_scopes.lock().await;
         if scopes.ne(&*finding_scopes) {
             log::info!("Updating finding scopes: {scopes:#?}");
-            let mut keep_alive_ticker = self.keep_alive_ticker.lock().await;
-            *keep_alive_ticker = KeepAliveTicker::Now();
         }
 
         finding_scopes.clear();
@@ -147,14 +115,10 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        log::info!("Removing peer: {peer_id:?}");
         let mut peers = self.peers.lock().await;
         if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get()) {
-            log::info!("Peer removed");
             drop(peers);
             peer.peer_disconnected().await;
-        } else {
-            log::info!("Peer not found {peer_id}");
         }
     }
 
@@ -320,10 +284,6 @@ impl Signaller for WebSignaller {
             }
         };
 
-        if message.join.is_some() && !self.shared_context.should_send_keep_alive().await {
-            return Ok(())
-        }
-
         message.scopes = self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>();
 
         self.client.send(message).await.map_err(Into::<SignalingError>::into)?;
@@ -347,10 +307,6 @@ impl Signaller for WebSignaller {
                     return Ok(peer_event);
                 }
             } else {
-                if matches!(peer_event, PeerEvent::PeerLeft(_)) {
-                    log::info!("Peer left: {peer_event:?}");
-                }
-
                 return Ok(peer_event);
             }
         }

@@ -45,3 +45,12 @@ pub fn get_signalling_server_ws_url() -> String {
         format!("ws://{}:{}/rpc-signalling", host_info.host, host_info.port)
     }
 }
+
+pub fn get_locator_server_url() -> String {
+    let host_info = get_host_info().unwrap();
+    if host_info.is_with_ssl {
+        format!("https://{}:{}/locator", host_info.host, host_info.port)
+    } else {
+        format!("http://{}:{}/locator", host_info.host, host_info.port)
+    }
+}

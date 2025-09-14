@@ -33,8 +33,7 @@ use shared::CoreOperation;
 use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{window, File, FileSystemWritableFileStream};
+use web_sys::{window, File};
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));

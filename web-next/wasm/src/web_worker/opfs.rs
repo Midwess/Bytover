@@ -3,7 +3,7 @@ use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger::setup;
 use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
-use js_sys::{Array, Uint8Array};
+use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -204,7 +204,9 @@ impl OpfsWorker {
                     let file: web_sys::File = file.into();
                     let url = web_sys::Url::create_object_url_with_blob(&file)?;
                     Ok::<String, JsValue>(url)
-                }.await {
+                }
+                .await
+                {
                     Ok(url) => OpfsOperationOutput::DownloadUrl(url),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }

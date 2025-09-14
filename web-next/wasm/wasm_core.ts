@@ -376,8 +376,31 @@ export class WasmCore {
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
-                        const location = new GeoLocation(10, 10.2);
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                        try {
+                            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                                if (!navigator.geolocation) {
+                                    reject(new Error('Geolocation is not supported'))
+                                    return
+                                }
+                                
+                                navigator.geolocation.getCurrentPosition(
+                                    resolve,
+                                    reject,
+                                    {
+                                        enableHighAccuracy: true,
+                                        timeout: 15000,
+                                        maximumAge: 60000
+                                    }
+                                )
+                            })
+                            
+                            const location = new GeoLocation(position.coords.latitude, position.coords.longitude);
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                        }
+                        catch (error) {
+                            console.warn('Failed to get geolocation:', error)
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(null))))
+                        }
                     }
                 }
 

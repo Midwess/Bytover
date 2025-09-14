@@ -121,12 +121,14 @@ impl NativeProcessor {
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
 
-        let _ = get_tokio_rt().spawn({
-            let shell = shell.clone();
-            async move {
-                di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
-            }
-        }).await;
+        let _ = get_tokio_rt()
+            .spawn({
+                let shell = shell.clone();
+                async move {
+                    di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
+                }
+            })
+            .await;
 
         let native_executor = di_container.get_native_executor();
 

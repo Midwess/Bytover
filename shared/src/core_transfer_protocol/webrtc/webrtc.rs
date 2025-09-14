@@ -115,7 +115,8 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_millis(300)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(3000)))
+            .reconnect_attempts(Some(4))
             .build();
 
         let loop_fut = loop_fut.fuse();
@@ -273,8 +274,8 @@ impl WebRtc {
                     timeout.reset(Duration::from_millis(5));
                 }
                 _ = (&mut connection_timeout).fuse() => {
+                    connection_timeout.reset(Duration::from_secs(1));
                     self.shared_context.poll_timeout().await;
-                    connection_timeout.reset(Duration::from_secs(10));
                 }
                 _ = &mut loop_fut => {
                     break;

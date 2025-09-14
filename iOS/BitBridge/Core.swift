@@ -184,7 +184,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
         case .appCapabilities(.delay(let duration)):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.delay(duration).bincodeSerialize()))
-        case .appCapabilities(.dialog(.message(_, _))):
+        case .appCapabilities(.dialog(.message)):
             return Data(try! CoreOperationOutput.void.bincodeSerialize())
         }
     }
@@ -212,7 +212,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let private_dir = self.getDocumentsDirectory(isPrivate: true).path
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
-        case .notify(_):
+        case .notify:
             return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
         }
     }

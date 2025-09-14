@@ -69,13 +69,13 @@ function ContentBoard() {
                 })
             }
         }
-    }, [selectedSession]);
+    }, [selectedSession])
 
     useEffect(() => {
         if (url.session && coreReady) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(url.session)))
         }
-    }, [coreReady]);
+    }, [coreReady])
 
     useEffect(() => {
         if (!url?.session || !cloudSessions?.length) return
@@ -87,8 +87,7 @@ function ContentBoard() {
         if (session) {
             core.updateSelectedSession(session)
         }
-
-    }, [cloudSessions?.length]);
+    }, [cloudSessions?.length])
 
     const onSelected = () => {
         if (!selectedSession) {

@@ -92,11 +92,12 @@ impl NearbyService {
         }
     }
 
-    pub async fn start_ip_address_monitor(&'static self, ctx: AppCommandContext) {
+    pub async fn start_locator_monitor(&'static self, ctx: AppCommandContext) {
         loop {
-            let ip_address = InternetOperation::get_current_ip_address().into_future(ctx.clone()).await;
-            if let Ok(ip_address) = ip_address {
-                ctx.notify_event(AppEvent::Nearby(NearbyEvent::OnIpAddressUpdated(ip_address)));
+            let geo_location = DeviceOperation::get_geo_location().into_future(ctx.clone()).await;
+            let scopes = InternetOperation::locate(geo_location).into_future(ctx.clone()).await;
+            if let Ok(scopes) = scopes {
+                ctx.request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).await;
             }
 
             ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
@@ -114,13 +115,11 @@ impl NearbyService {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
-                    log::info!(target: ns.as_str(), "Received cancel session request from peer: {}", peer.id);
                     let request = AppEvent::Transfer(TransferEvent::TransferCanceled { session_id });
 
                     ctx.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
-                    log::info!(target: ns.as_str(), "Received session request from peer: {}", peer.id);
                     let request = AppEvent::Transfer(TransferEvent::TransferRequest {
                         remote_session,
                         peer: peer.clone()

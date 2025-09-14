@@ -58,7 +58,6 @@ impl SignallingClient {
                 loop {
                     let receiver = receiver.clone();
 
-                    // Reduce CPU usage
                     Delay::new(Duration::from_millis(20)).await;
 
                     let msg_opt = {
