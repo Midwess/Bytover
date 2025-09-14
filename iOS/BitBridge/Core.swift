@@ -159,8 +159,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .appCapabilities(.rpc(let rpc)):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.rpc(rpc).bincodeSerialize()))
-        case .appCapabilities(.void):
-            return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.void.bincodeSerialize()))
         case .appCapabilities(.render):
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
@@ -186,6 +184,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
         case .appCapabilities(.delay(let duration)):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.delay(duration).bincodeSerialize()))
+        case .appCapabilities(.dialog(.message)):
+            return Data(try! CoreOperationOutput.void.bincodeSerialize())
         }
     }
 
@@ -212,6 +212,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let private_dir = self.getDocumentsDirectory(isPrivate: true).path
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
+        case .notify:
+            return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
         }
     }
 
@@ -743,7 +745,7 @@ class CoreMock: Core {
             peer_name: "Tien Dang",
             peer_description: "nearby",
             image_resources: [
-                ImageReceiveResourceViewModel(model: resource1, is_completed: false)
+                ImageReceiveResourceViewModel(model: resource1, completion: 1.0, is_completed: false)
             ],
             video_resources: [],
             file_resources: [],
@@ -762,7 +764,7 @@ class CoreMock: Core {
             image_resources: [],
             video_resources: [],
             file_resources: [
-                FileReceiveResourceViewModel(model: resource2, is_completed: false)
+                FileReceiveResourceViewModel(model: resource2, completion: 0.8, is_completed: false)
             ],
             is_completed: false,
             is_in_progress: true,
@@ -778,7 +780,7 @@ class CoreMock: Core {
             peer_description: "nearby",
             image_resources: [],
             video_resources: [
-                VideoReceiveResourceViewModel(model: resource3, is_completed: true)
+                VideoReceiveResourceViewModel(model: resource3, completion: 1.0, is_completed: true)
             ],
             file_resources: [],
             is_completed: true,
@@ -795,6 +797,7 @@ class CoreMock: Core {
             transfer_method_selection: .device,
             nearby_peers: [],
             received_sessions: [receive_session1, receive_session2, receive_session3],
+            received_cloud_sessions: [],
             cloud_session: CloudSession(access_url: "https://bitbridge.devlog.studio/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
         ))
 

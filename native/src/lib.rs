@@ -2,6 +2,7 @@
 
 static _CURRENT_VERSION: &str = "1.0.0";
 
+use core_services::logger::setup;
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration, Interval};
 pub mod config;
@@ -116,10 +117,18 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
 
 impl NativeProcessor {
     pub async fn new(shell: Arc<dyn ShellRuntime>) -> Self {
+        setup();
         let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
 
-        di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
+        let _ = get_tokio_rt()
+            .spawn({
+                let shell = shell.clone();
+                async move {
+                    di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
+                }
+            })
+            .await;
 
         let native_executor = di_container.get_native_executor();
 

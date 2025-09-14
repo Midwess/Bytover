@@ -11,7 +11,7 @@ typegen = ["crux_core/typegen"]
 
 [dependencies]
 crux_core.workspace = true
-core-services = { workspace = true, default-features = false }
+core-services = { workspace = true, default-features = false, features = ["retry"] }
 schema = { workspace = true, features = ["client"], default-features = false }
 devlog-sdk = { workspace = true, default-features = false }
 tonic = { workspace = true, default-features = false }
@@ -19,13 +19,10 @@ async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
-h3o = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true, features = ["v7"] }
 serde = { workspace = true, features = ["derive"] }
-url = { workspace = true }
 futures-util = { workspace = true }
-bytes.workspace = true
 prost.workspace = true
 futures-timer = {workspace = true, features = ["wasm-bindgen"]}
 n0-future.workspace = true
@@ -38,6 +35,9 @@ ewebsock = { workspace = true, features = ["tokio", "tls"] }
 once_cell = { workspace = true }
 futures = { workspace = true }
 http-body = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+bytes = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["js", "v7"] }

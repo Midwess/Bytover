@@ -17,3 +17,11 @@ pub fn get_signalling_server_ws_url() -> String {
         format!("ws://{GATEWAY_HOST}:{GATEWAY_PORT}/rpc-signalling")
     }
 }
+
+pub fn get_locator_http_url() -> String {
+    if DEVLOG_WITH_SSL == "1" {
+        format!("https://{GATEWAY_HOST}:{GATEWAY_PORT}/locator")
+    } else {
+        format!("http://{GATEWAY_HOST}:{GATEWAY_PORT}/locator")
+    }
+}

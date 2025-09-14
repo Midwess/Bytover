@@ -14,7 +14,8 @@ pub struct NativeExecutor {
     pub rpc: Box<dyn NativeRpc<Client>>,
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Client>>,
-    pub p2p: Box<dyn P2PNativeExecutor>
+    pub p2p: Box<dyn P2PNativeExecutor>,
+    pub internet_connection: InternetConnection
 }
 
 impl NativeExecutor {
@@ -29,15 +30,12 @@ impl NativeExecutor {
                 CoreOperationOutput::Database(response)
             }
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
-            CoreOperation::Internet(internet) => match internet {
-                InternetOperation::GetCurrentIpAddress => {
-                    let internet_connection = InternetConnection::new();
-                    match internet_connection.ip_address().await {
-                        Ok(ip_address) => CoreOperationOutput::Internet(InternetOperationOutput::GetCurrentIpAddress(ip_address)),
-                        Err(error) => CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error))
-                    }
+            CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
+                match self.internet_connection.locate(geo_location).await {
+                    Ok(net) => CoreOperationOutput::Internet(InternetOperationOutput::Locate(net.finding_scopes())),
+                    Err(error) => CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error))
                 }
-            },
+            }
             CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
             CoreOperation::Delay(duration) => {
                 Delay::new(duration).await;

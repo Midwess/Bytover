@@ -120,10 +120,52 @@ export class WasmCore {
         return session
     }
 
+    public useReceiveResource(id: bigint) {
+        const [resource, setResource] = useState<any>(() => {
+            const transferState = this.transferState.get()
+            if (!transferState) return undefined
+            
+            // Search in all resource arrays
+            return transferState.received_sessions?.flatMap(session => [
+                ...session.file_resources,
+                ...session.image_resources,
+                ...session.video_resources
+            ]).find(r => r.model.order_id === id) ||
+            transferState.received_cloud_sessions?.flatMap(session => [
+                ...session.file_resources,
+                ...session.image_resources,
+                ...session.video_resources
+            ]).find(r => r.model.order_id === id)
+        })
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (!transferState) return
+                
+                const foundResource = transferState.received_sessions?.flatMap(session => [
+                    ...session.file_resources,
+                    ...session.image_resources,
+                    ...session.video_resources
+                ]).find(r => r.model.order_id === id) ||
+                transferState.received_cloud_sessions?.flatMap(session => [
+                    ...session.file_resources,
+                    ...session.image_resources,
+                    ...session.video_resources
+                ]).find(r => r.model.order_id === id)
+                
+                if (foundResource && !isEqual(resource, foundResource)) {
+                    setResource(foundResource)
+                }
+            })
+        }, [id, resource])
+
+        return resource
+    }
+
     public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
         this.selectedSession.set(session)
     }
-
+    
     public useMessage(type: string) {
         const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
 
@@ -334,8 +376,31 @@ export class WasmCore {
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
-                        const location = new GeoLocation(10, 10.2);
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                        try {
+                            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                                if (!navigator.geolocation) {
+                                    reject(new Error('Geolocation is not supported'))
+                                    return
+                                }
+                                
+                                navigator.geolocation.getCurrentPosition(
+                                    resolve,
+                                    reject,
+                                    {
+                                        enableHighAccuracy: true,
+                                        timeout: 15000,
+                                        maximumAge: 60000
+                                    }
+                                )
+                            })
+                            
+                            const location = new GeoLocation(position.coords.latitude, position.coords.longitude);
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                        }
+                        catch (error) {
+                            console.warn('Failed to get geolocation:', error)
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(null))))
+                        }
                     }
                 }
 
@@ -408,31 +473,26 @@ export class WasmCore {
         return selections
     }
 
-    async loadThumbnailSource(path: LocalResourcePath): Promise<string | undefined> {
+    async getDownloadUrl(path: LocalResourcePath): Promise<string | undefined> {
         const data = serialize(path)
-        return this.nativeProcessor?.load_thumbnail_source(data)
+        return this.nativeProcessor?.get_download_url(data)
     }
 
-    async downloadFileFromCache(path: LocalResourcePath, filename: string): Promise<void> {
-        if (!this.nativeProcessor) {
-            throw new Error('Native processor not initialized')
+    async downloadFile(path: LocalResourcePath, filename: string): Promise<void> {
+        const downloadUrl = await this.getDownloadUrl(path)
+        
+        if (!downloadUrl) {
+            throw new Error('Failed to get download URL')
         }
-
-        const data = serialize(path)
         
-        // Create a file picker to save the file
-        const fileHandle = await (window as any).showSaveFilePicker({
-            suggestedName: filename,
-        })
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
         
-        const writable = await fileHandle.createWritable()
-        
-        try {
-            await this.nativeProcessor.download_file_from_cache(data, writable)
-        } catch (error) {
-            await writable.close()
-            throw error
-        }
+        URL.revokeObjectURL(downloadUrl)
     }
 
     async updateView() {

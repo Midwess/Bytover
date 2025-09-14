@@ -1,4 +1,4 @@
-use crate::config::{get_gateway_grpc_url, get_signalling_server_ws_url};
+use crate::config::{get_gateway_grpc_url, get_locator_server_url, get_signalling_server_ws_url};
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::executor::executor::NativeExecutor;
@@ -25,6 +25,7 @@ use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use shared::app::transfer::transfer_service::TransferService;
+use shared::core_api::network::InternetConnection;
 use shared::core_api::{CoreBridge, NetStream};
 use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
 use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
@@ -200,6 +201,7 @@ impl DiContainer {
         };
 
         let executor = NativeExecutor {
+            internet_connection: InternetConnection::new(get_locator_server_url()),
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server()
             }),

@@ -38,9 +38,9 @@ struct PublicUrlShareView: View {
                 // Upload action
                 Task {
                     if let cloud = cloud {
-                        await core.update(.transfer(.cancelTransfer(session_id: cloud.session_id)))
+                        await core.update(.transfer(.cancelTransfer(session_id: cloud.session_id, transfer_type: .send)))
                     } else {
-                        await core.update(.transfer(.startPublicTransfer(password: password.isEmpty ? nil : password)))
+                        await core.update(.transfer(.startPublicTransfer(password: password.isEmpty ? nil : password, to_emails: [])))
                     }
                 }
             }) {
