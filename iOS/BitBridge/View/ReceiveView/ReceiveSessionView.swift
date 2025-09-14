@@ -270,7 +270,7 @@ struct ReceiveSessionHeaderView: View {
                             .frame(width: 30, height: 30)
                             .onTapGesture { _ in
                                 Task {
-                                    await core.update(.transfer(.cancelTransfer(session_id: session.id)))
+                                    await core.update(.transfer(.cancelTransfer(session_id: session.id, transfer_type: .receive)))
                                 }
                             }
                     }

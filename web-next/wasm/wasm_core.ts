@@ -450,31 +450,26 @@ export class WasmCore {
         return selections
     }
 
-    async loadThumbnailSource(path: LocalResourcePath): Promise<string | undefined> {
+    async getDownloadUrl(path: LocalResourcePath): Promise<string | undefined> {
         const data = serialize(path)
-        return this.nativeProcessor?.load_thumbnail_source(data)
+        return this.nativeProcessor?.get_download_url(data)
     }
 
-    async downloadFileFromCache(path: LocalResourcePath, filename: string): Promise<void> {
-        if (!this.nativeProcessor) {
-            throw new Error('Native processor not initialized')
+    async downloadFile(path: LocalResourcePath, filename: string): Promise<void> {
+        const downloadUrl = await this.getDownloadUrl(path)
+        
+        if (!downloadUrl) {
+            throw new Error('Failed to get download URL')
         }
-
-        const data = serialize(path)
         
-        // Create a file picker to save the file
-        const fileHandle = await (window as any).showSaveFilePicker({
-            suggestedName: filename,
-        })
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
         
-        const writable = await fileHandle.createWritable()
-        
-        try {
-            await this.nativeProcessor.download_file_from_cache(data, writable)
-        } catch (error) {
-            await writable.close()
-            throw error
-        }
+        URL.revokeObjectURL(downloadUrl)
     }
 
     async updateView() {

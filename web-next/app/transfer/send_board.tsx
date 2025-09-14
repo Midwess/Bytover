@@ -230,7 +230,7 @@ function MediaView(props: {
 
     useEffect(() => {
         if ((isVideo || isImage) && model.thumbnail_path) {
-            core.loadThumbnailSource(model.thumbnail_path).then((it) => {
+            core.getDownloadUrl(model.thumbnail_path).then((it) => {
                 if (it) {
                     setThumbnail(<Image className={"w-full h-full object-cover"} fill src={it} alt={model.name}/>)
                 }

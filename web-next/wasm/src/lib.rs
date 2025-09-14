@@ -167,9 +167,9 @@ impl NativeProcessor {
         file.map(|it| it.file.0)
     }
 
-    pub async fn load_thumbnail_source(&self, path: Uint8Array) -> Option<String> {
+    pub async fn get_download_url(&self, path: Uint8Array) -> Option<String> {
         let path: LocalResourcePath = deserialize(&path);
-        let opfsPath = match path {
+        let opfs_path = match path {
             LocalResourcePath::AbsolutePath(path) => return Some(path),
             LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
             _ => return None
@@ -177,14 +177,14 @@ impl NativeProcessor {
 
         let _ = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfsPath.clone(),
+                file_path: opfs_path.clone(),
                 operation: FileOperation::Open
             }))
             .await;
 
         let response = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfsPath,
+                file_path: opfs_path,
                 operation: FileOperation::GenerateSource
             }))
             .await?;
@@ -193,31 +193,6 @@ impl NativeProcessor {
             OpfsOperationOutput::DownloadUrl(url) => Some(url),
             _ => None
         }
-    }
-
-    pub async fn download_file_from_cache(&self, path: Vec<u8>, writer: FileSystemWritableFileStream) {
-        let options = bincode_options();
-        let mut deser = bincode::Deserializer::from_slice(&path, options);
-        let mut deserializer = <dyn erased_serde::Deserializer>::erase(&mut deser);
-        let path: LocalResourcePath = erased_serde::deserialize(&mut deserializer).expect("Failed to deserialize effect");
-        let repository = DiContainer::get_instance().get_local_resource_repository().await;
-        let Ok(mut reader) = repository.read(path, 1024 * 256).await else {
-            let _ = JsFuture::from(writer.close()).await;
-            return;
-        };
-
-        while let Some(data) = reader.next().await.unwrap() {
-            let Ok(fut) = writer.write_with_u8_array(&data) else {
-                break;
-            };
-
-            if let Err(e) = JsFuture::from(fut).await {
-                log::error!("Failed to write to file: {:?}", e);
-                break;
-            }
-        }
-
-        let _ = JsFuture::from(writer.close()).await;
     }
 
     pub async fn execute_operation(&self, effect: Uint8Array) -> Uint8Array {

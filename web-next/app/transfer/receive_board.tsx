@@ -445,22 +445,6 @@ function FileView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
-    const handleDownload = async () => {
-        if (model.path instanceof LocalResourcePathVariantAbsolutePath) {
-            // Current behavior - direct download link
-            const link = document.createElement('a');
-            link.href = model.path.value;
-            link.download = model.name;
-            link.click();
-        } else {
-            try {
-                await core.downloadFileFromCache(model.path, model.name);
-            } catch (error) {
-                console.error('Failed to download file:', error);
-            }
-        }
-    };
-
     return (
         <div
             className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
@@ -485,7 +469,7 @@ function FileView(props: {
                 file.is_completed
                     ? <button
                         className={"rounded-lg p-2 border bg-muted hover:cursor-pointer"}
-                        onClick={handleDownload}
+                        onClick={() => core.downloadFile(model.path, model.name)}
                     >
                         <ArrowDown color={'var(--primary)'}/>
                     </button>
@@ -515,28 +499,9 @@ function MediaView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
-    const handleDownload = async () => {
-        if (model.path instanceof LocalResourcePathVariantAbsolutePath) {
-            // Current behavior - direct download link
-            const link = document.createElement('a');
-            link.href = model.path.value;
-            link.download = model.name;
-            link.click();
-        } else {
-            try {
-                await core.downloadFileFromCache(model.path, model.name);
-            } catch (error) {
-                console.error('Failed to download file:', error);
-            }
-        }
-    };
-
     useEffect(() => {
         if (model.thumbnail_path) {
-            core.loadThumbnailSource(model.thumbnail_path)
-                .then((value) => {
-                    setThumbnailSource(value)
-                })
+            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
         }
     }, [model.thumbnail_path]);
 
@@ -577,7 +542,9 @@ function MediaView(props: {
                 </div>
                     <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
-                        ? <button className={"rounded-lg ml-2 bg-muted border border-muted-foreground p-1 hover:cursor-pointer"} onClick={handleDownload}>
+                        ? <button
+                            className={"rounded-lg ml-2 bg-muted border border-muted-foreground p-1 hover:cursor-pointer"}
+                            onClick={() => core.downloadFile(model.path, model.name)}>
                             <ArrowDown color={'white'}/>
                           </button>
                         : <>
