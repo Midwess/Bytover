@@ -155,23 +155,6 @@ impl SharedContext {
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
     }
-
-    pub async fn poll_timeout(&self) {
-        let peers = self.peers.lock().await;
-        let mut peers_to_remove = vec![];
-        for (peer_id, peer) in peers.iter() {
-            if let WebRtcPeerConnectionProcess::Connecting(connecting_time) = peer {
-                if Instant::now().duration_since(*connecting_time).as_secs() > 10 {
-                    log::info!("Peer not connected for 10 seconds: {peer_id:?}");
-                    peers_to_remove.push(*peer_id);
-                }
-            }
-        }
-
-        for peer_id in peers_to_remove {
-            self.remove_peer(&peer_id).await;
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -325,7 +308,8 @@ impl Signaller for WebSignaller {
                     log::info!("New peer found: {peer_id:?}, connecting...");
                     return Ok(peer_event);
                 }
-            } else {
+            }
+            else {
                 return Ok(peer_event);
             }
         }

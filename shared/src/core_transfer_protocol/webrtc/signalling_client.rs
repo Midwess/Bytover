@@ -2,7 +2,7 @@ use crate::core_api::TimeoutReceiver;
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use anyhow::anyhow;
 use ewebsock::{connect, Options, WsEvent, WsMessage};
-use futures::channel::mpsc::{Sender, Receiver, channel, UnboundedReceiver, UnboundedSender, unbounded};
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
 use futures_util::{SinkExt, StreamExt};

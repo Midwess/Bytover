@@ -12,8 +12,6 @@ pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
-use crate::executor::executor::NativeExecutor;
-use crate::file_api::device_file::FileStorage;
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::opfs::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;

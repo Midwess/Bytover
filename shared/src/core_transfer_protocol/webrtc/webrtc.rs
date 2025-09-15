@@ -116,16 +116,14 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .signaling_keep_alive_interval(Some(Duration::from_millis(3000)))
-            .reconnect_attempts(Some(4))
+            .reconnect_attempts(Some(u16::MAX))
+            .handshake_timeout(Duration::from_secs(10))
             .build();
 
         let loop_fut = loop_fut.fuse();
         futures::pin_mut!(loop_fut);
         let timeout = Delay::new(Duration::from_millis(5));
         futures::pin_mut!(timeout);
-
-        let connection_timeout = Delay::new(Duration::from_secs(10));
-        futures::pin_mut!(connection_timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
         let outbound_data_sender = socket.channel(TRANSFER_RESOURCE_CHANNEL_ID).sender_clone();
@@ -272,10 +270,6 @@ impl WebRtc {
             select! {
                 _ = (&mut timeout).fuse() => {
                     timeout.reset(Duration::from_millis(5));
-                }
-                _ = (&mut connection_timeout).fuse() => {
-                    connection_timeout.reset(Duration::from_secs(1));
-                    self.shared_context.poll_timeout().await;
                 }
                 _ = &mut loop_fut => {
                     break;
