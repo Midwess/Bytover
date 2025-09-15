@@ -81,6 +81,108 @@ pub async fn view() -> Uint8Array {
     response.message.0
 }
 
+#[wasm_bindgen]
+pub async fn is_compatible() -> bool {
+    logger::setup();
+    let Some(with_browser) = window() else {
+        log::info!("No window");
+        return false
+    };
+
+    if with_browser.is_null() || with_browser.is_undefined() {
+        log::info!("Window is null");
+        return false
+    }
+
+    let Ok(with_cache) = with_browser.caches() else {
+        log::info!("No caches");
+        return false
+    };
+
+    if with_cache.is_null() || with_cache.is_undefined() {
+        log::info!("Caches is null");
+        return false
+    }
+
+    let storage = with_browser.navigator().storage();
+
+    if storage.is_null() || storage.is_undefined() {
+        log::info!("Storage is null");
+        return false
+    }
+
+    true
+}
+
+#[wasm_bindgen]
+pub async fn init() {
+    let di_container = DiContainer::get_instance();
+    di_container.init().await;
+}
+
+#[wasm_bindgen]
+pub async fn add_device_files(files: &Array) -> Uint8Array {
+    let storage = DiContainer::get_instance().file_storage();
+    let paths = storage.add(files).await;
+
+    serialize(&paths)
+}
+
+#[wasm_bindgen]
+pub async fn get_device_file(resource_id: u64) -> Option<File> {
+    let storage = DiContainer::get_instance().file_storage();
+    let file = storage.get(resource_id).await;
+    file.map(|it| it.file.0)
+}
+
+#[wasm_bindgen]
+pub async fn get_download_url(path: Uint8Array) -> Option<String> {
+    let path: LocalResourcePath = deserialize(&path);
+    let opfs_path = match path {
+        LocalResourcePath::AbsolutePath(path) => return Some(path),
+        LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
+        _ => return None
+    };
+
+    let _ = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: opfs_path.clone(),
+            operation: FileOperation::Open
+        }))
+        .await;
+
+    let response = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: opfs_path,
+            operation: FileOperation::GenerateSource
+        }))
+        .await?;
+
+    match response.message {
+        OpfsOperationOutput::DownloadUrl(url) => Some(url),
+        _ => None
+    }
+}
+
+/// Run CoreOperation and return the CoreOperationOutput
+#[wasm_bindgen]
+pub async fn execute_operation(effect: Uint8Array) -> Uint8Array {
+    let executor = DiContainer::get_instance().get_native_executor().await;
+    let effect: CoreOperation = deserialize(&effect);
+    let output = executor.handle(u32::MAX, effect).await;
+    serialize(&output)
+}
+
+/// Run CoreOperation and call core to handle response
+/// Return the next Operations that need to execute.
+#[wasm_bindgen]
+pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
+    let executor = DiContainer::get_instance().get_native_executor().await;
+    let effect: CoreOperation = deserialize(&effect);
+    let output = executor.handle(request_id, effect).await;
+    handle_response(request_id, serialize(&output)).await
+}
+
 pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E
 where
     E: for<'de> Deserialize<'de>
@@ -105,104 +207,3 @@ fn bincode_options() -> impl Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
 
-#[wasm_bindgen]
-pub struct NativeProcessor {
-    executor: &'static NativeExecutor,
-    storage: FileStorage
-}
-
-#[wasm_bindgen]
-impl NativeProcessor {
-    pub async fn is_compatible() -> bool {
-        logger::setup();
-        let Some(with_browser) = window() else {
-            log::info!("No window");
-            return false
-        };
-
-        if with_browser.is_null() || with_browser.is_undefined() {
-            log::info!("Window is null");
-            return false
-        }
-
-        let Ok(with_cache) = with_browser.caches() else {
-            log::info!("No caches");
-            return false
-        };
-
-        if with_cache.is_null() || with_cache.is_undefined() {
-            log::info!("Caches is null");
-            return false
-        }
-
-        let storage = with_browser.navigator().storage();
-
-        if storage.is_null() || storage.is_undefined() {
-            log::info!("Storage is null");
-            return false
-        }
-
-        true
-    }
-
-    pub async fn init() -> Self {
-        let di_container = DiContainer::get_instance();
-        di_container.init().await;
-
-        Self {
-            storage: di_container.file_storage(),
-            executor: di_container.get_native_executor().await
-        }
-    }
-
-    pub async fn add_device_files(&self, files: &Array) -> Uint8Array {
-        let paths = self.storage.add(files).await;
-
-        serialize(&paths)
-    }
-
-    pub async fn get_device_file(&self, resource_id: u64) -> Option<File> {
-        let file = self.storage.get(resource_id).await;
-        file.map(|it| it.file.0)
-    }
-
-    pub async fn get_download_url(&self, path: Uint8Array) -> Option<String> {
-        let path: LocalResourcePath = deserialize(&path);
-        let opfs_path = match path {
-            LocalResourcePath::AbsolutePath(path) => return Some(path),
-            LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
-            _ => return None
-        };
-
-        let _ = OPFS_WORKER
-            .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfs_path.clone(),
-                operation: FileOperation::Open
-            }))
-            .await;
-
-        let response = OPFS_WORKER
-            .send(WorkerMessage::new(OpfsOperation {
-                file_path: opfs_path,
-                operation: FileOperation::GenerateSource
-            }))
-            .await?;
-
-        match response.message {
-            OpfsOperationOutput::DownloadUrl(url) => Some(url),
-            _ => None
-        }
-    }
-
-    pub async fn execute_operation(&self, effect: Uint8Array) -> Uint8Array {
-        let effect: CoreOperation = deserialize(&effect);
-        let output = self.executor.handle(u32::MAX, effect).await;
-        serialize(&output)
-    }
-
-    pub async fn execute(&self, request_id: u32, effect: Uint8Array) -> Uint8Array {
-        let effect: CoreOperation = deserialize(&effect);
-        let output = self.executor.handle(request_id, effect).await;
-        handle_response(request_id, serialize(&output)).await
-    }
-}

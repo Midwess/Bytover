@@ -2,7 +2,7 @@ use crate::core_api::TimeoutReceiver;
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
 use anyhow::anyhow;
 use ewebsock::{connect, Options, WsEvent, WsMessage};
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{Sender, Receiver, channel, UnboundedReceiver, UnboundedSender, unbounded};
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
 use futures_util::{SinkExt, StreamExt};
@@ -11,13 +11,14 @@ use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
+use once_cell::sync::OnceCell;
 
 pub struct SignallingClient {
     socket_addr: String,
-    handle: Option<JoinHandle<()>>,
+    handle: OnceCell<JoinHandle<()>>,
     sender: UnboundedSender<Message>,
     receiver: Mutex<UnboundedReceiver<Message>>,
-    signal: Option<UnboundedSender<Message>>
+    signal: OnceCell<UnboundedSender<Message>>
 }
 
 impl SignallingClient {
@@ -25,16 +26,14 @@ impl SignallingClient {
         let (sender, receiver) = unbounded();
         Self {
             socket_addr,
-            handle: None,
             sender,
             receiver: Mutex::new(receiver),
-            signal: None
+            handle: Default::default(),
+            signal: Default::default()
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), WebRtcErrors> {
-        self.stop().await;
-
+    pub async fn start(&self) -> Result<(), WebRtcErrors> {
         let (signal_sender, mut signal_receiver) = unbounded::<Message>();
         let mut options = Options::default();
         options.read_timeout = Some(Duration::from_secs(60));
@@ -110,8 +109,8 @@ impl SignallingClient {
             }
         });
 
-        self.signal = Some(signal_sender);
-        self.handle = Some(handle);
+        let _ = self.signal.set(signal_sender);
+        let _ = self.handle.set(handle);
         Ok(())
     }
 
@@ -124,17 +123,16 @@ impl SignallingClient {
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), WebRtcErrors> {
-        if let Some(signal_sender) = self.signal.as_ref() {
+        if let Some(signal_sender) = self.signal.get() {
             let _ = signal_sender.unbounded_send(msg);
         };
 
         Ok(())
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
-            self.signal = None;
             let _ = self.sender.close().await;
             self.sender.close_channel();
         }
@@ -143,7 +141,7 @@ impl SignallingClient {
 
 impl Drop for SignallingClient {
     fn drop(&mut self) {
-        let Some(handle) = self.handle.take() else {
+        let Some(handle) = self.handle.get() else {
             return;
         };
 

@@ -61,7 +61,15 @@ import {
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
-import init_core, {view} from "core_wasm"
+import init_core, {
+    add_device_files,
+    execute,
+    execute_operation,
+    get_device_file,
+    get_download_url,
+    init, is_compatible,
+    view
+} from "core_wasm"
 import {process_event, NativeProcessor, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
@@ -70,7 +78,6 @@ import {FileMetadata} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
 
 export class WasmCore {
-    nativeProcessor: NativeProcessor | null;
     // If it is not compatible, then the current browser is not supported.
     // We should recommend user to download the app instead.
     isCoreCompatible: Observable<boolean> = new Observable(true)
@@ -85,9 +92,7 @@ export class WasmCore {
 
     selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
 
-    constructor() {
-        this.nativeProcessor = null;
-    }
+    constructor() {}
 
     public useSelectedSession() {
         const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
@@ -301,7 +306,7 @@ export class WasmCore {
 
     public async launch() {
         await init_core();
-        const isCompatible = await NativeProcessor.is_compatible()
+        const isCompatible = await is_compatible()
         if (!isCompatible) {
             this.isCoreCompatible.set(false)
             return;
@@ -328,13 +333,11 @@ export class WasmCore {
         const coreOperation = appEffect.value;
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
-                this.nativeProcessor = await NativeProcessor.init()
+                await init()
                 this.isCoreReady.set(true)
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantWebView: {
-                const operation = coreOperation as CoreOperationVariantWebView;
-                console.log(`Opening ${operation.value}`)
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantWebView(new WebViewOperationOutputVariantOpenUrl())))
             }
             case CoreOperationVariantDevice: {
@@ -349,14 +352,13 @@ export class WasmCore {
                         )))));
                     }
                     case DeviceOperationVariantOpen: {
-                        const open = device.value as DeviceOperationVariantOpen;
                         return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
                         const path = operation.value as LocalResourcePathVariantPlatformIdentifier;
                         const resourceId = BigInt(path.value.split("://")[1])
-                        const file = await this.nativeProcessor?.get_device_file(resourceId)
+                        const file = await get_device_file(resourceId)
                         if (!file) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
@@ -364,7 +366,7 @@ export class WasmCore {
                         try {
                             const buffer = await getThumbnailFromFile(file)
                             const ops = new CoreOperationVariantPersistent(new PersistentOperationVariantLocalResource(new LocalResourcePersistentOperationVariantAddThumbnail(Array.from(buffer), resourceId)));
-                            const opsOut = await this.nativeProcessor?.execute_operation(serialize(ops));
+                            const opsOut = await execute_operation(serialize(ops));
                             if (!opsOut) {
                                 throw new Error("Failed to save thumbnail")
                             }
@@ -407,23 +409,23 @@ export class WasmCore {
                 break;
             }
             case CoreOperationVariantPersistent: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantRpc: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantRender: {
                 await this.updateView()
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantTransfer: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantInternet: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array();
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
-                return await this.nativeProcessor?.execute(request_id, serialize(coreOperation)) || new Uint8Array()
+                return await execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
@@ -466,7 +468,7 @@ export class WasmCore {
 
     async addFiles(files: (File | FileMetadata) []) {
         const files_only = files.filter(f => f instanceof File) as File[]
-        const data = await this.nativeProcessor?.add_device_files(files_only)
+        const data = await add_device_files(files_only)
         if (!data) return [];
 
         const selections = deserializeArray<ResourceSelection>(ResourceSelection, data)
@@ -475,7 +477,7 @@ export class WasmCore {
 
     async getDownloadUrl(path: LocalResourcePath): Promise<string | undefined> {
         const data = serialize(path)
-        return this.nativeProcessor?.get_download_url(data)
+        return get_download_url(data)
     }
 
     async downloadFile(path: LocalResourcePath, filename: string): Promise<void> {

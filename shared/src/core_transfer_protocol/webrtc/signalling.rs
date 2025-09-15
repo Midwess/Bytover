@@ -18,6 +18,7 @@ use schema::devlog::rpc_signalling::server::{
     OfferMessage
 };
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::{Arc, Weak};
 
 pub enum WebRtcPeerConnectionProcess {
@@ -42,12 +43,13 @@ impl WebRtcPeerConnectionProcess {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SharedContext {
     peers: Arc<Mutex<HashMap<PeerId, WebRtcPeerConnectionProcess>>>,
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
-    current_id: OnceCell<PeerId>
+    current_id: OnceCell<PeerId>,
+    signaller: Arc<OnceCell<Weak<SignallingClient>>>,
 }
 
 impl Default for SharedContext {
@@ -62,8 +64,13 @@ impl SharedContext {
             current_id: Default::default(),
             finding_scopes: Default::default(),
             peers: Default::default(),
-            peer_msg_channels: Default::default()
+            peer_msg_channels: Default::default(),
+            signaller: Default::default()
         }
+    }
+
+    pub fn signaller(&self) -> Option<Arc<SignallingClient>> {
+        self.signaller.get().and_then(|it| it.upgrade())
     }
 
     pub fn set_current_id(&self, id: PeerId) {
@@ -75,13 +82,24 @@ impl SharedContext {
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
+        let id = self.get_current_id();
         let mut finding_scopes = self.finding_scopes.lock().await;
         if scopes.ne(&*finding_scopes) {
-            log::info!("Updating finding scopes: {scopes:#?}");
+            log::info!("Updating finding scopes: {scopes:?}");
         }
 
         finding_scopes.clear();
         finding_scopes.extend(scopes);
+        let scopes = finding_scopes.iter().map(|it| it.as_string()).collect::<Vec<_>>();
+        drop(finding_scopes);
+        if let Some(signaller) = self.signaller() {
+            let _ = signaller.send(Message {
+                from_id: id.to_string(),
+                join: Some(JoinMessage { id: id.to_string() }),
+                scopes,
+                ..Default::default()
+            }).await;
+        }
     }
 
     pub async fn get_finding_scopes(&self) -> Vec<FindingScope> {
@@ -241,13 +259,13 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
 }
 
 pub struct WebSignaller {
-    client: SignallingClient,
+    client: Arc<SignallingClient>,
     peer_id: PeerId,
     shared_context: SharedContext
 }
 
 impl WebSignaller {
-    pub fn new(client: SignallingClient, peer_id: PeerId, shared_context: SharedContext) -> Self {
+    pub fn new(client: Arc<SignallingClient>, peer_id: PeerId, shared_context: SharedContext) -> Self {
         Self {
             client,
             peer_id,
@@ -261,6 +279,7 @@ impl WebSignaller {
             join: Some(JoinMessage {
                 id: self.peer_id.to_string()
             }),
+            scopes: self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>(),
             ..Default::default()
         };
 
@@ -313,9 +332,15 @@ impl Signaller for WebSignaller {
     }
 }
 
-#[derive(Debug)]
 pub struct WebSignallerBuilder {
     shared_context: SharedContext
+}
+
+impl Debug for WebSignallerBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebSignallerBuilder")
+            .finish()
+    }
 }
 
 impl WebSignallerBuilder {
@@ -328,7 +353,8 @@ impl WebSignallerBuilder {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl SignallerBuilder for WebSignallerBuilder {
     async fn new_signaller(&self, _attempts: Option<u16>, socket_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
-        let client = SignallingClient::new(socket_url);
+        let client = Arc::new(SignallingClient::new(socket_url));
+        let _ = self.shared_context.signaller.set(Arc::downgrade(&client));
         let id = self.shared_context.get_current_id();
         let mut signaller = WebSignaller::new(client, id, self.shared_context.clone());
         signaller.start().await.map_err(Into::<SignalingError>::into)?;
