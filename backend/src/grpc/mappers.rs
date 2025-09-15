@@ -48,12 +48,12 @@ impl TransferResource {
         let thumbnail_source = self.thumbnail_source();
         let download_url = match progress.status() {
             TransferProgressStatus::InProgress(_) => "".to_string(),
-            TransferProgressStatus::Success => cloud_storage.sign_download(&mut source).await.unwrap_or_default(),
+            TransferProgressStatus::Success => cloud_storage.generate_download_url(&mut source).await.unwrap_or_default(),
             TransferProgressStatus::Failed(_) => "".to_string()
         };
 
         let download_thumbnail_url = match thumbnail_source {
-            Some(mut thumbnail_source) => cloud_storage.sign_download(&mut thumbnail_source).await.ok(),
+            Some(mut thumbnail_source) => cloud_storage.generate_download_url(&mut thumbnail_source).await.ok(),
             None => None
         };
 

@@ -7,7 +7,7 @@ edition.workspace = true
 [dependencies]
 schema = { path = "../libs/schema/rust", features = ["client", "server"] }
 devlog-sdk = { path = "../libs/devlog-sdk", features = ["db-remote", "s3", "grpc-server", "grpc-client"] }
-core-services = { path = "../libs/core-services", features = ["db-remote", "local-storage", "s3", "grpc-server", "grpc-client"] }
+core-services = { path = "../libs/core-services", features = ["db-remote", "local-storage", "s3", "grpc-server", "grpc-client", "token"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }

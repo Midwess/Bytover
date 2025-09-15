@@ -7,6 +7,8 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
+use schema::devlog::bitbridge::client_upload_request::Upload;
+use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
 use schema::devlog::auth_gateway::models::{Application, User};
@@ -49,6 +51,8 @@ pub struct TransferResourceRequest {
 pub struct TransferResourcesResponse {
     pub session_id: u64,
     pub first_resource: TransferResource,
+    pub first_resource_upload_request: Upload,
+    pub thumbnail_upload_urls: Vec<(u64, String)>,
     pub thumbnails: Vec<(u64, StaticResource)>
 }
 
@@ -88,8 +92,8 @@ impl TransferService {
         user_id: u64,
         session_id: u64,
         resource_id: u64,
-        transferred_amount_in_bytes: u64
-    ) -> Result<(), TransferErrors> {
+        status: ClientUploadStatus
+    ) -> Result<Option<(u64, Upload)>, TransferErrors> {
         let session_id = TransferSessionId {
             order_id: Some(session_id),
             user_order_id: Some(user_id)
@@ -99,11 +103,54 @@ impl TransferService {
             return Err(TransferErrors::SessionNotFound)
         };
 
-        session.update_transferred_progress(resource_id, transferred_amount_in_bytes);
+        match status {
+            ClientUploadStatus::TransferredAmountInBytes(transferred_amount) => {
+                session.update_transferred_progress(resource_id, transferred_amount as u64);
+                self.transfer_repository.update_one(session).await?;
+                Ok(None)
+            },
+            ClientUploadStatus::Success(completion) => {
+                let Some(current_progress) = session.current_resource_progress_mut() else {
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                };
 
-        self.transfer_repository.update_one(session).await?;
+                if let Err(e) = self.cloud_storage.complete_upload(&completion).await {
+                    current_progress.cancel();
+                    self.transfer_repository.update_one(session).await?;
+                    return Err(TransferErrors::CloudStorageError(e))
+                }
 
-        Ok(())
+                let expected_id = current_progress.resource_id();
+                if expected_id != resource_id {
+                    log::warn!("Id {resource_id} is not matched with current resource {expected_id} session_id {}", session.order_id());
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                }
+
+                current_progress.commit(TransferProgressStatus::Success)?;
+
+                let session = self.transfer_repository.update_one(session).await?;
+
+                let Some(next_resource_id) = session.current_resource().map(|it| it.order_id()) else {
+                    return Ok(None)
+                };
+
+                let Some(next_resource) = session.into_resource(next_resource_id) else {
+                    return Ok(None)
+                };
+
+                let upload_request = self.cloud_storage.get_upload_solution_for_resource(&next_resource).await?;
+                Ok(Some((next_resource_id, upload_request)))
+            },
+            ClientUploadStatus::Failed(error_message) => {
+                let Some(current_progress) = session.current_resource_progress_mut() else {
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                };
+
+                current_progress.commit(TransferProgressStatus::Failed(error_message))?;
+                self.transfer_repository.update_one(session).await?;
+                Ok(None)
+            }
+        }
     }
 
     pub async fn add_resources(
@@ -142,12 +189,14 @@ impl TransferService {
         let mut thumbnails = session.thumbnail_resources();
 
         for thumbnail in thumbnails.iter_mut() {
-            let _ = self.cloud_storage.sign_upload(&mut thumbnail.1).await;
+            let _ = self.cloud_storage.get_upload_solution(&mut thumbnail.1, None).await;
         }
 
         let Some(first_resource) = session.resources().iter().find(|it| it.order_id() == first_resource_id).cloned() else {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
+
+        let first_resource_upload_request = self.cloud_storage.get_upload_solution_for_resource(&first_resource).await?;
 
         let download_url = session.access_url(app.link.clone());
         let resources = session
@@ -158,6 +207,7 @@ impl TransferService {
                 size_in_bytes: it.size_in_bytes() as i32
             })
             .collect::<Vec<_>>();
+
         let template = EmailTemplate {
             template: Some(Template::SendFile(SendFileTemplate {
                 sender_email: user.email.clone(),
@@ -174,10 +224,22 @@ impl TransferService {
             }
         }
 
+        let mut thumbnail_upload_urls = vec![];
+        for (order_id, source) in thumbnails.iter() {
+            let upload_request = self.cloud_storage.get_upload_solution(source, None).await?;
+            let Upload::SingleUrl(url) = upload_request else {
+                panic!("Invalid upload request, the thumbnail upload request must be a single url");
+            };
+
+            thumbnail_upload_urls.push((*order_id, url));
+        }
+
         let response = TransferResourcesResponse {
             session_id: session_order_id,
             first_resource,
-            thumbnails
+            thumbnails,
+            first_resource_upload_request,
+            thumbnail_upload_urls
         };
 
         Ok(response)
@@ -200,46 +262,4 @@ impl TransferService {
         Ok(())
     }
 
-    pub async fn commit_resource(
-        &self,
-        user_id: u64,
-        session_order_id: u64,
-        resource_id: u64,
-        status: TransferProgressStatus
-    ) -> Result<Option<TransferResource>, TransferErrors> {
-        let session_id = TransferSessionId {
-            order_id: Some(session_order_id),
-            user_order_id: Some(user_id)
-        };
-
-        let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
-            return Err(TransferErrors::SessionNotFound)
-        };
-
-        let session_order_id = session.order_id();
-
-        let Some(current_progress) = session.current_resource_progress_mut() else {
-            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
-        };
-
-        let expected_id = current_progress.resource_id();
-        if expected_id != resource_id {
-            log::warn!("Id {resource_id} is not matched with current resource {expected_id} session_id {session_order_id}");
-            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
-        }
-
-        current_progress.commit(status)?;
-
-        let session = self.transfer_repository.update_one(session).await?;
-
-        let Some(next_resource_id) = session.current_resource().map(|it| it.order_id()) else {
-            return Ok(None)
-        };
-
-        let Some(next_resource) = session.into_resource(next_resource_id) else {
-            return Ok(None)
-        };
-
-        Ok(Some(next_resource))
-    }
 }

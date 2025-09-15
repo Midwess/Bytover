@@ -1,9 +1,7 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
-use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
-use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
@@ -13,7 +11,6 @@ use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
 use schema::devlog::auth_gateway::models::{Application, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
-use schema::devlog::bitbridge::commit_file_upload_request::UploadStatus;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};
 use schema::devlog::bitbridge::{
     AddResourcesRequest,
@@ -21,8 +18,6 @@ use schema::devlog::bitbridge::{
     CancelSessionRequest,
     CancelSessionResponse,
     ClientUploadRequest,
-    CommitFileUploadRequest,
-    CommitFileUploadResponse,
     CreatePublicTransferSessionRequest,
     CreatePublicTransferSessionResponse,
     FindSessionRequest,
@@ -239,71 +234,19 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let response = transfer_service.add_resources(user, app, request_body.session_order_id, requests).await?;
 
-        let mut source = response.first_resource.source();
-
-        let signed_upload_url = self.cloud_storage.sign_upload(&mut source).await?;
         let response_body = AddResourcesResponse {
             first_resource_upload_request: ClientUploadRequest {
                 resource_order_id: response.first_resource.order_id(),
-                upload_url: signed_upload_url
+                upload: Some(response.first_resource_upload_request)
             },
             thumbnail_upload_requests: response
-                .thumbnails
+                .thumbnail_upload_urls
                 .iter()
-                .filter_map(|(order_id, source)| match source.source.as_ref() {
-                    Some(static_resource::static_resource::Source::Url(url)) => Some(ClientUploadRequest {
-                        resource_order_id: *order_id,
-                        upload_url: url.clone()
-                    }),
-                    _ => None
+                .map(|(order_id, url)| ClientUploadRequest {
+                    resource_order_id: *order_id,
+                    upload: Some(schema::devlog::bitbridge::client_upload_request::Upload::SingleUrl(url.clone()))
                 })
                 .collect::<Vec<_>>()
-        };
-
-        let response = Response::new(response_body);
-
-        Ok(response)
-    }
-
-    async fn commit_file_upload(
-        &self,
-        request: Request<CommitFileUploadRequest>
-    ) -> Result<Response<CommitFileUploadResponse>, Status> {
-        let Some(token) = request.extensions().get::<Token>() else {
-            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
-        };
-
-        let Some(user) = request.extensions().get::<User>() else {
-            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
-        };
-
-        let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
-        let request_body = request.get_ref();
-
-        let resource_id = request_body.resource_id;
-        let status = request_body.status();
-        let err_msg = request_body.failed_reason.clone();
-
-        let Some(next_resource) = transfer_service
-            .commit_resource(
-                user.order_id,
-                request_body.session_order_id,
-                resource_id,
-                match status {
-                    UploadStatus::Failed => TransferProgressStatus::Failed(err_msg.unwrap_or("Unknown".to_owned())),
-                    UploadStatus::Success => TransferProgressStatus::Success
-                }
-            )
-            .await?
-        else {
-            let response_body = CommitFileUploadResponse { next_upload_request: None };
-
-            let response = Response::new(response_body);
-            return Ok(response)
-        };
-
-        let response_body = CommitFileUploadResponse {
-            next_upload_request: Some(self.create_upload_request(&next_resource).await?)
         };
 
         let response = Response::new(response_body);
@@ -345,27 +288,29 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request = request.into_inner();
+        let Some(status) = request.status else {
+            return Err(Status::invalid_argument("Status must be defined"));
+        };
 
-        transfer_service
+        let Some((next_resource_id, next_upload_request)) = transfer_service
             .update_transfer_progress(
                 user_id,
                 request.session_order_id,
-                request.resource_order_id,
-                request.transferred_amount_in_bytes
+                request.resource_id,
+                status
             )
-            .await?;
+            .await?
+        else {
+            return Ok(Response::new(UpdateTransferProgressResponse {
+                next_upload_request: None
+            }))
+        };
 
-        Ok(Response::new(UpdateTransferProgressResponse {}))
-    }
-}
-
-impl CloudGrpcService {
-    async fn create_upload_request(&self, resource: &TransferResource) -> Result<ClientUploadRequest, Status> {
-        let mut source = resource.source();
-        let url = self.cloud_storage.sign_upload(&mut source).await?;
-        Ok(ClientUploadRequest {
-            upload_url: url,
-            resource_order_id: resource.order_id()
-        })
+        return Ok(Response::new(UpdateTransferProgressResponse {
+            next_upload_request: Some(ClientUploadRequest {
+                resource_order_id: next_resource_id,
+                upload: Some(next_upload_request.clone())
+            })
+        }))
     }
 }
