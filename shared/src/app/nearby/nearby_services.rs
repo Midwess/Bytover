@@ -143,8 +143,6 @@ impl NearbyService {
             }
         }
 
-        log::info!(target: ns.as_str(), "Peer disconnected: {}", peer.id);
-
         ctx.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
             new_peer: vec![],
             removed: vec![peer.clone()]

@@ -130,7 +130,6 @@ impl OpfsWorker {
         let OpfsOperation { file_path, operation } = operation;
         match operation {
             FileOperation::Open => {
-                log::info!("Opening file {file_path}");
                 match async {
                     if self.file_handles.lock().await.contains_key(&file_path) {
                         return Ok::<(), JsValue>(());

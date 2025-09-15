@@ -20,7 +20,6 @@ pub struct IOReaderOpfsImpl {
 impl IOReaderOpfsImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
-        log::info!("Opening file for read: {}", path_str);
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
@@ -86,7 +85,6 @@ pub struct IOWriterOpfsImpl {
 impl IOWriterOpfsImpl {
     pub async fn new(path: PathBuf) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
-        log::info!("Opening file for write: {}", path_str);
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
