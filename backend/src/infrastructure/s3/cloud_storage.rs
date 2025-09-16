@@ -33,12 +33,10 @@ impl CloudStorage for S3CloudStorageImpl {
 
         let max_part_size = self.get_max_part_size();
         let part_size = max_part_size;
-        let multipart = self.s3_client.generate_multipart_upload_urls(
-            source,
-            part_size as u64,
-            file_size as u64,
-            duration
-        ).await?;
+        let multipart = self
+            .s3_client
+            .generate_multipart_upload_urls(source, part_size as u64, file_size as u64, duration)
+            .await?;
 
         let context = UploadContext {
             resource: source.clone(),
@@ -46,14 +44,16 @@ impl CloudStorage for S3CloudStorageImpl {
         };
 
         // TODO: Specify a real secret
-        let context_token = create_jwt_token(&context, "secret")?;
+        let context_token = create_jwt_token(context, self.get_jwt_secret(), duration)?;
 
-        let upload_parts = multipart.parts.into_iter().map(|part| {
-            UploadPart {
+        let upload_parts = multipart
+            .parts
+            .into_iter()
+            .map(|part| UploadPart {
                 url: part.upload_url,
-                x_content_length: part.x_content_length,
-            }
-        }).collect();
+                x_content_length: part.x_content_length
+            })
+            .collect();
 
         Ok(Upload::MultiParts(MultiPartUpload {
             parts: upload_parts,
@@ -82,11 +82,9 @@ impl CloudStorage for S3CloudStorageImpl {
     async fn complete_upload(&self, completion: &MultiPartUploadComplete) -> Result<(), CloudStorageErrors> {
         let context: UploadContext = decode_jwt_token(&completion.context_token, self.get_jwt_secret())?;
 
-        self.s3_client.complete_multipart_upload(
-            &context.resource,
-            context.upload_id,
-            completion.e_tags.clone()
-        ).await?;
+        self.s3_client
+            .complete_multipart_upload(&context.resource, context.upload_id, completion.e_tags.clone())
+            .await?;
 
         Ok(())
     }

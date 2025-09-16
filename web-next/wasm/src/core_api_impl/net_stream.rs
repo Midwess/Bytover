@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::file_api::device_file::FileStorage;
 use crate::file_api::file_extension::VecExtension;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
@@ -9,6 +10,10 @@ use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::entities::file_system::file::LocalResourcePath;
 use std::sync::Arc;
+use futures::lock::Mutex;
+use futures::{Stream, StreamExt};
+use n0_future::SinkExt;
+use n0_future::task::spawn;
 use url::Url;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -16,26 +21,37 @@ use web_sys::{ProgressEvent, XmlHttpRequest};
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,
-    pub resource_repo: Arc<dyn LocalResourceRepository>
+    pub resource_repo: Arc<dyn LocalResourceRepository>,
 }
 
 pub struct NetStreamInnerImpl {
     storage: FileStorage,
     pub resource_repo: Arc<dyn LocalResourceRepository>,
     url: Url,
-    size: u64,
+    from: usize,
+    to: usize,
     path: LocalResourcePath,
-    xhr: Option<Arc<NeverSend<XmlHttpRequest>>>
+    xhr: Option<Arc<NeverSend<XmlHttpRequest>>>,
+}
+
+impl NetStreamImpl {
+    pub fn new(storage: FileStorage, resource_repo: Arc<dyn LocalResourceRepository>) -> Self {
+        Self {
+            storage,
+            resource_repo,
+        }
+    }
 }
 
 #[async_trait::async_trait(?Send)]
 impl NetStream for NetStreamImpl {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>> {
+    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, from: usize, to: usize) -> anyhow::Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             storage: self.storage.clone(),
             resource_repo: self.resource_repo.clone(),
             url: http_url,
-            size,
+            from,
+            to,
             path,
             xhr: None
         }))
@@ -57,17 +73,34 @@ impl NetStreamInner for NetStreamInnerImpl {
 
         {
             let xhr_clone = xhr.clone();
-            let tx = tx.clone();
+            let mut tx = tx.clone();
             let onload_cb = Closure::<dyn FnMut()>::new(move || {
-                let status = xhr_clone.status().unwrap_or(0);
-                if (200..300).contains(&status) {
-                    let _ = tx.unbounded_send(NetStreamEvent::Completed);
+                let status_code = xhr_clone.status().unwrap_or(0);
+                let status = if (200..300).contains(&status_code) {
+                    let headers: Option<HashMap<String, String>> = xhr_clone.get_all_response_headers().ok().map(|raw| {
+                        raw.split("\r\n")
+                            .filter_map(|line| {
+                                if let Some((key, value)) = line.split_once(':') {
+                                    Some((key.trim().to_string(), value.trim().to_string()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    });
+
+                    NetStreamEvent::Completed {
+                        headers: headers.unwrap_or_default(),
+                        json: None
+                    }
                 } else {
                     let text_response = xhr_clone.response_text();
-                    let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!(
-                        "Server response status {status} - {text_response:?}"
-                    )));
-                }
+                    NetStreamEvent::Error(anyhow!(
+                        "Server response status {status_code} - {text_response:?}"
+                    ))
+                };
+
+                let _ = tx.unbounded_send(status);
             });
 
             xhr.set_onload(Some(onload_cb.as_ref().unchecked_ref()));
@@ -75,7 +108,7 @@ impl NetStreamInner for NetStreamInnerImpl {
         }
 
         {
-            let tx = tx.clone();
+            let mut tx = tx.clone();
             let progress_cb = Closure::<dyn FnMut(_)>::new(move |event: ProgressEvent| {
                 let loaded = event.loaded();
                 let _ = tx.unbounded_send(NetStreamEvent::Progress {
@@ -114,7 +147,10 @@ impl NetStreamInner for NetStreamInnerImpl {
             let tx = tx.clone();
             let abort_cb = Closure::<dyn FnMut()>::new(move || {
                 log::info!("The upload process is aborted");
-                let _ = tx.unbounded_send(NetStreamEvent::Completed);
+                let _ = tx.unbounded_send(NetStreamEvent::Completed {
+                    headers: HashMap::new(),
+                    json: None
+                });
             });
             xhr.set_onabort(Some(abort_cb.as_ref().unchecked_ref()));
             abort_cb.forget();
@@ -126,18 +162,21 @@ impl NetStreamInner for NetStreamInnerImpl {
             };
 
             let xhr = xhr.clone();
-            xhr.send_with_opt_blob(Some(&file)).map_err(|it| anyhow!("Upload file errors {it:?}"))?;
-        } else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
+            let to = self.to.min(file.size() as usize) as f64;
+            let from = self.from.max(0) as f64;
+            xhr.send_with_opt_blob(Some(&file.slice_with_f64_and_f64(from, to).unwrap())).map_err(|it| anyhow!("Upload file errors {it:?}"))?;
+        }
+        else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
             let bytes = reader.read_all().await?;
             let xhr = xhr.clone();
             xhr.send_with_opt_js_u8_array(Some(&bytes.into_uint_array()))
                 .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
-        } else {
+        }
+        else {
             return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));
         }
 
         self.xhr = Some(xhr);
-
         Ok(rx)
     }
 

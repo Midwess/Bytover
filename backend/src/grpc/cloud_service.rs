@@ -1,7 +1,7 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
-use crate::entities::transfer_resource::TransferResource;
+use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
@@ -28,7 +28,6 @@ use schema::devlog::bitbridge::{
     UpdateTransferProgressRequest,
     UpdateTransferProgressResponse
 };
-use schema::value::static_resource;
 use std::pin::Pin;
 use std::sync::Arc;
 use surreal_devl::proxy::default::SurrealDeserializer;
@@ -293,17 +292,10 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         let Some((next_resource_id, next_upload_request)) = transfer_service
-            .update_transfer_progress(
-                user_id,
-                request.session_order_id,
-                request.resource_id,
-                status
-            )
+            .update_transfer_progress(user_id, request.session_order_id, request.resource_id, status)
             .await?
         else {
-            return Ok(Response::new(UpdateTransferProgressResponse {
-                next_upload_request: None
-            }))
+            return Ok(Response::new(UpdateTransferProgressResponse { next_upload_request: None }))
         };
 
         return Ok(Response::new(UpdateTransferProgressResponse {

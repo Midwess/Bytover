@@ -19,17 +19,21 @@ pub struct NetStreamInnerImpl {
     handle: Option<JoinHandle<Result<(), CloudTransferErrors>>>,
     path: LocalResourcePath,
     size: u64,
+    from: usize,
+    to: usize,
     url: Url,
     repository: Arc<dyn LocalResourceRepository>
 }
 
 #[async_trait::async_trait]
 impl NetStream for NetStreamImpl {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>> {
+    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, from: usize, to: usize) -> anyhow::Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             path,
             handle: None,
             size,
+            from,
+            to,
             url: http_url,
             repository: self.repository.clone()
         }))

@@ -137,7 +137,6 @@ impl WebRtc {
                 if state == matchbox_socket::PeerState::Connected {
                     log::info!("Peer {peer_id} connected");
                     if self.shared_context.is_peer_connected(&peer_id).await {
-                        log::warn!("Peer {peer_id} already connected");
                         continue;
                     }
 
@@ -179,7 +178,8 @@ impl WebRtc {
                                 .await;
                         }));
                     }
-                } else {
+                }
+                else if state == matchbox_socket::PeerState::Disconnected {
                     log::info!("Peer {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }
@@ -211,7 +211,7 @@ impl WebRtc {
                             core_bridge.clone(),
                             outbound_data_sender,
                             outbound_thumbnail_sender,
-                            buffer.unwrap(),
+                            buffer.expect("Cannot transfer without buffer controller"),
                             local_resource_repository
                         )
                         .await

@@ -1,5 +1,6 @@
 pub mod network;
 
+use std::collections::HashMap;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
@@ -12,10 +13,11 @@ use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
-use n0_future::StreamExt;
+use n0_future::{Stream, StreamExt};
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -59,7 +61,10 @@ pub trait CoreBridge: Send + Sync {
 #[derive(Debug)]
 pub enum NetStreamEvent {
     Progress { uploaded_bytes: u64 },
-    Completed,
+    Completed {
+        headers: HashMap<String, String>,
+        json: Option<serde_json::Value>
+    },
     Error(anyhow::Error)
 }
 
@@ -67,7 +72,7 @@ pub enum NetStreamEvent {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStream: Send + Sync {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>>;
+    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, from: usize, to: usize) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

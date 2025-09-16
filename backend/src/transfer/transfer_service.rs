@@ -7,11 +7,11 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
-use schema::devlog::bitbridge::client_upload_request::Upload;
-use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
 use schema::devlog::auth_gateway::models::{Application, User};
+use schema::devlog::bitbridge::client_upload_request::Upload;
+use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::value::datetime::Datetime;
 use schema::value::static_resource::StaticResource;
 
@@ -108,7 +108,7 @@ impl TransferService {
                 session.update_transferred_progress(resource_id, transferred_amount as u64);
                 self.transfer_repository.update_one(session).await?;
                 Ok(None)
-            },
+            }
             ClientUploadStatus::Success(completion) => {
                 let Some(current_progress) = session.current_resource_progress_mut() else {
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
@@ -122,7 +122,10 @@ impl TransferService {
 
                 let expected_id = current_progress.resource_id();
                 if expected_id != resource_id {
-                    log::warn!("Id {resource_id} is not matched with current resource {expected_id} session_id {}", session.order_id());
+                    log::warn!(
+                        "Id {resource_id} is not matched with current resource {expected_id} session_id {}",
+                        session.order_id()
+                    );
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
                 }
 
@@ -140,7 +143,7 @@ impl TransferService {
 
                 let upload_request = self.cloud_storage.get_upload_solution_for_resource(&next_resource).await?;
                 Ok(Some((next_resource_id, upload_request)))
-            },
+            }
             ClientUploadStatus::Failed(error_message) => {
                 let Some(current_progress) = session.current_resource_progress_mut() else {
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
@@ -261,5 +264,4 @@ impl TransferService {
 
         Ok(())
     }
-
 }
