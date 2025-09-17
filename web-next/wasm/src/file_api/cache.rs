@@ -18,6 +18,12 @@ use shared::core_api::{IOReader, IOWriter};
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
 
+/// Deprecated
+/// This cache used index db on browser to save files
+/// It is fine even in term of performance
+/// the compatability is also even better that any others approach
+/// but it using too much ram
+/// and the implementation is complicated, definitely having bugs.
 #[derive(Debug, Error)]
 pub enum BrowserCacheErrors {
     #[error("Cache data is incomplete - missing end marker")]

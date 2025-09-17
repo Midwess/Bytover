@@ -8,6 +8,7 @@ use js_sys::Uint8Array;
 use shared::core_api::{IOReader, IOWriter};
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use core_services::local_storage::entry::FileEntry;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
@@ -62,15 +63,16 @@ impl IOReader for IOReaderOpfsImpl {
         }
     }
 
-    async fn total_size(&self) -> Result<u64> {
+    async fn entry(&self) -> Result<FileEntry> {
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::Size
+            operation: FileOperation::FileEntry
         });
+
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"))?;
 
         match response.message {
-            OpfsOperationOutput::Size(size) => Ok(size),
+            OpfsOperationOutput::FileEntry(entry) => Ok(entry),
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Size error: {:?}", e)),
             _ => Err(anyhow::anyhow!("Unexpected response"))
         }

@@ -2,6 +2,7 @@ use crate::file_api::device_file::WasmFile;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
+use core_services::local_storage::entry::FileEntry;
 use futures::lock::Mutex;
 use futures_channel::oneshot;
 use js_sys::{ArrayBuffer, Uint8Array};
@@ -17,14 +18,20 @@ pub struct IOReaderImpl {
     pub chunk_size: u64
 }
 
+impl IOReaderImpl {
+    pub(crate) fn new(file: WasmFile, chunk_size: u64) -> Self {
+        Self {
+            file: Mutex::new(file),
+            position: 0,
+            chunk_size
+        }
+    }
+}
+
 #[async_trait(?Send)]
 impl IOReader for IOReaderImpl {
     async fn next(&mut self) -> Result<Option<Bytes>> {
-        let total_size = self.total_size().await?;
-
-        if self.position >= total_size {
-            return Ok(None);
-        }
+        let total_size = self.entry().await?.size;
 
         let file = self.file.lock().await;
         let end = (self.position + self.chunk_size).min(total_size);
@@ -67,7 +74,14 @@ impl IOReader for IOReaderImpl {
         Ok(Some(Bytes::from(vec)))
     }
 
-    async fn total_size(&self) -> Result<u64> {
-        Ok(self.file.lock().await.size() as u64)
+    async fn entry(&self) -> Result<FileEntry> {
+        let file = self.file.lock().await;
+        Ok(FileEntry {
+            is_dir: false,
+            modified_at: chrono::Utc::now().into(),
+            size: file.size() as u64,
+            path: "".into(),
+            base_path: None
+        })
     }
 }

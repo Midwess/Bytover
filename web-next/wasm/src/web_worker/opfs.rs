@@ -7,6 +7,7 @@ use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use chrono::Utc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -17,6 +18,7 @@ use web_sys::{
     FileSystemReadWriteOptions,
     FileSystemSyncAccessHandle
 };
+use core_services::local_storage::entry::FileEntry;
 
 /// Web worker that support file system on browser
 /// Open a file handle, keep tracks that handle in a list
@@ -98,7 +100,7 @@ pub enum FileOperation {
         amount: usize
     },
     Flush,
-    Size,
+    FileEntry,
     GenerateSource
 }
 
@@ -111,7 +113,7 @@ pub enum OpfsOperationOutput {
     Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
     Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     Written(usize),
-    Size(u64),
+    FileEntry(FileEntry),
     DownloadUrl(String)
 }
 
@@ -174,14 +176,21 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
-            FileOperation::Size => {
+            FileOperation::FileEntry => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
 
                 let file_guard = file_handle.lock().await;
+                let entry = FileEntry {
+                    path: file_path.into(),
+                    size: file_guard.get_size().unwrap_or_default() as u64,
+                    modified_at: Utc::now().into(),
+                    is_dir: false,
+                    base_path: None
+                };
                 match file_guard.get_size() {
-                    Ok(size) => OpfsOperationOutput::Size(size as u64),
+                    Ok(size) => OpfsOperationOutput::FileEntry(entry),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
