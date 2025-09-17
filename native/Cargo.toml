@@ -37,7 +37,6 @@ mime_guess = { workspace = true }
 tokio-util = {workspace = true}
 redb = { workspace = true }
 futures = { workspace = true }
-async_zip = { workspace = true }
 serde_json = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]

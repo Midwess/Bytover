@@ -162,7 +162,6 @@ impl WebRtcPeer {
         let mut tx_opt = self.inbound_data_stream_sender.lock().await.clone();
         if let Some(tx) = tx_opt.as_mut() {
             if let Err(err) = tx.try_send(packet) {
-                log::error!("Failed to send resource to peer {err:?}");
                 tx_opt.take();
             }
         }

@@ -58,7 +58,7 @@ tonic-middleware = { version = "0.3.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }
 reqwest = { version = "0.12.23", default-features = false }
 async-trait = { version = "0.1.89", default-features = false }
-async_zip = { version = "0.0.18" }
+async_zip = { path = "../rs-async-zip", default-features = false }
 log = { version = "0.4.27", default-features = false }
 tonic = { version = "0.13.1", default-features = false }
 prost = { version = "0.13.5", default-features = false }

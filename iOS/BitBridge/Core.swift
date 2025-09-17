@@ -139,6 +139,14 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.device(.open(.openSession(let path)))):
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+        case .appCapabilities(.device(.getGeoLocation)):
+            if let lastKnownLocation {
+                let longitude = lastKnownLocation.longitude.magnitude;
+                let latitude = lastKnownLocation.latitude.magnitude;
+                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(GeoLocation(latitude: latitude, longitude: longitude))).bincodeSerialize()))
+            }
+            
+            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.persistent(let ops)):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.persistent(ops).bincodeSerialize()))
         case .appCapabilities(.device(.getDeviceInfo)):
@@ -429,8 +437,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         if let location = locations.first?.coordinate {
             lastKnownLocation = locations.first?.coordinate
             Task {
-                await self.update(.nearby(.onLocationUpdated(GeoLocation(latitude: lastKnownLocation!.latitude, longitude: lastKnownLocation!.longitude))))
-
                 manager.stopUpdatingLocation()
             }
         }

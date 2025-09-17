@@ -193,7 +193,7 @@ where
 
             log::info!("Uploading thumbnail to {:?}", url);
             let url = url.parse::<url::Url>().unwrap();
-            let request = UploadRequest { url, x_content_length: size as u64 };
+            let request = UploadRequest { url, x_content_length: size };
             let Ok(mut net_stream) = self.net_stream.upload_resource(vec![request], thumbnail_file_path).await else {
                 continue;
             };
@@ -372,6 +372,8 @@ where
 
                         etags.push(etag);
                     }
+
+                    break;
                 }
                 NetStreamEvent::Error(e) => {
                     log::warn!("Failed to upload resource: {e:?}");

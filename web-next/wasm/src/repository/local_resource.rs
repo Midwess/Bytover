@@ -148,13 +148,13 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, _chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(device_file_id) = path.device_file_id() {
             let Some(file) = self.file_storage.get(device_file_id).await else {
                 return Err(PersistenceError::NotFound(format!("{:?}", path)));
             };
 
-            return Ok(Box::new(IOReaderImpl::new(file.file.clone(), 63 * 1024)))
+            return Ok(Box::new(IOReaderImpl::new(file.file.clone(), chunk_size as u64)))
         };
 
         if let Some(path) = path.opfs_path() {

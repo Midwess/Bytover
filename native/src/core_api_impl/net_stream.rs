@@ -21,7 +21,6 @@ pub struct NetStreamInnerImpl {
     path: LocalResourcePath,
     requests: Vec<UploadRequest>,
     repository: Arc<dyn LocalResourceRepository>,
-    current_request_index: usize,
 }
 
 #[async_trait::async_trait]
@@ -32,7 +31,6 @@ impl NetStream for NetStreamImpl {
             handle: None,
             requests,
             repository: self.repository.clone(),
-            current_request_index: 0,
         }))
     }
 }
@@ -121,7 +119,7 @@ impl NetStreamInnerImpl {
                 chunk.extend(next_bytes);
                 
                 let remaining = required_bytes - bytes_written;
-                let write_size = (chunk.len() as usize).min(remaining as usize);
+                let write_size = chunk.len().min(remaining as usize);
                 writer.write_all(&chunk.split_to(write_size)).await?;
                 bytes_written += write_size as u64;
                 let _ = nt.unbounded_send(NetStreamEvent::Progress {
@@ -132,13 +130,18 @@ impl NetStreamInnerImpl {
                     break Bytes::from(chunk);
                 }
             };
-            
+
             writer.shutdown().await?;
             Ok::<Bytes, anyhow::Error>(data_left)
         };
 
-        let Ok((upload_result, data_left)) = try_join!(upload_future, writer_task) else {
-            return Err(anyhow::anyhow!("Panic occur during upload"));
+        let (data_left, upload_result) = match try_join!(writer_task, upload_future) {
+            Ok((upload_result, data_left)) => (upload_result, data_left),
+            Err(e) => {
+                log::error!("Panic occur during upload: {:?}", e);
+                let _ = nt.unbounded_send(NetStreamEvent::Error(anyhow::anyhow!("Panic occur during upload: {:?}", e)));
+                return Err(anyhow::anyhow!("Panic occur during upload: {:?}", e));
+            }
         };
 
         if !upload_result.status().is_success() {

@@ -44,7 +44,7 @@ impl IOReader for IOReaderOpfsImpl {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::Read {
                 position: self.position,
-                amount: 1024 * 64
+                amount: 1024 * 63
             }
         });
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;

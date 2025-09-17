@@ -187,7 +187,6 @@ impl OpfsWorker {
                     size: file_guard.get_size().unwrap_or_default() as u64,
                     modified_at: Utc::now().into(),
                     is_dir: false,
-                    base_path: None
                 };
                 match file_guard.get_size() {
                     Ok(size) => OpfsOperationOutput::FileEntry(entry),

@@ -239,14 +239,18 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        if path.is_dir() {
-            let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-            return folder.calculate_zip_size().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
+
+        let cursor = match path.is_dir() {
+            true => {
+                let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+                folder.cursor(1024).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?
+            }
+            false => {
+                let file = FileEntry::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+                file.cursor(1024).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?
+            }
         };
 
-        fs::metadata(&path)
-            .await
-            .map_err(|e| PersistenceError::IOError(format!("{e:?}")))
-            .map(|it| it.len())
+        Ok(cursor.entry().await?.size)
     }
 }

@@ -81,7 +81,6 @@ impl IOReader for IOReaderImpl {
             modified_at: chrono::Utc::now().into(),
             size: file.size() as u64,
             path: "".into(),
-            base_path: None
         })
     }
 }
