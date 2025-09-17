@@ -42,15 +42,16 @@ impl NetStreamInner for NetStreamInnerImpl {
         let mut cursor = self.repository.read(self.path.clone(), 1024 * 1024).await?;
         let requests = self.requests.clone();
         
-        let mut bytes = Bytes::new();
+        let mut remaining_bytes = Bytes::new();
         let handle = tokio::spawn(async move {
             let mut responses = Vec::new();
+            let mut total_uploaded_bytes = 0u64;
             
             for request in requests {
-                match Self::upload_single_request(&request, bytes, &mut cursor, &nt).await {
+                match Self::upload_single_request(&request, remaining_bytes, &mut cursor, &nt, &mut total_uploaded_bytes).await {
                     Ok((response, data_left)) => {
                         responses.push(response);
-                        bytes = data_left;
+                        remaining_bytes = data_left;
                     },
                     Err(e) => {
                         let _ = nt.unbounded_send(NetStreamEvent::Error(e));
@@ -86,6 +87,7 @@ impl NetStreamInnerImpl {
         bytes: Bytes,
         cursor: &mut Box<dyn IOCursor>,
         nt: &mpsc::UnboundedSender<NetStreamEvent>,
+        total_uploaded_bytes: &mut u64,
     ) -> anyhow::Result<(UploadResponse, Bytes)> {
         let required_bytes = request.x_content_length;
         let (mut writer, reader) = duplex(1024 * 512);
@@ -122,8 +124,9 @@ impl NetStreamInnerImpl {
                 let write_size = chunk.len().min(remaining as usize);
                 writer.write_all(&chunk.split_to(write_size)).await?;
                 bytes_written += write_size as u64;
+                *total_uploaded_bytes += write_size as u64;
                 let _ = nt.unbounded_send(NetStreamEvent::Progress {
-                    uploaded_bytes: bytes_written
+                    uploaded_bytes: *total_uploaded_bytes
                 });
 
                 if bytes_written >= required_bytes {
@@ -132,13 +135,14 @@ impl NetStreamInnerImpl {
             };
 
             writer.shutdown().await?;
+            log::info!("Writer task finished, wrote {} bytes", bytes_written);
             Ok::<Bytes, anyhow::Error>(data_left)
         };
 
         let (data_left, upload_result) = match try_join!(writer_task, upload_future) {
             Ok((upload_result, data_left)) => (upload_result, data_left),
             Err(e) => {
-                log::error!("Panic occur during upload: {:?}", e);
+                log::error!("Error occur during upload: {:?}", e);
                 let _ = nt.unbounded_send(NetStreamEvent::Error(anyhow::anyhow!("Panic occur during upload: {:?}", e)));
                 return Err(anyhow::anyhow!("Panic occur during upload: {:?}", e));
             }
