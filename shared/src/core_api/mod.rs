@@ -6,7 +6,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::app::AppEvent;
 use crate::entities::file_system::file::LocalResourcePath;
-pub use core_services::local_storage::abstraction::IOCursor as IOReader;
+pub use core_services::local_storage::stream::IOCursor as IOReader;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
@@ -17,7 +17,6 @@ use n0_future::{Stream, StreamExt};
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Debug, thiserror::Error)]
@@ -61,18 +60,27 @@ pub trait CoreBridge: Send + Sync {
 #[derive(Debug)]
 pub enum NetStreamEvent {
     Progress { uploaded_bytes: u64 },
-    Completed {
-        headers: HashMap<String, String>,
-        json: Option<serde_json::Value>
-    },
+    Completed(Vec<UploadResponse>),
     Error(anyhow::Error)
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadResponse {
+    pub headers: HashMap<String, String>,
+    pub json: Option<serde_json::Value>
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadRequest {
+    pub url: Url,
+    pub x_content_length: u64,
 }
 
 // Abstraction open stream to http server
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStream: Send + Sync {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, from: usize, to: usize) -> anyhow::Result<Box<dyn NetStreamInner>>;
+    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

@@ -19,6 +19,7 @@ use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepo
 use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
+use url::Position;
 use wasm_bindgen::JsValue;
 
 pub struct LocalResourceRepositoryImpl {
@@ -147,7 +148,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, _max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, _chunk_size: usize, position: Option<(usize, usize)>) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(device_file_id) = path.device_file_id() {
             let Some(file) = self.file_storage.get(device_file_id).await else {
                 return Err(PersistenceError::NotFound(format!("{:?}", path)));
@@ -155,7 +156,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
             return Ok(Box::new(IOReaderImpl {
                 file: Mutex::new(file.file.clone()),
-                position: 0,
+                position: position.map_or(0, |(from, to)| from as u64),
                 chunk_size: 63 * 1024
             }))
         };

@@ -4,7 +4,7 @@ use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
-use crate::core_api::{CoreBridge, NetStream, NetStreamEvent};
+use crate::core_api::{CoreBridge, NetStream, NetStreamEvent, UploadRequest};
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
@@ -21,8 +21,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
-use schema::value::static_resource::static_resource::Source::Url;
-use crate::app::transfer::session::TransferStatus::InProgress;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -195,7 +193,8 @@ where
 
             log::info!("Uploading thumbnail to {:?}", url);
             let url = url.parse::<url::Url>().unwrap();
-            let Ok(mut net_stream) = self.net_stream.upload_resource(url, thumbnail_file_path, 0, size as usize).await else {
+            let request = UploadRequest { url, x_content_length: size as u64 };
+            let Ok(mut net_stream) = self.net_stream.upload_resource(vec![request], thumbnail_file_path).await else {
                 continue;
             };
 
@@ -331,52 +330,53 @@ where
         log::info!("Uploading resource {resource_path:?} size = {size}");
         let mut ticker = Instant::now();
         let progress_update_interval = std::time::Duration::from_millis(3000);
-        let mut from_index = 0usize;
-        for part in upload.parts {
-            let url = url::Url::parse(&part.url).unwrap();
-            let to_index = from_index + part.x_content_length as usize;
-            let mut net_stream = self.net_stream.upload_resource(url, resource_path.clone(), from_index, to_index).await?;
-            let mut event_stream = net_stream.start().await?;
-            while let Some(event) = event_stream.next().await {
-                let mut session_guard = transfer_session.lock().await;
-                if session_guard.is_canceled() {
-                    net_stream.end().await?;
-                    return Err(CloudTransferErrors::SessionCancelled);
+        let upload_requests = upload.parts.iter().map(|it| {
+            let url = url::Url::parse(&it.url).unwrap();
+            UploadRequest {
+                url, x_content_length: it.x_content_length
+            }
+        }).collect();
+
+        let mut net_stream = self.net_stream.upload_resource(upload_requests, resource_path.clone()).await?;
+        let mut event_stream = net_stream.start().await?;
+        while let Some(event) = event_stream.next().await {
+            let mut session_guard = transfer_session.lock().await;
+            if session_guard.is_canceled() {
+                net_stream.end().await?;
+                return Err(CloudTransferErrors::SessionCancelled);
+            }
+
+            let progress = session_guard.resource_mut_progress(resource_order_id).expect("Progress not found");
+
+            match event {
+                NetStreamEvent::Progress { uploaded_bytes } => {
+                    let count = uploaded_bytes - total_sent;
+                    progress.update_progress(count);
+                    total_sent = uploaded_bytes;
+                    if ticker.elapsed() > progress_update_interval {
+                        ticker = Instant::now();
+                        self.server.update_transfer_progress(session_order_id, resource_order_id, Status::TransferredAmountInBytes(total_sent as u32)).await?;
+                    }
+
+                    let progress_update_event =
+                        CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
+                    self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
                 }
+                NetStreamEvent::Completed(responses) => {
+                    for mut response in responses {
+                        let Some(etag) = response.headers.remove("etag").map(|it| it.trim_matches('"').to_string()) else {
+                            progress.fail("Failed to upload resource, aborted".to_string());
+                            net_stream.end().await?;
+                            return Err(CloudTransferErrors::UploadProcessError("Failed to upload resource".to_string()));
+                        };
 
-                let progress = session_guard.resource_mut_progress(resource_order_id).expect("Progress not found");
-
-                match event {
-                    NetStreamEvent::Progress { uploaded_bytes } => {
-                        let count = uploaded_bytes - total_sent;
-                        progress.update_progress(count);
-                        total_sent = uploaded_bytes;
-                        if ticker.elapsed() > progress_update_interval {
-                            ticker = Instant::now();
-                            self.server.update_transfer_progress(session_order_id, resource_order_id, Status::TransferredAmountInBytes(total_sent as u32)).await?;
-                        }
-
-                        let progress_update_event =
-                            CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                        self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
+                        etags.push(etag);
                     }
-                    NetStreamEvent::Completed { mut headers, .. } => {
-                        log::info!("Uploaded part {headers:?}");
-                        let etag = headers.remove("etag").map(|it| it.trim_matches('"').to_string());
-                        if let Some(etag) = etag {
-                            etags.push(etag);
-                            break;
-                        }
-
-                        progress.fail("Failed to upload resource, aborted".to_string());
-                        net_stream.end().await?;
-                        return Err(CloudTransferErrors::UploadProcessError("Failed to upload resource".to_string()));
-                    }
-                    NetStreamEvent::Error(e) => {
-                        log::warn!("Failed to upload resource: {e:?}");
-                        net_stream.end().await?;
-                        return Err(CloudTransferErrors::from(e));
-                    }
+                }
+                NetStreamEvent::Error(e) => {
+                    log::warn!("Failed to upload resource: {e:?}");
+                    net_stream.end().await?;
+                    return Err(CloudTransferErrors::from(e));
                 }
             }
 

@@ -358,6 +358,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compression"
+version = "0.4.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40f6024f3f856663b45fd0c9b6f2024034a702f453549449e0d84a305900dad4"
+dependencies = [
+ "flate2",
+ "futures-core",
+ "futures-io",
+ "memchr",
+ "pin-project-lite",
+ "zstd",
+ "zstd-safe",
+]
+
+[[package]]
 name = "async-executor"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +605,30 @@ dependencies = [
  "futures",
  "pharos",
  "rustc_version",
+]
+
+[[package]]
+name = "async_zip"
+version = "0.0.18"
+dependencies = [
+ "async-compression",
+ "chrono",
+ "crc32fast",
+ "futures-lite",
+ "pin-project",
+ "thiserror 2.0.16",
+]
+
+[[package]]
+name = "async_zip"
+version = "0.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d8c50d65ce1b0e0cb65a785ff615f78860d7754290647d3b983208daa4f85e6"
+dependencies = [
+ "crc32fast",
+ "futures-lite",
+ "pin-project",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -1830,6 +1869,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "async_zip 0.0.18",
  "aws-config",
  "aws-sdk-s3",
  "aws-smithy-async",
@@ -4348,6 +4388,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "async_zip 0.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode",
  "bytes",
  "core-services",
@@ -4362,6 +4403,7 @@ dependencies = [
  "redb",
  "reqwest",
  "serde",
+ "serde_json",
  "shared",
  "tokio",
  "tokio-util",

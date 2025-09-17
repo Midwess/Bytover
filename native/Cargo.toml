@@ -20,7 +20,7 @@ serde = { workspace = true, features = ["derive"] }
 lazy_static = { workspace = true }
 uniffi = { workspace = true, features = ["cli"] }
 shared = { path = "../shared" }
-core-services = { workspace = true, features = ["db-red", "local-storage", "retry"] }
+core-services = { workspace = true, features = ["db-red", "local-storage", "retry", "zip"] }
 devlog-sdk = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 async-trait = { workspace = true }
@@ -37,6 +37,8 @@ mime_guess = { workspace = true }
 tokio-util = {workspace = true}
 redb = { workspace = true }
 futures = { workspace = true }
+async_zip = { workspace = true }
+serde_json = { workspace = true }
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }

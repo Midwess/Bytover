@@ -6,7 +6,8 @@ use core_services::db::redb::table::RedbTable;
 use core_services::db::repository::abstraction::errors::Resolve;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use core_services::local_storage::file_system::{File, Folder};
+use core_services::local_storage::entry::FileEntry;
+use core_services::local_storage::file_system::Folder;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use devlog_sdk::distributed_id::gen_id;
@@ -97,7 +98,6 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path.clone()).await;
-        log::info!("Loading resource {absolute_path:?}");
         let path_buf = PathBuf::from(absolute_path.clone());
         if path_buf.is_dir() {
             let folder = Folder::new(path_buf).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
@@ -117,12 +117,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             return Ok(None)
         }
 
-        let file = File::new(None, absolute_path).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
-        let metadata = file.metadata().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+        let file = FileEntry::new(None, absolute_path).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
         let resource = LocalResource {
             order_id: gen_id().await,
-            name: file.name.clone(),
-            size: metadata.size,
+            name: file.name(),
+            size: file.size,
             path,
             thumbnail_path: None,
             r#type: ResourceType::File
@@ -174,7 +173,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         let path = self.path_resolver.get_thumbnail_file_path(resource_id).await;
         log::info!("Creating thumbnail at {path:?}");
-        File::new(Some(png_bytes), &path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        FileEntry::new(Some(png_bytes), &path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
         let saved_path = self.path_resolver.get_local_resource_path(path).await;
         resource.thumbnail_path = Some(saved_path.clone());
         RedbRepository::update_one(self, resource).await?;
@@ -184,11 +183,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
-        let file = File::existing(&absolute_path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        let file = FileEntry::existing(&absolute_path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
 
-        let metadata = file.metadata().await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-
-        if metadata.is_dir {
+        if file.is_dir {
             Ok(ResourceType::Folder)
         } else {
             let mime_type = mime_guess::from_path(&file.path).first_or_octet_stream();
@@ -204,16 +201,16 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath, size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-            return folder.cursor(size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
+            return folder.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
         };
 
-        let file = File::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        Ok(file.cursor(0, size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
+        let file = FileEntry::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        Ok(file.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
     }
 
     async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
@@ -244,7 +241,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let path = PathBuf::from(absolute_path);
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-            return folder.calculate_tar_size().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
+            return folder.calculate_zip_size().await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
         };
 
         fs::metadata(&path)
