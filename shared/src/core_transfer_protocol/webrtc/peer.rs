@@ -12,11 +12,9 @@ use crate::core_transfer_protocol::webrtc::transfer::{TransferDelimiterShema, Tr
 use crate::core_transfer_protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
 use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
-use core_services::utils::cancellation::{AbortError, AbortableExt};
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::StreamExt;
-use futures_util::SinkExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
 use n0_future::task::spawn;
@@ -33,6 +31,8 @@ use schema::devlog::bitbridge::{
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
+use core_services::utils::yield_container::YieldContainer;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -42,16 +42,18 @@ pub struct WebRtcPeer {
     // Channel used to communicate with the peer
     pub msg_channel: DirectMessageChannel,
     // Channel used to transfer the resource
-    pub data_channel: Arc<Mutex<mpsc::UnboundedSender<(PeerId, Packet)>>>,
+    pub data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     // This channel is used to transfer the thumbnail
-    pub thumbnail_channel: Arc<Mutex<mpsc::UnboundedSender<(PeerId, Packet)>>>,
+    pub thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     // Webrtc buffer, used to control the amount of data that can be sent to the peer
     pub buffer: PeerBuffered,
 
     pub transfers_context: TransfersContext,
 
-    pub inbound_thumbnail_stream_sender: Mutex<Option<mpsc::Sender<Packet>>>,
-    pub inbound_data_stream_sender: Mutex<Option<mpsc::Sender<Packet>>>,
+    pub inbound_thumbnail_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
+    pub inbound_thumbnail_stream_sender: mpsc::Sender<Packet>,
+    pub inbound_data_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
+    pub inbound_data_stream_sender: mpsc::Sender<Packet>,
 
     // Connect to the core stream, where all state is stored
     pub core_id: AtomicU32
@@ -67,6 +69,9 @@ impl WebRtcPeer {
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>
     ) -> Result<Self, WebRtcErrors> {
+        let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
+        let (data_tx, data_rx) = mpsc::channel(1024);
+
         let introduce_request = IntroduceRequestMessage {
             mine: PeerMessage {
                 peer_id: user.id().to_string(),
@@ -86,13 +91,15 @@ impl WebRtcPeer {
         Ok(Self {
             msg_channel,
             peer,
-            data_channel: Arc::new(Mutex::new(data_channel)),
-            thumbnail_channel: Arc::new(Mutex::new(thumbnail_channel)),
+            data_channel,
+            thumbnail_channel,
             core_bridge,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
-            inbound_thumbnail_stream_sender: Mutex::new(None),
-            inbound_data_stream_sender: Mutex::new(None),
+            inbound_thumbnail_stream_sender: thumbnail_data_tx,
+            inbound_data_stream_sender: data_tx,
+            inbound_data_stream_receiver: YieldContainer::new(data_rx),
+            inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
             core_id: Default::default()
         })
@@ -110,6 +117,8 @@ impl WebRtcPeer {
         repository: Arc<dyn LocalResourceRepository>
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
+        let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
+        let (data_tx, data_rx) = mpsc::channel(1024);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
             peer: PeerMessage {
                 peer_id: user.id().to_string(),
@@ -126,12 +135,14 @@ impl WebRtcPeer {
             msg_channel,
             peer: msg.mine.into(),
             core_bridge,
-            data_channel: Arc::new(Mutex::new(data_channel)),
-            thumbnail_channel: Arc::new(Mutex::new(thumbnail_channel)),
+            data_channel,
+            thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
-            inbound_thumbnail_stream_sender: Mutex::new(None),
-            inbound_data_stream_sender: Mutex::new(None),
+            inbound_thumbnail_stream_sender: thumbnail_data_tx,
+            inbound_data_stream_sender: data_tx,
+            inbound_data_stream_receiver: YieldContainer::new(data_rx),
+            inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
             core_id: Default::default()
         })
@@ -159,28 +170,15 @@ impl WebRtcPeer {
     }
 
     pub async fn process_data_packet(&self, packet: Packet) {
-        let mut tx_opt = self.inbound_data_stream_sender.lock().await.clone();
-        if let Some(tx) = tx_opt.as_mut() {
-            if let Err(_) = tx.try_send(packet) {
-                tx_opt.take();
-            }
-        }
+        let _ = self.inbound_data_stream_sender.clone().try_send(packet);
     }
 
     pub async fn process_thumbnail_packet(&self, packet: Packet) {
-        let mut tx_opt = self.inbound_thumbnail_stream_sender.lock().await.clone();
-        if let Some(tx) = tx_opt.as_mut() {
-            if let Err(err) = tx.try_send(packet) {
-                log::error!("Failed to send thumbnail to peer {err:?}");
-                tx_opt.take();
-            }
-        }
+        let _ = self.inbound_thumbnail_stream_sender.clone().try_send(packet);
     }
 
     pub async fn peer_disconnected(&self) {
         log::info!("Peer disconnected, will cancel all transfers");
-        self.inbound_thumbnail_stream_sender.lock().await.take();
-        self.inbound_data_stream_sender.lock().await.take();
         self.transfers_context.stop_all().await;
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
         let _ = self.core_bridge.response(self.core_id.load(Ordering::Relaxed), response).await;
@@ -215,15 +213,12 @@ impl WebRtcPeer {
             return Ok(TransferSessionStatus::Canceled);
         };
 
-        let Some(cancellation_signal) = self.transfers_context.signal(session.order_id).await else {
-            return Err(WebRtcErrors::Canceled(AbortError::Cancelled))
+        let Some(cancellation_signal) = self.transfers_context.cancellation_token(session.order_id).await else {
+            return Err(WebRtcErrors::Canceled(TaskErrors::Cancelled))
         };
 
-        let (resource_tx, mut resource_rx) = mpsc::channel(1024);
-        let (thumbnail_tx, mut thumbnail_rx) = mpsc::channel(1024);
-
-        self.inbound_data_stream_sender.lock().await.replace(resource_tx);
-        self.inbound_thumbnail_stream_sender.lock().await.replace(thumbnail_tx);
+        let mut resource_rx = self.inbound_data_stream_receiver.retrieve().await?;
+        let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve().await?;
 
         let msg_channel = self.msg_channel.clone();
         let peer_id = session.peer().unwrap().peer_id();
@@ -253,44 +248,38 @@ impl WebRtcPeer {
                     return Ok(thumbnail_paths)
                 }
 
-                let first_delimiter = thumbnail_rx.next().abort_with(thumbnail_cancel_signal.clone()).await?.unwrap_or_default();
-                let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter)?;
+                let chunk = thumbnail_rx.next().with_cancel(&thumbnail_cancel_signal).await?.unwrap_or_default();
+                let first_delimiter = TransferDelimiterShema::from_bytes(&chunk, true)?;
                 if !first_delimiter.is_start {
                     return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
                 }
 
-                let index = thumbnail_paths.iter().position(|it| it.0 == first_delimiter.resource_id);
-
-                if index.is_none() {
+                let Some(resource_index) = thumbnail_paths.iter().position(|it| it.0 == first_delimiter.resource_id) else {
                     return Err(WebRtcErrors::InvalidDelimiter(format!(
                         "The first delimiter is not match with any resource {first_delimiter:?}"
                     )));
-                }
+                };
 
-                let resource_path = thumbnail_paths.swap_remove(index.unwrap()).1;
+                let resource_path = thumbnail_paths.swap_remove(resource_index).1;
                 if !context.is_active(session_id).await {
                     return Ok(thumbnail_paths)
                 }
 
                 let mut writer = repo.write(resource_path.clone()).await?;
 
-                // Then we will download
                 log::info!("Begin downloading thumbnail {resource_path:?} for session {session_id}");
-                while let Ok(Some(bytes)) = thumbnail_rx.next().abort_with(thumbnail_cancel_signal.clone()).await {
+                while let Ok(Some(bytes)) = thumbnail_rx.next().with_cancel(&thumbnail_cancel_signal).await {
                     writer
                         .write(bytes.to_vec().into())
                         .await
                         .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
-                    if let Ok(it) = TransferDelimiterShema::from_bytes(&bytes) {
-                        if !it.is_start {
-                            break;
-                        } else {
-                            return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = false".to_string()));
-                        }
+
+                    if TransferDelimiterShema::is_end(&bytes) {
+                        break;
                     }
                 }
 
-                writer.end().abort_with(thumbnail_cancel_signal.clone()).await??;
+                writer.end().with_cancel(&thumbnail_cancel_signal).await??;
                 log::info!("Completed downloading thumbnail {resource_path:?}");
 
                 let thumbnail_full_filled = SessionResourceThumbnailFullFilled {
@@ -305,7 +294,6 @@ impl WebRtcPeer {
             Ok(thumbnail_paths)
         });
 
-        let resource_cancel_signal = cancellation_signal.clone();
         log::info!(
             "Begin downloading resources for session {session_id} {}",
             session.is_completed()
@@ -318,14 +306,11 @@ impl WebRtcPeer {
 
             let first_delimiter = resource_rx
                 .next()
-                .abort_with(resource_cancel_signal.clone())
+                .with_cancel(&cancellation_signal)
                 .await
                 .unwrap_or_default()
                 .unwrap_or_default();
-            let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter)?;
-            if !first_delimiter.is_start {
-                return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
-            }
+            let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter, true)?;
 
             let Some((resource_path, resource_size)) = session
                 .resources
@@ -343,12 +328,8 @@ impl WebRtcPeer {
 
             let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
-            while let Ok(Some(packet)) = resource_rx.next().abort_with(resource_cancel_signal.clone()).await {
-                if let Ok(end_delimiter) = TransferDelimiterShema::from_bytes(&packet) {
-                    if end_delimiter.is_start {
-                        return Err(WebRtcErrors::InvalidDelimiter("The end must is_start = false".to_string()));
-                    }
-
+            while let Ok(Some(packet)) = resource_rx.next().with_cancel(&cancellation_signal).await {
+                if TransferDelimiterShema::is_end(&packet) {
                     progress_update.success();
                     log::info!("Received end delimiter");
                     break;
@@ -357,7 +338,7 @@ impl WebRtcPeer {
                 let written_bytes = packet.len() as u64;
                 writer
                     .write(packet.to_vec().into())
-                    .abort_with(resource_cancel_signal.clone())
+                    .with_cancel(&cancellation_signal)
                     .await?
                     .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
                 total_written_bytes += written_bytes;
@@ -386,16 +367,15 @@ impl WebRtcPeer {
     ) -> Result<TransferSessionStatus, WebRtcErrors> {
         let request_id = uuid::Uuid::now_v7();
         self.transfers_context.start_transfer(session.order_id, request_id.to_string()).await;
-        let Some(cancellation_signal) = self.transfers_context.signal(session.order_id).await else {
-            return Err(WebRtcErrors::Canceled(AbortError::Cancelled))
+        let Some(cancellation_signal) = self.transfers_context.cancellation_token(session.order_id).await else {
+            return Err(WebRtcErrors::Canceled(TaskErrors::Cancelled))
         };
 
         let session_id = session.order_id;
 
         for resource in session.resources.iter_mut() {
-            // We transfer folder as .tar file
             if matches!(resource.r#type, ResourceType::Folder) {
-                resource.name = format!("{}.tar", resource.name);
+                resource.name = format!("{}.zip", resource.name);
             }
         }
 
@@ -428,22 +408,22 @@ impl WebRtcPeer {
                 }
 
                 log::info!("Begin transferring thumbnail {thumbnail_path:?} for session {session_id}");
-                let Ok(Ok(mut reader)) = repo.read(thumbnail_path.clone(), 63 * 1024).abort_with(&thumbnail_cancel_signal).await
+                let Ok(Ok(mut reader)) = repo.read(thumbnail_path.clone(), 63 * 1024).with_cancel(&thumbnail_cancel_signal).await
                 else {
                     continue;
                 };
 
                 let begin_delimiter = TransferDelimiterShema::new(id, true).as_bytes()?;
 
-                if let Err(e) = thumbnail_channel.lock().await.send((peer_id, begin_delimiter)).await {
+                if let Err(e) = thumbnail_channel.unbounded_send((peer_id, begin_delimiter)) {
                     log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
                     return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                 }
 
-                while let Ok(Ok(Some(bytes))) = reader.next(None).abort_with(&thumbnail_cancel_signal).await {
+                while let Ok(Ok(Some(bytes))) = reader.next(None).with_cancel(&thumbnail_cancel_signal).await {
                     let bytes = Packet::from(bytes);
                     if !bytes.is_empty() {
-                        let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
+                        let _ = thumbnail_channel.unbounded_send((peer_id, bytes));
                     }
 
                     if buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
@@ -452,7 +432,7 @@ impl WebRtcPeer {
                 }
 
                 let end_delimiter = TransferDelimiterShema::new(id, false).as_bytes()?;
-                if let Err(e) = thumbnail_channel.lock().await.send((peer_id, end_delimiter)).await {
+                if let Err(e) = thumbnail_channel.unbounded_send((peer_id, end_delimiter)) {
                     log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
                     return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                 }
@@ -481,14 +461,14 @@ impl WebRtcPeer {
             let mut reader = self
                 .resource_repo
                 .read(resource_path.clone(), 63 * 1024)
-                .abort_with(resource_cancel_signal.clone())
+                .with_cancel(&resource_cancel_signal)
                 .await??;
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
             let mut total_sent_bytes = 0u64;
             let progress_update = session.resource_mut_progress(order_id).unwrap();
             let delimiter = TransferDelimiterShema::start(order_id).as_bytes()?;
-            if let Err(e) = self.data_channel.lock().await.send((peer_id, delimiter)).await {
+            if let Err(e) = self.data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
                 self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
@@ -497,7 +477,7 @@ impl WebRtcPeer {
 
             while let Some(bytes) = reader
                 .next(None)
-                .abort_with(&resource_cancel_signal)
+                .with_cancel(&resource_cancel_signal)
                 .await?
                 .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
             {
@@ -506,7 +486,7 @@ impl WebRtcPeer {
                 total_sent_bytes += sent_bytes;
                 if !bytes.is_empty() {
                     let packet = (peer_id, bytes);
-                    let _ = self.data_channel.lock().await.send(packet).await;
+                    let _ = self.data_channel.unbounded_send(packet);
                 }
 
                 progress_update.update_progress(sent_bytes);
@@ -517,7 +497,7 @@ impl WebRtcPeer {
             }
 
             let end_delimiter = TransferDelimiterShema::end(order_id).as_bytes()?;
-            if let Err(e) = self.data_channel.lock().await.send((peer_id, end_delimiter)).await {
+            if let Err(e) = self.data_channel.unbounded_send((peer_id, end_delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
                 self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
