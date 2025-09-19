@@ -31,8 +31,7 @@ impl CloudStorage for S3CloudStorageImpl {
             return Ok(Upload::SingleUrl(single_url));
         };
 
-        let max_part_size = self.get_max_part_size();
-        let part_size = max_part_size;
+        let part_size = self.get_max_part_size(file_size);
         let part_count = ((file_size + part_size - 1) / part_size) as i32 + self.extra_upload() as i32;
 
         let multipart = self
@@ -55,12 +54,12 @@ impl CloudStorage for S3CloudStorageImpl {
             .map(|(index, part)| UploadPart {
                 url: part.upload_url,
                 x_content_length: {
-                    let size = remaining_size.min(part_size as u64);
-                    remaining_size -= size;
-                    if remaining_size == 0 {
+                    if remaining_size <= 0 {
                         None
                     }
                     else {
+                        let size = remaining_size.min(part_size as u64);
+                        remaining_size -= size;
                         Some(size)
                     }
                 },

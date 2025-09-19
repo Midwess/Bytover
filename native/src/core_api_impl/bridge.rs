@@ -15,7 +15,7 @@ pub struct CoreBridgeImpl {
 impl CoreBridgeImpl {
     pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         Self {
-            throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(100)),
+            throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(500)),
             shell
         }
     }

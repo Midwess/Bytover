@@ -1843,6 +1843,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "futures-util",
+ "http 0.2.12",
  "idb",
  "indexmap 2.11.0",
  "js-sys",

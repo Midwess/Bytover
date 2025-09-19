@@ -29,8 +29,8 @@ pub trait CloudStorage: Send + Sync {
     async fn generate_download_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors>;
     async fn complete_upload(&self, completion: &MultiPartUploadComplete) -> Result<(), CloudStorageErrors>;
 
-    fn get_max_part_size(&self) -> usize {
-        5 * 1024 * 1024 * 1024 - 1
+    fn get_max_part_size(&self, file_size: usize) -> usize {
+        file_size.min(5 * 1024 * 1024 * 1024 - 1)
     }
 
     // The number of extra url that we want to buffer for the client

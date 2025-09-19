@@ -7,7 +7,7 @@ use crate::app::transfer::session::TransferProgress;
 use crate::app::AppEvent;
 use crate::entities::file_system::file::LocalResourcePath;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::{Receiver, Sender, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
@@ -67,7 +67,7 @@ pub enum NetStreamEvent {
 #[derive(Debug, Clone)]
 pub struct UploadResponse {
     pub headers: HashMap<String, String>,
-    pub json: Option<serde_json::Value>
+    pub body: Option<serde_json::Value>
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +87,7 @@ pub trait NetStream: Send + Sync {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStreamInner: Send + Sync {
     // Upload the resource to url
-    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>>;
+    async fn start(&mut self) -> anyhow::Result<Receiver<NetStreamEvent>>;
 
     async fn end(&mut self) -> anyhow::Result<()>;
 }
