@@ -33,6 +33,12 @@ pub trait CloudStorage: Send + Sync {
         5 * 1024 * 1024 * 1024 - 1
     }
 
+    // The number of extra url that we want to buffer for the client
+    // in case they need more than usual.
+    fn extra_upload(&self) -> usize {
+        1
+    }
+
     fn get_upload_duration(&self) -> Duration {
         Duration::from_secs(60 * 60 * 24 * 3)
     }

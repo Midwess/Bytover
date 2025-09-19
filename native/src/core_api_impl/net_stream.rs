@@ -1,23 +1,17 @@
-use bytes::{Bytes, BytesMut};
-use core_services::local_storage::stream::IOCursor;
-use futures::channel::mpsc::{unbounded, UnboundedReceiver};
-use futures::channel::mpsc;
+use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use anyhow::Result;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner, UploadRequest, UploadResponse};
-use shared::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
 use shared::entities::file_system::file::LocalResourcePath;
-use tokio::try_join;
 use std::sync::Arc;
-use tokio::io::{duplex, AsyncWriteExt};
-use tokio::task::JoinHandle;
-use tokio_util::io::ReaderStream;
+use tokio::{io::{AsyncWriteExt}, spawn, try_join};
 
 pub struct NetStreamImpl {
-    pub repository: Arc<dyn LocalResourceRepository>
+    pub repository: Arc<dyn LocalResourceRepository>,
 }
 
 pub struct NetStreamInnerImpl {
-    handle: Option<JoinHandle<Result<(), CloudTransferErrors>>>,
+    handle: Option<tokio::task::JoinHandle<Result<()>>>,
     path: LocalResourcePath,
     requests: Vec<UploadRequest>,
     repository: Arc<dyn LocalResourceRepository>,
@@ -25,7 +19,7 @@ pub struct NetStreamInnerImpl {
 
 #[async_trait::async_trait]
 impl NetStream for NetStreamImpl {
-    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>> {
+    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             path,
             handle: None,
@@ -37,134 +31,115 @@ impl NetStream for NetStreamImpl {
 
 #[async_trait::async_trait]
 impl NetStreamInner for NetStreamInnerImpl {
-    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>> {
-        let (nt, nx) = unbounded();
+    async fn start(&mut self) -> Result<UnboundedReceiver<NetStreamEvent>> {
+        let (tx, rx) = unbounded();
         let mut cursor = self.repository.read(self.path.clone(), 1024 * 1024).await?;
+
         let requests = self.requests.clone();
-        
-        let mut remaining_bytes = Bytes::new();
-        let handle = tokio::spawn(async move {
+
+        self.handle = Some(spawn(async move {
             let mut responses = Vec::new();
-            let mut total_uploaded_bytes = 0u64;
-            
-            for request in requests {
-                match Self::upload_single_request(&request, remaining_bytes, &mut cursor, &nt, &mut total_uploaded_bytes).await {
-                    Ok((response, data_left)) => {
-                        responses.push(response);
-                        remaining_bytes = data_left;
-                    },
+            let mut uploaded = 0u64;
+
+            for req in requests {
+                match upload_single(&req, &mut cursor, &tx, &mut uploaded).await {
+                    Ok(resp) => {
+                        responses.push(resp);
+                    }
                     Err(e) => {
-                        let _ = nt.unbounded_send(NetStreamEvent::Error(e));
-                        return Err(CloudTransferErrors::UploadProcessError("Upload failed".to_string()));
+                        let _ = tx.unbounded_send(NetStreamEvent::Error(e));
+                        return Err(anyhow::anyhow!("Upload failed"));
                     }
                 }
             }
-            
-            let _ = nt.unbounded_send(NetStreamEvent::Completed(responses));
+            let _ = tx.unbounded_send(NetStreamEvent::Completed(responses));
             Ok(())
-        });
+        }));
 
-        self.handle = Some(handle);
-        Ok(nx)
+        Ok(rx)
     }
 
-    async fn end(&mut self) -> anyhow::Result<()> {
-        let Some(handle) = self.handle.take() else {
-            return Ok(());
-        };
-
-        let Ok(result) = handle.await else { return Ok(()) };
-
-        result?;
-
+    async fn end(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.await??;
+        }
         Ok(())
     }
 }
 
-impl NetStreamInnerImpl {
-    async fn upload_single_request(
-        request: &UploadRequest,
-        bytes: Bytes,
-        cursor: &mut Box<dyn IOCursor>,
-        nt: &mpsc::UnboundedSender<NetStreamEvent>,
-        total_uploaded_bytes: &mut u64,
-    ) -> anyhow::Result<(UploadResponse, Bytes)> {
-        let required_bytes = request.x_content_length;
-        let (mut writer, reader) = duplex(1024 * 512);
-        let stream = ReaderStream::new(reader);
-        let body = reqwest::Body::wrap_stream(stream);
-        
+async fn upload_single(
+    req: &UploadRequest,
+    cursor: &mut Box<dyn core_services::local_storage::stream::IOCursor>,
+    tx: &UnboundedSender<NetStreamEvent>,
+    uploaded: &mut u64,
+) -> Result<UploadResponse> {
+    let (mut writer, reader) = tokio::io::duplex(1024 * 512);
+
+    let upload_fut = async {
+        let content_length = match req.x_content_length {
+            Some(it) => it,
+            None => {
+                let content = cursor.read_all().await?;
+                *uploaded += content.len() as u64;
+                let _ = tx.unbounded_send(NetStreamEvent::Progress { uploaded_bytes: *uploaded });
+                content.len() as u64
+            }
+        };
+
         let client = reqwest::Client::new();
-        let upload_future = async move {
-            let response = client
-                .put(request.url.clone())
-                .header("Content-Length", request.x_content_length.to_string())
-                .header("Content-Type", "application/octet-stream")
-                .body(body)
-                .send()
-                .await;
+        let resp = client
+            .put(req.url.clone())
+            .header("Content-Length", content_length)
+            .header("Content-Type", "application/octet-stream")
+            .body(reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(reader)))
+            .send()
+            .await?;
 
-            match response {
-                Ok(response) => Ok(response),
-                Err(e) => Err(anyhow::anyhow!("Failed to send upload request: {:?}", e))
-            }
-        };
-
-        let mut bytes_written = 0u64;
-        let writer_task = async {
-            let mut chunk = BytesMut::from(bytes);
-            let data_left = loop {
-                let Some(next_bytes) = cursor.next().await.map_err(|e| anyhow::anyhow!(e))? else {
-                    break Bytes::new();
-                };
-
-                chunk.extend(next_bytes);
-                
-                let remaining = required_bytes - bytes_written;
-                let write_size = chunk.len().min(remaining as usize);
-                writer.write_all(&chunk.split_to(write_size)).await?;
-                bytes_written += write_size as u64;
-                *total_uploaded_bytes += write_size as u64;
-                let _ = nt.unbounded_send(NetStreamEvent::Progress {
-                    uploaded_bytes: *total_uploaded_bytes
-                });
-
-                if bytes_written >= required_bytes {
-                    break Bytes::from(chunk);
-                }
-            };
-
-            writer.shutdown().await?;
-            log::info!("Writer task finished, wrote {} bytes", bytes_written);
-            Ok::<Bytes, anyhow::Error>(data_left)
-        };
-
-        let (data_left, upload_result) = match try_join!(writer_task, upload_future) {
-            Ok((upload_result, data_left)) => (upload_result, data_left),
-            Err(e) => {
-                log::error!("Error occur during upload: {:?}", e);
-                let _ = nt.unbounded_send(NetStreamEvent::Error(anyhow::anyhow!("Panic occur during upload: {:?}", e)));
-                return Err(anyhow::anyhow!("Panic occur during upload: {:?}", e));
-            }
-        };
-
-        if !upload_result.status().is_success() {
-            let msg = format!("Upload failed: {:?}", upload_result.status());
-            return Err(anyhow::anyhow!(msg));
+        if !resp.status().is_success() {
+            return Err(anyhow::anyhow!(format!("Upload failed: {}", resp.status())));
         }
-        
-        let headers = upload_result.headers().iter()
-            .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+
+        let headers = resp.headers().iter()
+            .map(|(k,v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
-            
-        let json = upload_result.json::<serde_json::Value>().await.ok();
-        
-        Ok((UploadResponse { headers, json }, data_left.into()))
-    }
+        let json = resp.json::<serde_json::Value>().await.ok();
+
+        let response = UploadResponse {
+            headers,
+            json
+        };
+
+        Ok(response)
+    };
+
+    let writer_fut = async {
+        let Some(content_length) = req.x_content_length else {
+            return Ok(())
+        };
+
+        let mut written = 0u64;
+
+        while written < content_length {
+            // Request next chunk with required max_read
+            let max_read = content_length - written;
+            let chunk = cursor.next(Some(max_read)).await?.unwrap_or_default();
+            if chunk.is_empty() { break; }
+            writer.write_all(chunk).await?;
+            written += chunk.len() as u64;
+            *uploaded += chunk.len() as u64;
+            let _ = tx.unbounded_send(NetStreamEvent::Progress { uploaded_bytes: *uploaded });
+        }
+
+        writer.shutdown().await?;
+        Ok(())
+    };
+
+    let (resp, _) = try_join!(upload_fut, writer_fut)?;
+    Ok(resp)
 }
 
 impl Drop for NetStreamInnerImpl {
     fn drop(&mut self) {
-        let _ = self.end();
+        let _ = futures::executor::block_on(self.end());
     }
 }

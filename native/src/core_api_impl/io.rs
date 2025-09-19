@@ -10,8 +10,8 @@ pub struct IOReaderImpl {
 
 #[async_trait]
 impl IOReader for IOReaderImpl {
-    async fn next(&mut self) -> Result<Option<bytes::Bytes>> {
-        self.cursor.next().await
+    async fn next(&mut self, max_read: Option<u64>) -> Result<Option<&[u8]>> {
+        self.cursor.next(max_read).await
     }
 
     async fn entry(&self) -> Result<FileEntry> {

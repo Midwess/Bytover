@@ -21,7 +21,6 @@ use shared::entities::file_system::file::{LocalResource, LocalResourcePath, Reso
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::fs;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<Database>,
@@ -102,10 +101,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         if path_buf.is_dir() {
             let folder = Folder::new(path_buf).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
 
+            let size = self.size(path.clone()).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
             let resource = LocalResource {
                 order_id: gen_id().await,
                 name: folder.name.clone(),
-                size: folder.calculate_total_size().await.unwrap_or_default(),
+                size,
                 path,
                 thumbnail_path: None,
                 r#type: ResourceType::Folder

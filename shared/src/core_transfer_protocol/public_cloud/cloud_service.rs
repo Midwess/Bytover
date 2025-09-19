@@ -193,7 +193,7 @@ where
 
             log::info!("Uploading thumbnail to {:?}", url);
             let url = url.parse::<url::Url>().unwrap();
-            let request = UploadRequest { url, x_content_length: size };
+            let request = UploadRequest { url, x_content_length: Some(size) };
             let Ok(mut net_stream) = self.net_stream.upload_resource(vec![request], thumbnail_file_path).await else {
                 continue;
             };

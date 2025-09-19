@@ -161,7 +161,7 @@ impl WebRtcPeer {
     pub async fn process_data_packet(&self, packet: Packet) {
         let mut tx_opt = self.inbound_data_stream_sender.lock().await.clone();
         if let Some(tx) = tx_opt.as_mut() {
-            if let Err(err) = tx.try_send(packet) {
+            if let Err(_) = tx.try_send(packet) {
                 tx_opt.take();
             }
         }
@@ -440,8 +440,8 @@ impl WebRtcPeer {
                     return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                 }
 
-                while let Ok(Ok(Some(bytes))) = reader.next().abort_with(&thumbnail_cancel_signal).await {
-                    let bytes = Packet::from(bytes.to_vec());
+                while let Ok(Ok(Some(bytes))) = reader.next(None).abort_with(&thumbnail_cancel_signal).await {
+                    let bytes = Packet::from(bytes);
                     if !bytes.is_empty() {
                         let _ = thumbnail_channel.lock().await.send((peer_id, bytes)).await;
                     }
@@ -496,7 +496,7 @@ impl WebRtcPeer {
             }
 
             while let Some(bytes) = reader
-                .next()
+                .next(None)
                 .abort_with(&resource_cancel_signal)
                 .await?
                 .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?

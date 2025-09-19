@@ -73,7 +73,7 @@ pub struct UploadResponse {
 #[derive(Debug, Clone)]
 pub struct UploadRequest {
     pub url: Url,
-    pub x_content_length: u64,
+    pub x_content_length: Option<u64>,
 }
 
 // Abstraction open stream to http server
