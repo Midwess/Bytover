@@ -38,6 +38,7 @@ impl NetStreamInner for NetStreamInnerImpl {
         let mut cursor = self.repository.read(self.path.clone(), 1024 * 1024).await?;
         let requests = self.requests.clone();
 
+        log::info!("Start uploading resource, request from upstream {:?}", requests);
         self.handle = Some(spawn(async move {
             let mut responses = Vec::new();
             let mut uploaded = 0u64;
@@ -46,11 +47,11 @@ impl NetStreamInner for NetStreamInnerImpl {
                 let task = async {
                     let response = match req.x_content_length {
                         Some(_) => {
-                            log::info!("Streaming");
                             stream(&req, &mut cursor, &mut tx, &mut uploaded).await?
                         },
                         None => {
                             let bytes = cursor.read_all().await?;
+                            let content_length = bytes.len() as u64;
                             log::info!("On memory uploading {} bytes", bytes.len());
                             if bytes.is_empty() {
                                 return Ok(())
@@ -59,6 +60,8 @@ impl NetStreamInner for NetStreamInnerImpl {
                             let client = reqwest::Client::new();
                             let resp = client
                                 .put(req.url.clone())
+                                .header("Content-Length", content_length)
+                                .header("Content-Type", "application/octet-stream")
                                 .body(bytes)
                                 .send()
                                 .await?
@@ -87,8 +90,9 @@ impl NetStreamInner for NetStreamInnerImpl {
 
     async fn end(&mut self) -> Result<()> {
         if let Some(handle) = self.handle.take() {
-            handle.await??;
+            handle.abort();
         }
+
         Ok(())
     }
 }
@@ -128,10 +132,11 @@ async fn stream(
         while remaining > 0 {
             let chunk = cursor.next(Some(remaining)).await?.unwrap_or_default();
             remaining -= chunk.len() as u64;
-            if chunk.is_empty() { break; }
             writer.write_all(chunk).await?;
             *uploaded += chunk.len() as u64;
-            let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: *uploaded });
+            if let Err(e) = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: *uploaded }) {
+                log::error!("Failed to send progress event: {:?}", e);
+            }
         }
 
         writer.shutdown().await?;

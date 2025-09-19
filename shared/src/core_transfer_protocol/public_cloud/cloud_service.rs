@@ -166,7 +166,6 @@ where
     ) -> Result<(), CloudTransferErrors> {
         for request in thumbnail_upload_requests {
             let session_guard = session.lock().await;
-            log::info!("Uploading thumbnail {}", request.resource_order_id);
             if session_guard.is_canceled() {
                 return Ok(());
             }
@@ -212,8 +211,6 @@ where
 
             let _ = net_stream.end().await;
         }
-
-        log::info!("Thumbnails uploaded");
 
         Ok(())
     }
@@ -350,8 +347,7 @@ where
 
             match event {
                 NetStreamEvent::Progress { uploaded_bytes } => {
-                    let count = uploaded_bytes - total_sent;
-                    progress.update_progress(count);
+                    progress.update_progress(uploaded_bytes - total_sent);
                     total_sent = uploaded_bytes;
                     if ticker.elapsed() > progress_update_interval {
                         ticker = Instant::now();
@@ -381,9 +377,9 @@ where
                     return Err(CloudTransferErrors::from(e));
                 }
             }
-
-            net_stream.end().await?;
         }
+
+        net_stream.end().await?;
 
         log::info!("Resource {resource_path:?} uploaded, total sent = {total_sent} bytes");
 
