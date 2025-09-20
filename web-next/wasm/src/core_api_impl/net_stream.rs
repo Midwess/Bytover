@@ -59,22 +59,24 @@ impl NetStreamInner for NetStreamInnerImpl {
 
         let mut all_requests = self.requests.drain(..).collect::<Vec<_>>();
         self.handle = Some(spawn(async move {
-            let current_position = 0;
+            let mut current_position = 0;
             let mut responses = Vec::new();
             let result: Result<(), JsValue> = 'upload: loop {
                 let Some(request) = all_requests.pop() else { break 'upload Ok(()) };
 
                 let new_position = match request.x_content_length {
-                    Some(x) => current_position + x,
+                    Some(x) => (current_position + x).min(blob.size() as u64),
                     None => blob.size() as u64
                 };
 
-                // No more data to upload, should end
-                if new_position >= current_position {
+                let content_length = new_position - current_position;
+                log::info!("Uploading {}", content_length);
+                if content_length == 0 {
                     break 'upload Ok(())
                 }
 
                 let next_blob = blob.slice_with_f64_and_f64(current_position as f64, new_position as f64)?;
+                current_position = new_position;
 
                 let mut request = HttpClient::new()
                     .url(request.url.as_str())
@@ -83,7 +85,7 @@ impl NetStreamInner for NetStreamInnerImpl {
                     .body_blob(next_blob)
                     .xhr()?;
 
-                while let Some(event) = request.next_event().await {
+                'event_loop: while let Some(event) = request.next_event().await {
                     log::info!("XHR event: {:?}", event);
                     match event {
                         XhrEvent::Error(value) => {
@@ -91,10 +93,9 @@ impl NetStreamInner for NetStreamInnerImpl {
                         }
                         XhrEvent::Complete { headers, body } => {
                             let body: Option<serde_json::Value> = body.as_string().and_then(|s| serde_json::from_str(&s).ok());
-
                             let response = UploadResponse { headers, body };
-
                             responses.push(response);
+                            break 'event_loop
                         }
                         XhrEvent::InProgress(value) => {
                             let total_bytes = value.total();
@@ -112,6 +113,7 @@ impl NetStreamInner for NetStreamInnerImpl {
             };
 
             let _ = tx.try_send(end_event);
+            let _ = tx.close();
             Ok(())
         }));
 
@@ -149,5 +151,11 @@ impl NetStreamInnerImpl {
         }
 
         None
+    }
+}
+
+impl Drop for NetStreamInnerImpl {
+    fn drop(&mut self) {
+        let _ = futures::executor::block_on(self.end());
     }
 }

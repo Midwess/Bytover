@@ -382,6 +382,7 @@ where
                             return Err(CloudTransferErrors::UploadProcessError("Failed to upload resource".to_string()));
                         };
 
+                        progress.success();
                         etags.push(etag);
                     }
 
