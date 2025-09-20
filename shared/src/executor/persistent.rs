@@ -97,8 +97,7 @@ pub trait NativePersistent: Send + Sync {
                     .await
                 {
                     PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(Some(resource)))
-                }
-                else {
+                } else {
                     PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(None))
                 }
             }

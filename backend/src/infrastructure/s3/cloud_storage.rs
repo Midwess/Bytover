@@ -32,12 +32,9 @@ impl CloudStorage for S3CloudStorageImpl {
         };
 
         let part_size = self.get_max_part_size(file_size);
-        let part_count = ((file_size + part_size - 1) / part_size) as i32 + self.extra_upload() as i32;
+        let part_count = file_size.div_ceil(part_size) as i32 + self.extra_upload() as i32;
 
-        let multipart = self
-            .s3_client
-            .generate_multipart_upload_urls(source, part_count, duration)
-            .await?;
+        let multipart = self.s3_client.generate_multipart_upload_urls(source, part_count, duration).await?;
 
         let context = UploadContext {
             resource: source.clone(),
@@ -56,13 +53,12 @@ impl CloudStorage for S3CloudStorageImpl {
                 x_content_length: {
                     if remaining_size <= 0 {
                         None
-                    }
-                    else {
+                    } else {
                         let size = remaining_size.min(part_size as u64);
                         remaining_size -= size;
                         Some(size)
                     }
-                },
+                }
             })
             .collect();
 

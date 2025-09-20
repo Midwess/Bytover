@@ -12,8 +12,9 @@ use crate::core_transfer_protocol::webrtc::transfer::{TransferDelimiterShema, Tr
 use crate::core_transfer_protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
 use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
+use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
-use futures::lock::Mutex;
 use futures::StreamExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
@@ -31,8 +32,6 @@ use schema::devlog::bitbridge::{
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
-use core_services::utils::yield_container::YieldContainer;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -294,22 +293,13 @@ impl WebRtcPeer {
             Ok(thumbnail_paths)
         });
 
-        log::info!(
-            "Begin downloading resources for session {session_id} {}",
-            session.is_completed()
-        );
         while !session.is_completed() {
             if !self.transfers_context.is_active(session_id).await {
                 session.cancel();
                 break;
             }
 
-            let first_delimiter = resource_rx
-                .next()
-                .with_cancel(&cancellation_signal)
-                .await
-                .unwrap_or_default()
-                .unwrap_or_default();
+            let first_delimiter = resource_rx.next().with_cancel(&cancellation_signal).await.unwrap_or_default().unwrap_or_default();
             let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter, true)?;
 
             let Some((resource_path, resource_size)) = session
@@ -323,15 +313,14 @@ impl WebRtcPeer {
                 )));
             };
 
-            log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             let mut writer = self.resource_repo.write(resource_path.clone()).await?;
 
             let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
+            log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             while let Ok(Some(packet)) = resource_rx.next().with_cancel(&cancellation_signal).await {
                 if TransferDelimiterShema::is_end(&packet) {
                     progress_update.success();
-                    log::info!("Received end delimiter");
                     break;
                 }
 
@@ -346,17 +335,16 @@ impl WebRtcPeer {
                 self.core_bridge.resource_progress_update(core_request_id, progress_update, false).await;
             }
 
+            log::info!("Complete downloading resource {:?} len {total_written_bytes}", resource_path);
             writer.end().await?;
             progress_update.complete();
             self.core_bridge.resource_progress_update(core_request_id, progress_update, true).await;
-            log::info!("Complete Downloading resource {:?} len {total_written_bytes}", resource_path);
         }
 
         let _ = thumbnail_handle.await;
 
         self.transfers_context.stop_transfer(session_id).await;
 
-        log::info!("Transfer session {session_id} completed");
         Ok(session.status())
     }
 
@@ -481,7 +469,7 @@ impl WebRtcPeer {
                 .await?
                 .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
             {
-                let bytes = Packet::from(&bytes[..]);
+                let bytes = Packet::from(bytes);
                 let sent_bytes = bytes.len() as u64;
                 total_sent_bytes += sent_bytes;
                 if !bytes.is_empty() {

@@ -6,8 +6,9 @@ use shared::entities::file_system::file::{LocalResource, LocalResourcePath, Reso
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+use wasm_bindgen::JsCast;
 use web_sys::js_sys::Array;
-use web_sys::File;
+use web_sys::{Blob, File};
 
 #[derive(Clone)]
 pub struct WasmFile(pub File);
@@ -69,6 +70,10 @@ impl DeviceFile {
             file: WasmFile(file),
             resource
         }
+    }
+
+    pub fn blob(self) -> Option<Blob> {
+        (self.file.0).dyn_into().ok()
     }
 }
 

@@ -37,7 +37,7 @@ final class SingleWaiter<T> {
 class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocationManagerDelegate {
     @Published var isSignedIn = false
     @Published var selectedMediaItems: [PhotosPickerItem] = []
-    
+
     var environment: CurrentValueSubject<EnvironmentViewModel?, Never> = .init(nil)
     var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
@@ -141,11 +141,11 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.device(.getGeoLocation)):
             if let lastKnownLocation {
-                let longitude = lastKnownLocation.longitude.magnitude;
-                let latitude = lastKnownLocation.latitude.magnitude;
+                let longitude = lastKnownLocation.longitude.magnitude
+                let latitude = lastKnownLocation.latitude.magnitude
                 return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(GeoLocation(latitude: latitude, longitude: longitude))).bincodeSerialize()))
             }
-            
+
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
         case .appCapabilities(.persistent(let ops)):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.persistent(ops).bincodeSerialize()))
@@ -300,7 +300,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                         await self.processPickedMediaItem(item)
                     }
                 }
-                
+
                 try? await group.waitForAll()
             }
         }
@@ -388,14 +388,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
 
                     if let image = image, !isDegraded, error == nil, let pngData = image.pngData() {
                         continuation.resume(returning: pngData)
-                    }
-                    else if error != nil {
+                    } else if error != nil {
                         continuation.resume(returning: nil)
                     }
                 }
             }
-        }
-        else if itemIdentifier.starts(with: "bookmark://") {
+        } else if itemIdentifier.starts(with: "bookmark://") {
             guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
                 print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
                 return nil
@@ -411,7 +409,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 scale: scale,
                 representationTypes: .all
             )
-            
+
             return await withCheckedContinuation { continuation in
                 QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, error in
                     if let thumbnail = thumbnail, let pngData = thumbnail.uiImage.pngData() {

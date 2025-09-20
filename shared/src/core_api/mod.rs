@@ -1,19 +1,19 @@
 pub mod network;
 
-use std::collections::HashMap;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::app::AppEvent;
 use crate::entities::file_system::file::LocalResourcePath;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
-use futures::channel::mpsc::{Receiver, Sender, UnboundedReceiver};
+use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::{Stream, StreamExt};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -73,7 +73,7 @@ pub struct UploadResponse {
 #[derive(Debug, Clone)]
 pub struct UploadRequest {
     pub url: Url,
-    pub x_content_length: Option<u64>,
+    pub x_content_length: Option<u64>
 }
 
 // Abstraction open stream to http server

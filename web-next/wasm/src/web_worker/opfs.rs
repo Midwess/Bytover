@@ -1,5 +1,7 @@
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
+use chrono::Utc;
+use core_services::local_storage::entry::FileEntry;
 use core_services::logger::setup;
 use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
@@ -7,10 +9,10 @@ use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use chrono::Utc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
+    Blob,
     FileSystemDirectoryHandle,
     FileSystemFileHandle,
     FileSystemGetDirectoryOptions,
@@ -18,13 +20,54 @@ use web_sys::{
     FileSystemReadWriteOptions,
     FileSystemSyncAccessHandle
 };
-use core_services::local_storage::entry::FileEntry;
 
 /// Web worker that support file system on browser
 /// Open a file handle, keep tracks that handle in a list
 /// We want to support read, write, download concurrently on multiple files.
 /// That's why there are no Operation::Closed or similar operations,
 /// we never want to close the handle once it opens to prevent race condition.
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OpfsOperation {
+    pub file_path: String,
+    pub operation: FileOperation
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FileOperation {
+    Open,
+    Write {
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        data: Uint8Array,
+        position: usize
+    },
+    Read {
+        position: usize,
+        amount: usize
+    },
+    Flush,
+    FileEntry,
+    GenerateSource,
+    Blob
+}
+
+unsafe impl Send for OpfsOperation {}
+unsafe impl Sync for OpfsOperation {}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum OpfsOperationOutput {
+    Void,
+    Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
+    Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
+    Written(usize),
+    FileEntry(FileEntry),
+    DownloadUrl(String),
+    Blob(#[serde(with = "serde_wasm_bindgen::preserve")] Blob)
+}
+
+unsafe impl Send for OpfsOperationOutput {}
+unsafe impl Sync for OpfsOperationOutput {}
+
 trait FileSystemDirectoryHandleExt {
     async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue>;
     async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue>;
@@ -80,45 +123,6 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
         Ok(file_handle)
     }
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OpfsOperation {
-    pub file_path: String,
-    pub operation: FileOperation
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum FileOperation {
-    Open,
-    Write {
-        #[serde(with = "serde_wasm_bindgen::preserve")]
-        data: Uint8Array,
-        position: usize
-    },
-    Read {
-        position: usize,
-        amount: usize
-    },
-    Flush,
-    FileEntry,
-    GenerateSource
-}
-
-unsafe impl Send for OpfsOperation {}
-unsafe impl Sync for OpfsOperation {}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum OpfsOperationOutput {
-    Void,
-    Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
-    Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
-    Written(usize),
-    FileEntry(FileEntry),
-    DownloadUrl(String)
-}
-
-unsafe impl Send for OpfsOperationOutput {}
-unsafe impl Sync for OpfsOperationOutput {}
 
 pub type AMutex<T> = Arc<Mutex<T>>;
 
@@ -186,7 +190,7 @@ impl OpfsWorker {
                     path: file_path.into(),
                     size: file_guard.get_size().unwrap_or_default() as u64,
                     modified_at: Utc::now().into(),
-                    is_dir: false,
+                    is_dir: false
                 };
                 match file_guard.get_size() {
                     Ok(size) => OpfsOperationOutput::FileEntry(entry),
@@ -215,6 +219,21 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(url) => OpfsOperationOutput::DownloadUrl(url),
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            }
+            FileOperation::Blob => {
+                match async {
+                    let root_future = JsFuture::from(get_directory());
+                    let root: FileSystemDirectoryHandle = root_future.await?.into();
+                    let file_handle = root.open_file_async(&file_path).await?;
+                    let file = JsFuture::from(file_handle.get_file()).await?;
+                    let blob: Blob = file.into();
+                    Ok::<Blob, JsValue>(blob)
+                }
+                .await
+                {
+                    Ok(blob) => OpfsOperationOutput::Blob(blob),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }

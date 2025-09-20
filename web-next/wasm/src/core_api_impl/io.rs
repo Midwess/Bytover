@@ -1,7 +1,7 @@
 use crate::file_api::device_file::WasmFile;
 use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
+use bytes::BytesMut;
 use core_services::local_storage::entry::FileEntry;
 use futures::lock::Mutex;
 use futures_channel::oneshot;
@@ -15,22 +15,26 @@ use web_sys::{Blob, FileReader, ProgressEvent};
 pub struct IOReaderImpl {
     pub file: Mutex<WasmFile>,
     pub position: u64,
-    pub chunk_size: u64
+    pub chunk_size: u64,
+    pub buffer: BytesMut
 }
 
 impl IOReaderImpl {
     pub(crate) fn new(file: WasmFile, chunk_size: u64) -> Self {
+        let mut buffer = BytesMut::with_capacity(chunk_size as usize);
+        buffer.resize(chunk_size as usize, 0);
         Self {
             file: Mutex::new(file),
             position: 0,
-            chunk_size
+            chunk_size,
+            buffer
         }
     }
 }
 
 #[async_trait(?Send)]
 impl IOReader for IOReaderImpl {
-    async fn next(&mut self) -> Result<Option<Bytes>> {
+    async fn next(&mut self, max: Option<u64>) -> Result<Option<&[u8]>> {
         let total_size = self.entry().await?.size;
 
         let file = self.file.lock().await;
@@ -66,12 +70,12 @@ impl IOReader for IOReaderImpl {
             .map_err(|e| anyhow::anyhow!("Failed to cast result to ArrayBuffer: {e:?}"))?;
 
         let data = Uint8Array::new(&array_buffer);
-        let mut vec = vec![0u8; data.length() as usize];
-        data.copy_to(&mut vec);
+        data.copy_to(&mut self.buffer);
 
         self.position = end;
 
-        Ok(Some(Bytes::from(vec)))
+        let response = &self.buffer[..data.length() as usize];
+        Ok(Some(response))
     }
 
     async fn entry(&self) -> Result<FileEntry> {
@@ -80,7 +84,7 @@ impl IOReader for IOReaderImpl {
             is_dir: false,
             modified_at: chrono::Utc::now().into(),
             size: file.size() as u64,
-            path: "".into(),
+            path: "".into()
         })
     }
 }

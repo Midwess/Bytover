@@ -1,10 +1,10 @@
 use crate::app::repository::errors::PersistenceError;
 use crate::errors::NetworkError;
-use core_services::utils::cancellation::{TaskErrors};
+use core_services::utils::cancellation::TaskErrors;
+use core_services::utils::yield_container::YieldError;
 use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use prost::{DecodeError, EncodeError};
-use core_services::utils::yield_container::YieldError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
@@ -51,7 +51,7 @@ pub enum WebRtcErrors {
     Canceled(#[from] TaskErrors),
 
     #[error("System error, yield error")]
-    YieldError(#[from] YieldError),
+    YieldError(#[from] YieldError)
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

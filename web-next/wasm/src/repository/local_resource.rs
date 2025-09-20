@@ -12,14 +12,12 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use futures::lock::Mutex;
 use idb::Database;
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
-use url::Position;
 use wasm_bindgen::JsValue;
 
 pub struct LocalResourceRepositoryImpl {

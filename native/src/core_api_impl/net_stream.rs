@@ -1,22 +1,23 @@
-use futures::channel::mpsc::{channel, Sender, Receiver, UnboundedReceiver, UnboundedSender};
 use anyhow::Result;
+use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures_util::SinkExt;
+use reqwest::Response;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner, UploadRequest, UploadResponse};
 use shared::entities::file_system::file::LocalResourcePath;
 use std::sync::Arc;
-use futures_util::SinkExt;
-use reqwest::Response;
-use tokio::{io::{AsyncWriteExt}, spawn, try_join};
+use tokio::io::AsyncWriteExt;
+use tokio::{spawn, try_join};
 
 pub struct NetStreamImpl {
-    pub repository: Arc<dyn LocalResourceRepository>,
+    pub repository: Arc<dyn LocalResourceRepository>
 }
 
 pub struct NetStreamInnerImpl {
     handle: Option<tokio::task::JoinHandle<Result<()>>>,
     path: LocalResourcePath,
     requests: Vec<UploadRequest>,
-    repository: Arc<dyn LocalResourceRepository>,
+    repository: Arc<dyn LocalResourceRepository>
 }
 
 #[async_trait::async_trait]
@@ -26,7 +27,7 @@ impl NetStream for NetStreamImpl {
             path,
             handle: None,
             requests,
-            repository: self.repository.clone(),
+            repository: self.repository.clone()
         }))
     }
 }
@@ -46,9 +47,7 @@ impl NetStreamInner for NetStreamInnerImpl {
             for req in requests {
                 let task = async {
                     let response = match req.x_content_length {
-                        Some(_) => {
-                            stream(&req, &mut cursor, &mut tx, &mut uploaded).await?
-                        },
+                        Some(_) => stream(&req, &mut cursor, &mut tx, &mut uploaded).await?,
                         None => {
                             let bytes = cursor.read_all().await?;
                             let content_length = bytes.len() as u64;
@@ -73,12 +72,13 @@ impl NetStreamInner for NetStreamInnerImpl {
 
                     responses.push(response);
                     Result::<(), anyhow::Error>::Ok(())
-                }.await;
+                }
+                .await;
 
                 if let Err(e) = task {
                     let _ = tx.send(NetStreamEvent::Error(e)).await;
                 }
-            };
+            }
 
             let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: uploaded });
             let _ = tx.send(NetStreamEvent::Completed(responses)).await;
@@ -101,7 +101,7 @@ async fn stream(
     req: &UploadRequest,
     cursor: &mut Box<dyn core_services::local_storage::stream::IOCursor>,
     tx: &mut Sender<NetStreamEvent>,
-    uploaded: &mut u64,
+    uploaded: &mut u64
 ) -> Result<UploadResponse> {
     let Some(content_length) = req.x_content_length else {
         return Err(anyhow::anyhow!("Upload stream must have a content length"));
@@ -125,9 +125,7 @@ async fn stream(
     };
 
     let writer_fut = async {
-        let Some(mut remaining) = req.x_content_length else {
-            return Ok(())
-        };
+        let Some(mut remaining) = req.x_content_length else { return Ok(()) };
 
         while remaining > 0 {
             let chunk = cursor.next(Some(remaining)).await?.unwrap_or_default();
@@ -155,9 +153,7 @@ impl Drop for NetStreamInnerImpl {
 
 async fn build_response(value: Response) -> UploadResponse {
     UploadResponse {
-        headers: value.headers().iter()
-            .map(|(k,v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-            .collect(),
+        headers: value.headers().iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string())).collect(),
         body: value.json::<serde_json::Value>().await.ok()
     }
 }

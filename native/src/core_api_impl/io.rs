@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use core_services::local_storage::{entry::FileEntry, stream::IOCursor};
+use core_services::local_storage::entry::FileEntry;
+use core_services::local_storage::stream::IOCursor;
 use shared::core_api::{IOReader, IOWriter};
 use std::path::PathBuf;
 

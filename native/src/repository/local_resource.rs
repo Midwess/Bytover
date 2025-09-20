@@ -117,7 +117,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             return Ok(None)
         }
 
-        let file = FileEntry::new(None, absolute_path).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+        let file = FileEntry::new(None, absolute_path)
+            .await
+            .map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
         let resource = LocalResource {
             order_id: gen_id().await,
             name: file.name(),
@@ -173,7 +175,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         let path = self.path_resolver.get_thumbnail_file_path(resource_id).await;
         log::info!("Creating thumbnail at {path:?}");
-        FileEntry::new(Some(png_bytes), &path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        FileEntry::new(Some(png_bytes), &path)
+            .await
+            .map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
         let saved_path = self.path_resolver.get_local_resource_path(path).await;
         resource.thumbnail_path = Some(saved_path.clone());
         RedbRepository::update_one(self, resource).await?;

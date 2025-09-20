@@ -14,13 +14,13 @@ use futures_util::lock::Mutex;
 use futures_util::{join, StreamExt};
 use n0_future::task::spawn;
 use n0_future::time::Instant;
+use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::subscribe_session_info_response::Event;
+use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUpload, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use schema::devlog::bitbridge::client_upload_request::Upload;
-use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -192,7 +192,10 @@ where
 
             log::info!("Uploading thumbnail to {:?}", url);
             let url = url.parse::<url::Url>().unwrap();
-            let request = UploadRequest { url, x_content_length: Some(size) };
+            let request = UploadRequest {
+                url,
+                x_content_length: Some(size)
+            };
             let Ok(mut net_stream) = self.net_stream.upload_resource(vec![request], thumbnail_file_path).await else {
                 continue;
             };
@@ -282,7 +285,9 @@ where
                     drop(session_guard);
                     let _ = self.core_bridge.response(core_request_id, msg).await;
 
-                    self.server.update_transfer_progress(session_order_id, order_id, Status::Success(completion)).await?
+                    self.server
+                        .update_transfer_progress(session_order_id, order_id, Status::Success(completion))
+                        .await?
                 }
                 Err(e) => {
                     log::error!("Upload resource failed with status: {e:?}");
@@ -327,12 +332,17 @@ where
         log::info!("Uploading resource {resource_path:?} size = {size}");
         let mut ticker = Instant::now();
         let progress_update_interval = std::time::Duration::from_millis(3000);
-        let upload_requests = upload.parts.iter().map(|it| {
-            let url = url::Url::parse(&it.url).unwrap();
-            UploadRequest {
-                url, x_content_length: it.x_content_length
-            }
-        }).collect();
+        let upload_requests = upload
+            .parts
+            .iter()
+            .map(|it| {
+                let url = url::Url::parse(&it.url).unwrap();
+                UploadRequest {
+                    url,
+                    x_content_length: it.x_content_length
+                }
+            })
+            .collect();
 
         let mut net_stream = self.net_stream.upload_resource(upload_requests, resource_path.clone()).await?;
         let mut event_stream = net_stream.start().await?;
@@ -351,7 +361,13 @@ where
                     total_sent = uploaded_bytes;
                     if ticker.elapsed() > progress_update_interval {
                         ticker = Instant::now();
-                        self.server.update_transfer_progress(session_order_id, resource_order_id, Status::TransferredAmountInBytes(total_sent as u32)).await?;
+                        self.server
+                            .update_transfer_progress(
+                                session_order_id,
+                                resource_order_id,
+                                Status::TransferredAmountInBytes(total_sent as u32)
+                            )
+                            .await?;
                     }
 
                     let progress_update_event =

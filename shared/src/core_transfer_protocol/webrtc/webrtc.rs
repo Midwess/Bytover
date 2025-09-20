@@ -178,8 +178,7 @@ impl WebRtc {
                                 .await;
                         }));
                     }
-                }
-                else if state == matchbox_socket::PeerState::Disconnected {
+                } else if state == matchbox_socket::PeerState::Disconnected {
                     log::info!("Peer {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }

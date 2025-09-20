@@ -29,7 +29,7 @@ futures = { workspace = true }
 erased-serde = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 bincode = { workspace = true }
-core-services = { workspace = true, features = ["db-idb", "wasm-logger"] }
+core-services = { workspace = true, features = ["db-idb", "wasm"] }
 serde_json = { workspace = true, features = ["indexmap", "preserve_order"] }
 once_cell = { workspace = true }
 anyhow = { workspace = true }

@@ -3,9 +3,23 @@ use crate::rpc::connection::RpcNetworkModule;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
-use schema::devlog::bitbridge::{AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse, PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest};
-use tonic::{Request, Streaming};
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
+use schema::devlog::bitbridge::{
+    AddResourcesRequest,
+    AddResourcesResponse,
+    CancelSessionRequest,
+    ClientUploadRequest,
+    CloudResourceMessage,
+    CreatePublicTransferSessionRequest,
+    FindSessionRequest,
+    FindSessionResponse,
+    PublicSessionId,
+    PublicTransferSessionMessage,
+    SubscribeSessionInfoRequest,
+    SubscribeSessionInfoResponse,
+    UpdateTransferProgressRequest
+};
+use tonic::{Request, Streaming};
 
 pub struct CloudServer<T>
 where
@@ -90,13 +104,13 @@ where
         &self,
         session_order_id: u64,
         resource_order_id: u64,
-        status: Status,
+        status: Status
     ) -> Result<Option<ClientUploadRequest>, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request_body = UpdateTransferProgressRequest {
             session_order_id,
             resource_id: resource_order_id,
-            status: Some(status),
+            status: Some(status)
         };
 
         let mut request = Request::new(request_body);

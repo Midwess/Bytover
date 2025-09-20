@@ -5,7 +5,7 @@
 //  Created by Dang Minh Tien on 20/9/25.
 //
 
-import SharedTypes;
+import SharedTypes
 
 @MainActor
 class CoreMock: Core {
