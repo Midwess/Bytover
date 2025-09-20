@@ -5,7 +5,6 @@
 
 import Foundation
 import SharedTypes
-import SwiftUICore
 import SwiftUI
 import Serde
 import PhotosUI
@@ -36,6 +35,9 @@ final class SingleWaiter<T> {
 
 @MainActor
 class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocationManagerDelegate {
+    @Published var isSignedIn = false
+    @Published var selectedMediaItems: [PhotosPickerItem] = []
+    
     var environment: CurrentValueSubject<EnvironmentViewModel?, Never> = .init(nil)
     var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
@@ -46,8 +48,6 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     var privatePath: URL?
     var publicPath: URL?
 
-    @Published var isSignedIn = false
-    @Published var selectedMediaItems: [PhotosPickerItem] = []
     var alert: CurrentValueSubject<(AlertDialog, SingleWaiter<Bool>)?, Never> = .init(nil)
     var toastMessage: CurrentValueSubject<String?, Never> = .init(nil)
 
@@ -280,50 +280,54 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
 
     func onMediasChanged() async {
         await self.update(.transfer(.beginLoadingResources))
-        let items = Array(self.selectedMediaItems)
+        defer { Task { await self.update(.transfer(.endLoadingResources)) } }
+
+        let items = self.selectedMediaItems
+        guard !items.isEmpty else {
+            self.selectedMediaItems.removeAll()
+            return
+        }
+
         let chunkSize = 5
-
         for i in stride(from: 0, to: items.count, by: chunkSize) {
-            let chunk = Array(items[i..<min(i + chunkSize, items.count)])
+            let upperBound = min(i + chunkSize, items.count)
+            let chunk = Array(items[i..<upperBound])
 
-            await withTaskGroup(of: Void.self) { group in
+            await withThrowingTaskGroup(of: Void.self) { group in
                 for item in chunk {
-                    group.addTask {
-                        guard let identifier = item.itemIdentifier else { return }
-
-                        guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else {
-                            return
-                        }
-
-                        let asset = assetCached.asset
-                        let asset_type = asset.mediaType
-
-                        let resourceType: ResourceType = {
-                            switch asset_type {
-                            case .image:
-                                return .image
-                            case .video:
-                                return .video
-                            default:
-                                return .file
-                            }
-                        }()
-
-                        let phassetUrl = "phasset://" + identifier
-
-                        let resourceSelection = ResourceSelection(
-                            path: .platformIdentifier(phassetUrl),
-                            type: resourceType
-                        )
-
-                        await self.update(.transfer(.addResources([resourceSelection])))
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        await self.processPickedMediaItem(item)
                     }
                 }
+                
+                try? await group.waitForAll()
             }
         }
 
-        await self.update(.transfer(.endLoadingResources))
         self.selectedMediaItems.removeAll()
+    }
+
+    private func processPickedMediaItem(_ item: PhotosPickerItem) async {
+        guard let identifier = item.itemIdentifier else { return }
+        guard let assetCached = await PHAsset.getCachedAsset(identifier: identifier) else { return }
+
+        let assetType = assetCached.asset.mediaType
+        let resourceType: ResourceType = {
+            switch assetType {
+            case .image: return .image
+            case .video: return .video
+            default: return .file
+            }
+        }()
+
+        let phassetUrl = "phasset://" + identifier
+        let resourceSelection = ResourceSelection(
+            path: .platformIdentifier(phassetUrl),
+            type: resourceType
+        )
+
+        await self.update(.transfer(.addResources([resourceSelection])))
     }
 
     func open(path: LocalResourcePath) async {
@@ -369,7 +373,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let options = PHImageRequestOptions()
             options.resizeMode = .fast
             options.isNetworkAccessAllowed = true
-            options.deliveryMode = .fastFormat
+            options.deliveryMode = .opportunistic
             options.isSynchronous = false
 
             return await withCheckedContinuation { continuation in
@@ -378,15 +382,20 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     targetSize: size,
                     contentMode: .aspectFit,
                     options: options
-                ) { image, _ in
-                    if let image = image, let pngData = image.pngData() {
+                ) { image, info in
+                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                    let error = info?[PHImageErrorKey] as? Error
+
+                    if let image = image, !isDegraded, error == nil, let pngData = image.pngData() {
                         continuation.resume(returning: pngData)
-                    } else {
+                    }
+                    else if error != nil {
                         continuation.resume(returning: nil)
                     }
                 }
             }
-        } else if itemIdentifier.starts(with: "bookmark://") {
+        }
+        else if itemIdentifier.starts(with: "bookmark://") {
             guard let absolutePath = await getAbsoluteUrl(from: itemIdentifier) else {
                 print("Cannot generate an absolute url from bookmark: \(itemIdentifier)")
                 return nil
@@ -394,15 +403,15 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
 
             let url = URL(fileURLWithPath: absolutePath)
 
-            let scale = 1.0
             let thumbnailSize = CGSize(width: size.width, height: size.height)
+            let scale = UIScreen.main.scale
             let request = QLThumbnailGenerator.Request(
                 fileAt: url,
                 size: thumbnailSize,
                 scale: scale,
-                representationTypes: .thumbnail
+                representationTypes: .all
             )
-
+            
             return await withCheckedContinuation { continuation in
                 QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, error in
                     if let thumbnail = thumbnail, let pngData = thumbnail.uiImage.pngData() {
@@ -722,98 +731,4 @@ extension View {
                 action(oldValue, newValue)
             }
     }
-}
-
-@MainActor
-class CoreMock: Core {
-    static func empty() -> Core {
-        CoreMock() as Core
-    }
-
-    static func withSelectedFileTransfers() -> Core {
-        let x = CoreMock() as Core
-
-        // Create avatar view models
-        let bearAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
-        let foxAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Fox.png?r=221&g=155&b=104", dominant_color_r: 221, dominant_color_g: 155, dominant_color_b: 104)
-        let wolfAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Wolf.png?r=128&g=128&b=128", dominant_color_r: 128, dominant_color_g: 128, dominant_color_b: 128)
-
-        // Create resource view models
-        let path = LocalResourcePath.absolutePath("")
-        let resource1 = SelectedResourceViewModel(order_id: 1, name: "ScreenShot.png", size_gb: 0, size_mb: 2.0, display_path: "/Photos/ScreenShot.png", path: path, thumbnail_path: nil, type: .image)
-        let resource2 = SelectedResourceViewModel(order_id: 2, name: "Document.pdf", size_gb: 0, size_mb: 5.3, display_path: "/Documents/Document.pdf", path: path, thumbnail_path: nil, type: .file)
-        let resource3 = SelectedResourceViewModel(order_id: 3, name: "Video.mp4", size_gb: 0.25, size_mb: 256, display_path: "/Videos/Video.mp4", path: path, thumbnail_path: nil, type: .video)
-
-        // Create receive sessions
-        let receive_session1 = ReceiveSessionViewModel(
-            id: 1,
-            peer_avatar: bearAvatar,
-            peer_name: "Tien Dang",
-            peer_description: "nearby",
-            image_resources: [
-                ImageReceiveResourceViewModel(model: resource1, completion: 1.0, is_completed: false)
-            ],
-            video_resources: [],
-            file_resources: [],
-            is_completed: false,
-            is_in_progress: true,
-            display_download_speed: "2.0 MB/s",
-            progress: 0.8,
-            display_datetime: "2025-08-22 12:44"
-        )
-
-        let receive_session2 = ReceiveSessionViewModel(
-            id: 2,
-            peer_avatar: foxAvatar,
-            peer_name: "Alex Smith",
-            peer_description: "nearby",
-            image_resources: [],
-            video_resources: [],
-            file_resources: [
-                FileReceiveResourceViewModel(model: resource2, completion: 0.8, is_completed: false)
-            ],
-            is_completed: false,
-            is_in_progress: true,
-            display_download_speed: "1.5 MB/s",
-            progress: 0.45,
-            display_datetime: "2025-08-22 12:44"
-        )
-
-        let receive_session3 = ReceiveSessionViewModel(
-            id: 3,
-            peer_avatar: wolfAvatar,
-            peer_name: "Sarah Johnson",
-            peer_description: "nearby",
-            image_resources: [],
-            video_resources: [
-                VideoReceiveResourceViewModel(model: resource3, completion: 1.0, is_completed: true)
-            ],
-            file_resources: [],
-            is_completed: true,
-            is_in_progress: false,
-            display_download_speed: "0 KB/s",
-            progress: 1.0,
-            display_datetime: "2025-08-22 12:44"
-        )
-
-        // Initialize the transfer view model
-        x.transfer = .init(TransferViewModel(
-            selected_resources: [],
-            is_loading_selected_resources: false,
-            transfer_method_selection: .device,
-            nearby_peers: [],
-            received_sessions: [receive_session1, receive_session2, receive_session3],
-            received_cloud_sessions: [],
-            cloud_session: CloudSession(access_url: "https://bitbridge.devlog.studio/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
-        ))
-
-        // Add selected resources
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image))
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file))
-
-        return x
-    }
-    override func update(_ event: AppEvent) async {}
-
-    override func update_view(_ model: AppViewModel) {}
 }

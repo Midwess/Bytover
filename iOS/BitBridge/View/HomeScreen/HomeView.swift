@@ -21,7 +21,7 @@ struct HomeView: View {
     var body: some View {
         ZStack {
             StunningBackgroundGradient()
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 TabView(selection: $selectedTab) {
                     ShareView()
                         .tag(1)
@@ -38,7 +38,6 @@ struct HomeView: View {
                     get: { selectedTab },
                     set: { newValue in
                         withAnimation(.easeInOut) {
-                            // Determine slide direction based on tab order
                             let slideDirection = if newValue > previousTab {
                                 Edge.trailing
                             } else if newValue < previousTab {
@@ -47,7 +46,6 @@ struct HomeView: View {
                                 Edge.leading
                             }
 
-                            // Apply transition based on direction
                             withAnimation(.easeInOut) {
                                 selectedTab = newValue
                             }

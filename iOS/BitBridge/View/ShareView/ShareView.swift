@@ -76,6 +76,7 @@ public struct ShareView: View {
                 .offset(y: SpaceTheme.screen.value)
                 .padding(.horizontal, SpaceTheme.screen.value)
         }
+        .frame(width: screenSize.width, height: screenSize.height - safeAreaInsets.bottom - 20)
         .confirmationDialog(
             selectedResource?.name ?? "Resource",
             isPresented: $isShowResourceOption) {

@@ -7,6 +7,7 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
+use crate::app::core_utils::CoreCommandContextUtils;
 use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
@@ -95,6 +96,7 @@ impl ResourceTransferSelectionService {
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {
+        log::info!("Removing resource from core: {}", id);
         let removed_resource = LocalResourcePersistentOperation::remove(id).into_future(ctx.clone()).await;
         if let Some(removed_resource) = removed_resource {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {

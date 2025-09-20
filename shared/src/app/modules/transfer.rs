@@ -1,4 +1,4 @@
-use crate::app::core_utils::CoreCommandUtils;
+use crate::app::core_utils::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
@@ -61,8 +61,8 @@ pub enum TransferEvent {
     Launch(),
     // This event is used to notify the core that the shell need sometime to load resources
     // The core will control the loading progress after the AddResources is triggered
-    BeginLoadingResources(),
-    EndLoadingResources(),
+    BeginLoadingResources,
+    EndLoadingResources,
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
     OpenSession {
@@ -153,28 +153,22 @@ impl AppModule<BitBridge> for TransferModule {
                 resource_selection_service.load_resources(it.clone()).await;
                 transfer_service.load_transfer_sessions(it).await;
             }),
-            TransferEvent::BeginLoadingResources() => {
+            TransferEvent::BeginLoadingResources => {
                 model.transfer.is_loading_selected_resources = true;
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
+                Command::render()
             }
-            TransferEvent::EndLoadingResources() => {
+            TransferEvent::EndLoadingResources => {
                 model.transfer.is_loading_selected_resources = false;
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
+                Command::render()
             }
             TransferEvent::AddResources(selections) => Command::new(|it| async move {
+                it.notify_event(AppEvent::Transfer(TransferEvent::BeginLoadingResources));
                 resource_selection_service.add_resources(it.clone(), selections).await;
-                it.notify_shell(CoreOperation::Render);
+                it.notify_event(AppEvent::Transfer(TransferEvent::EndLoadingResources));
             }),
-            TransferEvent::RemoveResource(id) => {
-                model.transfer.selected_resources.retain(|it| it.order_id != id);
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
-            }
+            TransferEvent::RemoveResource(id) => Command::new(|it| async move {
+                resource_selection_service.remove_resource(it, id).await;
+            }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let Some(session) = model
                     .transfer
