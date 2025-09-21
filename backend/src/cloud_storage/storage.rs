@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudStorageErrors {
-    #[error("Cloud storage error {0}")]
+    #[error("S3 error {0:?}")]
     S3Errors(#[from] core_services::services::errors::Errors),
     #[error("JWT error: {0}")]
     JwtError(#[from] JwtErrors),

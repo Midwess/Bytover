@@ -6,7 +6,6 @@ use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput}
 use anyhow::anyhow;
 use core_services::wasm::{HttpClient, XhrEvent};
 use futures::channel::mpsc;
-use futures::StreamExt;
 use futures_channel::mpsc::Receiver;
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::SinkExt;
@@ -57,25 +56,27 @@ impl NetStreamInner for NetStreamInnerImpl {
             return Err(anyhow!("No blob to upload"));
         };
 
-        let mut all_requests = self.requests.drain(..).collect::<Vec<_>>();
+        let all_requests = self.requests.drain(..).collect::<Vec<_>>();
         self.handle = Some(spawn(async move {
             let mut current_position = 0;
             let mut responses = Vec::new();
+            let mut peekable = all_requests.into_iter().peekable();
             let result: Result<(), JsValue> = 'upload: loop {
-                let Some(request) = all_requests.pop() else { break 'upload Ok(()) };
+                let Some(request) = peekable.peek() else {
+                    break 'upload Ok(())
+                };
 
                 let new_position = match request.x_content_length {
-                    Some(x) => (current_position + x).min(blob.size() as u64),
+                    Some(it) => (current_position + it).min(blob.size() as u64),
                     None => blob.size() as u64
                 };
 
                 let content_length = new_position - current_position;
-                log::info!("Uploading {}", content_length);
                 if content_length == 0 {
                     break 'upload Ok(())
                 }
 
-                let next_blob = blob.slice_with_f64_and_f64(current_position as f64, new_position as f64)?;
+                let next_blob = blob.slice_with_i32_and_i32(current_position as i32, new_position as i32)?;
                 current_position = new_position;
 
                 let mut request = HttpClient::new()
@@ -86,7 +87,6 @@ impl NetStreamInner for NetStreamInnerImpl {
                     .xhr()?;
 
                 'event_loop: while let Some(event) = request.next_event().await {
-                    log::info!("XHR event: {:?}", event);
                     match event {
                         XhrEvent::Error(value) => {
                             break 'upload Err(value);

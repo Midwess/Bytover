@@ -12,7 +12,7 @@ use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
-use n0_future::{Stream, StreamExt};
+use n0_future::Stream;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;

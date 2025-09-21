@@ -193,7 +193,7 @@ impl OpfsWorker {
                     is_dir: false
                 };
                 match file_guard.get_size() {
-                    Ok(size) => OpfsOperationOutput::FileEntry(entry),
+                    Ok(_size) => OpfsOperationOutput::FileEntry(entry),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }

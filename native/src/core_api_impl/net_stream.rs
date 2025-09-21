@@ -51,11 +51,11 @@ impl NetStreamInner for NetStreamInnerImpl {
                         None => {
                             let bytes = cursor.read_all().await?;
                             let content_length = bytes.len() as u64;
-                            log::info!("On memory uploading {} bytes", bytes.len());
                             if bytes.is_empty() {
                                 return Ok(())
                             }
 
+                            log::info!("On memory uploading {} bytes", bytes.len());
                             let client = reqwest::Client::new();
                             let resp = client
                                 .put(req.url.clone())
