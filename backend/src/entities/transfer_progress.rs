@@ -85,8 +85,6 @@ impl TransferProgress {
         self.transfered_amount = new_amount.min(self.resource_size);
         self.status = TransferProgressStatus::InProgress(self.transfered_amount as f32 / self.resource_size as f32);
 
-        self.commit(TransferProgressStatus::Success)?;
-
         Ok(())
     }
 

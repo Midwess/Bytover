@@ -12,7 +12,6 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use futures::lock::Mutex;
 use idb::Database;
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
@@ -147,17 +146,13 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, _max_length: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(device_file_id) = path.device_file_id() {
             let Some(file) = self.file_storage.get(device_file_id).await else {
                 return Err(PersistenceError::NotFound(format!("{:?}", path)));
             };
 
-            return Ok(Box::new(IOReaderImpl {
-                file: Mutex::new(file.file.clone()),
-                position: 0,
-                chunk_size: 63 * 1024
-            }))
+            return Ok(Box::new(IOReaderImpl::new(file.file.clone(), chunk_size as u64)))
         };
 
         if let Some(path) = path.opfs_path() {
@@ -193,6 +188,6 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
         let reader = self.read(path.clone(), 0).await?;
-        Ok(reader.total_size().await?)
+        Ok(reader.entry().await?.size)
     }
 }

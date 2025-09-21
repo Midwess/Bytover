@@ -49,7 +49,7 @@ pub struct SharedContext {
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: OnceCell<PeerId>,
-    signaller: Arc<OnceCell<Weak<SignallingClient>>>,
+    signaller: Arc<OnceCell<Weak<SignallingClient>>>
 }
 
 impl Default for SharedContext {
@@ -93,12 +93,14 @@ impl SharedContext {
         let scopes = finding_scopes.iter().map(|it| it.as_string()).collect::<Vec<_>>();
         drop(finding_scopes);
         if let Some(signaller) = self.signaller() {
-            let _ = signaller.send(Message {
-                from_id: id.to_string(),
-                join: Some(JoinMessage { id: id.to_string() }),
-                scopes,
-                ..Default::default()
-            }).await;
+            let _ = signaller
+                .send(Message {
+                    from_id: id.to_string(),
+                    join: Some(JoinMessage { id: id.to_string() }),
+                    scopes,
+                    ..Default::default()
+                })
+                .await;
         }
     }
 
@@ -308,8 +310,7 @@ impl Signaller for WebSignaller {
                     log::info!("New peer found: {peer_id:?}, connecting...");
                     return Ok(peer_event);
                 }
-            }
-            else {
+            } else {
                 return Ok(peer_event);
             }
         }
@@ -322,8 +323,7 @@ pub struct WebSignallerBuilder {
 
 impl Debug for WebSignallerBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WebSignallerBuilder")
-            .finish()
+        f.debug_struct("WebSignallerBuilder").finish()
     }
 }
 

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C71581C32E7E5B4600AE7788 /* CoreMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71581C12E7E5B4400AE7788 /* CoreMock.swift */; };
 		C73956D02DBE7DB900A73950 /* ToastUI in Frameworks */ = {isa = PBXBuildFile; productRef = C73956CF2DBE7DB900A73950 /* ToastUI */; };
 		C74721162E0BCF6E00CEF1F6 /* shared.udl in Sources */ = {isa = PBXBuildFile; fileRef = C74721152E0BCF6E00CEF1F6 /* shared.udl */; };
 		C74722632E0BF01900CEF1F6 /* libnative_static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C74721792E0BD25C00CEF1F6 /* libnative_static.a */; };
@@ -93,6 +94,7 @@
 		0324C0BA079EF82D60C106A2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4DC6EA4EF860FDE31B88BA77 /* BitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A7A7E41003307355FE9E0FE /* SharedTypes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SharedTypes; path = ../shared_types/generated/swift/SharedTypes; sourceTree = SOURCE_ROOT; };
+		C71581C12E7E5B4400AE7788 /* CoreMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreMock.swift; sourceTree = "<group>"; };
 		C74721152E0BCF6E00CEF1F6 /* shared.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = shared.udl; path = ../native/src/shared.udl; sourceTree = "<group>"; };
 		C74721182E0BD24500CEF1F6 /* native.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = native.xcodeproj; path = ../native/native.xcodeproj; sourceTree = SOURCE_ROOT; };
 		C757A8312D649E26005561E9 /* shared-types */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "shared-types"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -143,6 +145,7 @@
 		1FA6FE0C2F9BC4B169F5C4B7 /* BitBridge */ = {
 			isa = PBXGroup;
 			children = (
+				C71581C12E7E5B4400AE7788 /* CoreMock.swift */,
 				C794AB2E2D5C7B5C003CD57F /* Assets.xcassets */,
 				C794AB262D5C7585003CD57F /* View */,
 				C794AB242D5C6E26003CD57F /* Core.swift */,
@@ -353,6 +356,7 @@
 				C74721162E0BCF6E00CEF1F6 /* shared.udl in Sources */,
 				C757A8712D662A31005561E9 /* Shaders.metal in Sources */,
 				C794AB252D5C6E30003CD57F /* Core.swift in Sources */,
+				C71581C32E7E5B4600AE7788 /* CoreMock.swift in Sources */,
 				C79443152D49065900866E37 /* App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

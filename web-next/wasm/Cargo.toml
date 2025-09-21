@@ -29,7 +29,7 @@ futures = { workspace = true }
 erased-serde = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 bincode = { workspace = true }
-core-services = { workspace = true, features = ["db-idb", "wasm-logger"] }
+core-services = { workspace = true, features = ["db-idb", "wasm"] }
 serde_json = { workspace = true, features = ["indexmap", "preserve_order"] }
 once_cell = { workspace = true }
 anyhow = { workspace = true }
@@ -49,6 +49,7 @@ js-sys = "0.3.78"
 async-broadcast = "0.7.2"
 gloo-worker = "0.5.0"
 uuid = { version = "1.18.0", features = ["v4"] }
+chrono = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

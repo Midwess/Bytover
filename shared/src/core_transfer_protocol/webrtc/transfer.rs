@@ -1,5 +1,5 @@
 use crate::core_transfer_protocol::webrtc::errors::WebRtcErrors;
-use core_services::utils::cancellation::{AbortSignal, CancellationToken};
+use core_services::utils::cancellation::CancellationToken;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::sleep;
@@ -45,7 +45,15 @@ impl TransferDelimiterShema {
         Ok(buffer.into_boxed_slice())
     }
 
-    pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {
+    pub fn is_end(data: &Packet) -> bool {
+        Self::from_bytes(data, false).map(|it| !it.is_start).unwrap_or(false)
+    }
+
+    pub fn is_start(data: &Packet) -> bool {
+        Self::from_bytes(data, false).map(|it| it.is_start).unwrap_or(false)
+    }
+
+    pub fn from_bytes(data: &Packet, is_start: bool) -> Result<Self, WebRtcErrors> {
         if data.len() != 1024 {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Data buffer must be exactly 1024 bytes got {}",
@@ -61,8 +69,16 @@ impl TransferDelimiterShema {
 
         let serialized_data = &data[2..2 + len];
 
-        bincode::deserialize(serialized_data)
-            .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to deserialize delimiter: {e}")))
+        let result: Self = bincode::deserialize(serialized_data)
+            .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to deserialize delimiter: {e}")))?;
+
+        if result.is_start != is_start {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Invalid delimiter, is_start does not match".to_owned()
+            ));
+        }
+
+        Ok(result)
     }
 }
 
@@ -82,8 +98,8 @@ impl SessionContext {
         }
     }
 
-    pub fn signal(&self) -> AbortSignal {
-        self.token.signal()
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.token.clone()
     }
 }
 
@@ -143,8 +159,8 @@ impl TransfersContext {
         actives.clear();
     }
 
-    pub async fn signal(&self, session_id: u64) -> Option<AbortSignal> {
+    pub async fn cancellation_token(&self, session_id: u64) -> Option<CancellationToken> {
         let actives = self.active_transfers.lock().await;
-        actives.iter().find(|it| it.session_id == session_id).map(|it| it.signal())
+        actives.iter().find(|it| it.session_id == session_id).map(|it| it.cancellation_token())
     }
 }

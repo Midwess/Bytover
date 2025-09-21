@@ -70,7 +70,7 @@ import init_core, {
     init, is_compatible,
     view
 } from "core_wasm"
-import {process_event, NativeProcessor, handle_response} from "core_wasm";
+import {process_event, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";

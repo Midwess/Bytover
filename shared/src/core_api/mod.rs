@@ -5,14 +5,15 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::session::TransferProgress;
 use crate::app::AppEvent;
 use crate::entities::file_system::file::LocalResourcePath;
-pub use core_services::local_storage::abstraction::IOCursor as IOReader;
-use futures::channel::mpsc::UnboundedReceiver;
+pub use core_services::local_storage::stream::IOCursor as IOReader;
+use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
-use n0_future::StreamExt;
+use n0_future::Stream;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -59,22 +60,34 @@ pub trait CoreBridge: Send + Sync {
 #[derive(Debug)]
 pub enum NetStreamEvent {
     Progress { uploaded_bytes: u64 },
-    Completed,
+    Completed(Vec<UploadResponse>),
     Error(anyhow::Error)
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadResponse {
+    pub headers: HashMap<String, String>,
+    pub body: Option<serde_json::Value>
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadRequest {
+    pub url: Url,
+    pub x_content_length: Option<u64>
 }
 
 // Abstraction open stream to http server
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStream: Send + Sync {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>>;
+    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStreamInner: Send + Sync {
     // Upload the resource to url
-    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>>;
+    async fn start(&mut self) -> anyhow::Result<Receiver<NetStreamEvent>>;
 
     async fn end(&mut self) -> anyhow::Result<()>;
 }

@@ -5,6 +5,7 @@ use super::{AppCommand, AppCommandContext, AppEvent};
 
 pub trait CoreCommandUtils {
     fn empty() -> Self;
+    fn render() -> Self;
     fn then_render(self) -> Self;
 }
 
@@ -27,5 +28,9 @@ impl CoreCommandUtils for AppCommand {
         self.then(Command::new(|it| async move {
             it.notify_shell(CoreOperation::Render);
         }))
+    }
+
+    fn render() -> Self {
+        Command::empty().then_render()
     }
 }

@@ -204,4 +204,3 @@ pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
 fn bincode_options() -> impl Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
-

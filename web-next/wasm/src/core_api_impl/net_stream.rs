@@ -1,18 +1,20 @@
 use crate::file_api::device_file::FileStorage;
-use crate::file_api::file_extension::VecExtension;
+use crate::file_api::opfs::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::web_worker::bridge::WorkerMessage;
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use anyhow::anyhow;
-use core_services::utils::never_send::NeverSend;
+use core_services::wasm::{HttpClient, XhrEvent};
 use futures::channel::mpsc;
-use futures_channel::mpsc::UnboundedReceiver;
+use futures_channel::mpsc::Receiver;
+use n0_future::task::{spawn, JoinHandle};
+use n0_future::SinkExt;
 use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
+use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner, UploadRequest, UploadResponse};
 use shared::entities::file_system::file::LocalResourcePath;
 use std::sync::Arc;
-use url::Url;
-use wasm_bindgen::prelude::Closure;
-use wasm_bindgen::JsCast;
-use web_sys::{ProgressEvent, XmlHttpRequest};
+use wasm_bindgen::JsValue;
+use web_sys::Blob;
 
 pub struct NetStreamImpl {
     pub storage: FileStorage,
@@ -21,139 +23,139 @@ pub struct NetStreamImpl {
 
 pub struct NetStreamInnerImpl {
     storage: FileStorage,
-    pub resource_repo: Arc<dyn LocalResourceRepository>,
-    url: Url,
-    size: u64,
+    resource_repo: Arc<dyn LocalResourceRepository>,
+    requests: Vec<UploadRequest>,
     path: LocalResourcePath,
-    xhr: Option<Arc<NeverSend<XmlHttpRequest>>>
+    handle: Option<JoinHandle<Result<(), JsValue>>>
+}
+
+impl NetStreamImpl {
+    pub fn new(storage: FileStorage, resource_repo: Arc<dyn LocalResourceRepository>) -> Self {
+        Self { storage, resource_repo }
+    }
 }
 
 #[async_trait::async_trait(?Send)]
 impl NetStream for NetStreamImpl {
-    async fn upload_resource(&self, http_url: Url, path: LocalResourcePath, size: u64) -> anyhow::Result<Box<dyn NetStreamInner>> {
+    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             storage: self.storage.clone(),
             resource_repo: self.resource_repo.clone(),
-            url: http_url,
-            size,
+            requests,
             path,
-            xhr: None
+            handle: None
         }))
     }
 }
 
 #[async_trait::async_trait(?Send)]
 impl NetStreamInner for NetStreamInnerImpl {
-    async fn start(&mut self) -> anyhow::Result<UnboundedReceiver<NetStreamEvent>> {
-        let (tx, rx) = mpsc::unbounded();
-        let LocalResourcePath::PlatformIdentifier(platform_identifier) = &self.path else {
-            return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));
+    async fn start(&mut self) -> anyhow::Result<Receiver<NetStreamEvent>> {
+        let (mut tx, rx) = mpsc::channel::<NetStreamEvent>(20);
+        let Some(blob) = self.get_blob().await else {
+            return Err(anyhow!("No blob to upload"));
         };
 
-        let xhr = Arc::new(NeverSend(XmlHttpRequest::new().unwrap()));
+        let all_requests = self.requests.drain(..).collect::<Vec<_>>();
+        self.handle = Some(spawn(async move {
+            let mut current_position = 0;
+            let mut responses = Vec::new();
+            let mut peekable = all_requests.into_iter().peekable();
+            let result: Result<(), JsValue> = 'upload: loop {
+                let Some(request) = peekable.peek() else {
+                    break 'upload Ok(())
+                };
 
-        xhr.open_with_async("PUT", self.url.as_str(), true).unwrap();
-        xhr.set_request_header("Content-Type", "application/octet-stream").unwrap();
+                let new_position = match request.x_content_length {
+                    Some(it) => (current_position + it).min(blob.size() as u64),
+                    None => blob.size() as u64
+                };
 
-        {
-            let xhr_clone = xhr.clone();
-            let tx = tx.clone();
-            let onload_cb = Closure::<dyn FnMut()>::new(move || {
-                let status = xhr_clone.status().unwrap_or(0);
-                if (200..300).contains(&status) {
-                    let _ = tx.unbounded_send(NetStreamEvent::Completed);
-                } else {
-                    let text_response = xhr_clone.response_text();
-                    let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!(
-                        "Server response status {status} - {text_response:?}"
-                    )));
+                let content_length = new_position - current_position;
+                if content_length == 0 {
+                    break 'upload Ok(())
                 }
-            });
 
-            xhr.set_onload(Some(onload_cb.as_ref().unchecked_ref()));
-            onload_cb.forget();
-        }
+                let next_blob = blob.slice_with_i32_and_i32(current_position as i32, new_position as i32)?;
+                current_position = new_position;
 
-        {
-            let tx = tx.clone();
-            let progress_cb = Closure::<dyn FnMut(_)>::new(move |event: ProgressEvent| {
-                let loaded = event.loaded();
-                let _ = tx.unbounded_send(NetStreamEvent::Progress {
-                    uploaded_bytes: loaded as u64
-                });
-            });
+                let mut request = HttpClient::new()
+                    .url(request.url.as_str())
+                    .header("content-type", "application/octet-stream")
+                    .method("PUT")
+                    .body_blob(next_blob)
+                    .xhr()?;
 
-            let x_upload = xhr.upload().unwrap();
-            x_upload.set_onprogress(Some(progress_cb.as_ref().unchecked_ref()));
-            progress_cb.forget();
-        }
-
-        // ===== ERROR =====
-        {
-            let tx = tx.clone();
-            let error_cb = Closure::<dyn FnMut()>::new(move || {
-                let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!("Network level errors, cannot know exactly")));
-            });
-
-            xhr.set_onerror(Some(error_cb.as_ref().unchecked_ref()));
-            error_cb.forget();
-        }
-
-        // ===== TIMEOUT =====
-        {
-            let tx = tx.clone();
-            let timeout_cb = Closure::<dyn FnMut()>::new(move || {
-                let _ = tx.unbounded_send(NetStreamEvent::Error(anyhow!("Timeout")));
-            });
-            xhr.set_ontimeout(Some(timeout_cb.as_ref().unchecked_ref()));
-            timeout_cb.forget();
-        }
-
-        // ===== ABORT =====
-        {
-            let tx = tx.clone();
-            let abort_cb = Closure::<dyn FnMut()>::new(move || {
-                log::info!("The upload process is aborted");
-                let _ = tx.unbounded_send(NetStreamEvent::Completed);
-            });
-            xhr.set_onabort(Some(abort_cb.as_ref().unchecked_ref()));
-            abort_cb.forget();
-        }
-
-        if let Some(device_file_id) = self.path.device_file_id() {
-            let Some(file) = self.storage.get(device_file_id).await.map(|it| it.file) else {
-                return Err(anyhow!("Not found any file located at {platform_identifier:?}"))
+                'event_loop: while let Some(event) = request.next_event().await {
+                    match event {
+                        XhrEvent::Error(value) => {
+                            break 'upload Err(value);
+                        }
+                        XhrEvent::Complete { headers, body } => {
+                            let body: Option<serde_json::Value> = body.as_string().and_then(|s| serde_json::from_str(&s).ok());
+                            let response = UploadResponse { headers, body };
+                            responses.push(response);
+                            break 'event_loop
+                        }
+                        XhrEvent::InProgress(value) => {
+                            let total_bytes = value.total();
+                            let _ = tx.try_send(NetStreamEvent::Progress {
+                                uploaded_bytes: total_bytes as u64
+                            });
+                        }
+                    };
+                }
             };
 
-            let xhr = xhr.clone();
-            xhr.send_with_opt_blob(Some(&file)).map_err(|it| anyhow!("Upload file errors {it:?}"))?;
-        } else if let Ok(mut reader) = self.resource_repo.read(self.path.clone(), 1024).await {
-            let bytes = reader.read_all().await?;
-            let xhr = xhr.clone();
-            xhr.send_with_opt_js_u8_array(Some(&bytes.into_uint_array()))
-                .map_err(|it| anyhow!("Upload thumbnail errors {it:?}"))?;
-        } else {
-            return Err(anyhow::anyhow!("Invalid local resource path, expected platform identifier"));
-        }
+            let end_event = match result {
+                Ok(()) => NetStreamEvent::Completed(responses),
+                Err(value) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", value))
+            };
 
-        self.xhr = Some(xhr);
+            let _ = tx.try_send(end_event);
+            let _ = tx.close();
+            Ok(())
+        }));
 
         Ok(rx)
     }
 
     async fn end(&mut self) -> anyhow::Result<()> {
-        if let Some(xhr) = self.xhr.take() {
-            xhr.abort().map_err(|it| anyhow!("Abort upload errors {it:?}"))?;
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
         }
 
         Ok(())
     }
 }
 
+impl NetStreamInnerImpl {
+    async fn get_blob(&self) -> Option<Blob> {
+        if let Some(opfs_path) = self.path.opfs_path() {
+            let Some(resp) = OPFS_WORKER
+                .send(WorkerMessage::new(OpfsOperation {
+                    file_path: opfs_path,
+                    operation: FileOperation::Blob
+                }))
+                .await
+            else {
+                return None;
+            };
+
+            return match resp.message {
+                OpfsOperationOutput::Blob(blob) => Some(blob),
+                _ => None
+            }
+        } else if let Some(device_id) = self.path.device_file_id() {
+            return self.storage.get(device_id).await.and_then(|device_file| device_file.blob())
+        }
+
+        None
+    }
+}
+
 impl Drop for NetStreamInnerImpl {
     fn drop(&mut self) {
-        if let Some(xhr) = self.xhr.take() {
-            let _ = xhr.abort();
-        }
+        let _ = futures::executor::block_on(self.end());
     }
 }

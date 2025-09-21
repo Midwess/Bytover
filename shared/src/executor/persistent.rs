@@ -35,7 +35,6 @@ pub trait NativePersistent: Send + Sync {
                     log::error!("Failed to delete token from database: {err:?}");
                 }
 
-                log::info!("Writing token to database");
                 if let Err(err) = self
                     .auth_session_repository()
                     .create(Session {
@@ -88,10 +87,10 @@ pub trait NativePersistent: Send + Sync {
                 PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)) => {
+                log::info!("Removing local resource: {id:?}");
                 if let Ok(resource) = self
                     .local_resource_repository()
                     .delete_one(&LocalResourceId {
-                        r#type: None,
                         order_id: Some(id),
                         ..Default::default()
                     })

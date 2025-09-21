@@ -209,6 +209,7 @@ impl TransferService {
             return;
         }
 
+        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone()).into_future(cmd.clone()).await;
         cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
             loaded: vec![],
             added: vec![],
