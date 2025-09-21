@@ -28,6 +28,7 @@ struct SettingView: View {
                                         .colorEffect(
                                             ShaderLibrary.circleWave(
                                                 .float2(proxy.size),
+                                                .color(Theme.BluePrimary.color),
                                                 .float(elapsedTime * 3)
                                             )
                                         )

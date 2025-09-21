@@ -207,7 +207,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let result = await self.resolveAbsolutePath(path: path) ?? ""
             return Data(try! MessageToShellResponse.pathResolverResponse(.getAbsolutePath(absolute_path: result)).bincodeSerialize())
         case .pathResolver(.getLocalResourcePath(let absolute_path)):
-            let result = try! await self.resolveRelativePath(absolutePath: absolute_path)
+            let result = try! await self.getRelativePath(absolutePath: absolute_path)
             return Data(try! MessageToShellResponse.pathResolverResponse(.getLocalResourcePath(path: result)).bincodeSerialize())
         case .pathResolver(.getSessionDirPath(let session_id)):
             let public_dir = self.getDocumentsDirectory(isPrivate: false).path
@@ -504,7 +504,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         }
     }
 
-    func resolveRelativePath(absolutePath: String) async throws -> LocalResourcePath {
+    func getRelativePath(absolutePath: String) async throws -> LocalResourcePath {
         let private_path = self.getDocumentsDirectory(isPrivate: true).path
         let public_path = self.getDocumentsDirectory(isPrivate: false).path
         if absolutePath.hasPrefix(private_path) {

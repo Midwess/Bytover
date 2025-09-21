@@ -122,6 +122,16 @@ enum Theme: String {
     }
 }
 
+struct MaskTheme {
+    static var Bottom: LinearGradient {
+        LinearGradient(
+            gradient: Gradient(colors: [.black, .black, .black, .black.opacity(0.7), .black.opacity(0.1), .clear]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
 enum ImageAsset: String {
     case SupaLighting
     case GlobeEmpty

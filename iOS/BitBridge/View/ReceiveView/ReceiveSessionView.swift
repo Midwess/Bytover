@@ -237,7 +237,7 @@ struct ReceiveSessionBodyView: View {
 struct ReceiveSessionHeaderView: View {
     @EnvironmentObject var core: Core
     @State var session: ReceiveSessionViewModel
-    @Binding var isShowMoreOption: Bool
+    @State var isShowMoreOption: Bool = false
     @Binding var selectedItem: ReceiveSessionViewModel?
 
     var body: some View {
@@ -277,6 +277,19 @@ struct ReceiveSessionHeaderView: View {
                 }
             } else {
                 MoreOptionButton<ReceiveSessionViewModel>(state: $isShowMoreOption, item: session, selectedItem: $selectedItem)
+            }
+        }
+        .confirmationDialog(session.peer_name, isPresented: $isShowMoreOption) {
+            Button("Open") {
+                Task {
+                    await core.update(.transfer(.openSession(session_id: session.id)))
+                }
+            }
+
+            Button("Delete", role: .destructive) {
+                Task {
+                    await core.update(.transfer(.deleteSession(session_id: session.id)))
+                }
             }
         }
         .onReceive(self.core.transfer, perform: { value in

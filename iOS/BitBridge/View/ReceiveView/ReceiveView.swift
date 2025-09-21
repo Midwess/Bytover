@@ -20,11 +20,13 @@ struct ReceiveView: View {
 
     var body: some View {
         ZStack {
+            StunningBackgroundGradient()
             ScrollView {
-                LazyVStack(spacing: SpaceTheme.screen.value, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: SpaceTheme.screen.value) {
                     VStack(spacing: SpaceTheme.item.value) {
                         LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
                             .frame(width: screenSize.width, height: 100)
+                            .padding(.top, safeAreaInsets.top)
                             .overlay(Theme.gradientHeading
                                 .opacity(0.5)
                                 .blur(radius: 15)
@@ -41,7 +43,7 @@ struct ReceiveView: View {
 
                     VStack(spacing: SpaceTheme.item.value) {
                         ForEach(self.receiveSessions, id: \.self.id) { item in
-                            ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
+                            ReceiveSessionHeaderView(session: item, selectedItem: $selectedItem)
                             ReceiveSessionBodyView(session: item)
                         }
                         .padding(.horizontal, SpaceTheme.screen.value)
@@ -51,24 +53,11 @@ struct ReceiveView: View {
                     Spacer().frame(height: 160)
                 }
             }
-            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))
+            .mask(MaskTheme.Bottom)
             .padding(.bottom, SpaceTheme.screen.value)
 
         }
-        .confirmationDialog(selectedItem?.peer_name ?? "Session", isPresented: $isShowItemOption) {
-            Button("Open") {
-                Task {
-                    await core.update(.transfer(.openSession(session_id: selectedItem?.id ?? 0)))
-                }
-            }
-
-            Button("Delete", role: .destructive) {
-                Task {
-                    await core.update(.transfer(.deleteSession(session_id: selectedItem?.id ?? 0)))
-                }
-            }
-
-        }
+        .ignoresSafeArea()
         .onReceive(self.core.transfer, perform: { value in
             let receivedSessions = value?.received_sessions ?? []
 

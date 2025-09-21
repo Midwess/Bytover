@@ -43,20 +43,20 @@ struct ContentPickerView: View {
                             RoundedRectangle(cornerRadius: .infinity)
                                 .fill(Theme.BluePrimary.color.opacity(1))
                         )
+                        .confirmationDialog(
+                            "Hey! What type of file do you want to add?",
+                            isPresented: self.$isShowingConfirmationDialog) {
+                                Button("Photos and videos") {
+                                    self.isShowingPhotosPicker = true
+                                }
+                                Button("Files") {
+                                    self.isShowingFilePicker = true
+                                }
+                                Button(action: {}) {
+                                    Text("Can not find what you're looking for? 🤷‍♂️")
+                                }
+                            }
                 }
-                .confirmationDialog(
-                    "Hey! What type of file do you want to add?",
-                    isPresented: self.$isShowingConfirmationDialog) {
-                        Button("Photos and videos") {
-                            self.isShowingPhotosPicker = true
-                        }
-                        Button("Files") {
-                            self.isShowingFilePicker = true
-                        }
-                        Button(action: {}) {
-                            Text("Can not find what you're looking for? 🤷‍♂️")
-                        }
-                    }
             }
             .fileImporter(isPresented: $isShowingFilePicker, allowedContentTypes: [.item, .folder, .directory, .compositeContent, .content],
                 allowsMultipleSelection: true,
