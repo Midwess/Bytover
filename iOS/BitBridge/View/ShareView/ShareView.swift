@@ -50,10 +50,10 @@ public struct ShareView: View {
                     VStack(spacing: SpaceTheme.item.value) {
                         ContentPickerView()
                         ForEach(selectedResources, id: \.self.order_id) { item in
-                            SelectedResourceItem(resource: item, isShowMoreOption: $isShowResourceOption, selectedItem: $selectedResource)
-                                .padding(.top, SpaceTheme.item.value)
-                                .padding(.horizontal, SpaceTheme.screen.value)
-                                .id(item.order_id)
+                            SelectedResourceItem(resource: item, selectedItem: $selectedResource)
+                                    .padding(.top, SpaceTheme.item.value)
+                                    .padding(.horizontal, SpaceTheme.screen.value)
+                                    .id(item.order_id)
                         }
                     }
 
@@ -78,15 +78,6 @@ public struct ShareView: View {
             
         }
         .ignoresSafeArea()
-        .confirmationDialog(
-            selectedResource?.name ?? "Resource",
-            isPresented: $isShowResourceOption) {
-                Button("Remove", role: .destructive) {
-                    Task {
-                        await core.update(.transfer(.removeResource(selectedResource?.order_id ?? 0)))
-                    }
-                }
-            }
         .task {
             await core.update(.transfer(.launch))
         }

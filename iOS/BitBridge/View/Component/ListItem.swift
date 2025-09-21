@@ -106,7 +106,7 @@ struct ResourceImage: View {
 
 struct SelectedResourceItem: View {
     @State var resource: SelectedResourceViewModel
-    @Binding var isShowMoreOption: Bool
+    @State var isShowMoreOption: Bool = false
     @Binding var selectedItem: SelectedResourceViewModel?
     @State private var isVisible: Bool = false
     @EnvironmentObject var core: Core
@@ -157,6 +157,15 @@ struct SelectedResourceItem: View {
         .onDisappear {
             isVisible = false
         }
+        .confirmationDialog(
+            resource.name,
+            isPresented: $isShowMoreOption) {
+                Button("Remove", role: .destructive) {
+                    Task {
+                        await core.update(.transfer(.removeResource(resource.order_id)))
+                    }
+                }
+            }
         .onReceive(self.core.transfer, perform: { value in
             let newResource = value?.selected_resources.first(where: { resource in resource.order_id == self.resource.order_id }) ?? self.resource
             if newResource != self.resource {

@@ -43,7 +43,7 @@ struct ReceiveView: View {
 
                     VStack(spacing: SpaceTheme.item.value) {
                         ForEach(self.receiveSessions, id: \.self.id) { item in
-                            ReceiveSessionHeaderView(session: item, isShowMoreOption: $isShowItemOption, selectedItem: $selectedItem)
+                            ReceiveSessionHeaderView(session: item, selectedItem: $selectedItem)
                             ReceiveSessionBodyView(session: item)
                         }
                         .padding(.horizontal, SpaceTheme.screen.value)
@@ -58,20 +58,6 @@ struct ReceiveView: View {
 
         }
         .ignoresSafeArea()
-        .confirmationDialog(selectedItem?.peer_name ?? "Session", isPresented: $isShowItemOption) {
-            Button("Open") {
-                Task {
-                    await core.update(.transfer(.openSession(session_id: selectedItem?.id ?? 0)))
-                }
-            }
-
-            Button("Delete", role: .destructive) {
-                Task {
-                    await core.update(.transfer(.deleteSession(session_id: selectedItem?.id ?? 0)))
-                }
-            }
-
-        }
         .onReceive(self.core.transfer, perform: { value in
             let receivedSessions = value?.received_sessions ?? []
 
