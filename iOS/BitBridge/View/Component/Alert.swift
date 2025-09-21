@@ -46,7 +46,7 @@ struct Alert: View {
                     core.alert.value?.1.resolve(true)
                 }
             }
-            .confirmationDialog(core.alert.value?.0.message ?? "", isPresented: $isShowingConfirmation, titleVisibility: .visible) {
+            .alert(core.alert.value?.0.message ?? "", isPresented: $isShowingConfirmation) {
                 Button(core.alert.value?.0.affirmative ?? "Yes", role: .destructive) {
                     core.alert.value?.1.resolve(true)
                 }
