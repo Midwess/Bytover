@@ -91,8 +91,7 @@ pub trait NativePersistent: Send + Sync {
                 PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)) => {
-                log::info!("Removing local resource: {id:?}");
-                if let Ok(resource) = self
+                if let Ok(_) = self
                     .local_resource_repository()
                     .delete_one(&LocalResourceId {
                         order_id: Some(id),
@@ -101,8 +100,7 @@ pub trait NativePersistent: Send + Sync {
                     .await
                 {
                     PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
-                }
-                else {
+                } else {
                     PersistentOperationOutput::Error("Failed to remove local resource".to_string())
                 }
             }
@@ -195,7 +193,7 @@ pub trait NativePersistent: Send + Sync {
                 }
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove((order_id, transfer_type))) => {
-                if let Err(e) = self
+                if let Err(_) = self
                     .transfer_session_repository()
                     .delete_session(TransferSessionId {
                         r#type: Some(transfer_type),
@@ -204,7 +202,6 @@ pub trait NativePersistent: Send + Sync {
                     })
                     .await
                 {
-                    log::error!("Failed to remove transfer session: {e:?}");
                     return PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(false));
                 }
 

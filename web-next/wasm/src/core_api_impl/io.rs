@@ -38,8 +38,12 @@ impl IOReader for IOReaderImpl {
         let total_size = self.entry().await?.size;
 
         let file = self.file.lock().await;
-        let max_read = max.unwrap_or(self.chunk_size);
+        let max_read = self.chunk_size.min(max.unwrap_or(self.chunk_size));
         let end = (self.position + max_read).min(total_size);
+
+        if end == self.position {
+            return Ok(None)
+        }
 
         let blob: Blob = file
             .slice_with_f64_and_f64(self.position as f64, end as f64)
@@ -71,7 +75,7 @@ impl IOReader for IOReaderImpl {
             .map_err(|e| anyhow::anyhow!("Failed to cast result to ArrayBuffer: {e:?}"))?;
 
         let data = Uint8Array::new(&array_buffer);
-        data.copy_to(&mut self.buffer);
+        data.copy_to(&mut self.buffer[..data.length() as usize]);
 
         self.position = end;
 

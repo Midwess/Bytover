@@ -62,9 +62,7 @@ impl NetStreamInner for NetStreamInnerImpl {
             let mut responses = Vec::new();
             let mut peekable = all_requests.into_iter().peekable();
             let result: Result<(), JsValue> = 'upload: loop {
-                let Some(request) = peekable.peek() else {
-                    break 'upload Ok(())
-                };
+                let Some(request) = peekable.peek() else { break 'upload Ok(()) };
 
                 let new_position = match request.x_content_length {
                     Some(it) => (current_position + it).min(blob.size() as u64),

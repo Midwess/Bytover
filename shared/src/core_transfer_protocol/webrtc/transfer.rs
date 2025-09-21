@@ -130,7 +130,10 @@ impl TransfersContext {
 
     pub async fn stop_transfer(&self, session_id: u64) {
         let mut actives = self.active_transfers.lock().await;
-        actives.retain(|x| x.session_id != session_id);
+        if let Some(session) = actives.iter().find(|x| x.session_id == session_id) {
+            session.token.cancel();
+            actives.retain(|x| x.session_id != session_id);
+        }
     }
 
     pub async fn is_active(&self, session_id: u64) -> bool {

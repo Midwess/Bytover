@@ -1,9 +1,14 @@
+use shared::app::operations::persistent::{
+    LocalResourcePersistentOperation,
+    LocalResourcePersistentOperationOutput,
+    PersistentOperation,
+    PersistentOperationOutput
+};
 use shared::app::repository::auth_session::AuthSessionRepository;
 use shared::app::repository::local_resource::LocalResourceRepository;
 use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::executor::persistent::NativePersistent;
 use std::sync::Arc;
-use shared::app::operations::persistent::{LocalResourcePersistentOperation, LocalResourcePersistentOperationOutput, PersistentOperation, PersistentOperationOutput};
 
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,
@@ -26,11 +31,8 @@ impl NativePersistent for NativePersistentImpl {
     }
 
     async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
-        match effect {
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(_)) => {
-                return PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
-            }
-            _ => {}
+        if let PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(_)) = effect {
+            return PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
         };
 
         NativePersistent::default_handle(self, effect).await

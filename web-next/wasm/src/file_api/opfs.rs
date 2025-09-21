@@ -49,7 +49,7 @@ impl IOReader for IOReaderOpfsImpl {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::Read {
                 position: self.position,
-                amount: max.unwrap_or(1024 * 63) as usize
+                amount: (1024 * 63).min(max.unwrap_or(1024 * 63)) as usize
             }
         });
 
@@ -60,7 +60,7 @@ impl IOReader for IOReaderOpfsImpl {
                 if data.length() == 0 {
                     Ok(None)
                 } else {
-                    data.copy_to(&mut self.buffer);
+                    data.copy_to(&mut self.buffer[..data.length() as usize]);
                     self.position += data.length() as usize;
                     Ok(Some(&self.buffer[..data.length() as usize]))
                 }

@@ -252,10 +252,7 @@ impl AppModule<BitBridge> for TransferModule {
                     }));
                 }
 
-                model
-                    .transfer
-                    .selected_resources
-                    .retain(|it| !removed.iter().any(|removed| *removed == it.order_id));
+                model.transfer.selected_resources.retain(|it| !removed.contains(&it.order_id));
 
                 for updated in updated {
                     if let Some(index) = model.transfer.selected_resources.iter().position(|it| it.order_id == updated.order_id) {
@@ -341,7 +338,6 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::TransferRequest { remote_session, peer } => Command::new(|it| async move {
                 transfer_service.received_session_request(remote_session, peer, it).await;
-                log::info!(target: "transfer", "Done download, shell should done");
             }),
             TransferEvent::UpdateTransferSessions {
                 loaded,

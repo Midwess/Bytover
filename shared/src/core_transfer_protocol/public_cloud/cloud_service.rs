@@ -18,12 +18,7 @@ use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::subscribe_session_info_response::Event;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
-use schema::devlog::bitbridge::{
-    ClientUploadRequest,
-    CloudResourceMessage,
-    MultiPartUpload,
-    MultiPartUploadComplete
-};
+use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUpload, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
