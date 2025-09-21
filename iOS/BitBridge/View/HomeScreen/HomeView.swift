@@ -12,7 +12,6 @@ struct HomeView: View {
     @Environment(\.safeAreaInsets) private var safeAreaInsets
     @EnvironmentObject private var core: Core
     @State private var selectedTab: Int = 1
-    @State private var previousTab: Int = 1
 
     init() {
         UITabBar.appearance().unselectedItemTintColor = Theme.LightViolet.uiColor

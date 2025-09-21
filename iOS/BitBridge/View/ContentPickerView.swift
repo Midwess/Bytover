@@ -32,7 +32,7 @@ struct ContentPickerView: View {
                     } else {
                         Spacer()
                     }
-                    
+
                     Image(systemName: "plus")
                         .resizable()
                         .foregroundColor(Theme.PrimaryText.color)
