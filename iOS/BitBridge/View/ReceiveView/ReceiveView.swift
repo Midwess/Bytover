@@ -26,6 +26,7 @@ struct ReceiveView: View {
                     VStack(spacing: SpaceTheme.item.value) {
                         LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
                             .frame(width: screenSize.width, height: 100)
+                            .padding(.top, safeAreaInsets.top)
                             .overlay(Theme.gradientHeading
                                 .opacity(0.5)
                                 .blur(radius: 15)
@@ -52,10 +53,11 @@ struct ReceiveView: View {
                     Spacer().frame(height: 160)
                 }
             }
-            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
+            .mask(MaskTheme.Bottom)
             .padding(.bottom, SpaceTheme.screen.value)
 
         }
+        .ignoresSafeArea()
         .confirmationDialog(selectedItem?.peer_name ?? "Session", isPresented: $isShowItemOption) {
             Button("Open") {
                 Task {

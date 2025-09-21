@@ -69,9 +69,8 @@ public struct ShareView: View {
 
                     Spacer().frame(width: 10, height: 120)
                 }
-                .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             }
-            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
+            .mask(MaskTheme.Bottom)
             ShareButton(width: 220)
                 .ignoresSafeArea()
                 .padding(.horizontal, SpaceTheme.screen.value)
