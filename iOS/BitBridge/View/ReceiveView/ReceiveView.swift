@@ -20,8 +20,9 @@ struct ReceiveView: View {
 
     var body: some View {
         ZStack {
+            StunningBackgroundGradient()
             ScrollView {
-                LazyVStack(spacing: SpaceTheme.screen.value, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: SpaceTheme.screen.value) {
                     VStack(spacing: SpaceTheme.item.value) {
                         LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
                             .frame(width: screenSize.width, height: 100)
@@ -51,7 +52,7 @@ struct ReceiveView: View {
                     Spacer().frame(height: 160)
                 }
             }
-            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.8))
+            .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             .padding(.bottom, SpaceTheme.screen.value)
 
         }

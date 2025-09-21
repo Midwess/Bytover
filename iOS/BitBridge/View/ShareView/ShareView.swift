@@ -23,11 +23,13 @@ public struct ShareView: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
+            StunningBackgroundGradient()
             ScrollView {
                 LazyVStack(spacing: SpaceTheme.screen.value) {
                     VStack(spacing: SpaceTheme.item.value) {
                         LogoScene(gltfFileName: "Rocket", logoScale: 1.6)
                             .frame(width: screenSize.width, height: 100)
+                            .padding(.top, safeAreaInsets.top)
                             .overlay(Theme.gradientHeading
                                 .opacity(0.5)
                                 .blur(radius: 15)
@@ -45,7 +47,7 @@ public struct ShareView: View {
                         Spacer().frame(height: 160)
                     }
 
-                    LazyVStack(spacing: SpaceTheme.item.value) {
+                    VStack(spacing: SpaceTheme.item.value) {
                         ContentPickerView()
                         ForEach(selectedResources, id: \.self.order_id) { item in
                             SelectedResourceItem(resource: item, isShowMoreOption: $isShowResourceOption, selectedItem: $selectedResource)
@@ -67,16 +69,16 @@ public struct ShareView: View {
 
                     Spacer().frame(width: 10, height: 120)
                 }
+                .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
             }
             .mask(LinearGradient(gradient: Gradient(colors: [.black, .black, .black, .black, .clear]), startPoint: .top, endPoint: .bottom).opacity(0.9))
-            .padding(.top, safeAreaInsets.top)
-            .padding(.bottom, SpaceTheme.screen.value * 3)
-
             ShareButton(width: 220)
-                .offset(y: SpaceTheme.screen.value)
+                .ignoresSafeArea()
                 .padding(.horizontal, SpaceTheme.screen.value)
+                .padding(.bottom, safeAreaInsets.bottom)
+            
         }
-        .frame(width: screenSize.width, height: screenSize.height - safeAreaInsets.bottom - 20)
+        .ignoresSafeArea()
         .confirmationDialog(
             selectedResource?.name ?? "Resource",
             isPresented: $isShowResourceOption) {
@@ -86,7 +88,6 @@ public struct ShareView: View {
                     }
                 }
             }
-        .ignoresSafeArea()
         .task {
             await core.update(.transfer(.launch))
         }
