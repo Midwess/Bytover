@@ -27,7 +27,8 @@ struct ResourceImage: View {
                     .scaledToFill()
                     .frame(width: width, height: height)
                     .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
-            } else {
+            }
+            else {
                 Rectangle()
                     .frame(width: width, height: height)
                     .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
@@ -39,24 +40,22 @@ struct ResourceImage: View {
 
             // Video overlay icon
             if resource.type == .video {
-                VStack {
-                    HStack {
+                HStack {
+                    Spacer()
+                    VStack {
                         Spacer()
-                        VStack {
-                            Spacer()
-                            ZStack {
-                                Circle()
-                                    .fill(Theme.BlackBase.color)
-                                    .blur(radius: min(width, height) * 0.16)
-                                    .frame(width: min(width, height) * 0.2, height: min(width, height) * 0.2)
-                                ImageAsset.CameraVideoSolid.image
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundColor(Theme.PrimaryText.color.opacity(0.82))
-                                    .padding(min(width, height) * 0.1)
-                            }
-                            .frame(width: min(width, height) * 0.40, height: min(width, height) * 0.40)
+                        ZStack {
+                            Circle()
+                                .fill(Theme.BlackBase.color)
+                                .blur(radius: min(width, height) * 0.16)
+                                .frame(width: min(width, height) * 0.2, height: min(width, height) * 0.2)
+                            ImageAsset.CameraVideoSolid.image
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundColor(Theme.PrimaryText.color.opacity(0.82))
+                                .padding(min(width, height) * 0.1)
                         }
+                        .frame(width: min(width, height) * 0.40, height: min(width, height) * 0.40)
                     }
                 }
                 .frame(width: width, height: height)
@@ -99,8 +98,7 @@ struct ResourceImage: View {
 
     private func loadThumbnail() async {
         guard thumbnailImage == nil, let thumbnail_path = resource.thumbnail_path else { return }
-        let loadedImage = await Image.fromPath(thumbnail_path, core: core)
-        thumbnailImage = loadedImage
+        thumbnailImage = await Image.fromPath(thumbnail_path, core: core)
     }
 }
 

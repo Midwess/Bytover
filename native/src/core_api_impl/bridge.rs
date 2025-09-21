@@ -37,6 +37,6 @@ impl CoreBridge for CoreBridgeImpl {
     }
 
     async fn notify(&self, event: AppEvent) {
-        self.throttle_shell_runtime.send(MessageToShell::Notify(Box::new(event))).await;
+        self.shell.request(MessageToShell::Notify(Box::new(event))).await;
     }
 }

@@ -73,10 +73,10 @@ impl InternetConnection {
         }
 
         let ns = "internet-check";
-        let addr = "https://network-info.devlog.studio";
+        let addr = "https://devlog.studio/locator";
         let client = reqwest::Client::new();
 
-        match client.get(addr).timeout(Duration::from_millis(5000)).send().await {
+        match client.post(addr).json(&json!({})).timeout(Duration::from_millis(5000)).send().await {
             Ok(_) => {
                 *last_passed = Some(Instant::now());
                 true

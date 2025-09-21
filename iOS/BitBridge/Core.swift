@@ -220,7 +220,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let private_dir = self.getDocumentsDirectory(isPrivate: true).path
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
-        case .notify:
+        case .notify(let event):
+            await self.update(event);
             return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
         }
     }
@@ -553,7 +554,6 @@ extension Image {
         switch path {
         case .absolutePath(let path):
             guard let uiImage = UIImage.fromAbsolutePath(path) else {
-                print("There is no image at \(path)")
                 return nil
             }
             return Image(uiImage: uiImage)
@@ -561,15 +561,14 @@ extension Image {
             let workdir = await core.getDocumentsDirectory(isPrivate: isPrivate)
             let fullPath = workdir.appendingPathComponent(path).path
             guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
-                print("There is no image at \(path)")
                 return nil
             }
+            
             return Image(uiImage: uiImage)
         case .platformIdentifier(let identifier):
             guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
                   let fileUrl = cachedAsset.fileUrl,
                   let uiImage = UIImage.fromURL(fileUrl) else {
-                print("There is no image at \(path)")
                 return nil
             }
             return Image(uiImage: uiImage)

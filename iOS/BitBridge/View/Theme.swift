@@ -125,7 +125,7 @@ enum Theme: String {
 struct MaskTheme {
     static var Bottom: LinearGradient {
         LinearGradient(
-            gradient: Gradient(colors: [.black, .black, .black, .black.opacity(0.7), .black.opacity(0.1), .clear]),
+            gradient: Gradient(colors: [.black, .black, .black, .black, .black.opacity(0.3), .clear]),
             startPoint: .top,
             endPoint: .bottom
         )
