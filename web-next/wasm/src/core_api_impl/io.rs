@@ -38,7 +38,8 @@ impl IOReader for IOReaderImpl {
         let total_size = self.entry().await?.size;
 
         let file = self.file.lock().await;
-        let end = (self.position + self.chunk_size).min(total_size);
+        let max_read = max.unwrap_or(self.chunk_size);
+        let end = (self.position + max_read).min(total_size);
 
         let blob: Blob = file
             .slice_with_f64_and_f64(self.position as f64, end as f64)

@@ -38,7 +38,7 @@ pub enum LocalResourcePersistentOperationOutput {
     Add(Vec<LocalResource>),
     AddThumbnail(LocalResourcePath),
     LoadOnDisk(Option<LocalResource>),
-    Remove(Option<LocalResource>),
+    Removed,
     GetResourceType(ResourceType),
     Find(Option<LocalResource>),
     FindAll(Vec<LocalResource>)
@@ -181,15 +181,15 @@ impl LocalResourcePersistentOperation {
         })
     }
 
-    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
+    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = bool>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::Remove(id)
         )))
         .map(|it| match it {
             CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::Remove(resource)
-            )) => resource,
-            _ => panic!("Invalid output expected Remove got {it:?}")
+                LocalResourcePersistentOperationOutput::Removed
+            )) => true,
+            _ => false
         })
     }
 

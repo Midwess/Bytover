@@ -95,13 +95,12 @@ impl ResourceTransferSelectionService {
     }
 
     pub async fn remove_resource(&self, ctx: AppCommandContext, id: u64) {
-        log::info!("Removing resource from core: {}", id);
-        let removed_resource = LocalResourcePersistentOperation::remove(id).into_future(ctx.clone()).await;
-        if let Some(removed_resource) = removed_resource {
+        let is_resource_removed = LocalResourcePersistentOperation::remove(id).into_future(ctx.clone()).await;
+        if is_resource_removed {
             ctx.send_event(AppEvent::Transfer(TransferEvent::UpdateResourcesModel {
                 loaded: vec![],
                 added: vec![],
-                removed: vec![removed_resource],
+                removed: vec![id],
                 updated: vec![]
             }));
         }

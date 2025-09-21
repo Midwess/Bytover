@@ -23,6 +23,10 @@ pub trait NativePersistent: Send + Sync {
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
 
     async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
+        Self::default_handle(self, effect).await
+    }
+
+    async fn default_handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
         match effect {
             PersistentOperation::Session(SessionPersistentOperation::WriteToken(token)) => {
                 if let Err(err) = self
@@ -96,9 +100,10 @@ pub trait NativePersistent: Send + Sync {
                     })
                     .await
                 {
-                    PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(Some(resource)))
-                } else {
-                    PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Remove(None))
+                    PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
+                }
+                else {
+                    PersistentOperationOutput::Error("Failed to remove local resource".to_string())
                 }
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll) => {

@@ -103,7 +103,7 @@ pub enum TransferEvent {
     UpdateResourcesModel {
         loaded: Vec<LocalResource>,
         added: Vec<LocalResource>,
-        removed: Vec<LocalResource>,
+        removed: Vec<u64>,
         updated: Vec<LocalResource>
     },
     UpdateTransferTargets {
@@ -255,7 +255,7 @@ impl AppModule<BitBridge> for TransferModule {
                 model
                     .transfer
                     .selected_resources
-                    .retain(|it| !removed.iter().any(|removed| removed.order_id == it.order_id));
+                    .retain(|it| !removed.iter().any(|removed| *removed == it.order_id));
 
                 for updated in updated {
                     if let Some(index) = model.transfer.selected_resources.iter().position(|it| it.order_id == updated.order_id) {
