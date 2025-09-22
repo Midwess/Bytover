@@ -116,12 +116,26 @@ impl NetStreamInnerImpl {
             uploaded += (total_size - uploaded).min(MAX_CHUNK_SIZE);
 
             if uploaded < total_size {
-                upload = server
-                    .complete_part_upload(&upload.context_token)
-                    .await?
-                    .ok_or_else(|| anyhow!("Failed to get next upload part"))?;
+                upload = match server.complete_part_upload(&upload.context_token).await? {
+                    Some(continue_upload) => continue_upload,
+                    None => break
+                }
             }
         }
+
+        // Flushing remaining data if any
+        let bytes = cursor.read_all().await?;
+        if bytes.is_empty() {
+            return Ok(Some(completion));
+        }
+
+        let content_length = bytes.len() as u64;
+        let etag = Self::perform_upload(
+            &upload.upload_url,
+            bytes,
+            content_length
+        ).await?;
+        completion.e_tags.push(etag);
 
         Ok(Some(completion))
     }
@@ -142,20 +156,20 @@ impl NetStreamInnerImpl {
         let chunk_size = remaining_size.min(MAX_CHUNK_SIZE);
         let (mut writer, reader) = io::duplex(MAX_CHUNK_SIZE as usize);
 
-        let upload_task = Self::perform_upload(url, reader, chunk_size);
+        let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
         let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size);
 
         let (etag, _) = try_join!(upload_task, write_task)?;
         Ok(etag)
     }
 
-    async fn perform_upload(url: &str, reader: DuplexStream, content_length: u64) -> Result<String> {
+    async fn perform_upload(url: &str, body: impl Into<reqwest::Body>, content_length: u64) -> Result<String> {
         let client = reqwest::Client::new();
         let response = client
             .put(url)
             .header("Content-Length", content_length)
             .header("Content-Type", "application/octet-stream")
-            .body(reqwest::Body::wrap_stream(ReaderStream::new(reader)))
+            .body(body)
             .send()
             .await?
             .error_for_status()?;

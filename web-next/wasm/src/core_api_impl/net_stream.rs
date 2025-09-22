@@ -10,7 +10,7 @@ use futures_channel::mpsc::Receiver;
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::SinkExt;
 use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner, UploadRequest, UploadResponse};
+use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::entities::file_system::file::LocalResourcePath;
 use std::sync::Arc;
 use n0_future::io::AsyncWriteExt;
@@ -137,82 +137,6 @@ impl NetStreamInner for NetStreamInnerImpl {
         Ok(rx)
     }
 
-    async fn end(&mut self) -> anyhow::Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl NetStreamInner for NetStreamDuplexImpl {
-    async fn start(&mut self) -> anyhow::Result<Receiver<NetStreamEvent>> {
-        let (mut tx, rx) = mpsc::channel::<NetStreamEvent>(20);
-        let all_requests = self.requests.drain(..).collect::<Vec<_>>();
-
-        let mut cursor = self.resource_repo.read(self.path.clone(), 1024 * 1024).await?;
-        self.handle = Some(spawn(async move {
-            let mut responses = Vec::new();
-            let mut peekable = all_requests.into_iter().peekable();
-            let result: Result<(), anyhow::Error> = 'upload: loop {
-                let (mut writer, reader) = duplex();
-                let Some(request) = peekable.peek() else { break 'upload Ok(()) };
-                let Some(mut remaining) = request.x_content_length else {
-                    // TODO Mem upload all remaining data
-                    break 'upload Ok(())
-                };
-
-                let fetch_request = HttpClient::new()
-                    .url(request.url.as_str())
-                    .method("PUT")
-                    .header("content-length", cursor.entry().await.unwrap().size.to_string().as_str())
-                    .body_stream(reader)
-                    .unwrap()
-                    .fetch()
-                    .unwrap();
-
-                let response_handle = spawn(async move {
-                    fetch_request.response().await
-                });
-
-                while let Ok(Some(bytes)) = cursor.next(Some(remaining)).await {
-                    let _ = writer.write_all(bytes).await;
-                    remaining -= bytes.len() as u64;
-                }
-
-                let _ = writer.close().await;
-
-                match response_handle.await {
-                    Ok(Ok((headers, body))) => {
-                        responses.push(UploadResponse {
-                            headers,
-                            body: body.as_string().and_then(|s| serde_json::from_str(&s).ok())
-                        })
-                    },
-                    Ok(Err(value)) => {
-                        break 'upload Err(anyhow!("Upload failed: {:?}", value));
-                    }
-                    Err(value) => {
-                        break 'upload Err(anyhow!("Upload failed: {:?}", value));
-                    }
-                };
-            };
-
-            let end_event = match result {
-                Ok(()) => NetStreamEvent::Completed(responses),
-                Err(value) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", value))
-            };
-
-            let _ = tx.try_send(end_event);
-            let _ = tx.close();
-            Ok(())
-        }));
-
-        Ok(rx)
-    }
-    
     async fn end(&mut self) -> anyhow::Result<()> {
         if let Some(handle) = self.handle.take() {
             handle.abort();
