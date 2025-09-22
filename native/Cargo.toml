@@ -22,6 +22,7 @@ uniffi = { workspace = true, features = ["cli"] }
 shared = { path = "../shared" }
 core-services = { workspace = true, features = ["db-red", "local-storage", "retry", "zip"] }
 devlog-sdk = { workspace = true }
+schema = { path = "../libs/schema/rust" }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 async-trait = { workspace = true }
 log = { workspace = true }

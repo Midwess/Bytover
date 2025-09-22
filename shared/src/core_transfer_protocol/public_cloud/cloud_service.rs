@@ -4,7 +4,7 @@ use crate::app::repository::errors::PersistenceError;
 use crate::app::repository::local_resource::LocalResourceRepository;
 use crate::app::transfer::session::{TransferSession, TransferSessionStatus};
 use crate::app::transfer::target::TransferTarget;
-use crate::core_api::{CoreBridge, NetStream, NetStreamEvent, UploadRequest};
+use crate::core_api::{CoreBridge, NetStream, NetStreamEvent};
 use crate::rpc::cloud_server::CloudServer;
 use crate::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
@@ -18,7 +18,7 @@ use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as ResourceTypeSchema;
 use schema::devlog::bitbridge::subscribe_session_info_response::Event;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
-use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUpload, MultiPartUploadComplete};
+use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
@@ -50,6 +50,7 @@ pub enum CloudTransferErrors {
 
 pub struct CloudService<T>
 where
+    T: 'static,
     T: Clone,
     T: MaybeSend + Sync,
     T: tonic::client::GrpcService<tonic::body::Body>,
@@ -58,7 +59,7 @@ where
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
-    pub server: CloudServer<T>,
+    pub server: &'static CloudServer<T>,
     pub core_bridge: Arc<dyn CoreBridge>,
     pub active_session: Mutex<Weak<Mutex<TransferSession>>>,
     pub repository: Arc<dyn LocalResourceRepository>,
@@ -182,21 +183,12 @@ where
 
             drop(session_guard);
 
-            let Ok(size) = self.repository.size(thumbnail_file_path.clone()).await else {
+            let Some(upload) = request.upload else {
                 continue;
             };
 
-            let Some(Upload::SingleUrl(url)) = request.upload else {
-                continue;
-            };
-
-            log::info!("Uploading thumbnail to {:?}", url);
-            let url = url.parse::<url::Url>().unwrap();
-            let request = UploadRequest {
-                url,
-                x_content_length: Some(size)
-            };
-            let Ok(mut net_stream) = self.net_stream.upload_resource(vec![request], thumbnail_file_path).await else {
+            log::info!("Uploading thumbnail to {upload:?}");
+            let Ok(mut net_stream) = self.net_stream.upload_resource(upload, thumbnail_file_path).await else {
                 continue;
             };
 
@@ -264,7 +256,7 @@ where
             }
 
             let order_id = request.resource_order_id;
-            let Some(Upload::MultiParts(multi_parts)) = request.upload else {
+            let Some(upload) = request.upload else {
                 continue;
             };
 
@@ -276,7 +268,7 @@ where
                 None => continue
             };
 
-            current_upload_request = match self.upload_resource(session, order_id, multi_parts, size, core_request_id).await {
+            current_upload_request = match self.upload_resource(session, order_id, upload, size, core_request_id).await {
                 Ok(completion) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
@@ -312,7 +304,7 @@ where
         &self,
         transfer_session: &Arc<Mutex<TransferSession>>,
         resource_order_id: u64,
-        upload: MultiPartUpload,
+        upload: Upload,
         size: u64,
         core_request_id: u32
     ) -> Result<MultiPartUploadComplete, CloudTransferErrors> {
@@ -326,26 +318,15 @@ where
 
         drop(session_guard);
 
-        let mut etags: Vec<String> = vec![];
         let mut total_sent = 0;
 
         log::info!("Uploading resource {resource_path:?} size = {size}");
         let mut ticker = Instant::now();
         let progress_update_interval = std::time::Duration::from_millis(3000);
-        let upload_requests = upload
-            .parts
-            .iter()
-            .map(|it| {
-                let url = url::Url::parse(&it.url).unwrap();
-                UploadRequest {
-                    url,
-                    x_content_length: it.x_content_length
-                }
-            })
-            .collect();
 
-        let mut net_stream = self.net_stream.upload_resource(upload_requests, resource_path.clone()).await?;
+        let mut net_stream = self.net_stream.upload_resource(upload, resource_path.clone()).await?;
         let mut event_stream = net_stream.start().await?;
+        let mut upload_completion = None;
         while let Some(event) = event_stream.next().await {
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
@@ -374,18 +355,8 @@ where
                         CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
                 }
-                NetStreamEvent::Completed(responses) => {
-                    for mut response in responses {
-                        let Some(etag) = response.headers.remove("etag").map(|it| it.trim_matches('"').to_string()) else {
-                            progress.fail("Failed to upload resource, aborted".to_string());
-                            net_stream.end().await?;
-                            return Err(CloudTransferErrors::UploadProcessError("Failed to upload resource".to_string()));
-                        };
-
-                        progress.success();
-                        etags.push(etag);
-                    }
-
+                NetStreamEvent::Completed(completion) => {
+                    upload_completion = completion;
                     break;
                 }
                 NetStreamEvent::Error(e) => {
@@ -408,12 +379,17 @@ where
             ));
         }
 
-        let completion = MultiPartUploadComplete {
-            e_tags: etags,
-            context_token: upload.context_token
-        };
+        if progress.is_failed() {
+            return Err(CloudTransferErrors::UploadProcessError("Upload process is failed".to_string()));
+        }
 
-        Ok(completion)
+        if let Some(upload_completion) = upload_completion {
+            return Ok(upload_completion);
+        }
+
+        Err(CloudTransferErrors::UploadProcessError(
+            "Upload completion is not multipart".to_string()
+        ))
     }
 
     pub async fn cancel(&self, session_id: u64) -> bool {

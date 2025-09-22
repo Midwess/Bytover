@@ -32,6 +32,7 @@ use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
+use core_services::wasm::HttpClient;
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
@@ -160,6 +161,15 @@ pub async fn get_download_url(path: Uint8Array) -> Option<String> {
         OpfsOperationOutput::DownloadUrl(url) => Some(url),
         _ => None
     }
+}
+
+pub fn is_browser_support_duplex() -> bool {
+    let Some(with_browser) = window() else {
+        log::info!("No window");
+        return false
+    };
+
+    HttpClient::is_support_duplex_stream()
 }
 
 /// Run CoreOperation and return the CoreOperationOutput

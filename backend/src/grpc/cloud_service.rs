@@ -18,6 +18,8 @@ use schema::devlog::bitbridge::{
     CancelSessionRequest,
     CancelSessionResponse,
     ClientUploadRequest,
+    CompleteUploadPartRequest,
+    CompleteUploadPartResponse,
     CreatePublicTransferSessionRequest,
     CreatePublicTransferSessionResponse,
     FindSessionRequest,
@@ -122,7 +124,6 @@ impl BitBridgeCloudService for CloudGrpcService {
         .map_err(|_| Status::internal("Cannot send initial session"))?;
 
         if is_completed {
-            log::info!("Session is completed");
             return Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
         }
 
@@ -146,10 +147,10 @@ impl BitBridgeCloudService for CloudGrpcService {
                 };
 
                 let is_completed = session.is_completed();
-                let events = curr_session.get_events(&session, &cloud_storage, &app).await;
+                let events = curr_session.get_change_events(&session, &cloud_storage, &app).await;
                 for event in events {
                     if let Err(_e) = tx.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await {
-                        log::error!("Cannot send session, closing");
+                        log::error!("Cannot send session, closing stream...");
                         break;
                     };
                 }
@@ -157,7 +158,7 @@ impl BitBridgeCloudService for CloudGrpcService {
                 curr_session = session;
 
                 if is_completed {
-                    log::info!("Session is completed");
+                    log::info!("Session is completed, closing stream...");
                     break;
                 }
             }
@@ -281,28 +282,45 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
-        let Some(user_id) = request.extensions().get::<User>().map(|it| it.order_id) else {
+        let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
-        let request = request.into_inner();
-        let Some(status) = request.status else {
+        let request = request.get_ref();
+        let Some(status) = request.status.as_ref() else {
             return Err(Status::invalid_argument("Status must be defined"));
         };
 
         let Some((next_resource_id, next_upload_request)) = transfer_service
-            .update_transfer_progress(user_id, request.session_order_id, request.resource_id, status)
+            .update_transfer_progress(user, request.session_order_id, request.resource_id, status)
             .await?
         else {
             return Ok(Response::new(UpdateTransferProgressResponse { next_upload_request: None }))
         };
 
-        return Ok(Response::new(UpdateTransferProgressResponse {
+        Ok(Response::new(UpdateTransferProgressResponse {
             next_upload_request: Some(ClientUploadRequest {
                 resource_order_id: next_resource_id,
                 upload: Some(next_upload_request.clone())
             })
         }))
+    }
+
+    async fn complete_upload_part(
+        &self,
+        request: Request<CompleteUploadPartRequest>
+    ) -> Result<Response<CompleteUploadPartResponse>, Status> {
+        let Some(user) = request.extensions().get::<User>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+        let context = &request.get_ref().context_token;
+
+        let upload = self.cloud_storage.complete_upload_part(user, context).await?;
+
+        let response = Response::new(CompleteUploadPartResponse { part: upload });
+
+        Ok(response)
     }
 }

@@ -13,11 +13,11 @@ use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::Stream;
-use std::collections::HashMap;
+use schema::devlog::bitbridge::client_upload_request::Upload;
+use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
-use url::Url;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -60,27 +60,15 @@ pub trait CoreBridge: Send + Sync {
 #[derive(Debug)]
 pub enum NetStreamEvent {
     Progress { uploaded_bytes: u64 },
-    Completed(Vec<UploadResponse>),
+    Completed(Option<MultiPartUploadComplete>),
     Error(anyhow::Error)
-}
-
-#[derive(Debug, Clone)]
-pub struct UploadResponse {
-    pub headers: HashMap<String, String>,
-    pub body: Option<serde_json::Value>
-}
-
-#[derive(Debug, Clone)]
-pub struct UploadRequest {
-    pub url: Url,
-    pub x_content_length: Option<u64>
 }
 
 // Abstraction open stream to http server
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetStream: Send + Sync {
-    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>>;
+    async fn upload_resource(&self, request: Upload, path: LocalResourcePath) -> anyhow::Result<Box<dyn NetStreamInner>>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

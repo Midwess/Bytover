@@ -13,6 +13,7 @@ use std::sync::Arc;
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait TransferNative<T>: Send + Sync
 where
+    T: 'static,
     T: Clone,
     T: MaybeSend + Sync,
     T: tonic::client::GrpcService<tonic::body::Body>,

@@ -1897,6 +1897,7 @@ dependencies = [
  "tonic-middleware 0.1.4",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
 ]
 
@@ -4373,6 +4374,7 @@ dependencies = [
  "mime_guess",
  "redb",
  "reqwest",
+ "schema",
  "serde",
  "serde_json",
  "shared",

@@ -89,7 +89,12 @@ impl TransferSession {
         msg
     }
 
-    pub async fn get_events(&self, new: &TransferSession, cloud_storage: &Arc<dyn CloudStorage>, app: &Application) -> Vec<Event> {
+    pub async fn get_change_events(
+        &self,
+        new: &TransferSession,
+        cloud_storage: &Arc<dyn CloudStorage>,
+        app: &Application
+    ) -> Vec<Event> {
         let mut events = vec![];
 
         let resource_changes = new
