@@ -28,7 +28,8 @@ pub struct UploadContext {
     pub upload_id: String,
     pub part_number: usize,
     pub max_allowed_parts: usize,
-    pub resource: StaticResource
+    pub resource: StaticResource,
+    pub x_content_length: u32,
 }
 
 impl UploadContext {
@@ -40,16 +41,17 @@ impl UploadContext {
     ) -> Result<UploadContext, CloudStorageErrors> {
         let buffer_amount = 1024 * 1024 * 1024;
         let resource_size_with_buffer = resource_size + buffer_amount;
-        let max_allowed_parts = match &resource.source {
+        let (max_allowed_parts, content_length) = match &resource.source {
             Some(Source::S3Path(name)) => {
                 let is_zip_file = name.prefix.ends_with(".zip");
                 if is_zip_file {
                     // On web, we need to support upload 5MB chunk
-                    let min_part_size = 5 * 1024 * 1024;
-                    resource_size_with_buffer.div_ceil(min_part_size) as usize + 1
-                } else {
-                    let min_part_size = 5 * 1024 * 1024 * 1024;
-                    resource_size_with_buffer.div_ceil(min_part_size) as usize + 1
+                    let content_length = 5 * 1024 * 1024;
+                    (resource_size_with_buffer.div_ceil(content_length) as usize + 1, content_length)
+                }
+                else {
+                    let content_length = 5 * 1024 * 1024 * 1024;
+                    (resource_size_with_buffer.div_ceil(content_length) as usize + 1, content_length)
                 }
             }
             _ => {
@@ -60,6 +62,7 @@ impl UploadContext {
 
         Ok(Self {
             max_allowed_parts,
+            x_content_length: content_length as u32,
             part_number: 1,
             upload_id,
             user_id,

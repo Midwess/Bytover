@@ -42,7 +42,8 @@ impl CloudStorage for S3CloudStorageImpl {
         let token = context.as_token(self.get_jwt_secret());
         let part = MultiPartUpload {
             context_token: token,
-            upload_url
+            upload_url,
+            x_content_length: context.x_content_length,
         };
 
         Ok(Upload::Multipart(part))
@@ -64,7 +65,8 @@ impl CloudStorage for S3CloudStorageImpl {
 
         Ok(Some(MultiPartUpload {
             upload_url: part_url,
-            context_token: next_part.as_token(self.get_jwt_secret())
+            context_token: next_part.as_token(self.get_jwt_secret()),
+            x_content_length: next_part.x_content_length,
         }))
     }
 

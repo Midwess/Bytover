@@ -46,6 +46,7 @@ pub struct DiContainer {
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
+    cloud_server: OnceCell<CloudServer<Client>>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
     transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
@@ -67,7 +68,8 @@ impl DiContainer {
                 transfer_selection_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 resource_repository: OnceCell::new(),
-                transfer_repository: OnceCell::new()
+                transfer_repository: OnceCell::new(),
+                cloud_server: OnceCell::new()
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -79,10 +81,11 @@ impl DiContainer {
         self.file_storage.get().unwrap().clone()
     }
 
-    pub async fn get_net_stream(&self) -> Box<dyn NetStream> {
+    pub async fn get_net_stream(&'static self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
             storage: self.file_storage.get().unwrap().clone(),
-            resource_repo: self.get_local_resource_repository().await
+            resource_repo: self.get_local_resource_repository().await,
+            server: self.get_cloud_server()
         })
     }
 
@@ -178,8 +181,14 @@ impl DiContainer {
         repo
     }
 
-    pub fn get_cloud_server(&self) -> CloudServer<Client> {
-        CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
+    pub fn get_cloud_server(&'static self) -> &'static CloudServer<Client> {
+        if let Some(server) = self.cloud_server.get() {
+            return server;
+        }
+
+        let server = CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider());
+        let _ = self.cloud_server.set(server);
+        self.cloud_server.get().unwrap()
     }
 
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {

@@ -59,7 +59,8 @@ struct PublicUrlShareView: View {
                                 .foregroundColor(Theme.PrimaryText.color)
                                 .frame(width: 25, height: 25)
                         }
-                    } else {
+                    }
+                    else {
                         Text("Continue")
                             .modifier(Label1())
                             .foregroundColor(Theme.PrimaryText.color)

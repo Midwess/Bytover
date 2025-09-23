@@ -15,9 +15,7 @@ use tokio::{io, spawn, try_join};
 use tokio_util::io::ReaderStream;
 use tonic::transport::Channel;
 
-// 5GB because of s3 limit
-const MAX_CHUNK_SIZE: u64 = 1024 * 1024 * 1024 * 5 - 1;
-const EVENT_BUFFER_SIZE: usize = 8;
+const EVENT_QUEUE_SIZE: usize = 8;
 const READ_CHUNK_SIZE: usize = 1024 * 1024;
 
 pub struct NetStreamImpl {
@@ -49,7 +47,7 @@ impl NetStream for NetStreamImpl {
 #[async_trait::async_trait]
 impl NetStreamInner for NetStreamInnerImpl {
     async fn start(&mut self) -> Result<Receiver<NetStreamEvent>> {
-        let (tx, rx) = channel(EVENT_BUFFER_SIZE);
+        let (tx, rx) = channel(EVENT_QUEUE_SIZE);
         let cursor = self.repository.read(self.path.clone(), READ_CHUNK_SIZE).await?;
         let upload = self.upload.clone();
 
@@ -92,7 +90,7 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>
     ) -> Result<Option<MultiPartUploadComplete>> {
-        Self::upload_chunk(url, cursor, tx, 0).await?;
+        Self::upload_chunk(url, cursor, tx, 0, 1024 * 1024 * 1024 * 5).await?;
         Ok(None)
     }
 
@@ -111,9 +109,9 @@ impl NetStreamInnerImpl {
         let total_size = cursor.entry().await?.size;
 
         while uploaded < total_size {
-            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, uploaded).await?;
+            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, uploaded, upload.x_content_length as u64).await?;
             completion.e_tags.push(etag);
-            uploaded += (total_size - uploaded).min(MAX_CHUNK_SIZE);
+            uploaded += (total_size - uploaded).min(upload.x_content_length as u64);
 
             if uploaded < total_size {
                 upload = match server.complete_part_upload(&upload.context_token).await? {
@@ -144,7 +142,8 @@ impl NetStreamInnerImpl {
         url: &str,
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
-        uploaded: u64
+        uploaded: u64,
+        chunk_size: u64,
     ) -> Result<String> {
         let total_size = cursor.entry().await?.size;
         let remaining_size = total_size - uploaded;
@@ -153,8 +152,8 @@ impl NetStreamInnerImpl {
             return Err(anyhow!("No data to upload"));
         }
 
-        let chunk_size = remaining_size.min(MAX_CHUNK_SIZE);
-        let (mut writer, reader) = io::duplex(MAX_CHUNK_SIZE as usize);
+        let chunk_size = remaining_size.min(chunk_size);
+        let (mut writer, reader) = io::duplex(chunk_size as usize);
 
         let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
         let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size);
