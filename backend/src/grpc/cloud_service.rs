@@ -8,7 +8,7 @@ use crate::user::Token;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::db::surrealdb::id::SurrealDbId;
 use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
-use schema::devlog::auth_gateway::models::{Application, User};
+use schema::devlog::auth_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};
@@ -204,6 +204,10 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let Some(device) = request.extensions().get::<Device>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
@@ -232,7 +236,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             })
             .collect::<Vec<_>>();
 
-        let response = transfer_service.add_resources(user, app, request_body.session_order_id, requests).await?;
+        let response = transfer_service.add_resources(user, device, app, request_body.session_order_id, requests).await?;
 
         let response_body = AddResourcesResponse {
             first_resource_upload_request: ClientUploadRequest {
@@ -286,6 +290,10 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let Some(device) = request.extensions().get::<Device>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request = request.get_ref();
         let Some(status) = request.status.as_ref() else {
@@ -293,7 +301,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         let Some((next_resource_id, next_upload_request)) = transfer_service
-            .update_transfer_progress(user, request.session_order_id, request.resource_id, status)
+            .update_transfer_progress(user, device, request.session_order_id, request.resource_id, status)
             .await?
         else {
             return Ok(Response::new(UpdateTransferProgressResponse { next_upload_request: None }))

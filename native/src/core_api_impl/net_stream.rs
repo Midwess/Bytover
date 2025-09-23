@@ -128,11 +128,7 @@ impl NetStreamInnerImpl {
         }
 
         let content_length = bytes.len() as u64;
-        let etag = Self::perform_upload(
-            &upload.upload_url,
-            bytes,
-            content_length
-        ).await?;
+        let etag = Self::perform_upload(&upload.upload_url, bytes, content_length).await?;
         completion.e_tags.push(etag);
 
         Ok(Some(completion))
@@ -143,7 +139,7 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
         uploaded: u64,
-        chunk_size: u64,
+        chunk_size: u64
     ) -> Result<String> {
         let total_size = cursor.entry().await?.size;
         let remaining_size = total_size - uploaded;

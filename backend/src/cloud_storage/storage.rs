@@ -5,6 +5,7 @@ use schema::devlog::auth_gateway::models::user::UserId;
 use schema::devlog::auth_gateway::models::User;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
+use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
 use schema::value::static_resource::StaticResource;
 use serde::{Deserialize, Serialize};
@@ -29,7 +30,7 @@ pub struct UploadContext {
     pub part_number: usize,
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
-    pub x_content_length: u32,
+    pub x_content_length: u32
 }
 
 impl UploadContext {
@@ -37,23 +38,14 @@ impl UploadContext {
         user_id: UserId,
         upload_id: String,
         resource: StaticResource,
-        resource_size: u64
+        resource_size: u64,
+        chunk_size: Option<u64>
     ) -> Result<UploadContext, CloudStorageErrors> {
         let buffer_amount = 1024 * 1024 * 1024;
+        let chunk_size = chunk_size.unwrap_or(5 * 1024 * 1024 * 1024);
         let resource_size_with_buffer = resource_size + buffer_amount;
-        let (max_allowed_parts, content_length) = match &resource.source {
-            Some(Source::S3Path(name)) => {
-                let is_zip_file = name.prefix.ends_with(".zip");
-                if is_zip_file {
-                    // On web, we need to support upload 5MB chunk
-                    let content_length = 5 * 1024 * 1024;
-                    (resource_size_with_buffer.div_ceil(content_length) as usize + 1, content_length)
-                }
-                else {
-                    let content_length = 5 * 1024 * 1024 * 1024;
-                    (resource_size_with_buffer.div_ceil(content_length) as usize + 1, content_length)
-                }
-            }
+        let max_allowed_parts = match &resource.source {
+            Some(Source::S3Path(name)) => resource_size_with_buffer.div_ceil(chunk_size) as usize + 1,
             _ => {
                 log::error!("Invalid resource type: {:?}", resource);
                 return Err(CloudStorageErrors::InvalidUploadContext)
@@ -62,7 +54,7 @@ impl UploadContext {
 
         Ok(Self {
             max_allowed_parts,
-            x_content_length: content_length as u32,
+            x_content_length: chunk_size as u32,
             part_number: 1,
             upload_id,
             user_id,
@@ -96,13 +88,13 @@ impl UploadContext {
 
 #[async_trait::async_trait]
 pub trait CloudStorage: Send + Sync {
-    async fn get_upload_solution_for_resource(&self, user: &User, resource: &TransferResource) -> Result<Upload, CloudStorageErrors>;
     async fn get_upload_solution(
         &self,
         user: &User,
-        source: &StaticResource,
-        file_size: Option<usize>
+        platform: Platform,
+        resource: &TransferResource
     ) -> Result<Upload, CloudStorageErrors>;
+    async fn get_upload_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors>;
     async fn complete_upload_part(&self, user: &User, context_token: &str) -> Result<Option<MultiPartUpload>, CloudStorageErrors>;
     async fn complete_upload(&self, user: &User, completion: &MultiPartUploadComplete) -> Result<(), CloudStorageErrors>;
     async fn generate_download_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors>;

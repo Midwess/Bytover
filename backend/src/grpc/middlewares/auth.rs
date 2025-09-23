@@ -40,7 +40,9 @@ impl RequestInterceptor for AuthInterceptor {
                 let user_info = user_info.into_inner();
                 let user = user_info.user;
                 let app = user_info.app;
+                let device = user_info.device;
 
+                req.extensions_mut().insert(device);
                 req.extensions_mut().insert(user);
                 req.extensions_mut().insert(app);
                 req.extensions_mut().insert(Token(token_str));

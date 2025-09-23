@@ -27,8 +27,7 @@ struct ResourceImage: View {
                     .scaledToFill()
                     .frame(width: width, height: height)
                     .cornerRadius(radius ?? ((width + height) / 2) * 0.3)
-            }
-            else {
+            } else {
                 Rectangle()
                     .frame(width: width, height: height)
                     .cornerRadius(radius ?? ((width + height) / 2) * 0.3)

@@ -1,9 +1,10 @@
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors, UploadContext};
-use crate::entities::transfer_resource::TransferResource;
+use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use core_services::s3::S3Client;
 use schema::devlog::auth_gateway::models::User;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
+use schema::value::platform::Platform;
 use schema::value::static_resource::StaticResource;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,36 +18,40 @@ pub struct S3CloudStorageImpl {
 
 #[async_trait::async_trait]
 impl CloudStorage for S3CloudStorageImpl {
-    async fn get_upload_solution_for_resource(&self, user: &User, resource: &TransferResource) -> Result<Upload, CloudStorageErrors> {
-        let file_size = Some(resource.size_in_bytes() as usize);
-        let source = resource.source();
-        log::info!("Get upload solution for resource: {:?} size: {:?}", source, file_size);
-        self.get_upload_solution(user, &source, file_size).await
-    }
-
     async fn get_upload_solution(
         &self,
         user: &User,
-        source: &StaticResource,
-        file_size: Option<usize>
+        platform: Platform,
+        resource: &TransferResource
     ) -> Result<Upload, CloudStorageErrors> {
-        let duration = self.get_download_duration();
-        let Some(file_size) = file_size else {
-            let single_url = self.s3_client.sign_upload(source, duration).await?;
-            return Ok(Upload::SingleUrl(single_url));
+        let file_size = resource.size_in_bytes() as usize;
+        let chunk_size = match (resource.r#type(), platform) {
+            (TransferResourceType::Folder, Platform::Web) => Some(5 * 1024 * 1024),
+            _ => None
         };
 
-        let upload_id = self.s3_client.create_multipart_upload(source).await?;
-        let upload_url = self.s3_client.generate_part_upload_url(source, &upload_id, 1, self.get_download_duration()).await?;
-        let context = UploadContext::new(user.id.clone(), upload_id, source.clone(), file_size as u64)?;
+        let source = resource.source();
+        log::info!("Get upload solution for resource: {:?} size: {:?}", source, file_size);
+        let upload_id = self.s3_client.create_multipart_upload(&source).await?;
+        let upload_url = self
+            .s3_client
+            .generate_part_upload_url(&source, &upload_id, 1, self.get_download_duration())
+            .await?;
+        let context = UploadContext::new(user.id.clone(), upload_id, source.clone(), file_size as u64, chunk_size)?;
         let token = context.as_token(self.get_jwt_secret());
         let part = MultiPartUpload {
             context_token: token,
             upload_url,
-            x_content_length: context.x_content_length,
+            x_content_length: context.x_content_length
         };
 
         Ok(Upload::Multipart(part))
+    }
+
+    async fn get_upload_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors> {
+        let duration = self.get_download_duration();
+        let single_url = self.s3_client.sign_upload(source, duration).await?;
+        Ok(single_url)
     }
 
     async fn complete_upload_part(&self, user: &User, context_token: &str) -> Result<Option<MultiPartUpload>, CloudStorageErrors> {
@@ -66,7 +71,7 @@ impl CloudStorage for S3CloudStorageImpl {
         Ok(Some(MultiPartUpload {
             upload_url: part_url,
             context_token: next_part.as_token(self.get_jwt_secret()),
-            x_content_length: next_part.x_content_length,
+            x_content_length: next_part.x_content_length
         }))
     }
 

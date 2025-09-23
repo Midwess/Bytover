@@ -91,16 +91,18 @@ pub trait NativePersistent: Send + Sync {
                 PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)) => {
-                if let Ok(_) = self
+                if self
                     .local_resource_repository()
                     .delete_one(&LocalResourceId {
                         order_id: Some(id),
                         ..Default::default()
                     })
                     .await
+                    .is_ok()
                 {
                     PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
-                } else {
+                }
+                else {
                     PersistentOperationOutput::Error("Failed to remove local resource".to_string())
                 }
             }

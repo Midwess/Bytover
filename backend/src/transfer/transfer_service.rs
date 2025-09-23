@@ -9,7 +9,7 @@ use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRe
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
-use schema::devlog::auth_gateway::models::{Application, User};
+use schema::devlog::auth_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::value::datetime::Datetime;
@@ -90,6 +90,7 @@ impl TransferService {
     pub async fn update_transfer_progress(
         &self,
         user: &User,
+        device: &Device,
         session_id: u64,
         resource_id: u64,
         status: &ClientUploadStatus
@@ -141,7 +142,8 @@ impl TransferService {
                     return Ok(None)
                 };
 
-                let upload_request = self.cloud_storage.get_upload_solution_for_resource(user, &next_resource).await?;
+                let platform = device.platform();
+                let upload_request = self.cloud_storage.get_upload_solution(user, platform, &next_resource).await?;
                 Ok(Some((next_resource_id, upload_request)))
             }
             ClientUploadStatus::Failed(error_message) => {
@@ -159,6 +161,7 @@ impl TransferService {
     pub async fn add_resources(
         &self,
         user: &User,
+        device: &Device,
         app: &Application,
         session_order_id: u64,
         requests: Vec<TransferResourceRequest>
@@ -192,14 +195,15 @@ impl TransferService {
         let mut thumbnails = session.thumbnail_resources();
 
         for thumbnail in thumbnails.iter_mut() {
-            let _ = self.cloud_storage.get_upload_solution(user, &mut thumbnail.1, None).await;
+            let _ = Upload::SingleUrl(self.cloud_storage.get_upload_url(&mut thumbnail.1).await?);
         }
 
         let Some(first_resource) = session.resources().iter().find(|it| it.order_id() == first_resource_id).cloned() else {
             return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
         };
 
-        let first_resource_upload_request = self.cloud_storage.get_upload_solution_for_resource(user, &first_resource).await?;
+        let platform = device.platform();
+        let first_resource_upload_request = self.cloud_storage.get_upload_solution(user, platform, &first_resource).await?;
 
         let download_url = session.access_url(app.link.clone());
         let resources = session
@@ -229,7 +233,7 @@ impl TransferService {
 
         let mut thumbnail_upload_urls = vec![];
         for (order_id, source) in thumbnails.iter() {
-            let upload_request = self.cloud_storage.get_upload_solution(user, source, None).await?;
+            let upload_request = Upload::SingleUrl(self.cloud_storage.get_upload_url(source).await?);
             let Upload::SingleUrl(url) = upload_request else {
                 panic!("Invalid upload request, the thumbnail upload request must be a single url");
             };

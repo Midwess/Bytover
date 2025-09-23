@@ -21,6 +21,7 @@ use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput}
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
+use core_services::wasm::HttpClient;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
 use erased_serde::Serialize;
@@ -32,7 +33,6 @@ use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
-use core_services::wasm::HttpClient;
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
