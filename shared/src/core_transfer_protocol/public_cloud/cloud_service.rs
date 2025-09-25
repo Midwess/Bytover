@@ -338,6 +338,10 @@ where
 
             match event {
                 NetStreamEvent::Progress { uploaded_bytes } => {
+                    if uploaded_bytes < total_sent {
+                        continue;
+                    }
+
                     progress.update_progress(uploaded_bytes - total_sent);
                     total_sent = uploaded_bytes;
                     if ticker.elapsed() > progress_update_interval {
@@ -357,10 +361,12 @@ where
                 }
                 NetStreamEvent::Completed(completion) => {
                     upload_completion = completion;
+                    progress.success();
                     break;
                 }
                 NetStreamEvent::Error(e) => {
                     log::warn!("Failed to upload resource: {e:?}");
+                    progress.fail(e.to_string());
                     net_stream.end().await?;
                     return Err(CloudTransferErrors::from(e));
                 }

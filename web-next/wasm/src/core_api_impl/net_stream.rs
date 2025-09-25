@@ -1,4 +1,3 @@
-use crate::file_api::device_file::FileStorage;
 use crate::file_api::opfs::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::WorkerMessage;
@@ -28,14 +27,12 @@ const EVENT_QUEUE_SIZE: usize = 8;
 const CURSOR_THRESHOLD: usize = 1024 * 1024 * 10;
 
 pub struct NetStreamImpl {
-    pub storage: FileStorage,
     pub resource_repo: Arc<dyn LocalResourceRepository>,
     pub server: &'static CloudServer<Client>
 }
 
 // Only working with Blob from browser
 pub struct NetStreamInnerImpl {
-    storage: FileStorage,
     upload: Upload,
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
@@ -71,7 +68,6 @@ impl NetStream for NetStreamImpl {
         }
 
         Ok(Box::new(NetStreamInnerImpl {
-            storage: self.storage.clone(),
             server: self.server,
             upload,
             path,
@@ -189,26 +185,16 @@ impl NetStreamInnerImpl {
     }
 
     async fn get_blob(&self) -> Option<Blob> {
-        if let Some(opfs_path) = self.path.opfs_path() {
-            let Some(resp) = OPFS_WORKER
-                .send(WorkerMessage::new(OpfsOperation {
-                    file_path: opfs_path,
-                    operation: FileOperation::Blob
-                }))
-                .await
-            else {
-                return None;
-            };
+        let Some(opfs_path) = self.path.opfs_path() else {
+            return None;
+        };
 
-            return match resp.message {
-                OpfsOperationOutput::Blob(blob) => Some(blob),
-                _ => None
-            }
-        } else if let Some(device_id) = self.path.device_file_id() {
-            return self.storage.get(device_id).await.and_then(|device_file| device_file.blob())
+        let resp = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation { file_path: opfs_path, operation: FileOperation::Blob })).await?;
+        match resp.message {
+            OpfsOperationOutput::Blob(blob) => Some(blob),
+            _ => None
         }
-
-        None
     }
 }
 

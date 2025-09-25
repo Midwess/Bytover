@@ -65,6 +65,14 @@ impl BitBridgeCloudService for CloudGrpcService {
             }))
         };
 
+        if session.is_failed() {
+            return Ok(Response::new(FindSessionResponse {
+                session: None,
+                access_url: "".to_string(),
+                is_required_password: false
+            }))
+        }
+
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?;
         let response = FindSessionResponse {
             session: Some(PublicSessionId {
@@ -111,6 +119,10 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
 
         if !initial_session.validate_access(request.password) {
+            return Err(Status::invalid_argument("Session not found or password is not correct"))
+        }
+
+        if initial_session.is_failed() {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         }
 

@@ -6,7 +6,6 @@ use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
 use crate::executor::transfer::TransferNativeImpl;
-use crate::file_api::device_file::FileStorage;
 use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
@@ -42,7 +41,6 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    file_storage: OnceCell<FileStorage>,
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
@@ -61,7 +59,6 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                file_storage: OnceCell::new(),
                 auth_service: OnceCell::new(),
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
@@ -77,13 +74,8 @@ impl DiContainer {
         })
     }
 
-    pub fn file_storage(&self) -> FileStorage {
-        self.file_storage.get().unwrap().clone()
-    }
-
     pub async fn get_net_stream(&'static self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
-            storage: self.file_storage.get().unwrap().clone(),
             resource_repo: self.get_local_resource_repository().await,
             server: self.get_cloud_server()
         })
@@ -130,7 +122,6 @@ impl DiContainer {
             .await;
 
         let _ = self.db.set(pool);
-        let _ = self.file_storage.set(FileStorage::new());
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {
@@ -154,7 +145,6 @@ impl DiContainer {
         }
 
         let repo = Arc::new(LocalResourceRepositoryImpl {
-            file_storage: self.file_storage.get().unwrap().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())

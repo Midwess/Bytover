@@ -144,6 +144,7 @@ impl IOWriter for IOWriterOpfsImpl {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::Flush
         });
+
         OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to flush"))?;
         Ok(())
     }

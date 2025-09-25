@@ -1,17 +1,23 @@
+use std::cell::OnceCell;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use devlog_sdk::distributed_id::gen_id;
-use futures::lock::Mutex;
-use shared::app::transfer::file_selection_service::ResourceSelection;
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::Arc;
+use js_sys::Uint8Array;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
-use web_sys::js_sys::Array;
 use web_sys::{Blob, File};
+use crate::{deserialize, serialize};
 
-#[derive(Clone)]
-pub struct WasmFile(pub File);
+#[derive(Clone, Serialize, Deserialize)]
+pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);
+
+impl Debug for WasmFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WasmFile {{ name: {}, size: {} }}", self.name(), self.size())
+    }
+}
 
 unsafe impl Send for WasmFile {}
 
@@ -39,10 +45,14 @@ impl Deref for WasmFile {
 }
 
 /// Keep track of files that are being chosen by the user from their device.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DeviceFile {
     pub(crate) file: WasmFile,
-    pub(crate) resource: LocalResource
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    pub(crate) resource: Uint8Array,
+
+    #[serde(skip)]
+    pub(crate) resource_instance: OnceCell<LocalResource>
 }
 
 impl DeviceFile {
@@ -57,7 +67,7 @@ impl DeviceFile {
 
         let order_id = gen_id().await;
 
-        let resource = LocalResource {
+        let resource_instance = LocalResource {
             name: file.name(),
             size: file.size() as u64,
             path: LocalResourcePath::device_file(order_id),
@@ -66,57 +76,32 @@ impl DeviceFile {
             order_id
         };
 
+        let resource = serialize(&resource_instance);
+        let resource_cell = OnceCell::new();
+        resource_cell.set(resource_instance).unwrap();
+
         Self {
             file: WasmFile(file),
+            resource_instance: resource_cell,
             resource
         }
     }
 
+    pub fn local_resource(&self) -> &LocalResource {
+        if let Some(resource) = self.resource_instance.get() {
+            return resource;
+        }
+
+        let _ = self.resource_instance.set(deserialize(&self.resource));
+
+        self.resource_instance.get().unwrap()
+    }
+
+    pub fn raw_local_resource(&self) -> &Uint8Array {
+        &self.resource
+    }
+
     pub fn blob(self) -> Option<Blob> {
         (self.file.0).dyn_into().ok()
-    }
-}
-
-#[derive(Clone)]
-pub struct FileStorage {
-    files: Arc<Mutex<HashMap<u64, DeviceFile>>>
-}
-
-impl Default for FileStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl FileStorage {
-    pub fn new() -> FileStorage {
-        FileStorage {
-            files: Arc::new(Mutex::new(HashMap::new()))
-        }
-    }
-
-    pub async fn add(&self, files: &Array) -> Vec<ResourceSelection> {
-        let mut device_files = self.files.lock().await;
-        let mut selections = vec![];
-        for file in files.iter() {
-            let f = File::from(file);
-            let device_file = DeviceFile::new(f).await;
-
-            let selection = ResourceSelection {
-                path: device_file.resource.path.clone(),
-                r#type: Some(device_file.resource.r#type.clone())
-            };
-
-            device_files.insert(device_file.resource.order_id, device_file);
-
-            selections.push(selection);
-        }
-
-        selections
-    }
-
-    pub(crate) async fn get(&self, id: u64) -> Option<DeviceFile> {
-        let device_files = self.files.lock().await;
-        device_files.get(&id).cloned()
     }
 }

@@ -1,6 +1,5 @@
 use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::device_file::FileStorage;
-use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl};
+use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
@@ -19,10 +18,13 @@ use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
+use crate::deserialize;
+use crate::file_api::file_extension::VecExtension;
+use crate::web_worker::bridge::WorkerMessage;
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>,
-    pub file_storage: FileStorage
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -113,24 +115,32 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 #[async_trait::async_trait(?Send)]
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
-        let Some(path) = path.device_file_id() else {
+        let Some(path) = path.opfs_path() else {
             return Ok(None);
         };
 
-        let Some(resource) = self.file_storage.get(path).await else {
+        let resp = OPFS_WORKER.send(WorkerMessage::new(OpfsOperation {
+            file_path: path,
+            operation: FileOperation::LocalResourceInstance
+        })).await.unwrap().message;
+
+        let OpfsOperationOutput::LocalResourceInstance(resource) = resp else {
             return Ok(None);
         };
 
-        Ok(Some(resource.resource))
+        Ok(Some(deserialize(&resource)))
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
         let save_path = LocalResourcePath::resource_thumbnail(None, resource_id);
         let path = save_path.opfs_path().unwrap();
 
-        let mut writer = IOWriterOpfsImpl::new(path.into()).await?;
-        writer.write(png_bytes.into()).await?;
-        writer.end().await?;
+        OPFS_WORKER.send(WorkerMessage::new(OpfsOperation {
+            file_path: path,
+            operation: FileOperation::WriteNew {
+                data: png_bytes.into_uint_array_leak()
+            }
+        })).await;
         Ok(save_path)
     }
 
@@ -147,14 +157,6 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn read(&self, path: LocalResourcePath, chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
-        if let Some(device_file_id) = path.device_file_id() {
-            let Some(file) = self.file_storage.get(device_file_id).await else {
-                return Err(PersistenceError::NotFound(format!("{:?}", path)));
-            };
-
-            return Ok(Box::new(IOReaderImpl::new(file.file.clone(), chunk_size as u64)))
-        };
-
         if let Some(path) = path.opfs_path() {
             let reader = IOReaderOpfsImpl::new(path.into()).await?;
             return Ok(Box::new(reader))

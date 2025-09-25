@@ -10,12 +10,12 @@ pub trait WebExtLocalResourcePath {
 
 impl WebExtLocalResourcePath for LocalResourcePath {
     fn device_file(id: u64) -> Self {
-        Self::PlatformIdentifier(format!("device://{}", id))
+        Self::PlatformIdentifier(format!("opfs://device/{id}"))
     }
 
     fn device_file_id(&self) -> Option<u64> {
         match self {
-            Self::PlatformIdentifier(path) => path.split_once("device://")?.1.to_string().parse::<u64>().ok(),
+            Self::PlatformIdentifier(path) => path.trim_start_matches("opfs://device/").to_string().parse::<u64>().ok(),
             _ => None
         }
     }

@@ -1,6 +1,6 @@
 'use client'
 
-import toast from 'react-hot-toast';
+import toast from 'react-hot-toast'
 import isEqual from 'lodash/isEqual'
 
 import {
@@ -55,14 +55,13 @@ import {
     ReceiveSessionViewModel,
     ReceiveCloudSessionViewModel,
     PeerViewModel,
-    LocalResourcePath,
-    PersistentOperationVariantLocalResource,
-    LocalResourcePersistentOperationVariantAddThumbnail
+    LocalResourcePath, CoreOperationOutputVariantDatabase, PersistentOperationOutputVariantLocalResource,
+    LocalResourcePersistentOperationOutputVariantAddThumbnail,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
 import init_core, {
-    add_device_files,
+    add_device_files, create_file,
     execute,
     execute_operation,
     get_device_file,
@@ -357,21 +356,17 @@ export class WasmCore {
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
                         const path = operation.value as LocalResourcePathVariantPlatformIdentifier;
-                        const resourceId = BigInt(path.value.split("://")[1])
-                        const file = await get_device_file(resourceId)
+                        const resourceId = BigInt(path.value.replace("opfs://device/", ''))
+                        const file = await get_device_file(serialize(path))
                         if (!file) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
                         }
 
                         try {
                             const buffer = await getThumbnailFromFile(file)
-                            const ops = new CoreOperationVariantPersistent(new PersistentOperationVariantLocalResource(new LocalResourcePersistentOperationVariantAddThumbnail(Array.from(buffer), resourceId)));
-                            const opsOut = await execute_operation(serialize(ops));
-                            if (!opsOut) {
-                                throw new Error("Failed to save thumbnail")
-                            }
-
-                            return handle_response(request_id, opsOut)
+                            const savedPath = new LocalResourcePathVariantPlatformIdentifier(`opfs://thumbnails/${resourceId}.png`)
+                            await create_file(serialize(savedPath), buffer);
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDatabase(new PersistentOperationOutputVariantLocalResource(new LocalResourcePersistentOperationOutputVariantAddThumbnail(savedPath)))))
                         }
                         catch (e) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
