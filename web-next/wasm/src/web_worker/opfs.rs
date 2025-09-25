@@ -1,4 +1,4 @@
-use std::cell::OnceCell;
+use crate::file_api::device_file::DeviceFile;
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use chrono::Utc;
@@ -8,13 +8,21 @@ use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
-use shared::entities::file_system::file::LocalResource;
-use crate::file_api::device_file::DeviceFile;
+use web_sys::{
+    Blob,
+    File,
+    FileSystemDirectoryHandle,
+    FileSystemFileHandle,
+    FileSystemGetDirectoryOptions,
+    FileSystemGetFileOptions,
+    FileSystemReadWriteOptions,
+    FileSystemSyncAccessHandle
+};
 
 /// Web worker that support file system on browser
 /// Open a file handle, keep tracks that handle in a list
@@ -25,7 +33,7 @@ use crate::file_api::device_file::DeviceFile;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpfsOperation {
     pub file_path: String,
-    pub operation: FileOperation,
+    pub operation: FileOperation
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -188,14 +196,15 @@ impl OpfsWorker {
                     device_files.insert(file_path, Arc::new(Mutex::new(file)));
                     Ok::<Uint8Array, JsValue>(resource)
                 }
-                .await {
+                .await
+                {
                     Ok(r) => OpfsOperationOutput::LocalResourceInstance(r),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
             FileOperation::GetFile => {
                 if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
-                   return OpfsOperationOutput::File(device_file.lock().await.file.0.clone());
+                    return OpfsOperationOutput::File(device_file.lock().await.file.0.clone());
                 }
 
                 OpfsOperationOutput::Error("No file selected".into())
@@ -229,7 +238,11 @@ impl OpfsWorker {
                     let end_position = (position + amount).min(file_guard.file.size() as usize);
                     return match file_guard.file.slice_with_f64_and_f64(position as f64, end_position as f64) {
                         Ok(blob) => match JsFuture::from(blob.array_buffer()).await {
-                            Ok(buffer) => OpfsOperationOutput::Binary(Uint8Array::new_with_byte_offset_and_length(&buffer, 0, (end_position - position) as u32)),
+                            Ok(buffer) => OpfsOperationOutput::Binary(Uint8Array::new_with_byte_offset_and_length(
+                                &buffer,
+                                0,
+                                (end_position - position) as u32
+                            )),
                             Err(e) => return OpfsOperationOutput::Error(e)
                         },
                         Err(e) => return OpfsOperationOutput::Error(e)
@@ -336,7 +349,7 @@ impl Worker for OpfsWorker {
         Self {
             root: Default::default(),
             file_handles: Default::default(),
-            device_files: Default::default(),
+            device_files: Default::default()
         }
     }
 

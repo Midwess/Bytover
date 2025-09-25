@@ -101,8 +101,7 @@ pub trait NativePersistent: Send + Sync {
                     .is_ok()
                 {
                     PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
-                }
-                else {
+                } else {
                     PersistentOperationOutput::Error("Failed to remove local resource".to_string())
                 }
             }

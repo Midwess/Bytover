@@ -190,7 +190,11 @@ impl NetStreamInnerImpl {
         };
 
         let resp = OPFS_WORKER
-            .send(WorkerMessage::new(OpfsOperation { file_path: opfs_path, operation: FileOperation::Blob })).await?;
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: opfs_path,
+                operation: FileOperation::Blob
+            }))
+            .await?;
         match resp.message {
             OpfsOperationOutput::Blob(blob) => Some(blob),
             _ => None

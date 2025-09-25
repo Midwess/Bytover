@@ -8,7 +8,7 @@ pub trait VecExtension {
     fn into_js_value(&self) -> JsValue {
         self.into_uint_array().into()
     }
-    
+
     fn into_uint_array_leak(&self) -> Uint8Array;
 }
 

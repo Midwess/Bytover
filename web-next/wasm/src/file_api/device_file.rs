@@ -1,14 +1,14 @@
-use std::cell::OnceCell;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::{deserialize, serialize};
 use devlog_sdk::distributed_id::gen_id;
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
-use std::fmt::Debug;
-use std::ops::Deref;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
+use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use std::cell::OnceCell;
+use std::fmt::Debug;
+use std::ops::Deref;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
-use crate::{deserialize, serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);

@@ -1,7 +1,10 @@
-use crate::core_api_impl::io::IOReaderImpl;
+use crate::deserialize;
+use crate::file_api::file_extension::VecExtension;
 use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
+use crate::web_worker::bridge::WorkerMessage;
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -18,13 +21,9 @@ use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
-use crate::deserialize;
-use crate::file_api::file_extension::VecExtension;
-use crate::web_worker::bridge::WorkerMessage;
-use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 
 pub struct LocalResourceRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>,
+    pub db: PoolRequest<NeverSend<Database>>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -119,10 +118,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             return Ok(None);
         };
 
-        let resp = OPFS_WORKER.send(WorkerMessage::new(OpfsOperation {
-            file_path: path,
-            operation: FileOperation::LocalResourceInstance
-        })).await.unwrap().message;
+        let resp = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: path,
+                operation: FileOperation::LocalResourceInstance
+            }))
+            .await
+            .unwrap()
+            .message;
 
         let OpfsOperationOutput::LocalResourceInstance(resource) = resp else {
             return Ok(None);
@@ -135,12 +138,14 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let save_path = LocalResourcePath::resource_thumbnail(None, resource_id);
         let path = save_path.opfs_path().unwrap();
 
-        OPFS_WORKER.send(WorkerMessage::new(OpfsOperation {
-            file_path: path,
-            operation: FileOperation::WriteNew {
-                data: png_bytes.into_uint_array_leak()
-            }
-        })).await;
+        OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: path,
+                operation: FileOperation::WriteNew {
+                    data: png_bytes.into_uint_array_leak()
+                }
+            }))
+            .await;
         Ok(save_path)
     }
 
