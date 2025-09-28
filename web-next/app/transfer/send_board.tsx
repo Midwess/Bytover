@@ -7,7 +7,7 @@ import {
 import {
     AlertCircleIcon,
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check,
+    Users, X, Copy, Check, FolderIcon,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -63,19 +63,22 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        {files, isDragging, errors},
+        {files, isDragging, errors, supportsDirectories},
         {
             handleDragEnter,
             handleDragLeave,
             handleDragOver,
             handleDrop,
             openFileDialog,
+            openDirectoryDialog,
             getInputProps,
+            getDirectoryInputProps,
             clearFiles
         },
     ] = useFileUpload({
         accept: "*",
         multiple: true,
+        allowDirectories: true,
     })
 
     const selectedResources = core.useSelectedResources()
@@ -94,7 +97,7 @@ function FileSelections() {
 
     return (
         <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
-            <div className="relative w-full flex flex-col">
+            <div className="relative w-full flex flex-row gap-4">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -108,7 +111,7 @@ function FileSelections() {
                     <input
                         {...getInputProps()}
                         className="sr-only"
-                        aria-label="Upload file"
+                        aria-label="Upload files"
                     />
                     <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
                         <div
@@ -122,6 +125,36 @@ function FileSelections() {
                         </p>
                     </div>
                 </div>
+
+                {supportsDirectories && (
+                    <div
+                        role="button"
+                        onClick={openDirectoryDialog}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        data-dragging={isDragging || undefined}
+                        className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    >
+                        <input
+                            {...getDirectoryInputProps()}
+                            className="sr-only"
+                            aria-label="Upload folder"
+                        />
+                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                            <div
+                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                                aria-hidden="true"
+                            >
+                                <FolderIcon className="size-4 opacity-60"/>
+                            </div>
+                            <p className="mb-1.5 text-sm font-medium">
+                                Drop folders here or click to browse folders
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {errors.length > 0 && (
@@ -146,6 +179,7 @@ function FileSelections() {
         </div>
     )
 }
+
 
 function ResourceView(props: {
     model: SelectedResourceViewModel
