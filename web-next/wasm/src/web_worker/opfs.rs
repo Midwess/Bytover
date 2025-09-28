@@ -299,8 +299,6 @@ impl OpfsWorker {
             }
             FileOperation::GenerateSource => {
                 match async {
-                    let root_future = JsFuture::from(get_directory());
-                    let root: FileSystemDirectoryHandle = root_future.await?.into();
                     let file_handle = root.open_file_async(&file_path).await?;
                     let file = JsFuture::from(file_handle.get_file()).await?;
                     let file: web_sys::File = file.into();
@@ -321,8 +319,6 @@ impl OpfsWorker {
                         return Ok::<Blob, JsValue>(blob);
                     }
 
-                    let root_future = JsFuture::from(get_directory());
-                    let root: FileSystemDirectoryHandle = root_future.await?.into();
                     let file_handle = root.open_file_async(&file_path).await?;
                     let file = JsFuture::from(file_handle.get_file()).await?;
                     let blob: Blob = file.into();

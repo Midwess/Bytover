@@ -56,7 +56,7 @@ import {
     ReceiveCloudSessionViewModel,
     PeerViewModel,
     LocalResourcePath, CoreOperationOutputVariantDatabase, PersistentOperationOutputVariantLocalResource,
-    LocalResourcePersistentOperationOutputVariantAddThumbnail,
+    LocalResourcePersistentOperationOutputVariantAddThumbnail, SelectedResourceViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -226,6 +226,24 @@ export class WasmCore {
         const [state, setState] = useState(this.transferState.get());
         useEffect(() => {
             return this.transferState.subscribe(setState)
+        }, [])
+
+        return state
+    }
+
+    public useSelectedResources() {
+        const [state, setState] = useState<SelectedResourceViewModel[]>([])
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.selected_resources.length != state.length) {
+                    setState(transferState?.selected_resources || [])
+                }
+
+                if (!isEqual(state, transferState?.selected_resources)) {
+                    setState(transferState?.selected_resources || [])
+                }
+            })
         }, [])
 
         return state
