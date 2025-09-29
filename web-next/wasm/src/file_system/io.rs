@@ -1,4 +1,4 @@
-use crate::file_system::path_extension::WebExtLocalResourcePath;
+use crate::file_system::device_file::WasmFile;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput, OpfsWorker};
 use anyhow::{anyhow, Result};
@@ -7,18 +7,15 @@ use bytes::{Bytes, BytesMut};
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
 use core_services::utils::never_send::NeverSend;
-use devlog_sdk::distributed_id::gen_id;
+use core_services::wasm::extensions::FileExtension;
 use js_sys::Uint8Array;
 use shared::core_api::{IOReader, IOWriter};
-use shared::entities::file_system::file::LocalResourcePath;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::{Duration, SystemTime};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
-use core_services::wasm::extensions::FileExtension;
-use crate::file_system::device_file::WasmFile;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));

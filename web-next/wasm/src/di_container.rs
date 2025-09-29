@@ -1,12 +1,12 @@
-use crate::config::{get_gateway_grpc_url, get_locator_server_url, get_signalling_server_ws_url};
 use crate::bridge::bridge::CoreBridgeImpl;
-use crate::network::net_stream::NetStreamImpl;
+use crate::config::{get_gateway_grpc_url, get_locator_server_url, get_signalling_server_ws_url};
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
 use crate::executor::transfer::TransferNativeImpl;
 use crate::network::grpc::RpcNetworkModuleImpl;
+use crate::network::net_stream::NetStreamImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;

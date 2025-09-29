@@ -1,5 +1,6 @@
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger;
+use core_services::wasm::extensions::VecExtension;
 use crux_core::bridge::Bridge;
 use crux_core::Core;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
@@ -7,7 +8,6 @@ use gloo_worker::Worker;
 use js_sys::Uint8Array;
 use shared::app::BitBridge;
 use std::sync::LazyLock;
-use core_services::wasm::extensions::VecExtension;
 
 pub trait Handler<T> {
     type Output;

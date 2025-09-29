@@ -1,5 +1,11 @@
+use crate::file_system::io::IOReaderBlobImpl;
 use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::{deserialize, serialize};
+use async_stream::stream;
+use chrono::Utc;
+use core_services::local_storage::entry::FileEntry;
+use core_services::local_storage::stream::IOCursor;
+use core_services::local_storage::zip::ZipStream;
 use devlog_sdk::distributed_id::gen_id;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
@@ -8,15 +14,8 @@ use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::path::PathBuf;
-use async_stream::stream;
-use chrono::Utc;
-use n0_future::time::SystemTime;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
-use core_services::local_storage::entry::FileEntry;
-use core_services::local_storage::stream::IOCursor;
-use core_services::local_storage::zip::ZipStream;
-use crate::file_system::io::IOReaderBlobImpl;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);
@@ -73,7 +72,7 @@ impl DeviceFolder {
             order_id: local_resource_path.device_file_id().unwrap(),
             path: local_resource_path,
             thumbnail_path: None,
-            r#type: ResourceType::Folder,
+            r#type: ResourceType::Folder
         };
 
         Self {
@@ -96,10 +95,12 @@ impl DeviceFolder {
             is_dir: false,
             modified_at: Utc::now().into(),
             size: self.resource_instance.size,
-            path: self.base_path.clone().into(),
+            path: self.base_path.clone().into()
         };
 
-        Ok(Box::new(ZipStream::new_from_stream(Box::pin(stream), entry, buffer_size).await?))
+        Ok(Box::new(
+            ZipStream::new_from_stream(Box::pin(stream), entry, buffer_size).await?
+        ))
     }
 }
 

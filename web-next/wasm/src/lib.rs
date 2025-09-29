@@ -1,7 +1,7 @@
 extern crate core;
 
-pub mod config;
 pub mod bridge;
+pub mod config;
 pub mod di_container;
 mod errors;
 pub mod executor;
@@ -21,9 +21,11 @@ use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput}
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
+use core_services::wasm::extensions::VecExtension;
 use core_services::wasm::HttpClient;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
+use devlog_sdk::distributed_id::gen_id;
 use erased_serde::Serialize;
 use js_sys::{Array, Promise};
 use serde::Deserialize;
@@ -34,8 +36,6 @@ use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
-use core_services::wasm::extensions::VecExtension;
-use devlog_sdk::distributed_id::gen_id;
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
@@ -159,7 +159,7 @@ pub async fn add_device_folder(path: String, files: Vec<File>) -> Uint8Array {
             file_path: folder_path.opfs_path().unwrap(),
             operation: FileOperation::AddFolder {
                 path,
-                files: files.into_iter().map(|it| WasmFile(it)).collect()
+                files: files.into_iter().map(WasmFile).collect()
             }
         }))
         .await;

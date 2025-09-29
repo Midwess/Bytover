@@ -1,8 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use core_services::local_storage::entry::FileEntry;
-use core_services::local_storage::stream::IOCursor;
-use shared::core_api::{IOReader, IOWriter};
+use shared::core_api::IOWriter;
 use std::path::PathBuf;
 
 pub struct IOWriterImpl {

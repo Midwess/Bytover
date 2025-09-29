@@ -1,8 +1,8 @@
 use crate::file_system::device_file::{DeviceFile, DeviceFolder, WasmFile};
 use crate::file_system::io::IOReaderBlobImpl;
-use crate::{get_directory, serialize};
 use crate::file_system::opfs::FileSystemDirectoryHandleExt;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
+use crate::{get_directory, serialize};
 use chrono::Utc;
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
@@ -12,20 +12,14 @@ use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
+use shared::entities::file_system::file::LocalResourcePath;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    Blob,
-    File,
-    FileSystemDirectoryHandle,
-    FileSystemReadWriteOptions,
-    FileSystemSyncAccessHandle
-};
-use shared::entities::file_system::file::LocalResourcePath;
+use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:
@@ -145,14 +139,12 @@ impl OpfsWorker {
                         Ok(reader) => Box::new(reader) as Box<dyn IOCursor>,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }
-                }
-                else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
+                } else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
                     match device_folder.lock().await.cursor(buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }
-                }
-                else {
+                } else {
                     match root.cursor(&file_path, buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(e)
@@ -322,10 +314,7 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
-            FileOperation::AddFolder {
-                files,
-                path
-            } => {
+            FileOperation::AddFolder { files, path } => {
                 let mut folders = self.device_folders.lock().await;
                 let key = file_path.clone();
                 let resource_path = LocalResourcePath::PlatformIdentifier(format!("opfs://{}", file_path.clone()));
