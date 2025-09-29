@@ -63,7 +63,7 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        {files, isDragging, errors, supportsDirectories},
+        {files, folders, isDragging, errors, supportsDirectories},
         {
             handleDragEnter,
             handleDragLeave,
@@ -93,7 +93,11 @@ function FileSelections() {
                 })
             clearFiles()
         }
-    }, [files]);
+
+        if (folders.length) {
+            console.log(folders)
+        }
+    }, [files, folders]);
 
     return (
         <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
@@ -307,14 +311,12 @@ function MediaView(props: {
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            >
+                )}>
                 <Button 
                     className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
                     onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
-                    }}
-                >
+                    }}>
                     <X className="w-4 h-4"/>
                 </Button>
             </div>
@@ -326,8 +328,7 @@ function MediaView(props: {
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            >
+                )}>
                 <div className="flex flex-col items-start gap-1">
                     <p className="text-primaryText text-sm font-medium">
                         {model.name}
@@ -387,16 +388,16 @@ function Board() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className={"font-medium w-[200px]"}>
                     <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
-                                              checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
-                        setActiveMethod(activeMethods[0])
-                    }}>
+                        checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
+                            setActiveMethod(activeMethods[0])
+                        }}>
                         <Globe/>
                         Public
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[1])}
-                                              onCheckedChange={() => {
-                                                  setActiveMethod(activeMethods[1])
-                                              }}>
+                        onCheckedChange={() => {
+                            setActiveMethod(activeMethods[1])
+                        }}>
                         <Users/>
                         People
                     </DropdownMenuCheckboxItem>

@@ -1,4 +1,5 @@
 use crate::file_api::device_file::DeviceFile;
+use crate::file_api::opfs::*;
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use chrono::Utc;
@@ -6,11 +7,12 @@ use core_services::local_storage::entry::FileEntry;
 use core_services::logger::setup;
 use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
-use js_sys::Uint8Array;
+use js_sys::{Array, Uint8Array};
 use serde::{Deserialize, Serialize};
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -23,6 +25,9 @@ use web_sys::{
     FileSystemReadWriteOptions,
     FileSystemSyncAccessHandle
 };
+use core_services::local_storage::stream::IOCursor;
+use devlog_sdk::distributed_id::init_scoped_id_generator;
+use crate::file_api::opfs::IOReaderBlobImpl;
 
 /// Web worker that support file system on browser
 /// Open a file handle, keep tracks that handle in a list
@@ -38,6 +43,19 @@ pub struct OpfsOperation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FileOperation {
+    AddFolder {
+        path: String,
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        files: Array
+    },
+    Cursor {
+        buffer_size: usize
+    },
+    CursorNext {
+        instance_id: u32,
+        max: Option<u64>,
+    },
+    CursorEnd(u32),
     AddFile(DeviceFile),
     GetFile,
     Open,
@@ -74,7 +92,8 @@ pub enum OpfsOperationOutput {
     FileEntry(FileEntry),
     LocalResourceInstance(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     DownloadUrl(String),
-    Blob(#[serde(with = "serde_wasm_bindgen::preserve")] Blob)
+    Blob(#[serde(with = "serde_wasm_bindgen::preserve")] Blob),
+    Cursor(u32),
 }
 
 unsafe impl Send for OpfsOperationOutput {}
@@ -142,7 +161,9 @@ pub type AMutex<T> = Arc<Mutex<T>>;
 pub struct OpfsWorker {
     root: OnceCell<Arc<FileSystemDirectoryHandle>>,
     device_files: AMutex<HashMap<String, AMutex<DeviceFile>>>,
-    file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>
+    file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>,
+    cursors: AMutex<HashMap<u32, AMutex<dyn IOCursor>>>,
+    id_gen: Arc<AtomicU32>,
 }
 
 impl OpfsWorker {
@@ -158,6 +179,7 @@ impl OpfsWorker {
             }
         };
 
+        let id_gen = self.id_gen.clone();
         match operation {
             FileOperation::Open => {
                 match async {
@@ -178,6 +200,51 @@ impl OpfsWorker {
                     Ok(_) => OpfsOperationOutput::Void,
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
+            }
+            FileOperation::Cursor { buffer_size } => {
+                let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
+                    let guard = device_file.lock().await;
+                    IOReaderBlobImpl::from_file(&guard.file, buffer_size).await
+                }
+                else {
+                    let handle = match root.open_file_async(&file_path).await {
+                        Ok(handle) => handle,
+                        Err(e) => return OpfsOperationOutput::Error(e)
+                    };
+
+                    IOReaderBlobImpl::from_file_handle(handle, buffer_size).await
+                };
+
+                match cursor {
+                    Ok(c) => {
+                        let id = id_gen.fetch_add(1, Ordering::Relaxed);
+                        self.cursors.lock().await.insert(id, Arc::new(Mutex::new(c)));
+                        OpfsOperationOutput::Cursor(id)
+                    }
+                    Err(e) => {
+                        OpfsOperationOutput::Error(JsValue::from(e.to_string()))
+                    }
+                }
+            }
+            FileOperation::CursorNext { instance_id, max } => {
+                let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
+                    return OpfsOperationOutput::Error("Cursor not found".into());
+                };
+
+                let mut guard = cursor.lock().await;
+                let Ok(Some(data)) = guard.next(max).await else {
+                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0));
+                };
+
+                let uint8array = Uint8Array::new_from_slice(data);
+                OpfsOperationOutput::Binary(uint8array)
+            }
+            FileOperation::CursorEnd(instance_id) => {
+                if let Some(c) = self.cursors.lock().await.remove(&instance_id) {
+                    let _ = c.lock().await.end().await;
+                }
+
+                OpfsOperationOutput::Void
             }
             FileOperation::WriteNew { data } => {
                 if let Ok(file_handle) = root.open_file(&file_path).await {
@@ -330,6 +397,9 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
+            FileOperation::AddFolder { .. } => {
+                todo!()
+            }
         }
     }
 }
@@ -341,11 +411,14 @@ impl Worker for OpfsWorker {
 
     fn create(_: &WorkerScope<Self>) -> Self {
         setup();
+        init_scoped_id_generator("Bitbridge".to_owned());
 
         Self {
             root: Default::default(),
             file_handles: Default::default(),
-            device_files: Default::default()
+            device_files: Default::default(),
+            cursors: Default::default(),
+            id_gen: Arc::new(AtomicU32::new(0)),
         }
     }
 

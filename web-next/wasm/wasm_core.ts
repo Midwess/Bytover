@@ -55,8 +55,11 @@ import {
     ReceiveSessionViewModel,
     ReceiveCloudSessionViewModel,
     PeerViewModel,
-    LocalResourcePath, CoreOperationOutputVariantDatabase, PersistentOperationOutputVariantLocalResource,
-    LocalResourcePersistentOperationOutputVariantAddThumbnail, SelectedResourceViewModel,
+    LocalResourcePath,
+    CoreOperationOutputVariantDatabase,
+    PersistentOperationOutputVariantLocalResource,
+    LocalResourcePersistentOperationOutputVariantAddThumbnail,
+    SelectedResourceViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
