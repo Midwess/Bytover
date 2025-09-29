@@ -1,4 +1,4 @@
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::{deserialize, serialize};
 use devlog_sdk::distributed_id::gen_id;
 use js_sys::Uint8Array;
@@ -15,7 +15,7 @@ use web_sys::{Blob, File};
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
 use core_services::local_storage::zip::ZipStream;
-use crate::file_api::io::IOReaderBlobImpl;
+use crate::file_system::io::IOReaderBlobImpl;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);

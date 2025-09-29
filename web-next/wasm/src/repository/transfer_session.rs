@@ -1,4 +1,4 @@
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;

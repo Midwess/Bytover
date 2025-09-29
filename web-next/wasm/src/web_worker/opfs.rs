@@ -1,7 +1,7 @@
-use crate::file_api::device_file::{DeviceFile, DeviceFolder, WasmFile};
-use crate::file_api::io::IOReaderBlobImpl;
+use crate::file_system::device_file::{DeviceFile, DeviceFolder, WasmFile};
+use crate::file_system::io::IOReaderBlobImpl;
 use crate::get_directory;
-use crate::file_api::opfs::FileSystemDirectoryHandleExt;
+use crate::file_system::opfs::FileSystemDirectoryHandleExt;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use chrono::Utc;
 use core_services::local_storage::entry::FileEntry;
@@ -27,10 +27,9 @@ use web_sys::{
 };
 
 /// Web worker that support file system on browser
-/// Open a file handle, keep tracks that handle in a list
-/// We want to support read, write, download concurrently on multiple files.
-/// That's why there are no Operation::Closed or similar operations,
-/// we never want to close the handle once it opens to prevent race condition.
+/// There are two reasons that we use web worker for file system:
+/// + Performance, off load heavy logic out of main thread to avoid blocking.
+/// + Browser requirement, browser require us to use web worker to be able to access all opfs features.
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpfsOperation {

@@ -5,16 +5,16 @@ pub mod core_api_impl;
 pub mod di_container;
 mod errors;
 pub mod executor;
-pub mod file_api;
+pub mod file_system;
 pub mod network;
 pub mod repository;
 pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
-use crate::file_api::device_file::DeviceFile;
-use crate::file_api::io::OPFS_WORKER;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::device_file::DeviceFile;
+use crate::file_system::io::OPFS_WORKER;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};

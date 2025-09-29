@@ -1,5 +1,5 @@
-use crate::file_api::io::OPFS_WORKER;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::io::OPFS_WORKER;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use anyhow::{anyhow, Result};

@@ -1,6 +1,6 @@
 use crate::deserialize;
-use crate::file_api::io::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::io::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};

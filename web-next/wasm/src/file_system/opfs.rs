@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::time::SystemTime;
 use async_stream::stream;
 use futures::Stream;
 use js_sys::Array;
@@ -6,18 +7,22 @@ use n0_future::StreamExt;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSystemSyncAccessHandle};
+use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
-use crate::file_api::device_file::WasmFile;
+use core_services::local_storage::zip::ZipStream;
+use core_services::utils::never_send::NeverSend;
+use crate::file_system::device_file::WasmFile;
+use crate::file_system::io::IOReaderBlobImpl;
 
 pub type FileStream = Pin<Box<dyn Stream<Item = Result<WasmFile, anyhow::Error>>>>;
 
-pub enum HandleKind {
+pub enum HandleType {
     File,
     Folder
 }
 
-impl HandleKind {
-    fn from_handle(handle: &JsValue) -> Option<HandleKind> {
+impl HandleType {
+    fn from_handle(handle: &JsValue) -> Option<HandleType> {
         let Ok(kind) = js_sys::Reflect::get(handle, &JsValue::from_str("kind")) else {
             return None;
         };
@@ -25,8 +30,8 @@ impl HandleKind {
         let kind = kind.as_string().unwrap_or_default();
 
         match kind.as_str() {
-            "file" => Some(HandleKind::File),
-            "directory" => Some(HandleKind::Folder),
+            "file" => Some(HandleType::File),
+            "directory" => Some(HandleType::Folder),
             _ => None
         }
     }
@@ -38,7 +43,7 @@ pub trait FileSystemDirectoryHandleExt {
     async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue>;
     // Return either FileSystemAccessHandle
     // or FileSystemDirectoryHandle if it is a folder
-    async fn access(&self, path: &str, kind: HandleKind, auto_create: bool) -> Result<JsValue, JsValue>;
+    async fn access(&self, path: &str, kind: Option<HandleType>, auto_create: bool) -> Result<JsValue, JsValue>;
     fn file_stream(&self) -> FileStream;
     async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue>;
     async fn size(&self) -> Result<u64, JsValue>;
@@ -47,18 +52,18 @@ pub trait FileSystemDirectoryHandleExt {
 #[async_trait::async_trait(?Send)]
 impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
     async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue> {
-        let file_async_handle: FileSystemFileHandle = self.access(path, HandleKind::File, true).await?.dyn_into()?;
+        let file_async_handle: FileSystemFileHandle = self.access(path, Some(HandleType::File), true).await?.dyn_into()?;
         let file_sync_handle: FileSystemSyncAccessHandle = JsFuture::from(file_async_handle.create_sync_access_handle()).await?.into();
 
         Ok(file_sync_handle)
     }
 
     async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue> {
-        let file_async_handle: FileSystemFileHandle = self.access(path, HandleKind::File, true).await?.dyn_into()?;
+        let file_async_handle: FileSystemFileHandle = self.access(path, Some(HandleType::File), true).await?.dyn_into()?;
         Ok(file_async_handle)
     }
 
-    async fn access(&self, path: &str, kind: HandleKind, auto_create: bool) -> Result<JsValue, JsValue> {
+    async fn access(&self, path: &str, kind: Option<HandleType>, auto_create: bool) -> Result<JsValue, JsValue> {
         let path_parts: Vec<&str> = path.split('/').collect();
         let entry_name = path_parts.last().ok_or("Empty path")?;
         let dir_parts = &path_parts[..path_parts.len() - 1];
@@ -74,22 +79,39 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
             }
         }
 
-       if matches!(kind, HandleKind::Folder) {
-           let dir_handle_result = JsFuture::from(current_dir.get_directory_handle_with_options(entry_name, &dir_options)).await?;
-           let dir_handle: FileSystemDirectoryHandle = dir_handle_result.into();
-           Ok(dir_handle.into())
+        dir_options.set_create(false);
+        if let Ok(dir_handle_result) = JsFuture::from(current_dir.get_directory_handle_with_options(entry_name, &dir_options)).await {
+            let dir_handle: FileSystemDirectoryHandle = dir_handle_result.into();
+            return Ok(dir_handle.into())
         }
-        else {
-            let file_options = FileSystemGetFileOptions::new();
-            file_options.set_create(auto_create);
-            let file_handle_js = JsFuture::from(current_dir.get_file_handle_with_options(entry_name, &file_options)).await?;
+
+        let file_options = FileSystemGetFileOptions::new();
+        file_options.set_create(false);
+        if let Ok(file_handle_js) = JsFuture::from(current_dir.get_file_handle_with_options(entry_name, &file_options)).await {
             let file_handle: FileSystemFileHandle = file_handle_js.into();
-            Ok(file_handle.into())
+            return Ok(file_handle.into())
+        };
+
+        if !auto_create || kind.is_none() {
+            return Err(JsValue::from("Entry not found"));
         }
-    }
+
+        match kind.unwrap() {
+            HandleType::File => {
+                file_options.set_create(true);
+                let file_handle_js = JsFuture::from(current_dir.get_file_handle_with_options(entry_name, &file_options)).await?;
+                Ok(file_handle_js.into())
+            },
+            HandleType::Folder => {
+                dir_options.set_create(true);
+                let dir_handle_js = JsFuture::from(current_dir.get_directory_handle_with_options(entry_name, &dir_options)).await?;
+                Ok(dir_handle_js.into())
+            }
+        }
+   }
 
     fn file_stream(&self) -> FileStream {
-        let dir_handle = self.clone();
+        let dir_handle = NeverSend(self.clone());
 
         let stream = stream! {
             let mut dir_stack = vec![dir_handle];
@@ -100,12 +122,12 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                 loop {
                     let entry_result = JsFuture::from(
                         entries.next().map_err(|e| anyhow::anyhow!("{e:?}"))?
-                    ).await;
+                    ).await.map_err(|e| anyhow::anyhow!("{e:?}"));
 
                     let entry_js = match entry_result {
                         Ok(js_val) => js_val,
                         Err(e) => {
-                            yield Err(anyhow::anyhow!("{e:?}"));
+                            yield Err(e);
                             break;
                         }
                     };
@@ -118,18 +140,18 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                         .map_err(|e| anyhow::anyhow!("Failed to convert entry: {e:?}"))?;
                     let handle = entry_array.get(1);
 
-                    let kind = HandleKind::from_handle(&handle);
+                    let kind = HandleType::from_handle(&handle);
 
                     match kind {
-                        Some(HandleKind::File) => {
+                        Some(HandleType::File) => {
                             let file_handle = handle.unchecked_into::<FileSystemFileHandle>();
                             let js_value = JsFuture::from(file_handle.get_file()).await.unwrap();
                             let file: File = js_value.dyn_into().unwrap();
                             yield Ok(WasmFile(file));
                         }
-                        Some(HandleKind::Folder) => {
+                        Some(HandleType::Folder) => {
                             let dir_handle = handle.unchecked_into::<FileSystemDirectoryHandle>();
-                            dir_stack.push(dir_handle);
+                            dir_stack.push(NeverSend(dir_handle));
                         }
                         _ => {}
                     }
@@ -141,8 +163,43 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
     }
 
     async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue> {
-        let handle = self.access(path, HandleKind::Folder, false).await?;
-        todo!()
+        let handle = self.access(path, None, false).await?;
+        let Some(kind) = HandleType::from_handle(&handle) else {
+            return Err(JsValue::from("Entry not found"));
+        };
+
+        match kind {
+            HandleType::File => {
+                let file_handle = handle.unchecked_into::<FileSystemFileHandle>();
+                Ok(Box::new(IOReaderBlobImpl::from_file_handle(file_handle, 1024 * 63).await.map_err(|it| JsValue::from(it.to_string()))?))
+            },
+            HandleType::Folder => {
+                let file_handle = handle.unchecked_into::<FileSystemDirectoryHandle>();
+                let size = file_handle.size().await?;
+                let mut stream = file_handle.file_stream();
+                let entry = FileEntry {
+                    is_dir: false,
+                    path: path.into(),
+                    modified_at: SystemTime::now(),
+                    size,
+                };
+
+                let cursor_stream = stream! {
+                    while let Some(Ok(file)) = stream.next().await {
+                        let cursor = Box::new(IOReaderBlobImpl::from_file(file, 1024 * 63).await?);
+                        yield Ok::<_, anyhow::Error>(cursor as Box<dyn IOCursor>);
+                    }
+                };
+
+                let stream = unsafe {
+                    std::mem::transmute::<
+                        Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>>>>,
+                        Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>> + Send + Sync>>
+                    >(Box::pin(cursor_stream))
+                };
+                Ok(Box::new(ZipStream::new_from_stream(stream, entry, 1024 * 63).await.map_err(|it| JsValue::from(it.to_string()))?))
+            }
+        }
     }
 
     async fn size(&self) -> Result<u64, JsValue> {

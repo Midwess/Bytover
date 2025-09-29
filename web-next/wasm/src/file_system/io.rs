@@ -1,4 +1,4 @@
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput, OpfsWorker};
 use anyhow::{anyhow, Result};
@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
-use crate::file_api::device_file::WasmFile;
+use crate::file_system::device_file::WasmFile;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
