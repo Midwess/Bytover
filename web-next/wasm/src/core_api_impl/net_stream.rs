@@ -286,7 +286,7 @@ impl NetStreamCursorImpl {
         Ok(completion)
     }
 
-    async fn end(&mut self) -> anyhow::Result<()> {
+    async fn end(&mut self) -> Result<()> {
         if let Some(handle) = self.handle.take() {
             handle.abort();
         }

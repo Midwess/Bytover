@@ -7,8 +7,12 @@ use shared::entities::file_system::file::{LocalResource, LocalResourcePath, Reso
 use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::path::PathBuf;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
+use core_services::local_storage::stream::IOCursor;
+use core_services::local_storage::zip::ZipStream;
+use crate::file_api::opfs::IOReaderBlobImpl;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);
@@ -41,6 +45,80 @@ impl Deref for WasmFile {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DeviceFolder {
+    pub(crate) files: Vec<WasmFile>,
+    pub(crate) base_path: String,
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    pub(crate) resource: Uint8Array,
+
+    #[serde(skip)]
+    pub(crate) resource_instance: OnceCell<LocalResource>
+}
+
+impl DeviceFolder {
+    pub async fn new(path: PathBuf, files: Vec<WasmFile>) -> Self {
+        let order_id = gen_id().await;
+        let mut total_size = 0u64;
+        for file in files.iter() {
+            total_size += file.size() as u64;
+        }
+
+        let resource_instance = LocalResource {
+            name: path.file_name().unwrap().to_str().unwrap().to_string(),
+            size: total_size,
+            path: LocalResourcePath::device_file(order_id),
+            thumbnail_path: None,
+            r#type: ResourceType::Folder,
+            order_id
+        };
+
+        let resource_serialized = serialize(&resource_instance);
+
+        let resource_cell = OnceCell::new();
+        resource_cell.set(resource_instance).unwrap();
+        Self {
+            files,
+            base_path: path.to_str().unwrap().to_string(),
+            resource: resource_serialized,
+            resource_instance: resource_cell,
+        }
+    }
+
+    pub async fn cursor(&self) -> anyhow::Result<impl IOCursor> {
+        let max_buffer_size = 1024 * 63;
+        let path = PathBuf::from(&self.base_path);
+
+        let mut inputs: Vec<Box<dyn IOCursor>> = vec![];
+
+        for file in self.files.iter() {
+            inputs.push(Box::new(IOReaderBlobImpl::from_file(&file.0, max_buffer_size).await?))
+        }
+
+        let zip_stream = ZipStream::new(
+            inputs,
+            path,
+            max_buffer_size
+        ).await?;
+
+        Ok(zip_stream)
+    }
+
+    pub fn local_resource(&self) -> &LocalResource {
+        if let Some(resource) = self.resource_instance.get() {
+            return resource;
+        }
+
+        let _ = self.resource_instance.set(deserialize(&self.resource));
+
+        self.resource_instance.get().unwrap()
+    }
+
+    pub fn raw_local_resource(&self) -> &Uint8Array {
+        &self.resource
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::file_api::device_file::DeviceFile;
+use crate::file_api::device_file::{DeviceFile, DeviceFolder};
 use crate::file_api::opfs::IOReaderBlobImpl;
 use crate::get_directory;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
@@ -42,11 +42,7 @@ pub struct OpfsOperation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FileOperation {
-    AddFolder {
-        path: String,
-        #[serde(with = "serde_wasm_bindgen::preserve")]
-        files: Array
-    },
+    AddFolder(DeviceFolder),
     Cursor {
         buffer_size: usize
     },
@@ -158,6 +154,7 @@ pub struct OpfsWorker {
     device_files: AMutex<HashMap<String, AMutex<DeviceFile>>>,
     file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>,
     cursors: AMutex<HashMap<u32, AMutex<dyn IOCursor>>>,
+    device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
     id_gen: Arc<AtomicU32>
 }
 
@@ -200,7 +197,8 @@ impl OpfsWorker {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
                     IOReaderBlobImpl::from_file(&guard.file, buffer_size).await
-                } else {
+                }
+                else {
                     let handle = match root.open_file_async(&file_path).await {
                         Ok(handle) => handle,
                         Err(e) => return OpfsOperationOutput::Error(e)
@@ -360,8 +358,11 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
-            FileOperation::AddFolder { .. } => {
-                todo!()
+            FileOperation::AddFolder(folder) => {
+                let mut folders = self.device_folders.lock().await;
+                let key = folder.base_path.clone();
+                folders.insert(key, Arc::new(Mutex::new(folder)));
+                OpfsOperationOutput::Void
             }
         }
     }
@@ -381,7 +382,8 @@ impl Worker for OpfsWorker {
             file_handles: Default::default(),
             device_files: Default::default(),
             cursors: Default::default(),
-            id_gen: Arc::new(AtomicU32::new(0))
+            id_gen: Arc::new(AtomicU32::new(0)),
+            device_folders: Default::default(),
         }
     }
 
