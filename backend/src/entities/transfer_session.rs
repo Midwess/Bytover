@@ -138,6 +138,11 @@ impl TransferSession {
         is_all_completed
     }
 
+    pub fn is_failed(&self) -> bool {
+        let is_failed = self.progress.iter().any(|it| matches!(it.status(), TransferProgressStatus::Failed(_)));
+        is_failed
+    }
+
     pub fn user_order_id(&self) -> u64 {
         self.owner_user_order_id
     }

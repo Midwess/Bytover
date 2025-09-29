@@ -1,8 +1,9 @@
-use crate::core_api_impl::io::IOReaderImpl;
-use crate::file_api::device_file::FileStorage;
-use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl};
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::deserialize;
+use crate::file_system::io::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
+use crate::web_worker::bridge::WorkerMessage;
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -12,6 +13,7 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
+use core_services::wasm::extensions::VecExtension;
 use idb::Database;
 use shared::app::repository::errors::PersistenceError;
 use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
@@ -21,8 +23,7 @@ use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 
 pub struct LocalResourceRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>,
-    pub file_storage: FileStorage
+    pub db: PoolRequest<NeverSend<Database>>
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -113,24 +114,38 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
 #[async_trait::async_trait(?Send)]
 impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn load(&self, path: LocalResourcePath) -> Result<Option<LocalResource>, PersistenceError> {
-        let Some(path) = path.device_file_id() else {
+        let Some(path) = path.opfs_path() else {
             return Ok(None);
         };
 
-        let Some(resource) = self.file_storage.get(path).await else {
+        let resp = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: path,
+                operation: FileOperation::LocalResourceInstance
+            }))
+            .await
+            .unwrap()
+            .message;
+
+        let OpfsOperationOutput::LocalResourceInstance(resource) = resp else {
             return Ok(None);
         };
 
-        Ok(Some(resource.resource))
+        Ok(Some(deserialize(&resource)))
     }
 
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError> {
         let save_path = LocalResourcePath::resource_thumbnail(None, resource_id);
         let path = save_path.opfs_path().unwrap();
 
-        let mut writer = IOWriterOpfsImpl::new(path.into()).await?;
-        writer.write(png_bytes.into()).await?;
-        writer.end().await?;
+        OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: path,
+                operation: FileOperation::WriteNew {
+                    data: png_bytes.into_uint_array_leak()
+                }
+            }))
+            .await;
         Ok(save_path)
     }
 
@@ -146,17 +161,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
-        if let Some(device_file_id) = path.device_file_id() {
-            let Some(file) = self.file_storage.get(device_file_id).await else {
-                return Err(PersistenceError::NotFound(format!("{:?}", path)));
-            };
-
-            return Ok(Box::new(IOReaderImpl::new(file.file.clone(), chunk_size as u64)))
-        };
-
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
-            let reader = IOReaderOpfsImpl::new(path.into()).await?;
+            let reader = IOReaderOpfsImpl::new(path.into(), buffer_size).await?;
             return Ok(Box::new(reader))
         }
 

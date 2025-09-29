@@ -7,7 +7,7 @@ import {
 import {
     AlertCircleIcon,
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check,
+    Users, X, Copy, Check, FolderIcon,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -33,7 +33,7 @@ import {
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartTransfer
+    TransferEventVariantStartTransfer, ResourceTypeVariantFolder
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -63,23 +63,25 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        {files, isDragging, errors},
+        {files, folders, isDragging, errors, supportsDirectories},
         {
             handleDragEnter,
             handleDragLeave,
             handleDragOver,
             handleDrop,
             openFileDialog,
+            openDirectoryDialog,
             getInputProps,
+            getDirectoryInputProps,
             clearFiles
         },
     ] = useFileUpload({
         accept: "*",
         multiple: true,
+        allowDirectories: true,
     })
 
-    const transfer_state = core.useTransferState()
-    const selectedResources = transfer_state?.selected_resources || []
+    const selectedResources = core.useSelectedResources()
 
     useEffect(() => {
         if (files.length) {
@@ -91,11 +93,20 @@ function FileSelections() {
                 })
             clearFiles()
         }
-    }, [files]);
+
+        if (folders.length) {
+            core.addFolders(folders)
+                .then((selections) => {
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
+                        selections
+                    )))
+                })
+        }
+    }, [files, folders]);
 
     return (
         <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
-            <div className="relative w-full flex flex-col">
+            <div className="relative w-full flex flex-row gap-4">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -109,7 +120,7 @@ function FileSelections() {
                     <input
                         {...getInputProps()}
                         className="sr-only"
-                        aria-label="Upload file"
+                        aria-label="Upload files"
                     />
                     <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
                         <div
@@ -123,6 +134,36 @@ function FileSelections() {
                         </p>
                     </div>
                 </div>
+
+                {supportsDirectories && (
+                    <div
+                        role="button"
+                        onClick={openDirectoryDialog}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        data-dragging={isDragging || undefined}
+                        className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    >
+                        <input
+                            {...getDirectoryInputProps()}
+                            className="sr-only"
+                            aria-label="Upload folder"
+                        />
+                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                            <div
+                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                                aria-hidden="true"
+                            >
+                                <FolderIcon className="size-4 opacity-60"/>
+                            </div>
+                            <p className="mb-1.5 text-sm font-medium">
+                                Drop folders here or click to browse folders
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {errors.length > 0 && (
@@ -148,12 +189,14 @@ function FileSelections() {
     )
 }
 
+
 function ResourceView(props: {
     model: SelectedResourceViewModel
 }) {
     const {model} = props;
 
-    const isFile = model.type.constructor == ResourceTypeVariantFile
+    const isFile = model.type.constructor == ResourceTypeVariantFile ||
+        model.type.constructor == ResourceTypeVariantFolder
 
     if (isFile) {
         return <FileView model={model}/>
@@ -170,7 +213,7 @@ function FileView(props: {
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
     if (!thumbnailPath) {
-        thumbnailPath = "/file.svg";
+        thumbnailPath = model.type instanceof ResourceTypeVariantFolder ? "/folder.svg" : "/file.svg";
     }
 
     let displaySize = `${model.size_mb} MB`;
@@ -274,14 +317,12 @@ function MediaView(props: {
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            >
+                )}>
                 <Button 
                     className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
                     onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
-                    }}
-                >
+                    }}>
                     <X className="w-4 h-4"/>
                 </Button>
             </div>
@@ -293,8 +334,7 @@ function MediaView(props: {
                     isMobile
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            >
+                )}>
                 <div className="flex flex-col items-start gap-1">
                     <p className="text-primaryText text-sm font-medium">
                         {model.name}
@@ -354,16 +394,16 @@ function Board() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className={"font-medium w-[200px]"}>
                     <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
-                                              checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
-                        setActiveMethod(activeMethods[0])
-                    }}>
+                        checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
+                            setActiveMethod(activeMethods[0])
+                        }}>
                         <Globe/>
                         Public
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[1])}
-                                              onCheckedChange={() => {
-                                                  setActiveMethod(activeMethods[1])
-                                              }}>
+                        onCheckedChange={() => {
+                            setActiveMethod(activeMethods[1])
+                        }}>
                         <Users/>
                         People
                     </DropdownMenuCheckboxItem>

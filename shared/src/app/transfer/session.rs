@@ -99,11 +99,7 @@ impl TransferProgress {
 
     pub fn fail(&mut self, msg: String) {
         self.complete();
-        if self.percentage() == 1.0 {
-            self.success();
-        } else {
-            self.status = TransferStatus::Fail(msg);
-        }
+        self.status = TransferStatus::Fail(msg);
     }
 
     pub fn percentage(&self) -> f64 {

@@ -5,6 +5,7 @@ import {
   useCallback,
   useRef,
   useState,
+  useEffect,
   type ChangeEvent,
   type DragEvent,
   type InputHTMLAttributes,
@@ -24,52 +25,81 @@ export type FileWithPreview = {
   preview?: string
 }
 
+export type FolderStructure = {
+  folderName: string // Root folder name from webkitRelativePath
+  files: FileWithPreview[] // Files with their original webkitRelativePath preserved
+  id: string // Unique identifier for this folder
+}
+
 export type FileUploadOptions = {
-  maxFiles?: number // Only used when multiple is true, defaults to Infinity
+  maxFiles?: number
   maxSize?: number // in bytes
   accept?: string
-  multiple?: boolean // Defaults to false
+  multiple?: boolean
+  allowDirectories?: boolean
   initialFiles?: FileMetadata[]
-  onFilesChange?: (files: FileWithPreview[]) => void // Callback when files change
-  onFilesAdded?: (addedFiles: FileWithPreview[]) => void // Callback when new files are added
+  onFilesChange?: (files: FileWithPreview[]) => void
+  onFoldersChange?: (folders: FolderStructure[]) => void
+  onFilesAdded?: (addedFiles: FileWithPreview[]) => void
+  onFoldersAdded?: (addedFolders: FolderStructure[]) => void
 }
 
 export type FileUploadState = {
-  files: FileWithPreview[]
+  files: FileWithPreview[] // Individual files
+  folders: FolderStructure[] // Folders with their files
   isDragging: boolean
   errors: string[]
+  supportsDirectories: boolean
 }
 
 export type FileUploadActions = {
   addFiles: (files: FileList | File[]) => void
+  addFolders: (files: FileList | File[]) => void
   removeFile: (id: string) => void
+  removeFolder: (id: string) => void
   clearFiles: () => void
+  clearFolders: () => void
+  clearAll: () => void
   clearErrors: () => void
   handleDragEnter: (e: DragEvent<HTMLElement>) => void
   handleDragLeave: (e: DragEvent<HTMLElement>) => void
   handleDragOver: (e: DragEvent<HTMLElement>) => void
   handleDrop: (e: DragEvent<HTMLElement>) => void
   handleFileChange: (e: ChangeEvent<HTMLInputElement>) => void
+  handleFolderChange: (e: ChangeEvent<HTMLInputElement>) => void
   openFileDialog: () => void
+  openDirectoryDialog: () => void
   getInputProps: (
-    props?: InputHTMLAttributes<HTMLInputElement>
+      props?: InputHTMLAttributes<HTMLInputElement>
+  ) => InputHTMLAttributes<HTMLInputElement> & {
+    ref: React.Ref<HTMLInputElement>
+  }
+  getDirectoryInputProps: (
+      props?: InputHTMLAttributes<HTMLInputElement>
   ) => InputHTMLAttributes<HTMLInputElement> & {
     ref: React.Ref<HTMLInputElement>
   }
 }
 
 export const useFileUpload = (
-  options: FileUploadOptions = {}
+    options: FileUploadOptions = {}
 ): [FileUploadState, FileUploadActions] => {
   const {
     maxFiles = Infinity,
     maxSize = Infinity,
     accept = "*",
     multiple = false,
+    allowDirectories = false,
     initialFiles = [],
     onFilesChange,
+    onFoldersChange,
     onFilesAdded,
+    onFoldersAdded,
   } = options
+
+  const supportsDirectories = useCallback(() => {
+    return 'webkitdirectory' in document.createElement('input')
+  }, [])
 
   const [state, setState] = useState<FileUploadState>({
     files: initialFiles.map((file) => ({
@@ -77,58 +107,64 @@ export const useFileUpload = (
       id: file.id,
       preview: file.url,
     })),
+    folders: [],
     isDragging: false,
     errors: [],
+    supportsDirectories: false,
   })
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const directoryInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setState(prev => ({
+      ...prev,
+      supportsDirectories: supportsDirectories()
+    }))
+  }, [supportsDirectories])
 
   const validateFile = useCallback(
-    (file: File | FileMetadata): string | null => {
-      if (file instanceof File) {
-        if (file.size > maxSize) {
-          return `File "${file.name}" exceeds the maximum size of ${formatBytes(maxSize)}.`
-        }
-      } else {
-        if (file.size > maxSize) {
-          return `File "${file.name}" exceeds the maximum size of ${formatBytes(maxSize)}.`
-        }
-      }
-
-      if (accept !== "*") {
-        const acceptedTypes = accept.split(",").map((type) => type.trim())
-        const fileType = file instanceof File ? file.type || "" : file.type
-        const fileExtension = `.${file instanceof File ? file.name.split(".").pop() : file.name.split(".").pop()}`
-
-        const isAccepted = acceptedTypes.some((type) => {
-          if (type.startsWith(".")) {
-            return fileExtension.toLowerCase() === type.toLowerCase()
+      (file: File | FileMetadata): string | null => {
+        if (file instanceof File) {
+          if (file.size > maxSize) {
+            return `File "${file.name}" exceeds the maximum size of ${formatBytes(maxSize)}.`
           }
-          // if (type.endsWith("/*")) {
-          //   const baseType = type.split("/")[0]
-          //   return fileType.startsWith(`${baseType}/`)
-          // }
-          return fileType === type
-        })
-
-        if (!isAccepted) {
-          return `File "${file instanceof File ? file.name : file.name}" is not an accepted file type.`
+        } else {
+          if (file.size > maxSize) {
+            return `File "${file.name}" exceeds the maximum size of ${formatBytes(maxSize)}.`
+          }
         }
-      }
 
-      return null
-    },
-    [accept, maxSize]
+        if (accept !== "*") {
+          const acceptedTypes = accept.split(",").map((type) => type.trim())
+          const fileType = file instanceof File ? file.type || "" : file.type
+          const fileExtension = `.${file instanceof File ? file.name.split(".").pop() : file.name.split(".").pop()}`
+
+          const isAccepted = acceptedTypes.some((type) => {
+            if (type.startsWith(".")) {
+              return fileExtension.toLowerCase() === type.toLowerCase()
+            }
+            return fileType === type
+          })
+
+          if (!isAccepted) {
+            return `File "${file instanceof File ? file.name : file.name}" is not an accepted file type.`
+          }
+        }
+
+        return null
+      },
+      [accept, maxSize]
   )
 
   const createPreview = useCallback(
-    (file: File | FileMetadata): string | undefined => {
-      if (file instanceof File) {
-        return URL.createObjectURL(file)
-      }
-      return file.url
-    },
-    []
+      (file: File | FileMetadata): string | undefined => {
+        if (file instanceof File) {
+          return URL.createObjectURL(file)
+        }
+        return file.url
+      },
+      []
   )
 
   const generateUniqueId = useCallback((file: File | FileMetadata): string => {
@@ -138,14 +174,45 @@ export const useFileUpload = (
     return file.id
   }, [])
 
+  const generateFolderId = useCallback((folderName: string): string => {
+    return `folder-${folderName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+  }, [])
+
+  // Simple folder organization - just group by root folder name
+  const organizeFolderStructure = useCallback((files: File[]): FolderStructure[] => {
+    const folderMap = new Map<string, File[]>()
+
+    files.forEach(file => {
+      const webkitRelativePath = (file as any).webkitRelativePath || ""
+      if (webkitRelativePath) {
+        // Get root folder name (first part of path)
+        const folderName = webkitRelativePath.split("/")[0]
+
+        if (!folderMap.has(folderName)) {
+          folderMap.set(folderName, [])
+        }
+        folderMap.get(folderName)!.push(file)
+      }
+    })
+
+    return Array.from(folderMap.entries()).map(([folderName, files]) => ({
+      folderName,
+      files: files.map(file => ({
+        file,
+        id: generateUniqueId(file),
+        preview: createPreview(file),
+      })),
+      id: generateFolderId(folderName),
+    }))
+  }, [generateUniqueId, generateFolderId, createPreview])
+
   const clearFiles = useCallback(() => {
     setState((prev) => {
-      // Clean up object URLs
       prev.files.forEach((file) => {
         if (
-          file.preview &&
-          file.file instanceof File &&
-          file.file.type.startsWith("image/")
+            file.preview &&
+            file.file instanceof File &&
+            file.file.type.startsWith("image/")
         ) {
           URL.revokeObjectURL(file.preview)
         }
@@ -166,137 +233,256 @@ export const useFileUpload = (
     })
   }, [onFilesChange])
 
-  const addFiles = useCallback(
-    (newFiles: FileList | File[]) => {
-      if (!newFiles || newFiles.length === 0) return
-
-      const newFilesArray = Array.from(newFiles)
-      const errors: string[] = []
-
-      // Clear existing errors when new files are uploaded
-      setState((prev) => ({ ...prev, errors: [] }))
-
-      // In single file mode, clear existing files first
-      if (!multiple) {
-        clearFiles()
-      }
-
-      // Check if adding these files would exceed maxFiles (only in multiple mode)
-      if (
-        multiple &&
-        maxFiles !== Infinity &&
-        state.files.length + newFilesArray.length > maxFiles
-      ) {
-        errors.push(`You can only upload a maximum of ${maxFiles} files.`)
-        setState((prev) => ({ ...prev, errors }))
-        return
-      }
-
-      const validFiles: FileWithPreview[] = []
-
-      newFilesArray.forEach((file) => {
-        // Only check for duplicates if multiple files are allowed
-        if (multiple) {
-          const isDuplicate = state.files.some(
-            (existingFile) =>
-              existingFile.file.name === file.name &&
-              existingFile.file.size === file.size
-          )
-
-          // Skip duplicate files silently
-          if (isDuplicate) {
-            return
+  const clearFolders = useCallback(() => {
+    setState((prev) => {
+      prev.folders.forEach((folder) => {
+        folder.files.forEach((file) => {
+          if (
+              file.preview &&
+              file.file instanceof File &&
+              file.file.type.startsWith("image/")
+          ) {
+            URL.revokeObjectURL(file.preview)
           }
+        })
+      })
+
+      if (directoryInputRef.current) {
+        directoryInputRef.current.value = ""
+      }
+
+      const newState = {
+        ...prev,
+        folders: [],
+        errors: [],
+      }
+
+      onFoldersChange?.(newState.folders)
+      return newState
+    })
+  }, [onFoldersChange])
+
+  const clearAll = useCallback(() => {
+    clearFiles()
+    clearFolders()
+  }, [clearFiles, clearFolders])
+
+  const addFiles = useCallback(
+      (newFiles: FileList | File[]) => {
+        if (!newFiles || newFiles.length === 0) return
+
+        const newFilesArray = Array.from(newFiles)
+        const errors: string[] = []
+
+        setState((prev) => ({ ...prev, errors: [] }))
+
+        if (!multiple) {
+          clearFiles()
         }
 
-        // Check file size
-        if (file.size > maxSize) {
-          errors.push(
-            multiple
-              ? `Some files exceed the maximum size of ${formatBytes(maxSize)}.`
-              : `File exceeds the maximum size of ${formatBytes(maxSize)}.`
-          )
+        if (
+            multiple &&
+            maxFiles !== Infinity &&
+            state.files.length + newFilesArray.length > maxFiles
+        ) {
+          errors.push(`You can only upload a maximum of ${maxFiles} files.`)
+          setState((prev) => ({ ...prev, errors }))
           return
         }
 
-        const error = validateFile(file)
-        if (error) {
-          errors.push(error)
-        } else {
-          validFiles.push({
-            file,
-            id: generateUniqueId(file),
-            preview: createPreview(file),
-          })
-        }
-      })
+        const validFiles: FileWithPreview[] = []
 
-      // Only update state if we have valid files to add
-      if (validFiles.length > 0) {
-        // Call the onFilesAdded callback with the newly added valid files
-        onFilesAdded?.(validFiles)
+        newFilesArray.forEach((file) => {
+          if (multiple) {
+            const isDuplicate = state.files.some(
+                (existingFile) =>
+                    existingFile.file.name === file.name &&
+                    existingFile.file.size === file.size
+            )
 
-        setState((prev) => {
-          const newFiles = !multiple
-            ? validFiles
-            : [...prev.files, ...validFiles]
-          onFilesChange?.(newFiles)
-          return {
-            ...prev,
-            files: newFiles,
-            errors,
+            if (isDuplicate) {
+              return
+            }
+          }
+
+          if (file.size > maxSize) {
+            errors.push(
+                multiple
+                    ? `Some files exceed the maximum size of ${formatBytes(maxSize)}.`
+                    : `File exceeds the maximum size of ${formatBytes(maxSize)}.`
+            )
+            return
+          }
+
+          const error = validateFile(file)
+          if (error) {
+            errors.push(error)
+          } else {
+            validFiles.push({
+              file,
+              id: generateUniqueId(file),
+              preview: createPreview(file),
+            })
           }
         })
-      } else if (errors.length > 0) {
-        setState((prev) => ({
-          ...prev,
-          errors,
-        }))
-      }
 
-      // Reset input value after handling files
-      if (inputRef.current) {
-        inputRef.current.value = ""
-      }
-    },
-    [
-      state.files,
-      maxFiles,
-      multiple,
-      maxSize,
-      validateFile,
-      createPreview,
-      generateUniqueId,
-      clearFiles,
-      onFilesChange,
-      onFilesAdded,
-    ]
+        if (validFiles.length > 0) {
+          onFilesAdded?.(validFiles)
+
+          setState((prev) => {
+            const newFiles = !multiple ? validFiles : [...prev.files, ...validFiles]
+            onFilesChange?.(newFiles)
+            return {
+              ...prev,
+              files: newFiles,
+              errors,
+            }
+          })
+        } else if (errors.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            errors,
+          }))
+        }
+
+        if (inputRef.current) {
+          inputRef.current.value = ""
+        }
+      },
+      [
+        state.files,
+        maxFiles,
+        multiple,
+        maxSize,
+        validateFile,
+        createPreview,
+        generateUniqueId,
+        clearFiles,
+        onFilesChange,
+        onFilesAdded,
+      ]
+  )
+
+  const addFolders = useCallback(
+      (newFiles: FileList | File[]) => {
+        if (!newFiles || newFiles.length === 0) return
+
+        const newFilesArray = Array.from(newFiles)
+        const errors: string[] = []
+
+        setState((prev) => ({ ...prev, errors: [] }))
+
+        // Validate files
+        const validFiles: File[] = []
+        newFilesArray.forEach((file) => {
+          if (file.size > maxSize) {
+            errors.push(`Some files in folders exceed the maximum size of ${formatBytes(maxSize)}.`)
+            return
+          }
+
+          const error = validateFile(file)
+          if (error) {
+            errors.push(error)
+          } else {
+            validFiles.push(file)
+          }
+        })
+
+        if (validFiles.length > 0) {
+          const newFolders = organizeFolderStructure(validFiles)
+
+          // Filter out duplicate folders
+          const filteredFolders = newFolders.filter(newFolder => {
+            return !state.folders.some(f => f.folderName === newFolder.folderName)
+          })
+
+          if (filteredFolders.length > 0) {
+            onFoldersAdded?.(filteredFolders)
+
+            setState((prev) => {
+              const newFoldersState = [...prev.folders, ...filteredFolders]
+              onFoldersChange?.(newFoldersState)
+              return {
+                ...prev,
+                folders: newFoldersState,
+                errors,
+              }
+            })
+          }
+        } else if (errors.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            errors,
+          }))
+        }
+
+        if (directoryInputRef.current) {
+          directoryInputRef.current.value = ""
+        }
+      },
+      [
+        state.folders,
+        maxSize,
+        validateFile,
+        organizeFolderStructure,
+        onFoldersChange,
+        onFoldersAdded,
+      ]
   )
 
   const removeFile = useCallback(
-    (id: string) => {
-      setState((prev) => {
-        const fileToRemove = prev.files.find((file) => file.id === id)
-        if (
-          fileToRemove &&
-          fileToRemove.preview &&
-          fileToRemove.file instanceof File &&
-          fileToRemove.file.type.startsWith("image/")
-        ) {
-          URL.revokeObjectURL(fileToRemove.preview)
-        }
+      (id: string) => {
+        setState((prev) => {
+          const fileToRemove = prev.files.find((file) => file.id === id)
+          if (
+              fileToRemove &&
+              fileToRemove.preview &&
+              fileToRemove.file instanceof File &&
+              fileToRemove.file.type.startsWith("image/")
+          ) {
+            URL.revokeObjectURL(fileToRemove.preview)
+          }
 
-        const newFiles = prev.files.filter((file) => file.id !== id)
-        onFilesChange?.(newFiles)
+          const newFiles = prev.files.filter((file) => file.id !== id)
+          onFilesChange?.(newFiles)
 
-        return {
-          ...prev,
-          files: newFiles,
-          errors: [],
-        }
-      })
-    },
-    [onFilesChange]
+          return {
+            ...prev,
+            files: newFiles,
+            errors: [],
+          }
+        })
+      },
+      [onFilesChange]
+  )
+
+  const removeFolder = useCallback(
+      (id: string) => {
+        setState((prev) => {
+          const folderToRemove = prev.folders.find((folder) => folder.id === id)
+          if (folderToRemove) {
+            folderToRemove.files.forEach((file) => {
+              if (
+                  file.preview &&
+                  file.file instanceof File &&
+                  file.file.type.startsWith("image/")
+              ) {
+                URL.revokeObjectURL(file.preview)
+              }
+            })
+          }
+
+          const newFolders = prev.folders.filter((folder) => folder.id !== id)
+          onFoldersChange?.(newFolders)
+
+          return {
+            ...prev,
+            folders: newFolders,
+            errors: [],
+          }
+        })
+      },
+      [onFoldersChange]
   )
 
   const clearErrors = useCallback(() => {
@@ -329,36 +515,50 @@ export const useFileUpload = (
   }, [])
 
   const handleDrop = useCallback(
-    (e: DragEvent<HTMLElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setState((prev) => ({ ...prev, isDragging: false }))
+      (e: DragEvent<HTMLElement>) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setState((prev) => ({ ...prev, isDragging: false }))
 
-      // Don't process files if the input is disabled
-      if (inputRef.current?.disabled) {
-        return
-      }
-
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        // In single file mode, only use the first file
-        if (!multiple) {
-          const file = e.dataTransfer.files[0]
-          addFiles([file])
-        } else {
-          addFiles(e.dataTransfer.files)
+        if (inputRef.current?.disabled && directoryInputRef.current?.disabled) {
+          return
         }
-      }
-    },
-    [addFiles, multiple]
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const files = Array.from(e.dataTransfer.files)
+          const hasRelativePaths = files.some(file => (file as any).webkitRelativePath)
+
+          if (hasRelativePaths && allowDirectories) {
+            addFolders(e.dataTransfer.files)
+          } else {
+            if (!multiple) {
+              const file = e.dataTransfer.files[0]
+              addFiles([file])
+            } else {
+              addFiles(e.dataTransfer.files)
+            }
+          }
+        }
+      },
+      [addFiles, addFolders, multiple, allowDirectories]
   )
 
   const handleFileChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        addFiles(e.target.files)
-      }
-    },
-    [addFiles]
+      (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+          addFiles(e.target.files)
+        }
+      },
+      [addFiles]
+  )
+
+  const handleFolderChange = useCallback(
+      (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+          addFolders(e.target.files)
+        }
+      },
+      [addFolders]
   )
 
   const openFileDialog = useCallback(() => {
@@ -367,34 +567,62 @@ export const useFileUpload = (
     }
   }, [])
 
+  const openDirectoryDialog = useCallback(() => {
+    if (directoryInputRef.current && state.supportsDirectories) {
+      directoryInputRef.current.click()
+    }
+  }, [state.supportsDirectories])
+
   const getInputProps = useCallback(
-    (props: InputHTMLAttributes<HTMLInputElement> = {}) => {
-      return {
-        ...props,
-        type: "file" as const,
-        onChange: handleFileChange,
-        accept: props.accept || accept,
-        multiple: props.multiple !== undefined ? props.multiple : multiple,
-        ref: inputRef,
-      }
-    },
-    [accept, multiple, handleFileChange]
+      (props: InputHTMLAttributes<HTMLInputElement> = {}) => {
+        return {
+          ...props,
+          type: "file" as const,
+          onChange: handleFileChange,
+          accept: props.accept || accept,
+          multiple: props.multiple !== undefined ? props.multiple : multiple,
+          ref: inputRef,
+        }
+      },
+      [accept, multiple, handleFileChange]
+  )
+
+  const getDirectoryInputProps = useCallback(
+      (props: InputHTMLAttributes<HTMLInputElement> = {}) => {
+        return {
+          ...props,
+          type: "file" as const,
+          onChange: handleFolderChange,
+          accept: props.accept || accept,
+          multiple: true,
+          webkitdirectory: 'true',
+          ref: directoryInputRef,
+        }
+      },
+      [accept, handleFolderChange]
   )
 
   return [
     state,
     {
       addFiles,
+      addFolders,
       removeFile,
+      removeFolder,
       clearFiles,
+      clearFolders,
+      clearAll,
       clearErrors,
       handleDragEnter,
       handleDragLeave,
       handleDragOver,
       handleDrop,
       handleFileChange,
+      handleFolderChange,
       openFileDialog,
+      openDirectoryDialog,
       getInputProps,
+      getDirectoryInputProps,
     },
   ]
 }

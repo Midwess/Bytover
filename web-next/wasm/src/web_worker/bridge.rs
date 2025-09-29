@@ -142,4 +142,8 @@ where
         self.bridge.send(msg);
         receiver.await.ok()
     }
+
+    pub fn unbounded_send(&self, msg: W::Input) {
+        self.bridge.send(msg);
+    }
 }

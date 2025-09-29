@@ -10,9 +10,11 @@ use schema::devlog::bitbridge::{
     CancelSessionRequest,
     ClientUploadRequest,
     CloudResourceMessage,
+    CompleteUploadPartRequest,
     CreatePublicTransferSessionRequest,
     FindSessionRequest,
     FindSessionResponse,
+    MultiPartUpload,
     PublicSessionId,
     PublicTransferSessionMessage,
     SubscribeSessionInfoRequest,
@@ -150,10 +152,24 @@ where
             },
             password
         });
+
         self.auth_provider.with_auth(&mut request).await?;
         let response = client.subscribe_session_info(request).await?;
         let response = response.into_inner();
 
         Ok(response)
+    }
+
+    pub async fn complete_part_upload(&self, context_token: &str) -> Result<Option<MultiPartUpload>, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(CompleteUploadPartRequest {
+            context_token: context_token.to_string()
+        });
+
+        self.auth_provider.with_auth(&mut request).await?;
+        let response = client.complete_upload_part(request).await?;
+
+        Ok(response.into_inner().part)
     }
 }

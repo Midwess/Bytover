@@ -1,32 +1,36 @@
 extern crate core;
 
+pub mod bridge;
 pub mod config;
-pub mod core_api_impl;
 pub mod di_container;
 mod errors;
 pub mod executor;
-pub mod file_api;
+pub mod file_system;
 pub mod network;
 pub mod repository;
 pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
-use crate::file_api::file_extension::VecExtension;
-use crate::file_api::opfs::OPFS_WORKER;
-use crate::file_api::path_extension::WebExtLocalResourcePath;
+use crate::file_system::device_file::{DeviceFile, WasmFile};
+use crate::file_system::io::OPFS_WORKER;
+use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
+use core_services::wasm::extensions::VecExtension;
+use core_services::wasm::HttpClient;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};
+use devlog_sdk::distributed_id::gen_id;
 use erased_serde::Serialize;
 use js_sys::{Array, Promise};
 use serde::Deserialize;
-use shared::entities::file_system::file::LocalResourcePath;
+use shared::app::transfer::file_selection_service::ResourceSelection;
+use shared::entities::file_system::file::{LocalResource, LocalResourcePath};
 use shared::CoreOperation;
 use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
@@ -118,19 +122,75 @@ pub async fn init() {
     di_container.init().await;
 }
 
+/// Add device files to opfs
+/// and return list of ResourceSelections
 #[wasm_bindgen]
 pub async fn add_device_files(files: &Array) -> Uint8Array {
-    let storage = DiContainer::get_instance().file_storage();
-    let paths = storage.add(files).await;
+    let mut paths = vec![];
+    for file in files.iter() {
+        let file: File = file.dyn_into().unwrap();
+        let file = DeviceFile::new(file).await;
+        let resp = OPFS_WORKER
+            .send(WorkerMessage::new(OpfsOperation {
+                file_path: file.local_resource().path.opfs_path().unwrap(),
+                operation: FileOperation::AddFile(file)
+            }))
+            .await;
+
+        let OpfsOperationOutput::LocalResourceInstance(resource_instance) = resp.unwrap().message else {
+            continue;
+        };
+
+        let resource_instance: LocalResource = deserialize(&resource_instance);
+        paths.push(ResourceSelection {
+            path: resource_instance.path,
+            r#type: Some(resource_instance.r#type)
+        });
+    }
 
     serialize(&paths)
 }
 
 #[wasm_bindgen]
-pub async fn get_device_file(resource_id: u64) -> Option<File> {
-    let storage = DiContainer::get_instance().file_storage();
-    let file = storage.get(resource_id).await;
-    file.map(|it| it.file.0)
+pub async fn add_device_folder(path: String, files: Vec<File>) -> Uint8Array {
+    let folder_path = LocalResourcePath::device_file(gen_id().await);
+    let resp = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: folder_path.opfs_path().unwrap(),
+            operation: FileOperation::AddFolder {
+                path,
+                files: files.into_iter().map(WasmFile).collect()
+            }
+        }))
+        .await;
+
+    let OpfsOperationOutput::LocalResourceInstance(resource_instance) = resp.unwrap().message else {
+        return Uint8Array::default()
+    };
+
+    let resource_instance: LocalResource = deserialize(&resource_instance);
+
+    serialize(&resource_instance.path)
+}
+
+#[wasm_bindgen]
+pub async fn get_device_file(path: Uint8Array) -> Option<File> {
+    let path: LocalResourcePath = deserialize(&path);
+    let resp = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: path.opfs_path().unwrap(),
+            operation: FileOperation::GetFile
+        }))
+        .await
+        .unwrap()
+        .message;
+
+    let OpfsOperationOutput::File(file) = resp else {
+        log::info!("No file at {:?}", path);
+        return None
+    };
+
+    Some(file)
 }
 
 #[wasm_bindgen]
@@ -162,6 +222,15 @@ pub async fn get_download_url(path: Uint8Array) -> Option<String> {
     }
 }
 
+pub fn is_browser_support_duplex() -> bool {
+    let Some(_) = window() else {
+        log::info!("No window");
+        return false
+    };
+
+    HttpClient::is_support_duplex_stream()
+}
+
 /// Run CoreOperation and return the CoreOperationOutput
 #[wasm_bindgen]
 pub async fn execute_operation(effect: Uint8Array) -> Uint8Array {
@@ -169,6 +238,18 @@ pub async fn execute_operation(effect: Uint8Array) -> Uint8Array {
     let effect: CoreOperation = deserialize(&effect);
     let output = executor.handle(u32::MAX, effect).await;
     serialize(&output)
+}
+
+/// Create file at path
+#[wasm_bindgen]
+pub async fn create_file(file_path: Uint8Array, data: Uint8Array) {
+    let path: LocalResourcePath = deserialize(&file_path);
+    let _ = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: path.opfs_path().unwrap(),
+            operation: FileOperation::WriteNew { data }
+        }))
+        .await;
 }
 
 /// Run CoreOperation and call core to handle response

@@ -1,13 +1,12 @@
+use crate::bridge::bridge::CoreBridgeImpl;
 use crate::config::{get_gateway_grpc_url, get_locator_server_url, get_signalling_server_ws_url};
-use crate::core_api_impl::bridge::CoreBridgeImpl;
-use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
 use crate::executor::rpc::NativeRpcImpl;
 use crate::executor::transfer::TransferNativeImpl;
-use crate::file_api::device_file::FileStorage;
 use crate::network::grpc::RpcNetworkModuleImpl;
+use crate::network::net_stream::NetStreamImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
@@ -42,10 +41,10 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    file_storage: OnceCell<FileStorage>,
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
+    cloud_server: OnceCell<CloudServer<Client>>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
     transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
@@ -60,14 +59,14 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                file_storage: OnceCell::new(),
                 auth_service: OnceCell::new(),
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 resource_repository: OnceCell::new(),
-                transfer_repository: OnceCell::new()
+                transfer_repository: OnceCell::new(),
+                cloud_server: OnceCell::new()
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -75,14 +74,10 @@ impl DiContainer {
         })
     }
 
-    pub fn file_storage(&self) -> FileStorage {
-        self.file_storage.get().unwrap().clone()
-    }
-
-    pub async fn get_net_stream(&self) -> Box<dyn NetStream> {
+    pub async fn get_net_stream(&'static self) -> Box<dyn NetStream> {
         Box::new(NetStreamImpl {
-            storage: self.file_storage.get().unwrap().clone(),
-            resource_repo: self.get_local_resource_repository().await
+            resource_repo: self.get_local_resource_repository().await,
+            server: self.get_cloud_server()
         })
     }
 
@@ -127,7 +122,6 @@ impl DiContainer {
             .await;
 
         let _ = self.db.set(pool);
-        let _ = self.file_storage.set(FileStorage::new());
     }
 
     pub fn get_auth_provider(&self) -> AuthProvider {
@@ -151,7 +145,6 @@ impl DiContainer {
         }
 
         let repo = Arc::new(LocalResourceRepositoryImpl {
-            file_storage: self.file_storage.get().unwrap().clone(),
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
@@ -178,8 +171,14 @@ impl DiContainer {
         repo
     }
 
-    pub fn get_cloud_server(&self) -> CloudServer<Client> {
-        CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
+    pub fn get_cloud_server(&'static self) -> &'static CloudServer<Client> {
+        if let Some(server) = self.cloud_server.get() {
+            return server;
+        }
+
+        let server = CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider());
+        let _ = self.cloud_server.set(server);
+        self.cloud_server.get().unwrap()
     }
 
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {

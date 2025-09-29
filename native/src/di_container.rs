@@ -47,6 +47,7 @@ pub struct DiContainer {
     auth_service: OnceCell<AuthenticationService>,
     nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
+    cloud_server: OnceCell<CloudServer<Channel>>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
 
     rpc_connection: RpcNetworkModuleImpl
@@ -65,7 +66,8 @@ impl DiContainer {
                 nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url())
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
+                cloud_server: OnceCell::new()
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -77,8 +79,11 @@ impl DiContainer {
         self.path_resolver.get().unwrap()
     }
 
-    pub fn get_net_stream(&self, repository: Arc<dyn LocalResourceRepository>) -> impl NetStream {
-        NetStreamImpl { repository }
+    pub fn get_net_stream(&'static self, repository: Arc<dyn LocalResourceRepository>) -> impl NetStream {
+        NetStreamImpl {
+            repository,
+            server: self.get_cloud_server()
+        }
     }
 
     pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
@@ -163,8 +168,14 @@ impl DiContainer {
         }
     }
 
-    pub fn get_cloud_server(&self) -> CloudServer<Channel> {
-        CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider())
+    pub fn get_cloud_server(&'static self) -> &'static CloudServer<Channel> {
+        if let Some(server) = self.cloud_server.get() {
+            return server
+        };
+
+        let server = CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider());
+        let _ = self.cloud_server.set(server);
+        self.cloud_server.get().unwrap()
     }
 
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {

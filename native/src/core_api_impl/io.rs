@@ -1,24 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use core_services::local_storage::entry::FileEntry;
-use core_services::local_storage::stream::IOCursor;
-use shared::core_api::{IOReader, IOWriter};
+use shared::core_api::IOWriter;
 use std::path::PathBuf;
-
-pub struct IOReaderImpl {
-    cursor: Box<dyn IOCursor>
-}
-
-#[async_trait]
-impl IOReader for IOReaderImpl {
-    async fn next(&mut self, max_read: Option<u64>) -> Result<Option<&[u8]>> {
-        self.cursor.next(max_read).await
-    }
-
-    async fn entry(&self) -> Result<FileEntry> {
-        self.cursor.entry().await
-    }
-}
 
 pub struct IOWriterImpl {
     file: FileEntry

@@ -1,32 +1,44 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use core_services::local_storage::stream::IOCursor;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures_util::SinkExt;
-use reqwest::Response;
+use schema::devlog::bitbridge::client_upload_request::Upload;
+use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
 use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner, UploadRequest, UploadResponse};
+use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::entities::file_system::file::LocalResourcePath;
+use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::{spawn, try_join};
+use tokio::io::{AsyncWriteExt, DuplexStream};
+use tokio::task::JoinHandle;
+use tokio::{io, spawn, try_join};
+use tokio_util::io::ReaderStream;
+use tonic::transport::Channel;
+
+const EVENT_QUEUE_SIZE: usize = 8;
+const READ_CHUNK_SIZE: usize = 1024 * 1024;
 
 pub struct NetStreamImpl {
-    pub repository: Arc<dyn LocalResourceRepository>
+    pub repository: Arc<dyn LocalResourceRepository>,
+    pub server: &'static CloudServer<Channel>
 }
 
 pub struct NetStreamInnerImpl {
-    handle: Option<tokio::task::JoinHandle<Result<()>>>,
+    handle: Option<JoinHandle<()>>,
     path: LocalResourcePath,
-    requests: Vec<UploadRequest>,
+    upload: Upload,
+    server: &'static CloudServer<Channel>,
     repository: Arc<dyn LocalResourceRepository>
 }
 
 #[async_trait::async_trait]
 impl NetStream for NetStreamImpl {
-    async fn upload_resource(&self, requests: Vec<UploadRequest>, path: LocalResourcePath) -> Result<Box<dyn NetStreamInner>> {
+    async fn upload_resource(&self, upload: Upload, path: LocalResourcePath) -> Result<Box<dyn NetStreamInner>> {
         Ok(Box::new(NetStreamInnerImpl {
             path,
+            server: self.server,
             handle: None,
-            requests,
+            upload,
             repository: self.repository.clone()
         }))
     }
@@ -35,55 +47,12 @@ impl NetStream for NetStreamImpl {
 #[async_trait::async_trait]
 impl NetStreamInner for NetStreamInnerImpl {
     async fn start(&mut self) -> Result<Receiver<NetStreamEvent>> {
-        let (mut tx, rx) = channel(32);
-        let mut cursor = self.repository.read(self.path.clone(), 1024 * 1024).await?;
-        let requests = self.requests.clone();
+        let (tx, rx) = channel(EVENT_QUEUE_SIZE);
+        let cursor = self.repository.read(self.path.clone(), READ_CHUNK_SIZE).await?;
+        let upload = self.upload.clone();
 
-        log::info!("Start uploading resource, request from upstream {:?}", requests);
-        self.handle = Some(spawn(async move {
-            let mut responses = Vec::new();
-            let mut uploaded = 0u64;
-
-            for req in requests {
-                let task = async {
-                    let response = match req.x_content_length {
-                        Some(_) => stream(&req, &mut cursor, &mut tx, &mut uploaded).await?,
-                        None => {
-                            let bytes = cursor.read_all().await?;
-                            let content_length = bytes.len() as u64;
-                            if bytes.is_empty() {
-                                return Ok(())
-                            }
-
-                            log::info!("On memory uploading {} bytes", bytes.len());
-                            let client = reqwest::Client::new();
-                            let resp = client
-                                .put(req.url.clone())
-                                .header("Content-Length", content_length)
-                                .header("Content-Type", "application/octet-stream")
-                                .body(bytes)
-                                .send()
-                                .await?
-                                .error_for_status()?;
-
-                            build_response(resp).await
-                        }
-                    };
-
-                    responses.push(response);
-                    Result::<(), anyhow::Error>::Ok(())
-                }
-                .await;
-
-                if let Err(e) = task {
-                    let _ = tx.send(NetStreamEvent::Error(e)).await;
-                }
-            }
-
-            let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: uploaded });
-            let _ = tx.send(NetStreamEvent::Completed(responses)).await;
-            Ok(())
-        }));
+        let handle = spawn(Self::upload_task(cursor, upload, self.server, tx));
+        self.handle = Some(handle);
 
         Ok(rx)
     }
@@ -92,68 +61,155 @@ impl NetStreamInner for NetStreamInnerImpl {
         if let Some(handle) = self.handle.take() {
             handle.abort();
         }
-
         Ok(())
     }
 }
 
-async fn stream(
-    req: &UploadRequest,
-    cursor: &mut Box<dyn core_services::local_storage::stream::IOCursor>,
-    tx: &mut Sender<NetStreamEvent>,
-    uploaded: &mut u64
-) -> Result<UploadResponse> {
-    let Some(content_length) = req.x_content_length else {
-        return Err(anyhow::anyhow!("Upload stream must have a content length"));
-    };
+impl NetStreamInnerImpl {
+    async fn upload_task(
+        mut cursor: Box<dyn IOCursor>,
+        upload: Upload,
+        server: &'static CloudServer<Channel>,
+        mut tx: Sender<NetStreamEvent>
+    ) {
+        let result = match upload {
+            Upload::SingleUrl(url) => Self::single_upload(&url, &mut cursor, &mut tx).await,
+            Upload::Multipart(upload_info) => Self::multipart_upload(upload_info, &mut cursor, &mut tx, server).await
+        };
 
-    let (mut writer, reader) = tokio::io::duplex(1024 * 512);
+        let event = match result {
+            Ok(completion) => NetStreamEvent::Completed(completion),
+            Err(e) => NetStreamEvent::Error(e)
+        };
 
-    let upload_fut = async {
+        let _ = tx.send(event).await;
+    }
+
+    async fn single_upload(
+        url: &str,
+        cursor: &mut Box<dyn IOCursor>,
+        tx: &mut Sender<NetStreamEvent>
+    ) -> Result<Option<MultiPartUploadComplete>> {
+        Self::upload_chunk(url, cursor, tx, 0, 1024 * 1024 * 1024 * 5).await?;
+        Ok(None)
+    }
+
+    async fn multipart_upload(
+        mut upload: MultiPartUpload,
+        cursor: &mut Box<dyn IOCursor>,
+        tx: &mut Sender<NetStreamEvent>,
+        server: &CloudServer<Channel>
+    ) -> Result<Option<MultiPartUploadComplete>> {
+        let mut completion = MultiPartUploadComplete {
+            e_tags: vec![],
+            context_token: upload.context_token.clone()
+        };
+
+        let mut uploaded = 0u64;
+        let total_size = cursor.entry().await?.size;
+
+        while uploaded < total_size {
+            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, uploaded, upload.x_content_length as u64).await?;
+            completion.e_tags.push(etag);
+            uploaded += (total_size - uploaded).min(upload.x_content_length as u64);
+
+            if uploaded < total_size {
+                upload = match server.complete_part_upload(&upload.context_token).await? {
+                    Some(continue_upload) => continue_upload,
+                    None => break
+                }
+            }
+        }
+
+        // Flushing remaining data if any
+        let bytes = cursor.read_all().await?;
+        if bytes.is_empty() {
+            return Ok(Some(completion));
+        }
+
+        let content_length = bytes.len() as u64;
+        let etag = Self::perform_upload(&upload.upload_url, bytes, content_length).await?;
+        completion.e_tags.push(etag);
+
+        Ok(Some(completion))
+    }
+
+    async fn upload_chunk(
+        url: &str,
+        cursor: &mut Box<dyn IOCursor>,
+        tx: &mut Sender<NetStreamEvent>,
+        uploaded: u64,
+        chunk_size: u64
+    ) -> Result<String> {
+        let total_size = cursor.entry().await?.size;
+        let remaining_size = total_size - uploaded;
+
+        if remaining_size == 0 {
+            return Err(anyhow!("No data to upload"));
+        }
+
+        let chunk_size = remaining_size.min(chunk_size);
+        let (mut writer, reader) = io::duplex(chunk_size as usize);
+
+        let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
+        let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size);
+
+        let (etag, _) = try_join!(upload_task, write_task)?;
+        Ok(etag)
+    }
+
+    async fn perform_upload(url: &str, body: impl Into<reqwest::Body>, content_length: u64) -> Result<String> {
         let client = reqwest::Client::new();
-        let resp = client
-            .put(req.url.clone())
+        let response = client
+            .put(url)
             .header("Content-Length", content_length)
             .header("Content-Type", "application/octet-stream")
-            .body(reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(reader)))
+            .body(body)
             .send()
             .await?
             .error_for_status()?;
 
-        let response = build_response(resp).await;
-        Result::<UploadResponse, anyhow::Error>::Ok(response)
-    };
+        let etag = response
+            .headers()
+            .get("etag")
+            .ok_or_else(|| anyhow!("Missing etag in response"))?
+            .to_str()
+            .map_err(|_| anyhow!("Invalid ETag header"))?
+            .trim_matches('"')
+            .to_string();
 
-    let writer_fut = async {
-        let Some(mut remaining) = req.x_content_length else { return Ok(()) };
+        Ok(etag)
+    }
+
+    async fn write_data(
+        writer: &mut DuplexStream,
+        cursor: &mut Box<dyn IOCursor>,
+        tx: &mut Sender<NetStreamEvent>,
+        chunk_size: u64
+    ) -> Result<()> {
+        let mut remaining = chunk_size;
+        let mut total_uploaded = 0u64;
 
         while remaining > 0 {
-            let chunk = cursor.next(Some(remaining)).await?.unwrap_or_default();
-            remaining -= chunk.len() as u64;
-            writer.write_all(chunk).await?;
-            *uploaded += chunk.len() as u64;
-            if let Err(e) = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: *uploaded }) {
-                log::error!("Failed to send progress event: {:?}", e);
-            }
+            let data = cursor.next(Some(remaining)).await?.unwrap_or_default();
+            let data_len = data.len() as u64;
+
+            writer.write_all(data).await?;
+            remaining -= data_len;
+            total_uploaded += data_len;
+
+            let _ = tx.try_send(NetStreamEvent::Progress {
+                uploaded_bytes: total_uploaded
+            });
         }
 
         writer.shutdown().await?;
         Ok(())
-    };
-
-    let (resp, _) = try_join!(upload_fut, writer_fut)?;
-    Ok(resp)
+    }
 }
 
 impl Drop for NetStreamInnerImpl {
     fn drop(&mut self) {
         let _ = futures::executor::block_on(self.end());
-    }
-}
-
-async fn build_response(value: Response) -> UploadResponse {
-    UploadResponse {
-        headers: value.headers().iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string())).collect(),
-        body: value.json::<serde_json::Value>().await.ok()
     }
 }

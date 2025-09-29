@@ -221,7 +221,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let thumbnail_dir = "\(private_dir)/thumbnails"
             return Data(try! MessageToShellResponse.pathResolverResponse(.getThumbnailDirPath(path: thumbnail_dir)).bincodeSerialize())
         case .notify(let event):
-            await self.update(event);
+            await self.update(event)
             return Data(try! MessageToShellResponse.voidResponse.bincodeSerialize())
         }
     }
@@ -563,7 +563,7 @@ extension Image {
             guard let uiImage = UIImage.fromAbsolutePath(fullPath) else {
                 return nil
             }
-            
+
             return Image(uiImage: uiImage)
         case .platformIdentifier(let identifier):
             guard let cachedAsset = await PHAsset.getCachedAsset(identifier: identifier),
