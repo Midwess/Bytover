@@ -71,7 +71,7 @@ impl IOCursor for IOReaderBlobImpl {
         let blob = self.blob.slice_with_f64_and_f64(from as f64, to as f64).map_err(|it| anyhow!("Failed to slice blob {it:?}"))?;
         let js_value = JsFuture::from(blob.array_buffer()).await.map_err(|it| anyhow!("failed to get array buffer"))?;
         let data = Uint8Array::new_with_byte_offset_and_length(&js_value, 0, amount as u32);
-        data.copy_to(&mut self.buffer);
+        data.copy_to(&mut self.buffer[..data.length() as usize]);
 
         self.current_pos += amount;
         Ok(Some(&self.buffer[0..(amount as usize)]))
@@ -85,7 +85,6 @@ impl IOCursor for IOReaderBlobImpl {
 /// This is the bridge to the cursor in opfs worker
 pub struct IOReaderOpfsImpl {
     path: PathBuf,
-    position: usize,
     buffer: BytesMut,
     instance_id: u32,
 }
@@ -107,7 +106,7 @@ impl IOReaderOpfsImpl {
             OpfsOperationOutput::Cursor(instance_id) => {
                 let mut buffer = BytesMut::with_capacity(1024 * 63);
                 buffer.resize(1024 * 63, 0);
-                Ok(Self { path, position: 0, buffer, instance_id })
+                Ok(Self { path, buffer, instance_id })
             }
             r => Err(anyhow::anyhow!("Failed to open file: {:?}", r)),
         }
@@ -143,7 +142,6 @@ impl IOReader for IOReaderOpfsImpl {
                 }
                 else {
                     data.copy_to(&mut self.buffer[..data.length() as usize]);
-                    self.position += data.length() as usize;
                     Ok(Some(&self.buffer[..data.length() as usize]))
                 }
             }

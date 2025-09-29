@@ -68,10 +68,6 @@ pub enum FileOperation {
         data: Uint8Array,
         position: usize
     },
-    Read {
-        position: usize,
-        amount: usize
-    },
     Flush,
     FileEntry,
     LocalResourceInstance,
@@ -288,35 +284,6 @@ impl OpfsWorker {
                     Ok(written) => OpfsOperationOutput::Written(written as usize),
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
-            }
-            FileOperation::Read { position, amount } => {
-                if let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() {
-                    let file_guard = file_handle.lock().await;
-                    let options = FileSystemReadWriteOptions::new();
-                    options.set_at(position as f64);
-                    let buffer = Uint8Array::new_with_length(amount as u32);
-                    return match file_guard.read_with_js_u8_array_and_options(&buffer, &options) {
-                        Ok(bytes_read) => OpfsOperationOutput::Binary(buffer.subarray(0, bytes_read as u32)),
-                        Err(e) => OpfsOperationOutput::Error(e)
-                    }
-                }
-                if let Some(device_file) = self.device_files.lock().await.get(&file_path).cloned() {
-                    let file_guard = device_file.lock().await;
-                    let end_position = (position + amount).min(file_guard.file.size() as usize);
-                    return match file_guard.file.slice_with_f64_and_f64(position as f64, end_position as f64) {
-                        Ok(blob) => match JsFuture::from(blob.array_buffer()).await {
-                            Ok(buffer) => OpfsOperationOutput::Binary(Uint8Array::new_with_byte_offset_and_length(
-                                &buffer,
-                                0,
-                                (end_position - position) as u32
-                            )),
-                            Err(e) => return OpfsOperationOutput::Error(e)
-                        },
-                        Err(e) => return OpfsOperationOutput::Error(e)
-                    };
-                }
-
-                OpfsOperationOutput::Error("No file handle open".into())
             }
             FileOperation::FileEntry => {
                 if let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() {
