@@ -1,6 +1,6 @@
 use crate::deserialize;
 use crate::file_api::file_extension::VecExtension;
-use crate::file_api::opfs::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
+use crate::file_api::io::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
 use crate::web_worker::bridge::WorkerMessage;
@@ -161,7 +161,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, chunk_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, _: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
             let reader = IOReaderOpfsImpl::new(path.into()).await?;
             return Ok(Box::new(reader))

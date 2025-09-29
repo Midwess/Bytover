@@ -1,4 +1,4 @@
-use crate::file_api::opfs::OPFS_WORKER;
+use crate::file_api::io::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
@@ -8,7 +8,6 @@ use core_services::wasm::{HttpClient, XhrEvent};
 use futures::channel::mpsc;
 use futures_channel::mpsc::Receiver;
 use js_sys::Uint8Array;
-use n0_future::io::AsyncWriteExt;
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::SinkExt;
 use schema::devlog::bitbridge::client_upload_request::Upload;

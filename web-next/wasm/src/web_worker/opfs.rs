@@ -1,6 +1,7 @@
-use crate::file_api::device_file::{DeviceFile, DeviceFolder};
-use crate::file_api::opfs::IOReaderBlobImpl;
+use crate::file_api::device_file::{DeviceFile, DeviceFolder, WasmFile};
+use crate::file_api::io::IOReaderBlobImpl;
 use crate::get_directory;
+use crate::file_api::opfs::FileSystemDirectoryHandleExt;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use chrono::Utc;
 use core_services::local_storage::entry::FileEntry;
@@ -8,6 +9,7 @@ use core_services::local_storage::stream::IOCursor;
 use core_services::logger::setup;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use futures::lock::Mutex;
+use futures::{Stream, StreamExt};
 use gloo_worker::{HandlerId, Worker, WorkerScope};
 use js_sys::{Array, Uint8Array};
 use serde::{Deserialize, Serialize};
@@ -21,9 +23,6 @@ use web_sys::{
     Blob,
     File,
     FileSystemDirectoryHandle,
-    FileSystemFileHandle,
-    FileSystemGetDirectoryOptions,
-    FileSystemGetFileOptions,
     FileSystemReadWriteOptions,
     FileSystemSyncAccessHandle
 };
@@ -42,7 +41,10 @@ pub struct OpfsOperation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FileOperation {
-    AddFolder(DeviceFolder),
+    AddFolder {
+        path: String,
+        files: Vec<WasmFile>
+    },
     Cursor {
         buffer_size: usize
     },
@@ -89,62 +91,6 @@ pub enum OpfsOperationOutput {
 
 unsafe impl Send for OpfsOperationOutput {}
 unsafe impl Sync for OpfsOperationOutput {}
-
-trait FileSystemDirectoryHandleExt {
-    async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue>;
-    async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue>;
-}
-
-impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
-    async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue> {
-        let path_parts: Vec<&str> = path.split('/').collect();
-        let file_name = path_parts.last().ok_or("Empty path")?;
-        let dir_parts = &path_parts[..path_parts.len() - 1];
-
-        let mut current_dir = self.clone();
-
-        let options = FileSystemGetDirectoryOptions::new();
-        options.set_create(true);
-        for dir_name in dir_parts {
-            if !dir_name.is_empty() {
-                let dir_future = JsFuture::from(current_dir.get_directory_handle_with_options(dir_name, &options));
-                current_dir = dir_future.await?.into();
-            }
-        }
-
-        let options = FileSystemGetFileOptions::new();
-        options.set_create(true);
-        let file_future = JsFuture::from(current_dir.get_file_handle_with_options(file_name, &options));
-        let file_handle: FileSystemFileHandle = file_future.await?.into();
-        let file_sync_handle: FileSystemSyncAccessHandle = JsFuture::from(file_handle.create_sync_access_handle()).await?.into();
-
-        Ok(file_sync_handle)
-    }
-
-    async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue> {
-        let path_parts: Vec<&str> = path.split('/').collect();
-        let file_name = path_parts.last().ok_or("Empty path")?;
-        let dir_parts = &path_parts[..path_parts.len() - 1];
-
-        let mut current_dir = self.clone();
-
-        let options = FileSystemGetDirectoryOptions::new();
-        options.set_create(true);
-        for dir_name in dir_parts {
-            if !dir_name.is_empty() {
-                let dir_future = JsFuture::from(current_dir.get_directory_handle_with_options(dir_name, &options));
-                current_dir = dir_future.await?.into();
-            }
-        }
-
-        let options = FileSystemGetFileOptions::new();
-        options.set_create(true);
-        let file_future = JsFuture::from(current_dir.get_file_handle_with_options(file_name, &options));
-        let file_handle: FileSystemFileHandle = file_future.await?.into();
-
-        Ok(file_handle)
-    }
-}
 
 pub type AMutex<T> = Arc<Mutex<T>>;
 
@@ -197,8 +143,7 @@ impl OpfsWorker {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
                     IOReaderBlobImpl::from_file(&guard.file, buffer_size).await
-                }
-                else {
+                } else {
                     let handle = match root.open_file_async(&file_path).await {
                         Ok(handle) => handle,
                         Err(e) => return OpfsOperationOutput::Error(e)
@@ -358,9 +303,13 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
-            FileOperation::AddFolder(folder) => {
+            FileOperation::AddFolder {
+                files,
+                path
+            } => {
                 let mut folders = self.device_folders.lock().await;
-                let key = folder.base_path.clone();
+                let key = path.clone();
+                let folder = DeviceFolder::new(path.into(), files).await;
                 folders.insert(key, Arc::new(Mutex::new(folder)));
                 OpfsOperationOutput::Void
             }
@@ -383,7 +332,7 @@ impl Worker for OpfsWorker {
             device_files: Default::default(),
             cursors: Default::default(),
             id_gen: Arc::new(AtomicU32::new(0)),
-            device_folders: Default::default(),
+            device_folders: Default::default()
         }
     }
 

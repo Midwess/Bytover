@@ -14,7 +14,7 @@ pub mod web_worker;
 use crate::di_container::DiContainer;
 use crate::file_api::device_file::DeviceFile;
 use crate::file_api::file_extension::VecExtension;
-use crate::file_api::opfs::OPFS_WORKER;
+use crate::file_api::io::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
@@ -200,7 +200,7 @@ pub async fn get_download_url(path: Uint8Array) -> Option<String> {
 }
 
 pub fn is_browser_support_duplex() -> bool {
-    let Some(with_browser) = window() else {
+    let Some(_) = window() else {
         log::info!("No window");
         return false
     };

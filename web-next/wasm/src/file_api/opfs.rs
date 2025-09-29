@@ -1,243 +1,143 @@
-use crate::file_api::path_extension::WebExtLocalResourcePath;
-use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
-use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput, OpfsWorker};
-use anyhow::{anyhow, Result};
-use async_trait::async_trait;
-use bytes::{Bytes, BytesMut};
-use core_services::local_storage::entry::FileEntry;
-use core_services::local_storage::stream::IOCursor;
-use core_services::utils::never_send::NeverSend;
-use devlog_sdk::distributed_id::gen_id;
-use js_sys::Uint8Array;
-use shared::core_api::{IOReader, IOWriter};
-use shared::entities::file_system::file::LocalResourcePath;
-use std::path::PathBuf;
-use std::sync::LazyLock;
-use std::time::{Duration, SystemTime};
-use wasm_bindgen::JsCast;
+use std::pin::Pin;
+use async_stream::stream;
+use futures::Stream;
+use js_sys::Array;
+use n0_future::StreamExt;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Blob, File, FileSystemFileHandle};
+use web_sys::{File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSystemSyncAccessHandle};
+use core_services::local_storage::stream::IOCursor;
+use crate::file_api::device_file::WasmFile;
 
-pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
-    LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
+pub type FileStream = Pin<Box<dyn Stream<Item = Result<WasmFile, anyhow::Error>>>>;
 
-pub struct IOReaderBlobImpl {
-    entry: FileEntry,
-    blob: NeverSend<Blob>,
-    buffer: BytesMut,
-    current_pos: u64
+#[async_trait::async_trait(?Send)]
+pub trait FileSystemDirectoryHandleExt {
+    async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue>;
+    async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue>;
+    // Return either FileSystemAccessHandle
+    // or FileSystemDirectoryHandle if it is a folder
+    async fn access(&self, path: &str) -> Result<JsValue, JsValue>;
+    fn file_stream(&self) -> FileStream;
+    async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue>;
+    async fn size(&self) -> Result<u64, JsValue>;
 }
 
-impl IOReaderBlobImpl {
-    pub async fn from_file(file: &File, buffer_size: usize) -> Result<Self> {
-        let modified_at = SystemTime::UNIX_EPOCH + Duration::from_millis(file.last_modified() as u64);
+#[async_trait::async_trait(?Send)]
+impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
+    async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue> {
+        let file_async_handle: FileSystemFileHandle = self.access(path).await?.dyn_into()?;
+        let file_sync_handle: FileSystemSyncAccessHandle = JsFuture::from(file_async_handle.create_sync_access_handle()).await?.into();
 
-        let mut buffer = BytesMut::with_capacity(buffer_size);
-        buffer.resize(buffer_size, 0);
-
-        let entry = FileEntry {
-            is_dir: false,
-            modified_at,
-            size: file.size() as u64,
-            path: PathBuf::from(LocalResourcePath::device_file(gen_id().await).opfs_path().unwrap())
-        };
-
-        Ok(Self {
-            entry,
-            blob: NeverSend(file.slice().map_err(|it| anyhow!("Failed to slice file {:?}", it))?),
-            buffer,
-            current_pos: 0
-        })
+        Ok(file_sync_handle)
     }
 
-    pub async fn from_file_handle(handle: FileSystemFileHandle, buffer_size: usize) -> Result<Self> {
-        let file: File = JsFuture::from(handle.get_file())
-            .await
-            .map_err(|it| anyhow!("failed to get file"))?
-            .dyn_into()
-            .unwrap();
-        Self::from_file(&file, buffer_size).await
+    async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue> {
+        let file_async_handle: FileSystemFileHandle = self.access(path).await?.dyn_into()?;
+        Ok(file_async_handle)
     }
-}
 
-#[async_trait(?Send)]
-impl IOCursor for IOReaderBlobImpl {
-    async fn next(&mut self, max: Option<u64>) -> Result<Option<&[u8]>> {
-        let from = self.current_pos;
-        let to = (from + max.unwrap_or(self.buffer.len() as u64).min(self.buffer.len() as u64)).min(self.entry.size);
-        if from >= to {
-            return Ok(None)
+    async fn access(&self, path: &str) -> Result<JsValue, JsValue> {
+        let path_parts: Vec<&str> = path.split('/').collect();
+        let entry_name = path_parts.last().ok_or("Empty path")?;
+        let dir_parts = &path_parts[..path_parts.len() - 1];
+
+        let mut current_dir = self.clone();
+
+        let dir_options = FileSystemGetDirectoryOptions::new();
+        dir_options.set_create(true);
+        for dir_name in dir_parts {
+            if !dir_name.is_empty() {
+                let dir_future = JsFuture::from(current_dir.get_directory_handle_with_options(dir_name, &dir_options));
+                current_dir = dir_future.await?.into();
+            }
         }
 
-        let amount = to - from;
-        let blob = self
-            .blob
-            .slice_with_f64_and_f64(from as f64, to as f64)
-            .map_err(|it| anyhow!("Failed to slice blob {it:?}"))?;
-        let js_value = JsFuture::from(blob.array_buffer()).await.map_err(|it| anyhow!("failed to get array buffer"))?;
-        let data = Uint8Array::new_with_byte_offset_and_length(&js_value, 0, amount as u32);
-        data.copy_to(&mut self.buffer[..data.length() as usize]);
+        let dir_options = FileSystemGetDirectoryOptions::new();
+        dir_options.set_create(true);
+        let dir_handle_result = JsFuture::from(current_dir.get_directory_handle_with_options(entry_name, &dir_options)).await;
 
-        self.current_pos += amount;
-        Ok(Some(&self.buffer[0..(amount as usize)]))
-    }
-
-    async fn entry(&self) -> Result<FileEntry> {
-        Ok(self.entry.clone())
-    }
-}
-
-/// This is the bridge to the cursor in opfs worker
-pub struct IOReaderOpfsImpl {
-    path: PathBuf,
-    buffer: BytesMut,
-    instance_id: u32
-}
-
-impl IOReaderOpfsImpl {
-    pub async fn new(path: PathBuf) -> Result<Self> {
-        let path_str = path.to_string_lossy().to_string();
-
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: path_str,
-            operation: FileOperation::Cursor { buffer_size: 1024 * 63 }
-        });
-
-        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file"))?;
-
-        match response.message {
-            OpfsOperationOutput::Cursor(instance_id) => {
-                let mut buffer = BytesMut::with_capacity(1024 * 63);
-                buffer.resize(1024 * 63, 0);
-                Ok(Self { path, buffer, instance_id })
-            }
-            r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))
+        if let Ok(dir_handle_js) = dir_handle_result {
+            let dir_handle: FileSystemDirectoryHandle = dir_handle_js.into();
+            Ok(dir_handle.into())
+        } else {
+            let file_options = FileSystemGetFileOptions::new();
+            file_options.set_create(true);
+            let file_handle_js = JsFuture::from(current_dir.get_file_handle_with_options(entry_name, &file_options)).await?;
+            let file_handle: FileSystemFileHandle = file_handle_js.into();
+            Ok(file_handle.into())
         }
     }
 
-    pub fn stop(&mut self) {
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::CursorEnd(self.instance_id)
-        });
+    fn file_stream(&self) -> FileStream {
+        let dir_handle = self.clone();
 
-        OPFS_WORKER.unbounded_send(msg);
-    }
-}
+        let stream = stream! {
+            let mut dir_stack = vec![dir_handle];
 
-#[async_trait(?Send)]
-impl IOReader for IOReaderOpfsImpl {
-    async fn next(&mut self, max: Option<u64>) -> Result<Option<&[u8]>> {
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::CursorNext {
-                instance_id: self.instance_id,
-                max
-            }
-        });
+            while let Some(current_dir) = dir_stack.pop() {
+                let entries = current_dir.entries();
 
-        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
+                loop {
+                    let entry_result = JsFuture::from(
+                        entries.next().map_err(|e| anyhow::anyhow!("{e:?}"))?
+                    ).await;
 
-        match response.message {
-            OpfsOperationOutput::Binary(data) => {
-                if data.length() == 0 {
-                    Ok(None)
-                } else {
-                    data.copy_to(&mut self.buffer[..data.length() as usize]);
-                    Ok(Some(&self.buffer[..data.length() as usize]))
+                    let entry_js = match entry_result {
+                        Ok(js_val) => js_val,
+                        Err(e) => {
+                            yield Err(anyhow::anyhow!("{e:?}"));
+                            break;
+                        }
+                    };
+
+                    if entry_js.is_undefined() {
+                        break;
+                    }
+
+                    let entry_array: Array = entry_js.dyn_into()
+                        .map_err(|e| anyhow::anyhow!("Failed to convert entry: {e:?}"))?;
+                    let handle = entry_array.get(1);
+
+                    let kind = js_sys::Reflect::get(&handle, &JsValue::from_str("kind"))
+                        .map_err(|e| anyhow::anyhow!("Failed to get kind: {e:?}"))?
+                        .as_string()
+                        .unwrap_or_default();
+
+                    match kind.as_str() {
+                        "file" => {
+                            let file_handle = handle.unchecked_into::<FileSystemFileHandle>();
+                            let js_value = JsFuture::from(file_handle.get_file()).await.unwrap();
+                            let file: File = js_value.dyn_into().unwrap();
+                            yield Ok(WasmFile(file));
+                        }
+                        "directory" => {
+                            let dir_handle = handle.unchecked_into::<FileSystemDirectoryHandle>();
+                            dir_stack.push(dir_handle);
+                        }
+                        _ => {}
+                    }
                 }
             }
-            r => Err(anyhow::anyhow!("Read error: {:?}", r))
+        };
+
+        Box::pin(stream)
+    }
+
+    async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue> {
+        let handle = self.access(path).await?;
+        todo!()
+    }
+
+    async fn size(&self) -> Result<u64, JsValue> {
+        let mut stream = self.file_stream();
+
+        let mut total_size = 0u64;
+        while let Some(file_result) = stream.next().await {
+            let file = file_result.map_err(|it| JsValue::from(it.to_string()))?;
+            total_size += file.size() as u64;
         }
-    }
 
-    async fn entry(&self) -> Result<FileEntry> {
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::FileEntry
-        });
-
-        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"))?;
-
-        match response.message {
-            OpfsOperationOutput::FileEntry(entry) => Ok(entry),
-            OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Size error: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
-        }
-    }
-
-    async fn end(&mut self) -> Result<()> {
-        self.stop();
-        Ok(())
-    }
-}
-
-impl Drop for IOReaderOpfsImpl {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
-pub struct IOWriterOpfsImpl {
-    path: PathBuf,
-    position: usize
-}
-
-impl IOWriterOpfsImpl {
-    pub async fn new(path: PathBuf) -> Result<Self> {
-        let path_str = path.to_string_lossy().to_string();
-
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: path_str,
-            operation: FileOperation::Open
-        });
-
-        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file for writing"))?;
-
-        match response.message {
-            OpfsOperationOutput::Void => Ok(Self { path, position: 0 }),
-            OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file for writing: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
-        }
-    }
-}
-
-#[async_trait(?Send)]
-impl IOWriter for IOWriterOpfsImpl {
-    async fn write(&mut self, data: Bytes) -> Result<()> {
-        let uint8_array = Uint8Array::from(data.as_ref());
-
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::Write {
-                data: uint8_array,
-                position: self.position
-            }
-        });
-        let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to write"))?;
-
-        match response.message {
-            OpfsOperationOutput::Written(written) => {
-                self.position += written;
-                Ok(())
-            }
-            OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Write error: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
-        }
-    }
-
-    async fn end(&mut self) -> Result<()> {
-        self.flush().await?;
-        Ok(())
-    }
-
-    async fn flush(&mut self) -> Result<()> {
-        let msg = WorkerMessage::new(OpfsOperation {
-            file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::Flush
-        });
-
-        OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to flush"))?;
-        Ok(())
+        Ok(total_size)
     }
 }

@@ -24,6 +24,7 @@ devlog-sdk = { path = "../../libs/devlog-sdk" }
 schema = { path = "../../libs/schema/rust" }
 crux_core = { workspace = true }
 async-trait = { workspace = true }
+async-stream = "0.3.6"
 thiserror = { workspace = true }
 n0-future = { workspace = true }
 futures = { workspace = true }
