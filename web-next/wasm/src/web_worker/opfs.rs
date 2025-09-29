@@ -97,7 +97,7 @@ pub struct OpfsWorker {
     root: OnceCell<Arc<FileSystemDirectoryHandle>>,
     device_files: AMutex<HashMap<String, AMutex<DeviceFile>>>,
     file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>,
-    cursors: AMutex<HashMap<u32, AMutex<dyn IOCursor>>>,
+    cursors: AMutex<HashMap<u32, AMutex<Box<dyn IOCursor>>>>,
     device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
     id_gen: Arc<AtomicU32>
 }
@@ -140,25 +140,27 @@ impl OpfsWorker {
             FileOperation::Cursor { buffer_size } => {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
-                    IOReaderBlobImpl::from_file(guard.file.clone(), buffer_size).await
+                    match IOReaderBlobImpl::from_file(guard.file.clone(), buffer_size).await {
+                        Ok(reader) => Box::new(reader) as Box<dyn IOCursor>,
+                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
+                    }
+                }
+                else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
+                    match device_folder.lock().await.cursor().await {
+                        Ok(cursor) => cursor,
+                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
+                    }
                 }
                 else {
-                    let handle = match root.open_file_async(&file_path).await {
-                        Ok(handle) => handle,
+                    match root.cursor(&file_path).await {
+                        Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(e)
-                    };
-
-                    IOReaderBlobImpl::from_file_handle(handle, buffer_size).await
+                    }
                 };
 
-                match cursor {
-                    Ok(c) => {
-                        let id = id_gen.fetch_add(1, Ordering::Relaxed);
-                        self.cursors.lock().await.insert(id, Arc::new(Mutex::new(c)));
-                        OpfsOperationOutput::Cursor(id)
-                    }
-                    Err(e) => OpfsOperationOutput::Error(JsValue::from(e.to_string()))
-                }
+                let id = id_gen.fetch_add(1, Ordering::Relaxed);
+                self.cursors.lock().await.insert(id, Arc::new(Mutex::new(cursor)));
+                OpfsOperationOutput::Cursor(id)
             }
             FileOperation::CursorNext { instance_id, max } => {
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
