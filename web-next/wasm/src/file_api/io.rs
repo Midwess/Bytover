@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
+use crate::file_api::device_file::WasmFile;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
@@ -29,7 +30,7 @@ pub struct IOReaderBlobImpl {
 }
 
 impl IOReaderBlobImpl {
-    pub async fn from_file(file: &File, buffer_size: usize) -> Result<Self> {
+    pub async fn from_file(file: WasmFile, buffer_size: usize) -> Result<Self> {
         let modified_at = SystemTime::UNIX_EPOCH + Duration::from_millis(file.last_modified() as u64);
 
         let mut buffer = BytesMut::with_capacity(buffer_size);
@@ -56,7 +57,7 @@ impl IOReaderBlobImpl {
             .map_err(|it| anyhow!("failed to get file {it:?}"))?
             .dyn_into()
             .unwrap();
-        Self::from_file(&file, buffer_size).await
+        Self::from_file(WasmFile(file), buffer_size).await
     }
 }
 

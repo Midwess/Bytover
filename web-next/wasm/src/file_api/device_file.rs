@@ -8,8 +8,14 @@ use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::time::SystemTime;
+use async_stream::stream;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
+use core_services::local_storage::entry::FileEntry;
+use core_services::local_storage::stream::IOCursor;
+use core_services::local_storage::zip::ZipStream;
+use crate::file_api::io::IOReaderBlobImpl;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);
@@ -21,6 +27,8 @@ impl Debug for WasmFile {
 }
 
 unsafe impl Send for WasmFile {}
+
+unsafe impl Sync for WasmFile {}
 
 impl WasmFile {
     pub fn resource_type(&self) -> ResourceType {
@@ -73,6 +81,26 @@ impl DeviceFolder {
             base_path: path.to_str().unwrap().to_string(),
             resource_instance
         }
+    }
+
+    pub async fn cursor(&self) -> anyhow::Result<Box<dyn IOCursor>> {
+        let buffer_size = 1024 * 63usize;
+        let files = self.files.clone();
+        let stream = stream! {
+            for file in files {
+                let writer = Box::new(IOReaderBlobImpl::from_file(file, buffer_size).await?);
+                yield Ok::<_, anyhow::Error>(writer as Box<dyn IOCursor>);
+            }
+        };
+
+        let entry = FileEntry {
+            is_dir: false,
+            modified_at: SystemTime::now(),
+            size: self.resource_instance.size,
+            path: self.base_path.clone().into(),
+        };
+
+        Ok(Box::new(ZipStream::new_from_stream(Box::pin(stream), entry, buffer_size).await?))
     }
 }
 

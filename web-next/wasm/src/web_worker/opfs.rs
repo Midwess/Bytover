@@ -9,9 +9,8 @@ use core_services::local_storage::stream::IOCursor;
 use core_services::logger::setup;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use futures::lock::Mutex;
-use futures::{Stream, StreamExt};
 use gloo_worker::{HandlerId, Worker, WorkerScope};
-use js_sys::{Array, Uint8Array};
+use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::cell::OnceCell;
 use std::collections::HashMap;
@@ -142,8 +141,9 @@ impl OpfsWorker {
             FileOperation::Cursor { buffer_size } => {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
-                    IOReaderBlobImpl::from_file(&guard.file, buffer_size).await
-                } else {
+                    IOReaderBlobImpl::from_file(guard.file.clone(), buffer_size).await
+                }
+                else {
                     let handle = match root.open_file_async(&file_path).await {
                         Ok(handle) => handle,
                         Err(e) => return OpfsOperationOutput::Error(e)

@@ -1,4 +1,3 @@
-use crate::file_api::file_extension::VecExtension;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger;
 use crux_core::bridge::Bridge;
@@ -8,6 +7,7 @@ use gloo_worker::Worker;
 use js_sys::Uint8Array;
 use shared::app::BitBridge;
 use std::sync::LazyLock;
+use core_services::wasm::extensions::VecExtension;
 
 pub trait Handler<T> {
     type Output;

@@ -1,5 +1,4 @@
 use crate::deserialize;
-use crate::file_api::file_extension::VecExtension;
 use crate::file_api::io::{IOReaderOpfsImpl, IOWriterOpfsImpl, OPFS_WORKER};
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
@@ -21,6 +20,7 @@ use shared::core_api::{IOReader, IOWriter};
 use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
+use core_services::wasm::extensions::VecExtension;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<NeverSend<Database>>

@@ -13,7 +13,6 @@ pub mod web_worker;
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
 use crate::file_api::device_file::DeviceFile;
-use crate::file_api::file_extension::VecExtension;
 use crate::file_api::io::OPFS_WORKER;
 use crate::file_api::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
@@ -35,6 +34,7 @@ use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
+use core_services::wasm::extensions::VecExtension;
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
