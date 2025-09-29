@@ -15,7 +15,6 @@ use n0_future::task::JoinHandle;
 use n0_future::Stream;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
-use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
