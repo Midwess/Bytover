@@ -161,9 +161,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, _: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
-            let reader = IOReaderOpfsImpl::new(path.into()).await?;
+            let reader = IOReaderOpfsImpl::new(path.into(), buffer_size).await?;
             return Ok(Box::new(reader))
         }
 

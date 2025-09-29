@@ -42,7 +42,7 @@ impl UploadContext {
         chunk_size: Option<u64>
     ) -> Result<UploadContext, CloudStorageErrors> {
         let buffer_amount = 1024 * 1024 * 1024;
-        let chunk_size = chunk_size.unwrap_or(5 * 1024 * 1024 * 1024);
+        let chunk_size = chunk_size.unwrap_or(9 * 1024 * 1024 * 1024);
         let resource_size_with_buffer = resource_size + buffer_amount;
         let max_allowed_parts = match &resource.source {
             Some(Source::S3Path(name)) => resource_size_with_buffer.div_ceil(chunk_size) as usize + 1,

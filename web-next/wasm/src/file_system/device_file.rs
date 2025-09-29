@@ -83,8 +83,7 @@ impl DeviceFolder {
         }
     }
 
-    pub async fn cursor(&self) -> anyhow::Result<Box<dyn IOCursor>> {
-        let buffer_size = 1024 * 63usize;
+    pub async fn cursor(&self, buffer_size: usize) -> anyhow::Result<Box<dyn IOCursor>> {
         let files = self.files.clone();
         let stream = stream! {
             for file in files {

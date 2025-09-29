@@ -147,13 +147,13 @@ impl OpfsWorker {
                     }
                 }
                 else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
-                    match device_folder.lock().await.cursor().await {
+                    match device_folder.lock().await.cursor(buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }
                 }
                 else {
-                    match root.cursor(&file_path).await {
+                    match root.cursor(&file_path, buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(e)
                     }
@@ -242,6 +242,18 @@ impl OpfsWorker {
                     }
                 }
 
+                if let Some(device_folder) = self.device_folders.lock().await.get(&file_path).cloned() {
+                    let guard = device_folder.lock().await;
+                    let entry = FileEntry {
+                        path: guard.base_path.clone().into(),
+                        size: guard.resource_instance.size,
+                        is_dir: false,
+                        modified_at: Utc::now().into()
+                    };
+
+                    return OpfsOperationOutput::FileEntry(entry);
+                }
+
                 if let Some(device_file) = self.device_files.lock().await.get(&file_path).cloned() {
                     let entry = FileEntry {
                         path: file_path.into(),
@@ -317,6 +329,7 @@ impl OpfsWorker {
                 let mut folders = self.device_folders.lock().await;
                 let key = file_path.clone();
                 let resource_path = LocalResourcePath::PlatformIdentifier(format!("opfs://{}", file_path.clone()));
+                log::info!("Add folder: {} {}", key, files.len());
                 let folder = DeviceFolder::new(resource_path, path.into(), files).await;
                 let response = OpfsOperationOutput::LocalResourceInstance(serialize(&folder.resource_instance));
                 folders.insert(key, Arc::new(Mutex::new(folder)));

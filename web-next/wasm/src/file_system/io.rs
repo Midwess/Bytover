@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
+use core_services::wasm::extensions::FileExtension;
 use crate::file_system::device_file::WasmFile;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
@@ -40,7 +41,7 @@ impl IOReaderBlobImpl {
             is_dir: false,
             modified_at,
             size: file.size() as u64,
-            path: PathBuf::from(LocalResourcePath::device_file(gen_id().await).opfs_path().unwrap())
+            path: PathBuf::from(file.0.webkit_path().unwrap_or(file.0.name().to_string()))
         };
 
         Ok(Self {
@@ -98,20 +99,20 @@ pub struct IOReaderOpfsImpl {
 }
 
 impl IOReaderOpfsImpl {
-    pub async fn new(path: PathBuf) -> Result<Self> {
+    pub async fn new(path: PathBuf, buffer_size: usize) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
-            operation: FileOperation::Cursor { buffer_size: 1024 * 63 }
+            operation: FileOperation::Cursor { buffer_size }
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file"))?;
 
         match response.message {
             OpfsOperationOutput::Cursor(instance_id) => {
-                let mut buffer = BytesMut::with_capacity(1024 * 63);
-                buffer.resize(1024 * 63, 0);
+                let mut buffer = BytesMut::with_capacity(buffer_size);
+                buffer.resize(buffer_size, 0);
                 Ok(Self { path, buffer, instance_id })
             }
             r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))

@@ -493,6 +493,7 @@ export class WasmCore {
     }
 
     async addFolders(folders: FolderStructure[]) {
+        console.log(folders)
         let selections = []
         for (const folder of folders) {
             const files = folder.files.map((it) => it.file).filter(f => f instanceof File) as File[]

@@ -46,7 +46,7 @@ pub trait FileSystemDirectoryHandleExt {
     // or FileSystemDirectoryHandle if it is a folder
     async fn access(&self, path: &str, kind: Option<HandleType>, auto_create: bool) -> Result<JsValue, JsValue>;
     fn file_stream(&self) -> FileStream;
-    async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue>;
+    async fn cursor(&self, path: &str, buffer_size: usize) -> Result<Box<dyn IOCursor>, JsValue>;
     async fn size(&self) -> Result<u64, JsValue>;
 }
 
@@ -163,7 +163,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
         Box::pin(stream)
     }
 
-    async fn cursor(&self, path: &str) -> Result<Box<dyn IOCursor>, JsValue> {
+    async fn cursor(&self, path: &str, buffer_size: usize) -> Result<Box<dyn IOCursor>, JsValue> {
         let handle = self.access(path, None, false).await?;
         let Some(kind) = HandleType::from_handle(&handle) else {
             return Err(JsValue::from("Entry not found"));
@@ -172,7 +172,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
         match kind {
             HandleType::File => {
                 let file_handle = handle.unchecked_into::<FileSystemFileHandle>();
-                Ok(Box::new(IOReaderBlobImpl::from_file_handle(file_handle, 1024 * 63).await.map_err(|it| JsValue::from(it.to_string()))?))
+                Ok(Box::new(IOReaderBlobImpl::from_file_handle(file_handle, buffer_size).await.map_err(|it| JsValue::from(it.to_string()))?))
             },
             HandleType::Folder => {
                 let file_handle = handle.unchecked_into::<FileSystemDirectoryHandle>();
@@ -187,7 +187,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
 
                 let cursor_stream = stream! {
                     while let Some(Ok(file)) = stream.next().await {
-                        let cursor = Box::new(IOReaderBlobImpl::from_file(file, 1024 * 63).await?);
+                        let cursor = Box::new(IOReaderBlobImpl::from_file(file, buffer_size).await?);
                         yield Ok::<_, anyhow::Error>(cursor as Box<dyn IOCursor>);
                     }
                 };
@@ -198,7 +198,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                         Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>> + Send + Sync>>
                     >(Box::pin(cursor_stream))
                 };
-                Ok(Box::new(ZipStream::new_from_stream(stream, entry, 1024 * 63).await.map_err(|it| JsValue::from(it.to_string()))?))
+                Ok(Box::new(ZipStream::new_from_stream(stream, entry, buffer_size).await.map_err(|it| JsValue::from(it.to_string()))?))
             }
         }
     }
