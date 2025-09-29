@@ -1,9 +1,10 @@
 use std::pin::Pin;
-use std::time::SystemTime;
 use async_stream::stream;
+use chrono::Utc;
 use futures::Stream;
 use js_sys::Array;
 use n0_future::StreamExt;
+use n0_future::time::SystemTime;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSystemSyncAccessHandle};
@@ -180,7 +181,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                 let entry = FileEntry {
                     is_dir: false,
                     path: path.into(),
-                    modified_at: SystemTime::now(),
+                    modified_at: Utc::now().into(),
                     size,
                 };
 

@@ -1,7 +1,7 @@
 extern crate core;
 
 pub mod config;
-pub mod core_api_impl;
+pub mod bridge;
 pub mod di_container;
 mod errors;
 pub mod executor;
@@ -12,7 +12,7 @@ pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
-use crate::file_system::device_file::DeviceFile;
+use crate::file_system::device_file::{DeviceFile, WasmFile};
 use crate::file_system::io::OPFS_WORKER;
 use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
@@ -35,6 +35,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
 use core_services::wasm::extensions::VecExtension;
+use devlog_sdk::distributed_id::gen_id;
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
@@ -148,6 +149,28 @@ pub async fn add_device_files(files: &Array) -> Uint8Array {
     }
 
     serialize(&paths)
+}
+
+#[wasm_bindgen]
+pub async fn add_device_folder(path: String, files: Vec<File>) -> Uint8Array {
+    let folder_path = LocalResourcePath::device_file(gen_id().await);
+    let resp = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: folder_path.opfs_path().unwrap(),
+            operation: FileOperation::AddFolder {
+                path,
+                files: files.into_iter().map(|it| WasmFile(it)).collect()
+            }
+        }))
+        .await;
+
+    let OpfsOperationOutput::LocalResourceInstance(resource_instance) = resp.unwrap().message else {
+        return Uint8Array::default()
+    };
+
+    let resource_instance: LocalResource = deserialize(&resource_instance);
+
+    serialize(&resource_instance.path)
 }
 
 #[wasm_bindgen]

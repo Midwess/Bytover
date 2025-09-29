@@ -1,6 +1,6 @@
 use crate::file_system::device_file::{DeviceFile, DeviceFolder, WasmFile};
 use crate::file_system::io::IOReaderBlobImpl;
-use crate::get_directory;
+use crate::{get_directory, serialize};
 use crate::file_system::opfs::FileSystemDirectoryHandleExt;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use chrono::Utc;
@@ -25,6 +25,7 @@ use web_sys::{
     FileSystemReadWriteOptions,
     FileSystemSyncAccessHandle
 };
+use shared::entities::file_system::file::LocalResourcePath;
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:
@@ -260,6 +261,11 @@ impl OpfsWorker {
                     return OpfsOperationOutput::LocalResourceInstance(file_guard.raw_local_resource().clone());
                 }
 
+                if let Some(device_folder) = self.device_folders.lock().await.get(&file_path).cloned() {
+                    let guard = device_folder.lock().await;
+                    return OpfsOperationOutput::LocalResourceInstance(serialize(&guard.resource_instance))
+                }
+
                 OpfsOperationOutput::Error("No file selected".into())
             }
             FileOperation::Flush => {
@@ -309,10 +315,13 @@ impl OpfsWorker {
                 path
             } => {
                 let mut folders = self.device_folders.lock().await;
-                let key = path.clone();
-                let folder = DeviceFolder::new(path.into(), files).await;
+                let key = file_path.clone();
+                let resource_path = LocalResourcePath::PlatformIdentifier(format!("opfs://{}", file_path.clone()));
+                let folder = DeviceFolder::new(resource_path, path.into(), files).await;
+                let response = OpfsOperationOutput::LocalResourceInstance(serialize(&folder.resource_instance));
                 folders.insert(key, Arc::new(Mutex::new(folder)));
-                OpfsOperationOutput::Void
+
+                response
             }
         }
     }

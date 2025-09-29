@@ -64,7 +64,7 @@ import {
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
 import init_core, {
-    add_device_files, create_file,
+    add_device_files, add_device_folder, create_file,
     execute,
     execute_operation,
     get_device_file,
@@ -76,8 +76,9 @@ import {process_event, handle_response} from "core_wasm";
 import BPromise from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
-import {FileMetadata} from "@/hooks/use-file-upload";
+import {FileMetadata, FolderStructure} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
+import {deserialize} from "v8";
 
 export class WasmCore {
     // If it is not compatible, then the current browser is not supported.
@@ -488,6 +489,21 @@ export class WasmCore {
         if (!data) return [];
 
         const selections = deserializeArray<ResourceSelection>(ResourceSelection, data)
+        return selections
+    }
+
+    async addFolders(folders: FolderStructure[]) {
+        let selections = []
+        for (const folder of folders) {
+            const files = folder.files.map((it) => it.file).filter(f => f instanceof File) as File[]
+            let response = await add_device_folder(folder.folderName, files);
+            if (!response.length) continue;
+
+            const deserializer = new BincodeDeserializer(response);
+            let selection = ResourceSelection.deserialize(deserializer);
+            selections.push(selection)
+        }
+
         return selections
     }
 

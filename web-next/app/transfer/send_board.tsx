@@ -33,7 +33,7 @@ import {
     TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartTransfer
+    TransferEventVariantStartTransfer, ResourceTypeVariantFolder
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -95,7 +95,12 @@ function FileSelections() {
         }
 
         if (folders.length) {
-            console.log(folders)
+            core.addFolders(folders)
+                .then((selections) => {
+                    core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
+                        selections
+                    )))
+                })
         }
     }, [files, folders]);
 
@@ -190,7 +195,8 @@ function ResourceView(props: {
 }) {
     const {model} = props;
 
-    const isFile = model.type.constructor == ResourceTypeVariantFile
+    const isFile = model.type.constructor == ResourceTypeVariantFile ||
+        model.type.constructor == ResourceTypeVariantFolder
 
     if (isFile) {
         return <FileView model={model}/>
@@ -207,7 +213,7 @@ function FileView(props: {
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
     if (!thumbnailPath) {
-        thumbnailPath = "/file.svg";
+        thumbnailPath = model.type instanceof ResourceTypeVariantFolder ? "/folder.svg" : "/file.svg";
     }
 
     let displaySize = `${model.size_mb} MB`;

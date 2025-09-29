@@ -1,5 +1,5 @@
 use crate::config::{get_gateway_grpc_url, get_locator_server_url, get_signalling_server_ws_url};
-use crate::core_api_impl::bridge::CoreBridgeImpl;
+use crate::bridge::bridge::CoreBridgeImpl;
 use crate::network::net_stream::NetStreamImpl;
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;

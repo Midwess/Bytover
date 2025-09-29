@@ -8,8 +8,9 @@ use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::time::SystemTime;
 use async_stream::stream;
+use chrono::Utc;
+use n0_future::time::SystemTime;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
 use core_services::local_storage::entry::FileEntry;
@@ -60,8 +61,7 @@ pub struct DeviceFolder {
 }
 
 impl DeviceFolder {
-    pub async fn new(path: PathBuf, files: Vec<WasmFile>) -> Self {
-        let order_id = gen_id().await;
+    pub async fn new(local_resource_path: LocalResourcePath, path: PathBuf, files: Vec<WasmFile>) -> Self {
         let mut total_size = 0u64;
         for file in files.iter() {
             total_size += file.size() as u64;
@@ -70,10 +70,10 @@ impl DeviceFolder {
         let resource_instance = LocalResource {
             name: path.file_name().unwrap().to_str().unwrap().to_string(),
             size: total_size,
-            path: LocalResourcePath::device_file(order_id),
+            order_id: local_resource_path.device_file_id().unwrap(),
+            path: local_resource_path,
             thumbnail_path: None,
             r#type: ResourceType::Folder,
-            order_id
         };
 
         Self {
@@ -95,7 +95,7 @@ impl DeviceFolder {
 
         let entry = FileEntry {
             is_dir: false,
-            modified_at: SystemTime::now(),
+            modified_at: Utc::now().into(),
             size: self.resource_instance.size,
             path: self.base_path.clone().into(),
         };
