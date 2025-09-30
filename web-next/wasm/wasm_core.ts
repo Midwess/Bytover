@@ -517,16 +517,15 @@ export class WasmCore {
         const downloadUrl = await this.getDownloadUrl(path)
         
         if (!downloadUrl) {
-            throw new Error('Failed to get download URL')
+            throw new Error(`Failed to get download URL ${JSON.stringify(path)}`)
         }
-        
+
+        console.log(`Downloading file ${downloadUrl}`)
         const link = document.createElement('a')
+        link.download = filename || `download-${Date.now()}`
         link.href = downloadUrl
-        link.download = filename
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        
+        // link.click()
+
         URL.revokeObjectURL(downloadUrl)
     }
 

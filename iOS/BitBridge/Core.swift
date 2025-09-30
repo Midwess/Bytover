@@ -412,8 +412,9 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             )
 
             return await withCheckedContinuation { continuation in
-                QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, error in
-                    if let thumbnail = thumbnail, let pngData = thumbnail.uiImage.pngData() {
+                QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { thumbnail, error in
+                    if let thumbnail = thumbnail,
+                       let pngData = thumbnail.uiImage.pngData() {
                         continuation.resume(returning: pngData)
                     } else {
                         print("Failed to generate thumbnail: \(error?.localizedDescription ?? "unknown error")")

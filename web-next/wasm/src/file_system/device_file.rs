@@ -87,7 +87,7 @@ impl DeviceFolder {
         let files = self.files.clone();
         let stream = stream! {
             for file in files.iter() {
-                let writer = Box::new(IOReaderBlobImpl::from_file(file, buffer_size).await?);
+                let writer = Box::new(IOReaderBlobImpl::from_file(file, buffer_size.min(file.size() as usize)).await?);
                 yield Ok::<_, anyhow::Error>(writer as Box<dyn IOCursor>);
             }
         };
