@@ -4,7 +4,7 @@ use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use anyhow::{anyhow, Result};
 use core_services::local_storage::stream::IOCursor;
-use core_services::wasm::{HttpClient, XhrEvent};
+use core_services::wasm::{Body, HttpClient, XhrEvent};
 use futures::channel::mpsc;
 use futures_channel::mpsc::Receiver;
 use js_sys::Uint8Array;
@@ -17,13 +17,11 @@ use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::entities::file_system::file::LocalResourcePath;
 use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
+use bytes::BytesMut;
 use tonic_web_wasm_client::Client;
 use web_sys::Blob;
 
 const EVENT_QUEUE_SIZE: usize = 8;
-// The threshold for switching to cursor-based upload
-// It should small enough to fit in memory.
-const CURSOR_THRESHOLD: usize = 1024 * 1024 * 10;
 
 pub struct NetStreamImpl {
     pub resource_repo: Arc<dyn LocalResourceRepository>,
@@ -31,7 +29,7 @@ pub struct NetStreamImpl {
 }
 
 // Only working with Blob from browser
-pub struct NetStreamInnerImpl {
+pub struct NetStreamInnerBlobImpl {
     upload: Upload,
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
@@ -39,7 +37,7 @@ pub struct NetStreamInnerImpl {
 }
 
 // Support working with IOCursor from core-service
-pub struct NetStreamCursorImpl {
+pub struct NetStreamInnerChunkStreamImpl {
     server: &'static CloudServer<Client>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     upload: Upload,
@@ -50,14 +48,14 @@ pub struct NetStreamCursorImpl {
 #[async_trait::async_trait(?Send)]
 impl NetStream for NetStreamImpl {
     async fn upload_resource(&self, upload: Upload, path: LocalResourcePath) -> Result<Box<dyn NetStreamInner>> {
-        let is_cursor_based = match &upload {
-            Upload::Multipart(upload_info) => upload_info.x_content_length < CURSOR_THRESHOLD as u32,
+        let chunk_stream_enabled = match &upload {
+            Upload::Multipart(upload_info) => upload_info.chunk_stream_enabled,
             _ => false
         };
 
-        if is_cursor_based {
-            log::info!("Using cursor based for upload");
-            return Ok(Box::new(NetStreamCursorImpl {
+        if chunk_stream_enabled {
+            log::info!("Using chunk stream for upload");
+            return Ok(Box::new(NetStreamInnerChunkStreamImpl {
                 resource_repo: self.resource_repo.clone(),
                 server: self.server,
                 upload,
@@ -66,7 +64,7 @@ impl NetStream for NetStreamImpl {
             }))
         }
 
-        Ok(Box::new(NetStreamInnerImpl {
+        Ok(Box::new(NetStreamInnerBlobImpl {
             server: self.server,
             upload,
             path,
@@ -76,7 +74,7 @@ impl NetStream for NetStreamImpl {
 }
 
 #[async_trait::async_trait(?Send)]
-impl NetStreamInner for NetStreamInnerImpl {
+impl NetStreamInner for NetStreamInnerBlobImpl {
     async fn start(&mut self) -> Result<Receiver<NetStreamEvent>> {
         let (mut tx, rx) = mpsc::channel::<NetStreamEvent>(EVENT_QUEUE_SIZE);
         let Some(blob) = self.get_blob().await else {
@@ -112,75 +110,47 @@ impl NetStreamInner for NetStreamInnerImpl {
     }
 }
 
-impl NetStreamInnerImpl {
+impl NetStreamInnerBlobImpl {
     async fn single_upload(url: &str, blob: Blob, tx: &mut mpsc::Sender<NetStreamEvent>) -> Result<Option<MultiPartUploadComplete>> {
-        Self::upload_chunk(url, blob, tx).await?;
+        upload(url.to_owned(), Body::Blob(blob), 0, tx.clone()).await?;
         Ok(None)
     }
 
     async fn multipart_upload(
-        mut upload: MultiPartUpload,
+        mut request: MultiPartUpload,
         blob: Blob,
         tx: &mut mpsc::Sender<NetStreamEvent>,
         server: &'static CloudServer<Client>
     ) -> Result<Option<MultiPartUploadComplete>> {
         let mut completion = MultiPartUploadComplete {
             e_tags: vec![],
-            context_token: upload.context_token.clone()
+            context_token: request.context_token.clone()
         };
 
         let mut uploaded = 0u64;
         let total_size = blob.size() as u64;
 
         while uploaded < total_size {
-            let chunk_size = (total_size - uploaded).min(upload.x_content_length as u64);
+            let chunk_size = (total_size - uploaded).min(request.x_content_length as u64);
             let end_position = uploaded + chunk_size;
 
             let chunk_blob = blob
                 .slice_with_i32_and_i32(uploaded as i32, end_position as i32)
                 .map_err(|e| anyhow!("Failed to slice blob: {:?}", e))?;
-            let Some(etag) = Self::upload_chunk(&upload.upload_url, chunk_blob, tx).await? else {
+            let Some(etag) = upload(request.upload_url.clone(), Body::Blob(chunk_blob), uploaded, tx.clone()).await? else {
                 return Err(anyhow!("Failed to upload chunk, missing etag"));
             };
 
-            let Some(next_upload) = server.complete_part_upload(&upload.context_token).await? else {
+            let Some(next_request) = server.complete_part_upload(&request.context_token).await? else {
                 break;
             };
 
-            upload = next_upload;
+            request = next_request;
             completion.e_tags.push(etag);
             uploaded = end_position;
         }
 
         Ok(Some(completion))
-    }
-
-    async fn upload_chunk(url: &str, blob: Blob, tx: &mut mpsc::Sender<NetStreamEvent>) -> Result<Option<String>> {
-        let mut request = HttpClient::new()
-            .url(url)
-            .header("content-type", "application/octet-stream")
-            .method("PUT")
-            .body_blob(blob)
-            .xhr()
-            .map_err(|e| anyhow!("Failed to upload: {:?}", e))?;
-
-        while let Some(event) = request.next_event().await {
-            match event {
-                XhrEvent::Error(value) => {
-                    return Err(anyhow!("Failed to upload: {:?}", value));
-                }
-                XhrEvent::Complete { headers, .. } => {
-                    let etag = headers.get("etag").map(|tag| tag.trim_matches('"').to_string());
-                    return Ok(etag)
-                }
-                XhrEvent::InProgress(value) => {
-                    let uploaded_bytes = value.loaded() as u64;
-                    let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes });
-                }
-            }
-        }
-
-        Ok(None)
     }
 
     async fn get_blob(&self) -> Option<Blob> {
@@ -202,7 +172,7 @@ impl NetStreamInnerImpl {
 }
 
 #[async_trait::async_trait(?Send)]
-impl NetStreamInner for NetStreamCursorImpl {
+impl NetStreamInner for NetStreamInnerChunkStreamImpl {
     async fn start(&mut self) -> anyhow::Result<Receiver<NetStreamEvent>> {
         let (mut tx, rx) = mpsc::channel::<NetStreamEvent>(EVENT_QUEUE_SIZE);
         let Upload::Multipart(multipart) = self.upload.clone() else {
@@ -235,9 +205,9 @@ impl NetStreamInner for NetStreamCursorImpl {
     }
 }
 
-impl NetStreamCursorImpl {
+impl NetStreamInnerChunkStreamImpl {
     async fn multipart_upload(
-        mut upload: MultiPartUpload,
+        mut request: MultiPartUpload,
         cursor: &mut Box<dyn IOCursor>,
         server: &'static CloudServer<Client>,
         tx: &mut mpsc::Sender<NetStreamEvent>
@@ -245,41 +215,37 @@ impl NetStreamCursorImpl {
         let mut uploaded = 0u64;
         let mut completion = MultiPartUploadComplete {
             e_tags: vec![],
-            context_token: upload.context_token.clone()
+            context_token: request.context_token.clone()
         };
 
-        while let Some(bytes) = cursor.next(None).await? {
-            let content_length = bytes.len();
+        let mut bytes = BytesMut::with_capacity(request.x_content_length as usize);
+        let mut fut = None;
+        loop {
+            bytes.resize(request.x_content_length as usize, 0);
+            let content_length = cursor.read_exact(&mut bytes).await?;
             if content_length == 0 {
                 break;
             }
 
-            let blob = unsafe { Uint8Array::view(bytes) };
-            let response = HttpClient::new()
-                .url(&upload.upload_url)
-                .header("content-length", &content_length.to_string())
-                .header("content-type", "application/octet-stream")
-                .method("PUT")
-                .body_uint8array(blob)
-                .fetch()
-                .map_err(|e| anyhow!("Failed to upload: {:?}", e))?
-                .response()
-                .await
-                .map_err(|e| anyhow!("Failed to upload: {:?}", e))?;
+            let u8_array = unsafe { Uint8Array::view(&bytes[..content_length]) };
 
-            let Some(etag) = response.0.get("etag").map(|tag| tag.trim_matches('"').to_string()) else {
-                return Err(anyhow!("Missing etag in response"));
-            };
+            if let Some(fut) = fut.take() {
+                let Some(etag) = fut.await? else {
+                    return Err(anyhow!("Failed to upload chunk, missing etag"));
+                };
 
-            completion.e_tags.push(etag);
+                completion.e_tags.push(etag);
+            }
+
+            let url = request.upload_url.clone();
+            fut.replace(upload(url, Body::Uint8Array(u8_array), uploaded, tx.clone()));
             uploaded += content_length as u64;
-            let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes: uploaded });
 
-            let Some(continue_upload) = server.complete_part_upload(&upload.context_token).await? else {
+            let Some(next_request) = server.complete_part_upload(&request.context_token).await? else {
                 break;
             };
 
-            upload = continue_upload;
+            request = next_request;
         }
 
         Ok(completion)
@@ -293,13 +259,42 @@ impl NetStreamCursorImpl {
     }
 }
 
-impl Drop for NetStreamInnerImpl {
+
+async fn upload(url: String, body: Body, uploaded: u64, mut tx: mpsc::Sender<NetStreamEvent>) -> Result<Option<String>> {
+    let mut request = HttpClient::new()
+        .url(&url)
+        .header("content-type", "application/octet-stream")
+        .method("PUT")
+        .body(body)
+        .xhr()
+        .map_err(|e| anyhow!("Failed to upload: {:?}", e))?;
+
+    while let Some(event) = request.next_event().await {
+        match event {
+            XhrEvent::Error(value) => {
+                return Err(anyhow!("Failed to upload: {:?}", value));
+            }
+            XhrEvent::Complete { headers, .. } => {
+                let etag = headers.get("etag").map(|tag| tag.trim_matches('"').to_string());
+                return Ok(etag)
+            }
+            XhrEvent::InProgress(value) => {
+                let uploaded_bytes = value.loaded() as u64 + uploaded;
+                let _ = tx.try_send(NetStreamEvent::Progress { uploaded_bytes });
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+impl Drop for NetStreamInnerBlobImpl {
     fn drop(&mut self) {
         let _ = futures::executor::block_on(self.end());
     }
 }
 
-impl Drop for NetStreamCursorImpl {
+impl Drop for NetStreamInnerChunkStreamImpl {
     fn drop(&mut self) {
         let _ = futures::executor::block_on(self.end());
     }

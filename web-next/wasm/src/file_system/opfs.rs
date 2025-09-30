@@ -197,7 +197,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
 
                 let cursor_stream = stream! {
                     while let Some(Ok(file)) = stream.next().await {
-                        let cursor = Box::new(IOReaderBlobImpl::from_file(file, buffer_size).await?);
+                        let cursor = Box::new(IOReaderBlobImpl::from_file(&file, buffer_size).await?);
                         yield Ok::<_, anyhow::Error>(cursor as Box<dyn IOCursor>);
                     }
                 };

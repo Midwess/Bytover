@@ -135,7 +135,7 @@ impl OpfsWorker {
             FileOperation::Cursor { buffer_size } => {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
-                    match IOReaderBlobImpl::from_file(guard.file.clone(), buffer_size).await {
+                    match IOReaderBlobImpl::from_file(&guard.file, buffer_size).await {
                         Ok(reader) => Box::new(reader) as Box<dyn IOCursor>,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }

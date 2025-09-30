@@ -73,7 +73,8 @@ function FileSelections() {
             openDirectoryDialog,
             getInputProps,
             getDirectoryInputProps,
-            clearFiles
+            clearFiles,
+            clearFolders
         },
     ] = useFileUpload({
         accept: "*",
@@ -101,6 +102,7 @@ function FileSelections() {
                         selections
                     )))
                 })
+            clearFolders()
         }
     }, [files, folders]);
 

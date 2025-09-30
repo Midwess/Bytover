@@ -28,7 +28,7 @@ pub struct IOReaderBlobImpl {
 }
 
 impl IOReaderBlobImpl {
-    pub async fn from_file(file: WasmFile, buffer_size: usize) -> Result<Self> {
+    pub async fn from_file(file: &WasmFile, buffer_size: usize) -> Result<Self> {
         let modified_at = SystemTime::UNIX_EPOCH + Duration::from_millis(file.last_modified() as u64);
 
         let mut buffer = BytesMut::with_capacity(buffer_size);
@@ -55,7 +55,7 @@ impl IOReaderBlobImpl {
             .map_err(|it| anyhow!("failed to get file {it:?}"))?
             .dyn_into()
             .unwrap();
-        Self::from_file(WasmFile(file), buffer_size).await
+        Self::from_file(&WasmFile(file), buffer_size).await
     }
 }
 

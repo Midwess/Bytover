@@ -562,7 +562,7 @@ dependencies = [
 [[package]]
 name = "async_zip"
 version = "0.0.18"
-source = "git+https://github.com/dev-logs/rs-async-zip.git#2715d432934087e125ff4f552e143f8408a731d3"
+source = "git+https://github.com/dev-logs/rs-async-zip.git#b2f52eb7e32234967bc0a67c5a87c45c2863a663"
 dependencies = [
  "chrono",
  "crc32fast",

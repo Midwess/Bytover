@@ -14,6 +14,7 @@ use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::Arc;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
 
@@ -54,7 +55,7 @@ impl Deref for WasmFile {
 }
 
 pub struct DeviceFolder {
-    pub(crate) files: Vec<WasmFile>,
+    pub(crate) files: Arc<Vec<WasmFile>>,
     pub(crate) base_path: String,
     pub(crate) resource_instance: LocalResource
 }
@@ -76,7 +77,7 @@ impl DeviceFolder {
         };
 
         Self {
-            files,
+            files: Arc::new(files),
             base_path: path.to_str().unwrap().to_string(),
             resource_instance
         }
@@ -85,7 +86,7 @@ impl DeviceFolder {
     pub async fn cursor(&self, buffer_size: usize) -> anyhow::Result<Box<dyn IOCursor>> {
         let files = self.files.clone();
         let stream = stream! {
-            for file in files {
+            for file in files.iter() {
                 let writer = Box::new(IOReaderBlobImpl::from_file(file, buffer_size).await?);
                 yield Ok::<_, anyhow::Error>(writer as Box<dyn IOCursor>);
             }

@@ -1,4 +1,4 @@
-use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors, UploadContext};
+use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors, UploadContext, GB, MB};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use core_services::s3::S3Client;
 use schema::devlog::auth_gateway::models::User;
@@ -24,25 +24,27 @@ impl CloudStorage for S3CloudStorageImpl {
         platform: Platform,
         resource: &TransferResource
     ) -> Result<Upload, CloudStorageErrors> {
-        let file_size = resource.size_in_bytes() as usize;
-        let chunk_size = match (resource.r#type(), platform) {
-            (TransferResourceType::Folder, Platform::Web) => Some(5 * 1024 * 1024),
-            _ => None
+        let file_size = resource.size_in_bytes();
+        let file_size_buffered = file_size + file_size.min(GB);
+        let (chunk_size, chunk_stream_enabled) = match (resource.r#type(), platform) {
+            (TransferResourceType::Folder, Platform::Web) => (Some(8 * MB), true),
+            _ => (Some((5 * GB).min(file_size_buffered)), false) // Using max chunk size of s3
         };
 
         let source = resource.source();
-        log::info!("Get upload solution for resource: {:?} size: {:?}", source, file_size);
+        log::info!("Get upload solution for resource: {:?} size: {:?}", source, file_size_buffered);
         let upload_id = self.s3_client.create_multipart_upload(&source).await?;
         let upload_url = self
             .s3_client
             .generate_part_upload_url(&source, &upload_id, 1, self.get_download_duration())
             .await?;
-        let context = UploadContext::new(user.id.clone(), upload_id, source.clone(), file_size as u64, chunk_size)?;
+        let context = UploadContext::new(user.id.clone(), upload_id, source.clone(), file_size_buffered, chunk_size, chunk_stream_enabled)?;
         let token = context.as_token(self.get_jwt_secret());
         let part = MultiPartUpload {
             context_token: token,
             upload_url,
-            x_content_length: context.x_content_length
+            x_content_length: context.x_content_length,
+            chunk_stream_enabled
         };
 
         Ok(Upload::Multipart(part))
@@ -56,6 +58,7 @@ impl CloudStorage for S3CloudStorageImpl {
 
     async fn complete_upload_part(&self, user: &User, context_token: &str) -> Result<Option<MultiPartUpload>, CloudStorageErrors> {
         let context = UploadContext::from_token(context_token, self.get_jwt_secret(), user)?;
+        let chunk_stream_enabled = context.chunk_stream_enabled;
         let Ok(next_part) = context.next() else { return Ok(None) };
 
         let part_url = self
@@ -71,7 +74,8 @@ impl CloudStorage for S3CloudStorageImpl {
         Ok(Some(MultiPartUpload {
             upload_url: part_url,
             context_token: next_part.as_token(self.get_jwt_secret()),
-            x_content_length: next_part.x_content_length
+            x_content_length: next_part.x_content_length,
+            chunk_stream_enabled
         }))
     }
 
