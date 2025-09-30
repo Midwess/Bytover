@@ -137,16 +137,18 @@ struct CircleWaveEffect: ViewModifier {
     @State private var isActive: Bool = false
 
     func body(content: Content) -> some View {
-        content
+        let phase = animationPhase
+        let activeNow = isActive
+        return content
             .visualEffect { content, proxy in
                 return content
                     .colorEffect(
                         ShaderLibrary.circleWave(
                             .float2(proxy.size),
                             .color(Theme.BluePrimary.color),
-                            .float(animationPhase * 0.4)
+                            .float(phase * 0.4)
                         ),
-                        isEnabled: isActive
+                        isEnabled: activeNow
                     )
             }
             .onAppear {
@@ -201,7 +203,7 @@ struct ShareButton: View {
                     .frame(width: width * 0.3, height: width * 0.3)
                     .background(
                         Circle()
-                            .foregroundStyle(Theme.BlackBase.color)
+                            .foregroundStyle(Theme.BlackBase.color.opacity(0.95))
                     )
                     .clipShape(Circle())
             }
@@ -250,3 +252,4 @@ struct ShareButton: View {
 #Preview("Share button") {
     ShareButton(width: 300)
 }
+
