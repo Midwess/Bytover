@@ -25,7 +25,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
-import {ReactElement, useEffect, useState} from "react";
+import {ReactElement, useCallback, useEffect, useState} from "react";
 import {MotionEffect} from '@/components/animate-ui/effects/motion-effect';
 import Image from "next/image";
 import {useIsMobile} from "@/hooks/use-mobile";
@@ -450,6 +450,10 @@ function FileView(props: {
         }
     }, [model.thumbnail_path, thumbnailSource]);
 
+    const onDownloadClick = useCallback(() => {
+        core.downloadFile(model.path, model.name)
+    }, [model.path, model.name])
+
     return (
         <div
             className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
@@ -465,7 +469,7 @@ function FileView(props: {
             </div>
 
             <div className="flex flex-col text-white items-start mt-1">
-                <p className="text-sm text-center font-poppins break-words w-full">{model.name}</p>
+                <p className="text-sm text-start font-poppins break-words w-full">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
             </div>
             </div>
@@ -473,7 +477,7 @@ function FileView(props: {
                 file.is_completed
                     ? <button
                         className={"rounded-lg p-2 border bg-muted hover:cursor-pointer"}
-                        onClick={() => core.downloadFile(model.path, model.name)}
+                        onClick={onDownloadClick}
                     >
                         <ArrowDown color={'var(--primary)'}/>
                     </button>

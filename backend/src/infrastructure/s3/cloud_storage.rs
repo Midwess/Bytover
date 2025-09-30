@@ -38,7 +38,14 @@ impl CloudStorage for S3CloudStorageImpl {
             .s3_client
             .generate_part_upload_url(&source, &upload_id, 1, self.get_download_duration())
             .await?;
-        let context = UploadContext::new(user.id.clone(), upload_id, source.clone(), file_size_buffered, chunk_size, chunk_stream_enabled)?;
+        let context = UploadContext::new(
+            user.id.clone(),
+            upload_id,
+            source.clone(),
+            file_size_buffered,
+            chunk_size,
+            chunk_stream_enabled
+        )?;
         let token = context.as_token(self.get_jwt_secret());
         let part = MultiPartUpload {
             context_token: token,

@@ -12,7 +12,7 @@ pub mod web_worker;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;
-use crate::file_system::device_file::{DeviceFile, wasm_file};
+use crate::file_system::device_file::{wasm_file, DeviceFile};
 use crate::file_system::io::OPFS_WORKER;
 use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
@@ -21,7 +21,7 @@ use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput}
 use bincode::Options;
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
-use core_services::wasm::extensions::{FileExtension, VecExtension};
+use core_services::wasm::extensions::VecExtension;
 use core_services::wasm::HttpClient;
 pub use crux_core::bridge::Bridge;
 pub use crux_core::{Core, Request};

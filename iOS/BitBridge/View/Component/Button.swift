@@ -252,4 +252,3 @@ struct ShareButton: View {
 #Preview("Share button") {
     ShareButton(width: 300)
 }
-

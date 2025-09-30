@@ -160,7 +160,8 @@ export class WasmCore {
                     ...session.image_resources,
                     ...session.video_resources
                 ]).find(r => r.model.order_id === id)
-                
+
+                console.log('tiendang-debug', foundResource)
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
                 }
@@ -520,7 +521,6 @@ export class WasmCore {
             throw new Error(`Failed to get download URL ${JSON.stringify(path)}`)
         }
 
-        console.log(`Downloading file ${downloadUrl}`)
         const link = document.createElement('a')
         link.download = filename || `download-${Date.now()}`
         link.href = downloadUrl

@@ -1,5 +1,5 @@
 use crate::cloud_storage::storage::CloudStorage;
-use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatus};
+use crate::entities::transfer_progress::TransferProgress;
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::TransferSession;
 use schema::devlog::auth_gateway::models::Application;
@@ -43,14 +43,10 @@ impl From<TransferResourceType> for ResourceTypeMessage {
 }
 
 impl TransferResource {
-    pub async fn into_resource_msg(&self, progress: &TransferProgress, cloud_storage: &Arc<dyn CloudStorage>) -> CloudResourceMessage {
+    pub async fn into_resource_msg(&self, cloud_storage: &Arc<dyn CloudStorage>) -> CloudResourceMessage {
         let mut source = self.source();
         let thumbnail_source = self.thumbnail_source();
-        let download_url = match progress.status() {
-            TransferProgressStatus::InProgress(_) => "".to_string(),
-            TransferProgressStatus::Success => cloud_storage.generate_download_url(&mut source).await.unwrap_or_default(),
-            TransferProgressStatus::Failed(_) => "".to_string()
-        };
+        let download_url = cloud_storage.generate_download_url(&mut source).await.unwrap_or_default();
 
         let download_thumbnail_url = match thumbnail_source {
             Some(mut thumbnail_source) => cloud_storage.generate_download_url(&mut thumbnail_source).await.ok(),
@@ -73,7 +69,7 @@ impl TransferSession {
         let mut resources = vec![];
         for resource in self.resources() {
             let progress = self.progresses().iter().find(|it| it.resource_id() == resource.order_id()).unwrap();
-            resources.push(resource.clone().into_resource_msg(progress, cloud_storage).await);
+            resources.push(resource.clone().into_resource_msg(cloud_storage).await);
         }
 
         let msg = PublicTransferSessionMessage {
@@ -112,7 +108,7 @@ impl TransferSession {
                     continue;
                 };
 
-                resources.push(resource.clone().into_resource_msg(progress, cloud_storage).await);
+                resources.push(resource.clone().into_resource_msg(cloud_storage).await);
             }
 
             events.push(Event::ResourceUpdated(ResourceUpdated {

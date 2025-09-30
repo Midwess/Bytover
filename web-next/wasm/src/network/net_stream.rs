@@ -3,6 +3,7 @@ use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use anyhow::{anyhow, Result};
+use bytes::BytesMut;
 use core_services::local_storage::stream::IOCursor;
 use core_services::wasm::{Body, HttpClient, XhrEvent};
 use futures::channel::mpsc;
@@ -16,7 +17,6 @@ use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
 use shared::entities::file_system::file::LocalResourcePath;
 use shared::rpc::cloud_server::CloudServer;
 use std::sync::Arc;
-use bytes::BytesMut;
 use tonic_web_wasm_client::Client;
 use web_sys::Blob;
 
@@ -31,7 +31,7 @@ pub struct NetStreamInnerBlobImpl {
     upload: Upload,
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
-    handle: Option<JoinHandle<Result<()>>>,
+    handle: Option<JoinHandle<Result<()>>>
 }
 
 pub struct NetStreamInnerChunkStreamImpl {
@@ -39,7 +39,7 @@ pub struct NetStreamInnerChunkStreamImpl {
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
     resource_repo: Arc<dyn LocalResourceRepository>,
-    handle: Option<JoinHandle<()>>,
+    handle: Option<JoinHandle<()>>
 }
 
 #[async_trait::async_trait(?Send)]
@@ -54,14 +54,14 @@ impl NetStream for NetStreamImpl {
                 server: self.server,
                 upload,
                 path,
-                handle: None,
+                handle: None
             }))
         } else {
             Ok(Box::new(NetStreamInnerBlobImpl {
                 server: self.server,
                 upload,
                 path,
-                handle: None,
+                handle: None
             }))
         }
     }
@@ -72,8 +72,7 @@ impl NetStreamInner for NetStreamInnerBlobImpl {
     async fn start(&mut self) -> Result<Receiver<NetStreamEvent>> {
         let (mut tx, rx) = mpsc::channel::<NetStreamEvent>(EVENT_QUEUE_SIZE);
 
-        let blob = get_blob_from_path(&self.path).await
-            .ok_or_else(|| anyhow!("No blob to upload"))?;
+        let blob = get_blob_from_path(&self.path).await.ok_or_else(|| anyhow!("No blob to upload"))?;
 
         let upload = self.upload.clone();
         let server = self.server;
@@ -231,8 +230,7 @@ async fn upload_multipart_stream(
 
         // Wait for previous upload to complete
         if let Some(fut) = pending_upload.take() {
-            let etag = fut.await.unwrap()?
-                .ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
+            let etag = fut.await.unwrap()?.ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
             completion.e_tags.push(etag);
         }
 
@@ -241,9 +239,7 @@ async fn upload_multipart_stream(
         pending_upload = Some({
             let url = request.upload_url.clone();
             let tx_clone = tx.clone();
-            spawn(async move {
-                upload_with_progress(url, Body::Bytes(upload_data), uploaded, tx_clone).await
-            })
+            spawn(async move { upload_with_progress(url, Body::Bytes(upload_data), uploaded, tx_clone).await })
         });
 
         uploaded += content_length as u64;
@@ -256,20 +252,14 @@ async fn upload_multipart_stream(
 
     // Wait for final upload
     if let Some(fut) = pending_upload {
-        let etag = fut.await.unwrap()?
-            .ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
+        let etag = fut.await.unwrap()?.ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
         completion.e_tags.push(etag);
     }
 
     Ok(completion)
 }
 
-async fn upload_with_progress(
-    url: String,
-    body: Body,
-    uploaded: u64,
-    mut tx: mpsc::Sender<NetStreamEvent>
-) -> Result<Option<String>> {
+async fn upload_with_progress(url: String, body: Body, uploaded: u64, mut tx: mpsc::Sender<NetStreamEvent>) -> Result<Option<String>> {
     let mut request = HttpClient::new()
         .url(&url)
         .header("content-type", "application/octet-stream")

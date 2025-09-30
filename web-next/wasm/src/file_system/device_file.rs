@@ -6,6 +6,7 @@ use chrono::Utc;
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
 use core_services::local_storage::zip::ZipStream;
+use core_services::wasm::extensions::FileExtension;
 use devlog_sdk::distributed_id::gen_id;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
@@ -17,12 +18,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
-use core_services::wasm::extensions::FileExtension;
 
 pub fn wasm_file(file: File) -> WebFile {
     WebFile {
         webkit_path: file.webkit_path(),
-        file,
+        file
     }
 }
 

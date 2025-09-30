@@ -20,7 +20,6 @@ use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
-use core_services::wasm::extensions::FileExtension;
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:

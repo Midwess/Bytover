@@ -31,7 +31,7 @@ pub struct UploadContext {
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
     pub x_content_length: u32,
-    pub chunk_stream_enabled: bool,
+    pub chunk_stream_enabled: bool
 }
 
 pub const MB: u64 = 1024 * 1024;
