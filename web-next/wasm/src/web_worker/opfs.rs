@@ -139,12 +139,14 @@ impl OpfsWorker {
                         Ok(reader) => Box::new(reader) as Box<dyn IOCursor>,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }
-                } else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
+                }
+                else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
                     match device_folder.lock().await.cursor(buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
                     }
-                } else {
+                }
+                else {
                     match root.cursor(&file_path, buffer_size).await {
                         Ok(cursor) => cursor,
                         Err(e) => return OpfsOperationOutput::Error(e)

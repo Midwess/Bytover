@@ -120,7 +120,10 @@ impl NetStreamInner for NetStreamInnerChunkStreamImpl {
             return Err(anyhow!("Only multipart upload is supported"));
         };
 
-        let mut cursor = self.resource_repo.read(self.path.clone(), multipart.x_content_length as usize).await?;
+        let mut cursor = self.resource_repo.read(
+            self.path.clone(),
+            512 * 1024
+        ).await?;
         let server = self.server;
 
         self.handle = Some(spawn(async move {
