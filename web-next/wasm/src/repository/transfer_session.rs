@@ -133,6 +133,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         session_id: TransferSessionId,
         resource: LocalResource
     ) -> Result<Option<TransferSession>, PersistenceError> {
+        log::info!("update_resource of session: {:?}", session_id);
         let session =
             IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(session_id.clone()))
                 .await?;
@@ -148,10 +149,6 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
 
     async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
         IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(session_id.clone())).await?;
-
-        // Note: In WASM environment, we don't need to delete filesystem directories
-        // as the browser manages the storage differently than native filesystem
-
         Ok(())
     }
 

@@ -7,7 +7,6 @@ use core_services::local_storage::stream::IOCursor;
 use core_services::wasm::{Body, HttpClient, XhrEvent};
 use futures::channel::mpsc;
 use futures_channel::mpsc::Receiver;
-use js_sys::Uint8Array;
 use n0_future::task::{spawn, JoinHandle};
 use n0_future::SinkExt;
 use schema::devlog::bitbridge::client_upload_request::Upload;

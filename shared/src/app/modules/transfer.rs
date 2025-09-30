@@ -493,11 +493,10 @@ impl AppModule<BitBridge> for TransferModule {
                         TransferSessionPersistentOperation::update_resource(session_id, resource)
                             .into_future(it.clone())
                             .await;
-                    })
-                    .then_render();
+                    });
                 }
 
-                Command::done()
+                Command::render()
             }
             TransferEvent::FindPublicSession { keywords } => {
                 let transfer_service = self.transfer_service;

@@ -17,21 +17,33 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
 use web_sys::{Blob, File};
+use core_services::wasm::extensions::FileExtension;
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct WasmFile(#[serde(with = "serde_wasm_bindgen::preserve")] pub File);
-
-impl Debug for WasmFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmFile {{ name: {}, size: {} }}", self.name(), self.size())
+pub fn wasm_file(file: File) -> WebFile {
+    WebFile {
+        webkit_path: file.webkit_path(),
+        file,
     }
 }
 
-unsafe impl Send for WasmFile {}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct WebFile {
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    pub file: File,
+    pub webkit_path: Option<String>
+}
 
-unsafe impl Sync for WasmFile {}
+impl Debug for WebFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "wasm_file {{ name: {}, size: {} }}", self.name(), self.size())
+    }
+}
 
-impl WasmFile {
+unsafe impl Send for WebFile {}
+
+unsafe impl Sync for WebFile {}
+
+impl WebFile {
     pub fn resource_type(&self) -> ResourceType {
         let mime_type = mime_guess::from_path(self.name()).first_or_octet_stream();
         let resource_type = if mime_type.type_() == mime_guess::mime::IMAGE {
@@ -46,22 +58,22 @@ impl WasmFile {
     }
 }
 
-impl Deref for WasmFile {
+impl Deref for WebFile {
     type Target = File;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.file
     }
 }
 
 pub struct DeviceFolder {
-    pub(crate) files: Arc<Vec<WasmFile>>,
+    pub(crate) files: Arc<Vec<WebFile>>,
     pub(crate) base_path: String,
     pub(crate) resource_instance: LocalResource
 }
 
 impl DeviceFolder {
-    pub async fn new(local_resource_path: LocalResourcePath, path: PathBuf, files: Vec<WasmFile>) -> Self {
+    pub async fn new(local_resource_path: LocalResourcePath, path: PathBuf, files: Vec<WebFile>) -> Self {
         let mut total_size = 0u64;
         for file in files.iter() {
             total_size += file.size() as u64;
@@ -108,7 +120,7 @@ impl DeviceFolder {
 /// Keep track of files that are being chosen by the user from their device.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DeviceFile {
-    pub(crate) file: WasmFile,
+    pub(crate) file: WebFile,
     #[serde(with = "serde_wasm_bindgen::preserve")]
     pub(crate) resource: Uint8Array,
 
@@ -142,7 +154,7 @@ impl DeviceFile {
         resource_cell.set(resource_instance).unwrap();
 
         Self {
-            file: WasmFile(file),
+            file: wasm_file(file),
             resource_instance: resource_cell,
             resource
         }
@@ -163,6 +175,6 @@ impl DeviceFile {
     }
 
     pub fn blob(self) -> Option<Blob> {
-        (self.file.0).dyn_into().ok()
+        (self.file.file).dyn_into().ok()
     }
 }

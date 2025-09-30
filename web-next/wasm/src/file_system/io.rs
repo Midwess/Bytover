@@ -1,4 +1,4 @@
-use crate::file_system::device_file::WasmFile;
+use crate::file_system::device_file::{wasm_file, WebFile};
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput, OpfsWorker};
 use anyhow::{anyhow, Result};
@@ -7,7 +7,6 @@ use bytes::{Bytes, BytesMut};
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
 use core_services::utils::never_send::NeverSend;
-use core_services::wasm::extensions::FileExtension;
 use js_sys::Uint8Array;
 use shared::core_api::{IOReader, IOWriter};
 use std::path::PathBuf;
@@ -27,7 +26,7 @@ pub struct IOReaderBlobImpl {
 }
 
 impl IOReaderBlobImpl {
-    pub async fn from_file(file: &WasmFile, buffer_size: usize) -> Result<Self> {
+    pub async fn from_file(file: &WebFile, buffer_size: usize) -> Result<Self> {
         let modified_at = SystemTime::UNIX_EPOCH + Duration::from_millis(file.last_modified() as u64);
         let buffer_size = buffer_size.min(file.size() as usize);
 
@@ -38,7 +37,7 @@ impl IOReaderBlobImpl {
             is_dir: false,
             modified_at,
             size: file.size() as u64,
-            path: PathBuf::from(file.0.webkit_path().unwrap_or(file.0.name().to_string()))
+            path: PathBuf::from(file.webkit_path.clone().unwrap_or(file.name().to_string()))
         };
 
         Ok(Self {
@@ -55,7 +54,7 @@ impl IOReaderBlobImpl {
             .map_err(|it| anyhow!("failed to get file {it:?}"))?
             .dyn_into()
             .unwrap();
-        Self::from_file(&WasmFile(file), buffer_size).await
+        Self::from_file(&wasm_file(file), buffer_size).await
     }
 }
 

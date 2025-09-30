@@ -1,4 +1,4 @@
-use crate::file_system::device_file::WasmFile;
+use crate::file_system::device_file::{wasm_file, WebFile};
 use crate::file_system::io::IOReaderBlobImpl;
 use async_stream::stream;
 use chrono::Utc;
@@ -21,7 +21,7 @@ use web_sys::{
     FileSystemSyncAccessHandle
 };
 
-pub type FileStream = Pin<Box<dyn Stream<Item = Result<WasmFile, anyhow::Error>>>>;
+pub type FileStream = Pin<Box<dyn Stream<Item = Result<WebFile, anyhow::Error>>>>;
 
 pub enum HandleType {
     File,
@@ -154,7 +154,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                             let file_handle = handle.unchecked_into::<FileSystemFileHandle>();
                             let js_value = JsFuture::from(file_handle.get_file()).await.unwrap();
                             let file: File = js_value.dyn_into().unwrap();
-                            yield Ok(WasmFile(file));
+                            yield Ok(wasm_file(file));
                         }
                         Some(HandleType::Folder) => {
                             let dir_handle = handle.unchecked_into::<FileSystemDirectoryHandle>();
