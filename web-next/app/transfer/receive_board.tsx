@@ -6,7 +6,7 @@ import {
     ImageReceiveResourceViewModel,
     LocalResourcePathVariantAbsolutePath,
     ReceiveCloudSessionViewModel,
-    ReceiveSessionViewModel,
+    ReceiveSessionViewModel, ResourceTypeVariantFile,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel, TransferEventVariantCancelTransfer,
     TransferEventVariantFindPublicSession,
@@ -433,16 +433,22 @@ function FileView(props: {
     
     const model = file.model;
 
-    const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
     const fallbackThumbnail = model.type instanceof ResourceTypeVariantFolder
         ? "/folder.svg"
         : "/file.svg";
 
-    const [imgSrc, setImgSrc] = useState(thumbnailPath || fallbackThumbnail);
+    const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
+
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
+
+    useEffect(() => {
+        if (model.thumbnail_path && !thumbnailSource) {
+            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
+        }
+    }, [model.thumbnail_path, thumbnailSource]);
 
     return (
         <div
@@ -452,10 +458,9 @@ function FileView(props: {
                 <Image
                     className="w-full h-auto bg-muted rounded-xl p-1.5"
                     layout="fill"
-                    objectFit="cover"
                     alt="Thumbnail"
-                    src={imgSrc}
-                    onError={() => setImgSrc(fallbackThumbnail)}
+                    src={thumbnailSource || fallbackThumbnail}
+                    onError={() => setThumbnailSource(fallbackThumbnail)}
                 />
             </div>
 

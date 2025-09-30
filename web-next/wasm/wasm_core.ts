@@ -524,7 +524,7 @@ export class WasmCore {
         const link = document.createElement('a')
         link.download = filename || `download-${Date.now()}`
         link.href = downloadUrl
-        // link.click()
+        link.click()
 
         URL.revokeObjectURL(downloadUrl)
     }
