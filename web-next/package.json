@@ -3,16 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "next": "deno run --allow-all --unstable-unsafe-proto --unstable-detect-cjs npm:next@15.3.5",
-    "schema:compile": "deno --dir ../libs/schema/typescript build; rm -r node_modules/schema-ts; deno install -f ./schema/typescript",
-    "wasm:dev": "cd wasm && wasm-pack build --target web --dev && cd ../worker && wasm-pack build --target no-modules --dev --features core && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --dev --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
-    "wasm:build": "cd wasm && wasm-pack build --target web --release && cd ../worker && wasm-pack build --target no-modules --features core --release && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --features opfs --release && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
-    "dev": "pnpm next --turbopack",
     "postinstall": "cargo install wasm-pack --version 0.13.1",
-    "build": "pnpm next build",
-    "build:next-only": "deno run --allow-all build.ts --next-only",
-    "start": "deno run --allow-all npm:next@15.3.5 start",
-    "lint": "deno run --allow-all npm:next@15.3.5 lint --fix"
+    "wasm:dev": "cd wasm && wasm-pack build --target web --dev && cd ../worker && wasm-pack build --target no-modules --dev --features core && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --dev --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
+    "wasm:build": "cd wasm && wasm-pack build --target web && cd ../worker && wasm-pack build --target no-modules --features core && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
+    "build": "pnpm wasm:build; next build",
+    "lint": "next lint --fix",
+    "deno-next": "deno run --allow-all --unstable-unsafe-proto --unstable-detect-cjs npm:next@15.3.5",
+    "dev": "deno task deno-next --turbopack",
+    "start": "deno task deno-next start --turbopack"
   },
   "dependencies": {
     "@base-ui-components/react": "1.0.0-beta.1",
@@ -25,6 +23,7 @@
     "bluebird": "^3.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "core_wasm": "file:./wasm/pkg",
     "filepond": "^4.32.8",
     "filepond-plugin-file-poster": "^2.5.2",
     "filepond-plugin-image-preview": "^4.6.12",
@@ -40,8 +39,6 @@
     "react-filepond": "^7.1.3",
     "react-hot-toast": "^2.5.2",
     "react-use-measure": "^2.1.7",
-    "core_wasm": "file:./wasm/pkg",
-    "schema-ts": "file:../libs/schema/typescript",
     "shared_types": "file:../shared_types/generated/typescript",
     "tailwind-merge": "^3.3.1"
   },

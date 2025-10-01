@@ -47,14 +47,18 @@ $ cargo run
 ### Web
 NextJs with Deno runtime
 
-Deno version: `>= 2.0`
+- Deno (Runtime) version: `>= 2.0`
+- Node (Build time) version: `>= 20.0`
+- pnpm version: `>= 10.0.0`
 ```bash
-# Web
 $ cd web-next
-# Install js dependencies
+# Install dependencies
 $ pnpm install
-# To start web in dev mode
-$ pnpm dev
+# To start in dev mode
+$ deno task dev
+# To start in production mode
+$ deno task build
+$ PORT=<PORT> deno task start
 ```
 
 ### Android:
