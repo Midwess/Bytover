@@ -45,6 +45,9 @@ $ cargo run
 ```
 
 ### Web
+NextJs with Deno runtime
+
+Deno version: `>= 2.0`
 ```bash
 # Web
 $ cd web-next
