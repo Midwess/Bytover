@@ -66,7 +66,6 @@ import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
 import init_core, {
     add_device_files, add_device_folder, create_file,
     execute,
-    execute_operation,
     get_device_file,
     get_download_url,
     init, is_compatible,
@@ -78,7 +77,6 @@ import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
 import {FileMetadata, FolderStructure} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
-import {deserialize} from "v8";
 
 export class WasmCore {
     // If it is not compatible, then the current browser is not supported.
@@ -161,7 +159,6 @@ export class WasmCore {
                     ...session.video_resources
                 ]).find(r => r.model.order_id === id)
 
-                console.log('tiendang-debug', foundResource)
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
                 }

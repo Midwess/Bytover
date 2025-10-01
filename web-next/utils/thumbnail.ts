@@ -1,5 +1,7 @@
 'use client'
 
+let heic2any: any
+
 export async function getThumbnailFromFile(
     file: File,
     size: number = 300
@@ -16,12 +18,11 @@ export async function getThumbnailFromFile(
 
     if (isHEIC) {
         try {
-            const heic2any = (await import("heic2any")).default;
-
+            let heic2any = (await import("heic2any")).default;
             const convertedBlob = await heic2any({
                 blob: file,
                 toType: "image/png",
-                quality: 0.2
+                quality: 0.1,
             }) as Blob;
             
             const convertedFile = new File(
@@ -39,7 +40,9 @@ export async function getThumbnailFromFile(
     const url = URL.createObjectURL(file);
 
     return new Promise<Uint8Array>((resolve, reject) => {
-        const cleanup = () => URL.revokeObjectURL(url);
+        const cleanup = () => {
+            URL.revokeObjectURL(url);
+        }
 
         function drawWithAspect(media: HTMLImageElement | HTMLVideoElement) {
             const naturalWidth = media instanceof HTMLImageElement ? media.naturalWidth : media.videoWidth;
