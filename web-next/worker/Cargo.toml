@@ -3,6 +3,19 @@ name = "worker"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
+description = "wasm worker to handle heavy task for bitbridge"
+license = "Apache-2.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.dev]
+opt-level = 1
+debug = true
 
 [features]
 opfs = []
@@ -14,5 +27,18 @@ crate-type = ["cdylib", "lib", "staticlib"]
 [dependencies]
 wasm = { path = "../wasm" }
 gloo-worker = { version = "0.5", features = [ "futures" ] }
-wasm-bindgen = "0.2.101"
-wasm-bindgen-futures = "0.4.51"
+wasm-bindgen = "0.2.104"
+wasm-bindgen-futures = "0.4.54"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-O4",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+    "--dce",
+    "--vacuum"
+]
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false

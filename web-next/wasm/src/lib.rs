@@ -85,7 +85,7 @@ pub async fn view() -> Uint8Array {
 
 #[wasm_bindgen]
 pub async fn is_compatible() -> bool {
-    logger::setup();
+    log::info!("Checking is compatible");
     let Some(with_browser) = window() else {
         log::info!("No window");
         return false
@@ -118,6 +118,8 @@ pub async fn is_compatible() -> bool {
 
 #[wasm_bindgen]
 pub async fn init() {
+    logger::setup();
+    log::info!("Initializing");
     let di_container = DiContainer::get_instance();
     di_container.init().await;
 }

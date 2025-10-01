@@ -300,12 +300,7 @@ export class WasmCore {
                     return it.id === peerId
                 })
 
-                const isChanged = currentPeer?.id !== peer?.id ||
-                    currentPeer?.display_name !== peer?.display_name ||
-                    currentPeer?.display_download_speed !== peer?.display_download_speed ||
-                    currentPeer?.display_upload_speed !== peer?.display_upload_speed ||
-                    currentPeer?.display_download_speed !== peer?.display_download_speed
-                if (isChanged) {
+                if (!isEqual(peer, currentPeer)) {
                     setPeer(peer)
                 }
             })

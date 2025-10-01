@@ -57,7 +57,6 @@ pub struct TransferModule {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TransferEvent {
-    // Event from shell
     Launch(),
     // This event is used to notify the core that the shell need sometime to load resources
     // The core will control the loading progress after the AddResources is triggered
@@ -530,9 +529,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 for progress in progresses {
-                    if let Some(index) = session.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
-                        session.progress[index] = progress;
-                    }
+                    session.update_progress(progress);
                 }
 
                 if session.is_completed() {

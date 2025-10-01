@@ -3,6 +3,8 @@ name = "wasm"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
+description = "wasm client for bitbridge"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "lib", "staticlib"]
@@ -15,7 +17,7 @@ panic = "abort"
 strip = "symbols"
 
 [profile.dev]
-opt-level = 3
+opt-level = 1
 debug = true
 
 [dependencies]
@@ -39,18 +41,28 @@ bytes = { workspace = true }
 futures-timer = { workspace = true, features = ["wasm-bindgen"] }
 mime_guess = { workspace = true }
 url = { workspace = true }
-wasm-bindgen = { version = "0.2.101" }
+wasm-bindgen = { version = "0.2.104" }
 tonic-web-wasm-client = "0.7.1"
 serde-wasm-bindgen = { version = "0.6.5" }
 idb = { version = "0.6.4" }
 log = "0.4.28"
-web-sys = { version = "0.3.78", features = ["File", "Blob", "BlobPropertyBag", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager", "Url", "FileSystemWritableFileStream", "FileSystemSyncAccessHandle", "FileSystemFileHandle", "FileSystemHandle", "FileSystemDirectoryHandle", "FileSystemGetDirectoryOptions", "FileSystemGetFileOptions", "FileSystemReadWriteOptions"] }
+web-sys = { version = "0.3.81", features = ["File", "Blob", "BlobPropertyBag", "FileReader", "RequestMode", "RequestInit", "Headers", "Window", "Location", "ProgressEvent", "XmlHttpRequest", "XmlHttpRequestUpload", "AbortController", "Document", "Cache", "CacheStorage", "Request", "Response", "ResponseInit", "Navigator", "StorageManager", "Url", "FileSystemWritableFileStream", "FileSystemSyncAccessHandle", "FileSystemFileHandle", "FileSystemHandle", "FileSystemDirectoryHandle", "FileSystemGetDirectoryOptions", "FileSystemGetFileOptions", "FileSystemReadWriteOptions"] }
 futures-channel = "0.3.31"
-wasm-bindgen-futures = { version = "0.4.50" }
-js-sys = "0.3.78"
+wasm-bindgen-futures = { version = "0.4.54" }
+js-sys = "0.3.81"
 gloo-worker = "0.5.0"
-uuid = { version = "1.18.0", features = ["v4"] }
+uuid = { version = "1.18.1", features = ["v4"] }
 chrono = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-O4",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+    "--dce",
+    "--vacuum"
+]
+
+[package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
