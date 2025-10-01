@@ -208,7 +208,7 @@ export const useFileUpload = (
 
   // Helper function to traverse directory entries and collect files with proper paths
   const traverseDirectoryEntry = useCallback(async (entry: any, basePath = ""): Promise<File[]> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const collectedFiles: File[] = []
       let pendingOperations = 0
       let completed = false
@@ -229,62 +229,56 @@ export const useFileUpload = (
         addOperation()
         const reader = dirEntry.createReader()
 
-        const readEntries = () => {
+        const readAllEntries = (allEntries: any[] = []) => {
           reader.readEntries((entries: any[]) => {
             if (entries.length === 0) {
+              // Process all collected entries
+              allEntries.forEach((entryItem) => {
+                if (entryItem.isFile) {
+                  addOperation()
+                  entryItem.file((file: File) => {
+                    const relativePath = currentPath ? `${currentPath}/${file.name}` : file.name
+                    Object.defineProperty(file, "webkitRelativePath", {
+                      value: relativePath,
+                      configurable: true,
+                      enumerable: true,
+                      writable: false,
+                    })
+                    collectedFiles.push(file)
+                    completeOperation()
+                  }, (error: any) => {
+                    console.error('Error reading file:', error)
+                    completeOperation()
+                  })
+                } else if (entryItem.isDirectory) {
+                  const newPath = currentPath ? `${currentPath}/${entryItem.name}` : entryItem.name
+                  traverseEntry(entryItem, newPath)
+                }
+              })
               completeOperation()
               return
             }
 
-            entries.forEach((entryItem) => {
-              if (entryItem.isFile) {
-                addOperation()
-                entryItem.file((file: File) => {
-                  // Set the webkitRelativePath to match the structure expected by organizeFolderStructure
-                  const relativePath = currentPath ? `${currentPath}/${file.name}` : file.name;
-                  Object.defineProperty(file, "webkitRelativePath", {
-                    value: relativePath,
-                    configurable: true,
-                    enumerable: true,
-                    writable: false, // keep read-only semantics
-                  });
-                  collectedFiles.push(file)
-                  completeOperation()
-                }, (error: any) => {
-                  console.error('Error reading file:', error)
-                  completeOperation()
-                })
-              } else if (entryItem.isDirectory) {
-                const newPath = currentPath ? `${currentPath}/${entryItem.name}` : entryItem.name
-                traverseEntry(entryItem, newPath)
-              }
-            })
-
-            // Continue reading if there might be more entries
-            readEntries()
+            // Continue reading entries
+            allEntries.push(...entries)
+            readAllEntries(allEntries)
           }, (error: any) => {
             console.error('Error reading directory entries:', error)
             completeOperation()
           })
         }
 
-        readEntries()
+        readAllEntries()
       }
 
       if (entry.isDirectory) {
         const rootPath = basePath || entry.name
         traverseEntry(entry, rootPath)
       } else if (entry.isFile) {
-        // Single file
+        // For individual files, don't set webkitRelativePath
         addOperation()
         entry.file((file: File) => {
-          const relativePath = basePath ? `${basePath}/${file.name}` : file.name;
-          Object.defineProperty(file, "webkitRelativePath", {
-            value: relativePath,
-            configurable: true,
-            enumerable: true,
-            writable: false,
-          });
+          // Don't set webkitRelativePath for individual files
           collectedFiles.push(file)
           completeOperation()
         }, (error: any) => {
@@ -292,18 +286,8 @@ export const useFileUpload = (
           completeOperation()
         })
       } else {
-        // Unknown entry type
         resolve([])
       }
-
-      // Timeout fallback to prevent hanging
-      setTimeout(() => {
-        if (!completed) {
-          completed = true
-          console.warn('Directory traversal timed out, returning collected files')
-          resolve(collectedFiles)
-        }
-      }, 10000)
     })
   }, [])
 
@@ -464,11 +448,9 @@ export const useFileUpload = (
       ]
   )
 
-  // Enhanced addFolders function that handles both file input and drag/drop
   const addFolders = useCallback(
       async (newFiles: FileList | File[] | Promise<File[]>) => {
         try {
-          // Handle async file collection from drag/drop
           const resolvedFiles = await Promise.resolve(newFiles)
 
           if (!resolvedFiles || resolvedFiles.length === 0) return
@@ -478,7 +460,6 @@ export const useFileUpload = (
 
           setState((prev) => ({ ...prev, errors: [] }))
 
-          // Validate files
           const validFiles: File[] = []
           newFilesArray.forEach((file) => {
             if (file.size > maxSize) {
@@ -497,7 +478,6 @@ export const useFileUpload = (
           if (validFiles.length > 0) {
             const newFolders = organizeFolderStructure(validFiles)
 
-            // Filter out duplicate folders
             const filteredFolders = newFolders.filter(newFolder => {
               return !state.folders.some(f => f.folderName === newFolder.folderName)
             })
@@ -627,7 +607,7 @@ export const useFileUpload = (
     e.stopPropagation()
   }, [])
 
-  // Simplified handleDrop function that delegates all folder processing to addFolders
+  // Fixed handleDrop function that properly distinguishes files from folders
   const handleDrop = useCallback(
       async (e: React.DragEvent<HTMLElement>) => {
         e.preventDefault()
@@ -641,40 +621,62 @@ export const useFileUpload = (
         const items = e.dataTransfer.items
 
         // Handle modern browsers with webkitGetAsEntry support
-        if (items && items.length > 0 && allowDirectories) {
+        if (items && items.length > 0) {
           const entries = Array.from(items)
               .map(item => (item as any).webkitGetAsEntry?.())
               .filter(entry => entry)
 
           if (entries.length > 0) {
-            const hasDirectories = entries.some(entry => entry.isDirectory)
+            try {
+              const folderFiles: File[] = []
+              const individualFiles: File[] = []
 
-            if (hasDirectories) {
-              // Process directories using the enhanced traversal
-              try {
-                const allFiles: File[] = []
+              // Separate directories from individual files
+              const directories = entries.filter(entry => entry.isDirectory)
+              const fileEntries = entries.filter(entry => entry.isFile)
 
-                for (const entry of entries) {
-                  const files = await traverseDirectoryEntry(entry)
-                  allFiles.push(...files)
+              // Process directories if allowed
+              if (directories.length > 0 && allowDirectories) {
+                for (const dirEntry of directories) {
+                  const files = await traverseDirectoryEntry(dirEntry)
+                  folderFiles.push(...files)
                 }
-
-                if (allFiles.length > 0) {
-                  await addFolders(allFiles)
-                }
-              } catch (error) {
-                console.error('Error processing dropped directories:', error)
-                setState((prev) => ({
-                  ...prev,
-                  errors: [...prev.errors, 'Error processing dropped folders.']
-                }))
               }
+
+              // Process individual files
+              if (fileEntries.length > 0) {
+                for (const fileEntry of fileEntries) {
+                  const files = await traverseDirectoryEntry(fileEntry)
+                  individualFiles.push(...files)
+                }
+              }
+
+              // Add folder contents
+              if (folderFiles.length > 0) {
+                await addFolders(folderFiles)
+              }
+
+              // Add individual files
+              if (individualFiles.length > 0) {
+                if (!multiple) {
+                  addFiles([individualFiles[0]])
+                } else {
+                  addFiles(individualFiles)
+                }
+              }
+
               return
+            } catch (error) {
+              console.error('Error processing dropped items:', error)
+              setState((prev) => ({
+                ...prev,
+                errors: [...prev.errors, 'Error processing dropped items.']
+              }))
             }
           }
         }
 
-        // Fallback for browsers without full drag/drop support or regular files
+        // Fallback for browsers without full drag/drop support
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           const files = Array.from(e.dataTransfer.files)
           const hasRelativePaths = files.some((file) => !!(file as any).webkitRelativePath)

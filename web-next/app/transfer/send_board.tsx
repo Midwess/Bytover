@@ -132,7 +132,7 @@ function FileSelections() {
                             <ImageUpIcon className="size-4 opacity-60"/>
                         </div>
                         <p className="mb-1.5 text-sm font-medium">
-                            Drop multiple files here or click to browse
+                            Drop files here or click to browse
                         </p>
                     </div>
                 </div>
