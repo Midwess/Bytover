@@ -54,7 +54,7 @@ export type FileUploadState = {
 
 export type FileUploadActions = {
   addFiles: (files: FileList | File[]) => void
-  addFolders: (files: FileList | File[]) => void
+  addFolders: (files: FileList | File[] | Promise<File[]>) => Promise<void>
   removeFile: (id: string) => void
   removeFolder: (id: string) => void
   clearFiles: () => void
@@ -178,7 +178,7 @@ export const useFileUpload = (
     return `folder-${folderName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
   }, [])
 
-  // Simple folder organization - just group by root folder name
+  // Enhanced folder organization that handles both webkitRelativePath and custom paths
   const organizeFolderStructure = useCallback((files: File[]): FolderStructure[] => {
     const folderMap = new Map<string, File[]>()
 
@@ -205,6 +205,107 @@ export const useFileUpload = (
       id: generateFolderId(folderName),
     }))
   }, [generateUniqueId, generateFolderId, createPreview])
+
+  // Helper function to traverse directory entries and collect files with proper paths
+  const traverseDirectoryEntry = useCallback(async (entry: any, basePath = ""): Promise<File[]> => {
+    return new Promise((resolve, reject) => {
+      const collectedFiles: File[] = []
+      let pendingOperations = 0
+      let completed = false
+
+      const addOperation = () => {
+        pendingOperations++
+      }
+
+      const completeOperation = () => {
+        pendingOperations--
+        if (pendingOperations === 0 && !completed) {
+          completed = true
+          resolve(collectedFiles)
+        }
+      }
+
+      const traverseEntry = (dirEntry: any, currentPath: string) => {
+        addOperation()
+        const reader = dirEntry.createReader()
+
+        const readEntries = () => {
+          reader.readEntries((entries: any[]) => {
+            if (entries.length === 0) {
+              completeOperation()
+              return
+            }
+
+            entries.forEach((entryItem) => {
+              if (entryItem.isFile) {
+                addOperation()
+                entryItem.file((file: File) => {
+                  // Set the webkitRelativePath to match the structure expected by organizeFolderStructure
+                  const relativePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+                  Object.defineProperty(file, "webkitRelativePath", {
+                    value: relativePath,
+                    configurable: true,
+                    enumerable: true,
+                    writable: false, // keep read-only semantics
+                  });
+                  collectedFiles.push(file)
+                  completeOperation()
+                }, (error: any) => {
+                  console.error('Error reading file:', error)
+                  completeOperation()
+                })
+              } else if (entryItem.isDirectory) {
+                const newPath = currentPath ? `${currentPath}/${entryItem.name}` : entryItem.name
+                traverseEntry(entryItem, newPath)
+              }
+            })
+
+            // Continue reading if there might be more entries
+            readEntries()
+          }, (error: any) => {
+            console.error('Error reading directory entries:', error)
+            completeOperation()
+          })
+        }
+
+        readEntries()
+      }
+
+      if (entry.isDirectory) {
+        const rootPath = basePath || entry.name
+        traverseEntry(entry, rootPath)
+      } else if (entry.isFile) {
+        // Single file
+        addOperation()
+        entry.file((file: File) => {
+          const relativePath = basePath ? `${basePath}/${file.name}` : file.name;
+          Object.defineProperty(file, "webkitRelativePath", {
+            value: relativePath,
+            configurable: true,
+            enumerable: true,
+            writable: false,
+          });
+          collectedFiles.push(file)
+          completeOperation()
+        }, (error: any) => {
+          console.error('Error reading file:', error)
+          completeOperation()
+        })
+      } else {
+        // Unknown entry type
+        resolve([])
+      }
+
+      // Timeout fallback to prevent hanging
+      setTimeout(() => {
+        if (!completed) {
+          completed = true
+          console.warn('Directory traversal timed out, returning collected files')
+          resolve(collectedFiles)
+        }
+      }, 10000)
+    })
+  }, [])
 
   const clearFiles = useCallback(() => {
     setState((prev) => {
@@ -363,61 +464,73 @@ export const useFileUpload = (
       ]
   )
 
+  // Enhanced addFolders function that handles both file input and drag/drop
   const addFolders = useCallback(
-      (newFiles: FileList | File[]) => {
-        if (!newFiles || newFiles.length === 0) return
+      async (newFiles: FileList | File[] | Promise<File[]>) => {
+        try {
+          // Handle async file collection from drag/drop
+          const resolvedFiles = await Promise.resolve(newFiles)
 
-        const newFilesArray = Array.from(newFiles)
-        const errors: string[] = []
+          if (!resolvedFiles || resolvedFiles.length === 0) return
 
-        setState((prev) => ({ ...prev, errors: [] }))
+          const newFilesArray = Array.from(resolvedFiles)
+          const errors: string[] = []
 
-        // Validate files
-        const validFiles: File[] = []
-        newFilesArray.forEach((file) => {
-          if (file.size > maxSize) {
-            errors.push(`Some files in folders exceed the maximum size of ${formatBytes(maxSize)}.`)
-            return
-          }
+          setState((prev) => ({ ...prev, errors: [] }))
 
-          const error = validateFile(file)
-          if (error) {
-            errors.push(error)
-          } else {
-            validFiles.push(file)
-          }
-        })
+          // Validate files
+          const validFiles: File[] = []
+          newFilesArray.forEach((file) => {
+            if (file.size > maxSize) {
+              errors.push(`Some files in folders exceed the maximum size of ${formatBytes(maxSize)}.`)
+              return
+            }
 
-        if (validFiles.length > 0) {
-          const newFolders = organizeFolderStructure(validFiles)
-
-          // Filter out duplicate folders
-          const filteredFolders = newFolders.filter(newFolder => {
-            return !state.folders.some(f => f.folderName === newFolder.folderName)
+            const error = validateFile(file)
+            if (error) {
+              errors.push(error)
+            } else {
+              validFiles.push(file)
+            }
           })
 
-          if (filteredFolders.length > 0) {
-            onFoldersAdded?.(filteredFolders)
+          if (validFiles.length > 0) {
+            const newFolders = organizeFolderStructure(validFiles)
 
-            setState((prev) => {
-              const newFoldersState = [...prev.folders, ...filteredFolders]
-              onFoldersChange?.(newFoldersState)
-              return {
-                ...prev,
-                folders: newFoldersState,
-                errors,
-              }
+            // Filter out duplicate folders
+            const filteredFolders = newFolders.filter(newFolder => {
+              return !state.folders.some(f => f.folderName === newFolder.folderName)
             })
+
+            if (filteredFolders.length > 0) {
+              onFoldersAdded?.(filteredFolders)
+
+              setState((prev) => {
+                const newFoldersState = [...prev.folders, ...filteredFolders]
+                onFoldersChange?.(newFoldersState)
+                return {
+                  ...prev,
+                  folders: newFoldersState,
+                  errors,
+                }
+              })
+            }
+          } else if (errors.length > 0) {
+            setState((prev) => ({
+              ...prev,
+              errors,
+            }))
           }
-        } else if (errors.length > 0) {
+
+          if (directoryInputRef.current) {
+            directoryInputRef.current.value = ""
+          }
+        } catch (error) {
+          console.error('Error processing folders:', error)
           setState((prev) => ({
             ...prev,
-            errors,
+            errors: [...prev.errors, 'Error processing folders.']
           }))
-        }
-
-        if (directoryInputRef.current) {
-          directoryInputRef.current.value = ""
         }
       },
       [
@@ -514,8 +627,9 @@ export const useFileUpload = (
     e.stopPropagation()
   }, [])
 
+  // Simplified handleDrop function that delegates all folder processing to addFolders
   const handleDrop = useCallback(
-      (e: DragEvent<HTMLElement>) => {
+      async (e: React.DragEvent<HTMLElement>) => {
         e.preventDefault()
         e.stopPropagation()
         setState((prev) => ({ ...prev, isDragging: false }))
@@ -524,23 +638,60 @@ export const useFileUpload = (
           return
         }
 
+        const items = e.dataTransfer.items
+
+        // Handle modern browsers with webkitGetAsEntry support
+        if (items && items.length > 0 && allowDirectories) {
+          const entries = Array.from(items)
+              .map(item => (item as any).webkitGetAsEntry?.())
+              .filter(entry => entry)
+
+          if (entries.length > 0) {
+            const hasDirectories = entries.some(entry => entry.isDirectory)
+
+            if (hasDirectories) {
+              // Process directories using the enhanced traversal
+              try {
+                const allFiles: File[] = []
+
+                for (const entry of entries) {
+                  const files = await traverseDirectoryEntry(entry)
+                  allFiles.push(...files)
+                }
+
+                if (allFiles.length > 0) {
+                  await addFolders(allFiles)
+                }
+              } catch (error) {
+                console.error('Error processing dropped directories:', error)
+                setState((prev) => ({
+                  ...prev,
+                  errors: [...prev.errors, 'Error processing dropped folders.']
+                }))
+              }
+              return
+            }
+          }
+        }
+
+        // Fallback for browsers without full drag/drop support or regular files
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           const files = Array.from(e.dataTransfer.files)
-          const hasRelativePaths = files.some(file => (file as any).webkitRelativePath)
+          const hasRelativePaths = files.some((file) => !!(file as any).webkitRelativePath)
 
           if (hasRelativePaths && allowDirectories) {
-            addFolders(e.dataTransfer.files)
+            await addFolders(files)
           } else {
+            // Handle as regular files
             if (!multiple) {
-              const file = e.dataTransfer.files[0]
-              addFiles([file])
+              addFiles([files[0]])
             } else {
-              addFiles(e.dataTransfer.files)
+              addFiles(files)
             }
           }
         }
       },
-      [addFiles, addFolders, multiple, allowDirectories]
+      [addFiles, addFolders, multiple, allowDirectories, traverseDirectoryEntry]
   )
 
   const handleFileChange = useCallback(
