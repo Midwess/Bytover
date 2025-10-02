@@ -2,7 +2,7 @@
 members = [
     "shared",
     "shared_types",
-    # "Desktop/src-tauri",
+    "desktop/src-tauri",
     "backend",
     "native",
     "web-next/wasm", "web-next/worker",

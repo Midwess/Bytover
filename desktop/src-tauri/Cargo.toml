@@ -18,15 +18,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+crux_core.workspace = true
+shared = { path = "../../shared" }
+core-services = { path = "../../libs/core-services" }
+native = { path = "../../native" }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-shared = { path = "../../shared" }
-crux_core.workspace = true
-tokio.workspace = true
-lazy_static.workspace = true
-log.workspace = true
-core-services = {path = "../../libs/core-services"}
-schema = {path = "../../libs/schema/rust"}
-devlog-sdk = {path = "../../libs/devlog-sdk"}
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
