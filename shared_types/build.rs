@@ -29,18 +29,18 @@ use shared::app::operations::persistent::{
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
-use shared::app::repository::transfer_session::{TransferSessionId, TransferTargetId};
 use shared::app::transfer::file_selection_service::ResourceSelection;
-use shared::app::transfer::session::{TransferSessionStatus, TransferStatus, TransferType};
-use shared::app::transfer::target::TransferTarget;
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::view_models::receive_session::ReceiveCloudSessionViewModel;
 use shared::app::BitBridge;
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
+use shared::entities::target::TransferTarget;
 use shared::entities::token::Token;
+use shared::entities::transfer_session::{TransferSessionStatus, TransferStatus, TransferType};
 use shared::entities::user::User;
 use shared::errors::NetworkError;
+use shared::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../shared");

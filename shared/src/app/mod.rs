@@ -1,17 +1,15 @@
 pub mod authentication;
+pub mod core;
 pub mod core_utils;
 pub mod modules;
 pub mod nearby;
 pub mod operations;
-pub mod repository;
 pub mod transfer;
 pub mod view_models;
 
 pub use crate::app::operations::CoreOperation;
 
-use crate::app::authentication::service::AuthenticationService;
 use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
-use crate::app::nearby::nearby_services::NearbyService;
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
 use crux_core::capability::CapabilityContext;
@@ -38,19 +36,13 @@ pub struct BitBridge {
 impl Default for BitBridge {
     fn default() -> Self {
         Self {
-            environment: EnvironmentModule {
-                authentication_service: AuthenticationService::instance()
-            },
-            authentication: AuthenticationModule {
-                authentication_service: AuthenticationService::instance()
-            },
+            environment: EnvironmentModule,
+            authentication: AuthenticationModule,
             transfer: TransferModule {
                 transfer_service: TransferService::instance(),
                 resource_selection_service: ResourceTransferSelectionService::instance()
             },
-            nearby: NearbyModule {
-                nearby_service: NearbyService::instance()
-            }
+            nearby: NearbyModule
         }
     }
 }

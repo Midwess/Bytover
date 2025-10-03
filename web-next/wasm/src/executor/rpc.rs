@@ -1,5 +1,5 @@
-use shared::executor::rpc::NativeRpc;
-use shared::rpc::auth_server::AuthServer;
+use shared::protocol::rpc::auth_server::AuthServer;
+use shared::shell::executor::rpc::NativeRpc;
 use tonic_web_wasm_client::Client;
 
 pub struct NativeRpcImpl {

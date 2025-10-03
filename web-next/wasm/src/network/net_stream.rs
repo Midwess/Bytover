@@ -12,10 +12,10 @@ use n0_future::task::{spawn, JoinHandle};
 use n0_future::SinkExt;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
-use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::core_api::{NetStream, NetStreamEvent, NetStreamInner};
-use shared::entities::file_system::file::LocalResourcePath;
-use shared::rpc::cloud_server::CloudServer;
+use shared::entities::local_resource::LocalResourcePath;
+use shared::protocol::rpc::cloud_server::CloudServer;
+use shared::repository::local_resource::LocalResourceRepository;
+use shared::shell::api::{NetStream, NetStreamEvent, NetStreamInner};
 use std::sync::Arc;
 use tonic_web_wasm_client::Client;
 use web_sys::Blob;
@@ -120,10 +120,7 @@ impl NetStreamInner for NetStreamInnerChunkStreamImpl {
             return Err(anyhow!("Only multipart upload is supported"));
         };
 
-        let mut cursor = self.resource_repo.read(
-            self.path.clone(),
-            512 * 1024
-        ).await?;
+        let mut cursor = self.resource_repo.read(self.path.clone(), 512 * 1024).await?;
         let server = self.server;
 
         self.handle = Some(spawn(async move {

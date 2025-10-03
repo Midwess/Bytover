@@ -1,11 +1,11 @@
 use futures_timer::Delay;
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
-use shared::core_api::network::InternetConnection;
-use shared::executor::p2p::P2PNativeExecutor;
-use shared::executor::persistent::NativePersistent;
-use shared::executor::rpc::NativeRpc;
-use shared::executor::transfer::TransferNative;
+use shared::shell::api::network::InternetConnection;
+use shared::shell::executor::p2p::P2PNativeExecutor;
+use shared::shell::executor::persistent::NativePersistent;
+use shared::shell::executor::rpc::NativeRpc;
+use shared::shell::executor::transfer::TransferNative;
 use tonic_web_wasm_client::Client;
 
 // Handle the effect coming from the platform

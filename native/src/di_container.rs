@@ -16,21 +16,19 @@ use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolReso
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
-use shared::app::authentication::service::AuthenticationService;
-use shared::app::nearby::nearby_services::NearbyService;
-use shared::app::repository::auth_session::AuthSessionRepository;
-use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::app::repository::path_resolver::PathResolver;
-use shared::app::repository::transfer_session::TransferSessionRepository;
 use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use shared::app::transfer::transfer_service::TransferService;
-use shared::core_api::network::InternetConnection;
-use shared::core_api::{CoreBridge, NetStream};
-use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
-use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
-use shared::rpc::auth_provider::AuthProvider;
-use shared::rpc::auth_server::AuthServer;
-use shared::rpc::cloud_server::CloudServer;
+use shared::protocol::public_cloud::cloud_service::CloudService;
+use shared::protocol::rpc::auth_provider::AuthProvider;
+use shared::protocol::rpc::auth_server::AuthServer;
+use shared::protocol::rpc::cloud_server::CloudServer;
+use shared::protocol::webrtc::webrtc::WebRtc;
+use shared::repository::auth_session::AuthSessionRepository;
+use shared::repository::local_resource::LocalResourceRepository;
+use shared::repository::path_resolver::PathResolver;
+use shared::repository::transfer_session::TransferSessionRepository;
+use shared::shell::api::network::InternetConnection;
+use shared::shell::api::{CoreBridge, NetStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -44,8 +42,6 @@ pub struct DiContainer {
     shell: OnceCell<Arc<dyn ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    auth_service: OnceCell<AuthenticationService>,
-    nearby_service: OnceCell<NearbyService>,
     transfer_service: OnceCell<TransferService>,
     cloud_server: OnceCell<CloudServer<Channel>>,
     transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
@@ -62,8 +58,6 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                auth_service: OnceCell::new(),
-                nearby_service: OnceCell::new(),
                 transfer_service: OnceCell::new(),
                 transfer_selection_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
@@ -83,18 +77,6 @@ impl DiContainer {
         NetStreamImpl {
             repository,
             server: self.get_cloud_server()
-        }
-    }
-
-    pub fn get_authentication_service(&'static self) -> &'static AuthenticationService {
-        match self.auth_service.get() {
-            Some(service) => service,
-            None => {
-                let service = AuthenticationService {};
-
-                let _ = self.auth_service.set(service);
-                self.auth_service.get().unwrap()
-            }
         }
     }
 
@@ -224,17 +206,6 @@ impl DiContainer {
                 let service = ResourceTransferSelectionService {};
                 let _ = self.transfer_selection_service.set(service);
                 self.transfer_selection_service.get().unwrap()
-            }
-        }
-    }
-
-    pub fn get_nearby_service(&'static self) -> &'static NearbyService {
-        match self.nearby_service.get() {
-            Some(service) => service,
-            None => {
-                let service = NearbyService {};
-                let _ = self.nearby_service.set(service);
-                self.nearby_service.get().unwrap()
             }
         }
     }

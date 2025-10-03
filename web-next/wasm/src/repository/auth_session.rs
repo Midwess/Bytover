@@ -8,8 +8,8 @@ use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use idb::Database;
-use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use shared::entities::session::Session;
+use shared::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use wasm_bindgen::JsValue;
 
 use crate::repository::id::IdbIdWrapper;

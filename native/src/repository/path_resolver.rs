@@ -1,8 +1,8 @@
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::ShellRuntime;
 use serde::{Deserialize, Serialize};
-use shared::app::repository::path_resolver::PathResolver;
-use shared::entities::file_system::file::LocalResourcePath;
+use shared::entities::local_resource::LocalResourcePath;
+use shared::repository::path_resolver::PathResolver;
 use std::path::PathBuf;
 use std::sync::Arc;
 

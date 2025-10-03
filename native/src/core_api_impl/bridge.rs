@@ -2,7 +2,7 @@ use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use shared::app::operations::CoreOperationOutput;
 use shared::app::AppEvent;
-use shared::core_api::CoreBridge;
+use shared::shell::api::CoreBridge;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;

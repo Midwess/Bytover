@@ -10,10 +10,10 @@ use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use idb::Database;
-use shared::app::repository::errors::PersistenceError;
-use shared::app::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
-use shared::app::transfer::session::{TransferProgress, TransferSession};
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath};
+use shared::entities::transfer_session::{TransferProgress, TransferSession};
+use shared::repository::errors::PersistenceError;
+use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 

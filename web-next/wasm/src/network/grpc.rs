@@ -1,5 +1,5 @@
-use shared::rpc::connection::RpcNetworkModule;
-use shared::rpc::errors::RpcErrors;
+use shared::protocol::rpc::connection::RpcNetworkModule;
+use shared::protocol::rpc::errors::RpcErrors;
 use tonic_web_wasm_client::Client;
 
 #[derive(Clone)]

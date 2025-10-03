@@ -9,8 +9,8 @@ use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use idb::Database;
-use shared::app::repository::user::{UserId, UserRepository};
 use shared::entities::user::User;
+use shared::repository::user::{UserId, UserRepository};
 use wasm_bindgen::JsValue;
 
 pub struct UserRepositoryImpl {

@@ -1,7 +1,6 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
-use crate::app::authentication::service::AuthenticationService;
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::{AppEvent, AppModel, BitBridge};
@@ -10,9 +9,7 @@ use crate::entities::user::User;
 use super::nearby::NearbyEvent;
 use super::AppModule;
 
-pub struct AuthenticationModule {
-    pub authentication_service: &'static AuthenticationService
-}
+pub struct AuthenticationModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
@@ -30,7 +27,7 @@ pub enum AuthenticationEvent {
     SignUp,
     SignOut,
     OnRedirected { url: String },
-    OnSignInSuccess { user: User }
+    UpdateUser { user: User }
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -44,19 +41,19 @@ impl AppModule<BitBridge> for AuthenticationModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            AuthenticationEvent::SignIn => Command::new(|ctx| async {
-                self.authentication_service.signin(ctx).await;
+            AuthenticationEvent::SignIn => Command::new(|ctx| async move {
+                ctx.app().sign_in().await;
             }),
             AuthenticationEvent::SignOut => Command::done(),
-            AuthenticationEvent::OnRedirected { url } => Command::new(|ctx| async {
-                self.authentication_service.handle_auth_response(url, ctx).await;
+            AuthenticationEvent::OnRedirected { url } => Command::new(|ctx| async move {
+                ctx.app().authorize(url).await;
             }),
             AuthenticationEvent::SignUp => Command::done(),
-            AuthenticationEvent::OnSignInSuccess { user } => {
+            AuthenticationEvent::UpdateUser { user } => {
                 model.authentication.user.replace(user);
                 Command::new(|ctx| async move {
                     ctx.notify_event(AppEvent::Transfer(TransferEvent::Launch()));
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::Launch()));
+                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::Launch));
                 })
             }
         }

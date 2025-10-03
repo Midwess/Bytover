@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
-use crate::entities::file_system::file::LocalResourcePath;
+use crate::entities::local_resource::LocalResourcePath;
 
 use super::{CoreOperation, CoreOperationOutput};
 

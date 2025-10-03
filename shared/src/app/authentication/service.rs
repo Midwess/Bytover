@@ -4,24 +4,29 @@ use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::operations::CoreOperation;
-use crate::app::{AppCommandContext, AppEvent};
+use crate::app::AppEvent;
 use crate::entities::token::Token;
 use url::Url;
 
+use crate::app::core::command::AppCommand;
 use devlog_sdk::distributed_id::gen_id;
-use std::sync::OnceLock;
 
-pub struct AuthenticationService {}
+impl AppCommand {
+    pub async fn sign_in(&self) {
+        let device_info = DeviceOperation::get_device_info().into_future(self.ctx()).await;
+        let url = match RpcOperation::get_sign_in_url(device_info).into_future(self.ctx()).await {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
+                return;
+            }
+        };
 
-impl AuthenticationService {
-    pub fn instance() -> &'static Self {
-        static INSTANCE: OnceLock<AuthenticationService> = OnceLock::new();
-        INSTANCE.get_or_init(|| AuthenticationService {})
+        WebViewOperation::open_url(url).into_future(self.ctx()).await;
     }
 
-    pub async fn update_signin_session(&self, ctx: AppCommandContext) {
-        // Call API to update the user info
-        let mut user = match RpcOperation::get_me().into_future(ctx.clone()).await {
+    pub async fn re_authorize(&self) {
+        let mut user = match RpcOperation::get_me().into_future(self.ctx()).await {
             Ok(user) => Some(user),
             Err(e) => {
                 log::info!(target: "auth", "Failed to get user info: {e:?}");
@@ -30,37 +35,24 @@ impl AuthenticationService {
         };
 
         if user.is_none() {
-            let session = SessionPersistentOperation::get_session().into_future(ctx.clone()).await;
+            let session = SessionPersistentOperation::get_session().into_future(self.ctx()).await;
             if let Some(Some(user_info)) = session.map(|it| it.user) {
                 user.replace(user_info);
             }
 
             return;
         } else {
-            SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(ctx.clone()).await;
+            SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(self.ctx()).await;
         }
 
         let user = user.unwrap();
-        ctx.send_event(AppEvent::Authentication(AuthenticationEvent::OnSignInSuccess { user }));
-        ctx.notify_shell(CoreOperation::Render);
+        self.send_event(AppEvent::Authentication(AuthenticationEvent::UpdateUser { user }));
+        self.notify_shell(CoreOperation::Render);
     }
 
-    pub async fn signin(&self, ctx: AppCommandContext) {
-        let device_info = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
-        let url = match RpcOperation::get_sign_in_url(device_info).into_future(ctx.clone()).await {
-            Ok(url) => url,
-            Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
-                return;
-            }
-        };
-
-        WebViewOperation::open_url(url).into_future(ctx).await;
-    }
-
-    pub async fn handle_auth_response(&self, redirect_url: String, ctx: AppCommandContext) {
-        let Ok(url) = Url::parse(redirect_url.as_str()) else {
-            log::warn!("The redirect url is invalid: {redirect_url}");
+    pub async fn authorize(&self, url: String) {
+        let Ok(url) = Url::parse(url.as_str()) else {
+            log::warn!("The redirect url is invalid: {url}");
             return;
         };
 
@@ -75,13 +67,11 @@ impl AuthenticationService {
         };
 
         if token.value.is_empty() {
-            log::error!(target: "auth", "Failed to get access token from auth response {redirect_url}");
+            log::error!(target: "auth", "Failed to get access token from auth response {url}");
             return;
         }
 
-        log::info!("Saving token");
-        SessionPersistentOperation::save_token(token).into_future(ctx.clone()).await;
-        log::info!("Updating user");
-        self.update_signin_session(ctx).await;
+        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await;
+        self.re_authorize().await;
     }
 }

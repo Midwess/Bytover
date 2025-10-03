@@ -7,8 +7,8 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use shared::app::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use shared::entities::session::Session;
+use shared::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 
 use crate::repository::id::RedbIdWrapper;
 

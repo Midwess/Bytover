@@ -1,7 +1,7 @@
 use crate::config::get_locator_http_url;
-use shared::core_api::network::InternetConnection;
-use shared::rpc::connection::RpcNetworkModule;
-use shared::rpc::errors::RpcErrors;
+use shared::protocol::rpc::connection::RpcNetworkModule;
+use shared::protocol::rpc::errors::RpcErrors;
+use shared::shell::api::network::InternetConnection;
 use std::future::poll_fn;
 use std::sync::Arc;
 use std::time::Duration;

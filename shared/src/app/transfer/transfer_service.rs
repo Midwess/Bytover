@@ -4,18 +4,17 @@ use std::sync::OnceLock;
 use futures_util::StreamExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
-use super::session::TransferSession;
-use super::target::TransferTarget;
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::transfer::session::TransferSessionStatus;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::entities::file_system::file::{LocalResource, ResourceType};
+use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::entities::user::User;
 
 pub struct TransferService {}

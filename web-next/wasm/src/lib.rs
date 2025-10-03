@@ -30,7 +30,7 @@ use erased_serde::Serialize;
 use js_sys::{Array, Promise};
 use serde::Deserialize;
 use shared::app::transfer::file_selection_service::ResourceSelection;
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::CoreOperation;
 use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;

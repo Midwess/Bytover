@@ -10,7 +10,7 @@ use core_services::wasm::extensions::FileExtension;
 use devlog_sdk::distributed_id::gen_id;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::ops::Deref;

@@ -1,7 +1,7 @@
-use shared::app::repository::auth_session::AuthSessionRepository;
-use shared::app::repository::local_resource::LocalResourceRepository;
-use shared::app::repository::transfer_session::TransferSessionRepository;
-use shared::executor::persistent::NativePersistent;
+use shared::repository::auth_session::AuthSessionRepository;
+use shared::repository::local_resource::LocalResourceRepository;
+use shared::repository::transfer_session::TransferSessionRepository;
+use shared::shell::executor::persistent::NativePersistent;
 
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,

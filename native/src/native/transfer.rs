@@ -1,8 +1,8 @@
-use shared::core_transfer_protocol::public_cloud::cloud_service::CloudService;
-use shared::core_transfer_protocol::webrtc::webrtc::WebRtc;
-use shared::executor::transfer::TransferNative;
-use shared::rpc::auth_server::AuthServer;
-use shared::rpc::cloud_server::CloudServer;
+use shared::protocol::public_cloud::cloud_service::CloudService;
+use shared::protocol::rpc::auth_server::AuthServer;
+use shared::protocol::rpc::cloud_server::CloudServer;
+use shared::protocol::webrtc::webrtc::WebRtc;
+use shared::shell::executor::transfer::TransferNative;
 use std::sync::Arc;
 use tonic::transport::Channel;
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {

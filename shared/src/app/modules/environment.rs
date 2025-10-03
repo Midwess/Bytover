@@ -1,4 +1,4 @@
-use crate::app::authentication::service::AuthenticationService;
+use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppModel, BitBridge};
@@ -14,9 +14,7 @@ pub struct EnvironmentModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct EnvironmentViewModel {}
 
-pub struct EnvironmentModule {
-    pub authentication_service: &'static AuthenticationService
-}
+pub struct EnvironmentModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
@@ -34,14 +32,11 @@ impl AppModule<BitBridge> for EnvironmentModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            EnvironmentEvent::AppLaunched => {
-                let authentication_service = self.authentication_service;
-                Command::new(|ctx| async move {
-                    ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    authentication_service.update_signin_session(ctx.clone()).await;
-                })
-                .then(Command::done())
-            }
+            EnvironmentEvent::AppLaunched => Command::new(|ctx| async move {
+                ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
+                ctx.app().re_authorize().await;
+            })
+            .then(Command::done())
         }
     }
 

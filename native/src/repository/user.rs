@@ -8,8 +8,8 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use shared::app::repository::user::{UserId, UserRepository};
 use shared::entities::user::User;
+use shared::repository::user::{UserId, UserRepository};
 
 pub struct UserRepositoryImpl {
     pub db: PoolRequest<Database>

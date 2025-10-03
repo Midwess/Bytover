@@ -15,10 +15,10 @@ use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use core_services::wasm::extensions::VecExtension;
 use idb::Database;
-use shared::app::repository::errors::PersistenceError;
-use shared::app::repository::local_resource::{LocalResourceId, LocalResourceRepository};
-use shared::core_api::{IOReader, IOWriter};
-use shared::entities::file_system::file::{LocalResource, LocalResourcePath, ResourceType};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
+use shared::repository::errors::PersistenceError;
+use shared::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use shared::shell::api::{IOReader, IOWriter};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 

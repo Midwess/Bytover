@@ -1,6 +1,6 @@
-use crate::core_transfer_protocol::public_cloud::cloud_service::CloudTransferErrors;
-use crate::entities::file_system::file::LocalResourcePath;
-use crate::rpc::errors::RpcErrors;
+use crate::entities::local_resource::LocalResourcePath;
+use crate::protocol::public_cloud::cloud_service::CloudTransferErrors;
+use crate::protocol::rpc::errors::RpcErrors;
 use serde::{Deserialize, Serialize};
 
 /// Any error defined here must has friendly message

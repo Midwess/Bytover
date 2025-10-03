@@ -11,11 +11,16 @@ pub trait CoreCommandUtils {
 
 pub trait CoreCommandContextUtils {
     fn notify_event(&self, event: AppEvent);
+    fn app(&self) -> crate::app::core::command::AppCommand;
 }
 
 impl CoreCommandContextUtils for AppCommandContext {
     fn notify_event(&self, event: AppEvent) {
         AppCommandContext::notify_shell(self, CoreOperation::Notified(event));
+    }
+
+    fn app(&self) -> crate::app::core::command::AppCommand {
+        crate::app::core::command::AppCommand::new(self.clone())
     }
 }
 

@@ -8,7 +8,7 @@ use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
 use core_services::utils::never_send::NeverSend;
 use js_sys::Uint8Array;
-use shared::core_api::{IOReader, IOWriter};
+use shared::shell::api::{IOReader, IOWriter};
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::{Duration, SystemTime};

@@ -7,7 +7,7 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppCommandContext, AppEvent};
-use crate::entities::file_system::file::{LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {

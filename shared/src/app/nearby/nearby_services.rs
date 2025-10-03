@@ -1,6 +1,6 @@
-use std::sync::OnceLock;
 use std::time::Duration;
 
+use crate::app::core::command::AppCommand;
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::nearby::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
@@ -8,23 +8,16 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::transfer::target::TransferTarget;
-use crate::app::{AppCommandContext, AppEvent};
+use crate::app::AppEvent;
 use crate::entities::peer::Peer;
+use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
 
-pub struct NearbyService {}
-
-impl NearbyService {
-    pub fn instance() -> &'static NearbyService {
-        static INSTANCE: OnceLock<NearbyService> = OnceLock::new();
-        INSTANCE.get_or_init(|| NearbyService {})
-    }
-
-    pub async fn start_service(&'static self, user: Option<User>, ctx: AppCommandContext) {
-        let device = DeviceOperation::get_device_info().into_future(ctx.clone()).await;
+impl AppCommand {
+    pub async fn receive_nearby_events(&self, user: Option<User>) {
+        let device = DeviceOperation::get_device_info().into_future(self.ctx()).await;
 
         let peer_id = Uuid::now_v7().to_string();
 
@@ -45,44 +38,44 @@ impl NearbyService {
             }
         };
 
-        ctx.notify_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new_peer: peer.clone() }));
+        self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new_peer: peer.clone() }));
 
         let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
-        let mut start_p2p_server_stream = ctx.stream_from_shell(start_p2p_server_request);
+        let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request);
 
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
                     log::info!(target: "nearby", "New peer connected: {}", peer.id);
 
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
+                    self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
                         new_peer: vec![peer.clone()],
                         removed: vec![]
                     }));
 
-                    ctx.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
+                    self.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
                         added: vec![TransferTarget::Nearby(peer.clone())],
                         removed: vec![]
                     }));
 
-                    ctx.spawn(|it| async move {
-                        self.handle_peer_connection(peer, it).await;
+                    self.spawn(|it| async move {
+                        it.app().handle_peer_connection(peer).await;
                     });
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     log::error!(target: "nearby", "Device error: {error:?}");
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped");
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
                 CoreOperationOutput::Void => {}
                 CoreOperationOutput::ConnectionError(error) => {
                     log::error!(target: "nearby", "Connection error: {error:?}");
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
                     break;
                 }
                 _ => {
@@ -92,22 +85,22 @@ impl NearbyService {
         }
     }
 
-    pub async fn start_locator_monitor(&'static self, ctx: AppCommandContext) {
+    pub async fn start_locator_monitor(&self) {
         loop {
-            let geo_location = DeviceOperation::get_geo_location().into_future(ctx.clone()).await;
-            let scopes = InternetOperation::locate(geo_location).into_future(ctx.clone()).await;
+            let geo_location = DeviceOperation::get_geo_location().into_future(self.ctx()).await;
+            let scopes = InternetOperation::locate(geo_location).into_future(self.ctx()).await;
             if let Ok(scopes) = scopes {
-                ctx.request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).await;
+                self.request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).await;
             }
 
-            ctx.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
+            self.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
         }
     }
 
-    pub async fn handle_peer_connection(&'static self, peer: Peer, ctx: AppCommandContext) {
+    pub async fn handle_peer_connection(&self, peer: Peer) {
         let ns = format!("peer-id+{}", peer.id);
         let request = CoreOperation::P2P(P2POperation::PeerEvents(peer.id.clone()));
-        let mut stream = ctx.stream_from_shell(request);
+        let mut stream = self.stream_from_shell(request);
 
         while let Some(output) = stream.next().await {
             match output {
@@ -117,14 +110,14 @@ impl NearbyService {
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     let request = AppEvent::Transfer(TransferEvent::TransferCanceled { session_id });
 
-                    ctx.notify_shell(CoreOperation::Notified(request));
+                    self.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
                     let request = AppEvent::Transfer(TransferEvent::TransferRequest {
                         remote_session,
                         peer: peer.clone()
                     });
-                    ctx.notify_shell(CoreOperation::Notified(request));
+                    self.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::ConnectionError(error) => {
                     log::error!(target: ns.as_str(), "Connection error: {error:?}");
@@ -143,12 +136,12 @@ impl NearbyService {
             }
         }
 
-        ctx.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
+        self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
             new_peer: vec![],
             removed: vec![peer.clone()]
         }));
 
-        ctx.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
+        self.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
             added: vec![],
             removed: vec![TransferTarget::Nearby(peer.clone())]
         }));
