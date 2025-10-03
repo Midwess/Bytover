@@ -6,18 +6,19 @@ pub mod nearby;
 pub mod operations;
 pub mod transfer;
 pub mod view_models;
+pub mod environment;
 
 pub use crate::app::operations::CoreOperation;
 
-use crate::app::modules::environment::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
+use environment::module::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
 use crate::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use crate::app::transfer::transfer_service::TransferService;
 use crux_core::capability::CapabilityContext;
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::Capability;
 use crux_core::{App, Command};
-use modules::authentication::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
-use modules::nearby::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
+use authentication::module::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
+use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use serde::{Deserialize, Serialize};

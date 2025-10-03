@@ -1,6 +1,6 @@
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::AppModule;
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppModel, BitBridge};

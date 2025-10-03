@@ -5,7 +5,7 @@ use crux_core::Command;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::app::AppRequestBuilder;
 use crate::entities::peer::Peer;
 use crate::errors::NetworkError;

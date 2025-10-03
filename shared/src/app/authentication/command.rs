@@ -1,4 +1,4 @@
-use crate::app::modules::authentication::AuthenticationEvent;
+use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;

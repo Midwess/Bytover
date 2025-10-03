@@ -1,4 +1,4 @@
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::device::GeoLocation;
 use crate::errors::NetworkError;
 use core_services::retry;

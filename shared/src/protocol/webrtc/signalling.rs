@@ -1,5 +1,5 @@
 use super::errors::WebRtcErrors;
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling_client::SignallingClient;

@@ -1,4 +1,4 @@
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::peer::Peer as PeerEntity;

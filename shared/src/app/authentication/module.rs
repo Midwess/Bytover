@@ -6,8 +6,8 @@ use crate::app::modules::transfer::TransferEvent;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::user::User;
 
-use super::nearby::NearbyEvent;
-use super::AppModule;
+use crate::app::nearby::module::NearbyEvent;
+use crate::app::modules::AppModule;
 
 pub struct AuthenticationModule;
 

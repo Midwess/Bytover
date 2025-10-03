@@ -4,7 +4,7 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::nearby::finding_scope::FindingScope;
+use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::device::GeoLocation;
 use crate::app::AppRequestBuilder;
 use crate::errors::NetworkError;
