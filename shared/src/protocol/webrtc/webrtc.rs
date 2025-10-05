@@ -1,6 +1,6 @@
-use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;

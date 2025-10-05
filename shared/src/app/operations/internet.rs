@@ -4,9 +4,9 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::device::GeoLocation;
 use crate::app::AppRequestBuilder;
+use crate::entities::finding_scope::FindingScope;
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};

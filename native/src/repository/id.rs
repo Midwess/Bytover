@@ -1,13 +1,18 @@
 use core_services::db::repository::abstraction::id::DbId;
+use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RedbIdWrapper<T: Sized>(pub T);
 
-impl<T: Sized> DbId for RedbIdWrapper<T>
+impl<T> DbId for RedbIdWrapper<T>
 where
-    T: DbId
+    T: DbId + Debug,
+    <T as DbId>::Table: Table<RedbIdWrapper<T>>
 {
+    type Table = <T as DbId>::Table;
+
     fn soft_deleted(&self) -> bool {
         self.0.soft_deleted()
     }

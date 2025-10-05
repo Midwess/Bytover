@@ -22,11 +22,9 @@ impl Table<UserId> for User {
 }
 
 impl DbId for UserId {
-    fn soft_deleted(&self) -> bool {
-        false
+    type Table = User;
+
+    fn is_represent(&self, table: &Self::Table) -> bool {
+        self.email == table.email
     }
-
-    fn soft_delete(&mut self) {}
-
-    fn soft_restore(&mut self) {}
 }

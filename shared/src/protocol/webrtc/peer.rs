@@ -1,10 +1,9 @@
-use crate::app::modules::transfer::TransferEvent::SessionResourceThumbnailFullFilled;
 use crate::app::operations::p2p::P2POperationOutput;
+use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::app::AppEvent;
 use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
-use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
+use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
@@ -281,13 +280,8 @@ impl WebRtcPeer {
                 writer.end().with_cancel(&thumbnail_cancel_signal).await??;
                 log::info!("Completed downloading thumbnail {resource_path:?}");
 
-                let thumbnail_full_filled = SessionResourceThumbnailFullFilled {
-                    session_id,
-                    resource_id: first_delimiter.resource_id,
-                    path: resource_path
-                };
-
-                let _ = bridge.notify(AppEvent::Transfer(thumbnail_full_filled)).await;
+                let event = ThumbnailUpdatedEvent { resource_id: first_delimiter.resource_id, path: resource_path };
+                let _ = bridge.response(core_request_id, CoreOperationOutput::Transfer(TransferOperationOutput::ThumbnailUpdated(event))).await;
             }
 
             Ok(thumbnail_paths)

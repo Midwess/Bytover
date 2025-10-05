@@ -67,11 +67,28 @@ impl Table<TransferSessionId> for TransferSession {
 }
 
 impl DbId for TransferSessionId {
-    fn soft_deleted(&self) -> bool {
-        false
+    type Table = TransferSession;
+
+    fn is_represent(&self, table: &Self::Table) -> bool {
+        if let Some(r#type) = &self.r#type {
+            if r#type != &table.transfer_type {
+                return false;
+            }
+        }
+
+        if let Some(target) = &self.target {
+            let table_target_id: TransferTargetId = (&table.target).into();
+            if target != &table_target_id {
+                return false;
+            }
+        }
+
+        if let Some(order_id) = &self.order_id {
+            if order_id != &table.order_id {
+                return false;
+            }
+        }
+
+        true
     }
-
-    fn soft_delete(&mut self) {}
-
-    fn soft_restore(&mut self) {}
 }

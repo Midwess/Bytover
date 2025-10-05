@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::nearby::module::NearbyEvent;
 use crate::app::modules::transfer::TransferEvent;
+use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
@@ -40,7 +40,7 @@ impl AppCommand {
 
         self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new_peer: peer.clone() }));
 
-        let start_p2p_server_request = CoreOperation::P2P(P2POperation::StartNearbyServer(peer));
+        let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request);
 
         while let Some(output) = start_p2p_server_stream.next().await {
@@ -87,19 +87,19 @@ impl AppCommand {
 
     pub async fn start_locator_monitor(&self) {
         loop {
-            let geo_location = DeviceOperation::get_geo_location().into_future(self.ctx()).await;
-            let scopes = InternetOperation::locate(geo_location).into_future(self.ctx()).await;
+            let geo_location = self.run(DeviceOperation::get_geo_location()).await;
+            let scopes = self.run(InternetOperation::locate(geo_location)).await;
             if let Ok(scopes) = scopes {
-                self.request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).await;
+                self.request(P2POperation::UpdateFindingScopes(scopes)).await;
+                log::info!(target: "nearby", "Updated scope");
             }
 
-            self.request_from_shell(CoreOperation::Delay(Duration::from_secs(5))).await;
+            self.request(Duration::from_secs(5)).await;
         }
     }
 
     pub async fn handle_peer_connection(&self, peer: Peer) {
-        let ns = format!("peer-id+{}", peer.id);
-        let request = CoreOperation::P2P(P2POperation::PeerEvents(peer.id.clone()));
+        let request = P2POperation::PeerEvents(peer.id.clone());
         let mut stream = self.stream_from_shell(request);
 
         while let Some(output) = stream.next().await {
@@ -120,11 +120,11 @@ impl AppCommand {
                     self.notify_shell(CoreOperation::Notified(request));
                 }
                 CoreOperationOutput::ConnectionError(error) => {
-                    log::error!(target: ns.as_str(), "Connection error: {error:?}");
+                    log::error!("Connection error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: ns.as_str(), "Device error: {error:?}");
+                    log::error!("Device error: {error:?}");
                     break;
                 }
                 CoreOperationOutput::Void => {

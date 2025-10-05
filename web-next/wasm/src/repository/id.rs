@@ -7,10 +7,13 @@ pub struct IdbIdWrapper<T: Sized>(pub T)
 where
     T: DbId + Debug;
 
-impl<T: Sized> DbId for IdbIdWrapper<T>
+impl<T> DbId for IdbIdWrapper<T>
 where
-    T: DbId + Debug
+    T: DbId + Debug,
+    <T as DbId>::Table: core_services::db::repository::abstraction::table::Table<IdbIdWrapper<T>>,
 {
+    type Table = <T as DbId>::Table;
+
     fn soft_deleted(&self) -> bool {
         self.0.soft_deleted()
     }

@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use core_services::db::repository::abstraction::table::Table;
 use futures_util::StreamExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
+use crate::app::core::model_events::{TransferSessionModelEvent};
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::transfer::TransferEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::{AppCommandContext, AppEvent};
+use crate::app::AppCommandContext;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
@@ -37,27 +39,18 @@ impl TransferService {
 
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
         let receive_sessions = TransferSessionPersistentOperation::get_all_received_sessions().into_future(cmd.clone()).await;
+        let events = receive_sessions.into_iter().map(TransferSessionModelEvent::Add).collect::<Vec<_>>();
 
-        let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: receive_sessions,
-            added: vec![],
-            removed: vec![],
-            updated: vec![]
-        });
-
-        cmd.notify_event(event);
+        cmd.notify_event(TransferEvent::TransferSessionModelEvents(events));
     }
 
     pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-                loaded: vec![],
-                added: vec![],
-                removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
-                updated: vec![]
-            }));
+            cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+                TransferSessionModelEvent::Remove(transfer_session.id()),
+            ]));
 
             if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)
                 .into_future(cmd.clone())
@@ -70,13 +63,6 @@ impl TransferService {
         let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())
             .into_future(cmd.clone())
             .await;
-
-        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: vec![],
-            added: vec![],
-            removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
-            updated: vec![]
-        }));
     }
 
     pub async fn transfer(
@@ -132,21 +118,17 @@ impl TransferService {
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
-        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: vec![],
-            added: vec![transfer_session.clone()],
-            removed: vec![],
-            updated: vec![]
-        }));
+        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+            TransferSessionModelEvent::Add(transfer_session.clone()),
+        ]));
 
         log::info!(
-            "Begin transferring session to peer: {transfer_target_id:?} {:?}",
-            transfer_session
+            "Begin transferring session to: {transfer_target_id:?}",
         );
 
-        let mut stream = cmd.stream_from_shell(CoreOperation::Transfer(TransferOperation::SendSession(
+        let mut stream = cmd.app().stream_from_shell(TransferOperation::SendSession(
             transfer_session.clone()
-        )));
+        ));
 
         while let Some(output) = stream.next().await {
             match output {
@@ -160,11 +142,8 @@ impl TransferService {
                             );
                         }
 
-                        transfer_session.update_progress(progress.clone());
-                        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
-                            session_id: transfer_session.order_id,
-                            progresses: vec![progress]
-                        }));
+                        let id = transfer_session.id();
+                        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![TransferSessionModelEvent::Update(id, progress.into())]));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if status == TransferSessionStatus::Canceled {
@@ -211,12 +190,10 @@ impl TransferService {
         let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())
             .into_future(cmd.clone())
             .await;
-        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: vec![],
-            added: vec![],
-            removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
-            updated: vec![]
-        }));
+
+        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+            TransferSessionModelEvent::Remove(transfer_session.id()),
+        ]));
     }
 
     pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
@@ -272,12 +249,9 @@ impl TransferService {
         let mut transfer_session = response_transfer_session.clone();
         // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
         transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
-        let event = AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: vec![],
-            added: vec![transfer_session.clone()],
-            removed: vec![],
-            updated: vec![]
-        });
+        let event = TransferEvent::TransferSessionModelEvents(vec![
+            TransferSessionModelEvent::Add(transfer_session.clone()),
+        ]);
 
         cmd.notify_event(event);
 
@@ -292,11 +266,11 @@ impl TransferService {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        transfer_session.update_progress(progress.clone());
-                        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
-                            session_id: transfer_session.order_id,
-                            progresses: vec![progress]
-                        }));
+                        let is_completed = progress.status.is_completed();
+                        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![TransferSessionModelEvent::Update(transfer_session.id(), progress.into())]));
+                        if is_completed {
+                            break;
+                        }
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if matches!(
@@ -308,6 +282,9 @@ impl TransferService {
 
                         log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
                         break;
+                    }
+                    TransferOperationOutput::ThumbnailUpdated(event) => {
+                        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![TransferSessionModelEvent::Update(transfer_session.id(), event.into())]));
                     }
                     _ => {
                         continue;
@@ -334,21 +311,14 @@ impl TransferService {
             }
         }
 
+        // Remove the session and add the new session
         if matches!(transfer_session.status(), TransferSessionStatus::Success) {
-            let progresses = transfer_session.progress.clone();
-            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateResourceTransferProgresses {
-                session_id: transfer_session.order_id,
-                progresses
-            }));
+            cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+                TransferSessionModelEvent::Remove(transfer_session.id()),
+                TransferSessionModelEvent::Add(transfer_session.clone()),
+            ]));
         } else {
             DialogOperation::toast("Transfer session canceled".to_string());
-
-            cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-                loaded: vec![],
-                added: vec![],
-                removed: vec![(transfer_session.order_id, transfer_session.transfer_type.clone())],
-                updated: vec![]
-            }));
         }
     }
 
@@ -369,12 +339,9 @@ impl TransferService {
             return;
         };
 
-        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-            loaded: vec![],
-            added: vec![session],
-            removed: vec![],
-            updated: vec![]
-        }))
+        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+            TransferSessionModelEvent::Add(session),
+        ]));
     }
 
     pub async fn view_public_session(
@@ -428,12 +395,9 @@ impl TransferService {
                         transfer_session.resources.append(&mut resources);
                         transfer_session.progress.append(&mut progresses);
 
-                        cmd.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferSessions {
-                            added: vec![],
-                            loaded: vec![],
-                            removed: vec![],
-                            updated: vec![transfer_session.clone()]
-                        }));
+                        cmd.notify_event(TransferEvent::TransferSessionModelEvents(vec![
+                            TransferSessionModelEvent::Add(transfer_session.clone()),
+                        ]));
                     }
                     TransferOperationOutput::SubscribeSessionEnded => {
                         break;

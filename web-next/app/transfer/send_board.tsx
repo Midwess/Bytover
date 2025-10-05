@@ -30,10 +30,10 @@ import {
     ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
-    TransferEventVariantAddResources, TransferEventVariantRemoveResource,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartTransfer, ResourceTypeVariantFolder
+    TransferEventVariantStartTransfer, ResourceTypeVariantFolder, ShelfEvent, ShelfEventVariantAddResources,
+    AppEventVariantShelf, ShelfEventVariantRemoveResource
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -88,7 +88,7 @@ function FileSelections() {
         if (files.length) {
             core.addFiles(files.map(file => file.file))
                 .then((selections) => {
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
+                    core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
                         selections
                     )))
                 })
@@ -98,7 +98,7 @@ function FileSelections() {
         if (folders.length) {
             core.addFolders(folders)
                 .then((selections) => {
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantAddResources(
+                    core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
                         selections
                     )))
                 })
@@ -232,7 +232,7 @@ function FileView(props: {
                     isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
                 )}>
                 <Button className={"rounded-xl"} onClick={() => {
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
+                    core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
                 }}>
                     <X/>
                 </Button>
@@ -323,7 +323,7 @@ function MediaView(props: {
                 <Button 
                     className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
                     onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantRemoveResource(model.order_id)))
+                        core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
                     }}>
                     <X className="w-4 h-4"/>
                 </Button>

@@ -1,10 +1,10 @@
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::AppModule;
-use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
@@ -49,10 +49,11 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::all(vec![
                     Command::new(|it| async move {
-                        it.app().receive_nearby_events(user).await;
+                        log::info!(target: "nearby", "Starting locator monitor");
+                        it.app().start_locator_monitor().await;
                     }),
                     Command::new(|it| async move {
-                        it.app().start_locator_monitor().await;
+                        it.app().receive_nearby_events(user).await;
                     }),
                 ])
             }

@@ -1,0 +1,16 @@
+{
+  "name": "worker",
+  "collaborators": [
+    "Jimmy"
+  ],
+  "description": "wasm worker to handle heavy task for bitbridge",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "files": [
+    "worker_bg.wasm",
+    "worker.js",
+    "worker.d.ts"
+  ],
+  "browser": "worker.js",
+  "types": "worker.d.ts"
+}

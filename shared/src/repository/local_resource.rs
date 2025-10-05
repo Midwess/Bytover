@@ -7,7 +7,7 @@ use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct LocalResourceId {
     pub r#type: Option<ResourceType>,
     pub path: Option<String>,
@@ -46,11 +46,27 @@ impl Table<LocalResourceId> for LocalResource {
 }
 
 impl DbId for LocalResourceId {
-    fn soft_deleted(&self) -> bool {
-        false
+    type Table = LocalResource;
+
+    fn is_represent(&self, table: &Self::Table) -> bool {
+        if let Some(id) = self.order_id {
+            if id != table.order_id {
+                return false;
+            }
+        }
+
+        if let Some(path) = &self.path {
+            if path.ne(&table.path.as_string()) {
+                return false
+            }
+        }
+
+        if let Some(r#type) = &self.r#type {
+            if r#type != &table.r#type {
+                return false;
+            }
+        }
+
+        true
     }
-
-    fn soft_delete(&mut self) {}
-
-    fn soft_restore(&mut self) {}
 }

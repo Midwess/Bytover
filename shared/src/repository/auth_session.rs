@@ -25,15 +25,9 @@ impl Table<AuthSessionId> for Session {
 }
 
 impl DbId for AuthSessionId {
-    fn soft_deleted(&self) -> bool {
-        false
-    }
+    type Table = Session;
 
-    fn soft_delete(&mut self) {
-        self.r#type = SessionType::Access;
-    }
-
-    fn soft_restore(&mut self) {
-        self.r#type = SessionType::Access;
+    fn is_represent(&self, table: &Self::Table) -> bool {
+        self.r#type == table.r#type
     }
 }

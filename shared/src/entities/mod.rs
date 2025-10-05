@@ -1,9 +1,10 @@
 pub mod device;
+pub mod finding_scope;
 pub mod local_resource;
 pub mod peer;
 pub mod session;
+pub mod shelf;
 pub mod target;
 pub mod token;
 pub mod transfer_session;
 pub mod user;
-pub mod finding_scope;

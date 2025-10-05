@@ -1,7 +1,6 @@
 use std::future::Future;
 
-use crux_core::capability::Operation;
-use crux_core::Command;
+use crux_core::{capability::Operation, Command};
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;
@@ -18,7 +17,7 @@ pub enum WebViewOperationOutput {
     OpenUrl
 }
 
-impl Operation for WebViewOperationOutput {
+impl Operation for WebViewOperation {
     type Output = WebViewOperationOutput;
 }
 

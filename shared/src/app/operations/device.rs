@@ -63,7 +63,7 @@ impl DeviceOperation {
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
         Command::request_from_shell(CoreOperation::Device(DeviceOperation::LoadThumbnailPng(path))).map(|output| match output {
             CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(data)) => (data, None),
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::AddThumbnail(path)
             )) => (None, Some(path)),
             _ => (None, None)

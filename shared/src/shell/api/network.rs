@@ -1,5 +1,5 @@
-use crate::entities::finding_scope::FindingScope;
 use crate::app::operations::device::GeoLocation;
+use crate::entities::finding_scope::FindingScope;
 use crate::errors::NetworkError;
 use core_services::retry;
 use futures_util::lock::Mutex;

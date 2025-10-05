@@ -1,0 +1,128 @@
+use crate::app::core::model_events::LocalResourceEvent;
+use crate::app::core_utils::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::modules::AppModule;
+use crate::app::operations::device::OpenOperation;
+use crate::app::operations::dialog::DialogOperation;
+use crate::app::view_models::selected_resource::SelectedResourceViewModel;
+use crate::app::{AppModel, BitBridge};
+use crate::entities::local_resource::{LocalResourcePath, ResourceType};
+use crate::entities::shelf::Shelf;
+use crate::repository::local_resource::LocalResourceId;
+use crux_core::{App, Command};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Default)]
+pub struct ShelfModel {
+    pub shelf: Shelf,
+    pub is_loading: bool
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShelfViewModel {
+    pub selected_resources: Vec<SelectedResourceViewModel>,
+    pub is_loading: bool
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ShelfEvent {
+    Launch,
+    BeginLoadingResources,
+    EndLoadingResources,
+    OpenResource(LocalResourceId),
+    AddResources(Vec<ResourceSelection>),
+    RemoveResource(u64),
+
+    #[cfg_attr(feature = "typegen", serde(skip))]
+    ResourceModelEvents(Vec<LocalResourceEvent>)
+}
+
+pub struct ShelfModule;
+
+impl AppModule<BitBridge> for ShelfModule {
+    type Event = ShelfEvent;
+    type ViewModel = ShelfViewModel;
+
+    fn update(
+        &self,
+        event: Self::Event,
+        model: &mut AppModel,
+        _caps: &<BitBridge as App>::Capabilities
+    ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
+        match event {
+            Self::Event::Launch => Command::new(|it| async move {
+                it.app().load_resources().await;
+            }),
+            Self::Event::BeginLoadingResources => {
+                model.shelf.is_loading = true;
+                Command::render()
+            }
+            Self::Event::EndLoadingResources => {
+                model.shelf.is_loading = false;
+                Command::render()
+            }
+            Self::Event::AddResources(selections) => {
+                let mut commands = vec![];
+                let mut filtered_selections = vec![];
+                for selection in selections {
+                    if model.shelf.shelf.is_exists(&selection.path) {
+                        commands.push(Command::operate(DialogOperation::Toast(
+                            "Resource was already added before2.".to_owned()
+                        )))
+                    } else {
+                        filtered_selections.push(selection);
+                    }
+                }
+
+                commands.push(Command::new(|it| async move {
+                    it.notify_event(ShelfEvent::BeginLoadingResources);
+                    it.app().new_resources(filtered_selections).await;
+                    it.notify_event(ShelfEvent::EndLoadingResources);
+                }));
+
+                Command::all(commands)
+            }
+            Self::Event::RemoveResource(id) => Command::new(|it| async move {
+                it.app().remove_resource(id).await;
+            }),
+            Self::Event::ResourceModelEvents(events) => {
+                for event in events {
+                    match event {
+                        LocalResourceEvent::Add(resource) => {
+                            model.shelf.shelf.add_resource(resource);
+                        }
+                        LocalResourceEvent::Remove(id) => {
+                            model.shelf.shelf.remove_resource(&id);
+                        }
+                        _ => {}
+                    }
+                }
+
+                Command::render()
+            }
+            ShelfEvent::OpenResource(id) => {
+                let Some(resource) = model.shelf.shelf.get(&id) else {
+                    return Command::done();
+                };
+
+                let resource_path = resource.path.clone();
+                Command::new(move |it| async move {
+                    let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
+                })
+            }
+        }
+    }
+
+    fn view(&self, model: &AppModel) -> Self::ViewModel {
+        ShelfViewModel {
+            selected_resources: model.shelf.shelf.resources.iter().map(SelectedResourceViewModel::from).collect(),
+            is_loading: model.shelf.is_loading
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+pub struct ResourceSelection {
+    pub path: LocalResourcePath,
+    // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File
+    pub r#type: Option<ResourceType>
+}

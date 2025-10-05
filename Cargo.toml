@@ -42,7 +42,7 @@ matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch="
 matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git", branch = "main", default-features = false }
 ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
 anyhow = { version = "1.0.99", default-features = false }
-crux_core = { version = "0.15.0", default-features = false }
+crux_core = { version = "0.16.1" }
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 surrealdb = { version = "2.3.7", default-features = false }
 thiserror = { version = "2.0.16", default-features = false }

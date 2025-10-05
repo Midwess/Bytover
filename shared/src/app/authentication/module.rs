@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::core_utils::CoreCommandContextUtils;
 use crate::app::modules::transfer::TransferEvent;
-use crate::app::{AppEvent, AppModel, BitBridge};
+use crate::app::{AppModel, BitBridge};
 use crate::entities::user::User;
 
-use crate::app::nearby::module::NearbyEvent;
 use crate::app::modules::AppModule;
+use crate::app::nearby::module::NearbyEvent;
+use crate::app::shelf::module::ShelfEvent;
 
 pub struct AuthenticationModule;
 
@@ -52,8 +53,9 @@ impl AppModule<BitBridge> for AuthenticationModule {
             AuthenticationEvent::UpdateUser { user } => {
                 model.authentication.user.replace(user);
                 Command::new(|ctx| async move {
-                    ctx.notify_event(AppEvent::Transfer(TransferEvent::Launch()));
-                    ctx.notify_event(AppEvent::Nearby(NearbyEvent::Launch));
+                    ctx.notify_event(ShelfEvent::Launch);
+                    ctx.notify_event(TransferEvent::Launch);
+                    ctx.notify_event(NearbyEvent::Launch);
                 })
             }
         }

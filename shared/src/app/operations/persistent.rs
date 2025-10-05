@@ -10,10 +10,11 @@ use crate::entities::user::User;
 use crate::repository::transfer_session::TransferSessionId;
 use crux_core::capability::Operation;
 use crux_core::Command;
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum PersistentOperation {
     GenId(),
     Session(SessionPersistentOperation),
@@ -111,7 +112,7 @@ pub enum TransferSessionOperationOutput {
     GenerateThumbnailPath(HashMap<u64, LocalResourcePath>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum PersistentOperationOutput {
     Session(SessionPersistentOperationOutput),
     User(UserPersistentOperationOutput),
@@ -128,7 +129,7 @@ impl Operation for PersistentOperation {
 impl PersistentOperation {
     pub fn gen_id() -> AppRequestBuilder<impl Future<Output = u64>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::GenId())).map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::GenId(id)) => id,
+            CoreOperationOutput::Persistent(PersistentOperationOutput::GenId(id)) => id,
             _ => panic!("Invalid output expected GenId got {it:?}")
         })
     }
@@ -140,7 +141,7 @@ impl SessionPersistentOperation {
             SessionPersistentOperation::WriteToken(token)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteToken())) => {}
+            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteToken())) => {}
             _ => panic!("Invalid output expected WriteToken got {it:?}")
         })
     }
@@ -150,7 +151,7 @@ impl SessionPersistentOperation {
             SessionPersistentOperation::WriteUser(user)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteUser())) => (),
+            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteUser())) => (),
             _ => panic!("Invalid output expected WriteUser got {it:?}")
         })
     }
@@ -160,7 +161,7 @@ impl SessionPersistentOperation {
             SessionPersistentOperation::Get()
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::Session(SessionPersistentOperationOutput::Get(session))) => {
+            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::Get(session))) => {
                 session
             }
             _ => panic!("Invalid output expected Get got {it:?}")
@@ -174,7 +175,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::Add(resources)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(
                 resources
             ))) => resources,
             _ => panic!("Invalid output expected Add got {it:?}")
@@ -186,7 +187,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::Remove(id)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::Removed
             )) => true,
             _ => false
@@ -198,7 +199,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::Find(path)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(
                 resource
             ))) => resource,
             _ => panic!("Invalid output expected Find got {it:?}")
@@ -210,7 +211,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::FindAll
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::FindAll(resources)
             )) => resources,
             _ => panic!("Invalid output expected FindAll got {it:?}")
@@ -222,7 +223,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id }
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::AddThumbnail(thumbnail_url)
             )) => thumbnail_url,
             _ => panic!("Invalid output expected AddThumbnail got {it:?}")
@@ -234,7 +235,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::LoadOnDisk(path)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::LoadOnDisk(resource)
             )) => resource,
             _ => panic!("Invalid output expected IsExistedOnDisk got {it:?}")
@@ -246,7 +247,7 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::GetResourceType { path }
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::LocalResource(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::GetResourceType(resource_type)
             )) => resource_type,
             _ => panic!("Invalid output expected GetResourceType got {it:?}")
@@ -260,7 +261,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::Save(session)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Save(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Save(
                 session
             ))) => session,
             _ => panic!("Invalid output expected Save got {it:?}")
@@ -275,7 +276,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
                 TransferSessionOperationOutput::UpdateProgresses(session)
             )) => session,
             _ => panic!("Invalid output expected UpdateProgresses got {it:?}")
@@ -290,7 +291,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::UpdateResource { session_id, resource }
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
                 TransferSessionOperationOutput::UpdateResource(session)
             )) => session,
             _ => panic!("Invalid output expected UpdateResource got {it:?}")
@@ -302,7 +303,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::GetAllReceivedSessions()
         )))
         .map(move |it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(
                 sessions
             ))) => sessions,
             _ => panic!("Invalid output expected GetAll got {it:?}")
@@ -314,7 +315,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::Remove((id, transfer_type))
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(
                 is_removed
             ))) => is_removed,
             _ => panic!("Invalid output expected Remove got {it:?}")
@@ -329,7 +330,7 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::GenerateThumbnailPath { session_id, resource_ids }
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
                 TransferSessionOperationOutput::GenerateThumbnailPath(resource_paths)
             )) => resource_paths,
             _ => panic!("Invalid output expected GenerateResourcePath got {it:?}")
@@ -347,7 +348,7 @@ impl TransferSessionPersistentOperation {
             }
         )))
         .map(|it| match it {
-            CoreOperationOutput::Database(PersistentOperationOutput::TransferSession(
+            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
                 TransferSessionOperationOutput::GenerateResourcePath(resource_paths)
             )) => resource_paths,
             _ => panic!("Invalid output expected GenerateResourcePath got {it:?}")

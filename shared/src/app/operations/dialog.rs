@@ -58,8 +58,8 @@ impl Operation for DialogOperation {
 }
 
 impl DialogOperation {
-    pub fn toast(message: String) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message))).map(|_it| {})
+    pub fn toast(message: impl Into<String>) -> AppRequestBuilder<impl Future<Output = ()>> {
+        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message.into()))).map(|_it| {})
     }
 
     pub fn alert(dialog: AlertDialog) -> AppRequestBuilder<impl Future<Output = bool>> {

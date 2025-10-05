@@ -5,8 +5,6 @@ import isEqual from 'lodash/isEqual'
 
 import {
     CoreOperationVariantDelay,
-    Effect,
-    EffectVariantAppCapabilities,
     Request,
     AppViewModel,
     AppEvent,
@@ -56,10 +54,13 @@ import {
     ReceiveCloudSessionViewModel,
     PeerViewModel,
     LocalResourcePath,
-    CoreOperationOutputVariantDatabase,
     PersistentOperationOutputVariantLocalResource,
     LocalResourcePersistentOperationOutputVariantAddThumbnail,
     SelectedResourceViewModel,
+    ShelfViewModel,
+    CoreOperationOutputVariantPersistent,
+    AppOperation,
+    AppOperationVariantOperation,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -77,6 +78,7 @@ import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
 import {FileMetadata, FolderStructure} from "@/hooks/use-file-upload";
 import {getThumbnailFromFile} from "@/utils/thumbnail";
+import { noop } from 'lodash';
 
 export class WasmCore {
     // If it is not compatible, then the current browser is not supported.
@@ -88,6 +90,7 @@ export class WasmCore {
     environmentState: Observable<EnvironmentViewModel> = new Observable()
     nearbyState: Observable<NearbyViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
+    shelfState: Observable<ShelfViewModel> = new Observable()
 
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
@@ -237,7 +240,7 @@ export class WasmCore {
         const [state, setState] = useState<SelectedResourceViewModel[]>([])
 
         useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
+            return this.shelfState.subscribe((transferState) => {
                 if (transferState?.selected_resources.length != state.length) {
                     setState(transferState?.selected_resources || [])
                 }
@@ -329,8 +332,8 @@ export class WasmCore {
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
     }
 
-    public async update(event: AppEvent) {
-        const effects_bytes = await process_event(serialize(event));
+    public async update(event: AppEvent | undefined, raw: Uint8Array | undefined = undefined) {
+        const effects_bytes = await process_event(raw || serialize(event));
         const requests = deserializeArray<Request>(Request, effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
@@ -342,9 +345,10 @@ export class WasmCore {
         }
     }
 
-    async processEffect(request_id: number, effect: Effect): Promise<Uint8Array> {
-        const appEffect = effect as EffectVariantAppCapabilities;
-        const coreOperation = appEffect.value;
+    async processEffect(request_id: number, effect: AppOperation): Promise<Uint8Array> {
+        console.log('tiendang-debug', 'Handle effect', effect)
+        const effectOperation = effect as AppOperationVariantOperation;
+        const coreOperation = effectOperation.value;
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
                 await init()
@@ -381,7 +385,7 @@ export class WasmCore {
                             const buffer = await getThumbnailFromFile(file)
                             const savedPath = new LocalResourcePathVariantPlatformIdentifier(`opfs://thumbnails/${resourceId}.png`)
                             await create_file(serialize(savedPath), buffer);
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDatabase(new PersistentOperationOutputVariantLocalResource(new LocalResourcePersistentOperationOutputVariantAddThumbnail(savedPath)))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantPersistent(new PersistentOperationOutputVariantLocalResource(new LocalResourcePersistentOperationOutputVariantAddThumbnail(savedPath)))))
                         }
                         catch (e) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
@@ -439,7 +443,7 @@ export class WasmCore {
             }
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
-                this.update(operation.value).then(r => {})
+                this.update(operation.value).then(noop)
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
             }
             case CoreOperationVariantDialog: {
@@ -528,6 +532,7 @@ export class WasmCore {
         this.authenticationState.set(viewModel.authentication!)
         this.nearbyState.set(viewModel.nearby!)
         this.transferState.set(viewModel.transfer!)
+        this.shelfState.set(viewModel.shelf!)
         const selectedSession = this.selectedSession.get()
         if (selectedSession) {
             const newSession = viewModel.transfer?.received_sessions.find(it => it.id === selectedSession.id) ||

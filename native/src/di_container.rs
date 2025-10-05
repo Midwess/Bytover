@@ -16,7 +16,6 @@ use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolReso
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
-use shared::app::transfer::file_selection_service::ResourceTransferSelectionService;
 use shared::app::transfer::transfer_service::TransferService;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
@@ -44,7 +43,6 @@ pub struct DiContainer {
     native_executor: OnceCell<NativeExecutor>,
     transfer_service: OnceCell<TransferService>,
     cloud_server: OnceCell<CloudServer<Channel>>,
-    transfer_selection_service: OnceCell<ResourceTransferSelectionService>,
 
     rpc_connection: RpcNetworkModuleImpl
 }
@@ -59,7 +57,6 @@ impl DiContainer {
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
                 transfer_service: OnceCell::new(),
-                transfer_selection_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 cloud_server: OnceCell::new()
             };
@@ -197,16 +194,5 @@ impl DiContainer {
 
         let _ = self.native_executor.set(executor);
         self.native_executor.get().unwrap()
-    }
-
-    pub fn get_resource_transfer_selection_service(&'static self) -> &'static ResourceTransferSelectionService {
-        match self.transfer_selection_service.get() {
-            Some(service) => service,
-            None => {
-                let service = ResourceTransferSelectionService {};
-                let _ = self.transfer_selection_service.set(service);
-                self.transfer_selection_service.get().unwrap()
-            }
-        }
     }
 }

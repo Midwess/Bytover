@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;
 use crate::entities::local_resource::LocalResource;
-use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus};
+use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferProgress, TransferSession, TransferSessionStatus};
 use crate::errors::NetworkError;
 
 use super::{CoreOperation, CoreOperationOutput};
@@ -41,7 +41,8 @@ pub enum TransferOperationOutput {
     FindPublicSession(Option<TransferSession>),
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
     UnauthenticatedToSubscribeSession,
-    SubscribeSessionEnded
+    SubscribeSessionEnded,
+    ThumbnailUpdated(ThumbnailUpdatedEvent)
 }
 
 impl Operation for TransferOperation {

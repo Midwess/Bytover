@@ -27,7 +27,7 @@ impl NativeExecutor {
             }
             CoreOperation::Persistent(database) => {
                 let response = self.persistent.handle(database).await;
-                CoreOperationOutput::Database(response)
+                CoreOperationOutput::Persistent(response)
             }
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {

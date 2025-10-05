@@ -52,17 +52,7 @@ impl Table<TransferSessionId> for TransferSession {
 impl SurrealDbId for TransferSessionId {}
 
 impl DbId for TransferSessionId {
-    fn soft_delete(&mut self) {
-        todo!("Not support soft delete")
-    }
-
-    fn soft_restore(&mut self) {
-        todo!("Not support soft delete")
-    }
-
-    fn soft_deleted(&self) -> bool {
-        false
-    }
+    type Table = TransferSession;
 }
 
 impl SurrealId for TransferSession {

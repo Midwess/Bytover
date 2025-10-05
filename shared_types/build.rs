@@ -29,17 +29,18 @@ use shared::app::operations::persistent::{
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
-use shared::app::transfer::file_selection_service::ResourceSelection;
+use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfViewModel};
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::view_models::receive_session::ReceiveCloudSessionViewModel;
-use shared::app::BitBridge;
+use shared::app::{BitBridge, NotifiedOperation};
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::target::TransferTarget;
 use shared::entities::token::Token;
-use shared::entities::transfer_session::{TransferSessionStatus, TransferStatus, TransferType};
+use shared::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use shared::entities::user::User;
 use shared::errors::NetworkError;
+use shared::repository::local_resource::LocalResourceId;
 use shared::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
 fn main() -> anyhow::Result<()> {
@@ -95,6 +96,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<LocalResourcePersistentOperation>()?;
     gen.register_type::<LocalResourcePersistentOperationOutput>()?;
     gen.register_type::<TransferSessionPersistentOperation>()?;
+    gen.register_type::<TransferSession>()?;
     gen.register_type::<TransferSessionOperationOutput>()?;
     gen.register_type::<InternetOperation>()?;
     gen.register_type::<InternetOperationOutput>()?;
@@ -114,6 +116,11 @@ fn main() -> anyhow::Result<()> {
     // Register executor msg
     gen.register_type::<MessageToShellResponse>()?;
     gen.register_type::<MessageToShell>()?;
+    gen.register_type::<LocalResourceId>()?;
+    gen.register_type::<TransferSessionId>()?;
+    gen.register_type::<ShelfEvent>()?;
+    gen.register_type::<ShelfViewModel>()?;
+    gen.register_type::<NotifiedOperation>()?;
 
     gen.register_app::<BitBridge>()?;
 

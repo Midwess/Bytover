@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "postinstall": "cargo install wasm-pack --version 0.13.1",
-    "wasm:dev": "cd wasm && wasm-pack build --target web --dev && cd ../worker && wasm-pack build --target no-modules --dev --features core && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --dev --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
-    "wasm:build": "cd wasm && wasm-pack build --target web && cd ../worker && wasm-pack build --target no-modules --features core && mkdir -p ../public/core-worker && cp -r pkg/ ../public/core-worker/ && wasm-pack build --target no-modules --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/ ../public/opfs-worker/",
+    "wasm:dev": "cd wasm && wasm-pack build --target web --dev && cd ../worker && wasm-pack build --target no-modules --dev --features core && mkdir -p ../public/core-worker && cp -r pkg/* ../public/core-worker/ && wasm-pack build --target no-modules --dev --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/* ../public/opfs-worker/",
+    "wasm:build": "cd wasm && wasm-pack build --target web && cd ../worker && wasm-pack build --target no-modules --features core && mkdir -p ../public/core-worker && cp -r pkg/* ../public/core-worker/ && wasm-pack build --target no-modules --features opfs && mkdir -p ../public/opfs-worker && cp -r pkg/* ../public/opfs-worker/",
     "build": "pnpm wasm:build; next build",
     "lint": "next lint --fix",
     "deno-next": "deno run --allow-all --unstable-unsafe-proto --unstable-detect-cjs npm:next@15.3.5",

@@ -29,7 +29,7 @@ use devlog_sdk::distributed_id::gen_id;
 use erased_serde::Serialize;
 use js_sys::{Array, Promise};
 use serde::Deserialize;
-use shared::app::transfer::file_selection_service::ResourceSelection;
+use shared::app::shelf::module::ResourceSelection;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::CoreOperation;
 use std::sync::LazyLock;

@@ -10,6 +10,7 @@ pub mod webview;
 use std::time::Duration;
 
 use crux_core::capability::Operation;
+use derive_more::From;
 use device::{DeviceOperation, DeviceOperationOutput};
 use dialog::{DialogOperation, DialogOperationOutput};
 use internet::{InternetOperation, InternetOperationOutput};
@@ -24,7 +25,7 @@ use crate::errors::{DeviceError, NetworkError};
 
 use super::AppEvent;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum CoreOperation {
     WebView(WebViewOperation),
     Device(DeviceOperation),
@@ -40,12 +41,12 @@ pub enum CoreOperation {
     Delay(Duration)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum CoreOperationOutput {
     WebView(WebViewOperationOutput),
     Device(DeviceOperationOutput),
     Rpc(RpcOperationOutput),
-    Database(PersistentOperationOutput),
+    Persistent(PersistentOperationOutput),
     Transfer(TransferOperationOutput),
     P2P(P2POperationOutput),
     Internet(InternetOperationOutput),
