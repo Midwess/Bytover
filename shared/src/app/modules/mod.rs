@@ -1,5 +1,3 @@
-pub mod transfer;
-
 use crux_core::{App, Command};
 
 use super::AppModel;

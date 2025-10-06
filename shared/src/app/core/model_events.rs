@@ -6,6 +6,9 @@ use ambassador::{delegatable_trait, Delegate};
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use crate::app::AppEvent;
+use crate::app::transfer::module::TransferEvent;
+use crate::app::shelf::module::ShelfEvent;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum ModelEvent<D, I, U> {
@@ -33,3 +36,15 @@ pub enum LocalResourceUpdateEvent {
 
 pub type LocalResourceEvent = ModelEvent<LocalResource, LocalResourceId, LocalResourceUpdateEvent>;
 pub type TransferSessionModelEvent = ModelEvent<TransferSession, TransferSessionId, TransferSessionUpdateEvent>;
+
+impl Into<AppEvent> for TransferSessionModelEvent {
+    fn into(self) -> AppEvent {
+        TransferEvent::ModelEvent(self).into()
+    }
+}
+
+impl Into<AppEvent> for LocalResourceEvent {
+    fn into(self) -> AppEvent {
+        ShelfEvent::ModelEvent(self).into()
+    }
+}

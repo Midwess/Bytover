@@ -16,7 +16,7 @@ use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolReso
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
-use shared::app::transfer::transfer_service::TransferService;
+use shared::app::transfer::commands::TransferService;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::auth_server::AuthServer;

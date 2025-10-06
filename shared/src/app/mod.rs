@@ -1,6 +1,5 @@
 pub mod authentication;
 pub mod core;
-pub mod core_utils;
 pub mod environment;
 pub mod modules;
 pub mod nearby;
@@ -12,14 +11,13 @@ pub mod view_models;
 pub use crate::app::operations::CoreOperation;
 
 use crate::app::shelf::module::{ShelfEvent, ShelfModel, ShelfModule, ShelfViewModel};
-use crate::app::transfer::transfer_service::TransferService;
 use authentication::module::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::effect;
 use crux_core::{App, Command};
 use derive_more::From;
 use environment::module::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
-use modules::transfer::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
+use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use serde::{Deserialize, Serialize};
@@ -42,9 +40,7 @@ impl Default for BitBridge {
             environment: EnvironmentModule,
             authentication: AuthenticationModule,
             shelf: ShelfModule,
-            transfer: TransferModule {
-                transfer_service: TransferService::instance()
-            },
+            transfer: TransferModule,
             nearby: NearbyModule
         }
     }

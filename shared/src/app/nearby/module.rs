@@ -1,4 +1,4 @@
-use crate::app::core_utils::CoreCommandContextUtils;
+use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;

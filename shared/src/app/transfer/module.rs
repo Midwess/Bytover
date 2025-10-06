@@ -1,10 +1,9 @@
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
-use crate::app::core_utils::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
-use crate::app::transfer::transfer_selection::TransferMethodSelection;
-use crate::app::transfer::transfer_service::TransferService;
+use crate::entities::transfer_method::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::peer::PeerViewModel;
@@ -45,9 +44,7 @@ pub struct TransferViewModel {
     cloud_session: Option<CloudSession>
 }
 
-pub struct TransferModule {
-    pub transfer_service: &'static TransferService
-}
+pub struct TransferModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TransferEvent {
@@ -93,8 +90,8 @@ pub enum TransferEvent {
         transfer_type: TransferType
     },
 
-    #[cfg_attr(feature = "typegen", serde(skip))]
-    TransferSessionModelEvents(Vec<TransferSessionModelEvent>)
+    #[serde(skip)]
+    ModelEvent(TransferSessionModelEvent)
 }
 
 impl AppModule<BitBridge> for TransferModule {
@@ -107,10 +104,9 @@ impl AppModule<BitBridge> for TransferModule {
         model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
-        let transfer_service = self.transfer_service;
         match event {
             TransferEvent::Launch => Command::new(|it| async move {
-                transfer_service.load_transfer_sessions(it).await;
+                it.app().load_transfer_sessions(it).await;
             }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
@@ -145,7 +141,7 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
 
-                    transfer_service.delete_session(session, it.clone()).await;
+                    it.app().delete_session(session, it.clone()).await;
                 })
             }
             TransferEvent::DeleteSession { session_id } => {
@@ -164,7 +160,7 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 Command::new(|it| async move {
-                    transfer_service.delete_session(session, it.clone()).await;
+                    it.app().delete_session(session, it.clone()).await;
                 })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
@@ -180,7 +176,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let session = session.clone();
                 Command::new(|it| async move {
-                    transfer_service.delete_session(session, it.clone()).await;
+                    it.app().delete_session(session, it.clone()).await;
                 })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
@@ -198,7 +194,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::new(|it| async move {
-                    transfer_service.transfer(user, selected_resources, target, it).await;
+                    it.app().transfer(user, selected_resources, target).await;
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
@@ -229,31 +225,28 @@ impl AppModule<BitBridge> for TransferModule {
                         return;
                     }
 
-                    transfer_service.transfer(user, selected_resources, target, it).await;
+                    it.app().transfer(user, selected_resources, target).await;
                 })
             }
             TransferEvent::TransferRequest { remote_session, peer } => Command::new(|it| async move {
-                transfer_service.received_session_request(remote_session, peer, it).await;
+                it.app().accept_session(remote_session, peer).await;
             }),
-            TransferEvent::TransferSessionModelEvents(events) => {
-                for event in events {
-                    match event {
-                        TransferSessionModelEvent::Update(session_id, updated) => {
-                            if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
-                                updated.update(session);
-                            }
+            TransferEvent::ModelEvent(event) => {
+                match event {
+                    TransferSessionModelEvent::Update(session_id, action) => {
+                        if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
+                            action.update(session);
                         }
-                        TransferSessionModelEvent::Add(new) => {
-                            log::info!(target: "transfer", "Adding transfer session: {:?}", new);
-                            model.transfer.sessions.push(new);
-                        }
-                        TransferSessionModelEvent::Remove(session_id) => {
-                            model.transfer.sessions.retain(|it| !session_id.is_represent(it));
-                        }
+                    }
+                    TransferSessionModelEvent::Add(new) => {
+                        model.transfer.sessions.push(new);
+                    }
+                    TransferSessionModelEvent::Remove(session_id) => {
+                        model.transfer.sessions.retain(|it| !session_id.is_represent(it));
                     }
                 }
 
-                Command::render()
+                Command::done()
             }
             TransferEvent::UpdateTransferTargets { added: new, removed } => {
                 model.transfer.targets.extend(new);
@@ -303,9 +296,8 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::FindPublicSession { keywords } => {
-                let transfer_service = self.transfer_service;
                 Command::new(|it| async move {
-                    transfer_service.find_transfer_session(keywords, it.clone()).await;
+                    it.app().find_transfer_session(keywords).await;
                 })
             }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
@@ -319,9 +311,8 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done()
                 };
 
-                let transfer_service = self.transfer_service;
                 Command::new(|it| async move {
-                    transfer_service.view_public_session(session, password, it).await;
+                    it.app().view_public_session(session, password, it).await;
                 })
             }
         }

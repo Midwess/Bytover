@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
-use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::modules::transfer::TransferEvent;
+use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;

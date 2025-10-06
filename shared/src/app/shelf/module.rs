@@ -1,5 +1,5 @@
 use crate::app::core::model_events::LocalResourceEvent;
-use crate::app::core_utils::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::DialogOperation;
@@ -32,8 +32,8 @@ pub enum ShelfEvent {
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
 
-    #[cfg_attr(feature = "typegen", serde(skip))]
-    ResourceModelEvents(Vec<LocalResourceEvent>)
+    #[serde(skip)]
+    ModelEvent(LocalResourceEvent)
 }
 
 pub struct ShelfModule;
@@ -84,22 +84,20 @@ impl AppModule<BitBridge> for ShelfModule {
             Self::Event::RemoveResource(id) => Command::new(|it| async move {
                 it.app().remove_resource(id).await;
             }),
-            Self::Event::ResourceModelEvents(events) => {
-                for event in events {
-                    match event {
-                        LocalResourceEvent::Add(resource) => {
-                            model.shelf.shelf.add_resource(resource);
-                        }
-                        LocalResourceEvent::Remove(id) => {
-                            model.shelf.shelf.remove_resource(&id);
-                        }
-                        _ => {}
+            Self::Event::ModelEvent(event) => {
+                match event {
+                    LocalResourceEvent::Add(resource) => {
+                        model.shelf.shelf.add_resource(resource);
                     }
+                    LocalResourceEvent::Remove(id) => {
+                        model.shelf.shelf.remove_resource(&id);
+                    }
+                    _ => {}
                 }
 
-                Command::render()
+                Command::done()
             }
-            ShelfEvent::OpenResource(id) => {
+            Self::Event::OpenResource(id) => {
                 let Some(resource) = model.shelf.shelf.get(&id) else {
                     return Command::done();
                 };

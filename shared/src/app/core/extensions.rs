@@ -1,5 +1,5 @@
-use super::operations::CoreOperation;
-use super::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
+use crate::CoreOperation;
+use crate::app::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
 use crate::app::operations::CoreOperationOutput;
 use crate::CoreOperation::Notified;
 use crux_core::capability::Operation;
@@ -24,6 +24,7 @@ pub trait CoreCommandContextUtils {
     /// so that it will run super fast because it skip the serialize + deserialize,
     /// but it also means it cannot return any effects.
     fn update_model(&self, result: impl Into<AppEvent>);
+    fn update_model_series(&self, results: Vec<impl Into<AppEvent>>);
     fn notify_event(&self, event: impl Into<AppEvent>);
     fn app(&self) -> crate::app::core::command::AppCommand;
 }
@@ -31,6 +32,14 @@ pub trait CoreCommandContextUtils {
 impl CoreCommandContextUtils for AppCommandContext {
     fn update_model(&self, result: impl Into<AppEvent>) {
         self.send_event(result.into());
+        self.notify_shell(CoreOperation::Render);
+    }
+
+    fn update_model_series(&self, results: Vec<impl Into<AppEvent>>) {
+        for result in results {
+            self.send_event(result.into());
+        }
+
         self.notify_shell(CoreOperation::Render);
     }
 

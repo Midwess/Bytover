@@ -1,8 +1,8 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
-use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::modules::transfer::TransferEvent;
+use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::user::User;
 

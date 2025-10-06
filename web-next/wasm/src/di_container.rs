@@ -17,7 +17,6 @@ use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use idb::Database;
 use once_cell::sync::OnceCell;
-use shared::app::transfer::transfer_service::TransferService;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::auth_server::AuthServer;
@@ -38,7 +37,6 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    transfer_service: OnceCell<TransferService>,
     cloud_server: OnceCell<CloudServer<Client>>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
     transfer_repository: OnceCell<Arc<dyn TransferSessionRepository>>,
@@ -53,7 +51,6 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                transfer_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 resource_repository: OnceCell::new(),
                 transfer_repository: OnceCell::new(),
@@ -74,17 +71,6 @@ impl DiContainer {
 
     pub fn get_authentication_server(&'static self) -> AuthServer<Client> {
         AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
-    }
-
-    pub fn get_transfer_service(&'static self) -> &'static TransferService {
-        match self.transfer_service.get() {
-            Some(service) => service,
-            None => {
-                let service = TransferService {};
-                let _ = self.transfer_service.set(service);
-                self.transfer_service.get().unwrap()
-            }
-        }
     }
 
     pub async fn init(&self) {

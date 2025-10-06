@@ -3,54 +3,37 @@ use std::sync::OnceLock;
 
 use core_services::db::repository::abstraction::table::Table;
 use futures_util::StreamExt;
+use devlog_sdk::distributed_id::gen_id_sync;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core::model_events::TransferSessionModelEvent;
-use crate::app::core_utils::CoreCommandContextUtils;
-use crate::app::modules::transfer::TransferEvent;
+use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::AppCommandContext;
+use crate::app::core::command::AppCommand;
+use crate::app::transfer::module::TransferEvent::ModelEvent;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::entities::user::User;
 
-pub struct TransferService {}
-
-impl Default for TransferService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TransferService {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn instance() -> &'static TransferService {
-        static INSTANCE: OnceLock<TransferService> = OnceLock::new();
-        INSTANCE.get_or_init(TransferService::new)
-    }
-
+impl AppCommand {
     pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
         let receive_sessions = TransferSessionPersistentOperation::get_all_received_sessions().into_future(cmd.clone()).await;
-        let events = receive_sessions.into_iter().map(TransferSessionModelEvent::Add).collect::<Vec<_>>();
-
-        cmd.update_model(TransferEvent::TransferSessionModelEvents(events));
+        let events = receive_sessions.into_iter().map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it))).collect::<Vec<_>>();
+        cmd.update_model_series(events);
     }
 
     pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-                TransferSessionModelEvent::Remove(transfer_session.id()),
-            ]));
+            cmd.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
             if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)
                 .into_future(cmd.clone())
@@ -70,12 +53,9 @@ impl TransferService {
         user: User,
         selected_resources: Vec<LocalResource>,
         transfer_target: TransferTarget,
-        cmd: AppCommandContext
     ) {
         if selected_resources.is_empty() {
-            DialogOperation::toast("Please select at least one resource.".to_string())
-                .into_future(cmd.clone())
-                .await;
+            self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
             return;
         }
 
@@ -92,15 +72,15 @@ impl TransferService {
                     let valid_domain = domain_parts.len() >= 2 && domain_parts.iter().all(|p| !p.is_empty());
 
                     if !(has_at && has_dot && has_valid_length && valid_parts && valid_domain) {
-                        DialogOperation::toast("Invalid email format".to_string()).into_future(cmd.clone()).await;
+                        self.run(DialogOperation::toast("Invalid email format".to_string())).await;
                         return;
                     }
                 }
 
                 let session = TransferSession::public(user, password, selected_resources, to_emails);
-                let result = match TransferOperation::create_cloud_session(session).into_future(cmd.clone()).await {
+                let result = match self.run(TransferOperation::create_cloud_session(session)).await {
                     Err(err) => {
-                        DialogOperation::toast(format!("{err} please try again")).into_future(cmd.clone()).await;
+                        self.run(DialogOperation::toast(format!("{err} please try again"))).await;
                         return;
                     }
                     Ok(session) => session
@@ -109,7 +89,7 @@ impl TransferService {
                 result
             }
             TransferTarget::Nearby(_) => {
-                let order_id = PersistentOperation::gen_id().into_future(cmd.clone()).await;
+                let order_id = gen_id_sync();
                 let result = TransferSession::send(order_id, selected_resources, transfer_target).await;
 
                 result
@@ -118,13 +98,11 @@ impl TransferService {
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
-        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-            TransferSessionModelEvent::Add(transfer_session.clone()),
-        ]));
+        self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
 
         log::info!("Begin transferring session to: {transfer_target_id:?}",);
 
-        let mut stream = cmd.app().stream_from_shell(TransferOperation::SendSession(transfer_session.clone()));
+        let mut stream = self.stream_from_shell(TransferOperation::SendSession(transfer_session.clone()));
 
         while let Some(output) = stream.next().await {
             match output {
@@ -138,10 +116,10 @@ impl TransferService {
                             );
                         }
 
+                        transfer_session.update_progress(progress.clone());
+                        TransferSessionPersistentOperation::update_progresses(transfer_session.order_id, vec![progress.clone()]);
                         let id = transfer_session.id();
-                        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-                            TransferSessionModelEvent::Update(id, progress.into()),
-                        ]));
+                        self.update_model(TransferSessionModelEvent::Update(id, progress.into()));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if status == TransferSessionStatus::Canceled {
@@ -149,6 +127,13 @@ impl TransferService {
                         }
 
                         break;
+                    }
+                    TransferOperationOutput::ThumbnailUpdated(thumbnail) => {
+                        if let Some(resource) = transfer_session.resource_mut(thumbnail.resource_id).cloned() {
+                            TransferSessionPersistentOperation::update_resource(transfer_session.id(), resource);
+                        }
+
+                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), thumbnail.into()));
                     }
                     other => {
                         log::error!("Unexpected transfer output: {other:?}");
@@ -158,12 +143,12 @@ impl TransferService {
                 CoreOperationOutput::ConnectionError(error) => {
                     log::error!("Connection error: {error:?}");
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
+                    self.run(DialogOperation::toast(format!("{error}"))).await;
                     break;
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     transfer_session.force_complete(format!("Device error: {error:?}"));
-                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
+                    self.run(DialogOperation::toast(format!("{error}"))).await;
                     log::error!("Device error: {error:?}");
                     break;
                 }
@@ -185,16 +170,12 @@ impl TransferService {
             return;
         }
 
-        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())
-            .into_future(cmd.clone())
-            .await;
+        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())).await;
 
-        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-            TransferSessionModelEvent::Remove(transfer_session.id()),
-        ]));
+        self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
     }
 
-    pub async fn received_session_request(&self, remote_session: TransferSessionMessage, peer: Peer, cmd: AppCommandContext) {
+    pub async fn accept_session(&self, remote_session: TransferSessionMessage, peer: Peer) {
         let peer_id = peer.id();
         let (generate_file_paths_request, _generate_thumbnail_paths_request) = {
             let mut result = HashMap::new();
@@ -209,17 +190,12 @@ impl TransferService {
             (result, thumbnail_paths)
         };
 
-        let mut generated_thumbnails_paths = TransferSessionPersistentOperation::generate_thumbnail_paths(
+        let mut generated_thumbnails_paths = self.run(TransferSessionPersistentOperation::generate_thumbnail_paths(
             Some(remote_session.order_id),
             generate_file_paths_request.keys().copied().collect()
-        )
-        .into_future(cmd.clone())
-        .await;
+        )).await;
 
-        let mut generated_saved_paths =
-            TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)
-                .into_future(cmd.clone())
-                .await;
+        let mut generated_saved_paths = self.run(TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)).await;
 
         let mut resources = vec![];
         for resource_request in remote_session.resources {
@@ -247,9 +223,7 @@ impl TransferService {
         let mut transfer_session = response_transfer_session.clone();
         // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
         transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
-        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-            TransferSessionModelEvent::Add(transfer_session.clone()),
-        ]));
+        self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
 
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
@@ -257,15 +231,14 @@ impl TransferService {
             session_id: transfer_session.order_id
         });
 
-        let mut stream = cmd.stream_from_shell(response);
+        let mut stream = self.stream_from_shell(response);
         while let Some(transfer_output) = stream.next().await {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
                         let is_completed = progress.status.is_completed();
-                        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-                            TransferSessionModelEvent::Update(transfer_session.id(), progress.into()),
-                        ]));
+                        TransferSessionPersistentOperation::update_progresses(transfer_session.order_id, vec![progress.clone()]);
+                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                         if is_completed {
                             break;
                         }
@@ -282,9 +255,7 @@ impl TransferService {
                         break;
                     }
                     TransferOperationOutput::ThumbnailUpdated(event) => {
-                        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-                            TransferSessionModelEvent::Update(transfer_session.id(), event.into()),
-                        ]));
+                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), event.into()));
                     }
                     _ => {
                         continue;
@@ -313,35 +284,31 @@ impl TransferService {
 
         // Remove the session and add the new session
         if matches!(transfer_session.status(), TransferSessionStatus::Success) {
-            cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
+            self.update_model_series(vec![
                 TransferSessionModelEvent::Remove(transfer_session.id()),
                 TransferSessionModelEvent::Add(transfer_session.clone()),
-            ]));
+            ]);
         } else {
             DialogOperation::toast("Transfer session canceled".to_string());
         }
     }
 
-    pub async fn find_transfer_session(&self, keywords: String, cmd: AppCommandContext) {
-        let session_overview = match TransferOperation::find_transfer_session(keywords).into_future(cmd.clone()).await {
+    pub async fn find_transfer_session(&self, keywords: String) {
+        let session_overview = match self.run(TransferOperation::find_transfer_session(keywords)).await {
             Err(e) => {
                 log::error!(target: "transfer", "Failed to find transfer session: {e:?}");
-                DialogOperation::toast(format!("{e}")).into_future(cmd.clone()).await;
+                self.run(DialogOperation::toast(format!("{e}"))).await;
                 return;
             }
             Ok(session_overview) => session_overview
         };
 
         let Some(session) = session_overview else {
-            DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession)
-                .into_future(cmd.clone())
-                .await;
+            self.run(DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession)).await;
             return;
         };
 
-        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-            TransferSessionModelEvent::Add(session),
-        ]));
+        self.update_model(TransferSessionModelEvent::Add(session));
     }
 
     pub async fn view_public_session(
@@ -395,9 +362,7 @@ impl TransferService {
                         transfer_session.resources.append(&mut resources);
                         transfer_session.progress.append(&mut progresses);
 
-                        cmd.update_model(TransferEvent::TransferSessionModelEvents(vec![
-                            TransferSessionModelEvent::Add(transfer_session.clone()),
-                        ]));
+                        cmd.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
                     }
                     TransferOperationOutput::SubscribeSessionEnded => {
                         break;

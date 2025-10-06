@@ -2,8 +2,7 @@ use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger;
 use core_services::wasm::extensions::VecExtension;
 use crux_core::bridge::Bridge;
-use crux_core::middleware::Layer;
-use crux_core::{App, Core};
+use crux_core::Core;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use gloo_worker::Worker;
 use js_sys::Uint8Array;
@@ -43,7 +42,7 @@ impl Worker for CoreWorker {
     type Message = ();
     type Output = WorkerMessage<CoreWorkerOperationOutput>;
 
-    fn create(scope: &gloo_worker::WorkerScope<Self>) -> Self {
+    fn create(_: &gloo_worker::WorkerScope<Self>) -> Self {
         logger::setup();
         init_scoped_id_generator("BitBridge".to_string());
         CoreWorker {}
