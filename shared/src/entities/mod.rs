@@ -6,6 +6,6 @@ pub mod session;
 pub mod shelf;
 pub mod target;
 pub mod token;
+pub mod transfer_method;
 pub mod transfer_session;
 pub mod user;
-pub mod transfer_method;

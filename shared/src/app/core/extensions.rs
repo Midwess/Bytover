@@ -1,6 +1,6 @@
-use crate::CoreOperation;
-use crate::app::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
 use crate::app::operations::CoreOperationOutput;
+use crate::app::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
+use crate::CoreOperation;
 use crate::CoreOperation::Notified;
 use crux_core::capability::Operation;
 use crux_core::Command;

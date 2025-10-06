@@ -5,7 +5,7 @@ use crate::app::AppRequestBuilder;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::session::Session;
 use crate::entities::token::Token;
-use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferType};
+use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
 use crate::repository::transfer_session::TransferSessionId;
 use crux_core::capability::Operation;
@@ -81,7 +81,7 @@ pub enum SessionPersistentOperationOutput {
 pub enum TransferSessionPersistentOperation {
     Save(TransferSession),
     UpdateProgresses(u64, Vec<TransferProgress>),
-    Remove((u64, TransferType)),
+    Remove(TransferSessionId),
     GetAllReceivedSessions(),
     UpdateResource {
         session_id: TransferSessionId,
@@ -310,9 +310,9 @@ impl TransferSessionPersistentOperation {
         })
     }
 
-    pub fn remove(id: u64, transfer_type: TransferType) -> AppRequestBuilder<impl Future<Output = bool>> {
+    pub fn remove(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = bool>> {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::Remove((id, transfer_type))
+            TransferSessionPersistentOperation::Remove(id)
         )))
         .map(|it| match it {
             CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(

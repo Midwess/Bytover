@@ -1,18 +1,18 @@
 use std::collections::HashMap;
 
 use core_services::db::repository::abstraction::table::Table;
-use futures_util::StreamExt;
 use devlog_sdk::distributed_id::gen_id_sync;
+use futures_util::StreamExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
-use crate::app::core::model_events::TransferSessionModelEvent;
+use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::transfer::module::TransferEvent;
+use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::core::command::AppCommand;
+use crate::app::transfer::module::TransferEvent;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
@@ -22,7 +22,10 @@ use crate::entities::user::User;
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) {
         let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await;
-        let events = receive_sessions.into_iter().map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it))).collect::<Vec<_>>();
+        let events = receive_sessions
+            .into_iter()
+            .map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it)))
+            .collect::<Vec<_>>();
         self.update_model_series(events);
     }
 
@@ -32,21 +35,23 @@ impl AppCommand {
 
             self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
-            if let Err(error) = self.run(TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)).await
+            if let Err(error) = self
+                .run(TransferOperation::cancel_session(
+                    transfer_session.peer_id(),
+                    transfer_session.order_id
+                ))
+                .await
             {
                 log::error!("Failed to cancel transfer: {error:?}");
             }
         }
 
-        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())).await;
+        let _ = self
+            .run(TransferSessionPersistentOperation::remove(transfer_session.id()))
+            .await;
     }
 
-    pub async fn transfer(
-        &self,
-        user: User,
-        selected_resources: Vec<LocalResource>,
-        transfer_target: TransferTarget,
-    ) {
+    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget) {
         if selected_resources.is_empty() {
             self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
             return;
@@ -163,7 +168,9 @@ impl AppCommand {
             return;
         }
 
-        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())).await;
+        let _ = self
+            .run(TransferSessionPersistentOperation::remove(transfer_session.id()))
+            .await;
 
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
     }
@@ -183,12 +190,19 @@ impl AppCommand {
             (result, thumbnail_paths)
         };
 
-        let mut generated_thumbnails_paths = self.run(TransferSessionPersistentOperation::generate_thumbnail_paths(
-            Some(remote_session.order_id),
-            generate_file_paths_request.keys().copied().collect()
-        )).await;
+        let mut generated_thumbnails_paths = self
+            .run(TransferSessionPersistentOperation::generate_thumbnail_paths(
+                Some(remote_session.order_id),
+                generate_file_paths_request.keys().copied().collect()
+            ))
+            .await;
 
-        let mut generated_saved_paths = self.run(TransferSessionPersistentOperation::generate_resource_paths(remote_session.order_id, generate_file_paths_request)).await;
+        let mut generated_saved_paths = self
+            .run(TransferSessionPersistentOperation::generate_resource_paths(
+                remote_session.order_id,
+                generate_file_paths_request
+            ))
+            .await;
 
         let mut resources = vec![];
         for resource_request in remote_session.resources {
@@ -229,12 +243,8 @@ impl AppCommand {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        let is_completed = progress.status.is_completed();
                         TransferSessionPersistentOperation::update_progresses(transfer_session.order_id, vec![progress.clone()]);
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
-                        if is_completed {
-                            break;
-                        }
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if matches!(
@@ -248,6 +258,11 @@ impl AppCommand {
                         break;
                     }
                     TransferOperationOutput::ThumbnailUpdated(event) => {
+                        let resource = transfer_session.resource_mut(event.resource_id).unwrap();
+                        resource.thumbnail_path = Some(event.path.clone());
+                        let resource = resource.clone();
+
+                        TransferSessionPersistentOperation::update_resource(transfer_session.id(), resource);
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), event.into()));
                     }
                     _ => {
@@ -277,11 +292,14 @@ impl AppCommand {
 
         // Remove the session and add the new session
         if matches!(transfer_session.status(), TransferSessionStatus::Success) {
+            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
+            self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await;
             self.update_model_series(vec![
                 TransferSessionModelEvent::Remove(transfer_session.id()),
                 TransferSessionModelEvent::Add(transfer_session.clone()),
             ]);
         } else {
+            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
             DialogOperation::toast("Transfer session canceled".to_string());
         }
     }
@@ -297,18 +315,18 @@ impl AppCommand {
         };
 
         let Some(session) = session_overview else {
-            self.run(DialogOperation::message("Not found 🤔".to_owned(), MessageReason::FailedToFindPublicSession)).await;
+            self.run(DialogOperation::message(
+                "Not found 🤔".to_owned(),
+                MessageReason::FailedToFindPublicSession
+            ))
+            .await;
             return;
         };
 
         self.update_model(TransferSessionModelEvent::Add(session));
     }
 
-    pub async fn view_public_session(
-        &self,
-        mut transfer_session: TransferSession,
-        entered_password: Option<String>,
-    ) {
+    pub async fn view_public_session(&self, mut transfer_session: TransferSession, entered_password: Option<String>) {
         let (password, user_id) = match &mut transfer_session.target {
             TransferTarget::Internet { password, from_user, .. } => {
                 if let Some(entered_password) = entered_password {
@@ -332,29 +350,14 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(transfer) => match transfer {
-                    TransferOperationOutput::PublicTransferSessionUpdated((mut resources, mut progresses)) => {
-                        for resource in transfer_session.resources.iter_mut() {
-                            let Some(updated_index) = resources.iter().position(|r| r.order_id == resource.order_id) else {
-                                continue;
-                            };
-
-                            *resource = resources.remove(updated_index);
+                    TransferOperationOutput::PublicTransferSessionUpdated((resources, progresses)) => {
+                        for resource in resources {
+                            self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), resource.into()));
                         }
 
-                        for progress in transfer_session.progress.iter_mut() {
-                            let Some(updated_index) =
-                                progresses.iter().position(|r| r.resource_order_id == progress.resource_order_id)
-                            else {
-                                continue;
-                            };
-
-                            *progress = progresses.remove(updated_index);
+                        for progress in progresses {
+                            self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                         }
-
-                        transfer_session.resources.append(&mut resources);
-                        transfer_session.progress.append(&mut progresses);
-
-                        self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
                     }
                     TransferOperationOutput::SubscribeSessionEnded => {
                         break;
@@ -363,7 +366,8 @@ impl AppCommand {
                         self.run(DialogOperation::message(
                             "Password is not correct".to_owned(),
                             MessageReason::PublicSessionUnauthenticated
-                        )).await;
+                        ))
+                        .await;
 
                         return;
                     }

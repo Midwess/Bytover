@@ -244,6 +244,10 @@ impl TransferSession {
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
+        if self.resources.iter().any(|it| it.order_id == resource.order_id) {
+            return
+        }
+
         self.resources.push(resource);
         self.resources.sort_by(|a, b| a.size.cmp(&b.size));
     }
@@ -399,6 +403,12 @@ impl UpdateAction<TransferSession> for TransferProgress {
         };
 
         *progress = self;
+    }
+}
+
+impl UpdateAction<TransferSession> for LocalResource {
+    fn update(self, data: &mut TransferSession) {
+        data.replace_resource(self);
     }
 }
 

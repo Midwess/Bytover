@@ -1,9 +1,8 @@
-use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
-use crate::entities::transfer_method::TransferMethodSelection;
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::peer::PeerViewModel;
@@ -19,6 +18,7 @@ use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::ResourceType;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
+use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
 use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
 use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
@@ -295,11 +295,9 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = OpenOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => {
-                Command::new(|it| async move {
-                    it.app().find_transfer_session(keywords).await;
-                })
-            }
+            TransferEvent::FindPublicSession { keywords } => Command::new(|it| async move {
+                it.app().find_transfer_session(keywords).await;
+            }),
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     target: Some(TransferTargetId::Internet),

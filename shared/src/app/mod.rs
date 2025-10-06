@@ -17,10 +17,10 @@ use crux_core::macros::effect;
 use crux_core::{App, Command};
 use derive_more::From;
 use environment::module::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
-use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 use modules::AppModule;
 use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use serde::{Deserialize, Serialize};
+use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;

@@ -1,6 +1,6 @@
 use crate::app::core::command::AppCommand;
-use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::shelf::module::ResourceSelection;
@@ -10,7 +10,10 @@ use crate::repository::local_resource::LocalResourceId;
 impl AppCommand {
     pub async fn load_resources(&self) {
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await;
-        let model_events = resources.into_iter().map(|it| Into::<AppEvent>::into(LocalResourceEvent::Add(it))).collect::<Vec<_>>();
+        let model_events = resources
+            .into_iter()
+            .map(|it| Into::<AppEvent>::into(LocalResourceEvent::Add(it)))
+            .collect::<Vec<_>>();
         self.update_model_series(model_events);
     }
 
@@ -59,12 +62,10 @@ impl AppCommand {
     pub async fn remove_resource(&self, id: u64) {
         let removed = self.run(LocalResourcePersistentOperation::remove(id)).await;
         if removed {
-            self.update_model(
-                LocalResourceEvent::Remove(LocalResourceId {
-                    order_id: Some(id),
-                    ..Default::default()
-                })
-            );
+            self.update_model(LocalResourceEvent::Remove(LocalResourceId {
+                order_id: Some(id),
+                ..Default::default()
+            }));
         }
     }
 }

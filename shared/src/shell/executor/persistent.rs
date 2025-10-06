@@ -193,14 +193,10 @@ pub trait NativePersistent: Send + Sync {
                     }
                 }
             }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove((order_id, transfer_type))) => {
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove(id)) => {
                 if let Err(_) = self
                     .transfer_session_repository()
-                    .delete_session(TransferSessionId {
-                        r#type: Some(transfer_type),
-                        order_id: Some(order_id),
-                        ..Default::default()
-                    })
+                    .delete_session(id)
                     .await
                 {
                     return PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(false));

@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::transfer::module::TransferEvent;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
+use crate::app::transfer::module::TransferEvent;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
@@ -88,10 +88,8 @@ impl AppCommand {
     pub async fn start_locator_monitor(&self) {
         loop {
             let geo_location = self.run(DeviceOperation::get_geo_location()).await;
-            log::info!(target: "nearby", "Geo location: {geo_location:?}");
             let scopes = self.run(InternetOperation::locate(geo_location)).await;
             if let Ok(scopes) = scopes {
-                log::info!(target: "nearby", "Found nearby devices: {scopes:?}");
                 let _ = self.run(P2POperation::update_finding_scopes(scopes)).await;
             }
 

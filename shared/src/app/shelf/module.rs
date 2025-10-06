@@ -1,5 +1,5 @@
-use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::modules::AppModule;
 use crate::app::operations::device::OpenOperation;
 use crate::app::operations::dialog::DialogOperation;
