@@ -42,4 +42,3 @@ impl Shelf {
         self.resources.iter().find(|it| id.is_represent(it))
     }
 }
-

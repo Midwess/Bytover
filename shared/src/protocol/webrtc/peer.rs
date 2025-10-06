@@ -280,8 +280,16 @@ impl WebRtcPeer {
                 writer.end().with_cancel(&thumbnail_cancel_signal).await??;
                 log::info!("Completed downloading thumbnail {resource_path:?}");
 
-                let event = ThumbnailUpdatedEvent { resource_id: first_delimiter.resource_id, path: resource_path };
-                let _ = bridge.response(core_request_id, CoreOperationOutput::Transfer(TransferOperationOutput::ThumbnailUpdated(event))).await;
+                let event = ThumbnailUpdatedEvent {
+                    resource_id: first_delimiter.resource_id,
+                    path: resource_path
+                };
+                let _ = bridge
+                    .response(
+                        core_request_id,
+                        CoreOperationOutput::Transfer(TransferOperationOutput::ThumbnailUpdated(event))
+                    )
+                    .await;
             }
 
             Ok(thumbnail_paths)

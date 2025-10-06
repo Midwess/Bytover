@@ -14,7 +14,6 @@ pub use crate::app::operations::CoreOperation;
 use crate::app::shelf::module::{ShelfEvent, ShelfModel, ShelfModule, ShelfViewModel};
 use crate::app::transfer::transfer_service::TransferService;
 use authentication::module::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
-use crux_core::capability::Operation;
 use crux_core::command::{CommandContext, RequestBuilder};
 use crux_core::macros::effect;
 use crux_core::{App, Command};
@@ -73,18 +72,7 @@ pub struct AppViewModel {
 #[effect(typegen)]
 #[derive(Debug)]
 pub enum AppOperation {
-    Operation(CoreOperation),
-    Notified(NotifiedOperation),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum NotifiedOperation {
-    Raw(Vec<u8>),
-    AppEvent(AppEvent),
-}
-
-impl Operation for NotifiedOperation {
-    type Output = ();
+    Operation(CoreOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
@@ -94,7 +82,7 @@ pub enum AppEvent {
     Transfer(TransferEvent),
     Nearby(NearbyEvent),
     Shelf(ShelfEvent),
-    Void,
+    Void
 }
 
 impl App for BitBridge {

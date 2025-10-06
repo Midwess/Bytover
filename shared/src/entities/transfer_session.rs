@@ -1,14 +1,14 @@
 use std::fmt::Display;
 
-use chrono::Utc;
-use core_services::db::repository::abstraction::id::DbId;
-use serde::{Deserialize, Serialize};
-use crate::app::core::model_events::{UpdateAction};
+use crate::app::core::model_events::UpdateAction;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use crate::repository::local_resource::LocalResourceId;
+use chrono::Utc;
+use core_services::db::repository::abstraction::id::DbId;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -405,7 +405,7 @@ impl UpdateAction<TransferSession> for TransferProgress {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ThumbnailUpdatedEvent {
     pub resource_id: u64,
-    pub path: LocalResourcePath,
+    pub path: LocalResourcePath
 }
 
 impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {

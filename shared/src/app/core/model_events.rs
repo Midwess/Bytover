@@ -1,11 +1,11 @@
-use std::fmt::Debug;
-use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession};
-use crate::entities::{local_resource::LocalResource, transfer_session::TransferProgress};
+use crate::entities::local_resource::LocalResource;
+use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferProgress, TransferSession};
 use crate::repository::local_resource::LocalResourceId;
 use crate::repository::transfer_session::TransferSessionId;
 use ambassador::{delegatable_trait, Delegate};
 use derive_more::From;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum ModelEvent<D, I, U> {

@@ -175,9 +175,9 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::Add(resources)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Add(
-                resources
-            ))) => resources,
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
+                LocalResourcePersistentOperationOutput::Add(resources)
+            )) => resources,
             _ => panic!("Invalid output expected Add got {it:?}")
         })
     }
@@ -199,9 +199,9 @@ impl LocalResourcePersistentOperation {
             LocalResourcePersistentOperation::Find(path)
         )))
         .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Find(
-                resource
-            ))) => resource,
+            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
+                LocalResourcePersistentOperationOutput::Find(resource)
+            )) => resource,
             _ => panic!("Invalid output expected Find got {it:?}")
         })
     }

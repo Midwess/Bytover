@@ -1,13 +1,10 @@
-use std::future::Future;
-
-use crux_core::capability::Operation;
-use crux_core::Command;
-
-use crate::app::operations::CoreOperationOutput;
-use crate::app::NotifiedOperation;
-
 use super::operations::CoreOperation;
 use super::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
+use crate::app::operations::CoreOperationOutput;
+use crate::CoreOperation::Notified;
+use crux_core::capability::Operation;
+use crux_core::Command;
+use std::future::Future;
 
 pub trait CoreCommandUtils {
     fn empty() -> Self;
@@ -22,13 +19,24 @@ pub trait CoreCommandUtils {
 }
 
 pub trait CoreCommandContextUtils {
+    /// This one will used to update result of command
+    /// back to the core, without leaving the core.
+    /// so that it will run super fast because it skip the serialize + deserialize,
+    /// but it also means it cannot return any effects.
+    fn update_model(&self, result: impl Into<AppEvent>);
     fn notify_event(&self, event: impl Into<AppEvent>);
     fn app(&self) -> crate::app::core::command::AppCommand;
 }
 
 impl CoreCommandContextUtils for AppCommandContext {
+    fn update_model(&self, result: impl Into<AppEvent>) {
+        self.send_event(result.into());
+        self.notify_shell(CoreOperation::Render);
+    }
+
     fn notify_event(&self, event: impl Into<AppEvent>) {
-        self.notify_shell(NotifiedOperation::AppEvent(event.into()))
+        let event: AppEvent = event.into();
+        self.notify_shell(Notified(event))
     }
 
     fn app(&self) -> crate::app::core::command::AppCommand {
@@ -42,9 +50,7 @@ impl CoreCommandUtils for AppCommand {
     }
 
     fn then_render(self) -> Self {
-        self.then(Command::new(|it| async move {
-            it.notify_shell(CoreOperation::Render)
-        }))
+        self.then(Command::new(|it| async move { it.notify_shell(CoreOperation::Render) }))
     }
 
     fn render() -> Self {
@@ -53,18 +59,14 @@ impl CoreCommandUtils for AppCommand {
 
     fn operate<O>(operation: O) -> AppCommand
     where
-        O: Operation + Into<CoreOperation> + 'static,
+        O: Operation + Into<CoreOperation> + 'static
     {
-        AppCommand::new(move |it| async move {
-            it.notify_shell(operation.into())
-        })
+        AppCommand::new(move |it| async move { it.notify_shell(operation.into()) })
     }
 
-    fn request_from_shell<O>(
-        operation: O,
-    ) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
+    fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Operation + Into<CoreOperation> + 'static,
+        O: Operation + Into<CoreOperation> + 'static
     {
         Command::request_from_shell(operation.into())
     }

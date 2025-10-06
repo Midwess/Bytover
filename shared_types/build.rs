@@ -9,9 +9,8 @@ use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
 use shared::app::authentication::module::{AuthenticationEvent, AuthenticationModel};
 use shared::app::environment::module::{EnvironmentEvent, EnvironmentModel};
-use shared::app::nearby::module::NearbyEvent;
 use shared::app::modules::transfer::{TransferEvent, TransferModel};
-use shared::entities::finding_scope::FindingScope;
+use shared::app::nearby::module::NearbyEvent;
 use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation, OpenOperation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput, MessageReason};
 use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
@@ -32,7 +31,8 @@ use shared::app::operations::CoreOperationOutput;
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfViewModel};
 use shared::app::transfer::transfer_selection::TransferMethodSelection;
 use shared::app::view_models::receive_session::ReceiveCloudSessionViewModel;
-use shared::app::{BitBridge, NotifiedOperation};
+use shared::app::BitBridge;
+use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::target::TransferTarget;
@@ -120,7 +120,6 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferSessionId>()?;
     gen.register_type::<ShelfEvent>()?;
     gen.register_type::<ShelfViewModel>()?;
-    gen.register_type::<NotifiedOperation>()?;
 
     gen.register_app::<BitBridge>()?;
 

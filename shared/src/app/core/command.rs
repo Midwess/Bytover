@@ -44,29 +44,20 @@ impl AppCommand {
         request.into_future(self.ctx()).await
     }
 
-    pub async fn request<O: Into<CoreOperation>>(
-        &self,
-        operation: O,
-    ) -> CoreOperationOutput {
+    pub async fn request<O: Into<CoreOperation>>(&self, operation: O) -> CoreOperationOutput {
         Command::request_from_shell(operation.into()).into_future(self.ctx()).await
     }
 
-    pub fn request_from_shell<O>(
-        &self,
-        operation: O,
-    ) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
+    pub fn request_from_shell<O>(&self, operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Into<CoreOperation>,
+        O: Into<CoreOperation>
     {
         Command::request_from_shell(operation.into())
     }
 
-    pub fn stream_from_shell<O>(
-        &self,
-        operation: O,
-    ) -> impl Stream<Item = CoreOperationOutput>
+    pub fn stream_from_shell<O>(&self, operation: O) -> impl Stream<Item = CoreOperationOutput>
     where
-        O: Into<CoreOperation>,
+        O: Into<CoreOperation>
     {
         self.ctx.stream_from_shell(operation.into())
     }

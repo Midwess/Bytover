@@ -10,7 +10,7 @@ where
 impl<T> DbId for IdbIdWrapper<T>
 where
     T: DbId + Debug,
-    <T as DbId>::Table: core_services::db::repository::abstraction::table::Table<IdbIdWrapper<T>>,
+    <T as DbId>::Table: core_services::db::repository::abstraction::table::Table<IdbIdWrapper<T>>
 {
     type Table = <T as DbId>::Table;
 

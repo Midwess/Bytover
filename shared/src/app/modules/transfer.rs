@@ -21,13 +21,13 @@ use crate::entities::local_resource::ResourceType;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
+use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
 use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -94,7 +94,7 @@ pub enum TransferEvent {
     },
 
     #[cfg_attr(feature = "typegen", serde(skip))]
-    TransferSessionModelEvents(Vec<TransferSessionModelEvent>),
+    TransferSessionModelEvents(Vec<TransferSessionModelEvent>)
 }
 
 impl AppModule<BitBridge> for TransferModule {
@@ -113,7 +113,11 @@ impl AppModule<BitBridge> for TransferModule {
                 transfer_service.load_transfer_sessions(it).await;
             }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
-                let id = TransferSessionId { order_id: Some(session_id), r#type: Some(transfer_type), ..Default::default() };
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    r#type: Some(transfer_type),
+                    ..Default::default()
+                };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::new(|it| async move {
                         DialogOperation::toast("Session not found".to_string()).into_future(it.clone()).await;
@@ -145,7 +149,10 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::DeleteSession { session_id } => {
-                let id = TransferSessionId { order_id: Some(session_id), ..Default::default() };
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    ..Default::default()
+                };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::done();
                 };
@@ -161,7 +168,10 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
-                let id = TransferSessionId { order_id: Some(session_id), ..Default::default() };
+                let id = TransferSessionId {
+                    order_id: Some(session_id),
+                    ..Default::default()
+                };
                 let Some(session) = model.transfer.sessions.lookup_mut(&id) else {
                     return Command::done();
                 };
@@ -229,8 +239,7 @@ impl AppModule<BitBridge> for TransferModule {
                 for event in events {
                     match event {
                         TransferSessionModelEvent::Update(session_id, updated) => {
-                            if let Some(session) = model.transfer.sessions.lookup_mut(&session_id)
-                            {
+                            if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
                                 updated.update(session);
                             }
                         }
@@ -299,11 +308,7 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_service.find_transfer_session(keywords, it.clone()).await;
                 })
             }
-            TransferEvent::ViewPublicSession {
-                password,
-                session_id,
-                ..
-            } => {
+            TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     target: Some(TransferTargetId::Internet),
                     order_id: Some(session_id),

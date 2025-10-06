@@ -11,7 +11,7 @@ impl AppCommand {
     pub async fn load_resources(&self) {
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await;
         let model_events = resources.into_iter().map(LocalResourceEvent::Add).collect::<Vec<_>>();
-        self.send_event(AppEvent::Shelf(ShelfEvent::ResourceModelEvents(model_events)));
+        self.update_model(AppEvent::Shelf(ShelfEvent::ResourceModelEvents(model_events)));
     }
 
     pub async fn new_resources(&self, mut selections: Vec<ResourceSelection>) {
@@ -52,21 +52,19 @@ impl AppCommand {
                 _ => {}
             };
 
-            self.notify_event(ShelfEvent::ResourceModelEvents(vec![
-                LocalResourceEvent::Add(new_resource),
-            ]));
+            self.update_model(ShelfEvent::ResourceModelEvents(vec![LocalResourceEvent::Add(new_resource)]));
         }
     }
 
     pub async fn remove_resource(&self, id: u64) {
         let removed = self.run(LocalResourcePersistentOperation::remove(id)).await;
         if removed {
-            self.send_event(AppEvent::Shelf(ShelfEvent::ResourceModelEvents(vec![
+            self.update_model(ShelfEvent::ResourceModelEvents(vec![
                 LocalResourceEvent::Remove(LocalResourceId {
                     order_id: Some(id),
                     ..Default::default()
                 }),
-            ])));
+            ]));
         }
     }
 }

@@ -60,7 +60,7 @@ import {
     ShelfViewModel,
     CoreOperationOutputVariantPersistent,
     AppOperation,
-    AppOperationVariantOperation,
+    AppOperationVariantOperation, AppOperationVariantNotified, NotifiedOperationVariantRaw,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -346,7 +346,6 @@ export class WasmCore {
     }
 
     async processEffect(request_id: number, effect: AppOperation): Promise<Uint8Array> {
-        console.log('tiendang-debug', 'Handle effect', effect)
         const effectOperation = effect as AppOperationVariantOperation;
         const coreOperation = effectOperation.value;
         switch(coreOperation.constructor) {

@@ -1,16 +1,14 @@
-use core::convert::TryInto;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use core_services::logger;
 use core_services::wasm::extensions::VecExtension;
-use crux_core::bridge::EffectId;
-use crux_core::{App, Core, Request, RequestHandle};
+use crux_core::bridge::Bridge;
+use crux_core::middleware::Layer;
+use crux_core::{App, Core};
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use gloo_worker::Worker;
 use js_sys::Uint8Array;
-use shared::app::{AppOperation, BitBridge, NotifiedOperation};
+use shared::app::BitBridge;
 use std::sync::LazyLock;
-use crux_core::capability::Operation;
-use crux_core::middleware::{BincodeFfiFormat, Bridge, EffectMiddleware, HandleEffectLayer, Layer, MapEffectLayer};
 
 pub trait Handler<T> {
     type Output;
@@ -19,37 +17,8 @@ pub trait Handler<T> {
 
 pub struct CoreWorkerMiddleware;
 
-impl<Effect> EffectMiddleware<Effect> for CoreWorkerMiddleware
-where
-    Effect: TryInto<Request<NotifiedOperation>, Error = Effect>,
-{
-    type Op = NotifiedOperation;
-    
-    fn try_process_effect_with(
-        &self,
-        effect: Effect,
-        resolve_callback: impl FnOnce(
-            RequestHandle<<Self::Op as Operation>::Output>,
-            <Self::Op as Operation>::Output,
-        ) + Send
-        + 'static,
-    ) -> Result<(), Effect> {
-        Err(effect)
-    }
-}
-
-type ComplexBridge = Bridge<
-    MapEffectLayer<HandleEffectLayer<Core<BitBridge>, CoreWorkerMiddleware>, AppOperation>,
-    BincodeFfiFormat,
->;
-
 /// A web worker that is dedicated to Core only
-static CORE: LazyLock<ComplexBridge> = LazyLock::new(|| {
-    Core::<BitBridge>::new()
-        .handle_effects_using(CoreWorkerMiddleware)
-        .map_effect::<AppOperation>()
-        .bridge::<BincodeFfiFormat>(move |effect_bytes| {})
-});
+static CORE: LazyLock<Bridge<BitBridge>> = LazyLock::new(|| Bridge::new(Core::new()));
 
 pub struct CoreWorker {}
 
@@ -57,7 +26,7 @@ pub struct CoreWorker {}
 pub enum CoreWorkerOperation {
     Update(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     HandleResponse(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
-    View,
+    View
 }
 
 unsafe impl Send for CoreWorkerOperation {}
@@ -74,7 +43,7 @@ impl Worker for CoreWorker {
     type Message = ();
     type Output = WorkerMessage<CoreWorkerOperationOutput>;
 
-    fn create(_: &gloo_worker::WorkerScope<Self>) -> Self {
+    fn create(scope: &gloo_worker::WorkerScope<Self>) -> Self {
         logger::setup();
         init_scoped_id_generator("BitBridge".to_string());
         CoreWorker {}
@@ -86,14 +55,14 @@ impl Worker for CoreWorker {
         let msg_id = msg.id().to_string();
         match msg.message {
             CoreWorkerOperation::Update(event_data) => {
-                let data = CORE.update(event_data.to_vec().as_slice()).unwrap_or_default();
+                let data = CORE.process_event(event_data.to_vec().as_slice()).unwrap_or_default();
                 scope.respond(
                     id,
                     WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array()))
                 );
             }
             CoreWorkerOperation::HandleResponse(request_id, response_data) => {
-                let data = CORE.resolve(EffectId(request_id), response_data.to_vec().as_slice()).unwrap_or_default();
+                let data = CORE.handle_response(request_id, response_data.to_vec().as_slice()).unwrap_or_default();
                 scope.respond(
                     id,
                     WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array()))
