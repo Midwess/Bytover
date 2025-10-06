@@ -28,7 +28,7 @@ pub enum ShelfEvent {
     Launch,
     BeginLoadingResources,
     EndLoadingResources,
-    OpenResource(LocalResourceId),
+    OpenResource(u64),
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
 
@@ -99,6 +99,11 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::done()
             }
             Self::Event::OpenResource(id) => {
+                let id = LocalResourceId {
+                    order_id: Some(id),
+                    ..Default::default()
+                };
+
                 let Some(resource) = model.shelf.shelf.get(&id) else {
                     return Command::done();
                 };

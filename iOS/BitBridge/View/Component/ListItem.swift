@@ -141,7 +141,7 @@ struct SelectedResourceItem: View {
         }
         .onTapGesture {
             Task {
-                await core.update(.transfer(.openSelectedResource(resource_id: resource.order_id)))
+                await core.update(.shelf(.openResource(resource.order_id)))
             }
         }
         .opacity(1)
@@ -159,11 +159,11 @@ struct SelectedResourceItem: View {
             isPresented: $isShowMoreOption) {
                 Button("Remove", role: .destructive) {
                     Task {
-                        await core.update(.transfer(.removeResource(resource.order_id)))
+                        await core.update(.shelf(.removeResource(resource.order_id)))
                     }
                 }
             }
-        .onReceive(self.core.transfer, perform: { value in
+        .onReceive(self.core.shelf, perform: { value in
             let newResource = value?.selected_resources.first(where: { resource in resource.order_id == self.resource.order_id }) ?? self.resource
             if newResource != self.resource {
                 self.resource = newResource

@@ -81,9 +81,7 @@ class CoreMock: Core {
 
         // Initialize the transfer view model
         x.transfer = .init(TransferViewModel(
-            selected_resources: [],
-            is_loading_selected_resources: false,
-            transfer_method_selection: .device,
+            transfer_method: .device,
             nearby_peers: [],
             received_sessions: [receive_session1, receive_session2, receive_session3],
             received_cloud_sessions: [],
@@ -91,8 +89,8 @@ class CoreMock: Core {
         ))
 
         // Add selected resources
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image))
-        x.transfer.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file))
+        x.shelf.value?.selected_resources.append(SelectedResourceViewModel(order_id: 10, name: "Screenshot", size_gb: 0.02, size_mb: 20, display_path: "xyz", path: path, thumbnail_path: nil, type: .image))
+        x.shelf.value?.selected_resources.append(SelectedResourceViewModel(order_id: 11, name: "Folder 102384921", size_gb: 1.2, size_mb: 1200, display_path: "xyz", path: path, thumbnail_path: nil, type: .file))
 
         return x
     }
@@ -100,3 +98,4 @@ class CoreMock: Core {
 
     override func update_view(_ model: AppViewModel) {}
 }
+

@@ -21,7 +21,7 @@ struct ImageReceiveResourceView: View {
     var body: some View {
         Button(action: {
             Task {
-                await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+                await core.update(.transfer(.openResource(session_id: session_id, resource_id: localResource.model.order_id)))
             }
         }) {
             ZStack {
@@ -60,7 +60,7 @@ struct VideoReceiveResourceView: View {
     var body: some View {
         Button(action: {
             Task {
-                await core.update(.transfer(.openSessionResource(session_id: session_id, resource_id: localResource.model.order_id)))
+                await core.update(.transfer(.openResource(session_id: session_id, resource_id: localResource.model.order_id)))
             }
         }) {
             ZStack {
@@ -97,7 +97,7 @@ struct FileReceiveResourceView: View {
     var body: some View {
         Button(action: {
             Task {
-                await core.update(.transfer(.openSessionResource(session_id: sessionId, resource_id: localResource.model.order_id)))
+                await core.update(.transfer(.openResource(session_id: sessionId, resource_id: localResource.model.order_id)))
             }
         }) {
             ZStack {

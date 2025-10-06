@@ -85,7 +85,7 @@ struct ContentPickerView: View {
             }
             .padding(.horizontal, SpaceTheme.screen.value)
             .foregroundStyle(Theme.PrimaryText.color)
-            .onReceive(self.core.transfer, perform: { value in
+            .onReceive(self.core.shelf, perform: { value in
                 if value?.selected_resources.count != self.selectedResources.count {
                     self.selectedResources = value?.selected_resources ?? []
                 }
