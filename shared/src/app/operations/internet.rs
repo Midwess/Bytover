@@ -18,7 +18,6 @@ pub enum InternetOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum InternetOperationOutput {
-    NetworkError(NetworkError),
     Locate(Vec<FindingScope>)
 }
 
@@ -32,7 +31,7 @@ impl InternetOperation {
     ) -> AppRequestBuilder<impl Future<Output = Result<Vec<FindingScope>, NetworkError>>> {
         Command::request_from_shell(CoreOperation::Internet(InternetOperation::Locate(coordinate))).map(|it| match it {
             CoreOperationOutput::Internet(InternetOperationOutput::Locate(scopes)) => Ok(scopes),
-            CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error)) => Err(error),
+            CoreOperationOutput::ConnectionError(error) => Err(error),
             _ => panic!("Mismatch in response type, expected GetCurrentIpAddress, got {it:?}")
         })
     }

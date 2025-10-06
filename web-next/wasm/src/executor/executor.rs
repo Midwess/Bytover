@@ -33,7 +33,7 @@ impl NativeExecutor {
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
                 match self.internet_connection.locate(geo_location).await {
                     Ok(net) => CoreOperationOutput::Internet(InternetOperationOutput::Locate(net.finding_scopes())),
-                    Err(error) => CoreOperationOutput::Internet(InternetOperationOutput::NetworkError(error))
+                    Err(error) => CoreOperationOutput::ConnectionError(error)
                 }
             }
             CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,

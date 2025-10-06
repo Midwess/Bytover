@@ -57,7 +57,7 @@ pub struct CoreWorker {}
 pub enum CoreWorkerOperation {
     Update(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     HandleResponse(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
-    View
+    View,
 }
 
 unsafe impl Send for CoreWorkerOperation {}

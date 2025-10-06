@@ -68,8 +68,8 @@ pub struct AppViewModel {
     shelf: Option<ShelfViewModel>
 }
 
-// The capability in CRUX has been deprecated by command API
-// instead it just be here to be used for generating effect
+/// The effects that shell need to handle
+/// - This is not exactly best practice of crux_core, because I didn't see it best fit for this project
 #[effect(typegen)]
 #[derive(Debug)]
 pub enum AppOperation {
@@ -78,18 +78,14 @@ pub enum AppOperation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct NotifiedOperation(AppEvent);
+pub enum NotifiedOperation {
+    Raw(Vec<u8>),
+    AppEvent(AppEvent),
+}
 
 impl Operation for NotifiedOperation {
     type Output = ();
 }
-
-impl From<AppEvent> for NotifiedOperation {
-    fn from(event: AppEvent) -> Self {
-        NotifiedOperation(event)
-    }
-}
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum AppEvent {

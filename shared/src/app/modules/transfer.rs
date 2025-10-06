@@ -21,18 +21,19 @@ use crate::entities::local_resource::ResourceType;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
-use core_services::db::repository::abstraction::id::DbId;
+use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
-    transfer_method: TransferMethodSelection,
-    transfer_sessions: Vec<TransferSession>,
-    transfer_targets: Vec<TransferTarget>
+    selected_method: TransferMethodSelection,
+    sessions: Vec<TransferSession>,
+    targets: Vec<TransferTarget>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -112,13 +113,8 @@ impl AppModule<BitBridge> for TransferModule {
                 transfer_service.load_transfer_sessions(it).await;
             }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
-                let Some(session) = model
-                    .transfer
-                    .transfer_sessions
-                    .iter()
-                    .find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type))
-                    .cloned()
-                else {
+                let id = TransferSessionId { order_id: Some(session_id), r#type: Some(transfer_type), ..Default::default() };
+                let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::new(|it| async move {
                         DialogOperation::toast("Session not found".to_string()).into_future(it.clone()).await;
                     });
@@ -149,7 +145,8 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::DeleteSession { session_id } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id).cloned() else {
+                let id = TransferSessionId { order_id: Some(session_id), ..Default::default() };
+                let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::done();
                 };
 
@@ -164,7 +161,8 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
-                let Some(session) = model.transfer.transfer_sessions.iter_mut().find(|it| it.order_id == session_id) else {
+                let id = TransferSessionId { order_id: Some(session_id), ..Default::default() };
+                let Some(session) = model.transfer.sessions.lookup_mut(&id) else {
                     return Command::done();
                 };
 
@@ -181,33 +179,28 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::operate(DialogOperation::Toast("Unauthenticated".to_owned()))
                 };
 
+                let target = TransferTarget::Internet {
+                    is_required_password: password.is_some(),
+                    password,
+                    access_url: None,
+                    from_user: user.clone(),
+                    to_emails
+                };
+
                 Command::new(|it| async move {
-                    transfer_service
-                        .transfer(
-                            user.clone(),
-                            selected_resources,
-                            TransferTarget::Internet {
-                                is_required_password: password.is_some(),
-                                password,
-                                access_url: None,
-                                from_user: user,
-                                to_emails
-                            },
-                            it
-                        )
-                        .await;
+                    transfer_service.transfer(user, selected_resources, target, it).await;
                 })
             }
             TransferEvent::StartTransfer { target_id } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
-                let transfer_targets = model.transfer.transfer_targets.clone();
+                let transfer_targets = model.transfer.targets.clone();
                 let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {
                     return Command::done();
                 };
 
                 let duplicated_session = model
                     .transfer
-                    .transfer_sessions
+                    .sessions
                     .iter()
                     .filter(|it| it.transfer_type == TransferType::Send)
                     .find(|it| it.peer_id().map(|id| id.to_string()) == Some(target.id()))
@@ -236,21 +229,17 @@ impl AppModule<BitBridge> for TransferModule {
                 for event in events {
                     match event {
                         TransferSessionModelEvent::Update(session_id, updated) => {
-                            if let Some(session_pos) = model
-                                .transfer
-                                .transfer_sessions
-                                .iter_mut()
-                                .position(|it| session_id.is_represent(it))
+                            if let Some(session) = model.transfer.sessions.lookup_mut(&session_id)
                             {
-                                updated.update(&mut model.transfer.transfer_sessions[session_pos]);
+                                updated.update(session);
                             }
                         }
                         TransferSessionModelEvent::Add(new) => {
                             log::info!(target: "transfer", "Adding transfer session: {:?}", new);
-                            model.transfer.transfer_sessions.push(new);
+                            model.transfer.sessions.push(new);
                         }
                         TransferSessionModelEvent::Remove(session_id) => {
-                            model.transfer.transfer_sessions.retain(|it| !session_id.is_represent(it));
+                            model.transfer.sessions.retain(|it| !session_id.is_represent(it));
                         }
                     }
                 }
@@ -258,12 +247,12 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::render()
             }
             TransferEvent::UpdateTransferTargets { added: new, removed } => {
-                model.transfer.transfer_targets.extend(new);
-                model.transfer.transfer_targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
+                model.transfer.targets.extend(new);
+                model.transfer.targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
                 Command::done()
             }
             TransferEvent::OpenResource { session_id, resource_id } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id) else {
+                let Some(session) = model.transfer.sessions.iter().find(|it| it.order_id == session_id) else {
                     return Command::done();
                 };
 
@@ -285,7 +274,7 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::OpenSession { session_id } => {
-                let Some(session) = model.transfer.transfer_sessions.iter().find(|it| it.order_id == session_id) else {
+                let Some(session) = model.transfer.sessions.iter().find(|it| it.order_id == session_id) else {
                     return Command::done();
                 };
 
@@ -313,15 +302,15 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::ViewPublicSession {
                 password,
                 session_id,
-                transfer_type
+                ..
             } => {
-                let Some(session) = model
-                    .transfer
-                    .transfer_sessions
-                    .iter()
-                    .find(|it| it.order_id == session_id && it.transfer_type.eq(&transfer_type))
-                    .cloned()
-                else {
+                let session_id = TransferSessionId {
+                    target: Some(TransferTargetId::Internet),
+                    order_id: Some(session_id),
+                    r#type: Some(TransferType::Receive)
+                };
+
+                let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
                     return Command::done()
                 };
 
@@ -335,10 +324,10 @@ impl AppModule<BitBridge> for TransferModule {
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
-            transfer_method: model.transfer.transfer_method.clone(),
+            transfer_method: model.transfer.selected_method.clone(),
             received_cloud_sessions: model
                 .transfer
-                .transfer_sessions
+                .sessions
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
@@ -359,7 +348,7 @@ impl AppModule<BitBridge> for TransferModule {
                                     let alias = url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string());
                                     alias
                                 }
-                                Err(_________e) => None
+                                Err(_e) => None
                             };
 
                             let name = match &alias {
@@ -460,7 +449,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .collect::<Vec<_>>(),
             received_sessions: model
                 .transfer
-                .transfer_sessions
+                .sessions
                 .iter()
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
@@ -549,7 +538,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .collect(),
             cloud_session: model
                 .transfer
-                .transfer_sessions
+                .sessions
                 .iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_public())
@@ -574,13 +563,13 @@ impl AppModule<BitBridge> for TransferModule {
                 }),
             nearby_peers: model
                 .transfer
-                .transfer_targets
+                .targets
                 .iter()
                 .filter_map(|it| match it {
                     TransferTarget::Nearby(peer) => {
                         let send_session = model
                             .transfer
-                            .transfer_sessions
+                            .sessions
                             .iter()
                             .filter(|it| it.target.is_peer())
                             .find(|it| it.transfer_type == TransferType::Send && *it.peer_id().as_ref().unwrap() == peer.id);

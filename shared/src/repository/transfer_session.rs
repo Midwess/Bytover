@@ -7,6 +7,7 @@ use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use frunk::Generic;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferTargetId {
