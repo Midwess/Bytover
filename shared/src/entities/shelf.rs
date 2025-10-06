@@ -20,7 +20,6 @@ impl Shelf {
     }
 
     pub fn is_exists(&self, path: &LocalResourcePath) -> bool {
-        log::info!("Checking if resource exists: {:?} {:?}", path, self.resources);
         self.resources.iter().any(|resource| resource.path.eq(path))
     }
 

@@ -106,7 +106,7 @@ impl AppModule<BitBridge> for TransferModule {
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             TransferEvent::Launch => Command::new(|it| async move {
-                it.app().load_transfer_sessions(it).await;
+                it.app().load_transfer_sessions().await;
             }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
@@ -141,7 +141,7 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
 
-                    it.app().delete_session(session, it.clone()).await;
+                    it.app().delete_session(session).await;
                 })
             }
             TransferEvent::DeleteSession { session_id } => {
@@ -160,7 +160,7 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 Command::new(|it| async move {
-                    it.app().delete_session(session, it.clone()).await;
+                    it.app().delete_session(session).await;
                 })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
@@ -176,7 +176,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let session = session.clone();
                 Command::new(|it| async move {
-                    it.app().delete_session(session, it.clone()).await;
+                    it.app().delete_session(session).await;
                 })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
@@ -312,7 +312,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::new(|it| async move {
-                    it.app().view_public_session(session, password, it).await;
+                    it.app().view_public_session(session, password).await;
                 })
             }
         }

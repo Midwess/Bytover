@@ -12,7 +12,6 @@ use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::AppCommandContext;
 use crate::app::core::command::AppCommand;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
@@ -21,29 +20,25 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::entities::user::User;
 
 impl AppCommand {
-    pub async fn load_transfer_sessions(&self, cmd: AppCommandContext) {
-        let receive_sessions = TransferSessionPersistentOperation::get_all_received_sessions().into_future(cmd.clone()).await;
+    pub async fn load_transfer_sessions(&self) {
+        let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await;
         let events = receive_sessions.into_iter().map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it))).collect::<Vec<_>>();
-        cmd.update_model_series(events);
+        self.update_model_series(events);
     }
 
-    pub async fn delete_session(&self, transfer_session: TransferSession, cmd: AppCommandContext) {
+    pub async fn delete_session(&self, transfer_session: TransferSession) {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            cmd.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
+            self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
-            if let Err(error) = TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)
-                .into_future(cmd.clone())
-                .await
+            if let Err(error) = self.run(TransferOperation::cancel_session(transfer_session.peer_id(), transfer_session.order_id)).await
             {
                 log::error!("Failed to cancel transfer: {error:?}");
             }
         }
 
-        let _ = TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())
-            .into_future(cmd.clone())
-            .await;
+        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.order_id, transfer_session.transfer_type.clone())).await;
     }
 
     pub async fn transfer(
@@ -100,7 +95,7 @@ impl AppCommand {
 
         log::info!("Begin transferring session to: {transfer_target_id:?}",);
 
-        let mut stream = self.stream_from_shell(TransferOperation::SendSession(transfer_session.clone()));
+        let mut stream = self.stream_from_shell(TransferOperation::SendSession(transfer_session.clone()).into());
 
         while let Some(output) = stream.next().await {
             match output {
@@ -313,7 +308,6 @@ impl AppCommand {
         &self,
         mut transfer_session: TransferSession,
         entered_password: Option<String>,
-        cmd: AppCommandContext
     ) {
         let (password, user_id) = match &mut transfer_session.target {
             TransferTarget::Internet { password, from_user, .. } => {
@@ -334,7 +328,7 @@ impl AppCommand {
             session_order_id: transfer_session.order_id
         });
 
-        let mut stream = cmd.stream_from_shell(request);
+        let mut stream = self.stream_from_shell(request);
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(transfer) => match transfer {
@@ -360,24 +354,23 @@ impl AppCommand {
                         transfer_session.resources.append(&mut resources);
                         transfer_session.progress.append(&mut progresses);
 
-                        cmd.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
+                        self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
                     }
                     TransferOperationOutput::SubscribeSessionEnded => {
                         break;
                     }
                     TransferOperationOutput::UnauthenticatedToSubscribeSession => {
-                        DialogOperation::message(
+                        self.run(DialogOperation::message(
                             "Password is not correct".to_owned(),
                             MessageReason::PublicSessionUnauthenticated
-                        )
-                        .into_future(cmd.clone())
-                        .await;
+                        )).await;
+
                         return;
                     }
                     _ => return
                 },
                 CoreOperationOutput::ConnectionError(error) => {
-                    DialogOperation::toast(format!("{error}")).into_future(cmd.clone()).await;
+                    self.run(DialogOperation::toast(format!("{error}"))).await;
                     return;
                 }
                 _ => return

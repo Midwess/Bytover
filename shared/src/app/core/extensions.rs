@@ -26,7 +26,7 @@ pub trait CoreCommandContextUtils {
     fn update_model(&self, result: impl Into<AppEvent>);
     fn update_model_series(&self, results: Vec<impl Into<AppEvent>>);
     fn notify_event(&self, event: impl Into<AppEvent>);
-    fn app(&self) -> crate::app::core::command::AppCommand;
+    fn app(self) -> crate::app::core::command::AppCommand;
 }
 
 impl CoreCommandContextUtils for AppCommandContext {
@@ -48,8 +48,8 @@ impl CoreCommandContextUtils for AppCommandContext {
         self.notify_shell(Notified(event))
     }
 
-    fn app(&self) -> crate::app::core::command::AppCommand {
-        crate::app::core::command::AppCommand::new(self.clone())
+    fn app(self) -> crate::app::core::command::AppCommand {
+        crate::app::core::command::AppCommand::new(self)
     }
 }
 
@@ -58,19 +58,12 @@ impl CoreCommandUtils for AppCommand {
         Command::new(|_| async move {})
     }
 
-    fn then_render(self) -> Self {
-        self.then(Command::new(|it| async move { it.notify_shell(CoreOperation::Render) }))
-    }
-
     fn render() -> Self {
         Command::empty().then_render()
     }
 
-    fn operate<O>(operation: O) -> AppCommand
-    where
-        O: Operation + Into<CoreOperation> + 'static
-    {
-        AppCommand::new(move |it| async move { it.notify_shell(operation.into()) })
+    fn then_render(self) -> Self {
+        self.then(Command::new(|it| async move { it.notify_shell(CoreOperation::Render) }))
     }
 
     fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
@@ -78,5 +71,12 @@ impl CoreCommandUtils for AppCommand {
         O: Operation + Into<CoreOperation> + 'static
     {
         Command::request_from_shell(operation.into())
+    }
+
+    fn operate<O>(operation: O) -> AppCommand
+    where
+        O: Operation + Into<CoreOperation> + 'static
+    {
+        AppCommand::new(move |it| async move { it.notify_shell(operation.into()) })
     }
 }

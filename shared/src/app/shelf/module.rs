@@ -74,9 +74,10 @@ impl AppModule<BitBridge> for ShelfModule {
                 }
 
                 commands.push(Command::new(|it| async move {
-                    it.notify_event(ShelfEvent::BeginLoadingResources);
-                    it.app().new_resources(filtered_selections).await;
-                    it.notify_event(ShelfEvent::EndLoadingResources);
+                    let app = it.app();
+                    app.notify_event(ShelfEvent::BeginLoadingResources);
+                    app.new_resources(filtered_selections).await;
+                    app.notify_event(ShelfEvent::EndLoadingResources);
                 }));
 
                 Command::all(commands)

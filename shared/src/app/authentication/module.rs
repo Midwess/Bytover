@@ -53,9 +53,10 @@ impl AppModule<BitBridge> for AuthenticationModule {
             AuthenticationEvent::UpdateUser { user } => {
                 model.authentication.user.replace(user);
                 Command::new(|ctx| async move {
-                    ctx.notify_event(ShelfEvent::Launch);
-                    ctx.notify_event(TransferEvent::Launch);
-                    ctx.notify_event(NearbyEvent::Launch);
+                    let app = ctx.app();
+                    app.notify_event(ShelfEvent::Launch);
+                    app.notify_event(TransferEvent::Launch);
+                    app.notify_event(NearbyEvent::Launch);
                 })
             }
         }

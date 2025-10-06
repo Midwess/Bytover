@@ -7,7 +7,7 @@ use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
-use crate::app::operations::{CoreOperation, CoreOperationOutput};
+use crate::app::operations::CoreOperationOutput;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
@@ -15,8 +15,8 @@ use futures_util::StreamExt;
 use uuid::Uuid;
 
 impl AppCommand {
-    pub async fn receive_nearby_events(&self, user: Option<User>) {
-        let device = DeviceOperation::get_device_info().into_future(self.ctx()).await;
+    pub async fn start_nearby_server(&self, user: Option<User>) {
+        let device = self.run(DeviceOperation::get_device_info()).await;
 
         let peer_id = Uuid::now_v7().to_string();
 
@@ -40,8 +40,9 @@ impl AppCommand {
         self.notify_event(NearbyEvent::UpdateMe { new_peer: peer.clone() });
 
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
-        let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request);
+        let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
 
+        log::info!(target: "nearby", "Starting nearby server");
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
@@ -87,11 +88,11 @@ impl AppCommand {
     pub async fn start_locator_monitor(&self) {
         loop {
             let geo_location = self.run(DeviceOperation::get_geo_location()).await;
+            log::info!(target: "nearby", "Geo location: {geo_location:?}");
             let scopes = self.run(InternetOperation::locate(geo_location)).await;
             if let Ok(scopes) = scopes {
-                log::info!(target: "nearby", "Found scope: {:?}", scopes);
-                self.request(P2POperation::UpdateFindingScopes(scopes)).await;
-                log::info!(target: "nearby", "Updated scope");
+                log::info!(target: "nearby", "Found nearby devices: {scopes:?}");
+                let _ = self.run(P2POperation::update_finding_scopes(scopes)).await;
             }
 
             self.request(Duration::from_secs(5)).await;
@@ -100,7 +101,7 @@ impl AppCommand {
 
     pub async fn handle_peer_connection(&self, peer: Peer) {
         let request = P2POperation::PeerEvents(peer.id.clone());
-        let mut stream = self.stream_from_shell(request);
+        let mut stream = self.stream_from_shell(request.into());
 
         while let Some(output) = stream.next().await {
             match output {

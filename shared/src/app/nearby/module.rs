@@ -1,6 +1,5 @@
-use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
-use crate::app::operations::CoreOperation;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
@@ -49,7 +48,7 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::all(vec![
                     Command::new(|it| async move {
-                        it.app().receive_nearby_events(user).await;
+                        it.app().start_nearby_server(user).await;
                     }),
                     Command::new(|it| async move {
                         log::info!(target: "nearby", "Starting locator monitor");
@@ -60,21 +59,15 @@ impl AppModule<BitBridge> for NearbyModule {
             NearbyEvent::UpdateNearbyPeers { new_peer, removed } => {
                 model.nearby.peers.retain(|it| !removed.contains(it));
                 model.nearby.peers.extend(new_peer);
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
+                Command::render()
             }
             NearbyEvent::ClearNearbyPeers => {
                 model.nearby.peers.clear();
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
+                Command::render()
             }
             NearbyEvent::UpdateMe { new_peer } => {
                 model.nearby.me = Some(new_peer);
-                Command::new(|it| async move {
-                    it.notify_shell(CoreOperation::Render);
-                })
+                Command::render()
             }
         }
     }

@@ -1,5 +1,4 @@
 use crux_core::Command;
-use futures::Stream;
 
 use crate::app::operations::CoreOperationOutput;
 use crate::app::{AppCommandContext, AppRequestBuilder};
@@ -55,10 +54,10 @@ impl AppCommand {
         Command::request_from_shell(operation.into())
     }
 
-    pub fn stream_from_shell<O>(&self, operation: O) -> impl Stream<Item = CoreOperationOutput>
-    where
-        O: Into<CoreOperation>
-    {
-        self.ctx.stream_from_shell(operation.into())
-    }
+    // pub fn stream_from_shell<O>(&self, operation: O) -> impl Stream<Item = CoreOperationOutput>
+    // where
+    //     O: Into<CoreOperation>
+    // {
+    //     self.ctx.stream_from_shell(operation.into())
+    // }
 }

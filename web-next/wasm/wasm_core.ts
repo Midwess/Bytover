@@ -341,7 +341,8 @@ export class WasmCore {
 
             const nextRequest = await this.processEffect(request.id, request.effect);
             if (nextRequest.length === 0) continue;
-            requests.push(...deserializeArray<Request>(Request, nextRequest));
+            const effects = deserializeArray<Request>(Request, nextRequest);
+            requests.push(...effects);
         }
     }
 
@@ -410,11 +411,10 @@ export class WasmCore {
                             })
                             
                             const location = new GeoLocation(position.coords.latitude, position.coords.longitude);
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
                         }
                         catch (error) {
-                            console.warn('Failed to get geolocation:', error)
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(null))))
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(null))))
                         }
                     }
                 }
@@ -435,6 +435,7 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantInternet: {
+                console.log("Internet operation")
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {

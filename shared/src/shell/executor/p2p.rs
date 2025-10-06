@@ -2,6 +2,7 @@ use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::protocol::webrtc::webrtc::WebRtc;
 use std::sync::Arc;
+use n0_future::task::spawn;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -25,11 +26,13 @@ pub trait P2PNativeExecutor: Send + Sync {
             }
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
-                let result = web_rtc.start(request_id, peer).await;
-                match result {
-                    Ok(_) => CoreOperationOutput::Void,
-                    Err(e) => CoreOperationOutput::ConnectionError(e.into())
-                }
+                spawn(async move {
+                    if let Err(e) = web_rtc.start(request_id, peer).await {
+                        log::error!("Failed to start nearby server: {e:?}");
+                    }
+                });
+
+                CoreOperationOutput::Void
             }
         }
     }
