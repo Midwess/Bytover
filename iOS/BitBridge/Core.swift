@@ -39,6 +39,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     @Published var selectedMediaItems: [PhotosPickerItem] = []
 
     var environment: CurrentValueSubject<EnvironmentViewModel?, Never> = .init(nil)
+    var shelf: CurrentValueSubject<ShelfViewModel?, Never> = .init(nil)
     var authentication: CurrentValueSubject<AuthenticationViewModel?, Never> = .init(nil)
     var transfer: CurrentValueSubject<TransferViewModel?, Never> = .init(nil)
     var nearby: CurrentValueSubject<NearbyViewModel?, Never> = .init(nil)
@@ -71,6 +72,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         self.transfer.send(model.transfer)
         self.nearby.send(model.nearby)
         self.cloudSession.send(model.transfer?.cloud_session)
+        self.shelf.send(model.shelf)
 
         if self.authentication.value?.user != nil {
             self.isSignedIn = true
@@ -118,15 +120,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
 
     func processEffect(_ request: Request) async -> Data {
-        switch request.effect {
-        case .appCapabilities(.initNativeExecutor):
+        guard case .operation(let operation) = request.effect else {
+            return Data()
+        }
+        
+        switch operation {
+        case .initNativeExecutor:
             self.nativeProcessor = await NativeProcessor.init(self)
             self.checkLocationAuthorization()
             return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
-        case .appCapabilities(.webView(.openUrl(let url))):
+        case .webView(.openUrl(let url)):
             openURL(URL(string: url)!)
             return handleResponse(request.id, Data(try! CoreOperationOutput.webView(WebViewOperationOutput.openUrl).bincodeSerialize()))
-        case .appCapabilities(.device(.loadThumbnailPng(let localStoragePath))):
+        case .device(.loadThumbnailPng(let localStoragePath)):
             switch localStoragePath {
             case .platformIdentifier(let identifier):
                 let thumbnail = await self.getThumbnailData(for: identifier)
@@ -134,12 +140,12 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             default:
                 return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(nil)).bincodeSerialize()))
             }
-        case .appCapabilities(.device(.open(.open(let path)))):
+        case .device(.open(.open(let path))):
             await self.open(path: path)
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.device(.open(.openSession(let path)))):
+        case .device(.open(.openSession(let path))):
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.device(.getGeoLocation)):
+        case .device(.getGeoLocation):
             if let lastKnownLocation {
                 let longitude = lastKnownLocation.longitude.magnitude
                 let latitude = lastKnownLocation.latitude.magnitude
@@ -147,9 +153,9 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             }
 
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.persistent(let ops)):
+        case .persistent(let ops):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.persistent(ops).bincodeSerialize()))
-        case .appCapabilities(.device(.getDeviceInfo)):
+        case .device(.getDeviceInfo):
             let device = UIDevice.current
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
             let deviceName = device.name
@@ -162,37 +168,37 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                     device_type: .applePhone
                 ))
             ).bincodeSerialize()))
-        case .appCapabilities(.device(.getGeoLocation)):
+        case .device(.getGeoLocation):
             let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0)
             return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
-        case .appCapabilities(.rpc(let rpc)):
+        case .rpc(let rpc):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.rpc(rpc).bincodeSerialize()))
-        case .appCapabilities(.render):
+        case .render:
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.transfer(let trans)):
+        case .transfer(let trans):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.transfer(trans).bincodeSerialize()))
-        case .appCapabilities(.internet(let internetOps)):
+        case .internet(let internetOps):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.internet(internetOps).bincodeSerialize()))
-        case .appCapabilities(.p2P(let p2p)):
+        case .p2P(let p2p):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.p2P(p2p).bincodeSerialize()))
-        case .appCapabilities(.notified(let event)):
+        case .notified(let event):
             Task {
                 await self.update(event)
             }
 
             return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .appCapabilities(.dialog(.alert(let alert))):
+        case .dialog(.alert(let alert)):
             self.alert.send((alert, SingleWaiter()))
             let response = await self.alert.value!.1.wait()
             self.alert.send(nil)
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.alert(is_confirmed: response)).bincodeSerialize()))
-        case .appCapabilities(.dialog(.toast(let message))):
+        case .dialog(.toast(let message)):
             self.toastMessage.send(message)
             return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
-        case .appCapabilities(.delay(let duration)):
+        case .delay(let duration):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.delay(duration).bincodeSerialize()))
-        case .appCapabilities(.dialog(.message)):
+        case .dialog(.message):
             return Data(try! CoreOperationOutput.void.bincodeSerialize())
         }
     }
@@ -256,7 +262,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
     }
 
     func onFileSelected(urls: [URL]) async {
-        await self.update(.transfer(.beginLoadingResources))
+        await self.update(.shelf(.beginLoadingResources))
         for url in urls {
             _ = url.startAccessingSecurityScopedResource()
 
@@ -273,15 +279,15 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             )
 
             url.stopAccessingSecurityScopedResource()
-            await self.update(.transfer(.addResources([resourceSelection])))
+            await self.update(.shelf(.addResources([resourceSelection])))
         }
 
-        await self.update(.transfer(.endLoadingResources))
+        await self.update(.shelf(.endLoadingResources))
     }
 
     func onMediasChanged() async {
-        await self.update(.transfer(.beginLoadingResources))
-        defer { Task { await self.update(.transfer(.endLoadingResources)) } }
+        await self.update(.shelf(.beginLoadingResources))
+        defer { Task { await self.update(.shelf(.endLoadingResources)) } }
 
         let items = self.selectedMediaItems
         guard !items.isEmpty else {
@@ -328,7 +334,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             type: resourceType
         )
 
-        await self.update(.transfer(.addResources([resourceSelection])))
+        await self.update(.shelf(.addResources([resourceSelection])))
     }
 
     func open(path: LocalResourcePath) async {

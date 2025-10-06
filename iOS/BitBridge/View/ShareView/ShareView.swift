@@ -81,8 +81,8 @@ public struct ShareView: View {
         .task {
             await core.update(.transfer(.launch))
         }
-        .onReceive(self.core.transfer, perform: { value in
-            self.isLoadingSelectedResource = value?.is_loading_selected_resources ?? false
+        .onReceive(self.core.shelf, perform: { value in
+            self.isLoadingSelectedResource = value?.is_loading ?? false
             if self.selectedResources.count != value?.selected_resources.count ?? 0 {
                 self.selectedResources = value?.selected_resources ?? []
             }
