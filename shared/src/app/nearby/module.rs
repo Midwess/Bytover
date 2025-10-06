@@ -49,11 +49,11 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::all(vec![
                     Command::new(|it| async move {
-                        log::info!(target: "nearby", "Starting locator monitor");
-                        it.app().start_locator_monitor().await;
+                        it.app().receive_nearby_events(user).await;
                     }),
                     Command::new(|it| async move {
-                        it.app().receive_nearby_events(user).await;
+                        log::info!(target: "nearby", "Starting locator monitor");
+                        it.app().start_locator_monitor().await;
                     }),
                 ])
             }

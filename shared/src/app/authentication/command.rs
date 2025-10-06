@@ -10,6 +10,7 @@ use url::Url;
 
 use crate::app::core::command::AppCommand;
 use devlog_sdk::distributed_id::gen_id;
+use crate::app::core::extensions::CoreCommandContextUtils;
 
 impl AppCommand {
     pub async fn sign_in(&self) {
@@ -46,7 +47,7 @@ impl AppCommand {
         }
 
         let user = user.unwrap();
-        self.send_event(AppEvent::Authentication(AuthenticationEvent::UpdateUser { user }));
+        self.notify_event(AppEvent::Authentication(AuthenticationEvent::UpdateUser { user }));
         self.notify_shell(CoreOperation::Render);
     }
 

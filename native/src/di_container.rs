@@ -16,7 +16,6 @@ use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolReso
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
-use shared::app::transfer::commands::TransferService;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::auth_server::AuthServer;
@@ -41,7 +40,6 @@ pub struct DiContainer {
     shell: OnceCell<Arc<dyn ShellRuntime>>,
     core_bridge: OnceCell<Arc<dyn CoreBridge>>,
     native_executor: OnceCell<NativeExecutor>,
-    transfer_service: OnceCell<TransferService>,
     cloud_server: OnceCell<CloudServer<Channel>>,
 
     rpc_connection: RpcNetworkModuleImpl
@@ -56,7 +54,6 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                transfer_service: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 cloud_server: OnceCell::new()
             };
@@ -79,17 +76,6 @@ impl DiContainer {
 
     pub fn get_authentication_server(&'static self) -> AuthServer<Channel> {
         AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
-    }
-
-    pub fn get_transfer_service(&'static self) -> &'static TransferService {
-        match self.transfer_service.get() {
-            Some(service) => service,
-            None => {
-                let service = TransferService {};
-                let _ = self.transfer_service.set(service);
-                self.transfer_service.get().unwrap()
-            }
-        }
     }
 
     pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<dyn ShellRuntime>) {

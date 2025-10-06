@@ -60,7 +60,7 @@ import {
     ShelfViewModel,
     CoreOperationOutputVariantPersistent,
     AppOperation,
-    AppOperationVariantOperation, AppOperationVariantNotified, NotifiedOperationVariantRaw,
+    AppOperationVariantOperation,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -484,8 +484,7 @@ export class WasmCore {
         const data = await add_device_files(files_only)
         if (!data) return [];
 
-        const selections = deserializeArray<ResourceSelection>(ResourceSelection, data)
-        return selections
+        return deserializeArray<ResourceSelection>(ResourceSelection, data)
     }
 
     async addFolders(folders: FolderStructure[]) {

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 use core_services::db::repository::abstraction::table::Table;
 use futures_util::StreamExt;
@@ -10,12 +9,11 @@ use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
+use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::AppCommandContext;
 use crate::app::core::command::AppCommand;
-use crate::app::transfer::module::TransferEvent::ModelEvent;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;

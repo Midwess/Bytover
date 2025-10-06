@@ -8,7 +8,6 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::AppEvent;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
@@ -38,7 +37,7 @@ impl AppCommand {
             }
         };
 
-        self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateMe { new_peer: peer.clone() }));
+        self.notify_event(NearbyEvent::UpdateMe { new_peer: peer.clone() });
 
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request);
@@ -48,15 +47,15 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
                     log::info!(target: "nearby", "New peer connected: {}", peer.id);
 
-                    self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
+                    self.notify_event(NearbyEvent::UpdateNearbyPeers {
                         new_peer: vec![peer.clone()],
                         removed: vec![]
-                    }));
+                    });
 
-                    self.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
+                    self.notify_event(TransferEvent::UpdateTransferTargets {
                         added: vec![TransferTarget::Nearby(peer.clone())],
                         removed: vec![]
-                    }));
+                    });
 
                     self.spawn(|it| async move {
                         it.app().handle_peer_connection(peer).await;
@@ -64,18 +63,18 @@ impl AppCommand {
                 }
                 CoreOperationOutput::DeviceError(error) => {
                     log::error!(target: "nearby", "Device error: {error:?}");
-                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped");
-                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
                 CoreOperationOutput::Void => {}
                 CoreOperationOutput::ConnectionError(error) => {
                     log::error!(target: "nearby", "Connection error: {error:?}");
-                    self.notify_event(AppEvent::Nearby(NearbyEvent::ClearNearbyPeers));
+                    self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
                 _ => {
@@ -90,6 +89,7 @@ impl AppCommand {
             let geo_location = self.run(DeviceOperation::get_geo_location()).await;
             let scopes = self.run(InternetOperation::locate(geo_location)).await;
             if let Ok(scopes) = scopes {
+                log::info!(target: "nearby", "Found scope: {:?}", scopes);
                 self.request(P2POperation::UpdateFindingScopes(scopes)).await;
                 log::info!(target: "nearby", "Updated scope");
             }
@@ -108,16 +108,16 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
-                    let request = AppEvent::Transfer(TransferEvent::TransferCanceled { session_id });
+                    let request = TransferEvent::TransferCanceled { session_id };
 
-                    self.notify_shell(CoreOperation::Notified(request));
+                    self.notify_event(request);
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
-                    let request = AppEvent::Transfer(TransferEvent::TransferRequest {
+                    let request = TransferEvent::TransferRequest {
                         remote_session,
                         peer: peer.clone()
-                    });
-                    self.notify_shell(CoreOperation::Notified(request));
+                    };
+                    self.notify_event(request);
                 }
                 CoreOperationOutput::ConnectionError(error) => {
                     log::error!("Connection error: {error:?}");
@@ -136,14 +136,14 @@ impl AppCommand {
             }
         }
 
-        self.notify_event(AppEvent::Nearby(NearbyEvent::UpdateNearbyPeers {
+        self.notify_event(NearbyEvent::UpdateNearbyPeers {
             new_peer: vec![],
             removed: vec![peer.clone()]
-        }));
+        });
 
-        self.notify_event(AppEvent::Transfer(TransferEvent::UpdateTransferTargets {
+        self.notify_event(TransferEvent::UpdateTransferTargets {
             added: vec![],
             removed: vec![TransferTarget::Nearby(peer.clone())]
-        }));
+        });
     }
 }

@@ -3,7 +3,7 @@ use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
-use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
+use crate::app::shelf::module::ResourceSelection;
 use crate::app::AppEvent;
 use crate::repository::local_resource::LocalResourceId;
 

@@ -5,7 +5,6 @@ use crate::repository::errors::PersistenceError;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
-use frunk::Generic;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
