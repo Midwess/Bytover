@@ -12,10 +12,10 @@ pub trait CoreCommandUtils {
     fn then_render(self) -> Self;
     fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Operation + Into<CoreOperation> + 'static;
+        O: Into<CoreOperation> + 'static;
     fn operate<O>(operation: O) -> AppCommand
     where
-        O: Operation + Into<CoreOperation> + 'static;
+        O: Into<CoreOperation> + 'static;
 }
 
 pub trait CoreCommandContextUtils {
@@ -68,15 +68,17 @@ impl CoreCommandUtils for AppCommand {
 
     fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Operation + Into<CoreOperation> + 'static
+        O: Into<CoreOperation> + 'static
     {
-        Command::request_from_shell(operation.into())
+        let core_operation: CoreOperation = operation.into();
+        Command::request_from_shell(core_operation)
     }
 
     fn operate<O>(operation: O) -> AppCommand
     where
-        O: Operation + Into<CoreOperation> + 'static
+        O: Into<CoreOperation> + 'static
     {
-        AppCommand::new(move |it| async move { it.notify_shell(operation.into()) })
+        let core_operation: CoreOperation = operation.into();
+        AppCommand::new(move |it| async move { it.notify_shell(core_operation) })
     }
 }

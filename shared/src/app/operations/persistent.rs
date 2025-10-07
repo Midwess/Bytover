@@ -10,13 +10,13 @@ use crate::entities::user::User;
 use crate::repository::transfer_session::TransferSessionId;
 use crux_core::capability::Operation;
 use crux_core::Command;
+use derive_more::with_trait::TryFrom;
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum PersistentOperation {
-    GenId(),
     Session(SessionPersistentOperation),
     User(UserPersistentOperation),
     LocalResource(LocalResourcePersistentOperation),
@@ -112,7 +112,7 @@ pub enum TransferSessionOperationOutput {
     GenerateThumbnailPath(HashMap<u64, LocalResourcePath>)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom)]
 pub enum PersistentOperationOutput {
     Session(SessionPersistentOperationOutput),
     User(UserPersistentOperationOutput),
@@ -124,15 +124,6 @@ pub enum PersistentOperationOutput {
 
 impl Operation for PersistentOperation {
     type Output = PersistentOperationOutput;
-}
-
-impl PersistentOperation {
-    pub fn gen_id() -> AppRequestBuilder<impl Future<Output = u64>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::GenId())).map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::GenId(id)) => id,
-            _ => panic!("Invalid output expected GenId got {it:?}")
-        })
-    }
 }
 
 impl SessionPersistentOperation {
@@ -150,9 +141,9 @@ impl SessionPersistentOperation {
         Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::Session(
             SessionPersistentOperation::WriteUser(user)
         )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteUser())) => (),
-            _ => panic!("Invalid output expected WriteUser got {it:?}")
+        .map(|it| match it.result::<PersistentOperationOutput>() {
+            Ok(_) => (),
+            Err(e) => panic!("Invalid output expected WriteUser got {e:?}")
         })
     }
 

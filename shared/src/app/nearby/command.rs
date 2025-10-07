@@ -13,10 +13,14 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
+use crate::app::operations::dialog::DialogOperation;
 
 impl AppCommand {
     pub async fn start_nearby_server(&self, user: Option<User>) {
-        let device = self.run(DeviceOperation::get_device_info()).await;
+        let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
+            self.run(DialogOperation::toast("Device not found".to_string())).await;
+            return;
+        };
 
         let peer_id = Uuid::now_v7().to_string();
 

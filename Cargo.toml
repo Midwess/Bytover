@@ -5,30 +5,11 @@ members = [
     "desktop/src-tauri",
     "backend",
     "native",
-    "web-next/wasm", "web-next/worker",
+    "web-next/wasm",
+    "web-next/worker",
 ]
 
 resolver = "2"
-
-[profile.dev]
-opt-level = 0
-debug = 1
-strip = false
-split-debuginfo = "unpacked"
-incremental = true
-codegen-units = 256
-lto = false
-panic = "unwind"
-debug-assertions = true
-overflow-checks = true
-rpath = false
-
-[profile.release]
-lto = true
-strip = true
-opt-level = 3
-panic = 'abort'
-codegen-units = 1
 
 [workspace.package]
 authors = ["Jimmy"]

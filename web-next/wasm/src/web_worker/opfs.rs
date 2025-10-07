@@ -105,8 +105,9 @@ impl OpfsWorker {
             None => {
                 let root_future = JsFuture::from(get_directory());
                 let root: FileSystemDirectoryHandle = root_future.await.unwrap().into();
-                let _ = self.root.set(Arc::new(root));
-                self.root.get().unwrap().clone()
+                let root = Arc::new(root);
+                let _ = self.root.set(root.clone());
+                root
             }
         };
 

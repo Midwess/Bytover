@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::ShellRuntime;
-use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
+use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
 use shared::shell::executor::p2p::P2PNativeExecutor;
@@ -35,14 +35,14 @@ impl NativeExecutor {
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
             CoreOperation::Internet(internet) => match internet {
                 InternetOperation::Locate(geolocation) => match self.internet_connection.locate(geolocation).await {
-                    Ok(net) => CoreOperationOutput::Internet(InternetOperationOutput::Locate(net.finding_scopes())),
+                    Ok(net) => CoreOperationOutput::FindingScopes(net.finding_scopes()),
                     Err(error) => CoreOperationOutput::ConnectionError(error)
                 }
             },
             CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
             CoreOperation::Delay(duration) => {
                 sleep(duration).await;
-                CoreOperationOutput::Delay()
+                CoreOperationOutput::None
             }
             _ => panic!("Native executor doesn't support this effect {effect:?}")
         }

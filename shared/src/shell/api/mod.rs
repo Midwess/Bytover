@@ -13,9 +13,11 @@ use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::Stream;
+use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -54,6 +56,40 @@ pub trait CoreBridge: Send + Sync {
     }
 
     async fn notify(&self, event: AppEvent);
+}
+
+#[derive(Clone)]
+pub struct CoreRequest {
+    id: u32,
+    bridge: Arc<dyn CoreBridge>,
+    is_responded: OnceCell<()>
+}
+
+impl CoreRequest {
+    pub fn new(id: u32, bridge: Arc<dyn CoreBridge>) -> Self {
+        Self {
+            id,
+            bridge,
+            is_responded: OnceCell::new()
+        }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn response(&self, response: CoreOperationOutput) -> JoinHandle<()> {
+        let _ = self.is_responded.set(());
+        self.bridge.response(self.id, response)
+    }
+}
+
+impl Drop for CoreRequest {
+    fn drop(&mut self) {
+        if self.is_responded.get().is_none() {
+            let _ = self.response(CoreOperationOutput::Void);
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -1,12 +1,10 @@
 use std::future::Future;
 
-use crux_core::capability::Operation;
-use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
-use crate::app::AppRequestBuilder;
-
-use super::{CoreOperation, CoreOperationOutput};
+use crate::app::{AppRequestBuilder};
+use crate::app::core::command::AppCommand;
+use super::{CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AlertDialog {
@@ -46,30 +44,19 @@ pub enum DialogOperation {
     Message(String, MessageReason)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum DialogOperationOutput {
-    Toast,
-    Alert { is_confirmed: bool },
-    Message
-}
-
-impl Operation for DialogOperation {
-    type Output = DialogOperationOutput;
-}
-
 impl DialogOperation {
     pub fn toast(message: impl Into<String>) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Toast(message.into()))).map(|_it| {})
+        AppCommand::request_from_shell(DialogOperation::Toast(message.into())).map(|_it| ())
     }
 
     pub fn alert(dialog: AlertDialog) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Alert(dialog))).map(|it| match it {
-            CoreOperationOutput::Dialog(DialogOperationOutput::Alert { is_confirmed }) => is_confirmed,
-            _ => panic!("Invalid output for DialogOperation::Alert")
+        AppCommand::request_from_shell(DialogOperation::Alert(dialog)).map(|it| match it {
+            CoreOperationOutput::Bool(is_confirmed) => is_confirmed,
+            _ => false
         })
     }
 
     pub fn message(message: String, reason: MessageReason) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Dialog(DialogOperation::Message(message, reason))).map(|_it| {})
+        AppCommand::request_from_shell(DialogOperation::Message(message, reason)).map(|_it| ())
     }
 }

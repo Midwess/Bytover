@@ -1,15 +1,14 @@
 use std::future::Future;
 
-use crux_core::capability::Operation;
-use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
 use crate::app::AppRequestBuilder;
+use crate::app::core::command::AppCommand;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResourcePath;
 
-use super::{CoreOperation, CoreOperationOutput};
+use super::{CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GeoLocation {
@@ -26,43 +25,25 @@ pub enum DeviceOperation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum DeviceOperationOutput {
-    DeviceInfo(DeviceInfo),
-    GetGeoLocation(Option<GeoLocation>),
-    /// It could be Data, or the path to the thumbnail file.
-    LoadThumbnailPng(Option<Vec<u8>>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OpenOperation {
     OpenSession(u64),
     Open(LocalResourcePath)
 }
 
-impl Operation for DeviceOperation {
-    type Output = DeviceOperationOutput;
-}
-
 impl DeviceOperation {
-    pub fn get_device_info() -> AppRequestBuilder<impl Future<Output = DeviceInfo>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::GetDeviceInfo)).map(|output| match output {
-            CoreOperationOutput::Device(DeviceOperationOutput::DeviceInfo(device_info)) => device_info,
-            _ => panic!("Invalid output for DeviceOperation::GetDeviceInfo")
-        })
+    pub fn get_device_info() -> AppRequestBuilder<impl Future<Output = Option<DeviceInfo>>> {
+        AppCommand::request_from_shell(Self::GetDeviceInfo).map(|output| output.option())
     }
 
     pub fn get_geo_location() -> AppRequestBuilder<impl Future<Output = Option<GeoLocation>>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::GetGeoLocation)).map(|output| match output {
-            CoreOperationOutput::Device(DeviceOperationOutput::GetGeoLocation(geo_location)) => geo_location,
-            _ => None
-        })
+        AppCommand::request_from_shell(Self::GetGeoLocation).map(|output| output.option())
     }
 
     pub fn load_thumbnail_png(
         path: LocalResourcePath
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::LoadThumbnailPng(path))).map(|output| match output {
-            CoreOperationOutput::Device(DeviceOperationOutput::LoadThumbnailPng(data)) => (data, None),
+        AppCommand::request_from_shell(Self::LoadThumbnailPng(path)).map(|output| match output {
+            CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
             CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
                 LocalResourcePersistentOperationOutput::AddThumbnail(path)
             )) => (None, Some(path)),
@@ -73,19 +54,13 @@ impl DeviceOperation {
 
 impl OpenOperation {
     pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::OpenSession(
+        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::OpenSession(
             session_id
-        ))))
-        .map(|it| match it {
-            CoreOperationOutput::Void => (),
-            _ => panic!("Invalid output for DeviceOperation::OpenSession")
-        })
+        ))).map(|it| ())
     }
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Device(DeviceOperation::Open(OpenOperation::Open(path)))).map(|it| match it {
-            CoreOperationOutput::Void => (),
-            _ => panic!("Invalid output for DeviceOperation::Open")
-        })
+        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::Open(path)))
+            .map(|it| ())
     }
 }

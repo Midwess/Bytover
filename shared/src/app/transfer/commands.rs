@@ -46,9 +46,7 @@ impl AppCommand {
             }
         }
 
-        let _ = self
-            .run(TransferSessionPersistentOperation::remove(transfer_session.id()))
-            .await;
+        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
     }
 
     pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget) {
@@ -168,9 +166,7 @@ impl AppCommand {
             return;
         }
 
-        let _ = self
-            .run(TransferSessionPersistentOperation::remove(transfer_session.id()))
-            .await;
+        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
 
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
     }

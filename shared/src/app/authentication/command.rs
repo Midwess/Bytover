@@ -11,10 +11,15 @@ use url::Url;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use devlog_sdk::distributed_id::gen_id;
+use crate::app::operations::dialog::DialogOperation;
 
 impl AppCommand {
     pub async fn sign_in(&self) {
-        let device_info = DeviceOperation::get_device_info().into_future(self.ctx()).await;
+        let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
+            self.run(DialogOperation::toast("Device not found".to_string())).await;
+            return
+        };
+
         let url = match RpcOperation::get_sign_in_url(device_info).into_future(self.ctx()).await {
             Ok(url) => url,
             Err(e) => {

@@ -47,7 +47,7 @@ impl AppCommand {
         self.run(Command::request_from_shell(operation.into())).await
     }
 
-    pub fn request_from_shell<O>(&self, operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
+    pub fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
         O: Into<CoreOperation>
     {

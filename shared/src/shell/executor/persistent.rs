@@ -13,7 +13,6 @@ use crate::entities::transfer_session::TransferType;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use crate::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
-use devlog_sdk::distributed_id::gen_id;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -155,7 +154,6 @@ pub trait NativePersistent: Send + Sync {
                     }
                 }
             }
-            PersistentOperation::GenId() => PersistentOperationOutput::GenId(gen_id().await),
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
                 let result = self.transfer_session_repository().create(session).await;
                 match result {
@@ -194,11 +192,7 @@ pub trait NativePersistent: Send + Sync {
                 }
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove(id)) => {
-                if let Err(_) = self
-                    .transfer_session_repository()
-                    .delete_session(id)
-                    .await
-                {
+                if let Err(_) = self.transfer_session_repository().delete_session(id).await {
                     return PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(false));
                 }
 
