@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::app::AppRequestBuilder;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
-use crate::errors::NetworkError;
+use crate::errors::CoreError;
 
-use super::{CoreOperation, CoreOperationOutput};
+use super::CoreOperation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperation {
@@ -33,11 +33,7 @@ impl Operation for P2POperation {
 }
 
 impl P2POperation {
-    pub fn update_finding_scopes(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = Result<(), NetworkError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).map(|it| match it {
-            CoreOperationOutput::Void => Ok(()),
-            CoreOperationOutput::ConnectionError(e) => Err(e),
-            _ => panic!("Mismatch in response type, expected Void, got {it:?}")
-        })
+    pub fn update_finding_scopes(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).map(|it| it.result())
     }
 }

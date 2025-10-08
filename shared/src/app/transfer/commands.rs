@@ -136,16 +136,10 @@ impl AppCommand {
                         break;
                     }
                 },
-                CoreOperationOutput::ConnectionError(error) => {
-                    log::error!("Connection error: {error:?}");
+                CoreOperationOutput::Error(error) => {
+                    log::error!("Error: {error:?}");
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
                     self.run(DialogOperation::toast(format!("{error}"))).await;
-                    break;
-                }
-                CoreOperationOutput::DeviceError(error) => {
-                    transfer_session.force_complete(format!("Device error: {error:?}"));
-                    self.run(DialogOperation::toast(format!("{error}"))).await;
-                    log::error!("Device error: {error:?}");
                     break;
                 }
                 _ => {
@@ -265,14 +259,9 @@ impl AppCommand {
                         continue;
                     }
                 },
-                CoreOperationOutput::ConnectionError(error) => {
+                CoreOperationOutput::Error(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
                     log::error!(target: "transfer", "Connection error: {error:?}");
-                    break;
-                }
-                CoreOperationOutput::DeviceError(error) => {
-                    transfer_session.force_complete(format!("Device error: {error:?}"));
-                    log::error!(target: "transfer", "Device error: {error:?}");
                     break;
                 }
                 _ => {
@@ -358,18 +347,9 @@ impl AppCommand {
                     TransferOperationOutput::SubscribeSessionEnded => {
                         break;
                     }
-                    TransferOperationOutput::UnauthenticatedToSubscribeSession => {
-                        self.run(DialogOperation::message(
-                            "Password is not correct".to_owned(),
-                            MessageReason::PublicSessionUnauthenticated
-                        ))
-                        .await;
-
-                        return;
-                    }
                     _ => return
                 },
-                CoreOperationOutput::ConnectionError(error) => {
+                CoreOperationOutput::Error(error) => {
                     self.run(DialogOperation::toast(format!("{error}"))).await;
                     return;
                 }

@@ -1,6 +1,6 @@
 use crate::app::operations::device::GeoLocation;
 use crate::entities::finding_scope::FindingScope;
-use crate::errors::NetworkError;
+use crate::errors::CoreError;
 use core_services::retry;
 use futures_util::lock::Mutex;
 use n0_future::time::Instant;
@@ -42,23 +42,23 @@ impl InternetConnection {
         }
     }
 
-    pub async fn locate(&self, geo_location: Option<GeoLocation>) -> Result<NetworkResponse, NetworkError> {
+    pub async fn locate(&self, geo_location: Option<GeoLocation>) -> Result<NetworkResponse, CoreError> {
         let client = reqwest::Client::new();
 
         let body = geo_location.map(|geo_location| serde_json::to_value(&geo_location).unwrap()).unwrap_or(json!({}));
         let response = retry!(retries = 30, delay = Duration::from_millis(250), |_| true, {
             let Ok(response) = client.post(&self.locator_server_url).json(&body).send().await else {
-                return Err(NetworkError::Network("Failed to get public IP address".to_string()));
+                return Err(CoreError::Network("Failed to get public IP address".to_string()));
             };
 
             if response.status().is_success() {
                 let network: NetworkResponse =
-                    response.json().await.map_err(|_| NetworkError::Network("Bad response format".to_owned()))?;
+                    response.json().await.map_err(|_| CoreError::Network("Bad response format".to_owned()))?;
 
                 return Ok(network);
             }
 
-            Err(NetworkError::Network("Failed to get public IP address".to_string()))
+            Err(CoreError::Network("Failed to get public IP address".to_string()))
         })?;
 
         Ok(response)

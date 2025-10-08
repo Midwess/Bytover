@@ -2,13 +2,13 @@ use std::future::Future;
 
 use serde::{Deserialize, Serialize};
 
+use crate::app::core::command::AppCommand;
 use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
 use crate::app::AppRequestBuilder;
-use crate::app::core::command::AppCommand;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResourcePath;
 
-use super::{CoreOperationOutput};
+use super::CoreOperationOutput;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GeoLocation {
@@ -54,13 +54,10 @@ impl DeviceOperation {
 
 impl OpenOperation {
     pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::OpenSession(
-            session_id
-        ))).map(|it| ())
+        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::OpenSession(session_id))).map(|_it| ())
     }
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::Open(path)))
-            .map(|it| ())
+        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::Open(path))).map(|_it| ())
     }
 }

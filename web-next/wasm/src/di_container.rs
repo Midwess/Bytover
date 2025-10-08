@@ -180,7 +180,8 @@ impl DiContainer {
                 cloud_server: self.get_cloud_server(),
                 auth_server: self.get_authentication_server()
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc }),
+            bridge: self.core_bridge.get().unwrap().clone()
         };
 
         let _ = self.native_executor.set(executor);

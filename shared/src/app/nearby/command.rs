@@ -4,6 +4,7 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
+use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
@@ -13,7 +14,6 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
-use crate::app::operations::dialog::DialogOperation;
 
 impl AppCommand {
     pub async fn start_nearby_server(&self, user: Option<User>) {
@@ -66,8 +66,8 @@ impl AppCommand {
                         it.app().handle_peer_connection(peer).await;
                     });
                 }
-                CoreOperationOutput::DeviceError(error) => {
-                    log::error!(target: "nearby", "Device error: {error:?}");
+                CoreOperationOutput::Error(error) => {
+                    log::error!("Error: {error:?}");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
@@ -76,12 +76,7 @@ impl AppCommand {
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
-                CoreOperationOutput::Void => {}
-                CoreOperationOutput::ConnectionError(error) => {
-                    log::error!(target: "nearby", "Connection error: {error:?}");
-                    self.notify_event(NearbyEvent::ClearNearbyPeers);
-                    break;
-                }
+                CoreOperationOutput::None => {}
                 _ => {
                     panic!("Unexpected output from nearby server, output: {output:?}");
                 }
@@ -122,15 +117,11 @@ impl AppCommand {
                     };
                     self.notify_event(request);
                 }
-                CoreOperationOutput::ConnectionError(error) => {
+                CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");
                     break;
                 }
-                CoreOperationOutput::DeviceError(error) => {
-                    log::error!("Device error: {error:?}");
-                    break;
-                }
-                CoreOperationOutput::Void => {
+                CoreOperationOutput::None => {
                     continue;
                 }
                 _ => {

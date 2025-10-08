@@ -98,4 +98,3 @@ class CoreMock: Core {
 
     override func update_view(_ model: AppViewModel) {}
 }
-

@@ -1,4 +1,4 @@
-use crate::errors::NetworkError;
+use crate::errors::CoreError;
 use crate::repository::errors::PersistenceError;
 use core_services::utils::cancellation::TaskErrors;
 use core_services::utils::yield_container::YieldError;
@@ -60,8 +60,8 @@ impl From<WebRtcErrors> for matchbox_socket::SignalingError {
     }
 }
 
-impl From<WebRtcErrors> for NetworkError {
+impl From<WebRtcErrors> for CoreError {
     fn from(err: WebRtcErrors) -> Self {
-        NetworkError::InternalServerError(format!("{err:?}"))
+        CoreError::InternalServerError(format!("{err:?}"))
     }
 }

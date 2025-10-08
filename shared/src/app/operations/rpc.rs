@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
-use crate::errors::NetworkError;
+use crate::errors::CoreError;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -19,7 +19,7 @@ pub enum RpcOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
-    NetworkError(NetworkError),
+    NetworkError(CoreError),
     SignInUrl(String),
     GetMe(User)
 }
@@ -29,7 +29,7 @@ impl Operation for RpcOperation {
 }
 
 impl RpcOperation {
-    pub fn get_me() -> AppRequestBuilder<impl Future<Output = Result<User, NetworkError>>> {
+    pub fn get_me() -> AppRequestBuilder<impl Future<Output = Result<User, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetMe())).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetMe(user)) => Ok(user),
             CoreOperationOutput::Rpc(RpcOperationOutput::NetworkError(error)) => Err(error),
@@ -37,7 +37,7 @@ impl RpcOperation {
         })
     }
 
-    pub fn get_sign_in_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, NetworkError>>> {
+    pub fn get_sign_in_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info))).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::SignInUrl(url)) => Ok(url),
             CoreOperationOutput::Rpc(RpcOperationOutput::NetworkError(error)) => Err(error),

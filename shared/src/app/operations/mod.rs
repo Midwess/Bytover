@@ -19,7 +19,7 @@ use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
-use crate::errors::{DeviceError, NetworkError};
+use crate::errors::CoreError;
 use crux_core::capability::Operation;
 use derive_more::with_trait::TryInto;
 use derive_more::{From, TryFrom};
@@ -59,6 +59,7 @@ pub enum CoreOperationOutput {
     P2P(P2POperationOutput),
 
     // ==== Entities ====
+    String(String),
     ResourceType(ResourceType),
     LocalResourcePath(LocalResourcePath),
     Token(Token),
@@ -76,19 +77,7 @@ pub enum CoreOperationOutput {
 
     Error(CoreError),
 
-    None, // or Void
-
-    // ====== Deprecated ======
-    ConnectionError(NetworkError), // Deprecated, use Error instead
-    DeviceError(DeviceError),      // Deprecated, use Error instead
-    Void                           // Deprecated, use None instead
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
-pub enum CoreError {
-    ConnectionError(NetworkError),
-    DeviceError(DeviceError),
-    ParsingError(String)
+    None // or Void
 }
 
 impl Operation for CoreOperation {
@@ -117,5 +106,30 @@ impl CoreOperationOutput {
             CoreOperationOutput::Error(e) => Err(e),
             _ => Ok(T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?)
         }
+    }
+
+    pub fn result_option<T>(self) -> Result<Option<T>, CoreError>
+    where
+        T: TryFrom<Self> + Debug,
+        <T as TryFrom<CoreOperationOutput>>::Error: Debug
+    {
+        match self {
+            CoreOperationOutput::Error(e) => Err(e),
+            CoreOperationOutput::None => Ok(None),
+            _ => Ok(Some(
+                T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?
+            ))
+        }
+    }
+
+    pub fn empty(&self) {}
+}
+
+impl<T> From<Option<T>> for CoreOperationOutput
+where
+    T: Into<CoreOperationOutput>
+{
+    fn from(option: Option<T>) -> Self {
+        option.map(Into::into).unwrap_or(CoreOperationOutput::None)
     }
 }

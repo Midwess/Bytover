@@ -2,9 +2,9 @@ use std::future::Future;
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::{AppRequestBuilder};
+use super::CoreOperationOutput;
 use crate::app::core::command::AppCommand;
-use super::{CoreOperationOutput};
+use crate::app::AppRequestBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AlertDialog {

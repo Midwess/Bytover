@@ -32,14 +32,14 @@ impl NativeExecutor {
                 let response = self.persistent.handle(database).await;
                 CoreOperationOutput::Persistent(response)
             }
-            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
+            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await.into(),
             CoreOperation::Internet(internet) => match internet {
                 InternetOperation::Locate(geolocation) => match self.internet_connection.locate(geolocation).await {
                     Ok(net) => CoreOperationOutput::FindingScopes(net.finding_scopes()),
-                    Err(error) => CoreOperationOutput::ConnectionError(error)
+                    Err(error) => CoreOperationOutput::Error(error)
                 }
             },
-            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
+            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await.into(),
             CoreOperation::Delay(duration) => {
                 sleep(duration).await;
                 CoreOperationOutput::None

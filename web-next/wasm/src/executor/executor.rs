@@ -1,11 +1,13 @@
 use futures_timer::Delay;
-use shared::app::operations::internet::{InternetOperation};
+use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
+use shared::shell::api::{CoreBridge, CoreRequest};
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::persistent::NativePersistent;
 use shared::shell::executor::rpc::NativeRpc;
 use shared::shell::executor::transfer::TransferNative;
+use std::sync::Arc;
 use tonic_web_wasm_client::Client;
 
 // Handle the effect coming from the platform
@@ -15,11 +17,13 @@ pub struct NativeExecutor {
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Client>>,
     pub p2p: Box<dyn P2PNativeExecutor>,
-    pub internet_connection: InternetConnection
+    pub internet_connection: InternetConnection,
+    pub bridge: Arc<dyn CoreBridge>
 }
 
 impl NativeExecutor {
     pub async fn handle(&self, request_id: u32, effect: CoreOperation) -> CoreOperationOutput {
+        let request = CoreRequest::new(request_id, self.bridge.clone());
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
@@ -29,14 +33,14 @@ impl NativeExecutor {
                 let response = self.persistent.handle(database).await;
                 CoreOperationOutput::Persistent(response)
             }
-            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await,
+            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await.into(),
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
                 match self.internet_connection.locate(geo_location).await {
                     Ok(net) => CoreOperationOutput::FindingScopes(net.finding_scopes()),
-                    Err(error) => CoreOperationOutput::ConnectionError(error)
+                    Err(error) => CoreOperationOutput::Error(error)
                 }
             }
-            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await,
+            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await.into(),
             CoreOperation::Delay(duration) => {
                 Delay::new(duration).await;
                 CoreOperationOutput::None

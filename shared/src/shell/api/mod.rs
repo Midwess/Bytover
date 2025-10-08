@@ -5,6 +5,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
 use crate::entities::transfer_session::TransferProgress;
+use crate::errors::CoreError;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
@@ -17,6 +18,7 @@ use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
+use std::sync::atomic::AtomicI8;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -58,11 +60,23 @@ pub trait CoreBridge: Send + Sync {
     async fn notify(&self, event: AppEvent);
 }
 
-#[derive(Clone)]
 pub struct CoreRequest {
+    instance_count: Arc<AtomicI8>,
     id: u32,
     bridge: Arc<dyn CoreBridge>,
     is_responded: OnceCell<()>
+}
+
+impl Clone for CoreRequest {
+    fn clone(&self) -> Self {
+        self.instance_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self {
+            instance_count: self.instance_count.clone(),
+            id: self.id,
+            bridge: self.bridge.clone(),
+            is_responded: self.is_responded.clone()
+        }
+    }
 }
 
 impl CoreRequest {
@@ -70,7 +84,8 @@ impl CoreRequest {
         Self {
             id,
             bridge,
-            is_responded: OnceCell::new()
+            is_responded: OnceCell::new(),
+            instance_count: Arc::new(AtomicI8::new(0))
         }
     }
 
@@ -78,16 +93,18 @@ impl CoreRequest {
         self.id
     }
 
-    pub fn response(&self, response: CoreOperationOutput) -> JoinHandle<()> {
+    pub fn response(&self, response: impl Into<CoreOperationOutput>) -> JoinHandle<()> {
         let _ = self.is_responded.set(());
-        self.bridge.response(self.id, response)
+        self.bridge.response(self.id, response.into())
     }
 }
 
 impl Drop for CoreRequest {
     fn drop(&mut self) {
-        if self.is_responded.get().is_none() {
-            let _ = self.response(CoreOperationOutput::Void);
+        let is_forgotten =
+            self.instance_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) < 1 && self.is_responded.get().is_none();
+        if is_forgotten {
+            let _ = self.response(CoreError::NoResponse);
         }
     }
 }

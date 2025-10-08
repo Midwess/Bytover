@@ -10,9 +10,9 @@ use schema::value::static_resource::static_resource::Source;
 use shared::app::authentication::module::{AuthenticationEvent, AuthenticationModel};
 use shared::app::environment::module::{EnvironmentEvent, EnvironmentModel};
 use shared::app::nearby::module::NearbyEvent;
-use shared::app::operations::device::{DeviceOperation, DeviceOperationOutput, GeoLocation, OpenOperation};
-use shared::app::operations::dialog::{AlertDialog, DialogOperation, DialogOperationOutput, MessageReason};
-use shared::app::operations::internet::{InternetOperation, InternetOperationOutput};
+use shared::app::operations::device::{DeviceOperation, GeoLocation, OpenOperation};
+use shared::app::operations::dialog::{AlertDialog, DialogOperation, MessageReason};
+use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::persistent::{
     LocalResourcePersistentOperation,
@@ -39,7 +39,7 @@ use shared::entities::token::Token;
 use shared::entities::transfer_method::TransferMethodSelection;
 use shared::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use shared::entities::user::User;
-use shared::errors::NetworkError;
+use shared::errors::CoreError;
 use shared::repository::local_resource::LocalResourceId;
 use shared::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
 
     // Register base types
     gen.register_type::<Token>()?;
-    gen.register_type::<NetworkError>()?;
+    gen.register_type::<CoreError>()?;
     gen.register_type::<Session>()?;
     gen.register_type::<SessionType>()?;
     gen.register_type::<User>()?;
@@ -84,7 +84,6 @@ fn main() -> anyhow::Result<()> {
 
     // Register operation enums
     gen.register_type::<DialogOperation>()?;
-    gen.register_type::<DialogOperationOutput>()?;
     gen.register_type::<PersistentOperation>()?;
     gen.register_type::<PersistentOperationOutput>()?;
     gen.register_type::<RpcOperation>()?;
@@ -99,9 +98,7 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<TransferSession>()?;
     gen.register_type::<TransferSessionOperationOutput>()?;
     gen.register_type::<InternetOperation>()?;
-    gen.register_type::<InternetOperationOutput>()?;
     gen.register_type::<DeviceOperation>()?;
-    gen.register_type::<DeviceOperationOutput>()?;
     gen.register_type::<P2POperation>()?;
     gen.register_type::<P2POperationOutput>()?;
     gen.register_type::<NearbyEvent>()?;

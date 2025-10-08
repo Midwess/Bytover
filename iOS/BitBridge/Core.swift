@@ -123,7 +123,7 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         guard case .operation(let operation) = request.effect else {
             return Data()
         }
-        
+
         switch operation {
         case .initNativeExecutor:
             self.nativeProcessor = await NativeProcessor.init(self)
