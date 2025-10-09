@@ -22,8 +22,8 @@ pub enum EnvironmentEvent {
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
-    type Event = EnvironmentEvent;
     type ViewModel = EnvironmentViewModel;
+    type Event = EnvironmentEvent;
 
     fn update(
         &self,

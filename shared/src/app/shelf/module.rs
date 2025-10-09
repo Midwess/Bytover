@@ -1,7 +1,7 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::modules::AppModule;
-use crate::app::operations::device::OpenOperation;
+use crate::app::operations::device::{DeviceOperation};
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
@@ -39,8 +39,8 @@ pub enum ShelfEvent {
 pub struct ShelfModule;
 
 impl AppModule<BitBridge> for ShelfModule {
-    type Event = ShelfEvent;
     type ViewModel = ShelfViewModel;
+    type Event = ShelfEvent;
 
     fn update(
         &self,
@@ -112,7 +112,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 let resource_path = resource.path.clone();
                 Command::new(move |it| async move {
-                    let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
+                    let _ = DeviceOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
         }

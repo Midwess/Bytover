@@ -29,8 +29,7 @@ impl NativeExecutor {
                 CoreOperationOutput::Rpc(response)
             }
             CoreOperation::Persistent(database) => {
-                let response = self.persistent.handle(database).await;
-                CoreOperationOutput::Persistent(response)
+                self.persistent.handle(database).await.into()
             }
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await.into(),
             CoreOperation::Internet(internet) => match internet {

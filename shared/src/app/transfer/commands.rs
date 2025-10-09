@@ -9,10 +9,11 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::persistent::TransferSessionPersistentOperation;
+use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
+use crate::CoreOperation::Persistent;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
@@ -285,7 +286,7 @@ impl AppCommand {
             self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await?;
             self.update_model_series(vec![
                 TransferSessionModelEvent::Remove(transfer_session.id()),
-                TransferSessionModelEvent::Add(transfer_session.clone()),
+                TransferSessionModelEvent::Add(transfer_session),
             ]);
         } else {
             self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
@@ -295,15 +296,8 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn find_transfer_session(&self, keywords: String) {
-        let session_overview = match self.run(TransferOperation::find_transfer_session(keywords)).await {
-            Err(e) => {
-                log::error!(target: "transfer", "Failed to find transfer session: {e:?}");
-                self.run(DialogOperation::toast(format!("{e}"))).await;
-                return;
-            }
-            Ok(session_overview) => session_overview
-        };
+    pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
+        let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
 
         let Some(session) = session_overview else {
             self.run(DialogOperation::message(
@@ -311,10 +305,12 @@ impl AppCommand {
                 MessageReason::FailedToFindPublicSession
             ))
             .await;
-            return;
+            return Ok(());
         };
 
+        self.run(TransferSessionPersistentOperation::save(session.clone())).await?;
         self.update_model(TransferSessionModelEvent::Add(session));
+        Ok(())
     }
 
     pub async fn view_public_session(&self, mut transfer_session: TransferSession, entered_password: Option<String>) {

@@ -107,7 +107,7 @@ pub trait NativePersistent: Send + Sync {
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::LoadOnDisk(path)) => {
                 let result = self.local_resource_repository().load(path).await?;
                 Ok(match result {
-                    Some(resource) => CoreOperationOutput::LocalResources(vec![resource]),
+                    Some(resource) => CoreOperationOutput::LocalResource(resource),
                     None => CoreOperationOutput::None
                 })
             }

@@ -1,7 +1,7 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::modules::AppModule;
-use crate::app::operations::device::OpenOperation;
+use crate::app::operations::device::{DeviceOperation};
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
@@ -272,7 +272,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let resource_path = resource.path.clone();
                 Command::new(move |it| async move {
-                    let _ = OpenOperation::open(resource_path).into_future(it.clone()).await;
+                    let _ = DeviceOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
             TransferEvent::OpenSession { session_id } => {
@@ -292,11 +292,11 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let session_id = session.order_id;
                 Command::new(|it| async move {
-                    let _ = OpenOperation::open_session(session_id).into_future(it.clone()).await;
+                    let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => Command::new(|it| async move {
-                it.app().find_transfer_session(keywords).await;
+            TransferEvent::FindPublicSession { keywords } => Command::new_result(|it| async move {
+                it.app().find_transfer_session(keywords).await
             }),
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
@@ -306,6 +306,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+                    log::info!("Session not found");
                     return Command::done()
                 };
 

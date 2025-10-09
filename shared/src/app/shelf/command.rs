@@ -36,7 +36,6 @@ impl AppCommand {
 
             let mut new_resources = self.run(LocalResourcePersistentOperation::add(vec![local_resource])).await?;
             if new_resources.is_empty() {
-                log::info!("File already exists: {:?}", selection.path);
                 continue;
             }
 

@@ -99,7 +99,7 @@ function ContentBoard() {
     }
 
     useEffect(() => {
-        if (selectedSession instanceof ReceiveCloudSessionViewModel) {
+        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
             const cloud = selectedSession as ReceiveCloudSessionViewModel
             if (!cloud.is_required_password && isLoading) {
                 core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
@@ -109,7 +109,7 @@ function ContentBoard() {
                 )))
             }
         }
-    }, [selectedSession, isLoading]);
+    }, [selectedSession?.id]);
 
     if (!selectedSession) {
         return <div className={"w-full h-full flex justify-center items-center gap-2"}>

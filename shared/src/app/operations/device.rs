@@ -19,14 +19,9 @@ pub struct GeoLocation {
 pub enum DeviceOperation {
     GetDeviceInfo,
     GetGeoLocation,
-    Open(OpenOperation),
-    LoadThumbnailPng(LocalResourcePath)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum OpenOperation {
     OpenSession(u64),
-    Open(LocalResourcePath)
+    Open(LocalResourcePath),
+    LoadThumbnailPng(LocalResourcePath)
 }
 
 impl DeviceOperation {
@@ -47,14 +42,12 @@ impl DeviceOperation {
             _ => (None, None)
         })
     }
-}
 
-impl OpenOperation {
     pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::OpenSession(session_id))).map(|_it| ())
+        AppCommand::request_from_shell(DeviceOperation::OpenSession(session_id)).map(|_it| ())
     }
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::Open(OpenOperation::Open(path))).map(|_it| ())
+        AppCommand::request_from_shell(DeviceOperation::Open(path)).map(|_it| ())
     }
 }

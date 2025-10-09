@@ -2,7 +2,7 @@ use futures_timer::Delay;
 use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
-use shared::shell::api::{CoreBridge, CoreRequest};
+use shared::shell::api::CoreBridge;
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::persistent::NativePersistent;
 use shared::shell::executor::rpc::NativeRpc;

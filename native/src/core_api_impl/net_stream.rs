@@ -16,7 +16,7 @@ use tokio_util::io::ReaderStream;
 use tonic::transport::Channel;
 
 const EVENT_QUEUE_SIZE: usize = 8;
-const READ_CHUNK_SIZE: usize = 1024 * 1024;
+const READ_CHUNK_SIZE: usize = 256 * 1024;
 
 pub struct NetStreamImpl {
     pub repository: Arc<dyn LocalResourceRepository>,
