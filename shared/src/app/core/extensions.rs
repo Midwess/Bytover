@@ -1,5 +1,7 @@
+use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::{AppCommand, AppCommandContext, AppEvent, AppRequestBuilder};
+use crate::errors::CoreError;
 use crate::CoreOperation;
 use crate::CoreOperation::Notified;
 use crux_core::Command;
@@ -15,6 +17,11 @@ pub trait CoreCommandUtils {
     fn operate<O>(operation: O) -> AppCommand
     where
         O: Into<CoreOperation> + 'static;
+    fn new_result<F, Fut>(create_task: F) -> Self
+    where
+        F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), CoreError>> + Send + 'static,
+    ;
 }
 
 pub trait CoreCommandContextUtils {
@@ -53,6 +60,19 @@ impl CoreCommandContextUtils for AppCommandContext {
 }
 
 impl CoreCommandUtils for AppCommand {
+    fn new_result<F, Fut>(create_task: F) -> Self
+    where
+        F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), CoreError>> + Send + 'static,
+    {
+        Self::new(async move |ctx| {
+            let result = create_task(ctx.clone()).await;
+            if let Err(e) = result {
+                ctx.app().run(DialogOperation::toast(e.to_string())).await;
+            }
+        })
+    }
+
     fn empty() -> Self {
         Command::new(|_| async move {})
     }

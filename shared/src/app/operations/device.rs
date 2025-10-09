@@ -3,7 +3,6 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 
 use crate::app::core::command::AppCommand;
-use crate::app::operations::persistent::{LocalResourcePersistentOperationOutput, PersistentOperationOutput};
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResourcePath;
@@ -44,9 +43,7 @@ impl DeviceOperation {
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
         AppCommand::request_from_shell(Self::LoadThumbnailPng(path)).map(|output| match output {
             CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::AddThumbnail(path)
-            )) => (None, Some(path)),
+            CoreOperationOutput::LocalResourcePath(path) => (None, Some(path)),
             _ => (None, None)
         })
     }

@@ -1,4 +1,4 @@
-use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::CoreOperation;
 use crate::app::{AppModel, BitBridge};
@@ -32,11 +32,12 @@ impl AppModule<BitBridge> for EnvironmentModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            EnvironmentEvent::AppLaunched => Command::new(|ctx| async move {
+            EnvironmentEvent::AppLaunched => Command::new_result(|ctx| async move {
                 ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                ctx.app().re_authorize().await;
+                ctx.app().re_authorize().await?;
+
+                Ok(())
             })
-            .then(Command::done())
         }
     }
 

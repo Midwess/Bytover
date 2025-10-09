@@ -1,21 +1,20 @@
+use std::collections::HashMap;
 use std::future::Future;
 
-use super::{CoreOperation, CoreOperationOutput};
+use crux_core::capability::Operation;
+use serde::{Deserialize, Serialize};
+
+use crate::app::core::command::AppCommand;
 use crate::app::AppRequestBuilder;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::session::Session;
 use crate::entities::token::Token;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
+use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
-use crux_core::capability::Operation;
-use crux_core::Command;
-use derive_more::with_trait::TryFrom;
-use derive_more::From;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperation {
     Session(SessionPersistentOperation),
     User(UserPersistentOperation),
@@ -35,28 +34,8 @@ pub enum LocalResourcePersistentOperation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum LocalResourcePersistentOperationOutput {
-    Add(Vec<LocalResource>),
-    AddThumbnail(LocalResourcePath),
-    LoadOnDisk(Option<LocalResource>),
-    Removed,
-    GetResourceType(ResourceType),
-    Find(Option<LocalResource>),
-    FindAll(Vec<LocalResource>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum UserPersistentOperation {
     Save(User)
-}
-
-impl Operation for UserPersistentOperation {
-    type Output = UserPersistentOperationOutput;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum UserPersistentOperationOutput {
-    Save()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -64,17 +43,6 @@ pub enum SessionPersistentOperation {
     WriteToken(Token),
     WriteUser(User),
     Get()
-}
-
-impl Operation for SessionPersistentOperation {
-    type Output = SessionPersistentOperationOutput;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum SessionPersistentOperationOutput {
-    WriteToken(),
-    WriteUser(),
-    Get(Option<Session>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -97,252 +65,146 @@ pub enum TransferSessionPersistentOperation {
     }
 }
 
-impl Operation for TransferSessionPersistentOperation {
-    type Output = TransferSessionOperationOutput;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum TransferSessionOperationOutput {
-    Save(Option<TransferSession>),
-    UpdateProgresses(Option<TransferSession>),
-    Removed(bool),
-    GetAll(Vec<TransferSession>),
-    UpdateResource(Option<TransferSession>),
-    GenerateResourcePath(HashMap<u64, LocalResourcePath>),
-    GenerateThumbnailPath(HashMap<u64, LocalResourcePath>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom)]
-pub enum PersistentOperationOutput {
-    Session(SessionPersistentOperationOutput),
-    User(UserPersistentOperationOutput),
-    LocalResource(LocalResourcePersistentOperationOutput),
-    GenId(u64),
-    TransferSession(TransferSessionOperationOutput),
-    Error(String)
-}
-
 impl Operation for PersistentOperation {
-    type Output = PersistentOperationOutput;
+    type Output = ();
 }
 
 impl SessionPersistentOperation {
-    pub fn save_token(token: Token) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::Session(
+    pub fn save_token(token: Token) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Session(
             SessionPersistentOperation::WriteToken(token)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::WriteToken())) => {}
-            _ => panic!("Invalid output expected WriteToken got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn save_user(user: User) -> AppRequestBuilder<impl Future<Output = ()>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::Session(
+    pub fn save_user(user: User) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Session(
             SessionPersistentOperation::WriteUser(user)
-        )))
-        .map(|it| match it.result::<PersistentOperationOutput>() {
-            Ok(_) => (),
-            Err(e) => panic!("Invalid output expected WriteUser got {e:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn get_session() -> AppRequestBuilder<impl Future<Output = Option<Session>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::Session(
+    pub fn get_session() -> AppRequestBuilder<impl Future<Output = Result<Option<Session>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Session(
             SessionPersistentOperation::Get()
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::Session(SessionPersistentOperationOutput::Get(session))) => {
-                session
-            }
-            _ => panic!("Invalid output expected Get got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 }
 
 impl LocalResourcePersistentOperation {
-    pub fn add(resources: Vec<LocalResource>) -> AppRequestBuilder<impl Future<Output = Vec<LocalResource>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn add(resources: Vec<LocalResource>) -> AppRequestBuilder<impl Future<Output = Result<Vec<LocalResource>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::Add(resources)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::Add(resources)
-            )) => resources,
-            _ => panic!("Invalid output expected Add got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::Remove(id)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::Removed
-            )) => true,
-            _ => false
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn find(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn find(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<Option<LocalResource>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::Find(path)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::Find(resource)
-            )) => resource,
-            _ => panic!("Invalid output expected Find got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 
-    pub fn find_all() -> AppRequestBuilder<impl Future<Output = Vec<LocalResource>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn find_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<LocalResource>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::FindAll
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::FindAll(resources)
-            )) => resources,
-            _ => panic!("Invalid output expected FindAll got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn add_thumbnail(png_bytes: Vec<u8>, resource_id: u64) -> AppRequestBuilder<impl Future<Output = LocalResourcePath>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn add_thumbnail(png_bytes: Vec<u8>, resource_id: u64) -> AppRequestBuilder<impl Future<Output = Result<LocalResourcePath, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id }
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::AddThumbnail(thumbnail_url)
-            )) => thumbnail_url,
-            _ => panic!("Invalid output expected AddThumbnail got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn load_from_disk(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Option<LocalResource>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn load_from_disk(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<Option<LocalResource>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::LoadOnDisk(path)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::LoadOnDisk(resource)
-            )) => resource,
-            _ => panic!("Invalid output expected IsExistedOnDisk got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 
-    pub fn get_resource_type(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ResourceType>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::LocalResource(
+    pub fn get_resource_type(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<ResourceType, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::GetResourceType { path }
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::LocalResource(
-                LocalResourcePersistentOperationOutput::GetResourceType(resource_type)
-            )) => resource_type,
-            _ => panic!("Invalid output expected GetResourceType got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 }
 
 impl TransferSessionPersistentOperation {
-    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::Save(session)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Save(
-                session
-            ))) => session,
-            _ => panic!("Invalid output expected Save got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 
     pub fn update_progresses(
         order_id: u64,
         progresses: Vec<TransferProgress>
-    ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
-                TransferSessionOperationOutput::UpdateProgresses(session)
-            )) => session,
-            _ => panic!("Invalid output expected UpdateProgresses got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 
     pub fn update_resource(
         session_id: TransferSessionId,
         resource: LocalResource
-    ) -> AppRequestBuilder<impl Future<Output = Option<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::UpdateResource { session_id, resource }
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
-                TransferSessionOperationOutput::UpdateResource(session)
-            )) => session,
-            _ => panic!("Invalid output expected UpdateResource got {it:?}")
-        })
+        ))
+        .map(|it| it.result_option())
     }
 
-    pub fn get_all_received_sessions() -> AppRequestBuilder<impl Future<Output = Vec<TransferSession>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    pub fn get_all_received_sessions() -> AppRequestBuilder<impl Future<Output = Result<Vec<TransferSession>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::GetAllReceivedSessions()
-        )))
-        .map(move |it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::GetAll(
-                sessions
-            ))) => sessions,
-            _ => panic!("Invalid output expected GetAll got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
-    pub fn remove(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = bool>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    pub fn remove(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::Remove(id)
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(TransferSessionOperationOutput::Removed(
-                is_removed
-            ))) => is_removed,
-            _ => panic!("Invalid output expected Remove got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
     pub fn generate_thumbnail_paths(
         session_id: Option<u64>,
         resource_ids: Vec<u64>
-    ) -> AppRequestBuilder<impl Future<Output = HashMap<u64, LocalResourcePath>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    ) -> AppRequestBuilder<impl Future<Output = Result<HashMap<u64, LocalResourcePath>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::GenerateThumbnailPath { session_id, resource_ids }
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
-                TransferSessionOperationOutput::GenerateThumbnailPath(resource_paths)
-            )) => resource_paths,
-            _ => panic!("Invalid output expected GenerateResourcePath got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 
     pub fn generate_resource_paths(
         id: u64,
         resource_names: HashMap<u64, String>
-    ) -> AppRequestBuilder<impl Future<Output = HashMap<u64, LocalResourcePath>>> {
-        Command::request_from_shell(CoreOperation::Persistent(PersistentOperation::TransferSession(
+    ) -> AppRequestBuilder<impl Future<Output = Result<HashMap<u64, LocalResourcePath>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::GenerateResourcePath {
                 session_id: id,
                 resource_names
             }
-        )))
-        .map(|it| match it {
-            CoreOperationOutput::Persistent(PersistentOperationOutput::TransferSession(
-                TransferSessionOperationOutput::GenerateResourcePath(resource_paths)
-            )) => resource_paths,
-            _ => panic!("Invalid output expected GenerateResourcePath got {it:?}")
-        })
+        ))
+        .map(|it| it.result())
     }
 }

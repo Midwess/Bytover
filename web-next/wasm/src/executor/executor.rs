@@ -23,7 +23,6 @@ pub struct NativeExecutor {
 
 impl NativeExecutor {
     pub async fn handle(&self, request_id: u32, effect: CoreOperation) -> CoreOperationOutput {
-        let request = CoreRequest::new(request_id, self.bridge.clone());
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
@@ -31,7 +30,7 @@ impl NativeExecutor {
             }
             CoreOperation::Persistent(database) => {
                 let response = self.persistent.handle(database).await;
-                CoreOperationOutput::Persistent(response)
+                response.into()
             }
             CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await.into(),
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {

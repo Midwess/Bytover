@@ -3,9 +3,9 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
-use crate::app::operations::CoreOperation;
 use crate::app::AppEvent;
 use crate::entities::token::Token;
+use crate::errors::CoreError;
 use url::Url;
 
 use crate::app::core::command::AppCommand;
@@ -31,40 +31,22 @@ impl AppCommand {
         WebViewOperation::open_url(url).into_future(self.ctx()).await;
     }
 
-    pub async fn re_authorize(&self) {
-        let mut user = match RpcOperation::get_me().into_future(self.ctx()).await {
-            Ok(user) => Some(user),
-            Err(e) => {
-                log::info!(target: "auth", "Failed to get user info: {e:?}");
-                None
-            }
-        };
-
-        if user.is_none() {
-            let session = SessionPersistentOperation::get_session().into_future(self.ctx()).await;
-            if let Some(Some(user_info)) = session.map(|it| it.user) {
-                user.replace(user_info);
-            }
-
-            return;
-        } else {
-            SessionPersistentOperation::save_user(user.clone().unwrap()).into_future(self.ctx()).await;
-        }
-
-        let user = user.unwrap();
+    pub async fn re_authorize(&self) -> Result<(), CoreError> {
+        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
+        SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::UpdateUser { user }));
-        self.notify_shell(CoreOperation::Render);
+        Ok(())
     }
 
-    pub async fn authorize(&self, url: String) {
+    pub async fn authorize(&self, url: String) -> Result<(), CoreError> {
         let Ok(url) = Url::parse(url.as_str()) else {
             log::warn!("The redirect url is invalid: {url}");
-            return;
+            return Ok(());
         };
 
         let Some(token) = url.query_pairs().find(|it| it.0 == "access_token").map(|it| it.1.to_string()) else {
             log::info!("The redirect url does not contain access token");
-            return;
+            return Ok(());
         };
 
         let token = Token {
@@ -74,10 +56,12 @@ impl AppCommand {
 
         if token.value.is_empty() {
             log::error!(target: "auth", "Failed to get access token from auth response {url}");
-            return;
+            return Ok(());
         }
 
-        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await;
-        self.re_authorize().await;
+        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
+        self.re_authorize().await?;
+
+        Ok(())
     }
 }

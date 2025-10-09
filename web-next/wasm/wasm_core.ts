@@ -9,24 +9,17 @@ import {
     AppViewModel,
     AppEvent,
     CoreOperationVariantInitNativeExecutor,
-    CoreOperationOutputVariantVoid,
     CoreOperationVariantDevice,
     DeviceOperationVariantGetDeviceInfo,
-    DeviceOperationOutputVariantDeviceInfo,
     DeviceTypeVariantOtherPhone,
     PlatformVariantWeb,
     DeviceInfo,
     DeviceOperationVariantOpen,
     CoreOperationVariantWebView,
     DeviceOperationVariantLoadThumbnailPng,
-    CoreOperationOutputVariantDevice,
-    DeviceOperationOutputVariantLoadThumbnailPng,
     CoreOperationVariantPersistent,
-    CoreOperationOutputVariantWebView,
-    WebViewOperationOutputVariantOpenUrl,
     DeviceOperationVariantGetGeoLocation,
     GeoLocation,
-    DeviceOperationOutputVariantGetGeoLocation,
     CoreOperationVariantRpc,
     CoreOperationVariantRender,
     CoreOperationVariantTransfer,
@@ -43,13 +36,9 @@ import {
     TransferViewModel,
     ResourceSelection,
     LocalResourcePathVariantPlatformIdentifier,
-    DialogOperationOutputVariantToast,
-    CoreOperationOutputVariantDialog,
     DialogOperationVariantAlert,
-    DialogOperationOutputVariantAlert,
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
-    DialogOperationOutputVariantMessage,
     ReceiveSessionViewModel,
     ReceiveCloudSessionViewModel,
     PeerViewModel,
@@ -60,7 +49,9 @@ import {
     ShelfViewModel,
     CoreOperationOutputVariantPersistent,
     AppOperation,
-    AppOperationVariantOperation,
+    AppOperationVariantOperation, CoreOperationOutputVariantNone, CoreOperationOutputVariantDeviceInfo,
+    CoreOperationOutputVariantThumbnailPng, CoreOperationOutputVariantLocalResourcePath,
+    CoreOperationOutputVariantGeoLocation, CoreOperationOutputVariantBool,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -353,24 +344,24 @@ export class WasmCore {
             case CoreOperationVariantInitNativeExecutor: {
                 await init()
                 this.isCoreReady.set(true)
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantWebView: {
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantWebView(new WebViewOperationOutputVariantOpenUrl())))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantDevice: {
                 const device = coreOperation as CoreOperationVariantDevice;
                 switch(device.value.constructor) {
                     case DeviceOperationVariantGetDeviceInfo: {
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantDeviceInfo(new DeviceInfo(
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDeviceInfo(new DeviceInfo(
                             new PlatformVariantWeb(),
                             "Browser",
                             Date.now().toString(),
                             new DeviceTypeVariantOtherPhone(),
-                        )))));
+                        ))));
                     }
                     case DeviceOperationVariantOpen: {
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
@@ -378,17 +369,17 @@ export class WasmCore {
                         const resourceId = BigInt(path.value.replace("opfs://device/", ''))
                         const file = await get_device_file(serialize(path))
                         if (!file) {
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                         }
 
                         try {
                             const buffer = await getThumbnailFromFile(file)
                             const savedPath = new LocalResourcePathVariantPlatformIdentifier(`opfs://thumbnails/${resourceId}.png`)
                             await create_file(serialize(savedPath), buffer);
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantPersistent(new PersistentOperationOutputVariantLocalResource(new LocalResourcePersistentOperationOutputVariantAddThumbnail(savedPath)))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantLocalResourcePath(savedPath)))
                         }
                         catch (e) {
-                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantLoadThumbnailPng(null))))
+                            return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
@@ -411,10 +402,10 @@ export class WasmCore {
                             })
                             
                             const location = new GeoLocation(position.coords.latitude, position.coords.longitude);
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(location))))
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantGeoLocation(location)))
                         }
                         catch (error) {
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantDevice(new DeviceOperationOutputVariantGetGeoLocation(null))))
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                         }
                     }
                 }
@@ -429,7 +420,7 @@ export class WasmCore {
             }
             case CoreOperationVariantRender: {
                 await this.updateView()
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantTransfer: {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
@@ -444,7 +435,7 @@ export class WasmCore {
             case CoreOperationVariantNotified: {
                 const operation = coreOperation as CoreOperationVariantNotified;
                 this.update(operation.value).then(noop)
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantDialog: {
                 const operation = coreOperation as CoreOperationVariantDialog;
@@ -452,11 +443,11 @@ export class WasmCore {
                     case DialogOperationVariantToast: {
                         const toastOp = operation.value as DialogOperationVariantToast;
                         toast(toastOp.value)
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantToast())))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                     }
                     case DialogOperationVariantAlert: {
                         // No alert on web, will automatically confirmed
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantAlert(true))))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantBool(true)))
                     }
                     case DialogOperationVariantMessage: {
                         const op = operation.value as DialogOperationVariantMessage;
@@ -464,7 +455,7 @@ export class WasmCore {
                             ...(this.alertMessageState.get() || []),
                             op
                         ])
-                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantDialog(new DialogOperationOutputVariantMessage())))
+                        return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                     }
                 }
                 break
@@ -473,11 +464,11 @@ export class WasmCore {
                 const delay = coreOperation as CoreOperationVariantDelay;
                 const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
                 await BPromise.delay(ms)
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantVoid()))
+                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
         }
 
-        return serialize(new CoreOperationOutputVariantVoid())
+        return serialize(new CoreOperationOutputVariantNone())
     }
 
     async addFiles(files: (File | FileMetadata) []) {

@@ -18,41 +18,43 @@ use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::entities::user::User;
+use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn load_transfer_sessions(&self) {
-        let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await;
+    pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
+        let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
         let events = receive_sessions
             .into_iter()
             .map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it)))
             .collect::<Vec<_>>();
         self.update_model_series(events);
+
+        Ok(())
     }
 
-    pub async fn delete_session(&self, transfer_session: TransferSession) {
+    pub async fn delete_session(&self, transfer_session: TransferSession) -> Result<(), CoreError> {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
             self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
-            if let Err(error) = self
+           self
                 .run(TransferOperation::cancel_session(
                     transfer_session.peer_id(),
                     transfer_session.order_id
                 ))
-                .await
-            {
-                log::error!("Failed to cancel transfer: {error:?}");
-            }
+                .await?
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
+
+        Ok(())
     }
 
-    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget) {
+    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget) -> Result<(), CoreError> {
         if selected_resources.is_empty() {
             self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
-            return;
+            return Ok(());
         }
 
         let transfer_target_id = transfer_target.id();
@@ -69,7 +71,7 @@ impl AppCommand {
 
                     if !(has_at && has_dot && has_valid_length && valid_parts && valid_domain) {
                         self.run(DialogOperation::toast("Invalid email format".to_string())).await;
-                        return;
+                        return Ok(());
                     }
                 }
 
@@ -77,7 +79,7 @@ impl AppCommand {
                 let result = match self.run(TransferOperation::create_cloud_session(session)).await {
                     Err(err) => {
                         self.run(DialogOperation::toast(format!("{err} please try again"))).await;
-                        return;
+                        return Ok(());
                     }
                     Ok(session) => session
                 };
@@ -157,15 +159,17 @@ impl AppCommand {
         // We do not remove the public transfer since the user needs to see the information
         // after transfer completed.
         if transfer_session.is_success() && transfer_session.target.is_public() {
-            return;
+            return Ok(());
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
 
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
+
+        Ok(())
     }
 
-    pub async fn accept_session(&self, remote_session: TransferSessionMessage, peer: Peer) {
+    pub async fn accept_session(&self, remote_session: TransferSessionMessage, peer: Peer) -> Result<(), CoreError> {
         let peer_id = peer.id();
         let (generate_file_paths_request, _generate_thumbnail_paths_request) = {
             let mut result = HashMap::new();
@@ -185,14 +189,14 @@ impl AppCommand {
                 Some(remote_session.order_id),
                 generate_file_paths_request.keys().copied().collect()
             ))
-            .await;
+            .await?;
 
         let mut generated_saved_paths = self
             .run(TransferSessionPersistentOperation::generate_resource_paths(
                 remote_session.order_id,
                 generate_file_paths_request
             ))
-            .await;
+            .await?;
 
         let mut resources = vec![];
         for resource_request in remote_session.resources {
@@ -277,16 +281,18 @@ impl AppCommand {
 
         // Remove the session and add the new session
         if matches!(transfer_session.status(), TransferSessionStatus::Success) {
-            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
-            self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await;
+            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
+            self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await?;
             self.update_model_series(vec![
                 TransferSessionModelEvent::Remove(transfer_session.id()),
                 TransferSessionModelEvent::Add(transfer_session.clone()),
             ]);
         } else {
-            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
+            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
             DialogOperation::toast("Transfer session canceled".to_string());
         }
+
+        Ok(())
     }
 
     pub async fn find_transfer_session(&self, keywords: String) {

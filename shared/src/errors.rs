@@ -32,6 +32,10 @@ pub enum CoreError {
 
     #[error("{0}")]
     ParsingError(String),
+    
+    #[error("Feature not implemented: {0}")]
+    NotImplemented(String),
+    
     // The request dropped without a response.
     // then the CoreRequest will automatically response this message to prevent core hang forever.
     #[error("No response from the executor.")]
@@ -47,5 +51,17 @@ impl From<CloudTransferErrors> for CoreError {
 impl From<RpcErrors> for CoreError {
     fn from(e: RpcErrors) -> Self {
         Self::Network(format!("{e}"))
+    }
+}
+
+impl From<crate::repository::errors::PersistenceError> for CoreError {
+    fn from(e: crate::repository::errors::PersistenceError) -> Self {
+        Self::InternalServerError(format!("{e}"))
+    }
+}
+
+impl From<core_services::db::repository::abstraction::errors::RepositoryError> for CoreError {
+    fn from(e: core_services::db::repository::abstraction::errors::RepositoryError) -> Self {
+        Self::InternalServerError(format!("{e}"))
     }
 }

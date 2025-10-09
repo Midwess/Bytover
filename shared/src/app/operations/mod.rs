@@ -21,13 +21,12 @@ use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
 use crate::errors::CoreError;
 use crux_core::capability::Operation;
-use derive_more::with_trait::TryInto;
-use derive_more::{From, TryFrom};
+use derive_more::{From, TryFrom, TryInto};
 use device::DeviceOperation;
 use dialog::DialogOperation;
 use internet::InternetOperation;
 use p2p::{P2POperation, P2POperationOutput};
-use persistent::{PersistentOperation, PersistentOperationOutput};
+use persistent::PersistentOperation;
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use transfer::{TransferOperation, TransferOperationOutput};
@@ -54,7 +53,6 @@ pub enum CoreOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
 pub enum CoreOperationOutput {
     Rpc(RpcOperationOutput),
-    Persistent(PersistentOperationOutput),
     Transfer(TransferOperationOutput),
     P2P(P2POperationOutput),
 
@@ -74,6 +72,8 @@ pub enum CoreOperationOutput {
     Bool(bool),
     TransferSessions(Vec<TransferSession>),
     LocalResources(Vec<LocalResource>),
+    LocalResource(LocalResource),
+    ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
 
     Error(CoreError),
 

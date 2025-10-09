@@ -1,9 +1,9 @@
 use shared::app::operations::persistent::{
     LocalResourcePersistentOperation,
-    LocalResourcePersistentOperationOutput,
     PersistentOperation,
-    PersistentOperationOutput
 };
+use shared::app::operations::CoreOperationOutput;
+use shared::errors::CoreError;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
@@ -30,9 +30,9 @@ impl NativePersistent for NativePersistentImpl {
         &*self.transfer_session_repository
     }
 
-    async fn handle(&self, effect: PersistentOperation) -> PersistentOperationOutput {
+    async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
         if let PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(_)) = effect {
-            return PersistentOperationOutput::LocalResource(LocalResourcePersistentOperationOutput::Removed)
+            return Ok(CoreOperationOutput::Bool(true));
         };
 
         NativePersistent::default_handle(self, effect).await
