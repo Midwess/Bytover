@@ -128,31 +128,34 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
         case .initNativeExecutor:
             self.nativeProcessor = await NativeProcessor.init(self)
             self.checkLocationAuthorization()
-            return handleResponse(request.id, Data(try! CoreOperationOutput.initNativeExecutor.bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .webView(.openUrl(let url)):
             openURL(URL(string: url)!)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.webView(WebViewOperationOutput.openUrl).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .device(.loadThumbnailPng(let localStoragePath)):
             switch localStoragePath {
             case .platformIdentifier(let identifier):
                 let thumbnail = await self.getThumbnailData(for: identifier)
-                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(thumbnail?.bytes)).bincodeSerialize()))
+                if thumbnail == nil {
+                    return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
+                }
+                return handleResponse(request.id, Data(try! CoreOperationOutput.thumbnailPng(thumbnail!.bytes).bincodeSerialize()))
             default:
-                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.loadThumbnailPng(nil)).bincodeSerialize()))
+                return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
             }
-        case .device(.open(.open(let path))):
+        case .device(.open(let path)):
             await self.open(path: path)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
-        case .device(.open(.openSession(let path))):
-            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
+        case .device(.openSession(let path)):
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .device(.getGeoLocation):
             if let lastKnownLocation {
                 let longitude = lastKnownLocation.longitude.magnitude
                 let latitude = lastKnownLocation.latitude.magnitude
-                return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(GeoLocation(latitude: latitude, longitude: longitude))).bincodeSerialize()))
+                return handleResponse(request.id, Data(try! CoreOperationOutput.geoLocation(GeoLocation(latitude: latitude, longitude: longitude)).bincodeSerialize()))
             }
 
-            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .persistent(let ops):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.persistent(ops).bincodeSerialize()))
         case .device(.getDeviceInfo):
@@ -160,22 +163,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? ""
             let deviceName = device.name
 
-            return handleResponse(request.id, Data(try! CoreOperationOutput.device(
-                .deviceInfo(DeviceInfo(
+            return handleResponse(request.id, Data(try! CoreOperationOutput.deviceInfo(
+                DeviceInfo(
                     platform: Platform.ios,
                     name: deviceName,
                     unique_id: deviceId,
                     device_type: .applePhone
-                ))
+                )
             ).bincodeSerialize()))
-        case .device(.getGeoLocation):
-            let geoLocation = GeoLocation(latitude: self.lastKnownLocation?.latitude ?? 0.0, longitude: self.lastKnownLocation?.longitude ?? 0.0)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.device(.getGeoLocation(geoLocation)).bincodeSerialize()))
         case .rpc(let rpc):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.rpc(rpc).bincodeSerialize()))
         case .render:
             self.update_view(try! .bincodeDeserialize(input: [UInt8](BitBridge.view())))
-            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .transfer(let trans):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.transfer(trans).bincodeSerialize()))
         case .internet(let internetOps):
@@ -187,19 +187,19 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
                 await self.update(event)
             }
 
-            return handleResponse(request.id, Data(try! CoreOperationOutput.void.bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .dialog(.alert(let alert)):
             self.alert.send((alert, SingleWaiter()))
             let response = await self.alert.value!.1.wait()
             self.alert.send(nil)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.alert(is_confirmed: response)).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.bool(response).bincodeSerialize()))
         case .dialog(.toast(let message)):
             self.toastMessage.send(message)
-            return handleResponse(request.id, Data(try! CoreOperationOutput.dialog(.toast).bincodeSerialize()))
+            return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .delay(let duration):
             return await self.nativeProcessor().handle(request.id, Data(try! CoreOperation.delay(duration).bincodeSerialize()))
         case .dialog(.message):
-            return Data(try! CoreOperationOutput.void.bincodeSerialize())
+            return Data(try! CoreOperationOutput.none.bincodeSerialize())
         }
     }
 
