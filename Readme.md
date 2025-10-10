@@ -17,6 +17,15 @@ $ brew install openssl@3
 $ rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 ```
 
+### Pull git submodules
+```
+$ make gsu
+```
+
+### Dependencies
+See [Protocol Buffer Compiler Installation](https://protobuf.dev/installation/)
+See [pnpm Installation](https://pnpm.io/installation)
+
 ### (Optional) Use cache to speed up build process:
 Use sccache
 ```
