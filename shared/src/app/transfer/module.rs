@@ -27,12 +27,15 @@ use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use crate::app::operations::CoreOperationOutput;
+use crate::CoreOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
     sessions: Vec<TransferSession>,
-    targets: Vec<TransferTarget>
+    targets: Vec<TransferTarget>,
+    keywords: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -295,9 +298,14 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => Command::new_result(|it| async move {
-                it.app().find_transfer_session(keywords).await
-            }),
+            TransferEvent::FindPublicSession { keywords } => {
+                model.transfer.keywords = keywords.clone();
+
+                Command::new_result(|it| async move {
+                    it.app().notify_shell(CoreOperation::Render);
+                    it.app().find_transfer_session(keywords).await
+                })
+            },
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     target: Some(TransferTargetId::Internet),
@@ -324,6 +332,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .transfer
                 .sessions
                 .iter()
+                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords))
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
                     let (password, avatar, name, access_url, is_required_password, alias, _to_emails) = match &it.target {

@@ -164,7 +164,7 @@ impl TransferSession {
             return;
         };
 
-        let _ = progress.update_transfered_bytes(transferred_size);
+        let _ = progress.update_transferred_bytes(transferred_size);
     }
 
     pub fn access_url(&self, base_url: String) -> String {

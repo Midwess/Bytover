@@ -32,7 +32,7 @@ pub trait CoreCommandContextUtils {
     fn update_model(&self, result: impl Into<AppEvent>);
     fn update_model_series(&self, results: Vec<impl Into<AppEvent>>);
     fn notify_event(&self, event: impl Into<AppEvent>);
-    fn app(self) -> crate::app::core::command::AppCommand;
+    fn app(&self) -> crate::app::core::command::AppCommand;
 }
 
 impl CoreCommandContextUtils for AppCommandContext {
@@ -54,8 +54,8 @@ impl CoreCommandContextUtils for AppCommandContext {
         self.notify_shell(Notified(event))
     }
 
-    fn app(self) -> crate::app::core::command::AppCommand {
-        crate::app::core::command::AppCommand::new(self)
+    fn app(&self) -> crate::app::core::command::AppCommand {
+        crate::app::core::command::AppCommand::new(self.clone())
     }
 }
 

@@ -77,7 +77,7 @@ impl TransferProgress {
         }
     }
 
-    pub fn update_transfered_bytes(&mut self, new_amount: u64) -> Result<(), TransferProgressErrors> {
+    pub fn update_transferred_bytes(&mut self, new_amount: u64) -> Result<(), TransferProgressErrors> {
         if !matches!(self.status, TransferProgressStatus::InProgress(_)) {
             return Err(TransferProgressErrors::AlreadyCommitted)
         }

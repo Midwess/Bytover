@@ -1,7 +1,7 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::modules::AppModule;
-use crate::app::operations::device::{DeviceOperation};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};

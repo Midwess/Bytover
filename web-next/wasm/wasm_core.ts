@@ -323,8 +323,8 @@ export class WasmCore {
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
     }
 
-    public async update(event: AppEvent | undefined, raw: Uint8Array | undefined = undefined) {
-        const effects_bytes = await process_event(raw || serialize(event));
+    public async update(event: AppEvent) {
+        const effects_bytes = await process_event(serialize(event));
         const requests = deserializeArray<Request>(Request, effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
@@ -426,7 +426,6 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantInternet: {
-                console.log("Internet operation")
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {

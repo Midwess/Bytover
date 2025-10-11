@@ -41,10 +41,12 @@ export default function ReceiveBoard() {
         <div
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-11 w-full h-full gap-2"}>
-                <div className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8 scrollbar-dark"}>
+                <div
+                    className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8 scrollbar-dark"}>
                     <Board/>
                 </div>
-                <div className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 scrollbar-dark`}>
+                <div
+                    className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 scrollbar-dark`}>
                     <ContentBoard/>
                 </div>
             </div>
@@ -123,7 +125,9 @@ function ContentBoard() {
             return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
                 <div className={"w-[50%] flex flex-col gap-4"}>
                     <p className={"font-poppins text-muted-foreground flex flex-row items-center"}>
-                        <Image alt={"lock"} width={10} height={10} className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"} color={'white'}/>
+                        <Image alt={"lock"} width={10} height={10}
+                               className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                               color={'white'}/>
                         This session is password protected</p>
                     <Input
                         className="h-10"
@@ -256,103 +260,80 @@ function Board() {
 
     const handleFind = () => {
         message?.resolveMessage()
-        if (!keywords || keywords.trim() === '') {
-            setUrl({
-                session: undefined
-            })
+        if (!keywords?.trim()) {
+            setUrl({session: undefined})
 
             return
         }
 
-        setUrl({
-            session: keywords
-        })
+        setUrl({session: keywords})
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
     }
 
-    publicSessions = publicSessions.filter((it) => {
-        if (keywords) {
-            return it?.sender_name?.toLowerCase()?.includes(keywords.toLowerCase()) ?? false
-        }
-
-        return true
-    }) || []
-
-    nearbySessions = nearbySessions.filter(() => {
-        if (keywords) {
-            return false
-        }
-
-        return true
-    }) || []
-
     return <>
-        <>
-            <div className={"flex flex-col justify-start text-primaryText gap-4"}>
-                <p className={"opacity-80 text-sm"}>Find session</p>
-                <div className={"relative"}>
-                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"} placeholder={"Session name or url"}
-                           onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
-                           onKeyDown={(e) => {
-                               if (e.key === 'Enter') {
-                                   handleFind()
-                               }
-                           }}/>
-                    {keywords && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className={"absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"}
-                            onClick={() => {
-                                setKeywords('')
-                                setUrl({
-                                    session: undefined
-                                })
+        <div className={"flex flex-col justify-start text-primaryText gap-4"}>
+            <p className={"opacity-80 text-sm"}>Find session</p>
+            <div className={"relative"}>
+                <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
+                       placeholder={"Session name or url"}
+                       onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
+                       onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                               handleFind()
+                           }
+                       }}/>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
+                        onClick={() => {
+                            setKeywords('')
+                            setUrl({session: undefined})
+                        }}
+                    >
+                        ×
+                    </Button>
+            </div>
+            {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
+            <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
+        </div>
+        <div className={"flex flex-col gap-3"}>
+            <p className={"font-poppins text-muted-foreground"}>Nearby</p>
+            {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+            <MotionHighlight hover
+                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                {
+                    nearbySessions.map((item, index) => {
+                        return <TransferSession
+                            onPress={() => {
+                                core.updateSelectedSession(item)
                             }}
-                        >
-                            ×
-                        </Button>
-                    )}
-                </div>
-                {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
-                <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
-            </div>
-            <div className={"flex flex-col gap-3"}>
-                {!!nearbySessions.length && <p className={"font-poppins text-muted-foreground"}>Nearby</p>}
-                <MotionHighlight hover
-                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                    {
-                        nearbySessions.map((item, index) => {
-                            return <TransferSession
-                                onPress={() => {
-                                    core.updateSelectedSession(item)
-                                }}
-                                id={item.id}
-                                key={index}
-                            />
-                        })
-                    }
-                </MotionHighlight>
-            </div>
-            <div className={"flex flex-col gap-3"}>
-                {!!publicSessions.length && <p className={"font-poppins text-muted-foreground"}>Public</p>}
-                <MotionHighlight hover
-                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                    {
-                        publicSessions.map((item, index) => {
-                            return <TransferSession
-                                onPress={() => {
-                                    core.updateSelectedSession(item)
-                                }}
-                                id={item.id}
-                                key={index}
-                            />
-                        })
-                    }
-                </MotionHighlight>
-            </div>
-        </>
+                            id={item.id}
+                            key={index}
+                        />
+                    })
+                }
+            </MotionHighlight>
+        </div>
+        <div className={"flex flex-col gap-3"}>
+            <p className={"font-poppins text-muted-foreground"}>Public</p>
+            {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+            <MotionHighlight hover
+                             className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                {
+                    publicSessions.map((item, index) => {
+                        return <TransferSession
+                            onPress={() => {
+                                core.updateSelectedSession(item)
+                            }}
+                            id={item.id}
+                            key={index}
+                        />
+                    })
+                }
+            </MotionHighlight>
+        </div>
     </>
 }
 
@@ -365,30 +346,30 @@ function TransferSession(props: {
         onPress = () => {
         }
     } = props;
-    
+
     const session = core.useSession(id);
-    
+
     if (!session) {
         return null;
     }
-    
+
     const is_public = session instanceof ReceiveCloudSessionViewModel;
-    
-    const name = is_public 
-        ? (session as ReceiveCloudSessionViewModel).sender_name 
+
+    const name = is_public
+        ? (session as ReceiveCloudSessionViewModel).sender_name
         : (session as ReceiveSessionViewModel).peer_name;
     const display_datetime = session.display_datetime;
-    const avatar_url = is_public 
-        ? (session as ReceiveCloudSessionViewModel).avatar_url 
+    const avatar_url = is_public
+        ? (session as ReceiveCloudSessionViewModel).avatar_url
         : (session as ReceiveSessionViewModel).peer_avatar?.url;
-    const is_required_password = is_public 
-        ? (session as ReceiveCloudSessionViewModel).is_required_password 
+    const is_required_password = is_public
+        ? (session as ReceiveCloudSessionViewModel).is_required_password
         : false;
-    
-    const progress = is_public 
+
+    const progress = is_public
         ? 0
         : (session as ReceiveSessionViewModel).progress || 0;
-    const is_completed = is_public 
+    const is_completed = is_public
         ? false
         : (session as ReceiveSessionViewModel).is_completed || false;
 
@@ -402,9 +383,11 @@ function TransferSession(props: {
                     <Avatar className={"p-1"}>
                         <AvatarImage src={avatar_url}/>
                     </Avatar>
-                    {   is_public
-                        ? <Globe className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
-                        : <Wifi className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                    {is_public
+                        ? <Globe
+                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                        : <Wifi
+                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
                     }
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
@@ -412,12 +395,16 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {!!progress && !is_completed && <CircleProgress center={is_public ? <Download/> : undefined} progress={progress} size={30} onClick={() => {
-                if (!is_public) {
-                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(id, new TransferTypeVariantReceive())))
-                }
-            }}/>}
-            {is_required_password && <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"} src={"/lock.svg"} color={'white'}/>}
+            {!!progress && !is_completed &&
+                <CircleProgress center={is_public ? <Download/> : undefined} progress={progress} size={30}
+                                onClick={() => {
+                                    if (!is_public) {
+                                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(id, new TransferTypeVariantReceive())))
+                                    }
+                                }}/>}
+            {is_required_password &&
+                <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
+                       src={"/lock.svg"} color={'white'}/>}
         </button>
     </>
 }
@@ -427,9 +414,9 @@ function FileView(props: {
 }) {
     const {id} = props;
     const file = core.useReceiveResource(id);
-    
+
     if (!file) return null;
-    
+
     const model = file.model;
 
     const fallbackThumbnail = model.type instanceof ResourceTypeVariantFolder
@@ -457,20 +444,20 @@ function FileView(props: {
         <div
             className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
             <div className={"flex flex-row gap-3"}>
-            <div className="relative aspect-square w-12 h-12">
-                <Image
-                    className="w-full h-auto bg-muted rounded-xl p-1.5"
-                    layout="fill"
-                    alt="Thumbnail"
-                    src={thumbnailSource || fallbackThumbnail}
-                    onError={() => setThumbnailSource(fallbackThumbnail)}
-                />
-            </div>
+                <div className="relative aspect-square w-12 h-12">
+                    <Image
+                        className="w-full h-auto bg-muted rounded-xl p-1.5"
+                        layout="fill"
+                        alt="Thumbnail"
+                        src={thumbnailSource || fallbackThumbnail}
+                        onError={() => setThumbnailSource(fallbackThumbnail)}
+                    />
+                </div>
 
-            <div className="flex flex-col text-white items-start mt-1">
-                <p className="text-sm text-start font-poppins break-words w-full">{model.name}</p>
-                <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
-            </div>
+                <div className="flex flex-col text-white items-start mt-1">
+                    <p className="text-sm text-start font-poppins break-words w-full">{model.name}</p>
+                    <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
+                </div>
             </div>
             {
                 file.is_completed
@@ -493,7 +480,7 @@ function MediaView(props: {
 }) {
     const {id} = props;
     const media = core.useReceiveResource(id);
-    
+
     if (!media) return null;
 
     const model: SelectedResourceViewModel = media.model;
@@ -547,30 +534,30 @@ function MediaView(props: {
                         {displaySize}
                     </p>
                 </div>
-                    <div className={"flex-1 w-fit flex"}>
+                <div className={"flex-1 w-fit flex"}>
                     {media.is_completed
                         ? <button
                             className={"rounded-lg ml-2 bg-muted border border-muted-foreground p-1 hover:cursor-pointer"}
                             onClick={() => core.downloadFile(model.path, model.name)}>
                             <ArrowDown color={'white'}/>
-                          </button>
+                        </button>
                         : <>
                             <CircleProgress progress={media.completion} size={30}/>
                         </>
-                }</div>
+                    }</div>
 
             </div>
 
             {
                 thumbnailSource
-                ?   <Image
-                    className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
-                    alt={model.name}
-                    src={thumbnailSource || ''}
-                    fill
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-                : <></>
+                    ? <Image
+                        className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
+                        alt={model.name}
+                        src={thumbnailSource || ''}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    />
+                    : <></>
             }
         </div>
     );

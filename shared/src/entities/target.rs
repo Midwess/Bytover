@@ -23,6 +23,30 @@ impl TransferTarget {
     pub fn is_peer(&self) -> bool {
         matches!(self, Self::Nearby(_))
     }
+
+    pub fn is_keyword_match(&self, keywords: &str) -> bool {
+        if keywords.is_empty() {
+            return true;
+        }
+
+        let TransferTarget::Internet { from_user, access_url: Some(access_url), .. } = self else {
+            return false
+        };
+
+        let mut keywords = keywords.to_owned();
+        if let Ok(url) = url::Url::parse(&access_url) {
+            let Some(query) = url
+                .query_pairs()
+                .find(|(key, value)| key == "session")
+                .map(|it| it.1.to_string()) else {
+                return false
+            };
+
+            keywords = query;
+        }
+
+        from_user.name.contains(&keywords) || access_url.contains(&keywords)
+    }
 }
 
 impl TransferTarget {
