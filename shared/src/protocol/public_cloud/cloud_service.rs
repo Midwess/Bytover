@@ -45,7 +45,9 @@ pub enum CloudTransferErrors {
     #[error("Internal error {0}")]
     InternalError(#[from] anyhow::Error),
     #[error("IO Error {0}")]
-    IOError(#[from] PersistenceError)
+    IOError(#[from] PersistenceError),
+    #[error("{0}")]
+    TonicStatus(#[from] tonic::Status),
 }
 
 pub struct CloudService<T>
@@ -426,7 +428,8 @@ where
         password: Option<String>
     ) -> Result<(), CloudTransferErrors> {
         let mut stream = self.server.subscribe_public_session_events(user_id, session_id, password).await?;
-        while let Some(Ok(value)) = stream.next().await {
+        while let Some(value) = stream.next().await {
+            let value = value?;
             let Some(event) = value.event else {
                 break;
             };

@@ -3,7 +3,8 @@ import * as React from "react";
 import {
     AppEventVariantTransfer,
     FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel,
+    ImageReceiveResourceViewModel, MessageReasonVariantFailedToFindPublicSession,
+    MessageReasonVariantFailedToLoadSession,
     ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
@@ -60,6 +61,7 @@ function ContentBoard() {
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
     const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
+    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSession?.id));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
@@ -149,8 +151,14 @@ function ContentBoard() {
 
     if (isLoading) {
         return <div className={"w-full h-full flex justify-center items-center gap-2"}>
-            <LoaderCircle className={"animate-spin"}/>
-            <p>Loading...</p>
+            {
+                loadMessage.message
+                    ? <p>{loadMessage.message}</p>
+                    : <>
+                        <LoaderCircle className={"animate-spin"}/>
+                        <p>Loading...</p>
+                    </>
+            }
         </div>
     }
 
@@ -249,7 +257,7 @@ function Board() {
 
     const [url, setUrl] = useUrlState(['session'])
 
-    const message = core.useMessage('MessageReasonVariantFailedToFindPublicSession')
+    const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
     const [keywords, setKeywords] = useState<string>()
 
     useEffect(() => {
@@ -295,7 +303,7 @@ function Board() {
                         ×
                     </Button>
             </div>
-            {message.message && <p className={"text-foreground text-sm"}>{message.message?.field0}</p>}
+            {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
             <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
         </div>
         <div className={"flex flex-col gap-3"}>
@@ -304,13 +312,13 @@ function Board() {
             <MotionHighlight hover
                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                 {
-                    nearbySessions.map((item, index) => {
+                    nearbySessions.map((item ) => {
                         return <TransferSession
                             onPress={() => {
                                 core.updateSelectedSession(item)
                             }}
                             id={item.id}
-                            key={index}
+                            key={item.id}
                         />
                     })
                 }
@@ -319,16 +327,17 @@ function Board() {
         <div className={"flex flex-col gap-3"}>
             <p className={"font-poppins text-muted-foreground"}>Public</p>
             {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
-            <MotionHighlight hover
-                             className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+            <MotionHighlight
+                hover
+                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                 {
-                    publicSessions.map((item, index) => {
+                    publicSessions.map((item) => {
                         return <TransferSession
                             onPress={() => {
                                 core.updateSelectedSession(item)
                             }}
                             id={item.id}
-                            key={index}
+                            key={item.id}
                         />
                     })
                 }

@@ -27,7 +27,7 @@ use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use crate::app::operations::CoreOperationOutput;
+use core_services::db::repository::abstraction::table::Table;
 use crate::CoreOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -242,6 +242,10 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
                     TransferSessionModelEvent::Add(new) => {
+                        if model.transfer.sessions.iter().find(|it| it.id().is_represent(&new)).is_some() {
+                            return Command::done();
+                        }
+
                         model.transfer.sessions.push(new);
                     }
                     TransferSessionModelEvent::Remove(session_id) => {
@@ -300,9 +304,11 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::FindPublicSession { keywords } => {
                 model.transfer.keywords = keywords.clone();
+                if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords)) {
+                    return Command::render();
+                }
 
                 Command::new_result(|it| async move {
-                    it.app().notify_shell(CoreOperation::Render);
                     it.app().find_transfer_session(keywords).await
                 })
             },

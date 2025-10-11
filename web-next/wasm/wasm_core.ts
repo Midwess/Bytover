@@ -51,7 +51,7 @@ import {
     CoreOperationOutputVariantDeviceInfo,
     CoreOperationOutputVariantLocalResourcePath,
     CoreOperationOutputVariantGeoLocation,
-    CoreOperationOutputVariantBool,
+    CoreOperationOutputVariantBool, MessageReason,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -166,20 +166,24 @@ export class WasmCore {
         this.selectedSession.set(session)
     }
     
-    public useMessage(type: string) {
+    public useMessage(reason: MessageReason) {
         const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
 
         useEffect(() => {
             return this.alertMessageState.subscribe((it) => setMessages(it || []))
         }, []);
 
+        console.log(reason, messages)
+        const message: String | undefined = messages.find((it) => it.field1.constructor === reason?.constructor && isEqual(it.field1, reason))?.field0
+        const resolveMessage = () => {
+            const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor === reason.constructor && isEqual(it.field1, reason))
+            messages.splice(resolveMsgIndex, 1)
+            this.alertMessageState.set([...messages])
+        }
+
         return {
-            message: messages.find((it) => it.field1.constructor.name === type),
-            resolveMessage: (() => {
-                const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor.name === type)
-                messages.splice(resolveMsgIndex, 1)
-                this.alertMessageState.set([...messages])
-            })
+            message,
+            resolveMessage
         }
     }
 
@@ -251,12 +255,10 @@ export class WasmCore {
             return this.transferState.subscribe((transferState) => {
                 if (transferState?.received_cloud_sessions?.length != clouds.length)
                 {
-                    setClouds(
-                        transferState?.received_cloud_sessions ?? []
-                    )
+                    setClouds(transferState?.received_cloud_sessions ?? [])
                 }
             })
-        }, [])
+        }, [clouds.length])
 
         return clouds
     }

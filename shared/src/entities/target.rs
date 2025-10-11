@@ -37,7 +37,7 @@ impl TransferTarget {
         if let Ok(url) = url::Url::parse(&access_url) {
             let Some(query) = url
                 .query_pairs()
-                .find(|(key, value)| key == "session")
+                .find(|(key, _)| key == "session")
                 .map(|it| it.1.to_string()) else {
                 return false
             };

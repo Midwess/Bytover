@@ -327,10 +327,11 @@ impl AppCommand {
             }
         };
 
+        let session_order_id = transfer_session.order_id;
         let request = CoreOperation::Transfer(TransferOperation::SubscribeToPublicSessionTransferProgress {
             password,
             session_owner_user_id: user_id,
-            session_order_id: transfer_session.order_id
+            session_order_id
         });
 
         let mut stream = self.stream_from_shell(request);
@@ -352,10 +353,10 @@ impl AppCommand {
                     _ => return
                 },
                 CoreOperationOutput::Error(error) => {
-                    self.run(DialogOperation::toast(format!("{error}"))).await;
+                    self.run(DialogOperation::message(format!("{error}"), MessageReason::FailedToLoadSession(session_order_id))).await;
                     return;
                 }
-                _ => return
+                _ => continue
             };
         }
     }
