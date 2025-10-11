@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use crux_core::typegen::TypeGen;
+#[cfg(any(feature = "swift", feature = "java"))]
 use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
+#[cfg(any(feature = "swift", feature = "java"))]
 use native::repository::path_resolver::{PathResolverMessage, PathResolverResponseMessage};
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::value::device::DeviceType;
@@ -94,7 +96,9 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<P2POperation>()?;
     gen.register_type::<P2POperationOutput>()?;
     gen.register_type::<NearbyEvent>()?;
+    #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<PathResolverMessage>()?;
+    #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<PathResolverResponseMessage>()?;
 
     gen.register_type::<CoreOperationOutput>()?;
@@ -102,7 +106,9 @@ fn main() -> anyhow::Result<()> {
     gen.register_type::<Source>()?;
 
     // Register executor msg
+    #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<MessageToShellResponse>()?;
+    #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<MessageToShell>()?;
     gen.register_type::<LocalResourceId>()?;
     gen.register_type::<TransferSessionId>()?;
@@ -113,8 +119,13 @@ fn main() -> anyhow::Result<()> {
 
     let output_root = PathBuf::from("./generated");
 
+    #[cfg(feature = "swift")]
     gen.swift("SharedTypes", output_root.join("swift"))?;
+
+    #[cfg(feature = "java")]
     gen.java("com.devlog.bitbridge.shared_types", output_root.join("java"))?;
+
+    #[cfg(feature = "typescript")]
     gen.typescript("shared_types", output_root.join("typescript"))?;
 
     Ok(())
