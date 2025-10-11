@@ -20,8 +20,7 @@ pub trait CoreCommandUtils {
     fn new_result<F, Fut>(create_task: F) -> Self
     where
         F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), CoreError>> + Send + 'static,
-    ;
+        Fut: Future<Output = Result<(), CoreError>> + Send + 'static;
 }
 
 pub trait CoreCommandContextUtils {
@@ -63,11 +62,12 @@ impl CoreCommandUtils for AppCommand {
     fn new_result<F, Fut>(create_task: F) -> Self
     where
         F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), CoreError>> + Send + 'static,
+        Fut: Future<Output = Result<(), CoreError>> + Send + 'static
     {
         Self::new(async move |ctx| {
             let result = create_task(ctx.clone()).await;
             if let Err(e) = result {
+                log::info!("{:?}", e);
                 ctx.app().run(DialogOperation::toast(e.to_string())).await;
             }
         })

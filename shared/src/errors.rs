@@ -32,10 +32,10 @@ pub enum CoreError {
 
     #[error("{0}")]
     ParsingError(String),
-    
+
     #[error("Feature not implemented: {0}")]
     NotImplemented(String),
-    
+
     // The request dropped without a response.
     // then the CoreRequest will automatically response this message to prevent core hang forever.
     #[error("No response from the executor.")]

@@ -4,6 +4,7 @@ use crate::ShellRuntime;
 use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
+use shared::shell::api::CoreRequest;
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::persistent::NativePersistent;
 use shared::shell::executor::rpc::NativeRpc;
@@ -22,23 +23,26 @@ pub struct NativeExecutor {
 }
 
 impl NativeExecutor {
-    pub async fn handle(&self, request_id: u32, effect: CoreOperation, _shell_runtime: Arc<dyn ShellRuntime>) -> CoreOperationOutput {
+    pub async fn handle(
+        &self,
+        request: CoreRequest,
+        effect: CoreOperation,
+        _shell_runtime: Arc<dyn ShellRuntime>
+    ) -> CoreOperationOutput {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
                 CoreOperationOutput::Rpc(response)
             }
-            CoreOperation::Persistent(database) => {
-                self.persistent.handle(database).await.into()
-            }
-            CoreOperation::Transfer(transfer) => self.transfer.handle(request_id, transfer).await.into(),
+            CoreOperation::Persistent(database) => self.persistent.handle(database).await.into(),
+            CoreOperation::Transfer(transfer) => self.transfer.handle(request, transfer).await.into(),
             CoreOperation::Internet(internet) => match internet {
                 InternetOperation::Locate(geolocation) => match self.internet_connection.locate(geolocation).await {
                     Ok(net) => CoreOperationOutput::FindingScopes(net.finding_scopes()),
                     Err(error) => CoreOperationOutput::Error(error)
                 }
             },
-            CoreOperation::P2P(p2p) => self.p2p.handle(request_id, p2p).await.into(),
+            CoreOperation::P2P(p2p) => self.p2p.handle(request, p2p).await.into(),
             CoreOperation::Delay(duration) => {
                 sleep(duration).await;
                 CoreOperationOutput::None

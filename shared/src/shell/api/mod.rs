@@ -5,7 +5,6 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
 use crate::entities::transfer_session::TransferProgress;
-use crate::errors::CoreError;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
@@ -14,12 +13,9 @@ use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
 use n0_future::task::JoinHandle;
 use n0_future::Stream;
-use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
-use std::sync::atomic::AtomicI8;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -61,32 +57,22 @@ pub trait CoreBridge: Send + Sync {
 }
 
 pub struct CoreRequest {
-    instance_count: Arc<AtomicI8>,
     id: u32,
-    bridge: Arc<dyn CoreBridge>,
-    is_responded: OnceCell<()>
+    bridge: &'static dyn CoreBridge
 }
 
 impl Clone for CoreRequest {
     fn clone(&self) -> Self {
-        self.instance_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
-            instance_count: self.instance_count.clone(),
             id: self.id,
-            bridge: self.bridge.clone(),
-            is_responded: self.is_responded.clone()
+            bridge: self.bridge
         }
     }
 }
 
 impl CoreRequest {
-    pub fn new(id: u32, bridge: Arc<dyn CoreBridge>) -> Self {
-        Self {
-            id,
-            bridge,
-            is_responded: OnceCell::new(),
-            instance_count: Arc::new(AtomicI8::new(0))
-        }
+    pub fn new(id: u32, bridge: &'static dyn CoreBridge) -> Self {
+        Self { id, bridge }
     }
 
     pub fn id(&self) -> u32 {
@@ -94,18 +80,11 @@ impl CoreRequest {
     }
 
     pub fn response(&self, response: impl Into<CoreOperationOutput>) -> JoinHandle<()> {
-        let _ = self.is_responded.set(());
         self.bridge.response(self.id, response.into())
     }
-}
 
-impl Drop for CoreRequest {
-    fn drop(&mut self) {
-        let is_forgotten =
-            self.instance_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) < 1 && self.is_responded.get().is_none();
-        if is_forgotten {
-            let _ = self.response(CoreError::NoResponse);
-        }
+    pub async fn response_throttle(&self, response: impl Into<CoreOperationOutput>) {
+        let _ = self.bridge.response_throttle(self.id, response.into()).await;
     }
 }
 

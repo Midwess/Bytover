@@ -29,16 +29,18 @@ impl TransferTarget {
             return true;
         }
 
-        let TransferTarget::Internet { from_user, access_url: Some(access_url), .. } = self else {
+        let TransferTarget::Internet {
+            from_user,
+            access_url: Some(access_url),
+            ..
+        } = self
+        else {
             return false
         };
 
         let mut keywords = keywords.to_owned();
-        if let Ok(url) = url::Url::parse(&access_url) {
-            let Some(query) = url
-                .query_pairs()
-                .find(|(key, _)| key == "session")
-                .map(|it| it.1.to_string()) else {
+        if let Ok(url) = url::Url::parse(access_url) {
+            let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
                 return false
             };
 

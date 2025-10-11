@@ -38,7 +38,7 @@ pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Database>>>,
     path_resolver: OnceCell<Arc<dyn PathResolver>>,
     shell: OnceCell<Arc<dyn ShellRuntime>>,
-    core_bridge: OnceCell<Arc<dyn CoreBridge>>,
+    core_bridge: OnceCell<&'static dyn CoreBridge>,
     native_executor: OnceCell<NativeExecutor>,
     cloud_server: OnceCell<CloudServer<Channel>>,
 
@@ -81,7 +81,7 @@ impl DiContainer {
     pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<dyn ShellRuntime>) {
         let _ = self.path_resolver.set(path_resolver);
         let _ = self.shell.set(shell);
-        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone())));
+        let _ = self.core_bridge.set(Box::leak(Box::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone()))));
 
         let db_path = self.path_resolver().get_db_path().await;
         log::info!(target: "environment", "Connecting to local database at {db_path}");
@@ -143,19 +143,18 @@ impl DiContainer {
         self.cloud_server.get().unwrap()
     }
 
+    pub fn core_bridge(&'static self) -> &'static dyn CoreBridge {
+        *self.core_bridge.get().unwrap()
+    }
+
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
-        let web_rtc = Arc::new(WebRtc::new(
-            self.core_bridge.get().unwrap().clone(),
-            get_signalling_server_ws_url(),
-            local_resource_repo.clone()
-        ));
+        let web_rtc = Arc::new(WebRtc::new(get_signalling_server_ws_url(), local_resource_repo.clone()));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
-            core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
             repository: local_resource_repo.clone(),
             net_stream: Box::new(self.get_net_stream(local_resource_repo.clone()))

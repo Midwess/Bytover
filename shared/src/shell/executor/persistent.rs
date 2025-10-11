@@ -5,9 +5,9 @@ use crate::app::operations::persistent::{
     TransferSessionPersistentOperation
 };
 use crate::app::operations::CoreOperationOutput;
-use crate::errors::CoreError;
 use crate::entities::session::{Session, SessionType};
 use crate::entities::transfer_session::TransferType;
+use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use crate::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
@@ -62,7 +62,7 @@ pub trait NativePersistent: Send + Sync {
                         r#type: SessionType::Access
                     })
                     .await?;
-                
+
                 if let Some(mut session) = session {
                     session.user = Some(user);
                     self.auth_session_repository().update_one(session).await?;
@@ -85,7 +85,7 @@ pub trait NativePersistent: Send + Sync {
                         ..Default::default()
                     })
                     .await?;
-                    
+
                 Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll) => {
@@ -120,11 +120,8 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::ResourceType(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
-                let session = self.transfer_session_repository().create(session).await.ok();
-                Ok(match session {
-                    Some(session) => CoreOperationOutput::TransferSession(session),
-                    None => CoreOperationOutput::None
-                })
+                let session = self.transfer_session_repository().create(session).await?;
+                Ok(session.into())
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GetAllReceivedSessions()) => {
                 let id = TransferSessionId {
@@ -167,9 +164,7 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().generate_thumbnail_paths(session_id, resource_ids).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
             }
-            PersistentOperation::User(_) => {
-                Err(CoreError::NotImplemented("User operations not implemented yet".to_string()))
-            }
+            PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string()))
         }
     }
 }

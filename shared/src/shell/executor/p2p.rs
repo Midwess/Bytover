@@ -2,6 +2,7 @@ use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
 use crate::protocol::webrtc::webrtc::WebRtc;
+use crate::shell::api::CoreRequest;
 use n0_future::task::spawn;
 use std::sync::Arc;
 
@@ -10,11 +11,11 @@ use std::sync::Arc;
 pub trait P2PNativeExecutor: Send + Sync {
     fn web_rtc(&self) -> &Arc<WebRtc>;
 
-    async fn handle(&self, request_id: u32, effect: P2POperation) -> Result<CoreOperationOutput, CoreError> {
+    async fn handle(&self, request: CoreRequest, effect: P2POperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
             P2POperation::PeerEvents(peer_id) => {
                 let web_rtc = self.web_rtc().clone();
-                web_rtc.start_peer_core_stream(peer_id, request_id).await?;
+                web_rtc.start_peer_core_stream(peer_id, request).await?;
                 Ok(CoreOperationOutput::None)
             }
             P2POperation::UpdateFindingScopes(update_finding_scopes) => {
@@ -25,7 +26,7 @@ pub trait P2PNativeExecutor: Send + Sync {
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
                 spawn(async move {
-                    if let Err(e) = web_rtc.start(request_id, peer).await {
+                    if let Err(e) = web_rtc.start(request, peer).await {
                         log::error!("Failed to start nearby server: {e:?}");
                     }
                 });

@@ -10,9 +10,7 @@ use crate::repository::local_resource::LocalResourceId;
 
 impl AppCommand {
     pub async fn load_resources(&self) -> Result<(), CoreError> {
-        let resources = LocalResourcePersistentOperation::find_all()
-            .into_future(self.ctx())
-            .await?;
+        let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
         let model_events = resources
             .into_iter()
             .map(|it| Into::<AppEvent>::into(LocalResourceEvent::Add(it)))
@@ -23,7 +21,8 @@ impl AppCommand {
 
     pub async fn new_resources(&self, mut selections: Vec<ResourceSelection>) -> Result<(), CoreError> {
         while let Some(selection) = selections.pop() {
-            let Some(mut local_resource) = self.run(LocalResourcePersistentOperation::load_from_disk(selection.path.clone())).await? else {
+            let Some(mut local_resource) = self.run(LocalResourcePersistentOperation::load_from_disk(selection.path.clone())).await?
+            else {
                 log::error!("File not exists: {:?}", selection.path);
                 continue;
             };
@@ -41,15 +40,13 @@ impl AppCommand {
 
             let mut new_resource = new_resources.pop().unwrap();
 
-            let (thumbnail_png_opt, thumbnail_path_opt) = self
-                .run(DeviceOperation::load_thumbnail_png(selection.path.clone()))
-                .await;
+            let (thumbnail_png_opt, thumbnail_path_opt) = self.run(DeviceOperation::load_thumbnail_png(selection.path.clone())).await;
 
             if let Some(thumbnail_png) = thumbnail_png_opt {
                 match self
                     .run(LocalResourcePersistentOperation::add_thumbnail(
                         thumbnail_png,
-                        new_resource.order_id,
+                        new_resource.order_id
                     ))
                     .await
                 {

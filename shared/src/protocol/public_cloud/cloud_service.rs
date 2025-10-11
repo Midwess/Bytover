@@ -6,7 +6,7 @@ use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::rpc::errors::RpcErrors;
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
-use crate::shell::api::{CoreBridge, NetStream, NetStreamEvent};
+use crate::shell::api::{CoreRequest, NetStream, NetStreamEvent};
 use core_services::utils::maybe::MaybeSend;
 use futures::channel::oneshot;
 use futures_util::future::join_all;
@@ -47,7 +47,7 @@ pub enum CloudTransferErrors {
     #[error("IO Error {0}")]
     IOError(#[from] PersistenceError),
     #[error("{0}")]
-    TonicStatus(#[from] tonic::Status),
+    TonicStatus(#[from] tonic::Status)
 }
 
 pub struct CloudService<T>
@@ -62,7 +62,6 @@ where
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub server: &'static CloudServer<T>,
-    pub core_bridge: Arc<dyn CoreBridge>,
     pub active_session: Mutex<Weak<Mutex<TransferSession>>>,
     pub repository: Arc<dyn LocalResourceRepository>,
     pub net_stream: Box<dyn NetStream>
@@ -106,7 +105,7 @@ where
     pub async fn send_session(
         &self,
         session: TransferSession,
-        core_request_id: u32
+        core_request: CoreRequest
     ) -> Result<TransferSessionStatus, CloudTransferErrors> {
         let mut session_guard = self.active_session.lock().await;
         if session_guard.upgrade().is_some() {
@@ -153,7 +152,7 @@ where
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = join!(
             self.upload_thumbnails(&session, thumbnail_upload_requests),
-            self.upload_resources(&session, response.first_resource_upload_request, core_request_id)
+            self.upload_resources(&session, response.first_resource_upload_request, core_request)
         );
 
         thumbnail_result?;
@@ -216,7 +215,7 @@ where
         &self,
         session: &Arc<Mutex<TransferSession>>,
         first_upload_request: ClientUploadRequest,
-        core_request_id: u32
+        core_request: CoreRequest
     ) -> Result<(), CloudTransferErrors> {
         let session_order_id = session.lock().await.order_id;
         let mut current_upload_request = Some(first_upload_request);
@@ -270,14 +269,14 @@ where
                 None => continue
             };
 
-            current_upload_request = match self.upload_resource(session, order_id, upload, size, core_request_id).await {
+            current_upload_request = match self.upload_resource(session, order_id, upload, size, core_request.clone()).await {
                 Ok(completion) => {
                     let mut session_guard = session.lock().await;
                     let progress = session_guard.resource_mut_progress(order_id).expect("Progress not found");
                     progress.success();
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    let _ = self.core_bridge.response(core_request_id, msg).await;
+                    let _ = core_request.response(msg).await;
 
                     self.server
                         .update_transfer_progress(session_order_id, order_id, Status::Success(completion))
@@ -290,7 +289,7 @@ where
                     progress.fail(e.to_string());
                     let msg = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
                     drop(session_guard);
-                    let _ = self.core_bridge.response(core_request_id, msg).await;
+                    let _ = core_request.response(msg).await;
 
                     self.server
                         .update_transfer_progress(session_order_id, order_id, Status::Failed(e.to_string()))
@@ -308,7 +307,7 @@ where
         resource_order_id: u64,
         upload: Upload,
         size: u64,
-        core_request_id: u32
+        core_request: CoreRequest
     ) -> Result<MultiPartUploadComplete, CloudTransferErrors> {
         let session_guard = transfer_session.lock().await;
         let resource_path = match session_guard.resources.iter().find(|it| it.order_id == resource_order_id) {
@@ -359,7 +358,7 @@ where
 
                     let progress_update_event =
                         CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                    self.core_bridge.response_throttle(core_request_id, progress_update_event).await;
+                    core_request.response_throttle(progress_update_event).await;
                 }
                 NetStreamEvent::Completed(completion) => {
                     upload_completion = completion;
@@ -422,7 +421,7 @@ where
 
     pub async fn fetch_public_session(
         &self,
-        core_request_id: u32,
+        core_request: CoreRequest,
         session_id: u64,
         user_id: u64,
         password: Option<String>
@@ -445,15 +444,11 @@ where
                 Event::ResourceUpdated(mut s) => (vec![], s.resource_update.drain(..).collect::<Vec<_>>())
             };
 
-            let _ = self
-                .core_bridge
-                .response(
-                    core_request_id,
-                    CoreOperationOutput::Transfer(TransferOperationOutput::PublicTransferSessionUpdated((
-                        resources.into_iter().map(|it| it.into()).collect(),
-                        progresses.into_iter().map(|it| it.into()).collect()
-                    )))
-                )
+            let _ = core_request
+                .response(TransferOperationOutput::PublicTransferSessionUpdated((
+                    resources.into_iter().map(|it| it.into()).collect(),
+                    progresses.into_iter().map(|it| it.into()).collect()
+                )))
                 .await;
         }
 

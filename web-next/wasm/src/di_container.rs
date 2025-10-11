@@ -35,7 +35,7 @@ static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::new();
 
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<NeverSend<Database>>>>,
-    core_bridge: OnceCell<Arc<dyn CoreBridge>>,
+    core_bridge: Box<dyn CoreBridge>,
     native_executor: OnceCell<NativeExecutor>,
     cloud_server: OnceCell<CloudServer<Client>>,
     resource_repository: OnceCell<Arc<dyn LocalResourceRepository>>,
@@ -48,9 +48,9 @@ impl DiContainer {
     pub fn get_instance() -> &'static DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
-                core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
+                core_bridge: Box::new(CoreBridgeImpl::new()),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
                 resource_repository: OnceCell::new(),
                 transfer_repository: OnceCell::new(),
@@ -74,8 +74,6 @@ impl DiContainer {
     }
 
     pub async fn init(&self) {
-        let _ = self.core_bridge.set(Arc::new(CoreBridgeImpl::new()));
-
         init_scoped_id_generator("BitBridge".to_owned());
         let local_db: Box<dyn PoolResourceProvider<NeverSend<Database>>> = Box::new(IdbPoolProvider { name: "db".to_owned() });
 
@@ -146,19 +144,21 @@ impl DiContainer {
         self.cloud_server.get().unwrap()
     }
 
+    pub fn core_bridge(&'static self) -> &'static dyn CoreBridge {
+        &*self.core_bridge
+    }
+
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
 
         let web_rtc = Arc::new(WebRtc::new(
-            self.core_bridge.get().unwrap().clone(),
             get_signalling_server_ws_url(),
             self.get_local_resource_repository().await
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
-            core_bridge: self.core_bridge.get().unwrap().clone(),
             active_session: Default::default(),
             repository: self.get_local_resource_repository().await,
             net_stream: self.get_net_stream().await
@@ -180,8 +180,7 @@ impl DiContainer {
                 cloud_server: self.get_cloud_server(),
                 auth_server: self.get_authentication_server()
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc }),
-            bridge: self.core_bridge.get().unwrap().clone()
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
         };
 
         let _ = self.native_executor.set(executor);

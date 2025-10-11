@@ -38,12 +38,11 @@ impl AppCommand {
 
             self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
-           self
-                .run(TransferOperation::cancel_session(
-                    transfer_session.peer_id(),
-                    transfer_session.order_id
-                ))
-                .await?
+            self.run(TransferOperation::cancel_session(
+                transfer_session.peer_id(),
+                transfer_session.order_id
+            ))
+            .await?
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
@@ -51,7 +50,12 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn transfer(&self, user: User, selected_resources: Vec<LocalResource>, transfer_target: TransferTarget) -> Result<(), CoreError> {
+    pub async fn transfer(
+        &self,
+        user: User,
+        selected_resources: Vec<LocalResource>,
+        transfer_target: TransferTarget
+    ) -> Result<(), CoreError> {
         if selected_resources.is_empty() {
             self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
             return Ok(());
@@ -221,7 +225,7 @@ impl AppCommand {
 
         let response_transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
-        let mut transfer_session = response_transfer_session.clone();
+        let mut transfer_session = self.run(TransferSessionPersistentOperation::save(response_transfer_session.clone())).await?;
         // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
         transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
         self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
@@ -312,7 +316,11 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn view_public_session(&self, mut transfer_session: TransferSession, entered_password: Option<String>) {
+    pub async fn view_public_session(
+        &self,
+        mut transfer_session: TransferSession,
+        entered_password: Option<String>
+    ) -> Result<(), CoreError> {
         let (password, user_id) = match &mut transfer_session.target {
             TransferTarget::Internet { password, from_user, .. } => {
                 if let Some(entered_password) = entered_password {
@@ -322,7 +330,7 @@ impl AppCommand {
                 (password.clone(), from_user.id)
             }
             _ => {
-                return;
+                return Ok(());
             }
         };
 
@@ -335,28 +343,42 @@ impl AppCommand {
 
         let mut stream = self.stream_from_shell(request);
         while let Some(output) = stream.next().await {
-            match output {
-                CoreOperationOutput::Transfer(transfer) => match transfer {
-                    TransferOperationOutput::PublicTransferSessionUpdated((resources, progresses)) => {
-                        for resource in resources {
-                            self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), resource.into()));
-                        }
+            let transfer: TransferOperationOutput = match output.result() {
+                Ok(output) => output,
+                Err(err) => {
+                    self.run(DialogOperation::message(
+                        format!("{err}"),
+                        MessageReason::FailedToLoadSession(session_order_id)
+                    ))
+                    .await;
 
-                        for progress in progresses {
-                            self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
-                        }
-                    }
-                    TransferOperationOutput::SubscribeSessionEnded => {
-                        break;
-                    }
-                    _ => return
-                },
-                CoreOperationOutput::Error(error) => {
-                    self.run(DialogOperation::message(format!("{error}"), MessageReason::FailedToLoadSession(session_order_id))).await;
-                    return;
+                    return Err(err);
                 }
-                _ => continue
+            };
+
+            match transfer {
+                TransferOperationOutput::PublicTransferSessionUpdated((resources, progresses)) => {
+                    let mut events = vec![];
+                    for resource in resources {
+                        events.push(TransferSessionModelEvent::Update(transfer_session.id(), resource.into()));
+                    }
+
+                    for progress in progresses {
+                        events.push(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
+                    }
+
+                    self.update_model_series(events);
+                }
+                TransferOperationOutput::SubscribeSessionEnded => {
+                    break;
+                }
+                o => {
+                    log::warn!("Unexpected transfer output: {o:?}");
+                    continue;
+                }
             };
         }
+
+        Ok(())
     }
 }

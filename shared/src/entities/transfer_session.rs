@@ -398,11 +398,7 @@ impl TransferSession {
 
 impl UpdateAction<TransferSession> for TransferProgress {
     fn update(self, data: &mut TransferSession) {
-        let Some(progress) = data.resource_mut_progress(self.resource_order_id) else {
-            return;
-        };
-
-        *progress = self;
+        data.update_progress(self);
     }
 }
 

@@ -72,6 +72,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
     where
         TransferSession: 'async_trait
     {
+        log::info!("create session: {:?}", data);
         IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::create(self, data).await
     }
 
@@ -96,6 +97,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
     }
 
     async fn delete_one(&self, id: &TransferSessionId) -> Resolve<TransferSession> {
+        log::info!("delete session: {:?}", id);
         IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(id.clone())).await
     }
 

@@ -1,7 +1,7 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::modules::AppModule;
-use crate::app::operations::device::{DeviceOperation};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
@@ -22,19 +22,19 @@ use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
 use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
 use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
+use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
     sessions: Vec<TransferSession>,
     targets: Vec<TransferTarget>,
-    keywords: String,
+    keywords: String
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -107,9 +107,7 @@ impl AppModule<BitBridge> for TransferModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            TransferEvent::Launch => Command::new_result(|it| async move {
-                it.app().load_transfer_sessions().await
-            }),
+            TransferEvent::Launch => Command::new_result(|it| async move { it.app().load_transfer_sessions().await }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
                     order_id: Some(session_id),
@@ -161,9 +159,7 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 }
 
-                Command::new_result(|it| async move {
-                    it.app().delete_session(session).await
-                })
+                Command::new_result(|it| async move { it.app().delete_session(session).await })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let id = TransferSessionId {
@@ -177,9 +173,7 @@ impl AppModule<BitBridge> for TransferModule {
                 session.cancel();
 
                 let session = session.clone();
-                Command::new_result(|it| async move {
-                    it.app().delete_session(session).await
-                })
+                Command::new_result(|it| async move { it.app().delete_session(session).await })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
@@ -195,9 +189,7 @@ impl AppModule<BitBridge> for TransferModule {
                     to_emails
                 };
 
-                Command::new_result(|it| async move {
-                    it.app().transfer(user, selected_resources, target).await
-                })
+                Command::new_result(|it| async move { it.app().transfer(user, selected_resources, target).await })
             }
             TransferEvent::StartTransfer { target_id } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
@@ -230,9 +222,9 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().transfer(user, selected_resources, target).await
                 })
             }
-            TransferEvent::TransferRequest { remote_session, peer } => Command::new_result(|it| async move {
-                it.app().accept_session(remote_session, peer).await
-            }),
+            TransferEvent::TransferRequest { remote_session, peer } => {
+                Command::new_result(|it| async move { it.app().accept_session(remote_session, peer).await })
+            }
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
@@ -241,7 +233,7 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
                     TransferSessionModelEvent::Add(new) => {
-                        if model.transfer.sessions.iter().find(|it| it.id().is_represent(&new)).is_some() {
+                        if model.transfer.sessions.iter().any(|it| it.id().is_represent(&new)) {
                             return Command::done();
                         }
 
@@ -307,10 +299,8 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::render();
                 }
 
-                Command::new_result(|it| async move {
-                    it.app().find_transfer_session(keywords).await
-                })
-            },
+                Command::new_result(|it| async move { it.app().find_transfer_session(keywords).await })
+            }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     target: Some(TransferTargetId::Internet),
@@ -323,9 +313,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done()
                 };
 
-                Command::new(|it| async move {
-                    it.app().view_public_session(session, password).await;
-                })
+                Command::new_result(|it| async move { it.app().view_public_session(session, password).await })
             }
         }
     }

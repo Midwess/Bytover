@@ -31,6 +31,7 @@ use js_sys::{Array, Promise};
 use serde::Deserialize;
 use shared::app::shelf::module::ResourceSelection;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath};
+use shared::shell::api::CoreRequest;
 use shared::CoreOperation;
 use std::sync::LazyLock;
 use wasm_bindgen::prelude::*;
@@ -237,8 +238,9 @@ pub fn is_browser_support_duplex() -> bool {
 #[wasm_bindgen]
 pub async fn execute_operation(effect: Uint8Array) -> Uint8Array {
     let executor = DiContainer::get_instance().get_native_executor().await;
+    let bridge = DiContainer::get_instance().core_bridge();
     let effect: CoreOperation = deserialize(&effect);
-    let output = executor.handle(u32::MAX, effect).await;
+    let output = executor.handle(CoreRequest::new(0, bridge), effect).await;
     serialize(&output)
 }
 
@@ -259,8 +261,10 @@ pub async fn create_file(file_path: Uint8Array, data: Uint8Array) {
 #[wasm_bindgen]
 pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
     let executor = DiContainer::get_instance().get_native_executor().await;
+    let bridge = DiContainer::get_instance().core_bridge();
     let effect: CoreOperation = deserialize(&effect);
-    let output = executor.handle(request_id, effect).await;
+    let request = CoreRequest::new(request_id, bridge);
+    let output = executor.handle(request.clone(), effect).await;
     handle_response(request_id, serialize(&output)).await
 }
 

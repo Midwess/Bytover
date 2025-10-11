@@ -39,8 +39,8 @@ pub enum ShelfEvent {
 pub struct ShelfModule;
 
 impl AppModule<BitBridge> for ShelfModule {
-    type ViewModel = ShelfViewModel;
     type Event = ShelfEvent;
+    type ViewModel = ShelfViewModel;
 
     fn update(
         &self,
@@ -49,9 +49,7 @@ impl AppModule<BitBridge> for ShelfModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            Self::Event::Launch => Command::new_result(|it| async move {
-                it.app().load_resources().await
-            }),
+            Self::Event::Launch => Command::new_result(|it| async move { it.app().load_resources().await }),
             Self::Event::BeginLoadingResources => {
                 model.shelf.is_loading = true;
                 Command::render()
@@ -84,9 +82,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
-            Self::Event::RemoveResource(id) => Command::new_result(move |it| async move {
-                it.app().remove_resource(id).await
-            }),
+            Self::Event::RemoveResource(id) => Command::new_result(move |it| async move { it.app().remove_resource(id).await }),
             Self::Event::ModelEvent(event) => {
                 match event {
                     LocalResourceEvent::Add(resource) => {

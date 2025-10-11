@@ -71,64 +71,55 @@ impl Operation for PersistentOperation {
 
 impl SessionPersistentOperation {
     pub fn save_token(token: Token) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::Session(
-            SessionPersistentOperation::WriteToken(token)
-        ))
-        .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::Session(SessionPersistentOperation::WriteToken(token)))
+            .map(|it| it.result())
     }
 
     pub fn save_user(user: User) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::Session(
-            SessionPersistentOperation::WriteUser(user)
-        ))
-        .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::Session(SessionPersistentOperation::WriteUser(user))).map(|it| it.result())
     }
 
     pub fn get_session() -> AppRequestBuilder<impl Future<Output = Result<Option<Session>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::Session(
-            SessionPersistentOperation::Get()
-        ))
-        .map(|it| it.result_option())
+        AppCommand::request_from_shell(PersistentOperation::Session(SessionPersistentOperation::Get())).map(|it| it.result_option())
     }
 }
 
 impl LocalResourcePersistentOperation {
     pub fn add(resources: Vec<LocalResource>) -> AppRequestBuilder<impl Future<Output = Result<Vec<LocalResource>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(
-            LocalResourcePersistentOperation::Add(resources)
-        ))
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Add(
+            resources
+        )))
         .map(|it| it.result())
     }
 
     pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(
-            LocalResourcePersistentOperation::Remove(id)
-        ))
-        .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)))
+            .map(|it| it.result())
     }
 
     pub fn find(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<Option<LocalResource>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(
-            LocalResourcePersistentOperation::Find(path)
-        ))
-        .map(|it| it.result_option())
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Find(path)))
+            .map(|it| it.result_option())
     }
 
     pub fn find_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<LocalResource>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(
-            LocalResourcePersistentOperation::FindAll
-        ))
-        .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll))
+            .map(|it| it.result())
     }
 
-    pub fn add_thumbnail(png_bytes: Vec<u8>, resource_id: u64) -> AppRequestBuilder<impl Future<Output = Result<LocalResourcePath, CoreError>>> {
+    pub fn add_thumbnail(
+        png_bytes: Vec<u8>,
+        resource_id: u64
+    ) -> AppRequestBuilder<impl Future<Output = Result<LocalResourcePath, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id }
         ))
         .map(|it| it.result())
     }
 
-    pub fn load_from_disk(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<Option<LocalResource>, CoreError>>> {
+    pub fn load_from_disk(
+        path: LocalResourcePath
+    ) -> AppRequestBuilder<impl Future<Output = Result<Option<LocalResource>, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::LocalResource(
             LocalResourcePersistentOperation::LoadOnDisk(path)
         ))
@@ -144,11 +135,11 @@ impl LocalResourcePersistentOperation {
 }
 
 impl TransferSessionPersistentOperation {
-    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::Save(session)
-        ))
-        .map(|it| it.result_option())
+    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<TransferSession, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(
+            session
+        )))
+        .map(|it| it.result())
     }
 
     pub fn update_progresses(

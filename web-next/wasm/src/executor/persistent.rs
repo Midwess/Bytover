@@ -1,7 +1,4 @@
-use shared::app::operations::persistent::{
-    LocalResourcePersistentOperation,
-    PersistentOperation,
-};
+use shared::app::operations::persistent::{LocalResourcePersistentOperation, PersistentOperation};
 use shared::app::operations::CoreOperationOutput;
 use shared::errors::CoreError;
 use shared::repository::auth_session::AuthSessionRepository;

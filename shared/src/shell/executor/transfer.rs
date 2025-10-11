@@ -6,6 +6,7 @@ use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::auth_server::AuthServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::webrtc::webrtc::WebRtc;
+use crate::shell::api::CoreRequest;
 use core_services::utils::maybe::MaybeSend;
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ where
 
     fn auth_server(&self) -> &AuthServer<T>;
 
-    async fn handle(&self, request_id: u32, effect: TransferOperation) -> Result<CoreOperationOutput, CoreError> {
+    async fn handle(&self, request: CoreRequest, effect: TransferOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
             TransferOperation::CreateCloudSession(session) => {
                 let session = self.cloud_service().create_public_session(session).await?;
@@ -38,11 +39,11 @@ where
             }
             TransferOperation::SendSession(session) => {
                 if session.target.is_public() {
-                    let status = self.cloud_service().send_session(session, request_id).await?;
+                    let status = self.cloud_service().send_session(session, request).await?;
                     return Ok(TransferOperationOutput::TransferCompleted(status).into());
                 }
 
-                let status = self.web_rtc().send_session(request_id, session).await?;
+                let status = self.web_rtc().send_session(request, session).await?;
                 Ok(TransferOperationOutput::TransferCompleted(status).into())
             }
             TransferOperation::AnswerSessionRequest {
@@ -50,7 +51,7 @@ where
                 session,
                 session_id
             } => {
-                let result = self.web_rtc().answer_session(request_id, peer_id, session, session_id).await?;
+                let result = self.web_rtc().answer_session(request, peer_id, session, session_id).await?;
                 Ok(TransferOperationOutput::TransferCompleted(result).into())
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
@@ -90,7 +91,7 @@ where
                 session_order_id
             } => {
                 self.cloud_service()
-                    .fetch_public_session(request_id, session_order_id, session_owner_user_id, password)
+                    .fetch_public_session(request, session_order_id, session_owner_user_id, password)
                     .await?;
                 Ok(TransferOperationOutput::SubscribeSessionEnded.into())
             }

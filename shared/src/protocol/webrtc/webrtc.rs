@@ -1,5 +1,4 @@
 use crate::app::operations::p2p::P2POperationOutput;
-use crate::app::operations::CoreOperationOutput;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
@@ -8,7 +7,6 @@ use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::repository::local_resource::LocalResourceRepository;
-use crate::shell::api::CoreBridge;
 use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
@@ -20,6 +18,7 @@ use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::shell::api::CoreRequest;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -28,16 +27,14 @@ pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 2;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 4;
 
 pub struct WebRtc {
-    core_bridge: Arc<dyn CoreBridge>,
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
     shared_context: SharedContext
 }
 
 impl WebRtc {
-    pub fn new(core_bridge: Arc<dyn CoreBridge>, addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
+    pub fn new(addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
         Self {
-            core_bridge,
             addr,
             local_resource_repository,
             shared_context: SharedContext::new()
@@ -66,7 +63,7 @@ impl WebRtc {
 
     pub async fn answer_session(
         &self,
-        core_id: u32,
+        core_request: CoreRequest,
         peer_id: String,
         session: Option<TransferSession>,
         session_id: u64
@@ -74,7 +71,7 @@ impl WebRtc {
         let peer_id = PeerId(peer_id.parse().unwrap());
 
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.answer_transfer(core_id, session_id, session).await;
+            let result = peer.answer_transfer(core_request, session_id, session).await;
 
             return result;
         };
@@ -82,10 +79,14 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn send_session(&self, core_id: u32, session: TransferSession) -> Result<TransferSessionStatus, WebRtcErrors> {
+    pub async fn send_session(
+        &self,
+        core_request: CoreRequest,
+        session: TransferSession
+    ) -> Result<TransferSessionStatus, WebRtcErrors> {
         let peer_id = session.peer().unwrap().peer_id();
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.transfer_session(core_id, session).await;
+            let result = peer.transfer_session(core_request, session).await;
 
             return result;
         };
@@ -93,10 +94,10 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn start_peer_core_stream(&self, peer_id: String, core_id: u32) -> Result<(), WebRtcErrors> {
+    pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse().unwrap());
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            peer.start_core_stream(core_id);
+            peer.start_core_stream(core_request);
             return Ok(());
         } else {
             log::info!("Peer not found");
@@ -105,7 +106,7 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn start(&self, core_request_id: u32, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+    pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
         self.shared_context.set_current_id(current_user.peer_id());
 
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
@@ -142,18 +143,17 @@ impl WebRtc {
 
                     if peer_id > current_user.peer_id() {
                         let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
-                        let core_bridge = self.core_bridge.clone();
                         let current_user = current_user.clone();
                         let outbound_data_sender = outbound_data_sender.clone();
                         let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                         let local_resource_repository = self.local_resource_repository.clone();
                         let context = self.shared_context.clone();
+                        let core_request = core_request.clone();
                         self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                         handles.push(spawn(async move {
                             let peer = match WebRtcPeer::new(
                                 current_user.clone(),
                                 direct_message_channel,
-                                core_bridge.clone(),
                                 outbound_data_sender,
                                 outbound_thumbnail_sender,
                                 buffer.unwrap(),
@@ -170,11 +170,8 @@ impl WebRtc {
 
                             let peer_entity = peer.peer.clone();
                             context.add_peer(peer).await;
-                            let _ = core_bridge
-                                .response(
-                                    core_request_id,
-                                    CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))
-                                )
+                            let _ = core_request
+                                .response(P2POperationOutput::PeerConnected(peer_entity))
                                 .await;
                         }));
                     }
@@ -191,7 +188,6 @@ impl WebRtc {
                 };
 
                 if let Some(Request::IntroduceRequest(request)) = msg.request {
-                    let core_bridge = self.core_bridge.clone();
                     let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
                     let current_user = current_user.clone();
                     let peer_id = peer_id;
@@ -199,6 +195,7 @@ impl WebRtc {
                     let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
                     let request_id = msg.request_id.clone();
+                    let core_request = core_request.clone();
                     let context = self.shared_context.clone();
                     context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                     handles.push(spawn(async move {
@@ -207,7 +204,6 @@ impl WebRtc {
                             request_id,
                             request,
                             direct_message_channel,
-                            core_bridge.clone(),
                             outbound_data_sender,
                             outbound_thumbnail_sender,
                             buffer.expect("Cannot transfer without buffer controller"),
@@ -224,11 +220,8 @@ impl WebRtc {
 
                         let peer_entity = peer.peer.clone();
                         context.add_peer(peer).await;
-                        let _ = core_bridge
-                            .response(
-                                core_request_id,
-                                CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer_entity))
-                            )
+                        let _ = core_request
+                            .response(P2POperationOutput::PeerConnected(peer_entity))
                             .await;
                     }));
 
