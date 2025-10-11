@@ -27,12 +27,14 @@ use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
     sessions: Vec<TransferSession>,
-    targets: Vec<TransferTarget>
+    targets: Vec<TransferTarget>,
+    keywords: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -239,6 +241,10 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
                     TransferSessionModelEvent::Add(new) => {
+                        if model.transfer.sessions.iter().find(|it| it.id().is_represent(&new)).is_some() {
+                            return Command::done();
+                        }
+
                         model.transfer.sessions.push(new);
                     }
                     TransferSessionModelEvent::Remove(session_id) => {
@@ -295,9 +301,16 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => Command::new_result(|it| async move {
-                it.app().find_transfer_session(keywords).await
-            }),
+            TransferEvent::FindPublicSession { keywords } => {
+                model.transfer.keywords = keywords.clone();
+                if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords)) {
+                    return Command::render();
+                }
+
+                Command::new_result(|it| async move {
+                    it.app().find_transfer_session(keywords).await
+                })
+            },
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     target: Some(TransferTargetId::Internet),
@@ -324,6 +337,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .transfer
                 .sessions
                 .iter()
+                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords))
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
                     let (password, avatar, name, access_url, is_required_password, alias, _to_emails) = match &it.target {
@@ -364,7 +378,7 @@ impl AppModule<BitBridge> for TransferModule {
                         _ => return None
                     };
 
-                    let image_resources = it
+                    let image_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -384,7 +398,7 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
-                    let video_resources = it
+                    let video_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -404,7 +418,7 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
-                    let file_resources = it
+                    let file_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -424,9 +438,11 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
+                    let is_loading = file_resources.is_empty() && video_resources.is_empty() && image_resources.is_empty();
                     Some(ReceiveCloudSessionViewModel {
                         id: it.order_id,
                         password,
+                        is_loading,
                         avatar_url: avatar,
                         sender_name: name,
                         access_url: access_url.to_owned(),

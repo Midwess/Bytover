@@ -9,11 +9,10 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
+use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
-use crate::CoreOperation::Persistent;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
@@ -327,10 +326,11 @@ impl AppCommand {
             }
         };
 
+        let session_order_id = transfer_session.order_id;
         let request = CoreOperation::Transfer(TransferOperation::SubscribeToPublicSessionTransferProgress {
             password,
             session_owner_user_id: user_id,
-            session_order_id: transfer_session.order_id
+            session_order_id
         });
 
         let mut stream = self.stream_from_shell(request);
@@ -352,10 +352,10 @@ impl AppCommand {
                     _ => return
                 },
                 CoreOperationOutput::Error(error) => {
-                    self.run(DialogOperation::toast(format!("{error}"))).await;
+                    self.run(DialogOperation::message(format!("{error}"), MessageReason::FailedToLoadSession(session_order_id))).await;
                     return;
                 }
-                _ => return
+                _ => continue
             };
         }
     }

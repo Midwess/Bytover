@@ -127,6 +127,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         }
 
         let is_completed = initial_session.is_completed();
+        log::info!("Session: {:?}", initial_session);
         tx.send(Ok(SubscribeSessionInfoResponse {
             event: Some(Event::SessionUpdated(SessionUpdated {
                 session_updated: initial_session.into_msg(&self.cloud_storage, &app).await

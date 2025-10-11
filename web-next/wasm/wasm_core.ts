@@ -51,7 +51,7 @@ import {
     CoreOperationOutputVariantDeviceInfo,
     CoreOperationOutputVariantLocalResourcePath,
     CoreOperationOutputVariantGeoLocation,
-    CoreOperationOutputVariantBool,
+    CoreOperationOutputVariantBool, MessageReason,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -166,20 +166,23 @@ export class WasmCore {
         this.selectedSession.set(session)
     }
     
-    public useMessage(type: string) {
+    public useMessage(reason: MessageReason) {
         const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
 
         useEffect(() => {
             return this.alertMessageState.subscribe((it) => setMessages(it || []))
         }, []);
 
+        const message: String | undefined = messages.find((it) => it.field1.constructor === reason?.constructor && isEqual(it.field1, reason))?.field0
+        const resolveMessage = () => {
+            const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor === reason.constructor && isEqual(it.field1, reason))
+            messages.splice(resolveMsgIndex, 1)
+            this.alertMessageState.set([...messages])
+        }
+
         return {
-            message: messages.find((it) => it.field1.constructor.name === type),
-            resolveMessage: (() => {
-                const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor.name === type)
-                messages.splice(resolveMsgIndex, 1)
-                this.alertMessageState.set([...messages])
-            })
+            message,
+            resolveMessage
         }
     }
 
@@ -251,12 +254,10 @@ export class WasmCore {
             return this.transferState.subscribe((transferState) => {
                 if (transferState?.received_cloud_sessions?.length != clouds.length)
                 {
-                    setClouds(
-                        transferState?.received_cloud_sessions ?? []
-                    )
+                    setClouds(transferState?.received_cloud_sessions ?? [])
                 }
             })
-        }, [])
+        }, [clouds.length])
 
         return clouds
     }
@@ -323,8 +324,8 @@ export class WasmCore {
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
     }
 
-    public async update(event: AppEvent | undefined, raw: Uint8Array | undefined = undefined) {
-        const effects_bytes = await process_event(raw || serialize(event));
+    public async update(event: AppEvent) {
+        const effects_bytes = await process_event(serialize(event));
         const requests = deserializeArray<Request>(Request, effects_bytes);
         while (requests.length > 0) {
             const request = requests.shift();
@@ -426,7 +427,6 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantInternet: {
-                console.log("Internet operation")
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {

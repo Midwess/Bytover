@@ -133,3 +133,15 @@ where
         option.map(Into::into).unwrap_or(CoreOperationOutput::None)
     }
 }
+
+impl<T> From<Result<T, CoreError>> for CoreOperationOutput
+where
+    T: Into<CoreOperationOutput>
+{
+    fn from(result: Result<T, CoreError>) -> Self {
+        match result {
+            Ok(output) => output.into(),
+            Err(error) => error.into()
+        }
+    }
+}

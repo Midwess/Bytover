@@ -21,7 +21,7 @@ pub enum CoreError {
     Unauthorized(String),
 
     /// Internet connection issue
-    #[error("Check your internet connection and try again.")]
+    #[error("{0}")]
     Network(String),
 
     #[error("Insufficient storage")]

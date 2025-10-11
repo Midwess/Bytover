@@ -34,7 +34,8 @@ impl AlertDialog {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MessageReason {
     FailedToFindPublicSession,
-    PublicSessionUnauthenticated
+    FailedToLoadSession(u64),
+    PublicSessionUnauthenticated(u64)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
