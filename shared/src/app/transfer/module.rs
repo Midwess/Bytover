@@ -28,7 +28,6 @@ use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use core_services::db::repository::abstraction::table::Table;
-use crate::CoreOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -379,7 +378,7 @@ impl AppModule<BitBridge> for TransferModule {
                         _ => return None
                     };
 
-                    let image_resources = it
+                    let image_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -399,7 +398,7 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
-                    let video_resources = it
+                    let video_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -419,7 +418,7 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
-                    let file_resources = it
+                    let file_resources: Vec<_> = it
                         .resources
                         .iter()
                         .filter_map(|resource| {
@@ -439,9 +438,11 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                         .collect();
 
+                    let is_loading = file_resources.is_empty() && video_resources.is_empty() && image_resources.is_empty();
                     Some(ReceiveCloudSessionViewModel {
                         id: it.order_id,
                         password,
+                        is_loading,
                         avatar_url: avatar,
                         sender_name: name,
                         access_url: access_url.to_owned(),

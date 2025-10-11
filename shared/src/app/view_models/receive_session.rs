@@ -43,6 +43,7 @@ pub struct ReceiveSessionViewModel {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveCloudSessionViewModel {
     pub id: u64,
+    pub is_loading: bool,
     pub password: Option<String>,
     pub avatar_url: String,
     pub sender_name: String,

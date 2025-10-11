@@ -60,8 +60,10 @@ function ContentBoard() {
     const cloudSessions = core.useCloudSessionsList()
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
-    const isLoading = !selectedSession?.file_resources.length && !selectedSession?.image_resources.length && !selectedSession?.video_resources.length
-    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSession?.id));
+    const isLoading = selectedSession instanceof ReceiveCloudSessionViewModel
+        ? (selectedSession as ReceiveCloudSessionViewModel)?.is_loading
+        : false
+    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSession?.id!));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
@@ -147,6 +149,12 @@ function ContentBoard() {
                 </div>
             </div>
         }
+    }
+
+    if (!selectedSession) {
+        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
+            <p>No session selected</p>
+        </div>
     }
 
     if (isLoading) {

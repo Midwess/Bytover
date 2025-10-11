@@ -173,7 +173,6 @@ export class WasmCore {
             return this.alertMessageState.subscribe((it) => setMessages(it || []))
         }, []);
 
-        console.log(reason, messages)
         const message: String | undefined = messages.find((it) => it.field1.constructor === reason?.constructor && isEqual(it.field1, reason))?.field0
         const resolveMessage = () => {
             const resolveMsgIndex = messages.findIndex((it) => it.field1.constructor === reason.constructor && isEqual(it.field1, reason))
