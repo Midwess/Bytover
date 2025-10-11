@@ -6,9 +6,15 @@ edition.workspace = true
 
 [dependencies]
 
+[features]
+default = ["swift", "java", "typescript"]
+swift = []
+java = []
+typescript = []
+
 [build-dependencies]
 anyhow.workspace = true
 crux_core.workspace = true
 shared = { path = "../shared", features = ["typegen"] }
-native = { path = "../native", features = ["typegen"] }
+native = { path = "../native", features = ["typegen"], optional = true }
 schema = { path = "../libs/schema/rust", features = ["client"] }

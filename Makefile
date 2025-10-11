@@ -23,11 +23,5 @@ ffmt:
 	cargo +nightly fmt -p wasm
 	swiftlint lint --fix || true
 
-gen:
-	cargo build -p shared_types --target wasm32-unknown-unknown
-
-gsu:
-	git submodule update --init --recursive
-
 web:
 	cd web-next; yarn dev

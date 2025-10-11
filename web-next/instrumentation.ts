@@ -3,8 +3,7 @@ if (typeof window !== 'undefined') {
   throw new Error('This file should only be used on the server side.');
 }
 
-const KONG_ADMIN_URL = process.env.DEVLOG_KONG_GATEWAY_ADMIN_URL ||
-  'http://localhost:8001'
+const KONG_ADMIN_URL = process.env.DEVLOG_KONG_GATEWAY_ADMIN_URL
 const HOST_NAME = process.env.DEVLOG_SERVICE_HOST || 'host.docker.internal'
 const PORT = process.env.PORT
 const DOMAIN = 'localhost'
