@@ -7,7 +7,7 @@ use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::TransferSessionModelEvent;
+use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -36,8 +36,6 @@ impl AppCommand {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
-
             self.run(TransferOperation::cancel_session(
                 transfer_session.peer_id(),
                 transfer_session.order_id
@@ -46,6 +44,7 @@ impl AppCommand {
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
+        self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
         Ok(())
     }
@@ -241,7 +240,7 @@ impl AppCommand {
             match transfer_output {
                 CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
                     TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        TransferSessionPersistentOperation::update_progresses(transfer_session.order_id, vec![progress.clone()]);
+                        transfer_session.update_progress(progress.clone());
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
@@ -256,11 +255,7 @@ impl AppCommand {
                         break;
                     }
                     TransferOperationOutput::ThumbnailUpdated(event) => {
-                        let resource = transfer_session.resource_mut(event.resource_id).unwrap();
-                        resource.thumbnail_path = Some(event.path.clone());
-                        let resource = resource.clone();
-
-                        TransferSessionPersistentOperation::update_resource(transfer_session.id(), resource);
+                        event.clone().update(&mut transfer_session);
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), event.into()));
                     }
                     _ => {
@@ -291,7 +286,8 @@ impl AppCommand {
                 TransferSessionModelEvent::Remove(transfer_session.id()),
                 TransferSessionModelEvent::Add(transfer_session),
             ]);
-        } else {
+        }
+        else {
             self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
             DialogOperation::toast("Transfer session canceled".to_string());
         }
