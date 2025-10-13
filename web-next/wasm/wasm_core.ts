@@ -26,7 +26,6 @@ import {
     CoreOperationVariantInternet,
     CoreOperationVariantP2P,
     CoreOperationVariantNotified,
-    MessageToShellResponseVariantVoidResponse,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
     EnvironmentEventVariantAppLaunched,
@@ -522,10 +521,10 @@ export class WasmCore {
         await this.update(event);
     }
 
-    async forward_core_operation_output(id: number, operationData: Uint8Array): Promise<Uint8Array> {
+    async forward_core_operation_output(id: number, operationData: Uint8Array) {
         try {
             const requestsData = await handle_response(id, operationData)
-            if (requestsData.length === 0) return serialize(new MessageToShellResponseVariantVoidResponse())
+            if (requestsData.length === 0) return
 
             const requests = deserializeArray<Request>(Request, requestsData);
             while (requests.length > 0) {
@@ -540,13 +539,13 @@ export class WasmCore {
                 requests.push(...newRequests);
             }
 
-            return serialize(new MessageToShellResponseVariantVoidResponse())
+            return
         }
         catch(ignored) {
             console.error(ignored)
         }
 
-        return serialize(new MessageToShellResponseVariantVoidResponse())
+        return
     }
 }
 

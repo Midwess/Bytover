@@ -305,6 +305,7 @@ function Board() {
                         onClick={() => {
                             setKeywords('')
                             setUrl({session: undefined})
+                            handleFind()
                         }}
                     >
                         ×

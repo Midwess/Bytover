@@ -244,6 +244,8 @@ impl AppModule<BitBridge> for TransferModule {
                     }
                 }
 
+                model.transfer.sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+
                 Command::done()
             }
             TransferEvent::UpdateTransferTargets { added: new, removed } => {
