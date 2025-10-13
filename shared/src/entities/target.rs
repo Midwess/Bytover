@@ -24,7 +24,7 @@ impl TransferTarget {
         matches!(self, Self::Nearby(_))
     }
 
-    pub fn is_keyword_match(&self, keywords: &str) -> bool {
+    pub fn is_keyword_match(&self, keywords: &str, exact: bool) -> bool {
         if keywords.is_empty() {
             return true;
         }
@@ -38,16 +38,19 @@ impl TransferTarget {
             return false
         };
 
-        let mut keywords = keywords.to_owned();
+        let mut name: String = "".to_string();
         if let Ok(url) = url::Url::parse(access_url) {
             let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
                 return false
             };
 
-            keywords = query;
+            name = query;
         }
 
-        from_user.name.contains(&keywords) || access_url.contains(&keywords)
+        if exact {
+            return from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
+        }
+        from_user.name.to_lowercase().contains(&keywords.to_lowercase()) || name.to_lowercase().contains(&keywords.to_lowercase())
     }
 }
 

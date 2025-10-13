@@ -18,7 +18,7 @@ impl CoreBridgeImpl {
     pub fn new() -> Self {
         let shell = Arc::new(ShellRuntime {});
         Self {
-            throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(100)),
+            throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(1000)),
             shell
         }
     }

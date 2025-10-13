@@ -67,8 +67,11 @@ impl CoreCommandUtils for AppCommand {
         Self::new(async move |ctx| {
             let result = create_task(ctx.clone()).await;
             if let Err(e) = result {
-                log::info!("{:?}", e);
-                ctx.app().run(DialogOperation::toast(e.to_string())).await;
+                log::info!("{e:?}");
+                let display_msg = e.to_string();
+                if !display_msg.is_empty() {
+                    ctx.app().run(DialogOperation::toast(e.to_string())).await;
+                }
             }
         })
     }

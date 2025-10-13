@@ -278,10 +278,9 @@ function Board() {
         message?.resolveMessage()
         if (!keywords?.trim()) {
             setUrl({session: undefined})
-
-            return
         }
 
+        console.log('find', keywords)
         setUrl({session: keywords})
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
@@ -431,31 +430,33 @@ function FileView(props: {
 }) {
     const {id} = props;
     const file = core.useReceiveResource(id);
+    const model = file?.model;
 
-    if (!file) return null;
-
-    const model = file.model;
-
-    const fallbackThumbnail = model.type instanceof ResourceTypeVariantFolder
+    const fallbackThumbnail = model?.type instanceof ResourceTypeVariantFolder
         ? "/folder.svg"
         : "/file.svg";
 
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
+    useEffect(() => {
+        if (!model) return
+
+        if (model.thumbnail_path && !thumbnailSource) {
+            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
+        }
+    }, [model?.thumbnail_path, thumbnailSource]);
+
+    const onDownloadClick = useCallback(() => {
+        if (!model) return
+        core.downloadFile(model.path, model.name)
+    }, [model?.path, model?.name])
+
+    if (!file || !model) return null;
+
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
-
-    useEffect(() => {
-        if (model.thumbnail_path && !thumbnailSource) {
-            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
-        }
-    }, [model.thumbnail_path, thumbnailSource]);
-
-    const onDownloadClick = useCallback(() => {
-        core.downloadFile(model.path, model.name)
-    }, [model.path, model.name])
 
     return (
         <div
@@ -498,23 +499,23 @@ function MediaView(props: {
     const {id} = props;
     const media = core.useReceiveResource(id);
 
-    if (!media) return null;
-
-    const model: SelectedResourceViewModel = media.model;
+    const model: SelectedResourceViewModel | undefined = media?.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
     const isMobile = useIsMobile();
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
+
+    useEffect(() => {
+        if (model?.thumbnail_path) {
+            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
+        }
+    }, [model?.thumbnail_path]);
+
+    if (!media || !model) return null;
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
         displaySize = `${model.size_gb} GB`;
     }
-
-    useEffect(() => {
-        if (model.thumbnail_path) {
-            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
-        }
-    }, [model.thumbnail_path]);
 
     return (
         <div className="w-full h-full bg-muted-foreground overflow-hidden rounded-2xl relative group">

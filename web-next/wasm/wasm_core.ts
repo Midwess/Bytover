@@ -51,7 +51,8 @@ import {
     CoreOperationOutputVariantDeviceInfo,
     CoreOperationOutputVariantLocalResourcePath,
     CoreOperationOutputVariantGeoLocation,
-    CoreOperationOutputVariantBool, MessageReason,
+    CoreOperationOutputVariantBool, MessageReason, FileReceiveResourceViewModel, ImageReceiveResourceViewModel,
+    VideoReceiveResourceViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -121,27 +122,12 @@ export class WasmCore {
     }
 
     public useReceiveResource(id: bigint) {
-        const [resource, setResource] = useState<any>(() => {
-            const transferState = this.transferState.get()
-            if (!transferState) return undefined
-            
-            // Search in all resource arrays
-            return transferState.received_sessions?.flatMap(session => [
-                ...session.file_resources,
-                ...session.image_resources,
-                ...session.video_resources
-            ]).find(r => r.model.order_id === id) ||
-            transferState.received_cloud_sessions?.flatMap(session => [
-                ...session.file_resources,
-                ...session.image_resources,
-                ...session.video_resources
-            ]).find(r => r.model.order_id === id)
-        })
+        const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 if (!transferState) return
-                
+
                 const foundResource = transferState.received_sessions?.flatMap(session => [
                     ...session.file_resources,
                     ...session.image_resources,

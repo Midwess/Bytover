@@ -165,9 +165,8 @@ impl AppCommand {
             return Ok(());
         }
 
-        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
-
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
+        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
 
         Ok(())
     }
@@ -286,8 +285,8 @@ impl AppCommand {
                 TransferSessionModelEvent::Remove(transfer_session.id()),
                 TransferSessionModelEvent::Add(transfer_session),
             ]);
-        }
-        else {
+        } else {
+            self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
             self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
             DialogOperation::toast("Transfer session canceled".to_string());
         }
@@ -299,6 +298,7 @@ impl AppCommand {
         let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
 
         let Some(session) = session_overview else {
+            log::info!("No session found");
             self.run(DialogOperation::message(
                 "Not found 🤔".to_owned(),
                 MessageReason::FailedToFindPublicSession
@@ -307,7 +307,10 @@ impl AppCommand {
             return Ok(());
         };
 
-        self.run(TransferSessionPersistentOperation::save(session.clone())).await?;
+        if let Err(e) = self.run(TransferSessionPersistentOperation::save(session.clone())).await {
+            log::error!("Failed to save session: {e:?}");
+        };
+
         self.update_model(TransferSessionModelEvent::Add(session));
         Ok(())
     }

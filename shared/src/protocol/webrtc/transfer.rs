@@ -67,6 +67,12 @@ impl TransferDelimiterShema {
             len_bytes[1]
         ]) as usize;
 
+        if len > 1022 {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Serialized data is larger than buffer size!".to_owned()
+            ));
+        }
+
         let serialized_data = &data[2..2 + len];
 
         let result: Self = bincode::deserialize(serialized_data)

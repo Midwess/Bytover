@@ -295,7 +295,7 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::FindPublicSession { keywords } => {
                 model.transfer.keywords = keywords.clone();
-                if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords)) {
+                if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords, true)) {
                     return Command::render();
                 }
 
@@ -325,7 +325,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .transfer
                 .sessions
                 .iter()
-                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords))
+                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords, false))
                 .filter(|it| it.transfer_type == TransferType::Receive)
                 .filter_map(|it| {
                     let (password, avatar, name, access_url, is_required_password, alias, _to_emails) = match &it.target {

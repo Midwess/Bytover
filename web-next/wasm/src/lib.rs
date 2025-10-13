@@ -18,7 +18,7 @@ use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::core::{CoreWorker, CoreWorkerOperation};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
-use bincode::Options;
+use bincode::{DefaultOptions, Options};
 use core_services::logger;
 use core_services::utils::never_send::NeverSend;
 use core_services::wasm::extensions::VecExtension;
@@ -289,5 +289,5 @@ pub fn serialize<E: Serialize>(data: &E) -> Uint8Array {
 }
 
 fn bincode_options() -> impl Options + Copy {
-    bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
+    DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }

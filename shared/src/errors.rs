@@ -30,15 +30,15 @@ pub enum CoreError {
     #[error("Expected an absolute path")]
     ExpectedAnAbsolutePath(LocalResourcePath),
 
-    #[error("{0}")]
+    #[error("")]
     ParsingError(String),
 
-    #[error("Feature not implemented: {0}")]
+    #[error("")]
     NotImplemented(String),
 
     // The request dropped without a response.
     // then the CoreRequest will automatically response this message to prevent core hang forever.
-    #[error("No response from the executor.")]
+    #[error("")]
     NoResponse
 }
 

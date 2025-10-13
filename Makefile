@@ -14,7 +14,7 @@ ffmt:
 	cargo clippy -p shared --allow-dirty --allow-staged --fix
 	cargo +nightly fmt -p shared
 	@echo "==> Fixing and formatting shared_types"
-	cargo fix -p shared_types --allow-dirty --allow-staged
+	cargo fix -p shared_types --allow-dirty --allow-staged --all-features
 	cargo clippy -p shared_types --allow-dirty --allow-staged --fix
 	cargo +nightly fmt -p shared_types
 	@echo "==> Fixing and formatting wasm"
@@ -24,4 +24,4 @@ ffmt:
 	swiftlint lint --fix || true
 
 web:
-	cd web-next; yarn dev
+	cd web-next; pnpm dev

@@ -1,10 +1,8 @@
 pub mod network;
 
-use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
-use crate::entities::transfer_session::TransferProgress;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
@@ -43,15 +41,6 @@ pub trait CoreBridge: Send + Sync {
 
     // How many throttle is depends on the implementation
     async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput);
-
-    async fn resource_progress_update(&self, request_id: u32, progress: &TransferProgress, is_sync: bool) {
-        let response = CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-        if is_sync {
-            let _ = self.response(request_id, response).await;
-        } else {
-            self.response_throttle(request_id, response).await;
-        }
-    }
 
     async fn notify(&self, event: AppEvent);
 }

@@ -7,6 +7,7 @@ use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::repository::local_resource::LocalResourceRepository;
+use crate::shell::api::CoreRequest;
 use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
@@ -18,7 +19,6 @@ use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::shell::api::CoreRequest;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -170,9 +170,7 @@ impl WebRtc {
 
                             let peer_entity = peer.peer.clone();
                             context.add_peer(peer).await;
-                            let _ = core_request
-                                .response(P2POperationOutput::PeerConnected(peer_entity))
-                                .await;
+                            let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         }));
                     }
                 } else if state == matchbox_socket::PeerState::Disconnected {
@@ -220,9 +218,7 @@ impl WebRtc {
 
                         let peer_entity = peer.peer.clone();
                         context.add_peer(peer).await;
-                        let _ = core_request
-                            .response(P2POperationOutput::PeerConnected(peer_entity))
-                            .await;
+                        let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                     }));
 
                     continue;

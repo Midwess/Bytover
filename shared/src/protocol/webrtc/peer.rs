@@ -331,15 +331,13 @@ impl WebRtcPeer {
                     .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
                 total_written_bytes += written_bytes;
                 progress_update.update_progress(written_bytes);
-                let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone()));
+                core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
             }
 
             log::info!("Complete downloading resource {:?} len {total_written_bytes}", resource_path);
             writer.end().await?;
             progress_update.complete();
-            let _ = core_request
-                .response(TransferResourceProgressUpdate(progress_update.clone()))
-                .await;
+            let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
         }
 
         let _ = thumbnail_handle.await;
@@ -462,9 +460,7 @@ impl WebRtcPeer {
             if let Err(e) = self.data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
-                let _ = core_request
-                    .response_throttle(TransferResourceProgressUpdate(progress_update.clone()))
-                    .await;
+                let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                 continue;
             }
 
