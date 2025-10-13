@@ -134,11 +134,6 @@ impl WebRtc {
 
         loop {
             for (peer_id, state) in socket.try_update_peers()? {
-                let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
-                    log::error!("Buffer not found for peer {peer_id}");
-                    continue;
-                };
-
                 if state == matchbox_socket::PeerState::Connected {
                     log::info!("Peer {peer_id} connected");
                     if self.shared_context.is_peer_connected(&peer_id).await {
@@ -146,6 +141,11 @@ impl WebRtc {
                     }
 
                     if peer_id > current_user.peer_id() {
+                        let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
+                            log::error!("Buffer not found for peer {peer_id}");
+                            continue;
+                        };
+
                         let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
                         let current_user = current_user.clone();
                         let outbound_data_sender = outbound_data_sender.clone();
@@ -184,16 +184,15 @@ impl WebRtc {
             }
 
             for (peer_id, msg) in socket.channel_mut(MSG_CHANNEL_ID).receive() {
-                let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
-                    log::error!("Buffer not found for peer {peer_id}");
-                    continue;
-                };
-
                 let Ok(msg) = PeerMessageBody::decode(&msg[..]) else {
                     continue;
                 };
 
                 if let Some(Request::IntroduceRequest(request)) = msg.request {
+                    let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
+                        log::error!("Buffer not found for peer {peer_id}");
+                        continue;
+                    };
                     let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
                     let current_user = current_user.clone();
                     let peer_id = peer_id;

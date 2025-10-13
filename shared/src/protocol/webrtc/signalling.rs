@@ -310,7 +310,8 @@ impl Signaller for WebSignaller {
                     log::info!("New peer found: {peer_id:?}, connecting...");
                     return Ok(peer_event);
                 }
-            } else {
+            }
+            else {
                 return Ok(peer_event);
             }
         }
