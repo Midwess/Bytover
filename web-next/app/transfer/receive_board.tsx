@@ -216,9 +216,9 @@ function ContentBoard() {
                     className="flex flex-col gap-4 h-fit min-h-[400px]">
                     {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
-                            return <ItemEffect key={index} index={index}>
+                            return <ItemEffect key={file.model.order_id} index={index}>
                                 <div className={"h-fit"}>
-                                    <FileView key={index} id={file.model.order_id}/>
+                                    <FileView key={file.model.order_id} id={file.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -238,8 +238,7 @@ function ItemEffect(props: { children: ReactElement, index: number }) {
         }}
         fade
         zoom
-        inView
-        delay={0.5 + index * 0.1}>
+        delay={0.2 + index * 0.1}>
         {children}
     </MotionEffect>
 }
