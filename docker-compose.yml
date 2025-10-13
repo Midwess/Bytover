@@ -57,6 +57,8 @@ services:
       - "8445:8445"
       - "8003:8003"
       - "8004:8004"
+    extra_hosts: 
+      - "host.docker.internal:host-gateway"
     networks:
       - kong-net
     restart: always
