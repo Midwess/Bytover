@@ -62,6 +62,6 @@ impl From<WebRtcErrors> for matchbox_socket::SignalingError {
 
 impl From<WebRtcErrors> for CoreError {
     fn from(err: WebRtcErrors) -> Self {
-        CoreError::InternalServerError(format!("{err:?}"))
+        CoreError::Network(format!("WebRtc {err:?}"))
     }
 }

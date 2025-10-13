@@ -214,6 +214,8 @@ impl WebRtcPeer {
             return Err(WebRtcErrors::Canceled(TaskErrors::Cancelled))
         };
 
+        let _drop_guard = cancellation_signal.drop_guard();
+
         let mut resource_rx = self.inbound_data_stream_receiver.retrieve().await?;
         let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve().await?;
 
@@ -228,18 +230,16 @@ impl WebRtcPeer {
             }
         }
 
-        let mut thumbnail_paths = session
-            .resources
-            .iter()
-            .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
-            .collect::<Vec<(u64, LocalResourcePath)>>();
-        let repo = self.resource_repo.clone();
-        let context = self.transfers_context.clone();
-
         let thumbnail_handle = {
+            let mut thumbnail_paths = session
+                .resources
+                .iter()
+                .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
+                .collect::<Vec<(u64, LocalResourcePath)>>();
+            let repo = self.resource_repo.clone();
+            let context = self.transfers_context.clone();
             let core_request = core_request.clone();
-            let thumbnail_cancel_signal = cancellation_signal.clone();
-            log::info!("Begin downloading thumbnails for session {session_id}");
+            let thumbnail_cancel_signal = cancellation_signal.child_token();
             spawn(async move {
                 while context.is_active(session_id).await {
                     if thumbnail_paths.is_empty() {
@@ -263,9 +263,8 @@ impl WebRtcPeer {
                         return Ok(thumbnail_paths)
                     }
 
-                    let mut writer = repo.write(resource_path.clone()).await?;
+                    let mut writer = repo.write(resource_path.clone()).with_cancel(&thumbnail_cancel_signal).await??;
 
-                    log::info!("Begin downloading thumbnail {resource_path:?} for session {session_id}");
                     while let Ok(Some(bytes)) = thumbnail_rx.next().with_cancel(&thumbnail_cancel_signal).await {
                         writer
                             .write(bytes.to_vec().into())
@@ -278,7 +277,6 @@ impl WebRtcPeer {
                     }
 
                     writer.end().with_cancel(&thumbnail_cancel_signal).await??;
-                    log::info!("Completed downloading thumbnail {resource_path:?}");
 
                     let event = ThumbnailUpdatedEvent {
                         resource_id: first_delimiter.resource_id,
@@ -340,9 +338,9 @@ impl WebRtcPeer {
             let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
         }
 
-        let _ = thumbnail_handle.await;
-
+        cancellation_signal.cancel();
         self.transfers_context.stop_transfer(session_id).await;
+        let _ = thumbnail_handle.await;
 
         Ok(session.status())
     }
@@ -357,6 +355,8 @@ impl WebRtcPeer {
         let Some(cancellation_signal) = self.transfers_context.cancellation_token(session.order_id).await else {
             return Err(WebRtcErrors::Canceled(TaskErrors::Cancelled))
         };
+
+        let _drop_guard = cancellation_signal.drop_guard();
 
         let session_id = session.order_id;
 

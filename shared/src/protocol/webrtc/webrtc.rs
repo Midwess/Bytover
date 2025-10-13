@@ -134,7 +134,11 @@ impl WebRtc {
 
         loop {
             for (peer_id, state) in socket.try_update_peers()? {
-                let buffer = socket.get_peer_buffer_info(peer_id).cloned();
+                let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
+                    log::error!("Buffer not found for peer {peer_id}");
+                    continue;
+                };
+
                 if state == matchbox_socket::PeerState::Connected {
                     log::info!("Peer {peer_id} connected");
                     if self.shared_context.is_peer_connected(&peer_id).await {
@@ -156,7 +160,7 @@ impl WebRtc {
                                 direct_message_channel,
                                 outbound_data_sender,
                                 outbound_thumbnail_sender,
-                                buffer.unwrap(),
+                                buffer,
                                 local_resource_repository
                             )
                             .await
@@ -180,7 +184,11 @@ impl WebRtc {
             }
 
             for (peer_id, msg) in socket.channel_mut(MSG_CHANNEL_ID).receive() {
-                let buffer = socket.get_peer_buffer_info(peer_id).cloned();
+                let Some(buffer) = socket.get_peer_buffer_info(peer_id).cloned() else {
+                    log::error!("Buffer not found for peer {peer_id}");
+                    continue;
+                };
+
                 let Ok(msg) = PeerMessageBody::decode(&msg[..]) else {
                     continue;
                 };
@@ -204,7 +212,7 @@ impl WebRtc {
                             direct_message_channel,
                             outbound_data_sender,
                             outbound_thumbnail_sender,
-                            buffer.expect("Cannot transfer without buffer controller"),
+                            buffer,
                             local_resource_repository
                         )
                         .await

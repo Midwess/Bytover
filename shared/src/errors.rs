@@ -1,4 +1,3 @@
-use crate::entities::local_resource::LocalResourcePath;
 use crate::protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::protocol::rpc::errors::RpcErrors;
 use serde::{Deserialize, Serialize};
@@ -8,10 +7,6 @@ use serde::{Deserialize, Serialize};
 /// but it's must be detailed enough to be used for debugging (Debug trait)
 #[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum CoreError {
-    /// Unknown error from backend, should not happen
-    #[error("Something went wrong, please try again.")]
-    InternalServerError(String),
-
     /// The upstream has something to say
     #[error("The request could not be processed.")]
     BadRequest(String),
@@ -24,22 +19,14 @@ pub enum CoreError {
     #[error("{0}")]
     Network(String),
 
-    #[error("Insufficient storage")]
-    StorageInsufficient(String),
-
-    #[error("Expected an absolute path")]
-    ExpectedAnAbsolutePath(LocalResourcePath),
+    #[error("Browser error {0}")]
+    BrowserError(String),
 
     #[error("")]
     ParsingError(String),
 
     #[error("")]
     NotImplemented(String),
-
-    // The request dropped without a response.
-    // then the CoreRequest will automatically response this message to prevent core hang forever.
-    #[error("")]
-    NoResponse
 }
 
 impl From<CloudTransferErrors> for CoreError {
@@ -56,12 +43,12 @@ impl From<RpcErrors> for CoreError {
 
 impl From<crate::repository::errors::PersistenceError> for CoreError {
     fn from(e: crate::repository::errors::PersistenceError) -> Self {
-        Self::InternalServerError(format!("{e}"))
+        Self::BrowserError(format!("{e}"))
     }
 }
 
 impl From<core_services::db::repository::abstraction::errors::RepositoryError> for CoreError {
     fn from(e: core_services::db::repository::abstraction::errors::RepositoryError) -> Self {
-        Self::InternalServerError(format!("{e}"))
+        Self::BrowserError(format!("{e}"))
     }
 }

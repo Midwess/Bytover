@@ -357,15 +357,15 @@ enum TransferType {
 
 const activeMethods = [
     {
+        name: 'People',
+        icon: Users,
+        type: TransferType.People
+    },
+    {
         name: 'Public',
         icon: Globe,
         type: TransferType.Public
     },
-    {
-        name: 'People',
-        icon: Users,
-        type: TransferType.People
-    }
 ]
 
 function Board() {
@@ -378,6 +378,23 @@ function Board() {
     return <>
         <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-2"}>
             <DropdownMenu>
+                <DropdownMenuContent className={"font-medium w-[200px]"}>
+                    <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[0])}
+                                              onCheckedChange={() => {
+                                                  setActiveMethod(activeMethods[0])
+                                              }}>
+                        <Users/>
+                        People
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
+                                              checked={(activeMethod === activeMethods[1])} onCheckedChange={() => {
+                        setActiveMethod(activeMethods[1])
+                    }}>
+                        <Globe/>
+                        Public
+                    </DropdownMenuCheckboxItem>
+
+                </DropdownMenuContent>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="ghost"
@@ -394,22 +411,6 @@ function Board() {
                         <ChevronsUpDown className="ml-auto"/>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className={"font-medium w-[200px]"}>
-                    <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
-                        checked={(activeMethod === activeMethods[0])} onCheckedChange={() => {
-                            setActiveMethod(activeMethods[0])
-                        }}>
-                        <Globe/>
-                        Public
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[1])}
-                        onCheckedChange={() => {
-                            setActiveMethod(activeMethods[1])
-                        }}>
-                        <Users/>
-                        People
-                    </DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
             </DropdownMenu>
             <div className={"px-2 flex flex-col items-center justify-center pt-5"}>
                 {
