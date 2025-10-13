@@ -1,4 +1,4 @@
-## All platforms:
+# All platforms:
 - 
     ```bash
     # if on macOS
@@ -7,12 +7,38 @@
 -   ```bash
     git submodule update --init --recursive
     ```
+- [Surreal DB Installation](https://surrealdb.com/docs/surrealdb/installation/linux)
+    ```bash
+    surreal start --bind 127.0.0.1:8500 --user root --pass root --log debug
+
+    # on another shell
+    surreal sql --endpoint http://127.0.0.1:8500 --auth-level root --username root --password root
+    > DEFINE NAMESPACE development;
+    > USE NS development;
+    > DEFINE USER devlog ON NAMESPACE PASSWORD 'ssh' ROLES OWNER;
+    ```
+
+- Kong gateway
+    ```bash
+    docker compose up 
+    ```
+- auth-gateway
+    ```bash
+    cd auth-gateway && cargo run
+    ```
+- Back-end
+    ```bash
+    cd backend && AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    ```
+
+# Front-end & native development
 - [Protocol Buffer Compiler Installation](https://protobuf.dev/installation/)
 
-- 
+- Generate types for language of your choice
+    - `Swift` for `iOS`
+    - `Java` for `Android`
+    - `Typescript` for `Web`
     ```bash
-    # generate types for language of your choice
-
     # all
     cargo build -p shared_types --target wasm32-unknown-unknown
 
@@ -21,11 +47,6 @@
 
     # swift and java
     cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features swift,java
-    ```
-// TODO: back-end, auth-gateway, kong gateway
-- 
-    ```bash
-    cd backend && cargo run
     ```
 
 ## Web
