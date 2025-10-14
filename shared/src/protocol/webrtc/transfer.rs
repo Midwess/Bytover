@@ -1,5 +1,5 @@
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use core_services::utils::cancellation::CancellationToken;
+use core_services::utils::cancellation::{CancellationToken};
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::sleep;
@@ -7,24 +7,27 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+use futures::channel::mpsc;
+use n0_future::StreamExt;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransferDelimiterShema {
+    pub session_id: u64,
     pub resource_id: u64,
     pub is_start: bool
 }
 
 impl TransferDelimiterShema {
-    pub fn new(resource_id: u64, is_start: bool) -> Self {
-        Self { resource_id, is_start }
+    pub fn new(session_id: u64, resource_id: u64, is_start: bool) -> Self {
+        Self { resource_id, is_start, session_id }
     }
 
-    pub fn start(resource_id: u64) -> Self {
-        Self::new(resource_id, true)
+    pub fn start(session_id: u64, resource_id: u64) -> Self {
+        Self::new(session_id, resource_id, true)
     }
 
-    pub fn end(resource_id: u64) -> Self {
-        Self::new(resource_id, false)
+    pub fn end(session_id: u64, resource_id: u64) -> Self {
+        Self::new(session_id, resource_id, false)
     }
 
     pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {
@@ -45,15 +48,28 @@ impl TransferDelimiterShema {
         Ok(buffer.into_boxed_slice())
     }
 
-    pub fn is_end(data: &Packet) -> bool {
-        Self::from_bytes(data, false).map(|it| !it.is_start).unwrap_or(false)
+    pub async fn forward_to_next_resource(
+        rx: &mut mpsc::Receiver<Packet>,
+        session_id: u64
+    ) -> Result<Self, WebRtcErrors> {
+        loop {
+            let Some(packet) = rx.next().await else {
+                return Err(WebRtcErrors::InvalidDelimiter(
+                    "No more data to read, channel closed".to_owned()
+                ))
+            };
+
+            if let Ok(delimiter) = Self::from_bytes(&packet, session_id, true) {
+                return Ok(delimiter)
+            }
+        }
     }
 
-    pub fn is_start(data: &Packet) -> bool {
-        Self::from_bytes(data, false).map(|it| it.is_start).unwrap_or(false)
+    pub fn from_end_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+        Self::from_bytes(data, session_id, false)
     }
 
-    pub fn from_bytes(data: &Packet, is_start: bool) -> Result<Self, WebRtcErrors> {
+    pub fn from_bytes(data: &Packet, session_id: u64, is_start: bool) -> Result<Self, WebRtcErrors> {
         if data.len() != 1024 {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Data buffer must be exactly 1024 bytes got {}",
@@ -81,6 +97,12 @@ impl TransferDelimiterShema {
         if result.is_start != is_start {
             return Err(WebRtcErrors::InvalidDelimiter(
                 "Invalid delimiter, is_start does not match".to_owned()
+            ));
+        }
+
+        if result.session_id != session_id {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Invalid delimiter, session_id does not match".to_owned()
             ));
         }
 

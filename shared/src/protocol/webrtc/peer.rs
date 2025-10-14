@@ -246,15 +246,14 @@ impl WebRtcPeer {
                         return Ok(thumbnail_paths)
                     }
 
-                    let chunk = thumbnail_rx.next().with_cancel(&thumbnail_cancel_signal).await?.unwrap_or_default();
-                    let first_delimiter = TransferDelimiterShema::from_bytes(&chunk, true)?;
-                    if !first_delimiter.is_start {
-                        return Err(WebRtcErrors::InvalidDelimiter("The first must is_start = true".to_string()));
-                    }
+                    let start_delimiter = TransferDelimiterShema::forward_to_next_resource(
+                        &mut thumbnail_rx,
+                        session_id
+                    ).with_cancel(&thumbnail_cancel_signal).await??;
 
-                    let Some(resource_index) = thumbnail_paths.iter().position(|it| it.0 == first_delimiter.resource_id) else {
+                    let Some(resource_index) = thumbnail_paths.iter().position(|it| it.0 == start_delimiter.resource_id) else {
                         return Err(WebRtcErrors::InvalidDelimiter(format!(
-                            "The first delimiter is not match with any resource {first_delimiter:?}"
+                            "The first delimiter is not match with any resource {start_delimiter:?}"
                         )));
                     };
 
@@ -271,7 +270,7 @@ impl WebRtcPeer {
                             .await
                             .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
 
-                        if TransferDelimiterShema::is_end(&bytes) {
+                        if TransferDelimiterShema::from_end_packet(&bytes, session_id).is_ok() {
                             break;
                         }
                     }
@@ -279,7 +278,7 @@ impl WebRtcPeer {
                     writer.end().with_cancel(&thumbnail_cancel_signal).await??;
 
                     let event = ThumbnailUpdatedEvent {
-                        resource_id: first_delimiter.resource_id,
+                        resource_id: start_delimiter.resource_id,
                         path: resource_path
                     };
 
@@ -296,27 +295,29 @@ impl WebRtcPeer {
                 break;
             }
 
-            let first_delimiter = resource_rx.next().with_cancel(&cancellation_signal).await.unwrap_or_default().unwrap_or_default();
-            let first_delimiter = TransferDelimiterShema::from_bytes(&first_delimiter, true)?;
+            let start_delimiter = TransferDelimiterShema::forward_to_next_resource(
+                &mut resource_rx,
+                session_id
+            ).with_cancel(&cancellation_signal).await??;
 
             let Some((resource_path, resource_size)) = session
                 .resources
                 .iter()
-                .find(|it| it.order_id == first_delimiter.resource_id)
+                .find(|it| it.order_id == start_delimiter.resource_id)
                 .map(|it| (it.path.clone(), it.size))
             else {
                 return Err(WebRtcErrors::InvalidDelimiter(format!(
-                    "The first delimiter is not match with any resource {first_delimiter:?}"
+                    "The first delimiter is not match with any resource {start_delimiter:?}"
                 )));
             };
 
             let mut writer = self.resource_repo.write(resource_path.clone()).await?;
 
-            let progress_update = session.resource_mut_progress(first_delimiter.resource_id).unwrap();
+            let progress_update = session.resource_mut_progress(start_delimiter.resource_id).unwrap();
             let mut total_written_bytes = 0u64;
             log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             while let Ok(Some(packet)) = resource_rx.next().with_cancel(&cancellation_signal).await {
-                if TransferDelimiterShema::is_end(&packet) {
+                if TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok() {
                     progress_update.success();
                     break;
                 }
@@ -401,7 +402,7 @@ impl WebRtcPeer {
                         continue;
                     };
 
-                    let begin_delimiter = TransferDelimiterShema::new(id, true).as_bytes()?;
+                    let begin_delimiter = TransferDelimiterShema::new(session_id, id, true).as_bytes()?;
 
                     if let Err(e) = thumbnail_channel.unbounded_send((peer_id, begin_delimiter)) {
                         log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
@@ -419,7 +420,7 @@ impl WebRtcPeer {
                         }
                     }
 
-                    let end_delimiter = TransferDelimiterShema::new(id, false).as_bytes()?;
+                    let end_delimiter = TransferDelimiterShema::new(session_id, id, false).as_bytes()?;
                     if let Err(e) = thumbnail_channel.unbounded_send((peer_id, end_delimiter)) {
                         log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
                         return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
@@ -456,7 +457,7 @@ impl WebRtcPeer {
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
             let mut total_sent_bytes = 0u64;
             let progress_update = session.resource_mut_progress(order_id).unwrap();
-            let delimiter = TransferDelimiterShema::start(order_id).as_bytes()?;
+            let delimiter = TransferDelimiterShema::start(session_id, order_id).as_bytes()?;
             if let Err(e) = self.data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
@@ -485,7 +486,7 @@ impl WebRtcPeer {
                 }
             }
 
-            let end_delimiter = TransferDelimiterShema::end(order_id).as_bytes()?;
+            let end_delimiter = TransferDelimiterShema::end(session_id, order_id).as_bytes()?;
             if let Err(e) = self.data_channel.unbounded_send((peer_id, end_delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
