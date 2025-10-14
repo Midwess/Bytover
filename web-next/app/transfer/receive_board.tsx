@@ -43,7 +43,7 @@ export default function ReceiveBoard() {
             className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
             <div className={"grid grid-cols-11 w-full h-full gap-2"}>
                 <div
-                    className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-8 scrollbar-dark"}>
+                    className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-4 scrollbar-dark"}>
                     <Board/>
                 </div>
                 <div
@@ -69,7 +69,6 @@ function ContentBoard() {
     useEffect(() => {
         if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
             if (selectedSession.alias) {
-                console.log(selectedSession.alias)
                 setUrl({
                     session: selectedSession.alias ?? ''
                 })
@@ -309,17 +308,17 @@ function Board() {
             {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
             <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
         </div>
-        <Collapsible className={"flex flex-col w-full"} defaultOpen={true}>
+        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
             <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                <Button variant="ghost"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-xl !p-0">
-                    <p className={"font-bold h2 text-md"}>Nearby</p>
+                <Button variant="secondary"
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                    Nearby
                     <ChevronsUpDown className="h-4 w-4"/>
                     <span className="sr-only">Toggle</span>
                 </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className={"flex flex-col gap-3"}>
-                {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+                {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
                 <MotionHighlight hover
                                  className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
@@ -338,17 +337,17 @@ function Board() {
                 </MotionHighlight>
             </CollapsibleContent>
         </Collapsible>
-        <Collapsible className={"flex flex-col w-full"} defaultOpen={true}>
+        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
             <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                <Button variant="ghost"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-xl !p-0">
-                    <p className={"font-bold h2 text-md"}>Public</p>
+                <Button variant="secondary"
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                    Public
                     <ChevronsUpDown className="h-4 w-4"/>
                     <span className="sr-only">Toggle</span>
                 </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className={"flex flex-col gap-3"}>
-                {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+                {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
                 <MotionHighlight
                     hover
                     className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
