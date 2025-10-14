@@ -67,14 +67,15 @@ function ContentBoard() {
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
-        if (selectedSession instanceof ReceiveCloudSessionViewModel) {
+        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
             if (selectedSession.alias) {
+                console.log(selectedSession.alias)
                 setUrl({
                     session: selectedSession.alias ?? ''
                 })
             }
         }
-    }, [selectedSession])
+    }, [selectedSession?.id])
 
     useEffect(() => {
         if (url.session && coreReady) {
@@ -273,17 +274,13 @@ function Board() {
         }
     }, []);
 
-    const handleFind = () => {
+    const handleFind = useCallback(() => {
         message?.resolveMessage()
-        if (!keywords?.trim()) {
-            setUrl({session: undefined})
-        }
+        console.log(keywords)
+        setUrl({session: keywords?.trim() || null})
 
-        console.log('find', keywords)
-        setUrl({session: keywords})
-
-        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords)))
-    }
+        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
+    }, [keywords])
 
     return <>
         <div className={"flex flex-col justify-start text-primaryText gap-4"}>
@@ -297,59 +294,79 @@ function Board() {
                                handleFind()
                            }
                        }}/>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
-                        onClick={() => {
-                            setKeywords('')
-                            setUrl({session: undefined})
-                            handleFind()
-                        }}
-                    >
-                        ×
-                    </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
+                    onClick={() => {
+                        setKeywords('')
+                        handleFind()
+                    }}
+                >
+                    ×
+                </Button>
             </div>
             {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
             <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
         </div>
-        <div className={"flex flex-col gap-3"}>
-            <p className={"font-poppins text-muted-foreground"}>Nearby</p>
-            {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
-            <MotionHighlight hover
-                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                {
-                    nearbySessions.map((item ) => {
-                        return <TransferSession
-                            onPress={() => {
-                                core.updateSelectedSession(item)
-                            }}
-                            id={item.id}
-                            key={item.id}
-                        />
-                    })
-                }
-            </MotionHighlight>
-        </div>
-        <div className={"flex flex-col gap-3"}>
-            <p className={"font-poppins text-muted-foreground"}>Public</p>
-            {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
-            <MotionHighlight
-                hover
-                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                {
-                    publicSessions.map((item) => {
-                        return <TransferSession
-                            onPress={() => {
-                                core.updateSelectedSession(item)
-                            }}
-                            id={item.id}
-                            key={item.id}
-                        />
-                    })
-                }
-            </MotionHighlight>
-        </div>
+        <Collapsible className={"flex flex-col w-full"} defaultOpen={true}>
+            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
+                <Button variant="ghost"
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-xl !p-0">
+                    <p className={"font-bold h2 text-md"}>Nearby</p>
+                    <ChevronsUpDown className="h-4 w-4"/>
+                    <span className="sr-only">Toggle</span>
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className={"flex flex-col gap-3"}>
+                {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+                <MotionHighlight hover
+                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                    {
+                        nearbySessions.map((item, index) => {
+                            return <ItemEffect index={index}>
+                                <TransferSession
+                                    onPress={() => {
+                                        core.updateSelectedSession(item)
+                                    }}
+                                    id={item.id}
+                                    key={item.id}
+                                />
+                            </ItemEffect>
+                        })
+                    }
+                </MotionHighlight>
+            </CollapsibleContent>
+        </Collapsible>
+        <Collapsible className={"flex flex-col w-full"} defaultOpen={true}>
+            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
+                <Button variant="ghost"
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-xl !p-0">
+                    <p className={"font-bold h2 text-md"}>Public</p>
+                    <ChevronsUpDown className="h-4 w-4"/>
+                    <span className="sr-only">Toggle</span>
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className={"flex flex-col gap-3"}>
+                {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm"}>Empty</p>}
+                <MotionHighlight
+                    hover
+                    className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                    {
+                        publicSessions.map((item, index) => {
+                            return <ItemEffect index={index}><TransferSession
+                                onPress={() => {
+                                    core.updateSelectedSession(item)
+                                }}
+                                id={item.id}
+                                key={item.id}
+                            />
+                            </ItemEffect>
+                        })
+                    }
+                </MotionHighlight>
+            </CollapsibleContent>
+        </Collapsible>
     </>
 }
 

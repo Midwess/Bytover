@@ -30,7 +30,7 @@ export function useUrlState(paramNames: string[]): [
             paramNames.forEach((key) => params.delete(key))
 
             Object.entries(newState).forEach(([key, value]) => {
-                if (value != null && value !== undefined) {
+                if (value != null) {
                     params.set(key, value)
                 }
             })
