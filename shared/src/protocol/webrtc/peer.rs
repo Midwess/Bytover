@@ -480,7 +480,7 @@ impl WebRtcPeer {
                 }
 
                 progress_update.update_progress(sent_bytes);
-                let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone()));
+                let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                 if self.buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
                     self.buffer.flush_all_timeout().await?;
                 }

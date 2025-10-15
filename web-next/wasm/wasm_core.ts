@@ -188,24 +188,6 @@ export class WasmCore {
         return isReady
     }
 
-    public useEnvironmentState() {
-        const [state, setState] = useState(this.environmentState.get());
-        useEffect(() => {
-            return this.environmentState.subscribe(setState)
-        }, []);
-
-        return state
-    }
-
-    public useAuthenticationState() {
-        const [state, setState] = useState(this.authenticationState.get());
-        useEffect(() => {
-            return this.authenticationState.subscribe(setState)
-        }, []);
-
-        return state
-    }
-
     public useTransferState() {
         const [state, setState] = useState(this.transferState.get());
         useEffect(() => {
@@ -276,7 +258,7 @@ export class WasmCore {
 
         useEffect(() => {
             return this.transferState.subscribe((value) => {
-                let peer = value?.nearby_peers?.find((it) => {
+                let peer = value?.nearby_peers?.find((it: any) => {
                     return it.id === peerId
                 })
 

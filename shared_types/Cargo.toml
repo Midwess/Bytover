@@ -8,8 +8,8 @@ edition.workspace = true
 
 [features]
 default = ["swift", "java", "typescript"]
-swift = []
-java = []
+swift = ["native"]
+java = ["native"]
 typescript = []
 
 [build-dependencies]

@@ -117,10 +117,8 @@ impl AppCommand {
                             );
                         }
 
-                        transfer_session.update_progress(progress.clone());
-                        TransferSessionPersistentOperation::update_progresses(transfer_session.order_id, vec![progress.clone()]);
-                        let id = transfer_session.id();
-                        self.update_model(TransferSessionModelEvent::Update(id, progress.into()));
+                        progress.clone().update(&mut transfer_session);
+                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
                         if status == TransferSessionStatus::Canceled {
