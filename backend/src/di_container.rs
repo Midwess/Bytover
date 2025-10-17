@@ -20,6 +20,8 @@ use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::mail_service_client::MailServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
@@ -35,6 +37,7 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
+    pub db: Pool<Postgres>,
     live_query: Arc<LiveQuery>
 }
 
@@ -48,9 +51,16 @@ impl DiContainer {
 
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
+        let db = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&std::env::var("DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
+            db,
             live_query: Arc::new(LiveQuery::new(app_db).await)
         }
     }
@@ -59,6 +69,10 @@ impl DiContainer {
         let instance = DI_CONTAINER.get_or_init(|| async { Self::new().await }).await;
 
         instance
+    }
+
+    pub fn new_db(&self) -> Pool<Postgres> {
+        self.db.clone()
     }
 
     pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {

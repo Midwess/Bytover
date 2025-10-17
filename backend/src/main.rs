@@ -3,6 +3,7 @@ use devlog_sdk::api_gateway::client::ApiGatewayClient;
 use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
 use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
 use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
+use grpc::oauth::{MyOauth, OauthServer};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudServiceServer;
 use tonic::transport::Server;
 use tonic_middleware::InterceptorFor;
@@ -47,6 +48,7 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
             BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
             di.get_auth_middleware()
         ))
+        .add_service(OauthServer::new(MyOauth { db: di.new_db() }))
         .serve_with_incoming(connection.listener)
         .await?;
 

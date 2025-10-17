@@ -20,7 +20,7 @@
 
 - Kong gateway
     ```bash
-    docker compose up 
+    cd kong-gateway && docker compose up 
     ```
 - auth-gateway
     ```bash
@@ -28,7 +28,7 @@
     ```
 - Back-end
     ```bash
-    cd backend && AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    cd backend && DATABASE_URL="postgres://bitbridge:bitbridgepass@localhost:5433/bitbridge" DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
     ```
 
 # Front-end & native development

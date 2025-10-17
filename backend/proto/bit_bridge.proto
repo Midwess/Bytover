@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package bitbridge;
+
+service Oauth {
+  rpc OauthGoogle(OauthGoogleRequest) returns (OauthGoogleResponse);
+}
+
+message OauthGoogleRequest {
+  string id_token = 1;
+}
+
+message OauthGoogleResponse {
+  string access_token = 1;
+}
