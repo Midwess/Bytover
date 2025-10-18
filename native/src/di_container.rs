@@ -37,7 +37,6 @@ static DI_SINGLETON: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     db: OnceCell<Arc<PoolAllocator<Database>>>,
     path_resolver: OnceCell<Arc<dyn PathResolver>>,
-    shell: OnceCell<Arc<dyn ShellRuntime>>,
     core_bridge: OnceCell<&'static dyn CoreBridge>,
     native_executor: OnceCell<NativeExecutor>,
     cloud_server: OnceCell<CloudServer<Channel>>,
@@ -50,7 +49,6 @@ impl DiContainer {
         DI_SINGLETON.get().unwrap_or_else(|| {
             let instance = DiContainer {
                 path_resolver: OnceCell::new(),
-                shell: OnceCell::new(),
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
@@ -78,10 +76,9 @@ impl DiContainer {
         AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
     }
 
-    pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, shell: Arc<dyn ShellRuntime>) {
+    pub async fn init(&self, path_resolver: Arc<dyn PathResolver>, bridge: &'static dyn CoreBridge) {
         let _ = self.path_resolver.set(path_resolver);
-        let _ = self.shell.set(shell);
-        let _ = self.core_bridge.set(Box::leak(Box::new(CoreBridgeImpl::new(self.shell.get().unwrap().clone()))));
+        let _ = self.core_bridge.set(bridge);
 
         let db_path = self.path_resolver().get_db_path().await;
         log::info!(target: "environment", "Connecting to local database at {db_path}");

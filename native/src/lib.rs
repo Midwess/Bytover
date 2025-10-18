@@ -23,11 +23,12 @@ use lazy_static::lazy_static;
 use native::executor::NativeExecutor;
 use shared::app::operations::CoreOperation;
 use shared::app::BitBridge;
-use shared::shell::api::CoreRequest;
+use shared::shell::api::{CoreBridge, CoreRequest};
 use std::sync::Arc;
 use tokio::spawn;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+use crate::core_api_impl::bridge::CoreBridgeImpl;
 
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
@@ -126,7 +127,8 @@ impl NativeProcessor {
             .spawn({
                 let shell = shell.clone();
                 async move {
-                    di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), shell.clone()).await;
+                    let core: &'static dyn CoreBridge = Box::leak(Box::new(CoreBridgeImpl::new(shell.clone())));
+                    di_container.init(Arc::new(PathResolverImpl { shell: shell.clone() }), core).await;
                 }
             })
             .await;

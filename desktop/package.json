@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "deno-vite": "deno run --allow-all --unstable-unsafe-proto --unstable-detect-cjs npm:vite@7.0.4",
+    "dev": "deno task deno-vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"

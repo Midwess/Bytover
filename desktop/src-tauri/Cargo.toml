@@ -19,6 +19,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 crux_core.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "fs"] }
+async-trait.workspace = true
+n0-future.workspace = true
 shared = { path = "../../shared" }
 core-services = { path = "../../libs/core-services" }
 native = { path = "../../native" }
