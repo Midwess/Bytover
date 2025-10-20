@@ -2,10 +2,9 @@ use crate::native::message_to_shell::MessageToShell;
 use crate::{ShellRuntime, ThrottleShellRuntime};
 use shared::app::operations::CoreOperationOutput;
 use shared::app::AppEvent;
-use shared::shell::api::CoreBridge;
+use shared::shell::api::{CoreBridge, CruxRequest};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::task::JoinHandle;
 
 pub struct CoreBridgeImpl {
     pub shell: Arc<dyn ShellRuntime>,
@@ -23,16 +22,22 @@ impl CoreBridgeImpl {
 
 #[async_trait::async_trait]
 impl CoreBridge for CoreBridgeImpl {
-    fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
+    async fn response(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
         let shell = self.shell.clone();
-        tokio::spawn(async move {
-            let _ = shell.notify(MessageToShell::HandleResponse(request_id, Box::new(response))).await;
-        })
+        let CruxRequest::Id(request_id) = request else {
+            return;
+        };
+
+        let _ = shell.notify(MessageToShell::HandleResponse(*request_id, Box::new(response))).await;
     }
 
-    async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
+    async fn response_throttle(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
+        let CruxRequest::Id(request_id) = request else {
+            return;
+        };
+
         self.throttle_shell_runtime
-            .send(MessageToShell::HandleResponse(request_id, Box::new(response)))
+            .send(MessageToShell::HandleResponse(*request_id, Box::new(response)))
             .await;
     }
 

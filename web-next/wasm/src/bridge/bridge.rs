@@ -5,7 +5,7 @@ use n0_future::time;
 use n0_future::time::Interval;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::AppEvent;
-use shared::shell::api::CoreBridge;
+use shared::shell::api::{CoreBridge, CruxRequest};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,13 +26,21 @@ impl CoreBridgeImpl {
 
 #[async_trait::async_trait(?Send)]
 impl CoreBridge for CoreBridgeImpl {
-    fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
+    async fn response(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
         let shell = self.shell.clone();
-        shell.forward_core_operation_output(request_id, response)
+        let CruxRequest::Id(request_id) = request else {
+            panic!("Invalid request");
+        };
+
+        shell.forward_core_operation_output(*request_id, response);
     }
 
-    async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
-        let _ = self.throttle_shell_runtime.send(request_id, response).await;
+    async fn response_throttle(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
+        let CruxRequest::Id(request_id) = request else {
+            panic!("Invalid request");
+        };
+
+        let _ = self.throttle_shell_runtime.send(*request_id, response).await;
     }
 
     async fn notify(&self, event: AppEvent) {

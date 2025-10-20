@@ -23,7 +23,7 @@ use lazy_static::lazy_static;
 use native::executor::NativeExecutor;
 use shared::app::operations::CoreOperation;
 use shared::app::BitBridge;
-use shared::shell::api::{CoreBridge, CoreRequest};
+use shared::shell::api::{CoreBridge, CoreRequest, CruxRequest};
 use std::sync::Arc;
 use tokio::spawn;
 use tokio::sync::OnceCell;
@@ -101,7 +101,6 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
 
 // NativeProcessor implementation
 pub struct NativeProcessor {
-    shell: Arc<dyn ShellRuntime>,
     native_executor: &'static NativeExecutor
 }
 
@@ -120,7 +119,6 @@ pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
 impl NativeProcessor {
     pub async fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         setup();
-        let shell: Arc<dyn ShellRuntime> = shell;
         let di_container = DiContainer::get_instance();
 
         let _ = get_tokio_rt()
@@ -137,7 +135,6 @@ impl NativeProcessor {
 
         Self {
             native_executor,
-            shell: shell.clone()
         }
     }
 
@@ -150,10 +147,9 @@ impl NativeProcessor {
 
         let native_executor = self.native_executor;
         let core_bridge = DiContainer::get_instance().core_bridge();
-        let shell = self.shell.clone();
         get_tokio_rt()
             .spawn(async move {
-                let output = native_executor.handle(CoreRequest::new(id, core_bridge), effect, shell).await;
+                let output = native_executor.handle(CoreRequest::new(CruxRequest::Id(id), core_bridge), effect).await;
                 handle_response(id, serialize(&output))
             })
             .await

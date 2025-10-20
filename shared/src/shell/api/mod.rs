@@ -9,12 +9,14 @@ use futures::task::{noop_waker, Context, Poll};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
 use matchbox_socket::PeerBuffered;
-use n0_future::task::JoinHandle;
 use n0_future::Stream;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
+use crux_core::RequestHandle;
+use futures_util::lock::Mutex;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -34,46 +36,49 @@ pub trait IOWriter: Send + Sync {
     }
 }
 
+pub enum CruxRequest {
+    Id(u32),
+    RequestHandle(RequestHandle<CoreOperationOutput>)
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait CoreBridge: Send + Sync {
-    fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()>;
+    async fn response(&self, request: &mut CruxRequest, response: CoreOperationOutput);
 
     // How many throttle is depends on the implementation
-    async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput);
+    async fn response_throttle(&self, request: &mut CruxRequest, response: CoreOperationOutput);
 
     async fn notify(&self, event: AppEvent);
 }
 
 pub struct CoreRequest {
-    id: u32,
+    crux_request: Arc<Mutex<CruxRequest>>,
     bridge: &'static dyn CoreBridge
 }
 
 impl Clone for CoreRequest {
     fn clone(&self) -> Self {
         Self {
-            id: self.id,
+            crux_request: self.crux_request.clone(),
             bridge: self.bridge
         }
     }
 }
 
 impl CoreRequest {
-    pub fn new(id: u32, bridge: &'static dyn CoreBridge) -> Self {
-        Self { id, bridge }
+    pub fn new(crux_request: CruxRequest, bridge: &'static dyn CoreBridge) -> Self {
+        Self { crux_request: Arc::new(Mutex::new(crux_request)), bridge }
     }
 
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    pub fn response(&self, response: impl Into<CoreOperationOutput>) -> JoinHandle<()> {
-        self.bridge.response(self.id, response.into())
+    pub async fn response(&self, response: impl Into<CoreOperationOutput>) {
+        let mut request = self.crux_request.lock().await;
+        self.bridge.response(&mut request, response.into()).await;
     }
 
     pub async fn response_throttle(&self, response: impl Into<CoreOperationOutput>) {
-        let _ = self.bridge.response_throttle(self.id, response.into()).await;
+        let mut request = self.crux_request.lock().await;
+        let _ = self.bridge.response_throttle(&mut request, response.into()).await;
     }
 }
 

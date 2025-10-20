@@ -1,24 +1,33 @@
-use crux_core::middleware::Layer;
-use n0_future::task::JoinHandle;
 use shared::app::AppEvent;
 use shared::app::operations::CoreOperationOutput;
-use shared::shell::api::CoreBridge;
-use crate::CORE;
+use shared::shell::api::{CoreBridge, CruxRequest};
+use crate::{process_effects, process_event, CORE};
 
 pub struct BridgeImpl {}
 
 #[async_trait::async_trait]
 impl CoreBridge for BridgeImpl {
-    fn response(&self, request_id: u32, response: CoreOperationOutput) -> JoinHandle<()> {
-        let effects = CORE.resolve(response);
-        todo!()
+    async fn response(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
+        let CruxRequest::RequestHandle(handle) = request else {
+            panic!("Invalid request");
+        };
+
+        let Ok(effects) = CORE.resolve(handle, response) else {
+            return;
+        };
+
+        process_effects(effects).await;
     }
 
-    async fn response_throttle(&self, request_id: u32, response: CoreOperationOutput) {
-        todo!()
+    async fn response_throttle(
+        &self,
+        request: &mut CruxRequest,
+        response: CoreOperationOutput
+    ) {
+        self.response(request, response).await;
     }
 
     async fn notify(&self, event: AppEvent) {
-        todo!()
+        process_event(event).await;
     }
 }

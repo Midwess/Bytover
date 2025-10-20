@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use crate::ShellRuntime;
 use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
@@ -27,7 +24,6 @@ impl NativeExecutor {
         &self,
         request: CoreRequest,
         effect: CoreOperation,
-        _shell_runtime: Arc<dyn ShellRuntime>
     ) -> CoreOperationOutput {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {

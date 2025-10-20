@@ -1,5 +1,4 @@
 use crate::config::{get_gateway_grpc_url, get_locator_http_url, get_signalling_server_ws_url};
-use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -11,7 +10,6 @@ use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
-use crate::ShellRuntime;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;

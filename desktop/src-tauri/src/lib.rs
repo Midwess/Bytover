@@ -1,12 +1,12 @@
-use std::ops::Deref;
 use std::sync::{Arc, LazyLock};
 use crux_core::Core;
 use tauri::Manager;
 use tokio::{fs, spawn};
 use native::di_container::DiContainer;
-use shared::app::AppEvent;
+use shared::app::{AppEvent, AppOperation};
 use shared::app::BitBridge;
-use shared::shell::api::CoreBridge;
+use shared::CoreOperation;
+use shared::shell::api::{CoreRequest, CruxRequest};
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
 
@@ -18,8 +18,29 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[tauri::command]
-fn process(event: AppEvent) {}
+async fn process_event(event: AppEvent) {
+    let effects = CORE.process_event(event);
+    process_effects(effects).await;
+}
+
+async fn process_effects(mut effects: Vec<AppOperation>) {
+    while let Some(effect) = effects.pop() {
+        let AppOperation::Operation(request) = effect;
+
+        let (operation, handle) = request.split();
+        if let CoreOperation::Notified(event) = operation {
+            let mut new_effects = CORE.process_event(event);
+            effects.append(&mut new_effects);
+            continue;
+        }
+
+        let bridge = DiContainer::get_instance().core_bridge();
+        let request = CoreRequest::new(CruxRequest::RequestHandle(handle), bridge);
+        let executor = DiContainer::get_instance().get_native_executor();
+        let output = executor.handle(request.clone(), operation).await;
+        request.response(output).await;
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
