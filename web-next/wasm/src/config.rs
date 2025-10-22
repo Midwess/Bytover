@@ -2,6 +2,11 @@ use url::Url;
 use wasm_bindgen::JsValue;
 use web_sys::window;
 
+/// If these are not specified, we will use the host of the current webpage.
+pub const GATEWAY_HOST: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_HOST");
+pub const GATEWAY_PORT: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_PORT");
+pub const DEVLOG_WITH_SSL: Option<&str> = option_env!("DEVLOG_WITH_SSL");
+
 pub struct HostInfo {
     pub host: String,
     pub port: u16,
@@ -12,7 +17,13 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
     let window = window().ok_or_else(|| JsValue::from_str("No window found"))?;
     let href = window.location().href().map_err(|_| JsValue::from_str("Failed to get href"))?;
 
-    let url = Url::parse(&href).map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?;
+    let env_scheme = match DEVLOG_WITH_SSL.unwrap_or("0") == "1" {
+        true => "https",
+        false => "http"
+    };
+
+    let env_url = Url::parse(&format!("{env_scheme}://{}:{}", GATEWAY_HOST.unwrap_or("localhost"), GATEWAY_PORT.unwrap_or("8080"))).ok();
+    let url = env_url.unwrap_or(Url::parse(&href).map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?);
 
     let port = match url.port_or_known_default() {
         Some(p) => p,

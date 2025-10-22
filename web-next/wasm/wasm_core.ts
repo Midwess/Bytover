@@ -308,7 +308,6 @@ export class WasmCore {
     async processEffect(request_id: number, effect: AppOperation): Promise<Uint8Array> {
         const effectOperation = effect as AppOperationVariantOperation;
         const coreOperation = effectOperation.value;
-        console.log(JSON.stringify(effect))
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
                 await init()
