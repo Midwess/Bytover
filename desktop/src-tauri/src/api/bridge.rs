@@ -19,6 +19,8 @@ impl CoreBridge for BridgeImpl {
         process_effects(effects).await;
     }
 
+    // The response throttle in desktop don't need to be throttle
+    // because there are no FFI bridge in desktop, so performance is not a concern.
     async fn response_throttle(
         &self,
         request: &mut CruxRequest,
