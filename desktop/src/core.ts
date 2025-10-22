@@ -1,4 +1,5 @@
-import { listen, UnlistenFn } from '@tauri-apps/api/event'
+import { EnvironmentModel } from 'shared_types/types/shared_types'
+import { listen } from '@tauri-apps/api/event'
 import {useEffect} from "react";
 
 export class Core {
@@ -6,9 +7,12 @@ export class Core {
 
     useViewModel() {
         useEffect(() => {
-            listen<State>('render', (event) => {
+            let unlisten = () => {};
+            listen<EnvironmentModel>('render', (event) => {
                 console.log(event)
-            })
+            }).then(it => unlisten = it)
+
+            return unlisten
         }, []);
     }
 }
