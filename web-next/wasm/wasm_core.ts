@@ -308,6 +308,7 @@ export class WasmCore {
     async processEffect(request_id: number, effect: AppOperation): Promise<Uint8Array> {
         const effectOperation = effect as AppOperationVariantOperation;
         const coreOperation = effectOperation.value;
+        console.log(JSON.stringify(effect))
         switch(coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
                 await init()
@@ -496,6 +497,8 @@ export class WasmCore {
                 viewModel.transfer?.received_cloud_sessions.find(it => it.id === selectedSession.id)
             this.selectedSession.set(newSession)
         }
+
+        console.log(`tiendang-debug, ${JSON.stringify(viewModel)}`)
     }
 
     async update_app_event(appEvent: Uint8Array) {

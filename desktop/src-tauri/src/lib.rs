@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::{fs, spawn};
 use core_services::logger;
 use native::di_container::DiContainer;
-use shared::app::{AppEvent, AppOperation};
+use shared::app::{AppEvent, AppOperation, AppViewModel};
 use shared::app::BitBridge;
 use shared::app::environment::module::EnvironmentEvent;
 use shared::app::operations::CoreOperationOutput;
@@ -23,12 +23,14 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-async fn process_event(event: AppEvent) {
+async fn process_event(event: AppEvent, app_handle: AppHandle) {
     let effects = CORE.process_event(event);
-    process_effects(effects).await;
+    process_effects(effects, app_handle).await;
 }
 
-async fn render() {}
+async fn render(view: AppViewModel, app_handle: AppHandle) {
+    let _ = app_handle.emit("CoreView", CORE.view());
+}
 
 async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) {
     while let Some(effect) = effects.pop() {
@@ -37,7 +39,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
         let (operation, mut handle) = request.split();
         let mut new_effects = match operation {
             CoreOperation::Render => {
-                let _ = app_handle.emit("render", CORE.view()).unwrap();
+                render(CORE.view(), app_handle.clone()).await;
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Notified(event) => {
@@ -98,7 +100,6 @@ pub async fn run() {
         .invoke_handler(tauri::generate_handler![greet])
         .setup(|app| {
             let handle = app.handle().clone();
-            handle.emit("app-launched", None).unwrap();
             let workdir_path = app
                 .path()
                 .app_data_dir()
@@ -106,9 +107,11 @@ pub async fn run() {
 
             spawn(async move {
                 let _ = fs::create_dir_all(&workdir_path);
-                let bridge = Box::leak(Box::new(BridgeImpl {}));
+                let bridge = Box::leak(Box::new(BridgeImpl {
+                    app_handle: handle.clone()
+                }));
                 DiContainer::get_instance().init(Arc::new(PathResolverImpl::new(workdir_path).await), &*bridge).await;
-                process_event(EnvironmentEvent::AppLaunched.into()).await;
+                process_event(EnvironmentEvent::AppLaunched.into(), handle).await;
             });
 
             Ok(())

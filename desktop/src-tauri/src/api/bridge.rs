@@ -1,9 +1,12 @@
+use tauri::AppHandle;
 use shared::app::AppEvent;
 use shared::app::operations::CoreOperationOutput;
 use shared::shell::api::{CoreBridge, CruxRequest};
 use crate::{process_effects, process_event, CORE};
 
-pub struct BridgeImpl {}
+pub struct BridgeImpl {
+    pub app_handle: AppHandle
+}
 
 #[async_trait::async_trait]
 impl CoreBridge for BridgeImpl {
@@ -16,7 +19,7 @@ impl CoreBridge for BridgeImpl {
             return;
         };
 
-        process_effects(effects).await;
+        process_effects(effects, self.app_handle.clone()).await;
     }
 
     // The response throttle in desktop don't need to be throttle
@@ -30,6 +33,6 @@ impl CoreBridge for BridgeImpl {
     }
 
     async fn notify(&self, event: AppEvent) {
-        process_event(event).await;
+        process_event(event, self.app_handle.clone()).await;
     }
 }
