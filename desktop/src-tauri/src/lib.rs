@@ -1,6 +1,6 @@
 use std::sync::{Arc, LazyLock};
 use crux_core::Core;
-use tauri::Manager;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::{fs, spawn};
 use core_services::logger;
 use native::di_container::DiContainer;
@@ -28,12 +28,18 @@ async fn process_event(event: AppEvent) {
     process_effects(effects).await;
 }
 
-async fn process_effects(mut effects: Vec<AppOperation>) {
+async fn render() {}
+
+async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) {
     while let Some(effect) = effects.pop() {
         let AppOperation::Operation(request) = effect;
 
         let (operation, mut handle) = request.split();
         let mut new_effects = match operation {
+            CoreOperation::Render => {
+                let _ = app_handle.emit("render", CORE.view()).unwrap();
+                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            }
             CoreOperation::Notified(event) => {
                 CORE.process_event(event)
             },
@@ -91,6 +97,8 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet])
         .setup(|app| {
+            let handle = app.handle().clone();
+            handle.emit("app-launched", None).unwrap();
             let workdir_path = app
                 .path()
                 .app_data_dir()
