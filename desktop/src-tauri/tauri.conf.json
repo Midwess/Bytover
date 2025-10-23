@@ -13,8 +13,9 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "url": "shelf.html",
-        "title": "Shelf",
+        "url": "send.html",
+        "title": "Send",
+        "label": "send",
         "width": 480,
         "height": 280,
         "backgroundColor": "#00000000",
@@ -23,7 +24,7 @@
         "transparent": true,
         "focus": false,
         "alwaysOnTop": true,
-        "skipTaskbar": true,
+        "skipTaskbar": false,
         "resizable": false,
         "shadow": false
       }

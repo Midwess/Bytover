@@ -77,6 +77,11 @@
   --color-sidebar-border: var(--sidebar-border);
 
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-greenSecondary: oklch(0.9082 0.2464 130.54);
+  --color-blackBase: oklch(12.69% 0.007 268.06);
+  --color-blackSecondary: oklch(24.79% 0.017 270.00);
+  --color-bluePrimary: oklch(45.11% 0.273 266.23);
 }
 
 :root {
@@ -214,6 +219,7 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    @apply text-sm
   }
   body {
     @apply bg-background text-foreground;

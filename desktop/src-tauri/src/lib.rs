@@ -2,6 +2,7 @@ use std::sync::{Arc, LazyLock};
 use crux_core::Core;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::{fs, spawn};
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 use core_services::logger;
 use native::di_container::DiContainer;
 use shared::app::{AppEvent, AppOperation, AppViewModel};
