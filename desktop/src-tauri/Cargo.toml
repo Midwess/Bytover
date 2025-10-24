@@ -27,6 +27,10 @@ core-services = { path = "../../libs/core-services" }
 native = { path = "../../native" }
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
-window-vibrancy = "0.6.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+log.workspace = true
+schema = { path = "../../libs/schema/rust" }
+hostname.workspace = true
+machine-uid.workspace = true
+uuid.workspace = true

@@ -37,7 +37,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                 ctx.app().re_authorize().await?;
 
                 Ok(())
-            })
+            }).then_render()
         }
     }
 

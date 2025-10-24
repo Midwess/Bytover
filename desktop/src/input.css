@@ -84,6 +84,13 @@
   --color-bluePrimary: oklch(45.11% 0.273 266.23);
 }
 
+.container {
+  padding-top: 0.5rem;
+  padding-right: 1rem;
+  padding-bottom: 0.5rem;
+  padding-left: 1rem;
+}
+
 :root {
 
   --radius: 0.625rem;

@@ -26,12 +26,36 @@
         "alwaysOnTop": true,
         "skipTaskbar": false,
         "resizable": false,
-        "shadow": false
+        "shadow": false,
+        "devtools": true
+      },
+      {
+        "url": "auth.html",
+        "title": "Auth",
+        "label": "auth",
+        "width": 280,
+        "height": 450,
+        "backgroundColor": "#00000000",
+        "decorations": false,
+        "transparent": true,
+        "focus": true,
+        "skipTaskbar": false,
+        "resizable": false,
+        "shadow": true,
+        "devtools": true
       }
     ],
     "security": {
       "csp": null
     }
+  },
+  "protocols": {
+    "custom": [
+      {
+        "name": "bitbridge",
+        "handler": "bitbridge"
+      }
+    ]
   },
   "bundle": {
     "active": true,

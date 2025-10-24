@@ -56,11 +56,11 @@ pub struct AppModel {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppViewModel {
-    environment: Option<EnvironmentViewModel>,
-    authentication: Option<AuthenticationViewModel>,
-    transfer: Option<TransferViewModel>,
-    nearby: Option<NearbyViewModel>,
-    shelf: Option<ShelfViewModel>
+    pub environment: Option<EnvironmentViewModel>,
+    pub authentication: Option<AuthenticationViewModel>,
+    pub transfer: Option<TransferViewModel>,
+    pub nearby: Option<NearbyViewModel>,
+    pub shelf: Option<ShelfViewModel>
 }
 
 /// The effects that shell need to handle
