@@ -25,3 +25,4 @@ tonic-web = { workspace = true }
 async-trait = { workspace = true }
 lazy_static = { workspace = true }
 tokio-stream = "0.1.17"
+sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "postgres"] }

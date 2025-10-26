@@ -23,6 +23,8 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -35,7 +37,8 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
-    live_query: Arc<LiveQuery>
+    live_query: Arc<LiveQuery>,
+    pub pg_pool: PgPool
 }
 
 impl DiContainer {
@@ -48,10 +51,19 @@ impl DiContainer {
 
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable is not set.");
+        let pg_pool = PgPoolOptions::new()
+            .min_connections(5)
+            .max_connections(10)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to Postgres using sqlx.");
+
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
-            live_query: Arc::new(LiveQuery::new(app_db).await)
+            live_query: Arc::new(LiveQuery::new(app_db).await),
+            pg_pool
         }
     }
 
@@ -59,6 +71,10 @@ impl DiContainer {
         let instance = DI_CONTAINER.get_or_init(|| async { Self::new().await }).await;
 
         instance
+    }
+
+    pub fn get_pg_pool(&self) -> &PgPool {
+        &self.pg_pool
     }
 
     pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {
