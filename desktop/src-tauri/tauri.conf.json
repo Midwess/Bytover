@@ -9,6 +9,15 @@
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "bitbridge"
+        ]
+      }
+    }
+  },
   "app": {
     "macOSPrivateApi": true,
     "windows": [
@@ -48,14 +57,6 @@
     "security": {
       "csp": null
     }
-  },
-  "protocols": {
-    "custom": [
-      {
-        "name": "bitbridge",
-        "handler": "bitbridge"
-      }
-    ]
   },
   "bundle": {
     "active": true,

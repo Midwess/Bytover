@@ -1,8 +1,8 @@
-use tauri::AppHandle;
-use shared::app::AppEvent;
-use shared::app::operations::CoreOperationOutput;
-use shared::shell::api::{CoreBridge, CruxRequest};
 use crate::{process_effects, process_event, CORE};
+use shared::app::operations::CoreOperationOutput;
+use shared::app::AppEvent;
+use shared::shell::api::{CoreBridge, CruxRequest};
+use tauri::AppHandle;
 
 pub struct BridgeImpl {
     pub app_handle: AppHandle
@@ -24,11 +24,7 @@ impl CoreBridge for BridgeImpl {
 
     // The response throttle in desktop don't need to be throttle
     // because there are no FFI bridge in desktop, so performance is not a concern.
-    async fn response_throttle(
-        &self,
-        request: &mut CruxRequest,
-        response: CoreOperationOutput
-    ) {
+    async fn response_throttle(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
         self.response(request, response).await;
     }
 

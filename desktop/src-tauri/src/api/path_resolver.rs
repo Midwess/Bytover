@@ -1,12 +1,12 @@
-use std::path::PathBuf;
-use tokio::fs::create_dir_all;
 use shared::entities::local_resource::LocalResourcePath;
 use shared::repository::path_resolver::PathResolver;
+use std::path::PathBuf;
+use tokio::fs::create_dir_all;
 
 pub struct PathResolverImpl {
     private_dir_path: PathBuf,
     user_dir_path: PathBuf,
-    thumbnails_dir_path: PathBuf,
+    thumbnails_dir_path: PathBuf
 }
 
 impl PathResolverImpl {
@@ -40,10 +40,10 @@ impl PathResolver for PathResolverImpl {
     async fn get_absolute_path(&self, path: LocalResourcePath) -> String {
         match path {
             LocalResourcePath::AbsolutePath(str) => str,
-            LocalResourcePath::RelativePath { path, is_private} => match is_private {
+            LocalResourcePath::RelativePath { path, is_private } => match is_private {
                 true => self.private_dir_path.join(path).to_str().unwrap().to_string(),
                 false => self.user_dir_path.join(path).to_str().unwrap().to_string()
-            }
+            },
             LocalResourcePath::PlatformIdentifier(str) => str
         }
     }

@@ -2,10 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["send", "auth"],
+  "windows": [
+    "send",
+    "auth"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
-    "core:webview:allow-create-webview-window"
+    "core:webview:allow-create-webview-window",
+    "deep-link:default"
   ]
 }

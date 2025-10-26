@@ -107,9 +107,8 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
-        self.shared_context.set_current_id(current_user.peer_id());
-
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
+        self.shared_context.set_current_id(current_user.peer_id());
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())

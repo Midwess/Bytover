@@ -34,3 +34,7 @@ schema = { path = "../../libs/schema/rust" }
 hostname.workspace = true
 machine-uid.workspace = true
 uuid.workspace = true
+tauri-plugin-deep-link = "2"
+
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }

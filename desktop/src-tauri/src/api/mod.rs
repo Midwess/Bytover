@@ -1,2 +1,2 @@
-pub mod path_resolver;
 pub mod bridge;
+pub mod path_resolver;

@@ -88,8 +88,15 @@ export PATH=$PATH:$TOOLCHAIN/bin
 Build the rust binary by selecting the `shared` module, and
 `press build in Android Studio`
 ## iOS
+- Open XCode project at `ios/BitBridge.xcodeproj`
+- Run with XCode
 
 ## Desktop
+- Because MacOS doesn't support 'deep-linking' on development,
+We will need to explicitly set access token in the environment variable.
 ```bash
-cd Desktop; cargo build
+export BTIBRIDGE_ACCESS_TOKEN='<token>'
+```
+```bash
+cd Desktop; pnpm tauri dev
 ```
