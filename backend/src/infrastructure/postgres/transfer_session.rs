@@ -4,7 +4,9 @@ use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRe
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
 use sea_orm::entity::prelude::*;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, JsonValue};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, JsonValue, ActiveModelTrait};
+use sea_orm::ActiveValue::Set;
+use devlog_sdk::distributed_id::gen_id;
 use serde_json::{json, Value};
 
 pub struct TransferSessionPostgresRepository {
@@ -15,7 +17,7 @@ pub struct TransferSessionPostgresRepository {
 #[sea_orm(table_name = "transfer_session")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
+    pub id: i64,
     pub alias: String,
     pub password: Option<String>,
     #[sea_orm(column_type = "JsonBinary", nullable)]
@@ -81,8 +83,30 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
 
 #[async_trait::async_trait]
 impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresRepository {
-    async fn create(&self, _data: TransferSession) -> Result<TransferSession, RepositoryError> {
-        Err(RepositoryError::DbError("Not implemented for Postgres repository".to_string()))
+    async fn create(&self, data: TransferSession) -> Result<TransferSession, RepositoryError> {
+        let row_id = gen_id().await as i64;
+        let password = data.password();
+        let to_emails_val = serde_json::to_value(data.to_emails()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let resources_val = serde_json::to_value(data.resources()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let progress_val = serde_json::to_value(data.progresses()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        let active = ActiveModel {
+            id: Set(row_id),
+            alias: Set(data.alias()),
+            password: Set(password),
+            to_emails: Set(Some(to_emails_val)),
+            order_id: Set(data.order_id() as i64),
+            owner_user_order_id: Set(data.user_order_id() as i64),
+            progress: Set(Some(progress_val)),
+            resources: Set(Some(resources_val)),
+        };
+
+        let _ = active
+            .insert(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        Ok(data)
     }
 
     async fn find_one(&self, id: &TransferSessionId) -> Result<Option<TransferSession>, RepositoryError> {
