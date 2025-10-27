@@ -38,7 +38,7 @@ pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
     live_query: Arc<LiveQuery>,
-    pub pg_pool: PgPool
+    pg_pool: PgPool
 }
 
 impl DiContainer {
