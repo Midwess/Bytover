@@ -3,8 +3,27 @@ import { useEffect } from "react";
 
 export const useOverlayScrollbars = () => {
     useEffect(() => {
+        const instances = new Map<HTMLElement, ReturnType<typeof OverlayScrollbars>>();
+
+        // Clean up instances for elements that are no longer in the DOM
+        const cleanupRemovedElements = () => {
+            instances.forEach((instance, element) => {
+                if (!document.contains(element)) {
+                    try {
+                        instance.destroy();
+                    } catch (error) {
+                        // Silently ignore
+                    }
+                    instances.delete(element);
+                }
+            });
+        };
+
         // Initialize OverlayScrollbars on all scrollable elements
         const initScrollbars = () => {
+            // First, clean up any removed elements
+            cleanupRemovedElements();
+
             // Target the main scrollable areas
             const scrollableElements = [
                 document.body,
@@ -13,21 +32,22 @@ export const useOverlayScrollbars = () => {
                 ...document.querySelectorAll(".overflow-auto"),
                 ...document.querySelectorAll(".overflow-scroll"),
                 ...document.querySelectorAll(".overflow-y-scroll"),
-            ].filter(Boolean) as Element[];
+            ].filter(Boolean) as HTMLElement[];
 
             scrollableElements.forEach((element) => {
-                const htmlElement = element as HTMLElement;
-                if (
-                    htmlElement &&
-                    !htmlElement.hasAttribute("data-overlayscrollbars-initialize")
-                ) {
-                    OverlayScrollbars(htmlElement, {
-                        scrollbars: {
-                            theme: "os-theme-custom",
-                            autoHide: "never",
-                        },
-                    });
-                    htmlElement.setAttribute("data-overlayscrollbars-initialize", "true");
+                // Only initialize if not already tracked and still in DOM
+                if (!instances.has(element) && document.contains(element)) {
+                    try {
+                        const instance = OverlayScrollbars(element, {
+                            scrollbars: {
+                                theme: "os-theme-custom",
+                                autoHide: "never",
+                            },
+                        });
+                        instances.set(element, instance);
+                    } catch (error) {
+                        console.warn("Error initializing OverlayScrollbars:", error);
+                    }
                 }
             });
         };
@@ -36,28 +56,32 @@ export const useOverlayScrollbars = () => {
         initScrollbars();
 
         // Re-initialize when DOM changes (for dynamic content)
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const observer = new MutationObserver(() => {
-            setTimeout(initScrollbars, 100);
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(initScrollbars, 100);
         });
 
         observer.observe(document.body, {
             childList: true,
             subtree: true,
-            attributes: true,
-            attributeFilter: ["class"],
         });
 
         return () => {
             observer.disconnect();
-            // Clean up all OverlayScrollbars instances
-            document
-                .querySelectorAll("[data-overlayscrollbars-initialize]")
-                .forEach((element) => {
-                    const instance = OverlayScrollbars(element as HTMLElement);
-                    if (instance) {
+            if (timeoutId) clearTimeout(timeoutId);
+            
+            // Clean up all OverlayScrollbars instances safely
+            instances.forEach((instance, element) => {
+                try {
+                    if (document.contains(element)) {
                         instance.destroy();
                     }
-                });
+                } catch (error) {
+                    // Silently ignore cleanup errors
+                }
+            });
+            instances.clear();
         };
     }, []);
 };

@@ -235,7 +235,7 @@
 }
 
 .os-theme-custom.os-scrollbar {
-  --os-size: 8px;
+  --os-size: 3px;
   --os-padding-perpendicular: 0px;
   --os-padding-axis: 0px;
 }

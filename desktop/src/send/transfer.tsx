@@ -39,7 +39,7 @@ export function Transfer() {
                     <TabsPanels>
                         <TabsPanel value="nearby" className="flex flex-col">
                             <CardContent className={"p-0 flex flex-col gap-2"}>
-                                <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/80 rounded-lg">
+                                <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 rounded-lg min-h-fit">
                                     <Label htmlFor="tabs-input-email" className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
                                         <div className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
                                             <Mail/>
@@ -53,8 +53,8 @@ export function Transfer() {
                                         </Button>
                                     </div>
                                 </Card>
-                                <Card className="flex flex-col gap-2 py-2 border p-1.5 overflow-y-scroll">
-                                    <Label className={"flex flex-row items-center gap-2 bg-muted px-2 py-1 w-fit rounded-md shadow-black"}>
+                                <Card className="flex flex-col gap-5 py-2 bg-card/95 border p-1.5 overflow-y-scroll">
+                                    <Label className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
                                         <div className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
                                             <MapPin/>
                                         </div>
@@ -107,6 +107,7 @@ export function Transfer() {
 
 function NearbyList() {
     const list = core.useNearbyListState();
+    console.log('tiendang-debug', `nearby list ${JSON.stringify(list, null, 2)}`)
     return <div className={"flex flex-col gap-2 w-full h-full"}>
         {
             list.map((it) => <>

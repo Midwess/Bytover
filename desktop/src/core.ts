@@ -27,14 +27,13 @@ export class Core {
 
     useNearbyListState() {
         const [state, setState] = useState(this.nearbyState.get()?.peers ?? []);
-        console.log(state)
         useEffect(() => {
             return this.nearbyState.subscribe((newState) => {
                 if (state.length != newState?.peers.length) {
                     setState(newState?.peers || [])
                 }
             })
-        }, []);
+        }, [state.length]);
 
         return state
     }
