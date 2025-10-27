@@ -51,7 +51,7 @@ impl DiContainer {
 
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable is not set.");
+        let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
         let pg_pool = PgPoolOptions::new()
             .min_connections(5)
             .max_connections(10)
