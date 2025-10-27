@@ -22,25 +22,8 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "url": "send.html",
-        "title": "Send",
-        "label": "send",
-        "width": 480,
-        "height": 280,
-        "backgroundColor": "#00000000",
-        "dragDropEnabled": true,
-        "decorations": false,
-        "transparent": true,
-        "focus": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": false,
-        "resizable": false,
-        "shadow": false,
-        "devtools": true
-      },
-      {
         "url": "auth.html",
-        "title": "Auth",
+        "title": "auth",
         "label": "auth",
         "width": 280,
         "height": 450,

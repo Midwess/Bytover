@@ -98,5 +98,8 @@ We will need to explicitly set access token in the environment variable.
 export BTIBRIDGE_ACCESS_TOKEN='<token>'
 ```
 ```bash
+# Run tailwind to generate css
+cd Desktop; pnpm tailwind
+# Start desktop app
 cd Desktop; pnpm tauri dev
 ```

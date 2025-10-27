@@ -1,9 +1,9 @@
 import Home from "@/app/home";
 
 export default function Page() {
-  return (
-      <>
-        <Home></Home>
-      </>
-  );
+    return (
+        <>
+            <Home></Home>
+        </>
+    );
 }
