@@ -65,6 +65,14 @@ impl Model {
     }
 }
 
+impl std::convert::TryInto<TransferSession> for Model {
+    type Error = RepositoryError;
+
+    fn try_into(self) -> Result<TransferSession, Self::Error> {
+        self.into_domain()
+    }
+}
+
 #[async_trait::async_trait]
 impl TransferSessionRepository for TransferSessionPostgresRepository {
     async fn find_session_by_alias(&self, alias: String) -> Result<Option<TransferSession>, RepositoryError> {
