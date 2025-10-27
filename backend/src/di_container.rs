@@ -73,7 +73,7 @@ impl DiContainer {
         instance
     }
 
-    pub fn get_pg_pool(&self) -> &PgPool {
+    pub fn get_pg_pool(&'static self) -> &'static PgPool {
         &self.pg_pool
     }
 
