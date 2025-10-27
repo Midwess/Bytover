@@ -1,4 +1,3 @@
-use std::panic::catch_unwind;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;

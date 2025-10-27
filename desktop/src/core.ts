@@ -39,7 +39,6 @@ export class Core {
         return state
     }
 
-
     usePeerState(peerId: string | undefined) {
         const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
 

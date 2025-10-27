@@ -16,7 +16,7 @@
     > DEFINE NAMESPACE development;
     > USE NS development;
     > DEFINE USER devlog ON NAMESPACE PASSWORD 'ssh' ROLES OWNER;
-    ```
+    ``
 
 - Kong gateway
     ```bash
@@ -98,8 +98,5 @@ We will need to explicitly set access token in the environment variable.
 export BTIBRIDGE_ACCESS_TOKEN='<token>'
 ```
 ```bash
-# Run tailwind to generate css
-cd Desktop; pnpm tailwind
-# Start desktop app
-cd Desktop; pnpm tauri dev
+cd Desktop; pnpm dev 
 ```

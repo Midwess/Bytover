@@ -2,11 +2,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "overlayscrollbars/overlayscrollbars.css";
-@import "tailwindcss/preflight";
-
 @plugin '@tailwindcss/typography';
 @plugin 'tailwindcss-animate';
-@tailwind utilities;
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
