@@ -24,6 +24,7 @@ pub struct TransferResource {
     name: String,
     size: u64,
     location: ResourceLocation,
+    #[serde(rename = "r#type")]
     r#type: TransferResourceType
 }
 
