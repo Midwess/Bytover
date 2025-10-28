@@ -1,4 +1,5 @@
 use std::env::var;
+use std::path::PathBuf;
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
 use core_services::logger;
@@ -21,17 +22,41 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
-use tokio::time::sleep;
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
+use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
+use shared::app::transfer::module::TransferEvent;
+use shared::entities::local_resource::LocalResourcePath;
+use crate::extensions::AppHandleExt;
+use crate::thumbnail::generate_thumbnail;
 
 pub mod api;
+pub mod extensions;
+mod thumbnail;
+
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 
 #[tauri::command]
 async fn sign_in(app_handle: AppHandle) {
     process_event(AuthenticationEvent::SignIn, app_handle).await;
+}
+
+#[tauri::command]
+async fn start_transfer(target_id: String, app_handle: AppHandle) {
+    process_event(TransferEvent::StartTransfer {
+        target_id
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
+    let selections = paths.into_iter().map(|path| ResourceSelection {
+        path: LocalResourcePath::AbsolutePath(path),
+        r#type: None
+    }).collect::<Vec<_>>();
+
+    process_event(ShelfEvent::AddResources(selections), app_handle).await;
 }
 
 async fn process_event(event: impl Into<AppEvent>, app_handle: AppHandle) {
@@ -42,25 +67,10 @@ async fn process_event(event: impl Into<AppEvent>, app_handle: AppHandle) {
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
     if !is_authorized {
-        for (_, window) in app_handle.webview_windows() {
-            if window.label() != "auth" {
-                let _ = window.close();
-            }
-        }
-
-        let auth_window = match app_handle.get_webview_window("auth") {
-            Some(window) => window,
-            None => {
-                let win = tauri::WebviewWindowBuilder::new(&app_handle, "auth", tauri::WebviewUrl::App("auth.html".into()))
-                    .title("Auth")
-                    .build()
-                    .unwrap();
-                win
-            }
-        };
-
-        auth_window.show().unwrap();
-        auth_window.set_focus().unwrap();
+        app_handle.show_auth();
+    }
+    else {
+        app_handle.show_send();
     }
 
     let _ = app_handle.emit("Render", view);
@@ -104,13 +114,30 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                         unique_id: machine_uid::get().unwrap_or(Uuid::new_v4().to_string())
                     };
 
-                    log::info!("device info: {:?}", device);
                     CORE.resolve(&mut handle, CoreOperationOutput::DeviceInfo(device)).unwrap_or_default()
                 }
                 DeviceOperation::GetGeoLocation => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::OpenSession(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::Open(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DeviceOperation::LoadThumbnailPng(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                DeviceOperation::LoadThumbnailPng(path, resource_id) => match path {
+                    LocalResourcePath::AbsolutePath(path) => {
+                        let path = PathBuf::from(path);
+                        let path_resolver = DiContainer::get_instance().path_resolver();
+                        let output_path_str = path_resolver.get_thumbnail_file_path(resource_id).await;
+                        let output_path = PathBuf::from(&output_path_str);
+                        if let Err(e) = generate_thumbnail(path.clone(), output_path).await {
+                            log::error!("Failed to generate thumbnail for {path:?} {e:?}");
+                            CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                        }
+                        else {
+                            CORE.resolve(&mut handle, CoreOperationOutput::LocalResourcePath(LocalResourcePath::AbsolutePath(output_path_str))).unwrap_or_default()
+                        }
+                    },
+                    path => {
+                        log::warn!("Desktop only support absolute path not {path:?}");
+                        CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                    }
+                }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
                 let _ = app_handle.opener().open_url(url, Option::<&str>::None);
@@ -151,7 +178,7 @@ pub async fn run() {
 
     builder
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![sign_in])
+        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources])
         .setup(|app| {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");

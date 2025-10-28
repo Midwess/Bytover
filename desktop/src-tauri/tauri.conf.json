@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.westrise.bitbridge.desktop",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm web:dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm web:build",
     "frontendDist": "../dist"
   },
   "plugins": {
@@ -22,25 +22,8 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "url": "send.html",
-        "title": "Send",
-        "label": "send",
-        "width": 480,
-        "height": 280,
-        "backgroundColor": "#00000000",
-        "dragDropEnabled": true,
-        "decorations": false,
-        "transparent": true,
-        "focus": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": false,
-        "resizable": false,
-        "shadow": false,
-        "devtools": true
-      },
-      {
         "url": "auth.html",
-        "title": "Auth",
+        "title": "auth",
         "label": "auth",
         "width": 280,
         "height": 450,

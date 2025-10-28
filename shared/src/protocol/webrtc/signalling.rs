@@ -82,6 +82,10 @@ impl SharedContext {
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
+        if self.current_id.get().is_none() {
+            return;
+        }
+        
         let id = self.get_current_id();
         let mut finding_scopes = self.finding_scopes.lock().await;
         if scopes.ne(&*finding_scopes) {

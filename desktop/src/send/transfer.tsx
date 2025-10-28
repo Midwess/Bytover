@@ -17,6 +17,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {Mail, MapPin, SendHorizonal} from "lucide-react";
+import core from "@/core.ts";
+import {Avatar, AvatarImage} from "@/components/ui/avatar";
+import {
+    PeerViewModel,
+} from 'shared_types/types/shared_types'
+import CircleProgress from "@/components/ui/progress.tsx";
+import {invoke} from "@tauri-apps/api/core";
+import {noop} from "motion";
 
 export function Transfer() {
     return (
@@ -31,7 +39,7 @@ export function Transfer() {
                     <TabsPanels>
                         <TabsPanel value="nearby" className="flex flex-col">
                             <CardContent className={"p-0 flex flex-col gap-2"}>
-                                <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/80 rounded-lg">
+                                <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 rounded-lg min-h-fit">
                                     <Label htmlFor="tabs-input-email" className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
                                         <div className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
                                             <Mail/>
@@ -45,15 +53,14 @@ export function Transfer() {
                                         </Button>
                                     </div>
                                 </Card>
-                                <Card className="flex flex-col gap-2 py-2 border p-1.5">
-                                    <Label className={"flex flex-row items-center gap-2 bg-muted px-2 py-1 w-fit rounded-md shadow-black"}>
+                                <Card className="flex flex-col gap-5 py-2 bg-card/95 border p-1.5 overflow-y-scroll">
+                                    <Label className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
                                         <div className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
                                             <MapPin/>
                                         </div>
                                         Nearby:
                                     </Label>
-                                    <div className={"flex flex-row gap-2"}>
-                                    </div>
+                                    <NearbyList/>
                                 </Card>
                             </CardContent>
                         </TabsPanel>
@@ -96,4 +103,51 @@ export function Transfer() {
             </Tabs>
         </div>
     );
+}
+
+function NearbyList() {
+    const list = core.useNearbyListState();
+    console.log('tiendang-debug', `nearby list ${JSON.stringify(list, null, 2)}`)
+    return <div className={"flex flex-col gap-2 w-full h-full"}>
+        {
+            list.map((it) => <>
+                <NearbyPeer peer={it}></NearbyPeer>
+            </>)
+        }
+    </div>
+}
+
+function NearbyPeer(props: {peer: PeerViewModel}) {
+    const peer = core.usePeerState(props.peer?.id) || props.peer
+    const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
+
+    return <>
+        <Card
+            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
+            onClick={() => {
+                invoke("start_transfer", { target_id: peer.id }).then(noop)
+            }}>
+            <div className={"flex flex-row items-center gap-3"}>
+                <div
+                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
+                    <Avatar className={"p-1 rounded-xl h-fit"} style={{backgroundColor: color}}>
+                        <AvatarImage src={peer.avatar.url}/>
+                    </Avatar>
+                </div>
+                <div className={"flex flex-col gap-1 items-start"}>
+                    <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
+                    {
+                        peer.display_upload_speed
+                            ? <p className={"text-primaryText/70 text-xs"}>{peer.display_upload_speed}</p>
+                            : <></>
+                    }
+                </div>
+            </div>
+            {
+                <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
+                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35}/> : <></>}
+                </div>
+            }
+        </Card>
+    </>
 }

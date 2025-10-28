@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "overlayscrollbars/overlayscrollbars.css";
 @plugin '@tailwindcss/typography';
 @plugin 'tailwindcss-animate';
 
@@ -231,4 +232,25 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.os-theme-custom.os-scrollbar {
+  --os-size: 3px;
+  --os-padding-perpendicular: 0px;
+  --os-padding-axis: 0px;
+}
+
+.os-theme-custom.os-scrollbar .os-scrollbar-track {
+  background-color: rgba(30, 30, 30, 0.6);
+  border-radius: 4px;
+}
+
+.os-theme-custom.os-scrollbar .os-scrollbar-handle {
+  background-color: rgba(80, 80, 80, 0.8);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.os-theme-custom.os-scrollbar .os-scrollbar-handle:hover {
+  background: rgba(120, 120, 120, 0.9);
 }

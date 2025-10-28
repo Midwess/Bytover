@@ -53,7 +53,7 @@ export default function SendBoard() {
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-8 h-full"}>
+                <div className={"col-span-8 h-full overflow-y-scroll"}>
                     <FileSelections/>
                 </div>
             </div>

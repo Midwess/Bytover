@@ -21,7 +21,7 @@ pub enum DeviceOperation {
     GetGeoLocation,
     OpenSession(u64),
     Open(LocalResourcePath),
-    LoadThumbnailPng(LocalResourcePath)
+    LoadThumbnailPng(LocalResourcePath, u64)
 }
 
 impl DeviceOperation {
@@ -34,9 +34,10 @@ impl DeviceOperation {
     }
 
     pub fn load_thumbnail_png(
+        resource_id: u64,
         path: LocalResourcePath
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
-        AppCommand::request_from_shell(Self::LoadThumbnailPng(path)).map(|output| match output {
+        AppCommand::request_from_shell(Self::LoadThumbnailPng(path, resource_id)).map(|output| match output {
             CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
             CoreOperationOutput::LocalResourcePath(path) => (None, Some(path)),
             _ => (None, None)
