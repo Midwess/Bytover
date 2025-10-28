@@ -6,7 +6,7 @@ use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
-use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
+use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
@@ -72,8 +72,8 @@ impl DiContainer {
         instance
     }
 
-    pub fn get_db_connection(&'static self) -> &'static DatabaseConnection {
-        &self.db_connection
+    pub fn get_db_connection(&self) -> DatabaseConnection {
+        self.db_connection.clone()
     }
 
     pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {
@@ -145,7 +145,7 @@ impl DiContainer {
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
-        TransferSessionSurrealdbRepository { db: self.db().await }
+        TransferSessionPostgresRepository { db: self.get_db_connection() }
     }
 
     pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
