@@ -5,7 +5,7 @@ import {
     EnvironmentViewModel,
     NearbyViewModel, PeerViewModel,
     ReceiveCloudSessionViewModel,
-    ReceiveSessionViewModel,
+    ReceiveSessionViewModel, SelectedResourceViewModel,
     ShelfViewModel,
     TransferViewModel
 } from 'shared_types/types/shared_types'
@@ -38,6 +38,24 @@ export class Core {
         return state
     }
 
+    public useSelectedResources() {
+        const [state, setState] = useState<SelectedResourceViewModel[]>([])
+
+        useEffect(() => {
+            return this.shelfState.subscribe((transferState) => {
+                if (transferState?.selected_resources.length != state.length) {
+                    setState(transferState?.selected_resources || [])
+                }
+
+                if (!isEqual(state, transferState?.selected_resources)) {
+                    setState(transferState?.selected_resources || [])
+                }
+            })
+        }, [])
+
+        return state
+    }
+
     usePeerState(peerId: string | undefined) {
         const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
 
@@ -63,7 +81,6 @@ export class Core {
         this.isLaunched = true;
 
         await listen<AppViewModel>('Render', (viewModel) => {
-            console.log(viewModel.payload)
             this.environmentState.set(viewModel.payload.environment!)
             this.authenticationState.set(viewModel.payload.authentication!)
             this.nearbyState.set(viewModel.payload.nearby!)
