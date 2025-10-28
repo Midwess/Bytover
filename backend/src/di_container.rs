@@ -23,8 +23,8 @@ use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use migration::{Migrator, MigratorTrait};
+use sea_orm::{ConnectOptions, DatabaseConnection, Database};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -38,7 +38,7 @@ pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
     live_query: Arc<LiveQuery>,
-    pg_pool: PgPool
+    db_connection: DatabaseConnection
 }
 
 impl DiContainer {
@@ -52,18 +52,17 @@ impl DiContainer {
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
         let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
-        let pg_pool = PgPoolOptions::new()
-            .min_connections(5)
-            .max_connections(10)
-            .connect(&database_url)
-            .await
-            .expect("Failed to connect to Postgres using sqlx.");
+        let mut opt = ConnectOptions::new(database_url);
+        opt.max_connections(20)
+            .min_connections(5);
+        let db_connection = Database::connect(opt).await.expect("Failed to connect to Postgres");
+        Migrator::up(&db_connection, None).await.expect("Failed to run DB migration");
 
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
             live_query: Arc::new(LiveQuery::new(app_db).await),
-            pg_pool
+            db_connection
         }
     }
 
@@ -73,8 +72,8 @@ impl DiContainer {
         instance
     }
 
-    pub fn get_pg_pool(&'static self) -> &'static PgPool {
-        &self.pg_pool
+    pub fn get_db_connection(&'static self) -> &'static DatabaseConnection {
+        &self.db_connection
     }
 
     pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {
