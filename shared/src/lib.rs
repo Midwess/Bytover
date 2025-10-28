@@ -8,5 +8,6 @@ pub mod errors;
 pub mod protocol;
 pub mod repository;
 pub mod shell;
+pub mod utils;
 
 pub use app::CoreOperation;

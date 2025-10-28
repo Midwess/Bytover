@@ -22,7 +22,7 @@ crux_core.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "fs", "process"] }
 async-trait.workspace = true
 n0-future.workspace = true
-shared = { path = "../../shared" }
+shared = { path = "../../shared", features = ["bigint_as_string"] }
 core-services = { path = "../../libs/core-services" }
 native = { path = "../../native" }
 tauri = { version = "2", features = ["macos-private-api", "devtools"] }
