@@ -3,6 +3,7 @@ import React, {useEffect} from "react";
 import { Shelf } from "./shelf";
 import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
+import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -11,6 +12,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 function Window() {
+    useOverlayScrollbars()
     useEffect(() => {
         console.log("launching core")
         core.launch()

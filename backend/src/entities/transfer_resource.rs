@@ -12,18 +12,12 @@ pub enum TransferResourceType {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
-pub enum ResourceLocation {
-    System
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
 pub struct TransferResource {
     order_id: u64,
     #[surreal(ignore)]
     session_id: u64,
     name: String,
     size: u64,
-    location: ResourceLocation,
     #[serde(rename = "r#type")]
     r#type: TransferResourceType
 }
@@ -45,7 +39,6 @@ impl TransferResource {
             session_id,
             size,
             r#type,
-            location: ResourceLocation::System
         }
     }
 

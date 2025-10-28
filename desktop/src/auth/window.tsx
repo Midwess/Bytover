@@ -58,7 +58,6 @@ function Window() {
                     </div>
                 </div>
                 <Button onClick={() => {
-                    console.log("sign in")
                     invoke("sign_in").then(console.log)
                 }} className={"bg-bluePrimary text-foreground hover:bg-bluePrimary/60"}>Get started</Button>
             </Card>

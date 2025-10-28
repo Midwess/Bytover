@@ -36,6 +36,7 @@ import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useUrlState} from "@/hooks/use-url";
+import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 
 export default function ReceiveBoard() {
     return <>

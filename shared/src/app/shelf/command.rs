@@ -40,7 +40,8 @@ impl AppCommand {
 
             let mut new_resource = new_resources.pop().unwrap();
 
-            let (thumbnail_png_opt, thumbnail_path_opt) = self.run(DeviceOperation::load_thumbnail_png(selection.path.clone())).await;
+            let (thumbnail_png_opt, thumbnail_path_opt) = self.run(
+                DeviceOperation::load_thumbnail_png(new_resource.order_id, selection.path.clone())).await;
 
             if let Some(thumbnail_png) = thumbnail_png_opt {
                 match self

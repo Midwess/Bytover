@@ -16,7 +16,7 @@
     > DEFINE NAMESPACE development;
     > USE NS development;
     > DEFINE USER devlog ON NAMESPACE PASSWORD 'ssh' ROLES OWNER;
-    ```
+    ``
 
 - Kong gateway
     ```bash
@@ -92,11 +92,13 @@ Build the rust binary by selecting the `shared` module, and
 - Run with XCode
 
 ## Desktop
-- Because MacOS doesn't support 'deep-linking' on development,
-We will need to explicitly set access token in the environment variable.
+#### MacOS only
+Because MacOS doesn't support 'deep-linking' on development, so that we cannot authorize,
+Instead, we will explicitly set access token via environment variable.
 ```bash
 export BTIBRIDGE_ACCESS_TOKEN='<token>'
 ```
+
 ```bash
-cd Desktop; pnpm tauri dev
+cd Desktop; pnpm dev 
 ```
