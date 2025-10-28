@@ -151,6 +151,10 @@ impl TransferSession {
         self.order_id
     }
 
+    pub fn alias(&self) -> String {
+        self.alias.clone()
+    }
+
     pub fn resources(&self) -> &Vec<TransferResource> {
         &self.resources
     }
