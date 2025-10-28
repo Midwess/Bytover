@@ -4,86 +4,62 @@ use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRe
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
 use sea_orm::entity::prelude::*;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, JsonValue, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use sea_orm::ActiveValue::Set;
 use devlog_sdk::distributed_id::gen_id;
 use serde_json::{json, Value};
+
+use migration::model::transfer_session as transfer_session_model;
+use transfer_session_model::{ActiveModel as TransferSessionActiveModel, Column as TransferSessionColumn, Entity as TransferSessionEntity, Model as TransferSessionModel};
 
 pub struct TransferSessionPostgresRepository {
     pub db: DatabaseConnection,
 }
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "transfer_session")]
-pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: i64,
-    pub alias: String,
-    pub password: Option<String>,
-    #[sea_orm(column_type = "JsonBinary", nullable)]
-    pub to_emails: Option<JsonValue>,
-    pub order_id: i64,
-    pub owner_user_order_id: i64,
-    #[sea_orm(column_type = "JsonBinary", nullable)]
-    pub progress: Option<JsonValue>,
-    #[sea_orm(column_type = "JsonBinary", nullable)]
-    pub resources: Option<JsonValue>,
-}
+impl TryFrom<TransferSessionModel> for TransferSession {
+    type Error = serde_json::Error;
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
-
-impl Model {
-    fn into_domain(self) -> Result<TransferSession, RepositoryError> {
-        let progresses: Vec<Value> = match self.progress {
+    fn try_from(m: TransferSessionModel) -> Result<Self, Self::Error> {
+        let progresses: Vec<Value> = match m.progress {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
-        let resources : Vec<Value>= match self.resources {
+        let resources: Vec<Value> = match m.resources {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
-        let to_emails: Vec<String> = match self.to_emails {
+        let to_emails: Vec<String> = match m.to_emails {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
 
-        let value = json!({
-            "order_id": self.order_id as u64,
-            "owner_user_order_id": self.owner_user_order_id as u64,
-            "alias": self.alias,
-            "password": self.password,
+        let v = json!({
+            "order_id": m.order_id as u64,
+            "owner_user_order_id": m.owner_user_order_id as u64,
+            "alias": m.alias,
+            "password": m.password,
             "to_emails": to_emails,
             "resources": resources,
             "progress": progresses,
         });
 
-        let session: TransferSession = serde_json::from_value(value)?;
-        Ok(session)
-    }
-}
-
-impl std::convert::TryInto<TransferSession> for Model {
-    type Error = RepositoryError;
-
-    fn try_into(self) -> Result<TransferSession, Self::Error> {
-        self.into_domain()
+        serde_json::from_value(v)
     }
 }
 
 #[async_trait::async_trait]
 impl TransferSessionRepository for TransferSessionPostgresRepository {
     async fn find_session_by_alias(&self, alias: String) -> Result<Option<TransferSession>, RepositoryError> {
-        let row = Entity::find()
-            .filter(Column::Alias.eq(alias))
+        let row = TransferSessionEntity::find()
+            .filter(TransferSessionColumn::Alias.eq(alias))
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
         match row {
-            Some(model) => model.into_domain().map(Some),
+            Some(model) => TransferSession::try_from(model)
+                .map(Some)
+                .map_err(|e| RepositoryError::DbError(e.to_string())),
             None => Ok(None),
         }
     }
@@ -98,7 +74,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
         let resources_val = serde_json::to_value(data.resources()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
         let progress_val = serde_json::to_value(data.progresses()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
-        let active = ActiveModel {
+        let active = TransferSessionActiveModel {
             id: Set(row_id),
             alias: Set(data.alias()),
             password: Set(password),
@@ -118,12 +94,12 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
     }
 
     async fn find_one(&self, id: &TransferSessionId) -> Result<Option<TransferSession>, RepositoryError> {
-        let mut query = Entity::find();
+        let mut query = TransferSessionEntity::find();
         if let Some(user_order_id) = id.user_order_id {
-            query = query.filter(Column::OwnerUserOrderId.eq(user_order_id as i64));
+            query = query.filter(TransferSessionColumn::OwnerUserOrderId.eq(user_order_id as i64));
         }
         if let Some(order_id) = id.order_id {
-            query = query.filter(Column::OrderId.eq(order_id as i64));
+            query = query.filter(TransferSessionColumn::OrderId.eq(order_id as i64));
         }
 
         let row = query
@@ -132,7 +108,9 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
             .map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
         match row {
-            Some(model) => model.into_domain().map(Some),
+            Some(model) => TransferSession::try_from(model)
+                .map(Some)
+                .map_err(|e| RepositoryError::DbError(e.to_string())),
             None => Ok(None),
         }
     }
