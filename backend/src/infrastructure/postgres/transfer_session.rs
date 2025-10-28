@@ -16,37 +16,34 @@ pub struct TransferSessionPostgresRepository {
     pub db: DatabaseConnection,
 }
 
-trait TransferSessionModelExt {
-    fn into_domain(self) -> Result<TransferSession, RepositoryError>;
-}
+impl TryFrom<TransferSessionModel> for TransferSession {
+    type Error = serde_json::Error;
 
-impl TransferSessionModelExt for TransferSessionModel {
-    fn into_domain(self) -> Result<TransferSession, RepositoryError> {
-        let progresses: Vec<Value> = match self.progress {
+    fn try_from(m: TransferSessionModel) -> Result<Self, Self::Error> {
+        let progresses: Vec<Value> = match m.progress {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
-        let resources : Vec<Value>= match self.resources {
+        let resources: Vec<Value> = match m.resources {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
-        let to_emails: Vec<String> = match self.to_emails {
+        let to_emails: Vec<String> = match m.to_emails {
             Some(v) => serde_json::from_value(v)?,
             None => Vec::new(),
         };
 
-        let value = json!({
-            "order_id": self.order_id as u64,
-            "owner_user_order_id": self.owner_user_order_id as u64,
-            "alias": self.alias,
-            "password": self.password,
+        let v = json!({
+            "order_id": m.order_id as u64,
+            "owner_user_order_id": m.owner_user_order_id as u64,
+            "alias": m.alias,
+            "password": m.password,
             "to_emails": to_emails,
             "resources": resources,
             "progress": progresses,
         });
 
-        let session: TransferSession = serde_json::from_value(value)?;
-        Ok(session)
+        serde_json::from_value(v)
     }
 }
 
@@ -60,7 +57,9 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
             .map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
         match row {
-            Some(model) => model.into_domain().map(Some),
+            Some(model) => TransferSession::try_from(model)
+                .map(Some)
+                .map_err(|e| RepositoryError::DbError(e.to_string())),
             None => Ok(None),
         }
     }
@@ -109,7 +108,9 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
             .map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
         match row {
-            Some(model) => model.into_domain().map(Some),
+            Some(model) => TransferSession::try_from(model)
+                .map(Some)
+                .map_err(|e| RepositoryError::DbError(e.to_string())),
             None => Ok(None),
         }
     }
