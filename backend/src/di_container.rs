@@ -55,8 +55,12 @@ impl DiContainer {
         let mut opt = ConnectOptions::new(database_url);
         opt.max_connections(20)
             .min_connections(5);
-        let db_connection = Database::connect(opt).await.expect("Failed to connect to Postgres");
-        Migrator::up(&db_connection, None).await.expect("Failed to run DB migration");
+        let db_connection = Database::connect(opt)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to connect to Postgres: {e}"));
+        Migrator::up(&db_connection, None)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to run DB migration: {e}"));
 
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
