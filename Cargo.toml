@@ -4,6 +4,7 @@ members = [
     "shared_types",
     "desktop/src-tauri",
     "backend",
+    "backend/migration",
     "native",
     "web-next/wasm",
     "web-next/worker",
