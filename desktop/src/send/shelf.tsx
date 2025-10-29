@@ -179,8 +179,8 @@ function FileView(props: { model: SelectedResourceViewModel }) {
                         <MoreVertical className="w-4 h-4"/>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem variant="destructive" className="bg-card" onClick={() => {
+                <DropdownMenuContent align="end" className="dark">
+                    <DropdownMenuItem variant="destructive" onClick={() => {
                         invoke("remove_resource", {resourceId: model.order_id})
                     }}>
                         <Trash2 className="w-4 h-4 mr-2"/>
