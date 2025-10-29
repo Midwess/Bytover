@@ -6,6 +6,7 @@ use tauri::async_runtime::spawn_blocking;
 use tokio::process::Command;
 use thiserror::Error;
 use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension, TaskErrors};
+use shared::entities::local_resource::ResourceType;
 
 #[derive(Error, Debug)]
 pub enum ThumbnailError {
@@ -37,6 +38,7 @@ pub enum ThumbnailError {
 pub async fn generate_thumbnail(
     file_path: PathBuf,
     png_output_path: PathBuf,
+    resource_type: &ResourceType
 ) -> Result<(), ThumbnailError> {
     // Validate input paths
     if !file_path.exists() {
@@ -47,19 +49,21 @@ pub async fn generate_thumbnail(
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    // Load icon of files
-    let icon = get_file_icon(file_path.clone(), 256).expect("Failed to get icon");
-    if let Some(icon) = RgbaImage::from_raw(icon.width, icon.height, icon.pixels).map(DynamicImage::ImageRgba8) {
-        let saved_path = spawn_blocking({
-            let png_output_path = png_output_path.clone();
-            move || {
-                icon.save_with_format(png_output_path.clone(), ImageFormat::Png).ok()?;
-                Some(png_output_path)
-            }
-        }).await.ok().flatten();
+    if matches!(resource_type, ResourceType::File | ResourceType::Folder) {
+        // Load icon of files
+        let icon = get_file_icon(file_path.clone(), 256).expect("Failed to get icon");
+        if let Some(icon) = RgbaImage::from_raw(icon.width, icon.height, icon.pixels).map(DynamicImage::ImageRgba8) {
+            let saved_path = spawn_blocking({
+                let png_output_path = png_output_path.clone();
+                move || {
+                    icon.save_with_format(png_output_path.clone(), ImageFormat::Png).ok()?;
+                    Some(png_output_path)
+                }
+            }).await.ok().flatten();
 
-        if saved_path.is_some() {
-            return Ok(());
+            if saved_path.is_some() {
+                return Ok(());
+            }
         }
     }
 
@@ -67,7 +71,7 @@ pub async fn generate_thumbnail(
     match generate_os_thumbnail(&file_path, &png_output_path).await {
         Ok(_) => return Ok(()),
         Err(e) => {
-            eprintln!("OS thumbnail generation failed: {}. Falling back to image crate.", e);
+            log::warn!("OS thumbnail generation failed: {e:?}. Falling back to image crate.");
         }
     }
 
@@ -89,7 +93,7 @@ async fn generate_os_thumbnail(
         .parent()
         .ok_or(ThumbnailError::InvalidPath)?;
 
-    let cancellation = CancellationToken::timeout(Duration::from_secs(1));
+    let cancellation = CancellationToken::timeout(Duration::from_secs(3));
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
         .arg("-s")           // Size
@@ -102,7 +106,6 @@ async fn generate_os_thumbnail(
         .with_cancel(&cancellation)
         .await??;
 
-    log::info!("qlmanage output");
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(ThumbnailError::OsApiError(format!(

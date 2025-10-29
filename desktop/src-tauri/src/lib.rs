@@ -83,7 +83,6 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.show_send();
     }
 
-    log::info!("Render view: {view:?}");
     let _ = app_handle.emit("Render", view);
 }
 
@@ -137,13 +136,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 DeviceOperation::GetGeoLocation => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::OpenSession(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::Open(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DeviceOperation::LoadThumbnailPng(path, resource_id) => match path {
+                DeviceOperation::LoadThumbnailPng { path, resource_type, id } => match path {
                     LocalResourcePath::AbsolutePath(path) => {
                         let path = PathBuf::from(path);
                         let path_resolver = DiContainer::get_instance().path_resolver();
-                        let output_path_str = path_resolver.get_thumbnail_file_path(resource_id).await;
+                        let output_path_str = path_resolver.get_thumbnail_file_path(id).await;
                         let output_path = PathBuf::from(&output_path_str);
-                        if let Err(e) = generate_thumbnail(path.clone(), output_path).await {
+                        if let Err(e) = generate_thumbnail(path.clone(), output_path, &resource_type).await {
                             log::error!("Failed to generate thumbnail for {path:?} {e:?}");
                             CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                         }

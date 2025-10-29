@@ -109,8 +109,8 @@ export function Shelf() {
 
 function ResourceView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
-    const isFile = model.type.constructor === ResourceTypeVariantFile ||
-        model.type.constructor === ResourceTypeVariantFolder;
+
+    const isFile = ['Folder', 'File'].includes(model.type as any);
 
     if (isFile) {
         return <FileView model={model}/>;
@@ -137,9 +137,9 @@ function FileView(props: { model: SelectedResourceViewModel }) {
         <div
             className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/50 p-1 overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-md"/>
+                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-hidden"/>
                 ) : isFolder ? (
                     <FolderIcon className="w-6 h-6 text-primary"/>
                 ) : (
@@ -192,9 +192,9 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
         <div
             className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/50 p-1 overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover"/>
+                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-clip"/>
                 ) : (
                     <FileIcon
                         className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>

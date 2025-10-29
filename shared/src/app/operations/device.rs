@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::app::core::command::AppCommand;
 use crate::app::AppRequestBuilder;
 use crate::entities::device::DeviceInfo;
-use crate::entities::local_resource::LocalResourcePath;
+use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 
 use super::CoreOperationOutput;
 
@@ -21,7 +21,11 @@ pub enum DeviceOperation {
     GetGeoLocation,
     OpenSession(u64),
     Open(LocalResourcePath),
-    LoadThumbnailPng(LocalResourcePath, u64)
+    LoadThumbnailPng {
+        resource_type: ResourceType,
+        path: LocalResourcePath,
+        id: u64
+    }
 }
 
 impl DeviceOperation {
@@ -35,9 +39,14 @@ impl DeviceOperation {
 
     pub fn load_thumbnail_png(
         resource_id: u64,
-        path: LocalResourcePath
+        path: LocalResourcePath,
+        resource_type: ResourceType
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
-        AppCommand::request_from_shell(Self::LoadThumbnailPng(path, resource_id)).map(|output| match output {
+        AppCommand::request_from_shell(Self::LoadThumbnailPng {
+            path,
+            resource_type,
+            id: resource_id
+        }).map(|output| match output {
             CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
             CoreOperationOutput::LocalResourcePath(path) => (None, Some(path)),
             _ => (None, None)
