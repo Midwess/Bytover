@@ -4,7 +4,6 @@ import { Shelf } from "./shelf";
 import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
-import {Minus} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>

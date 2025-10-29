@@ -1,6 +1,6 @@
 import {Card} from "@/components/ui/card.tsx";
 import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
-import { startDrag } from "@crabnebula/tauri-plugin-drag";
+import {startDrag} from "@crabnebula/tauri-plugin-drag";
 import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -95,13 +95,13 @@ export function Shelf() {
             {/* Resources List */}
             <div className="w-full h-full overflow-y-auto px-2 z-0 pt-9">
                 {selectedResources.length === 0 ? (
-                    <div data-tauri-drag-region
+                    <div
                          className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Upload className="h-8 w-8 opacity-40"/>
                         <p className="text-sm opacity-70">Drop files here</p>
                     </div>
                 ) : (
-                    <div data-tauri-drag-region className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2">
                         {selectedResources.map((resource, index) => (
                             <ResourceView key={index} model={resource}/>
                         ))}
