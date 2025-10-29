@@ -70,7 +70,7 @@ async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
     process_event(ShelfEvent::AddResources(selections), app_handle).await;
 }
 
-async fn process_event(event: impl Into<AppEvent>, app_handle: AppHandle) {
+async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
 }
@@ -97,7 +97,14 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 render(CORE.view(), app_handle.clone());
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
-            CoreOperation::Notified(event) => CORE.process_event(event),
+            CoreOperation::Notified(event) => {
+                let app_handle = app_handle.clone();
+                spawn(async move {
+                    process_event(event, app_handle).await;
+                });
+
+                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            },
             CoreOperation::InitNativeExecutor => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
             CoreOperation::Device(device) => match device {
                 DeviceOperation::GetDeviceInfo => {
@@ -167,6 +174,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     let output = executor.handle(request.clone(), operation).await;
                     request.response(output).await;
                 });
+
                 continue;
             }
         };
