@@ -33,6 +33,7 @@ log.workspace = true
 schema = { path = "../../libs/schema/rust" }
 hostname.workspace = true
 machine-uid.workspace = true
+file_icon_provider = "0.4.0"
 uuid.workspace = true
 tauri-plugin-deep-link = "2"
 thiserror.workspace = true

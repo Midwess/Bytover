@@ -126,7 +126,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
 
     // Convert absolute path to Tauri asset URL
-    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath, 'tauri') : null;
+    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
@@ -135,9 +135,9 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-md bg-background">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/50 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-md"/>
                 ) : isFolder ? (
@@ -190,9 +190,9 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-background overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/50 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover"/>
                 ) : (

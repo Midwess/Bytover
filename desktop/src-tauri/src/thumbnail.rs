@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
+use file_icon_provider::get_file_icon;
+use image::{DynamicImage, ImageFormat, RgbaImage};
+use tauri::async_runtime::spawn_blocking;
 use tokio::process::Command;
 use thiserror::Error;
 use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension, TaskErrors};
@@ -40,6 +43,26 @@ pub async fn generate_thumbnail(
         return Err(ThumbnailError::InvalidPath);
     }
 
+    if let Some(parent) = png_output_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    // Load icon of files
+    let icon = get_file_icon(file_path.clone(), 256).expect("Failed to get icon");
+    if let Some(icon) = RgbaImage::from_raw(icon.width, icon.height, icon.pixels).map(DynamicImage::ImageRgba8) {
+        let saved_path = spawn_blocking({
+            let png_output_path = png_output_path.clone();
+            move || {
+                icon.save_with_format(png_output_path.clone(), ImageFormat::Png).ok()?;
+                Some(png_output_path)
+            }
+        }).await.ok().flatten();
+
+        if saved_path.is_some() {
+            return Ok(());
+        }
+    }
+
     // Try OS-specific thumbnail generation first
     match generate_os_thumbnail(&file_path, &png_output_path).await {
         Ok(_) => return Ok(()),
@@ -61,18 +84,11 @@ async fn generate_os_thumbnail(
     file_path: &PathBuf,
     png_output_path: &PathBuf,
 ) -> Result<(), ThumbnailError> {
-    // Create output directory if it doesn't exist
-    if let Some(parent) = png_output_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-
     // Get output directory for qlmanage
     let output_dir = png_output_path
         .parent()
         .ok_or(ThumbnailError::InvalidPath)?;
 
-    // Use macOS QuickLook via qlmanage command
-    log::info!("Generating thumbnail using qlmanage");
     let cancellation = CancellationToken::timeout(Duration::from_secs(1));
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
