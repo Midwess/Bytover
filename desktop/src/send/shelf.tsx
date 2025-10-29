@@ -1,5 +1,6 @@
 import {Card} from "@/components/ui/card.tsx";
 import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
+import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -122,14 +123,11 @@ function ResourceView(props: { model: SelectedResourceViewModel }) {
         draggable={true}
         onDragStart={async (e) => {
             e.preventDefault()
-            const tauri: any = (window as any).__TAURI__
-            tauri?.drag?.startDrag(
-                {
-                    item: [filePath],
-                    icon: thumbnailPath,
-                },
-            );
-        }}>
+            await startDrag({
+                item: [filePath],
+                icon: thumbnailPath,
+            }, console.log)
+       }}>
         {
             isFile
                 ? <FileView model={model}/>
