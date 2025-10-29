@@ -1,7 +1,8 @@
 import {Card} from "@/components/ui/card.tsx";
 import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
 import {noop} from "motion";
-import {invoke, convertFileSrc} from "@tauri-apps/api/core";
+import {invoke} from "@tauri-apps/api/core";
+import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
 import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2} from "lucide-react";
@@ -13,7 +14,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
 import {
-    LocalResourcePathVariantAbsolutePath,
     ResourceTypeVariantFile,
     ResourceTypeVariantVideo,
     ResourceTypeVariantFolder,
@@ -122,11 +122,11 @@ function ResourceView(props: { model: SelectedResourceViewModel }) {
 function FileView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
 
-    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
 
     // Convert absolute path to Tauri asset URL
-    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
+    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath, 'tauri') : null;
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
@@ -177,10 +177,11 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
 
     const isVideo = model.type.constructor === ResourceTypeVariantVideo;
-    const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
+    console.log('converted', thumbnailPath, thumbnailUrl)
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {

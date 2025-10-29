@@ -18,7 +18,6 @@ use shared::entities::device::DeviceInfo;
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
@@ -84,6 +83,7 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.show_send();
     }
 
+    log::info!("Render view: {view:?}");
     let _ = app_handle.emit("Render", view);
 }
 
@@ -98,9 +98,9 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Notified(event) => {
-                let app_handle = app_handle.clone();
                 spawn(async move {
-                    process_event(event, app_handle).await;
+                    let bridge = DiContainer::get_instance().core_bridge();
+                    bridge.notify(event).await;
                 });
 
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
@@ -162,9 +162,18 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Dialog(dialog) => match dialog {
-                DialogOperation::Toast(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DialogOperation::Alert(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DialogOperation::Message(..) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                DialogOperation::Toast(msg) => {
+                    log::info!(target: "toast", "{msg:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
+                DialogOperation::Alert(alert) => {
+                    log::info!(target: "alert", "{alert:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
+                DialogOperation::Message(msg, reason) => {
+                    log::info!(target: "msg", "{msg:?} {reason:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
             },
             operation => {
                 spawn(async move {

@@ -30,7 +30,9 @@ impl Shelf {
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
-        self.resources.push(resource);
+        if !self.is_exists(&resource.path) {
+            self.resources.push(resource);
+        }
     }
 
     pub fn remove_resource(&mut self, remove: &LocalResourceId) {

@@ -1,12 +1,11 @@
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::process::Command;
 use thiserror::Error;
+use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension, TaskErrors};
 
 #[derive(Error, Debug)]
 pub enum ThumbnailError {
-    #[error("Failed to generate thumbnail: {0}")]
-    GenerationFailed(String),
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
@@ -16,11 +15,11 @@ pub enum ThumbnailError {
     #[error("OS thumbnail API failed: {0}")]
     OsApiError(String),
 
-    #[error("Unsupported file format")]
-    UnsupportedFormat,
-
     #[error("Invalid path")]
     InvalidPath,
+
+    #[error("Cancelled")]
+    Cancelled(#[from] TaskErrors)
 }
 
 /// Generate a thumbnail using OS-specific APIs with fallback to image crate
@@ -73,16 +72,21 @@ async fn generate_os_thumbnail(
         .ok_or(ThumbnailError::InvalidPath)?;
 
     // Use macOS QuickLook via qlmanage command
+    log::info!("Generating thumbnail using qlmanage");
+    let cancellation = CancellationToken::timeout(Duration::from_secs(1));
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
         .arg("-s")           // Size
-        .arg("512")          // 512x512 pixels
+        .arg("256")
         .arg("-o")           // Output directory
         .arg(output_dir)
         .arg(file_path)
+        .kill_on_drop(true)
         .output()
-        .await?;
+        .with_cancel(&cancellation)
+        .await??;
 
+    log::info!("qlmanage output");
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(ThumbnailError::OsApiError(format!(
