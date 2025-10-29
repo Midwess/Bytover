@@ -14,7 +14,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
 import {
-    ResourceTypeVariantFile,
     ResourceTypeVariantVideo,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
@@ -176,12 +175,11 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 function MediaView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
 
-    const isVideo = model.type.constructor === ResourceTypeVariantVideo;
+    const isVideo = (model.type as any) === 'Video';
     const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
-    console.log('converted', thumbnailPath, thumbnailUrl)
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
@@ -200,7 +198,7 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
                         className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
                 )}
                 {isVideo && (
-                    <div className="absolute top-1 right-1">
+                    <div className="absolute top-1.5 right-1.5">
                         <Play className="w-3 h-3 text-white bg-black/50 rounded-sm p-0.5"/>
                     </div>
                 )}
