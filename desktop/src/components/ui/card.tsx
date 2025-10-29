@@ -7,6 +7,7 @@ const Card = React.forwardRef<
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
+    data-tauri-drag-region
     ref={ref}
     className={cn(
       "rounded-xl border bg-card text-card-foreground shadow",

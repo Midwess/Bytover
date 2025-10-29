@@ -333,8 +333,8 @@ export class WasmCore {
                     }
                     case DeviceOperationVariantLoadThumbnailPng: {
                         const operation = device.value as DeviceOperationVariantLoadThumbnailPng;
-                        const path = operation.value as LocalResourcePathVariantPlatformIdentifier;
-                        const resourceId = BigInt(path.value.replace("opfs://device/", ''))
+                        const path = operation.path as LocalResourcePathVariantPlatformIdentifier;
+                        const resourceId = operation.id
                         const file = await get_device_file(serialize(path))
                         if (!file) {
                             return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))

@@ -3,9 +3,9 @@ import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
 import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
-import {useEffect, useRef, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
-import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2} from "lucide-react";
+import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2, Minus} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
     DropdownMenu,
@@ -14,7 +14,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
 import {
-    ResourceTypeVariantVideo,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
 } from "shared_types/types/shared_types";
@@ -69,6 +68,7 @@ export function Shelf() {
 
     return <>
         <Card className={`
+            p-0
             w-full h-full bg-card shadow-md shadow-background border-1 
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
@@ -76,7 +76,9 @@ export function Shelf() {
             : 'border-border'
         }
         `}>
-            {/* Drag overlay */}
+            <div data-tauri-drag-region className={"w-full absolute top-0 flex justify-center items-center py-1 z-10 group"}>
+                <Minus className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+            </div>
             {isDraggingOver && (
                 <div
                     className="absolute inset-0 bg-bluePrimary/10 backdrop-blur-[1px] flex items-center justify-center z-10 animate-in fade-in duration-200">
@@ -88,7 +90,7 @@ export function Shelf() {
             )}
 
             {/* Resources List */}
-            <div className="w-full h-full overflow-y-auto p-3">
+            <div className="w-full h-full overflow-y-auto px-3 z-0 pt-12">
                 {selectedResources.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Upload className="h-8 w-8 opacity-40"/>
