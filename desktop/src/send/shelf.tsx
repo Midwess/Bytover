@@ -1,7 +1,8 @@
 import {Card} from "@/components/ui/card.tsx";
 import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
 import {noop} from "motion";
-import {invoke, convertFileSrc} from "@tauri-apps/api/core";
+import {invoke} from "@tauri-apps/api/core";
+import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
 import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2} from "lucide-react";
@@ -13,8 +14,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
 import {
-    LocalResourcePathVariantAbsolutePath,
-    ResourceTypeVariantFile,
     ResourceTypeVariantVideo,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
@@ -109,8 +108,8 @@ export function Shelf() {
 
 function ResourceView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
-    const isFile = model.type.constructor === ResourceTypeVariantFile ||
-        model.type.constructor === ResourceTypeVariantFolder;
+
+    const isFile = ['Folder', 'File'].includes(model.type as any);
 
     if (isFile) {
         return <FileView model={model}/>;
@@ -122,7 +121,7 @@ function ResourceView(props: { model: SelectedResourceViewModel }) {
 function FileView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
 
-    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
 
     // Convert absolute path to Tauri asset URL
@@ -135,11 +134,11 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-md bg-background">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-md"/>
+                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-hidden"/>
                 ) : isFolder ? (
                     <FolderIcon className="w-6 h-6 text-primary"/>
                 ) : (
@@ -176,8 +175,8 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 function MediaView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
 
-    const isVideo = model.type.constructor === ResourceTypeVariantVideo;
-    const thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    const isVideo = (model.type as any) === 'Video';
+    const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
@@ -189,17 +188,17 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-background overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover"/>
+                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-clip"/>
                 ) : (
                     <FileIcon
                         className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
                 )}
                 {isVideo && (
-                    <div className="absolute top-1 right-1">
+                    <div className="absolute top-1.5 right-1.5">
                         <Play className="w-3 h-3 text-white bg-black/50 rounded-sm p-0.5"/>
                     </div>
                 )}

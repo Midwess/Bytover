@@ -18,7 +18,6 @@ use shared::entities::device::DeviceInfo;
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
@@ -70,7 +69,7 @@ async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
     process_event(ShelfEvent::AddResources(selections), app_handle).await;
 }
 
-async fn process_event(event: impl Into<AppEvent>, app_handle: AppHandle) {
+async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
 }
@@ -97,7 +96,14 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 render(CORE.view(), app_handle.clone());
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
-            CoreOperation::Notified(event) => CORE.process_event(event),
+            CoreOperation::Notified(event) => {
+                spawn(async move {
+                    let bridge = DiContainer::get_instance().core_bridge();
+                    bridge.notify(event).await;
+                });
+
+                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            },
             CoreOperation::InitNativeExecutor => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
             CoreOperation::Device(device) => match device {
                 DeviceOperation::GetDeviceInfo => {
@@ -130,13 +136,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 DeviceOperation::GetGeoLocation => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::OpenSession(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
                 DeviceOperation::Open(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DeviceOperation::LoadThumbnailPng(path, resource_id) => match path {
+                DeviceOperation::LoadThumbnailPng { path, resource_type, id } => match path {
                     LocalResourcePath::AbsolutePath(path) => {
                         let path = PathBuf::from(path);
                         let path_resolver = DiContainer::get_instance().path_resolver();
-                        let output_path_str = path_resolver.get_thumbnail_file_path(resource_id).await;
+                        let output_path_str = path_resolver.get_thumbnail_file_path(id).await;
                         let output_path = PathBuf::from(&output_path_str);
-                        if let Err(e) = generate_thumbnail(path.clone(), output_path).await {
+                        if let Err(e) = generate_thumbnail(path.clone(), output_path, &resource_type).await {
                             log::error!("Failed to generate thumbnail for {path:?} {e:?}");
                             CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                         }
@@ -155,9 +161,18 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Dialog(dialog) => match dialog {
-                DialogOperation::Toast(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DialogOperation::Alert(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DialogOperation::Message(..) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                DialogOperation::Toast(msg) => {
+                    log::info!(target: "toast", "{msg:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
+                DialogOperation::Alert(alert) => {
+                    log::info!(target: "alert", "{alert:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
+                DialogOperation::Message(msg, reason) => {
+                    log::info!(target: "msg", "{msg:?} {reason:?}");
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
             },
             operation => {
                 spawn(async move {
@@ -167,6 +182,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     let output = executor.handle(request.clone(), operation).await;
                     request.response(output).await;
                 });
+
                 continue;
             }
         };

@@ -20,6 +20,13 @@
   },
   "app": {
     "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**"]
+      }
+    },
     "windows": [
       {
         "url": "auth.html",
@@ -36,10 +43,7 @@
         "shadow": true,
         "devtools": true
       }
-    ],
-    "security": {
-      "csp": null
-    }
+    ]
   },
   "bundle": {
     "active": true,

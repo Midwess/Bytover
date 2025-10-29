@@ -1,5 +1,4 @@
-use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-use tauri_plugin_opener::OpenerExt;
+use tauri::{Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);

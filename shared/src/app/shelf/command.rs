@@ -33,34 +33,34 @@ impl AppCommand {
                 None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?
             };
 
-            let mut new_resources = self.run(LocalResourcePersistentOperation::add(vec![local_resource])).await?;
-            if new_resources.is_empty() {
-                continue;
-            }
-
-            let mut new_resource = new_resources.pop().unwrap();
-
             let (thumbnail_png_opt, thumbnail_path_opt) = self.run(
-                DeviceOperation::load_thumbnail_png(new_resource.order_id, selection.path.clone())).await;
+                DeviceOperation::load_thumbnail_png(local_resource.order_id, selection.path.clone(), local_resource.r#type.clone())).await;
 
             if let Some(thumbnail_png) = thumbnail_png_opt {
                 match self
                     .run(LocalResourcePersistentOperation::add_thumbnail(
                         thumbnail_png,
-                        new_resource.order_id
+                        local_resource.order_id
                     ))
                     .await
                 {
                     Ok(thumbnail) => {
-                        new_resource.thumbnail_path = Some(thumbnail);
+                        local_resource.thumbnail_path = Some(thumbnail);
                     }
                     Err(e) => {
                         log::error!("Failed to add thumbnail: {:?}", e);
                     }
                 }
             } else if let Some(thumbnail_path) = thumbnail_path_opt {
-                new_resource.thumbnail_path = Some(thumbnail_path);
+                local_resource.thumbnail_path = Some(thumbnail_path);
             }
+
+            let mut new_resources = self.run(LocalResourcePersistentOperation::add(vec![local_resource])).await?;
+            if new_resources.is_empty() {
+                continue;
+            }
+
+            let new_resource = new_resources.pop().unwrap();
 
             self.update_model(LocalResourceEvent::Add(new_resource));
         }
