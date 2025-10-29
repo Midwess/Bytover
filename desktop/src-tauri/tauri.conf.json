@@ -19,6 +19,7 @@
     }
   },
   "app": {
+    "withGlobalTauri": true,
     "macOSPrivateApi": true,
     "security": {
       "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost",

@@ -37,6 +37,123 @@ mod thumbnail;
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 
 #[tauri::command]
+async fn start_dragging(
+    app_handle: AppHandle,
+    file_path: String,
+    thumbnail_path: Option<String>
+) {
+    log::info!("Starting drag for file: {}", file_path);
+    let Some(window) = app_handle.get_focused_window() else {
+        log::warn!("No window is focused, cannot start dragging");
+        return;
+    };
+
+    let result = handle_drag(&window, file_path, thumbnail_path);
+    log::info!("Drag result: {:?}", result);
+}
+
+fn handle_drag(
+    window: &tauri::Window,
+    file_path: String,
+    thumbnail_path: Option<String>
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Validate and canonicalize the file path
+    let abs_path = std::fs::canonicalize(&file_path)?;
+    log::info!("Starting drag for file: {}", abs_path.display());
+
+    // Ensure the file exists
+    if !abs_path.exists() {
+        return Err(format!("File not found: {}", file_path).into());
+    }
+
+    let item = drag::DragItem::Files(vec![abs_path]);
+
+    // Use provided thumbnail or fallback to a default preview
+    let preview = if let Some(thumb_path) = thumbnail_path {
+        // Validate thumbnail exists before using it
+        let thumb_abs = std::fs::canonicalize(&thumb_path)
+            .unwrap_or_else(|_| {
+                log::warn!("Thumbnail not found, using fallback: {}", thumb_path);
+                PathBuf::from("./default-icon.png")
+            });
+
+        if thumb_abs.exists() {
+            drag::Image::File(thumb_abs)
+        } else {
+            log::warn!("Thumbnail file doesn't exist: {:?}, using fallback", thumb_abs);
+            drag::Image::Raw(include_bytes!("../../public/send.svg").to_vec())
+        }
+    } else {
+        // Use embedded default preview
+        drag::Image::Raw(include_bytes!("../../public/send.svg").to_vec())
+    };
+
+    // Get the window handle with proper platform-specific handling
+    #[cfg(target_os = "linux")]
+    {
+        let gtk_window = window.gtk_window()?;
+        drag::start_drag(
+            &gtk_window,
+            item,
+            preview,
+            |result, cursor| {
+                match result {
+                    drag::DragResult::Dropped => {
+                        log::info!("File dropped at x:{}, y:{}", cursor.x, cursor.y);
+                    }
+                    drag::DragResult::Cancel => {
+                        log::info!("Drag operation cancelled");
+                    }
+                }
+            },
+            drag::Options::default(),
+        )?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        drag::start_drag(
+            window,
+            item,
+            preview,
+            |result, cursor| {
+                match result {
+                    drag::DragResult::Dropped => {
+                        log::info!("File dropped at x:{}, y:{}", cursor.x, cursor.y);
+                    }
+                    drag::DragResult::Cancel => {
+                        log::info!("Drag operation cancelled");
+                    }
+                }
+            },
+            drag::Options::default(),
+        )?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        drag::start_drag(
+            window,
+            item,
+            preview,
+            |result, cursor| {
+                match result {
+                    drag::DragResult::Dropped => {
+                        log::info!("File dropped at x:{}, y:{}", cursor.x, cursor.y);
+                    }
+                    drag::DragResult::Cancel => {
+                        log::info!("Drag operation cancelled");
+                    }
+                }
+            },
+            drag::Options::default(),
+        )?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn ui_launched(app_handle: AppHandle) {
     render(CORE.view(), app_handle);
 }
@@ -205,7 +322,8 @@ pub async fn run() {
 
     builder
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched])
+        .plugin(tauri_plugin_drag::init())
+        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched, start_dragging])
         .setup(|app| {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");

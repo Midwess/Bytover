@@ -11,6 +11,7 @@
     "opener:default",
     "core:webview:allow-create-webview-window",
     "deep-link:default",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    "drag:default"
   ]
 }

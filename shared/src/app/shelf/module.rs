@@ -64,7 +64,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 for selection in selections {
                     if model.shelf.shelf.is_exists(&selection.path) {
                         commands.push(Command::operate(DialogOperation::Toast(
-                            "Resource was already added before2.".to_owned()
+                            "Resource was already added before.".to_owned()
                         )))
                     } else {
                         filtered_selections.push(selection);

@@ -3,7 +3,7 @@ import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
 import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
-import React, {useEffect, useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
 import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2, Minus} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
@@ -76,8 +76,10 @@ export function Shelf() {
             : 'border-border'
         }
         `}>
-            <div data-tauri-drag-region className={"w-full absolute top-0 flex justify-center items-center py-1 z-10 group"}>
-                <Minus className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+            <div data-tauri-drag-region
+                 className={"w-full absolute top-0 flex justify-center items-center py-1 z-10 group"}>
+                <Minus
+                    className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
             {isDraggingOver && (
                 <div
@@ -90,14 +92,15 @@ export function Shelf() {
             )}
 
             {/* Resources List */}
-            <div className="w-full h-full overflow-y-auto px-3 z-0 pt-12">
+            <div className="w-full h-full overflow-y-auto px-2 z-0 pt-9">
                 {selectedResources.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+                    <div data-tauri-drag-region
+                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Upload className="h-8 w-8 opacity-40"/>
                         <p className="text-sm opacity-70">Drop files here</p>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-2">
+                    <div data-tauri-drag-region className="flex flex-col gap-2">
                         {selectedResources.map((resource, index) => (
                             <ResourceView key={index} model={resource}/>
                         ))}
@@ -110,14 +113,29 @@ export function Shelf() {
 
 function ResourceView(props: { model: SelectedResourceViewModel }) {
     const {model} = props;
+    let filePath = (model.path as any).AbsolutePath;
+    let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
     const isFile = ['Folder', 'File'].includes(model.type as any);
 
-    if (isFile) {
-        return <FileView model={model}/>;
-    } else {
-        return <MediaView model={model}/>;
-    }
+    return <div
+        draggable={true}
+        onDragStart={async (e) => {
+            e.preventDefault()
+            const tauri: any = (window as any).__TAURI__
+            tauri?.drag?.startDrag(
+                {
+                    item: [filePath],
+                    icon: thumbnailPath,
+                },
+            );
+        }}>
+        {
+            isFile
+                ? <FileView model={model}/>
+                : <MediaView model={model}/>
+        }
+    </div>
 }
 
 function FileView(props: { model: SelectedResourceViewModel }) {
@@ -140,7 +158,9 @@ function FileView(props: { model: SelectedResourceViewModel }) {
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-hidden"/>
+                    <img
+                        src={thumbnailUrl} alt={model.name}
+                        className="w-full h-full object-cover rounded-sm overflow-hidden"/>
                 ) : isFolder ? (
                     <FolderIcon className="w-6 h-6 text-primary"/>
                 ) : (
@@ -163,7 +183,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem variant="destructive" className="bg-card" onClick={() => {
-                        invoke("remove_resource", {resourceId: model.name})
+                        invoke("remove_resource", {resourceId: model.order_id})
                     }}>
                         <Trash2 className="w-4 h-4 mr-2"/>
                         Remove
@@ -194,7 +214,8 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={model.name} className="w-full h-full object-cover rounded-sm overflow-clip"/>
+                    <img src={thumbnailUrl} alt={model.name}
+                         className="w-full h-full object-cover rounded-sm overflow-clip"/>
                 ) : (
                     <FileIcon
                         className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>

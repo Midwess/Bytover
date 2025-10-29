@@ -67,10 +67,17 @@ pub async fn generate_thumbnail(
         }
     }
 
+    let cancellation = match resource_type {
+        ResourceType::Video => {
+            CancellationToken::timeout(Duration::from_secs(6))
+        },
+        _ => CancellationToken::timeout(Duration::from_secs(2))
+    };
+
     // Try OS-specific thumbnail generation first
-    match generate_os_thumbnail(&file_path, &png_output_path).await {
-        Ok(_) => return Ok(()),
-        Err(e) => {
+    match generate_os_thumbnail(&file_path, &png_output_path).with_cancel(&cancellation).await {
+        Ok(Ok(_)) => return Ok(()),
+        e => {
             log::warn!("OS thumbnail generation failed: {e:?}. Falling back to image crate.");
         }
     }
@@ -93,7 +100,6 @@ async fn generate_os_thumbnail(
         .parent()
         .ok_or(ThumbnailError::InvalidPath)?;
 
-    let cancellation = CancellationToken::timeout(Duration::from_secs(3));
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
         .arg("-s")           // Size
@@ -103,8 +109,7 @@ async fn generate_os_thumbnail(
         .arg(file_path)
         .kill_on_drop(true)
         .output()
-        .with_cancel(&cancellation)
-        .await??;
+        .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
