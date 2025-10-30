@@ -232,7 +232,7 @@ function FileView(props: {
                     isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
                 )}>
                 <Button className={"rounded-xl"} onClick={() => {
-                    core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
+                    core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                 }}>
                     <X/>
                 </Button>
@@ -323,7 +323,7 @@ function MediaView(props: {
                 <Button 
                     className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
                     onClick={() => {
-                        core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
+                        core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
                     <X className="w-4 h-4"/>
                 </Button>
@@ -487,7 +487,7 @@ function PublicSend() {
                 {
                     isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id, new TransferTypeVariantSend())))
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
                     }}>Cancel</Button>
                 }
@@ -501,7 +501,7 @@ function PublicSend() {
                     cloudSession?.is_completed &&
                     <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                            cloudSession?.session_id,
+                            BigInt(cloudSession?.session_id),
                             new TransferTypeVariantSend()
                         )))
                     }}>Continue</Button>
@@ -634,7 +634,7 @@ function NearbySend() {
                 {
                     isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(cloudSession.session_id, new TransferTypeVariantSend())))
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
                     }}>Cancel</Button>
                 }
@@ -654,7 +654,7 @@ function NearbySend() {
                     cloudSession?.is_completed &&
                     <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                            cloudSession?.session_id,
+                            BigInt(cloudSession?.session_id),
                             new TransferTypeVariantSend()
                         )))
                     }}>Continue</Button>

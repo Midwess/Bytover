@@ -6,7 +6,15 @@ import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
-import {Upload, Play, FolderIcon, FileIcon, MoreVertical, Trash2, Minus} from "lucide-react";
+import {
+    Upload,
+    Play,
+    FolderIcon,
+    FileIcon,
+    MoreVertical,
+    Trash2,
+    Minus,
+} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
     DropdownMenu,
@@ -71,6 +79,10 @@ export function Shelf() {
     return <>
         <Card className={`
             p-0
+            flex flex-col
+            justify-center
+            items-center
+            py-2
             w-full h-full bg-card shadow-md shadow-background border-1 
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
@@ -79,7 +91,7 @@ export function Shelf() {
         }
         `}>
             <div data-tauri-drag-region
-                 className={"w-full absolute top-0 flex justify-center items-center py-1 z-10 group"}>
+                 className={"w-full absolute top-0 flex justify-center items-center z-10 group"}>
                 <Minus
                     className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
@@ -153,7 +165,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-1 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -209,7 +221,7 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-2 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-1 relative group transition-colors border border-primaryText/5">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -239,8 +251,8 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
                         <MoreVertical className="w-4 h-4"/>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem variant="destructive" className="bg-card" onClick={() => {
+                <DropdownMenuContent align="end" className={"dark"}>
+                    <DropdownMenuItem variant="destructive" onClick={() => {
                         invoke("remove_resource", {resourceId: String(model.order_id)})
                     }}>
                         <Trash2 className="w-4 h-4 mr-2"/>

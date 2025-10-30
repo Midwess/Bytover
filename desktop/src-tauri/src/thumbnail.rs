@@ -51,7 +51,7 @@ pub async fn generate_thumbnail(
 
     if matches!(resource_type, ResourceType::File | ResourceType::Folder) {
         // Load icon of files
-        let icon = get_file_icon(file_path.clone(), 256).expect("Failed to get icon");
+        let icon = get_file_icon(file_path.clone(), 64).expect("Failed to get icon");
         if let Some(icon) = RgbaImage::from_raw(icon.width, icon.height, icon.pixels).map(DynamicImage::ImageRgba8) {
             let saved_path = spawn_blocking({
                 let png_output_path = png_output_path.clone();
@@ -103,7 +103,7 @@ async fn generate_os_thumbnail(
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
         .arg("-s")           // Size
-        .arg("256")
+        .arg("64")
         .arg("-o")           // Output directory
         .arg(output_dir)
         .arg(file_path)
@@ -328,7 +328,7 @@ async fn generate_os_thumbnail(
         .ok_or(ThumbnailError::InvalidPath)?
         .join("thumbnails");
 
-    // Try different sizes: large (256x256) first, then normal (128x128)
+    // Try different sizes: large (64x64) first, then normal (64x64)
     for size_dir in &["large", "normal"] {
         let cached_thumb = cache_dir.join(size_dir).join(format!("{}.png", hash));
 

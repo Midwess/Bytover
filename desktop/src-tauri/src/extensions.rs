@@ -33,7 +33,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("send.html".into())
                 )
                     .title("send")
-                    .inner_size(480.0, 280.0)
+                    .inner_size(260.0, 280.0)
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
