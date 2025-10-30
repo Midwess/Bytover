@@ -18,9 +18,12 @@ import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
 } from "shared_types/types/shared_types";
+import useWindow from "@/hooks/use-window.ts";
+import {throttle} from "lodash";
 
 export function Shelf() {
     const window = getCurrentWindow()
+    const windowInfo = useWindow(window)
     const selectedResources = core.useSelectedResources()
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -32,11 +35,9 @@ export function Shelf() {
         let unlisten: (() => void) | undefined;
 
         const setup = async () => {
-            unlisten = await window.onDragDropEvent(async ({payload}) => {
-                const windowSize = await window.innerSize();
+            unlisten = await window.onDragDropEvent(throttle(({payload}) => {
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
-                const windowPos = await window.outerPosition();
-                const isLeftSide = eventPosition?.x && eventPosition.x < windowPos.x + windowSize.width / 2;
+                const isLeftSide = eventPosition?.x && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
                     // Show drag feedback when hovering over the left side (shelf area)
                     if (isLeftSide) {
@@ -55,7 +56,7 @@ export function Shelf() {
                         invoke("add_resources", payload).then(noop);
                     }
                 }
-            });
+            }, 120, {leading: true, trailing: true}));
         };
 
         setup();
@@ -65,7 +66,7 @@ export function Shelf() {
                 unlisten();
             }
         };
-    }, []);
+    }, [windowInfo]);
 
     return <>
         <Card className={`
@@ -93,7 +94,7 @@ export function Shelf() {
             )}
 
             {/* Resources List */}
-            <div className="w-full h-full overflow-y-auto px-2 z-0 pt-9">
+            <div className="w-full h-full overflow-y-auto px-2 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
                 {selectedResources.length === 0 ? (
                     <div
                          className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">

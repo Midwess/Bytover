@@ -107,7 +107,6 @@ export function Transfer() {
 
 function NearbyList() {
     const list = core.useNearbyListState();
-    console.log('tiendang-debug', `nearby list ${JSON.stringify(list, null, 2)}`)
     return <div className={"flex flex-col gap-2 w-full h-full"}>
         {
             list.map((it) => <>
@@ -125,7 +124,7 @@ function NearbyPeer(props: {peer: PeerViewModel}) {
         <Card
             className={"flex flex-row bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
             onClick={() => {
-                invoke("start_transfer", { target_id: peer.id }).then(noop)
+                invoke("start_transfer", { targetId: peer.id }).then(noop)
             }}>
             <div className={"flex flex-row items-center gap-3"}>
                 <div

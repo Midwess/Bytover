@@ -44,7 +44,6 @@ export class Core {
 
         useEffect(() => {
             return this.shelfState.subscribe((transferState) => {
-                console.log('tiendang-debug', `selected resources`, transferState?.selected_resources)
                 if (transferState?.selected_resources.length != state.length) {
                     setState(transferState?.selected_resources || [])
                 }
@@ -83,7 +82,6 @@ export class Core {
         this.isLaunched = true;
 
         await listen<AppViewModel>('Render', (viewModel) => {
-            console.log('tiendang-debug', `Render`, viewModel)
             this.environmentState.set(viewModel.payload.environment!)
             this.authenticationState.set(viewModel.payload.authentication!)
             this.nearbyState.set(viewModel.payload.nearby!)
