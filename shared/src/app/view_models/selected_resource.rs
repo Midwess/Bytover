@@ -4,7 +4,6 @@ use crate::entities::local_resource::{LocalResource, LocalResourcePath, Resource
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {
-    #[cfg_attr(feature = "bigint_as_string", serde(with = "crate::utils::serde::as_string"))]
     pub order_id: u64,
     pub name: String,
     pub size_gb: f64,

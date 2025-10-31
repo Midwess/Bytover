@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct CloudSession {
     pub access_url: Option<String>,
     pub password: Option<String>,
-    #[cfg_attr(feature = "bigint_as_string", serde(with = "crate::utils::serde::as_string"))]
     pub session_id: u64,
     pub is_completed: bool,
     pub is_in_progress: bool,

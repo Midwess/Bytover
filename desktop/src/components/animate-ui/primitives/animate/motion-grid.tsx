@@ -1,0 +1,494 @@
+'use client';
+
+import * as React from 'react';
+import { motion, type HTMLMotionProps } from 'motion/react';
+
+import { cn } from '@/lib/utils';
+import { getStrictContext } from '@/lib/get-strict-context';
+import { Slot, type WithAsChild } from '@/components/animate-ui/primitives/animate/slot';
+import {useEffect, useState} from "react";
+
+type FrameDot = [number, number];
+type Frame = FrameDot[];
+type Frames = Frame[];
+
+type MotionGridContextType = {
+  index: number;
+  cols: number;
+  rows: number;
+  frames: Frames;
+  duration: number;
+  animate: boolean;
+};
+
+const [MotionGridProvider, useMotionGrid] =
+  getStrictContext<MotionGridContextType>('MotionGridContext');
+
+type MotionGridProps = WithAsChild<
+  {
+    gridSize: [number, number];
+    frames: Frames;
+    duration?: number;
+    animate?: boolean;
+  } & HTMLMotionProps<'div'>
+>;
+
+const MotionGrid = ({
+  gridSize,
+  frames,
+  duration = 200,
+  animate = true,
+  asChild = false,
+  style,
+  ...props
+}: MotionGridProps) => {
+  const [index, setIndex] = React.useState(0);
+  const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    if (!animate || frames.length === 0) return;
+    intervalRef.current = setInterval(
+      () => setIndex((i) => (i + 1) % frames.length),
+      duration,
+    );
+    return () => clearInterval(intervalRef.current!);
+  }, [frames.length, duration, animate]);
+
+  const [cols, rows] = gridSize;
+
+  const Component = asChild ? Slot : motion.div;
+
+  return (
+    <MotionGridProvider
+      value={{ animate, index, cols, rows, frames, duration }}
+    >
+      <Component
+        data-animate={animate}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gridAutoRows: '1fr',
+          ...style,
+        }}
+        {...props}
+      />
+    </MotionGridProvider>
+  );
+};
+
+type MotionGridCellsProps = HTMLMotionProps<'div'> & {
+  activeProps?: HTMLMotionProps<'div'>;
+  inactiveProps?: HTMLMotionProps<'div'>;
+};
+
+function MotionGridCells({
+  activeProps,
+  inactiveProps,
+  ...props
+}: MotionGridCellsProps) {
+  const { animate, index, cols, rows, frames, duration } = useMotionGrid();
+
+  const active = new Set<number>(
+    frames[index]?.map(([x, y]) => y * cols + x) ?? [],
+  );
+
+  return Array.from({ length: cols * rows }).map((_, i) => {
+    const isActive = active.has(i);
+    const componentProps: HTMLMotionProps<'div'> = {
+      ...(isActive ? activeProps : inactiveProps),
+    };
+    componentProps.className = cn(
+      props?.className,
+      isActive ? activeProps?.className : inactiveProps?.className,
+    );
+    componentProps.style = {
+      ...props?.style,
+      ...(isActive ? activeProps?.style : inactiveProps?.style),
+    };
+
+    return (
+      <motion.div
+        key={i}
+        data-active={isActive}
+        data-animate={animate}
+        transition={{ duration, ease: 'easeInOut' }}
+        {...props}
+        {...componentProps}
+      />
+    );
+  });
+}
+
+const importingFrames = [
+  [[2, 2]],
+  [
+    [1, 2],
+    [2, 1],
+    [2, 3],
+    [3, 2],
+  ],
+  [
+    [2, 2],
+    [0, 2],
+    [1, 1],
+    [1, 3],
+    [2, 0],
+    [2, 4],
+    [3, 1],
+    [3, 3],
+    [4, 2],
+  ],
+  [
+    [0, 1],
+    [0, 3],
+    [1, 0],
+    [1, 2],
+    [1, 4],
+    [2, 1],
+    [2, 3],
+    [3, 0],
+    [3, 2],
+    [3, 4],
+    [4, 1],
+    [4, 3],
+  ],
+  [
+    [0, 0],
+    [0, 2],
+    [0, 4],
+    [1, 1],
+    [1, 3],
+    [2, 0],
+    [2, 2],
+    [2, 4],
+    [3, 1],
+    [3, 3],
+    [4, 0],
+    [4, 2],
+    [4, 4],
+  ],
+  [
+    [0, 1],
+    [0, 3],
+    [1, 0],
+    [1, 2],
+    [1, 4],
+    [2, 1],
+    [2, 3],
+    [3, 0],
+    [3, 2],
+    [3, 4],
+    [4, 1],
+    [4, 3],
+  ],
+  [
+    [0, 0],
+    [0, 2],
+    [0, 4],
+    [1, 1],
+    [1, 3],
+    [2, 0],
+    [2, 4],
+    [3, 1],
+    [3, 3],
+    [4, 0],
+    [4, 2],
+    [4, 4],
+  ],
+  [
+    [0, 1],
+    [1, 0],
+    [3, 0],
+    [4, 1],
+    [0, 3],
+    [1, 4],
+    [3, 4],
+    [4, 3],
+  ],
+  [
+    [0, 0],
+    [0, 4],
+    [4, 0],
+    [4, 4],
+  ],
+  [],
+] as Frames;
+
+const arrowDownFrames = [
+  [[2, 0]],
+  [
+    [1, 0],
+    [2, 0],
+    [3, 0],
+    [2, 1],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [2, 1],
+    [3, 1],
+    [2, 2],
+  ],
+  [
+    [2, 0],
+    [2, 1],
+    [1, 2],
+    [2, 2],
+    [3, 2],
+    [2, 3],
+  ],
+  [
+    [2, 1],
+    [2, 2],
+    [1, 3],
+    [2, 3],
+    [3, 3],
+    [2, 4],
+  ],
+  [
+    [2, 2],
+    [2, 3],
+    [1, 4],
+    [2, 4],
+    [3, 4],
+  ],
+  [
+    [2, 3],
+    [2, 4],
+  ],
+  [[2, 4]],
+  [],
+] as Frames;
+
+const arrowUpFrames = [
+  [[2, 4]],
+  [
+    [1, 4],
+    [2, 4],
+    [3, 4],
+    [2, 3],
+  ],
+  [
+    [2, 4],
+    [1, 3],
+    [2, 3],
+    [3, 3],
+    [2, 2],
+  ],
+  [
+    [2, 4],
+    [2, 3],
+    [1, 2],
+    [2, 2],
+    [3, 2],
+    [2, 1],
+  ],
+  [
+    [2, 3],
+    [2, 2],
+    [1, 1],
+    [2, 1],
+    [3, 1],
+    [2, 0],
+  ],
+  [
+    [2, 2],
+    [2, 1],
+    [1, 0],
+    [2, 0],
+    [3, 0],
+  ],
+  [
+    [2, 1],
+    [2, 0],
+  ],
+  [[2, 0]],
+  [],
+] as Frames;
+
+const syncingFrames = [...arrowDownFrames, ...arrowUpFrames] as Frames;
+
+const searchingFrames = [
+  [
+    [1, 0],
+    [0, 1],
+    [1, 1],
+    [2, 1],
+    [1, 2],
+  ],
+  [
+    [2, 0],
+    [1, 1],
+    [2, 1],
+    [3, 1],
+    [2, 2],
+  ],
+  [
+    [3, 0],
+    [2, 1],
+    [3, 1],
+    [4, 1],
+    [3, 2],
+  ],
+  [
+    [3, 1],
+    [2, 2],
+    [3, 2],
+    [4, 2],
+    [3, 3],
+  ],
+  [
+    [3, 2],
+    [2, 3],
+    [3, 3],
+    [4, 3],
+    [3, 4],
+  ],
+  [
+    [1, 2],
+    [0, 3],
+    [1, 3],
+    [2, 3],
+    [1, 4],
+  ],
+  [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [1, 0],
+    [1, 2],
+    [2, 0],
+    [2, 1],
+    [2, 2],
+  ],
+  [],
+] as Frames;
+
+const busyFrames = [
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [1, 2],
+    [4, 1],
+    [4, 2],
+    [4, 3],
+  ],
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [2, 3],
+    [4, 2],
+    [4, 3],
+    [4, 4],
+  ],
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [3, 4],
+    [4, 2],
+    [4, 3],
+    [4, 4],
+  ],
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [2, 3],
+    [4, 2],
+    [4, 3],
+    [4, 4],
+  ],
+  [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [1, 2],
+    [4, 2],
+    [4, 3],
+    [4, 4],
+  ],
+  [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [2, 1],
+    [4, 1],
+    [4, 2],
+    [4, 3],
+  ],
+  [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [3, 0],
+    [4, 0],
+    [4, 1],
+    [4, 2],
+  ],
+  [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [2, 1],
+    [4, 0],
+    [4, 1],
+    [4, 2],
+  ],
+] as Frames;
+
+const states = {
+  connecting: {
+    frames: searchingFrames,
+    label: 'Connecting',
+  }
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const MotionGridSignalling = ({size}: {size: number}) => {
+  const [state, setState] = useState<keyof typeof states>('connecting');
+
+  const runStates = async () => {
+    while (true) {
+      for (const state of Object.keys(states) as (keyof typeof states)[]) {
+        setState(state);
+        await sleep(3000);
+      }
+    }
+  };
+
+  useEffect(() => {
+    runStates();
+  }, []);
+
+  return (
+      <motion.button
+          layout
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="gap-y-3 items-center w-fit flex flex-col"
+      >
+        <motion.div layout="preserve-aspect">
+          <MotionGrid
+              gridSize={[5, 5]}
+              frames={states[state].frames}
+              className="w-fit gap-1 bg-card/60 aspect-square">
+            <MotionGridCells className={`size-[${size}px] rounded-full bg-black/90 dark:bg-white/20 data-[active=true]:bg-black/70 dark:data-[active=true]:bg-white/70`} />
+          </MotionGrid>
+        </motion.div>
+      </motion.button>
+  );
+};
+
+export {
+  MotionGrid,
+  MotionGridCells,
+  type MotionGridProps,
+  type MotionGridCellsProps,
+  type FrameDot,
+  type Frame,
+  type Frames,
+};

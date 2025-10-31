@@ -82,7 +82,6 @@ export function Shelf() {
             flex flex-col
             justify-center
             items-center
-            py-2
             w-full h-full bg-card shadow-md shadow-background border-1 
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
@@ -91,7 +90,7 @@ export function Shelf() {
         }
         `}>
             <div data-tauri-drag-region
-                 className={"w-full absolute top-0 flex justify-center items-center z-10 group"}>
+                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-10 group"}>
                 <Minus
                     className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>

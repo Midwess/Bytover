@@ -26,6 +26,7 @@ import CircleProgress from "@/components/ui/progress.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {noop} from "motion";
 import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx";
+import {MotionGridSignalling} from "@/components/animate-ui/primitives/animate/motion-grid.tsx";
 
 export function Transfer() {
     return (
@@ -65,10 +66,12 @@ export function Transfer() {
                                         className="flex flex-col gap-5 py-2 bg-card/95 border p-1.5 overflow-y-scroll">
                                         <Label
                                             className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
-                                            <div
-                                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                                                <MapPin/>
-                                            </div>
+                                            {
+                                                <div
+                                                    className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
+                                                    <MapPin/>
+                                                </div>
+                                            }
                                             Nearby:
                                         </Label>
                                         <NearbyList/>
@@ -119,12 +122,16 @@ export function Transfer() {
 
 function NearbyList() {
     const list = core.useNearbyListState();
+
     return <div className={"flex flex-col gap-2 w-full h-full"}>
         {
             list.map((it) => <>
                 <NearbyPeer peer={it}></NearbyPeer>
             </>)
         }
+        <div className={"flex flex-col items-center pb-2 pt-1"}>
+            <MotionGridSignalling size={2}/>
+        </div>
     </div>
 }
 

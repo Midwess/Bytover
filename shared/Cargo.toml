@@ -8,7 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 typegen = ["crux_core/typegen"]
-bigint_as_string = []
 
 [dependencies]
 crux_core.workspace = true

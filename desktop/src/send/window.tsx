@@ -43,15 +43,15 @@ function Window() {
     return (
         <main className="w-screen h-screen overflow-hidden rounded-xl dark bg-transparent flex flex-col">
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
-                <div className={`h-full bg-transparent relative w-[240px]`}>
+                <div className={`h-full bg-transparent relative w-[245px]`}>
                    <Shelf/>
                    {/* Toggle button at the middle-right edge */}
                    <Button
                        onClick={toggleExpand}
-                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-4 aspect-square h-auto bg-bluePrimary/80 shadow-lg border rounded-full flex items-center justify-center hover:bg-bluePrimary/80"
+                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-3 aspect-square h-auto bg-card border shadow-lg rounded-full flex items-center justify-center hover:bg-muted"
                    >
                        <ArrowRight 
-                           className={`w-4 h-4 text-white transition-transform duration-400 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
+                           className={`w-3 h-3 text-white transition-transform duration-400 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
                        />
                    </Button>
                 </div>

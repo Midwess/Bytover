@@ -50,7 +50,10 @@ import {
     CoreOperationOutputVariantDeviceInfo,
     CoreOperationOutputVariantLocalResourcePath,
     CoreOperationOutputVariantGeoLocation,
-    CoreOperationOutputVariantBool, MessageReason, FileReceiveResourceViewModel, ImageReceiveResourceViewModel,
+    CoreOperationOutputVariantBool,
+    MessageReason,
+    FileReceiveResourceViewModel,
+    ImageReceiveResourceViewModel,
     VideoReceiveResourceViewModel,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
