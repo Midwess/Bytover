@@ -46,7 +46,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 ctx.app().sign_in().await;
             }),
             AuthenticationEvent::SignOut => Command::done(),
-            AuthenticationEvent::OnRedirected { url } => Command::new_result(|ctx| async move {
+            AuthenticationEvent::OnRedirected { url } => Command::handle_result(|ctx| async move {
                 ctx.app().authorize(url).await?;
 
                 Ok(())

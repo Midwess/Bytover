@@ -32,8 +32,11 @@ import {
     SelectedResourceViewModel,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartTransfer, ResourceTypeVariantFolder, ShelfEvent, ShelfEventVariantAddResources,
-    AppEventVariantShelf, ShelfEventVariantRemoveResource
+    TransferEventVariantStartTransfer,
+    ResourceTypeVariantFolder,
+    ShelfEventVariantAddResources,
+    AppEventVariantShelf,
+    ShelfEventVariantRemoveResource
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
@@ -231,8 +234,8 @@ function FileView(props: {
                     "absolute z-20 inset-0 flex items-center justify-center",
                     isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
                 )}>
-                <Button className={"rounded-xl"} onClick={() => {
-                    core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
+                <Button className={"rounded-xl"} onClick={async () => {
+                    await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(model.order_id)))
                 }}>
                     <X/>
                 </Button>
@@ -323,7 +326,7 @@ function MediaView(props: {
                 <Button 
                     className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
                     onClick={() => {
-                        core.update(new AppEventVariantTransfer(new ShelfEventVariantRemoveResource(model.order_id)))
+                        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(model.order_id)))
                     }}>
                     <X className="w-4 h-4"/>
                 </Button>

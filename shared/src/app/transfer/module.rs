@@ -107,7 +107,7 @@ impl AppModule<BitBridge> for TransferModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            TransferEvent::Launch => Command::new_result(|it| async move { it.app().load_transfer_sessions().await }),
+            TransferEvent::Launch => Command::handle_result(|it| async move { it.app().load_transfer_sessions().await }),
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
                     order_id: Some(session_id),
@@ -126,7 +126,7 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 }
 
-                Command::new_result(|it| async move {
+                Command::handle_result(|it| async move {
                     if !session.is_completed() {
                         let confirmation = DialogOperation::alert(AlertDialog::confirmation(
                             "Cancel the transfer ?".to_string(),
@@ -159,7 +159,7 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 }
 
-                Command::new_result(|it| async move { it.app().delete_session(session).await })
+                Command::handle_result(|it| async move { it.app().delete_session(session).await })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let id = TransferSessionId {
@@ -173,7 +173,7 @@ impl AppModule<BitBridge> for TransferModule {
                 session.cancel();
 
                 let session = session.clone();
-                Command::new_result(|it| async move { it.app().delete_session(session).await })
+                Command::handle_result(|it| async move { it.app().delete_session(session).await })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
@@ -189,7 +189,7 @@ impl AppModule<BitBridge> for TransferModule {
                     to_emails
                 };
 
-                Command::new_result(|it| async move { it.app().transfer(user, selected_resources, target).await })
+                Command::handle_result(|it| async move { it.app().transfer(user, selected_resources, target).await })
             }
             TransferEvent::StartTransfer { target_id } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
@@ -210,7 +210,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::operate(DialogOperation::Toast("unauthenticated".to_owned()));
                 };
 
-                Command::new_result(|it| async move {
+                Command::handle_result(|it| async move {
                     if let Some(duplicated_session) = duplicated_session {
                         it.notify_event(TransferEvent::CancelTransfer {
                             session_id: duplicated_session.order_id,
@@ -223,7 +223,7 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::TransferRequest { remote_session, peer } => {
-                Command::new_result(|it| async move { it.app().accept_session(remote_session, peer).await })
+                Command::handle_result(|it| async move { it.app().accept_session(remote_session, peer).await })
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
@@ -301,7 +301,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::render();
                 }
 
-                Command::new_result(|it| async move { it.app().find_transfer_session(keywords).await })
+                Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await })
             }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
@@ -315,7 +315,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done()
                 };
 
-                Command::new_result(|it| async move { it.app().view_public_session(session, password).await })
+                Command::handle_result(|it| async move { it.app().view_public_session(session, password).await })
             }
         }
     }

@@ -17,7 +17,7 @@ pub trait CoreCommandUtils {
     fn operate<O>(operation: O) -> AppCommand
     where
         O: Into<CoreOperation> + 'static;
-    fn new_result<F, Fut>(create_task: F) -> Self
+    fn handle_result<F, Fut>(create_task: F) -> Self
     where
         F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
         Fut: Future<Output = Result<(), CoreError>> + Send + 'static;
@@ -59,7 +59,7 @@ impl CoreCommandContextUtils for AppCommandContext {
 }
 
 impl CoreCommandUtils for AppCommand {
-    fn new_result<F, Fut>(create_task: F) -> Self
+    fn handle_result<F, Fut>(create_task: F) -> Self
     where
         F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
         Fut: Future<Output = Result<(), CoreError>> + Send + 'static

@@ -49,7 +49,7 @@ impl AppModule<BitBridge> for ShelfModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            Self::Event::Launch => Command::new_result(|it| async move { it.app().load_resources().await }),
+            Self::Event::Launch => Command::handle_result(|it| async move { it.app().load_resources().await }),
             Self::Event::BeginLoadingResources => {
                 model.shelf.is_loading = true;
                 Command::render()
@@ -71,7 +71,7 @@ impl AppModule<BitBridge> for ShelfModule {
                     }
                 }
 
-                commands.push(Command::new_result(|it| async move {
+                commands.push(Command::handle_result(|it| async move {
                     let app = it.app();
                     app.notify_event(ShelfEvent::BeginLoadingResources);
                     app.new_resources(filtered_selections).await?;
@@ -82,7 +82,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
-            Self::Event::RemoveResource(id) => Command::new_result(move |it| async move { it.app().remove_resource(id).await }),
+            Self::Event::RemoveResource(id) => Command::handle_result(move |it| async move { it.app().remove_resource(id).await }),
             Self::Event::ModelEvent(event) => {
                 match event {
                     LocalResourceEvent::Add(resource) => {
