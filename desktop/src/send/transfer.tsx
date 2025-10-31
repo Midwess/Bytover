@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/card';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
-import {Mail, MapPin, SendHorizonal} from "lucide-react";
+import {Info, Lock, Mail, MapPin, SendHorizonal} from "lucide-react";
 import core from "@/core.ts";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {
@@ -63,7 +63,7 @@ export function Transfer() {
                                         </div>
                                     </Card>
                                     <Card
-                                        className="flex flex-col gap-5 py-2 bg-card/95 border p-1.5 overflow-y-scroll">
+                                        className="flex flex-col gap-5 bg-card/95 border p-1.5 overflow-y-scroll">
                                         <Label
                                             className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
                                             {
@@ -78,24 +78,28 @@ export function Transfer() {
                                     </Card>
                                 </CardContent>
                             </TabsPanel>
-                            <TabsPanel value="public" className="flex flex-col gap-6">
-                                <CardHeader>
-                                    <CardTitle>Public</CardTitle>
-                                    <CardDescription>
-                                        Public your resources with protected password.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-6">
-                                    <div className="grid gap-3">
-                                        <Label htmlFor="tabs-demo-current">Password</Label>
-                                        <Input id="tabs-demo-current" type="password"/>
-                                    </div>
+                            <TabsPanel value="public" className="flex flex-col gap-2">
+                                <CardContent className={"p-0 flex flex-col gap-2"}>
+                                    <Card className="flex flex-col gap-2 p-2">
+                                        <Label
+                                            className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
+                                            <div
+                                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
+                                                <Lock/>
+                                            </div>
+                                            Password:
+                                        </Label>
+                                        <div className="grid gap-3">
+                                            <Input className={"bg-secondary shadow-background"} type="password"
+                                                   placeholder={"Pwd@123"}/>
+                                        </div>
+                                    </Card>
+                                    <Card className="flex flex-col gap-2 p-2">
+                                        <Button className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+                                    </Card>
                                 </CardContent>
-                                <CardFooter>
-                                    <Button>Send</Button>
-                                </CardFooter>
                             </TabsPanel>
-                            <TabsPanel value="public" className="flex flex-col gap-6">
+                            <TabsPanel value="devices" className="flex flex-col gap-6">
                                 <CardHeader>
                                     <CardTitle>Devices</CardTitle>
                                     <CardDescription>
@@ -131,12 +135,13 @@ function NearbyList() {
         }
         {
             !list.length &&
-            <div className={"flex flex-col items-center pb-1 rounded-full"}>
-                <MotionGridSignalling size={3}/>
+            <div className={"flex flex-col items-center h-[30px] rounded-full"}>
+                <MotionGridSignalling/>
             </div>
         }
         {/* Bottom fade mask */}
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/95 to-transparent pointer-events-none z-20"/>
+        <div
+            className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/95 to-transparent pointer-events-none z-20"/>
     </div>
 }
 

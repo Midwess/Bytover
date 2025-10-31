@@ -448,7 +448,7 @@ const states = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export const MotionGridSignalling = ({size}: {size: number}) => {
+export const MotionGridSignalling = () => {
   const [state, setState] = useState<keyof typeof states>('connecting');
 
   const runStates = async () => {
@@ -476,7 +476,7 @@ export const MotionGridSignalling = ({size}: {size: number}) => {
               gridSize={[5, 5]}
               frames={states[state].frames}
               className="w-fit gap-1 bg-transparent">
-            <MotionGridCells className={`size-[${size}px] rounded-full bg-black/90 dark:bg-white/20 data-[active=true]:bg-black/70 dark:data-[active=true]:bg-white/70`} />
+            <MotionGridCells className={`size-[3px] rounded-full bg-black/90 dark:bg-white/20 data-[active=true]:bg-black/70 dark:data-[active=true]:bg-white/70`} />
           </MotionGrid>
         </motion.div>
       </motion.button>

@@ -167,7 +167,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 },
                 DialogOperation::Alert(alert) => {
                     log::info!(target: "alert", "{alert:?}");
-                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                    CORE.resolve(&mut handle, CoreOperationOutput::Bool(true)).unwrap_or_default()
                 },
                 DialogOperation::Message(msg, reason) => {
                     log::info!(target: "msg", "{msg:?} {reason:?}");

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use crux_core::RequestHandle;
 use futures_util::lock::Mutex;
+use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -145,12 +146,10 @@ impl BufferExt for PeerBuffered {
         let secs = est_secs.clamp(5.0, 10.0);
         let timeout = Duration::from_secs_f64(secs);
 
-        select! {
-            _ = self.flush(index).fuse() => Ok(()),
-            _ = Delay::new(timeout).fuse() => Err(anyhow::anyhow!("flush timeout after {:?}", timeout)),
-            complete => Ok(()),
-        }
-    }
+        let cancel = CancellationToken::timeout(timeout);
+        self.flush(index).with_cancel(&cancel).await?;
+        Ok(())
+   }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
         for i in 0..self.len() {

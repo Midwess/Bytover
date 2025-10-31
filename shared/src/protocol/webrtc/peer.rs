@@ -8,7 +8,7 @@ use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, 
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
+use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
@@ -246,10 +246,13 @@ impl WebRtcPeer {
                         return Ok(thumbnail_paths)
                     }
 
+                    log::info!("Begin receiving thumbnail for session {session_id}");
                     let start_delimiter = TransferDelimiterShema::forward_to_next_resource(
                         &mut thumbnail_rx,
                         session_id
                     ).with_cancel(&thumbnail_cancel_signal).await??;
+
+                    log::info!("Found start delimiter {start_delimiter:?}");
 
                     let Some(resource_index) = thumbnail_paths.iter().position(|it| it.0 == start_delimiter.resource_id) else {
                         return Err(WebRtcErrors::InvalidDelimiter(format!(
@@ -383,6 +386,7 @@ impl WebRtcPeer {
             .resources
             .iter()
             .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
+            .rev()
             .collect::<Vec<_>>();
         let repo = self.resource_repo.clone();
         let thumbnail_channel = self.thumbnail_channel.clone();
@@ -396,7 +400,6 @@ impl WebRtcPeer {
                         break;
                     }
 
-                    log::info!("Begin transferring thumbnail {thumbnail_path:?} for session {session_id}");
                     let Ok(Ok(mut reader)) = repo.read(thumbnail_path.clone(), 63 * 1024).with_cancel(&thumbnail_cancel_signal).await
                     else {
                         continue;
@@ -415,8 +418,8 @@ impl WebRtcPeer {
                             let _ = thumbnail_channel.unbounded_send((peer_id, bytes));
                         }
 
-                        if buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
-                            buffer.flush_all_timeout().await?;
+                        if buffer.buffered_amount(TRANSFER_THUMBNAIL_CHANNEL_ID).await > MAX_BUFFER_SIZE {
+                            buffer.flush_timeout(TRANSFER_THUMBNAIL_CHANNEL_ID).await?;
                         }
                     }
 
@@ -425,9 +428,6 @@ impl WebRtcPeer {
                         log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
                         return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                     }
-
-                    buffer.flush_all_timeout().await?;
-                    log::info!("Complete transferring thumbnail {thumbnail_path:?} for session {session_id}");
                 }
 
                 Ok(session_thumbnail_paths)
@@ -481,8 +481,8 @@ impl WebRtcPeer {
 
                 progress_update.update_progress(sent_bytes);
                 let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
-                if self.buffer.sum_buffered_amount().await > MAX_BUFFER_SIZE {
-                    self.buffer.flush_all_timeout().await?;
+                if self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await > MAX_BUFFER_SIZE {
+                    self.buffer.flush_timeout(TRANSFER_RESOURCE_CHANNEL_ID).await?;
                 }
             }
 
@@ -504,8 +504,8 @@ impl WebRtcPeer {
             );
         }
 
-        self.buffer.flush_all_timeout().await?;
         let _ = thumbnail_handle.await;
+        self.buffer.flush_all_timeout().await?;
         self.transfers_context.stop_transfer(session_id).await;
         log::info!("Transfer session {session_id} completed");
 
