@@ -43,7 +43,7 @@ function Window() {
     return (
         <main className="w-screen h-screen overflow-hidden rounded-xl dark bg-transparent flex flex-col">
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
-                <div className={`h-full bg-transparent relative w-[245px]`}>
+                <div className={`h-full bg-transparent relative min-w-[245px] w-[245px]`}>
                    <Shelf/>
                    {/* Toggle button at the middle-right edge */}
                    <Button

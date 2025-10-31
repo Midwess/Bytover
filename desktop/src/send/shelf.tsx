@@ -78,7 +78,7 @@ export function Shelf() {
 
     return <>
         <Card className={`
-            p-0
+            px-0
             flex flex-col
             justify-center
             items-center
@@ -105,7 +105,7 @@ export function Shelf() {
             )}
 
             {/* Resources List */}
-            <div className="w-full h-full overflow-y-auto px-2 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
+            <div className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
                 {selectedResources.length === 0 ? (
                     <div
                          className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
@@ -120,6 +120,9 @@ export function Shelf() {
                     </div>
                 )}
             </div>
+            
+            {/* Bottom fade mask */}
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
         </Card>
     </>
 }

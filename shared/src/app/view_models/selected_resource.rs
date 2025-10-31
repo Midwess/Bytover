@@ -4,7 +4,7 @@ use crate::entities::local_resource::{LocalResource, LocalResourcePath, Resource
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {
-    pub order_id: u64,
+    pub order_id: String,
     pub name: String,
     pub size_gb: f64,
     pub size_mb: f64,
@@ -17,7 +17,7 @@ pub struct SelectedResourceViewModel {
 impl From<&LocalResource> for SelectedResourceViewModel {
     fn from(resource: &LocalResource) -> Self {
         let mut view_model = SelectedResourceViewModel {
-            order_id: resource.order_id,
+            order_id: resource.order_id.to_string(),
             name: resource.name.clone(),
             size_gb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
             size_mb: 0.0,

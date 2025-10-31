@@ -134,12 +134,12 @@ export class WasmCore {
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
-                ]).find(r => r.model.order_id === id) ||
+                ]).find(r => BigInt(r.model.order_id) === id) ||
                 transferState.received_cloud_sessions?.flatMap(session => [
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
-                ]).find(r => r.model.order_id === id)
+                ]).find(r => BigInt(r.model.order_id) === id)
 
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
@@ -213,7 +213,7 @@ export class WasmCore {
                     setState(transferState?.selected_resources || [])
                 }
             })
-        }, [])
+        }, [state.length])
 
         return state
     }

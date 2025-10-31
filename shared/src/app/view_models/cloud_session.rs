@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct CloudSession {
     pub access_url: Option<String>,
     pub password: Option<String>,
-    pub session_id: u64,
+    pub session_id: String,
     pub is_completed: bool,
     pub is_in_progress: bool,
     pub display_download_speed: String,

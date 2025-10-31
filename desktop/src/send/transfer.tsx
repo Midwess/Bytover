@@ -123,15 +123,20 @@ export function Transfer() {
 function NearbyList() {
     const list = core.useNearbyListState();
 
-    return <div className={"flex flex-col gap-2 w-full h-full"}>
+    return <div className={"flex flex-col gap-2 w-full h-full relative"}>
         {
             list.map((it) => <>
                 <NearbyPeer peer={it}></NearbyPeer>
             </>)
         }
-        <div className={"flex flex-col items-center pb-2 pt-1"}>
-            <MotionGridSignalling size={2}/>
-        </div>
+        {
+            !list.length &&
+            <div className={"flex flex-col items-center pb-1 rounded-full"}>
+                <MotionGridSignalling size={3}/>
+            </div>
+        }
+        {/* Bottom fade mask */}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/95 to-transparent pointer-events-none z-20"/>
     </div>
 }
 
@@ -141,7 +146,7 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
 
     return <>
         <Card
-            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
+            className={"flex flex-row overflow-clip bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
             onClick={() => {
                 invoke("start_transfer", {targetId: peer.id}).then(noop)
             }}>

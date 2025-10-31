@@ -182,7 +182,7 @@ function ContentBoard() {
                         selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={image.model.order_id}/>
+                                    <MediaView key={index} id={BigInt(image.model.order_id)}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -200,7 +200,7 @@ function ContentBoard() {
                         selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={video.model.order_id}/>
+                                    <MediaView key={index} id={BigInt(video.model.order_id)}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -219,7 +219,7 @@ function ContentBoard() {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={file.model.order_id} index={index}>
                                 <div className={"h-fit"}>
-                                    <FileView key={file.model.order_id} id={file.model.order_id}/>
+                                    <FileView key={file.model.order_id} id={BigInt(file.model.order_id)}/>
                                 </div>
                             </ItemEffect>
                         })

@@ -82,7 +82,10 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
-            Self::Event::RemoveResource(id) => Command::handle_result(move |it| async move { it.app().remove_resource(id).await }),
+            Self::Event::RemoveResource(id) => {
+                log::info!("Remove resource: {}", id);
+                Command::handle_result(move |it| async move { it.app().remove_resource(id).await })
+            },
             Self::Event::ModelEvent(event) => {
                 match event {
                     LocalResourceEvent::Add(resource) => {

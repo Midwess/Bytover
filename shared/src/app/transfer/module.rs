@@ -555,7 +555,7 @@ impl AppModule<BitBridge> for TransferModule {
                             false => it.status().to_string()
                         },
                         password,
-                        session_id: it.order_id,
+                        session_id: it.order_id.to_string(),
                         is_completed: it.is_completed(),
                         is_in_progress: !it.is_completed() && !it.is_canceled(),
                         progress: it.total_progress(),

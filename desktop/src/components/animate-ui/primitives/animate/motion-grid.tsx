@@ -469,13 +469,13 @@ export const MotionGridSignalling = ({size}: {size: number}) => {
           layout
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="gap-y-3 items-center w-fit flex flex-col"
+          className="gap-y-3 items-center bg-transparent inline-flex border-full overflow-clip"
       >
-        <motion.div layout="preserve-aspect">
+        <motion.div layout="preserve-aspect" className={"bg-transparent"}>
           <MotionGrid
               gridSize={[5, 5]}
               frames={states[state].frames}
-              className="w-fit gap-1 bg-card/60 aspect-square">
+              className="w-fit gap-1 bg-transparent">
             <MotionGridCells className={`size-[${size}px] rounded-full bg-black/90 dark:bg-white/20 data-[active=true]:bg-black/70 dark:data-[active=true]:bg-white/70`} />
           </MotionGrid>
         </motion.div>
