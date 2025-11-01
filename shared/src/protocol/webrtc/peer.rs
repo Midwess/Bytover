@@ -32,6 +32,7 @@ use schema::devlog::bitbridge::{
     TransferSessionMessage
 };
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -150,7 +151,7 @@ impl WebRtcPeer {
         let _ = self.core_request.set(core_request);
     }
 
-    pub async fn process_request(&self, request_id: String, msg: Request) {
+    pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
             Request::CancelRequest(request) => {
                 self.transfers_context.stop_transfer(request.session_id as u64).await;
@@ -342,9 +343,10 @@ impl WebRtcPeer {
             let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
         }
 
-        cancellation_signal.cancel();
-        self.transfers_context.stop_transfer(session_id).await;
+        // Giving max 10s more for thumbnail to complete
+        cancellation_signal.cancel_after(Duration::from_secs(10));
         let _ = thumbnail_handle.await;
+        self.transfers_context.stop_transfer(session_id).await;
 
         Ok(session.status())
     }
@@ -363,6 +365,7 @@ impl WebRtcPeer {
         let _drop_guard = cancellation_signal.drop_guard();
 
         let session_id = session.order_id;
+        log::info!("Requesting peer to transfer session {session_id}");
 
         for resource in session.resources.iter_mut() {
             if matches!(resource.r#type, ResourceType::Folder) {
@@ -380,7 +383,8 @@ impl WebRtcPeer {
             session: transfer_session_message
         });
 
-        let _ = self.msg_channel.send(request, Some(request_id)).await?;
+        let response = self.msg_channel.send(request, Some(request_id)).await?;
+        log::info!("Received response for session {session_id} {response:?}");
 
         let mut session_thumbnail_paths = session
             .resources
@@ -388,6 +392,7 @@ impl WebRtcPeer {
             .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
             .rev()
             .collect::<Vec<_>>();
+
         let repo = self.resource_repo.clone();
         let thumbnail_channel = self.thumbnail_channel.clone();
         let context = self.transfers_context.clone();
@@ -504,6 +509,8 @@ impl WebRtcPeer {
             );
         }
 
+        // Giving max 10s more for thumbnail to complete
+        cancellation_signal.cancel_after(Duration::from_secs(10));
         let _ = thumbnail_handle.await;
         self.buffer.flush_all_timeout().await?;
         self.transfers_context.stop_transfer(session_id).await;

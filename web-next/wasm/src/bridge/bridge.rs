@@ -32,7 +32,7 @@ impl CoreBridge for CoreBridgeImpl {
             panic!("Invalid request");
         };
 
-        shell.forward_core_operation_output(*request_id, response);
+        shell.forward_core_operation_output(*request_id, response).await;
     }
 
     async fn response_throttle(&self, request: &mut CruxRequest, response: CoreOperationOutput) {
@@ -51,11 +51,9 @@ impl CoreBridge for CoreBridgeImpl {
 pub struct ShellRuntime {}
 
 impl ShellRuntime {
-    fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) -> JoinHandle<()> {
-        spawn(async move {
-            let serialized_output = serialize(&output);
-            forward_core_operation_output(request_id, serialized_output).await;
-        })
+    async fn forward_core_operation_output(self: Arc<Self>, request_id: u32, output: CoreOperationOutput) {
+        let serialized_output = serialize(&output);
+        forward_core_operation_output(request_id, serialized_output).await;
     }
 
     fn update(self: Arc<Self>, event: AppEvent) -> JoinHandle<()> {

@@ -241,7 +241,7 @@ impl WebRtc {
                 };
 
                 if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) {
-                    peer.process_request(request_id, request).await;
+                    peer.process_message_packet(request_id, request).await;
                 };
             }
 
