@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/card';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
-import {Info, Lock, Mail, MapPin, SendHorizonal} from "lucide-react";
+import {Lock, Mail, MapPin, SendHorizonal} from "lucide-react";
 import core from "@/core.ts";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {

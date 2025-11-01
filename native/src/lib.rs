@@ -47,9 +47,9 @@ pub trait ShellRuntime: Send + Sync + 'static {
         response
     }
 
-    fn notify(self: Arc<Self>, msg: MessageToShell) -> JoinHandle<MessageToShellResponse> {
+    async fn notify(self: Arc<Self>, msg: MessageToShell) -> MessageToShellResponse {
         let self_clone = self.clone();
-        spawn(async move { self_clone.request(msg).await })
+        self_clone.request(msg).await
     }
 }
 
