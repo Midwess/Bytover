@@ -6,7 +6,6 @@ use crate::entities::local_resource::LocalResourcePath;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
-use futures_util::FutureExt;
 use matchbox_socket::PeerBuffered;
 use n0_future::Stream;
 use schema::devlog::bitbridge::client_upload_request::Upload;
