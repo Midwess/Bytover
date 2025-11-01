@@ -34,7 +34,7 @@ impl AppCommand {
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
-        self.notify_event(AppEvent::Authentication(AuthenticationEvent::UpdateUser { user }));
+        self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
         Ok(())
     }
 
@@ -60,7 +60,8 @@ impl AppCommand {
         }
 
         SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
-        self.re_authorize().await?;
+        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
+        self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
 
         Ok(())
     }

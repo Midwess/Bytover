@@ -58,15 +58,15 @@ where
                 log::info!(target: "executor", "Cancelling session: {session_id:?}");
 
                 if self.cloud_service().cancel(session_id).await {
-                    return Ok(TransferOperationOutput::TransferCanceled.into());
+                    return Ok(CoreOperationOutput::None);
                 }
 
                 if peer_id.is_none() {
-                    return Ok(TransferOperationOutput::TransferCanceled.into());
+                    return Ok(CoreOperationOutput::None);
                 }
 
                 self.web_rtc().cancel_session(peer_id.unwrap(), session_id).await?;
-                Ok(TransferOperationOutput::TransferCanceled.into())
+                Ok(CoreOperationOutput::None)
             }
             TransferOperation::FindPublicSession { alias } => {
                 let response = self.cloud_server().find_public_session(alias).await?;

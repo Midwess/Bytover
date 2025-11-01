@@ -30,9 +30,8 @@ pub struct LocalResourceRepositoryImpl {
 impl RedbId for RedbIdWrapper<LocalResourceId> {
     fn lower_id(&self) -> Vec<Vec<u8>> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
-        let path = bincode::serialize(&self.0.path).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
-        vec![code, path, id]
+        vec![code, id]
     }
 }
 

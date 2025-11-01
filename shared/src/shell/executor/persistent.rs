@@ -92,18 +92,6 @@ pub trait NativePersistent: Send + Sync {
                 let resources = self.local_resource_repository().find_all(None, None, None).await?;
                 Ok(CoreOperationOutput::LocalResources(resources))
             }
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Find(path)) => {
-                let id = LocalResourceId {
-                    path: Some(path.as_string()),
-                    ..Default::default()
-                };
-
-                let resource = self.local_resource_repository().find_one(&id).await.unwrap_or(None);
-                Ok(match resource {
-                    Some(resource) => CoreOperationOutput::LocalResources(vec![resource]),
-                    None => CoreOperationOutput::None
-                })
-            }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::LoadOnDisk(path)) => {
                 let result = self.local_resource_repository().load(path).await?;
                 Ok(match result {

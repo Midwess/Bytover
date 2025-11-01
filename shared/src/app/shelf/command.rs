@@ -11,6 +11,7 @@ use crate::repository::local_resource::LocalResourceId;
 impl AppCommand {
     pub async fn load_resources(&self) -> Result<(), CoreError> {
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
+        log::info!("Loaded resources: {:?}", resources);
         let model_events = resources
             .into_iter()
             .map(|it| Into::<AppEvent>::into(LocalResourceEvent::Add(it)))

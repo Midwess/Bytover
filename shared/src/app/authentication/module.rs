@@ -28,7 +28,7 @@ pub enum AuthenticationEvent {
     SignUp,
     SignOut,
     OnRedirected { url: String },
-    UpdateUser { user: User }
+    Authorized { user: User }
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -46,14 +46,26 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 ctx.app().sign_in().await;
             }),
             AuthenticationEvent::SignOut => Command::done(),
-            AuthenticationEvent::OnRedirected { url } => Command::handle_result(|ctx| async move {
-                ctx.app().authorize(url).await?;
+            AuthenticationEvent::OnRedirected { url } => {
+                if model.authentication.user.is_some() {
+                    return Command::done();
+                }
 
-                Ok(())
-            }),
+                Command::handle_result(|ctx| async move {
+                    ctx.app().authorize(url).await?;
+
+                    Ok(())
+                })
+            },
             AuthenticationEvent::SignUp => Command::done(),
-            AuthenticationEvent::UpdateUser { user } => {
+            AuthenticationEvent::Authorized { user } => {
+                let is_authorized = model.authentication.user.is_some();
+
                 model.authentication.user.replace(user);
+                if is_authorized {
+                    return Command::done();
+                }
+
                 Command::new(|ctx| async move {
                     let app = ctx.app();
                     app.notify_event(ShelfEvent::Launch);

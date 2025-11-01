@@ -34,7 +34,6 @@ pub enum TransferOperation {
 pub enum TransferOperationOutput {
     TransferResourceProgressUpdate(TransferProgress),
     TransferCompleted(TransferSessionStatus),
-    TransferCanceled,
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
     SubscribeSessionEnded,
     ThumbnailUpdated(ThumbnailUpdatedEvent)
