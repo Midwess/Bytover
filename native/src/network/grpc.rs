@@ -39,12 +39,13 @@ impl RpcNetworkModuleImpl {
             .timeout(Duration::from_millis(12000));
 
         if self.endpoint.starts_with("https") {
-            let tls = ClientTlsConfig::new().with_webpki_roots();
+            let tls = ClientTlsConfig::new()
+                .with_native_roots();
 
             builder = builder.tls_config(tls).unwrap();
         };
 
-        let channel = builder.connect().await.map_err(|e| RpcErrors::InternalServerError(e.to_string()))?;
+        let channel = builder.connect().await.map_err(|e| RpcErrors::InternalServerError(format!("{e:?}")))?;
         self.channel.lock().await.replace(channel);
 
         Ok(())

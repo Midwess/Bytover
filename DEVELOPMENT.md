@@ -56,7 +56,7 @@
 - [pnpm installation](https://pnpm.io/installation)
 
 - [wasm-pack installation](https://drager.github.io/wasm-pack/installer/)
-
+- Environment variables are applied at build time
 -
     ```bash
     cd web-next
@@ -67,6 +67,7 @@
 
 ## Android
 - `Android NDK 28`
+- Environment variables are applied at build time
 -
     ```bash
     rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
@@ -89,12 +90,14 @@ Build the rust binary by selecting the `shared` module, and
 `press build in Android Studio`
 ## iOS
 - Open XCode project at `ios/BitBridge.xcodeproj`
+- Environment variables are applied at build time in XCode settings
 - Run with XCode
 
 ## Desktop
 #### MacOS only
-Because MacOS doesn't support 'deep-linking' on development, so that we cannot authorize,
+- Because MacOS doesn't support 'deep-linking' on development, so that we cannot authorize,
 Instead, we will explicitly set access token via environment variable.
+- Environment variables are applied at build time
 ```bash
 export BTIBRIDGE_ACCESS_TOKEN='<token>'
 ```

@@ -46,7 +46,6 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
 
         Ok(IdbIdWrapper(LocalResourceId {
             r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
-            path: json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()),
             order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
         }))
     }
