@@ -62,11 +62,11 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
     let service = GatewayServiceBuilder::new()
         .grpc(tcp.public_host.clone(), tcp.port)
         .name("bitbridge-grpc-server")
+        .enable_cors(true)
         .routes(vec![
             GatewayRouteBuilder::new()
                 .grpc()
                 .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
-                .allow_cross_origin(true)
                 .priority(i32::MAX)
                 .strip_path(false)
                 .public(true)

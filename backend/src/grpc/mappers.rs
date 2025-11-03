@@ -68,7 +68,7 @@ impl TransferSession {
     pub async fn into_msg(&self, cloud_storage: &Arc<dyn CloudStorage>, app: &Application) -> PublicTransferSessionMessage {
         let mut resources = vec![];
         for resource in self.resources() {
-            let progress = self.progresses().iter().find(|it| it.resource_id() == resource.order_id()).unwrap();
+            let _ = self.progresses().iter().find(|it| it.resource_id() == resource.order_id()).unwrap();
             resources.push(resource.clone().into_resource_msg(cloud_storage).await);
         }
 
@@ -104,7 +104,7 @@ impl TransferSession {
         if !resource_changes.is_empty() {
             let mut resources = vec![];
             for resource in resource_changes {
-                let Some(progress) = new.progresses().iter().find(|it| it.resource_id() == resource.order_id()) else {
+                let Some(_) = new.progresses().iter().find(|it| it.resource_id() == resource.order_id()) else {
                     continue;
                 };
 

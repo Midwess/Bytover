@@ -27,6 +27,7 @@ import {invoke} from "@tauri-apps/api/core";
 import {noop} from "motion";
 import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx";
 import {MotionGridSignalling} from "@/components/animate-ui/primitives/animate/motion-grid.tsx";
+import {useState} from "react";
 
 export function Transfer() {
     return (
@@ -80,23 +81,7 @@ export function Transfer() {
                             </TabsPanel>
                             <TabsPanel value="public" className="flex flex-col gap-2">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
-                                    <Card className="flex flex-col gap-2 p-2">
-                                        <Label
-                                            className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
-                                            <div
-                                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                                                <Lock/>
-                                            </div>
-                                            Password:
-                                        </Label>
-                                        <div className="grid gap-3">
-                                            <Input className={"bg-secondary shadow-background"} type="password"
-                                                   placeholder={"Pwd@123"}/>
-                                        </div>
-                                    </Card>
-                                    <Card className="flex flex-col gap-2 p-2">
-                                        <Button className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
-                                    </Card>
+                                    <PublicTransfer/>
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="devices" className="flex flex-col gap-6">
@@ -176,6 +161,35 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
                     {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35}/> : <></>}
                 </div>
             }
+        </Card>
+    </>
+}
+
+function PublicTransfer() {
+    const [pwd, setPwd] = useState("");
+    return <>
+        <Card className="flex flex-col gap-2 p-2">
+            <Label
+                className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
+                <div
+                    className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
+                    <Lock/>
+                </div>
+                Password:
+            </Label>
+            <div className="grid gap-3">
+                <Input className={"bg-secondary shadow-background"} type="password"
+                       value={pwd}
+                       onChange={(e) => {
+                           setPwd(e.target.value)
+                       }}
+                       placeholder={"Pwd@123"}/>
+            </div>
+        </Card>
+        <Card className="flex flex-col gap-2 p-2">
+            <Button onClick={() => {
+                invoke("public_transfer", {password: pwd}).then(noop)
+            }} className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
         </Card>
     </>
 }

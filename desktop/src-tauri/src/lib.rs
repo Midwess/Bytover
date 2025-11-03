@@ -37,6 +37,14 @@ mod thumbnail;
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 
 #[tauri::command]
+async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
+    process_event(TransferEvent::StartPublicTransfer {
+        password,
+        to_emails: vec![]
+    }, app_handle).await;
+}
+
+#[tauri::command]
 async fn ui_launched(app_handle: AppHandle) {
     render(CORE.view(), app_handle);
 }
@@ -206,7 +214,7 @@ pub async fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
-        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched])
+        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched, public_transfer])
         .setup(|app| {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");

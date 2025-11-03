@@ -6,7 +6,6 @@ use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
-use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
@@ -25,6 +24,7 @@ use tokio::sync::OnceCell;
 use tonic::transport::Channel;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, DatabaseConnection, Database};
+use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -149,7 +149,7 @@ impl DiContainer {
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
-        TransferSessionPostgresRepository { db: self.get_db_connection() }
+        TransferSessionSurrealdbRepository { db: self.db().await }
     }
 
     pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
