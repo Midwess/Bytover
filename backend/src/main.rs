@@ -67,7 +67,7 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
             GatewayRouteBuilder::new()
                 .grpc()
                 .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
-                .priority(i32::MAX)
+                .priority(10)
                 .strip_path(false)
                 .public(true)
                 .preserve_host(false)
