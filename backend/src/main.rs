@@ -42,7 +42,6 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
     let di = di_container::DiContainer::instance().await;
     log::info!("Start server at {}", connection.port);
     Server::builder()
-        .accept_http1(true)
         .add_service(InterceptorFor::new(
             BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
             di.get_auth_middleware()
