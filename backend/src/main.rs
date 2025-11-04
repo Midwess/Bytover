@@ -65,12 +65,12 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         .routes(vec![
             GatewayRouteBuilder::new()
                 .grpc()
+                .grpc_web()
                 .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
                 .priority(10)
                 .strip_path(false)
                 .public(true)
                 .preserve_host(false)
-                .grpc_web()
                 .name("bitbridge-grpc-server-path")
                 .build(),
         ])
