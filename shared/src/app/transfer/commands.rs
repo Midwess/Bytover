@@ -117,7 +117,6 @@ impl AppCommand {
                             );
                         }
 
-                        log::info!("Update progress: {progress:?}");
                         progress.clone().update(&mut transfer_session);
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                     }
