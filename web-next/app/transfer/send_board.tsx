@@ -446,7 +446,6 @@ function PublicSend() {
                 }
             }, 2000)
         }
-
     }, [cloudSession?.is_in_progress])
 
     return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center px-2 mt-4"}>

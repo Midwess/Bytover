@@ -75,6 +75,15 @@ export class Core {
         return currentPeer
     }
 
+    useTransferState() {
+        const [state, setState] = useState(this.transferState.get());
+        useEffect(() => {
+            return this.transferState.subscribe(setState)
+        }, [])
+
+        return state
+    }
+
     constructor() {}
 
     async launch() {

@@ -90,7 +90,7 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>
     ) -> Result<Option<MultiPartUploadComplete>> {
-        Self::upload_chunk(url, cursor, tx, 0, 1024 * 1024 * 1024 * 5).await?;
+        Self::upload_chunk(url, cursor, tx, &mut 0, 1024 * 1024 * 1024 * 5).await?;
         Ok(None)
     }
 
@@ -109,9 +109,8 @@ impl NetStreamInnerImpl {
         let total_size = cursor.entry().await?.size;
 
         while uploaded < total_size {
-            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, uploaded, upload.x_content_length as u64).await?;
+            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await?;
             completion.e_tags.push(etag);
-            uploaded += (total_size - uploaded).min(upload.x_content_length as u64);
 
             if uploaded < total_size {
                 upload = match server.complete_part_upload(&upload.context_token).await? {
@@ -138,21 +137,21 @@ impl NetStreamInnerImpl {
         url: &str,
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
-        uploaded: u64,
+        uploaded: &mut u64,
         chunk_size: u64
     ) -> Result<String> {
         let total_size = cursor.entry().await?.size;
-        let remaining_size = total_size - uploaded;
+        let remaining_size = total_size - *uploaded;
 
         if remaining_size == 0 {
             return Err(anyhow!("No data to upload"));
         }
 
         let chunk_size = remaining_size.min(chunk_size);
-        let (mut writer, reader) = io::duplex(chunk_size as usize);
+        let (mut writer, reader) = io::duplex(1024 * 1024 * 5);
 
         let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
-        let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size);
+        let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size, uploaded);
 
         let (etag, _) = try_join!(upload_task, write_task)?;
         Ok(etag)
@@ -185,22 +184,30 @@ impl NetStreamInnerImpl {
         writer: &mut DuplexStream,
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
-        chunk_size: u64
+        chunk_size: u64,
+        total_uploaded: &mut u64,
     ) -> Result<()> {
         let mut remaining = chunk_size;
-        let mut total_uploaded = 0u64;
+        let _ = tx.try_send(NetStreamEvent::Progress {
+            uploaded_bytes: *total_uploaded
+        });
 
         while remaining > 0 {
             let data = cursor.next(Some(remaining)).await?.unwrap_or_default();
             let data_len = data.len() as u64;
+            if data_len == 0 {
+                break;
+            }
 
             writer.write_all(data).await?;
             remaining -= data_len;
-            total_uploaded += data_len;
+            *total_uploaded += data_len;
 
             let _ = tx.try_send(NetStreamEvent::Progress {
-                uploaded_bytes: total_uploaded
+                uploaded_bytes: *total_uploaded
             });
+
+            writer.flush().await?;
         }
 
         writer.shutdown().await?;

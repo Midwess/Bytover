@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/card';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
-import {Lock, Mail, MapPin, SendHorizonal} from "lucide-react";
+import {Lock, Mail, MapPin, SendHorizonal, Copy, Check, Link} from "lucide-react";
 import core from "@/core.ts";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {
@@ -28,6 +28,14 @@ import {noop} from "motion";
 import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx";
 import {MotionGridSignalling} from "@/components/animate-ui/primitives/animate/motion-grid.tsx";
 import {useState} from "react";
+import {Progress} from "@/components/animate-ui/components/radix/progress";
+import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/animate-ui/primitives/animate/tooltip";
 
 export function Transfer() {
     return (
@@ -167,6 +175,9 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
 
 function PublicTransfer() {
     const [pwd, setPwd] = useState("");
+    const cloudSession = core.useTransferState()?.cloud_session
+    const progress = (cloudSession?.progress ?? 0) * 100
+
     return <>
         <Card className="flex flex-col gap-2 p-2">
             <Label
@@ -184,12 +195,108 @@ function PublicTransfer() {
                            setPwd(e.target.value)
                        }}
                        placeholder={"Pwd@123"}/>
+                {
+                    cloudSession?.access_url &&
+                    <>
+                        <Label
+                            className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
+                            <div
+                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
+                                <Link/>
+                            </div>
+                            Generated url:
+                        </Label>
+                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
+                    </>
+                }
             </div>
         </Card>
-        <Card className="flex flex-col gap-2 p-2">
-            <Button onClick={() => {
-                invoke("public_transfer", {password: pwd}).then(noop)
-            }} className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+        <Card className="flex flex-row gap-2 p-2"> 
+            {
+                cloudSession?.is_in_progress ? (
+                    <Button onClick={() => {
+                        invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
+                    }} className={"bg-muted-foreground text-primary w-fit shadow-lg hover:bg-muted-foreground/80"}>Cancel</Button>
+                ) : cloudSession?.is_completed ? (
+                    <Button onClick={() => {
+                        invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
+                    }} className={"bg-greenSecondary/40 text-primary w-fit shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                ) : (
+                    <Button onClick={() => {
+                        invoke("public_transfer", {password: pwd}).then(noop)
+                    }} className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+                )
+            }
+            {
+                cloudSession?.progress && (
+                    <div className="flex flex-col w-full gap-2 pb-2">
+                        <div className="flex items-center justify-between gap-1">
+                            <span className="text-sm">
+                                {cloudSession?.display_download_speed}
+                            </span>
+                        </div>
+                        <Progress value={progress} className="w-full space-y-2">
+                            <ProgressIndicator className="bg-primary rounded-full h-full w-full flex-1" />
+                        </Progress>
+                    </div>
+                )
+            }
         </Card>
     </>
+}
+
+function UrlInputWithCopy({url}: {url: string}) {
+    const [isCopied, setIsCopied] = useState(false)
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(url)
+            setIsCopied(true)
+            setTimeout(() => setIsCopied(false), 2000) // Reset after 2 seconds
+        } catch (err) {
+            console.error('Failed to copy text: ', err)
+        }
+    }
+
+    // Function to trim from the center
+    const getTrimmedUrl = (url: string, maxLength: number = 40) => {
+        if (url.length <= maxLength) return url
+        
+        const ellipsis = '...'
+        const availableLength = maxLength - ellipsis.length
+        const frontLength = Math.ceil(availableLength / 2)
+        const backLength = Math.floor(availableLength / 2)
+        
+        return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
+    }
+
+    return (
+        <TooltipProvider>
+            <div className="relative">
+                <Tooltip side="top">
+                    <TooltipTrigger asChild>
+                        <Input 
+                            value={getTrimmedUrl(url)} 
+                            disabled={true}
+                            className="pr-12 cursor-default bg-secondary shadow-background" // Add padding for the button and cursor
+                        />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-all">
+                        {url}
+                    </TooltipContent>
+                </Tooltip>
+                <button
+                    onClick={handleCopy}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    title={isCopied ? "Copied!" : "Copy to clipboard"}
+                >
+                    {isCopied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    )}
+                </button>
+            </div>
+        </TooltipProvider>
+    )
 }

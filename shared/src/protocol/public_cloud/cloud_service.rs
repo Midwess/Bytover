@@ -339,10 +339,6 @@ where
 
             match event {
                 NetStreamEvent::Progress { uploaded_bytes } => {
-                    if uploaded_bytes < total_sent {
-                        continue;
-                    }
-
                     progress.update_progress(uploaded_bytes - total_sent);
                     total_sent = uploaded_bytes;
                     if ticker.elapsed() > progress_update_interval {
@@ -354,11 +350,11 @@ where
                                 Status::TransferredAmountInBytes(total_sent as u32)
                             )
                             .await?;
-                    }
+                   }
 
-                    let progress_update_event =
-                        CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                    core_request.response_throttle(progress_update_event).await;
+                   let progress_update_event =
+                       CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
+                   core_request.response_throttle(progress_update_event).await;
                 }
                 NetStreamEvent::Completed(completion) => {
                     upload_completion = completion;

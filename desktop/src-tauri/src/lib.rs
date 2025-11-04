@@ -27,6 +27,7 @@ use {hostname, machine_uid};
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
 use shared::app::transfer::module::TransferEvent;
 use shared::entities::local_resource::LocalResourcePath;
+use shared::entities::transfer_session::TransferType;
 use crate::extensions::AppHandleExt;
 use crate::thumbnail::generate_thumbnail;
 
@@ -35,6 +36,24 @@ pub mod extensions;
 mod thumbnail;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
+
+#[tauri::command]
+async fn cancel_send(app_handle: AppHandle, session_id: String) {
+    let session_id = session_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::CancelTransfer {
+        session_id,
+        transfer_type: TransferType::Send,
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn cancel_receive(app_handle: AppHandle, session_id: String) {
+    let session_id = session_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::CancelTransfer {
+        session_id,
+        transfer_type: TransferType::Receive,
+    }, app_handle).await;
+}
 
 #[tauri::command]
 async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
@@ -214,7 +233,7 @@ pub async fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
-        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched, public_transfer])
+        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched, public_transfer, cancel_send, cancel_receive])
         .setup(|app| {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
