@@ -68,13 +68,17 @@ impl TransferService {
     pub async fn create_public_transfer_session(
         &self,
         user: &User,
-        password: Option<String>,
+        mut password: Option<String>,
         to_emails: Vec<String>
     ) -> Result<TransferSession, TransferErrors> {
         let user_id = user.id.id;
-        if let Some(ref password) = password {
-            if password.len() > 20 {
+        if let Some(ref value) = password {
+            if value.len() > 20 {
                 return Err(TransferErrors::PasswordLengthExceed(20))
+            }
+
+            if value.trim().is_empty() {
+                password.take();
             }
         }
 

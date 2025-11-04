@@ -146,7 +146,7 @@ function ContentBoard() {
                             }
                         }}
                     />
-                    <Button onClick={onSelected} className={"w-fit"}>Continue</Button>
+                    <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
                 </div>
             </div>
         }

@@ -301,7 +301,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::render();
                 }
 
-                Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await })
+                Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await }).then_render()
             }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
