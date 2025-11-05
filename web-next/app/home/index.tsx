@@ -11,7 +11,9 @@ import { Suspense } from "react";
 export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-blackBase">
         <div className={'relative flex flex-col w-full items-center gap-10 pb-16'}>
-            <Header/>
+            <Suspense fallback={null}>
+                <Header/>
+            </Suspense>
             <div
                 className="absolute top-0 h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
             </div>

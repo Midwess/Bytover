@@ -54,7 +54,7 @@ import {
     MessageReason,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel,
+    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -318,6 +318,14 @@ export class WasmCore {
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantWebView: {
+                const webOperation = coreOperation as CoreOperationVariantWebView;
+                switch(webOperation.value.constructor) {
+                    case WebViewOperationVariantOpenUrl: {
+                        const operation = webOperation.value as WebViewOperationVariantOpenUrl
+                        window.open(operation.value, "_blank")
+                    }
+                }
+
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantDevice: {
