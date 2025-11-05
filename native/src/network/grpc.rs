@@ -1,4 +1,4 @@
-use crate::config::get_locator_http_url;
+use crate::config::get_locator_url;
 use shared::protocol::rpc::connection::RpcNetworkModule;
 use shared::protocol::rpc::errors::RpcErrors;
 use shared::shell::api::network::InternetConnection;
@@ -21,7 +21,7 @@ impl RpcNetworkModuleImpl {
         Self {
             channel: Default::default(),
             endpoint,
-            internet_connection: InternetConnection::new(get_locator_http_url())
+            internet_connection: InternetConnection::new(get_locator_url())
         }
     }
 

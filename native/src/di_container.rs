@@ -1,4 +1,4 @@
-use crate::config::{get_gateway_grpc_url, get_locator_http_url, get_signalling_server_ws_url};
+use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -157,7 +157,7 @@ impl DiContainer {
         };
 
         let executor = NativeExecutor {
-            internet_connection: InternetConnection::new(get_locator_http_url()),
+            internet_connection: InternetConnection::new(get_locator_url()),
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server()
             }),

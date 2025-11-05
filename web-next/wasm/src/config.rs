@@ -5,7 +5,8 @@ use web_sys::window;
 /// If these are not specified, we will use the host of the current webpage.
 pub const GATEWAY_HOST: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_HOST");
 pub const GATEWAY_PORT: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_PORT");
-pub const DEVLOG_WITH_SSL: Option<&str> = option_env!("DEVLOG_WITH_SSL");
+pub const WITH_SSL: Option<&str> = option_env!("BITBRIDGE_WITH_SSL");
+pub const LOCATOR_URL: Option<&str> = option_env!("BITBRIDGE_LOCATOR_URL");
 
 pub struct HostInfo {
     pub host: String,
@@ -13,11 +14,15 @@ pub struct HostInfo {
     pub is_with_ssl: bool
 }
 
+pub fn get_locator_url() -> String {
+    LOCATOR_URL.unwrap_or("https://devlog.studio/locator").to_string()
+}
+
 pub fn get_host_info() -> Result<HostInfo, JsValue> {
     let window = window().ok_or_else(|| JsValue::from_str("No window found"))?;
     let href = window.location().href().map_err(|_| JsValue::from_str("Failed to get href"))?;
 
-    let env_scheme = match DEVLOG_WITH_SSL.unwrap_or("0") == "1" {
+    let env_scheme = match WITH_SSL.unwrap_or("0") == "1" {
         true => "https",
         false => "http"
     };
@@ -54,14 +59,5 @@ pub fn get_signalling_server_ws_url() -> String {
         format!("wss://{}:{}/rpc-signalling", host_info.host, host_info.port)
     } else {
         format!("ws://{}:{}/rpc-signalling", host_info.host, host_info.port)
-    }
-}
-
-pub fn get_locator_server_url() -> String {
-    let host_info = get_host_info().unwrap();
-    if host_info.is_with_ssl {
-        format!("https://{}:{}/locator", host_info.host, host_info.port)
-    } else {
-        format!("http://{}:{}/locator", host_info.host, host_info.port)
     }
 }
