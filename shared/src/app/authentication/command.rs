@@ -31,6 +31,23 @@ impl AppCommand {
         WebViewOperation::open_url(url).into_future(self.ctx()).await;
     }
 
+    pub async fn sign_up(&self) {
+        let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
+            self.run(DialogOperation::toast("Device not found".to_string())).await;
+            return
+        };
+
+        let url = match RpcOperation::get_sign_up_url(device_info).into_future(self.ctx()).await {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
+                return;
+            }
+        };
+        
+        WebViewOperation::open_url(url).into_future(self.ctx()).await;
+    }
+
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;

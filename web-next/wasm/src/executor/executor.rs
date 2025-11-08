@@ -24,7 +24,7 @@ impl NativeExecutor {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;
-                CoreOperationOutput::Rpc(response)
+                response.into()
             }
             CoreOperation::Persistent(database) => {
                 let response = self.persistent.handle(database).await;

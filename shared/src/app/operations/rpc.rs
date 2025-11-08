@@ -19,8 +19,6 @@ pub enum RpcOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
-    NetworkError(CoreError),
-    SignInUrl(String),
     GetMe(User)
 }
 
@@ -32,15 +30,23 @@ impl RpcOperation {
     pub fn get_me() -> AppRequestBuilder<impl Future<Output = Result<User, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetMe())).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetMe(user)) => Ok(user),
-            CoreOperationOutput::Rpc(RpcOperationOutput::NetworkError(error)) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::GetMe")
+            CoreOperationOutput::Error(error) => Err(error),
+            e => panic!("Invalid output for RpcOperation::GetMe got {e:?}")
         })
     }
 
     pub fn get_sign_in_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info))).map(|res| match res {
-            CoreOperationOutput::Rpc(RpcOperationOutput::SignInUrl(url)) => Ok(url),
-            CoreOperationOutput::Rpc(RpcOperationOutput::NetworkError(error)) => Err(error),
+            CoreOperationOutput::String(value) => Ok(value),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::GetSignInUrl")
+        })
+    }
+
+    pub fn get_sign_up_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info))).map(|res| match res {
+            CoreOperationOutput::String(url) => Ok(url),
+            CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetSignInUrl")
         })
     }

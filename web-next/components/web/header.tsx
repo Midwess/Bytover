@@ -1,12 +1,19 @@
 'use client'
 import {GitHubStarsButton} from '@/components/animate-ui/buttons/github-stars'
 import Image from "next/image";
-import {AppEventVariantAuthentication, AuthenticationEventVariantSignIn} from 'shared_types/types/shared_types'
+import {
+    AppEventVariantAuthentication,
+    AuthenticationEventVariantSignIn,
+    AuthenticationEventVariantSignUp
+} from 'shared_types/types/shared_types'
 import {Button} from "@/components/ui/button.tsx";
 
 export default function Header() {
     const onSignIn = () => {
         core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantSignIn()))
+    }
+    const onSignUp = () => {
+        core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantSignUp()))
     }
     return (
         <div className="z-2 relative flex justify-between items-center w-full py-10 container">
@@ -56,6 +63,7 @@ export default function Header() {
             </div>
             <div className="flex flex-row gap-2 font-bold text-primaryText">
                 <Button variant={"outline"} onClick={onSignIn}>Sign in</Button>
+                <Button variant={"outline"} onClick={onSignUp}>Sign up</Button>
                 <GitHubStarsButton className={"bg-white/90"} username="Dev-log" repo="animate-ui"/>
             </div>
         </div>

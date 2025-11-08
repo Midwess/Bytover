@@ -1,6 +1,8 @@
 use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::protocol::rpc::auth_server::AuthServer;
 use core_services::utils::maybe::MaybeSend;
+use crate::app::operations::CoreOperationOutput;
+use crate::errors::CoreError;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -16,21 +18,15 @@ where
 {
     fn auth_server(&self) -> &AuthServer<T>;
 
-    async fn handle(&self, effect: RpcOperation) -> RpcOperationOutput {
+    async fn handle(&self, effect: RpcOperation) ->  Result<CoreOperationOutput, CoreError> {
         match effect {
             RpcOperation::GetSignInUrl(device_info) => {
-                let response = self.auth_server().request_signin_url(device_info).await;
-                match response {
-                    Ok(url) => RpcOperationOutput::SignInUrl(url),
-                    Err(e) => RpcOperationOutput::NetworkError(e.into())
-                }
+                let response = self.auth_server().request_signin_url(device_info).await?;
+                Ok(response.into())
             }
             RpcOperation::GetMe() => {
-                let response = self.auth_server().get_me().await;
-                match response {
-                    Ok(user) => RpcOperationOutput::GetMe(user),
-                    Err(e) => RpcOperationOutput::NetworkError(e.into())
-                }
+                let response = self.auth_server().get_me().await?;
+                Ok(RpcOperationOutput::GetMe(response).into())
             }
         }
     }
