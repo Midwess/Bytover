@@ -36,7 +36,7 @@ type MotionGridProps = WithAsChild<
 const MotionGrid = ({
   gridSize,
   frames,
-  duration = 200,
+  duration = 450,
   animate = true,
   asChild = false,
   style,
@@ -467,9 +467,9 @@ export const MotionGridSignalling = () => {
   return (
       <motion.button
           layout
-          whileHover={{ scale: 1.05 }}
+          whileHover={{ scale: 1.15 }}
           whileTap={{ scale: 0.95 }}
-          className="gap-y-3 items-center bg-transparent inline-flex border-full overflow-clip"
+          className="gap-y-3 items-center bg-transparent inline-flex border-full overflow-clip rounded-sm"
       >
         <motion.div layout="preserve-aspect" className={"bg-transparent"}>
           <MotionGrid

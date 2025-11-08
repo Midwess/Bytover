@@ -1,9 +1,9 @@
-use tauri::{Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self);
-    fn show_send(&self);
+    fn show_send(&self) -> WebviewWindow<R>;
 }
 
 impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
@@ -18,11 +18,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_auth(&self) {
+        self.close_all_windows(vec!["auth"]);
         let auth = self.get_webview_window("auth").expect("auth window not found");
         let _ = auth.show();
     }
 
-    fn show_send(&self) {
+    fn show_send(&self) -> WebviewWindow<R> {
         self.close_all_windows(vec!["send"]);
         let window = match self.get_webview_window("send") {
             Some(window) => window,
@@ -47,5 +48,6 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         };
 
         let _ = window.show();
+        window
     }
 }

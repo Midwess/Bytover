@@ -38,8 +38,16 @@ uuid.workspace = true
 tauri-plugin-deep-link = "2"
 thiserror.workspace = true
 image.workspace = true
-drag = "2.1.0"
 tauri-plugin-drag = "2.1.0"
-
-[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+# Terrible ! we need to switch to main branch
+# see https://github.com/Narsil/rdev/issues/165#issuecomment-2907684547
+rdev = { git = "https://github.com/Narsil/rdev.git#c77b4e5456301cfa7f2226020f2a58f2f8d77c5d" }
+active-win-pos-rs = "0.9.1"
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
+dispatch = "0.2.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cacao = { version = "0.4.0-beta2", features = ["appkit"] }

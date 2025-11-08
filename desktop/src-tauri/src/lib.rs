@@ -29,11 +29,13 @@ use shared::app::transfer::module::TransferEvent;
 use shared::entities::local_resource::LocalResourcePath;
 use shared::entities::transfer_session::TransferType;
 use crate::extensions::AppHandleExt;
+use crate::mouse_tracking::{start_mouse_monitor, MouseMonitorConfig};
 use crate::thumbnail::generate_thumbnail;
 
 pub mod api;
 pub mod extensions;
 mod thumbnail;
+mod mouse_tracking;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 
@@ -258,7 +260,9 @@ pub async fn run() {
                 }
             });
 
+            let handle_cloned = handle.clone();
             spawn(async move {
+                let handle = handle_cloned;
                 let _ = fs::create_dir_all(&workdir_path);
                 let bridge = Box::leak(Box::new(BridgeImpl {
                     app_handle: handle.clone()
@@ -276,6 +280,9 @@ pub async fn run() {
                 }
             });
 
+            start_mouse_monitor(MouseMonitorConfig::default(), handle);
+            #[cfg(target_os = "macos")]
+            mouse_tracking::start_macos_drag_pasteboard_monitor();
             Ok(())
         })
         .run(tauri::generate_context!())

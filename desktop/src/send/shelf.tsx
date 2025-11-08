@@ -45,6 +45,7 @@ export function Shelf() {
         const setup = async () => {
             unlisten = await window.onDragDropEvent(throttle(({payload}) => {
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
+                console.log(eventPosition)
                 const isLeftSide = eventPosition?.x && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
                     // Show drag feedback when hovering over the left side (shelf area)
@@ -78,21 +79,23 @@ export function Shelf() {
 
     return <>
         <Card className={`
+            rounded-3xl
             px-0
             flex flex-col
             justify-center
             items-center
-            w-full h-full bg-card shadow-md shadow-background border-1 
+            w-full h-full bg-card shadow-md shadow-background border-2
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
             ? 'border-bluePrimary border-2 shadow-lg shadow-bluePrimary/20'
             : 'border-border'
         }
         `}>
+            <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
-                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-10 group"}>
+                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
                 <Minus
-                    className={"scale-x-200 scale-y-200 pointer-events-none transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                    className={"scale-x-200 scale-y-200 pointer-events-none text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
             {isDraggingOver && (
                 <div
@@ -122,7 +125,7 @@ export function Shelf() {
             </div>
             
             {/* Bottom fade mask */}
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
+            <div className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
         </Card>
     </>
 }
@@ -167,13 +170,13 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex flex-row hover:opacity-70 items-center gap-3 p-1 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
                     <img
                         src={thumbnailUrl} alt={model.name}
-                        className="w-full h-full object-cover rounded-sm overflow-hidden"/>
+                        className="w-full h-full object-cover rounded-md overflow-hidden"/>
                 ) : isFolder ? (
                     <FolderIcon className="w-6 h-6 text-primary"/>
                 ) : (
@@ -223,19 +226,19 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <div
-            className="w-full bg-muted rounded-lg flex hover:opacity-70 flex-row items-center gap-3 p-1 relative group transition-colors border border-primaryText/5">
+            className="w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted-foreground/15 p-1 overflow-hidden relative">
+            <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt={model.name}
-                         className="w-full h-full object-cover rounded-sm overflow-clip"/>
+                         className="w-full h-full object-cover rounded-md overflow-clip"/>
                 ) : (
                     <FileIcon
                         className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
                 )}
                 {isVideo && (
                     <div className="absolute top-1.5 right-1.5">
-                        <Play className="w-3 h-3 text-white bg-black/50 rounded-sm p-0.5"/>
+                        <Play className="w-3 h-3 text-white bg-black/50 rounded-md p-0.5"/>
                     </div>
                 )}
             </div>

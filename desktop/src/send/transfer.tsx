@@ -4,8 +4,8 @@ import {
     TabsPanels,
     TabsList,
     TabsTab,
-} from '@/components/animate-ui/components/base/tabs';
-import {Button} from '@/components/ui/button';
+} from '@/components/animate-ui/components/base/tabs'
+import {Button} from "@/components/ui/button"
 import {
     Card,
     CardContent,
@@ -13,29 +13,29 @@ import {
     CardFooter,
     CardHeader,
     CardTitle,
-} from '@/components/ui/card';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
-import {Lock, Mail, MapPin, SendHorizonal, Copy, Check, Link} from "lucide-react";
-import core from "@/core.ts";
-import {Avatar, AvatarImage} from "@/components/ui/avatar";
+} from "@/components/ui/card"
+import {Input} from "@/components/ui/input"
+import {Label} from "@/components/ui/label"
+import {Lock, Mail, MapPin, SendHorizonal, Copy, Check, Link} from "lucide-react"
+import core from "@/core.ts"
+import {Avatar, AvatarImage} from "@/components/ui/avatar"
 import {
     PeerViewModel,
 } from 'shared_types/types/shared_types'
-import CircleProgress from "@/components/ui/progress.tsx";
-import {invoke} from "@tauri-apps/api/core";
-import {noop} from "motion";
-import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx";
-import {MotionGridSignalling} from "@/components/animate-ui/primitives/animate/motion-grid.tsx";
-import {useState} from "react";
-import {Progress} from "@/components/animate-ui/components/radix/progress";
-import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress";
+import CircleProgress from "@/components/ui/progress.tsx"
+import {invoke} from "@tauri-apps/api/core"
+import {noop} from "motion"
+import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx"
+import {MotionGridSignalling} from "@/components/animate-ui/primitives/animate/motion-grid.tsx"
+import {useState} from "react"
+import {Progress} from "@/components/animate-ui/components/radix/progress"
+import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
-} from "@/components/animate-ui/primitives/animate/tooltip";
+} from "@/components/animate-ui/primitives/animate/tooltip"
 
 export function Transfer() {
     return (
@@ -45,16 +45,16 @@ export function Transfer() {
                 direction={"left"}
                 offset={380}>
                 <Tabs defaultValue="people" className="w-full items-start">
-                    <TabsList className={"ml-2 border shadow-background shadow-sm"}>
+                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm"}>
                         <TabsTab value="people">People</TabsTab>
                         <TabsTab value="public">Public</TabsTab>
                         <TabsTab value="devices">Devices</TabsTab>
                     </TabsList>
-                    <Card className="px-2 border-none bg-transparent relative">
+                    <div className="px-2 border-none bg-transparent relative">
                         <TabsPanels>
                             <TabsPanel value="people" className="flex flex-col">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
-                                    <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 rounded-lg min-h-fit">
+                                    <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 min-h-fit">
                                         <Label htmlFor="tabs-input-email"
                                                className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
                                             <div
@@ -72,7 +72,7 @@ export function Transfer() {
                                         </div>
                                     </Card>
                                     <Card
-                                        className="flex flex-col gap-5 bg-card/95 border p-1.5 overflow-y-scroll">
+                                        className="flex flex-col gap-5 bg-card/95 p-1.5 overflow-y-scroll">
                                         <Label
                                             className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
                                             {
@@ -110,7 +110,7 @@ export function Transfer() {
                                 </CardFooter>
                             </TabsPanel>
                         </TabsPanels>
-                    </Card>
+                    </div>
                 </Tabs>
             </Slide>
         </div>
@@ -128,7 +128,7 @@ function NearbyList() {
         }
         {
             !list.length &&
-            <div className={"flex flex-col items-center h-[30px] rounded-full"}>
+            <div className={"flex flex-col items-center h-[30px]"}>
                 <MotionGridSignalling/>
             </div>
         }
@@ -166,7 +166,8 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             </div>
             {
                 <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
-                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35}/> : <></>}
+                    {peer.transfer_progress}
+                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress * 2} size={35}/> : <></>}
                 </div>
             }
         </Card>
@@ -211,20 +212,20 @@ function PublicTransfer() {
                 }
             </div>
         </Card>
-        <Card className="flex flex-row gap-2 p-2"> 
+        <Card className="flex flex-row gap-2 p-2 items-center">
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
-                    }} className={"bg-muted-foreground text-primary w-fit shadow-lg hover:bg-muted-foreground/80"}>Cancel</Button>
+                    }} className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
                 ) : cloudSession?.is_completed ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
-                    }} className={"bg-greenSecondary/40 text-primary w-fit shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                    }} className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
                     <Button onClick={() => {
                         invoke("public_transfer", {password: pwd}).then(noop)
-                    }} className={"bg-bluePrimary text-foreground w-fit shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+                    }} className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
                 )
             }
             {
