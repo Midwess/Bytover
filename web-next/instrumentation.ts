@@ -63,7 +63,7 @@ export async function registerApiGateway() {
   })
 
   await createOrUpdate('/services/bitbridge-website/routes', '/routes/bitbridge-website-route', {
-    expression: `http.path ^= "/" && http.host == "${DOMAIN}"`,
+    expression: `(net.protocol == "http" || net.protocol == "https") && http.path ^= "/" && http.host == "${DOMAIN}"`,
     name: 'bitbridge-website-route',
     priority: 0,
   });

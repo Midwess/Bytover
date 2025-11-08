@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 use rdev::{set_is_main_thread, Button, EventType};
-use tauri::{AppHandle, LogicalPosition};
+use tauri::{AppHandle, LogicalPosition, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
 #[cfg(target_os = "macos")]
@@ -19,7 +19,7 @@ pub fn drag_end_gesture() {
     DRAG_ACTIVE.store(false, Ordering::SeqCst);
 }
 
-pub fn detect_drag(start: &LogicalPosition<f64>, current: &LogicalPosition<f64>) -> bool {
+pub fn detect_drag(start: &PhysicalPosition<f64>, current: &PhysicalPosition<f64>) -> bool {
     if !DRAG_ACTIVE.load(Ordering::SeqCst) {
         return false;
     }
@@ -29,7 +29,7 @@ pub fn detect_drag(start: &LogicalPosition<f64>, current: &LogicalPosition<f64>)
         use windows::Win32::UI::Input::Mouse::DragDetect;
         use windows::Win32::Foundation::{HWND, POINT};
 
-        let pt = POINT { x: start.0, y: start.1 };
+        let pt = POINT { x: start.x, y: start.y };
         return unsafe { DragDetect(HWND(0), pt).as_bool() };
     }
 
@@ -56,7 +56,6 @@ pub fn start_macos_drag_pasteboard_monitor() {
         let mut current_dragging = true;
         loop {
             let is_active = DRAG_ACTIVE.load(Ordering::Relaxed);
-            // If user is not pressing, then we reset the drag state
             if !is_active {
                 queue.exec_sync(move || {
                     // Schedule periodic checks
@@ -85,7 +84,6 @@ pub struct MouseMonitorConfig {
     pub required_shakes: u32,
     pub shake_timeout: Duration,
     pub min_changed: f64,
-    pub window_close_delay: u64,
 }
 
 impl Default for MouseMonitorConfig {
@@ -94,9 +92,85 @@ impl Default for MouseMonitorConfig {
             required_shakes: 3,
             min_changed: 50f64,
             shake_timeout: Duration::from_millis(2000),
-            window_close_delay: 1000,
         }
     }
+}
+
+fn get_monitor_at_position(physical_pos: &PhysicalPosition<f64>, app_handle: &AppHandle) -> Option<tauri::Monitor> {
+    app_handle
+        .available_monitors()
+        .ok()
+        .and_then(|monitors| {
+            monitors.iter().find(|m| {
+                let monitor_pos = m.position();
+                let monitor_size = m.size();
+
+                let x = physical_pos.x as i32;
+                let y = physical_pos.y as i32;
+
+                x >= monitor_pos.x
+                    && x < (monitor_pos.x + monitor_size.width as i32)
+                    && y >= monitor_pos.y
+                    && y < (monitor_pos.y + monitor_size.height as i32)
+            }).cloned()
+        })
+}
+
+fn calculate_window_position(
+    mouse_physical: &PhysicalPosition<f64>,
+    window_physical_size: &PhysicalSize<u32>,
+    monitor: &tauri::Monitor,
+) -> PhysicalPosition<i32> {
+    let margin = 200f64;
+    let edge_margin = 50f64;
+    let monitor_pos = monitor.position();
+    let monitor_size = monitor.size();
+
+    let screen_left = monitor_pos.x as f64 + edge_margin;
+    let max_top = monitor_pos.y as f64 + edge_margin;
+    let screen_right = monitor_pos.x as f64 + monitor_size.width as f64 - edge_margin;
+    let max_bottom = monitor_pos.y as f64 + monitor_size.height as f64 - edge_margin;
+
+    let mouse_x = mouse_physical.x;
+    let mouse_y = mouse_physical.y;
+    let window_width = window_physical_size.width as f64;
+    let window_height = window_physical_size.height as f64;
+
+    // Calculate desired position (top-right with margin)
+    let mut desired_x = mouse_x + margin;
+    let mut desired_y = mouse_y + margin;
+
+    // Check if window would go beyond right edge
+    if desired_x + window_width > screen_right {
+        desired_x = mouse_x - margin - window_width;
+
+        // Check if window would go beyond left edge too
+        if desired_x < screen_left {
+            desired_x = screen_left;
+
+            // Move down if top is too close
+            if desired_y < max_top {
+                desired_y = mouse_y + margin;
+            }
+        }
+    } else if desired_y - window_height < max_top {
+        desired_y = mouse_y + margin;
+
+        if desired_y + window_height > max_bottom {
+            desired_y = max_bottom - window_height;
+        }
+
+        // Determine left/right position for bottom
+        if desired_x + window_width > screen_right {
+            desired_x = mouse_x - margin - window_width;
+        }
+    }
+
+    // Clamp to screen boundaries
+    desired_x = desired_x.max(screen_left).min(screen_right - window_width);
+    desired_y = desired_y.max(max_top).min(max_bottom - window_height);
+
+    PhysicalPosition::new(desired_x as i32, desired_y as i32)
 }
 
 pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
@@ -108,8 +182,8 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
     thread::spawn(move || {
         #[cfg(target_os = "macos")]
         set_is_main_thread(false);
-        let mut current_mouse_position = LogicalPosition::default();
-        let mut start_mouse_position = LogicalPosition::default();
+        let mut current_mouse_position = PhysicalPosition::default();
+        let mut start_mouse_position = PhysicalPosition::default();
         let mut last_shake_time = Instant::now();
         let _ = rdev::listen(move |event| {
             match event.event_type {
@@ -135,6 +209,19 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     current_mouse_position.x = x;
                     current_mouse_position.y = y;
 
+                    #[cfg(target_os = "macos")]
+                    {
+                        let scale_factor = app_handle
+                            .primary_monitor()
+                            .ok()
+                            .flatten()
+                            .map(|m| m.scale_factor())
+                            .unwrap_or(1.0);
+
+                        current_mouse_position.x = x * scale_factor;
+                        current_mouse_position.y = y * scale_factor;
+                    }
+
                     if detect_drag(&start_mouse_position, &current_mouse_position) {
                         let dx = (current_mouse_position.x - previous_mouse.x);
                         if dx.abs() < config.min_changed {
@@ -153,10 +240,26 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                         }
 
                         if shake_count >= config.required_shakes {
-                            log::info!("Shaking detected");
                             let win = app_handle.show_send();
-                            // TODO: Apply margin
-                            let _ = win.set_position(current_mouse_position.clone());
+
+                            if let Ok(window_size) = win.outer_size() {
+                                let window_physical_size: PhysicalSize<u32> = window_size.into();
+
+                                if let Some(monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
+                                    let final_pos = calculate_window_position(
+                                        &current_mouse_position,
+                                        &window_physical_size,
+                                        &monitor,
+                                    );
+
+                                    let _ = win.set_position(final_pos);
+                                }
+                                else {
+                                    log::warn!("Could not find monitor at position, using logical fallback");
+                                    let _ = win.set_position(current_mouse_position.clone());
+                                }
+                            }
+
                             let _ = win.set_focus();
 
                             shake_count = 0;
