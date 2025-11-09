@@ -85,7 +85,7 @@ impl SharedContext {
         if self.current_id.get().is_none() {
             return;
         }
-        
+
         let id = self.get_current_id();
         let mut finding_scopes = self.finding_scopes.lock().await;
         if scopes.ne(&*finding_scopes) {
@@ -314,8 +314,7 @@ impl Signaller for WebSignaller {
                     log::info!("New peer found: {peer_id:?}, connecting...");
                     return Ok(peer_event);
                 }
-            }
-            else {
+            } else {
                 return Ok(peer_event);
             }
         }

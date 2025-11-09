@@ -185,7 +185,7 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
         chunk_size: u64,
-        total_uploaded: &mut u64,
+        total_uploaded: &mut u64
     ) -> Result<()> {
         let mut remaining = chunk_size;
         let _ = tx.try_send(NetStreamEvent::Progress {

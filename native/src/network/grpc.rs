@@ -39,8 +39,7 @@ impl RpcNetworkModuleImpl {
             .timeout(Duration::from_millis(12000));
 
         if self.endpoint.starts_with("https") {
-            let tls = ClientTlsConfig::new()
-                .with_native_roots();
+            let tls = ClientTlsConfig::new().with_native_roots();
 
             builder = builder.tls_config(tls).unwrap();
         };

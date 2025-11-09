@@ -26,7 +26,8 @@ pub trait NativePersistent: Send + Sync {
     async fn default_handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
             PersistentOperation::Session(SessionPersistentOperation::WriteToken(token)) => {
-                let _ = self.auth_session_repository()
+                let _ = self
+                    .auth_session_repository()
                     .delete_one(&AuthSessionId {
                         r#type: SessionType::Access
                     })

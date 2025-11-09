@@ -38,7 +38,7 @@ impl TransferResource {
             order_id,
             session_id,
             size,
-            r#type,
+            r#type
         }
     }
 

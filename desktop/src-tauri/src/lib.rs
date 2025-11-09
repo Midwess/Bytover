@@ -29,7 +29,7 @@ use shared::app::transfer::module::TransferEvent;
 use shared::entities::local_resource::LocalResourcePath;
 use shared::entities::transfer_session::TransferType;
 use crate::extensions::AppHandleExt;
-use crate::mouse_tracking::{start_mouse_monitor, MouseMonitorConfig};
+use crate::mouse_tracking::{notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig};
 use crate::thumbnail::generate_thumbnail;
 
 pub mod api;
@@ -82,6 +82,11 @@ async fn sign_in(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn sign_up(app_handle: AppHandle) {
+    process_event(AuthenticationEvent::SignUp, app_handle).await;
+}
+
+#[tauri::command]
 async fn start_transfer(target_id: String, app_handle: AppHandle) {
     process_event(TransferEvent::StartTransfer {
         target_id
@@ -90,6 +95,7 @@ async fn start_transfer(target_id: String, app_handle: AppHandle) {
 
 #[tauri::command]
 async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
+    notify_user_did_drop();
     let selections = paths.into_iter().map(|path| ResourceSelection {
         path: LocalResourcePath::AbsolutePath(path),
         r#type: None
@@ -109,7 +115,7 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.show_auth();
     }
     else {
-        app_handle.show_send();
+        app_handle.hide_auth();
     }
 
     let _ = app_handle.emit("Render", view);
@@ -235,7 +241,7 @@ pub async fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
-        .invoke_handler(tauri::generate_handler![sign_in, start_transfer, add_resources, remove_resource, ui_launched, public_transfer, cancel_send, cancel_receive])
+        .invoke_handler(tauri::generate_handler![sign_in, sign_up, start_transfer, add_resources, remove_resource, ui_launched, public_transfer, cancel_send, cancel_receive])
         .setup(|app| {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");

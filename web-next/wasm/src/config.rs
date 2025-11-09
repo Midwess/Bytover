@@ -27,7 +27,12 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
         false => "http"
     };
 
-    let env_url = Url::parse(&format!("{env_scheme}://{}:{}", GATEWAY_HOST.unwrap_or_default(), GATEWAY_PORT.unwrap_or_default())).ok();
+    let env_url = Url::parse(&format!(
+        "{env_scheme}://{}:{}",
+        GATEWAY_HOST.unwrap_or_default(),
+        GATEWAY_PORT.unwrap_or_default()
+    ))
+    .ok();
     let url = env_url.unwrap_or(Url::parse(&href).map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?);
 
     let port = match url.port_or_known_default() {

@@ -248,10 +248,9 @@ impl WebRtcPeer {
                     }
 
                     log::info!("Begin receiving thumbnail for session {session_id}");
-                    let start_delimiter = TransferDelimiterShema::forward_to_next_resource(
-                        &mut thumbnail_rx,
-                        session_id
-                    ).with_cancel(&thumbnail_cancel_signal).await??;
+                    let start_delimiter = TransferDelimiterShema::forward_to_next_resource(&mut thumbnail_rx, session_id)
+                        .with_cancel(&thumbnail_cancel_signal)
+                        .await??;
 
                     log::info!("Found start delimiter {start_delimiter:?}");
 
@@ -299,10 +298,9 @@ impl WebRtcPeer {
                 break;
             }
 
-            let start_delimiter = TransferDelimiterShema::forward_to_next_resource(
-                &mut resource_rx,
-                session_id
-            ).with_cancel(&cancellation_signal).await??;
+            let start_delimiter = TransferDelimiterShema::forward_to_next_resource(&mut resource_rx, session_id)
+                .with_cancel(&cancellation_signal)
+                .await??;
 
             let Some((resource_path, resource_size)) = session
                 .resources

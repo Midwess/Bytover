@@ -6,6 +6,7 @@ use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
+use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
@@ -16,15 +17,14 @@ use devlog_sdk::distributed_id::init_id_generator;
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use devlog_sdk::live_query::live_query::LiveQuery;
 use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
+use migration::{Migrator, MigratorTrait};
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::mail_service_client::MailServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
-use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectOptions, DatabaseConnection, Database};
-use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -53,11 +53,8 @@ impl DiContainer {
 
         let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
         let mut opt = ConnectOptions::new(database_url);
-        opt.max_connections(20)
-            .min_connections(5);
-        let db_connection = Database::connect(opt)
-            .await
-            .unwrap_or_else(|e| panic!("Failed to connect to Postgres: {e}"));
+        opt.max_connections(20).min_connections(5);
+        let db_connection = Database::connect(opt).await.unwrap_or_else(|e| panic!("Failed to connect to Postgres: {e}"));
         Migrator::up(&db_connection, None)
             .await
             .unwrap_or_else(|e| panic!("Failed to run DB migration: {e}"));

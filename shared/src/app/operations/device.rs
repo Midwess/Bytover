@@ -46,7 +46,8 @@ impl DeviceOperation {
             path,
             resource_type,
             id: resource_id
-        }).map(|output| match output {
+        })
+        .map(|output| match output {
             CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
             CoreOperationOutput::LocalResourcePath(path) => (None, Some(path)),
             _ => (None, None)

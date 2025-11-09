@@ -4,7 +4,10 @@ use tauri::utils::config::LogicalPosition;
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self);
+    fn hide_auth(&self);
     fn show_send(&self) -> WebviewWindow<R>;
+    fn is_send_window_open(&self) -> bool;
+    fn hide_send(&self);
 }
 
 impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
@@ -22,6 +25,22 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         self.close_all_windows(vec!["auth"]);
         let auth = self.get_webview_window("auth").expect("auth window not found");
         let _ = auth.show();
+    }
+
+    fn hide_auth(&self) {
+        if let Some(window) = self.get_webview_window("auth") {
+            let _ = window.hide();
+        }
+    }
+
+    fn is_send_window_open(&self) -> bool {
+        self.get_webview_window("send").is_some()
+    }
+
+    fn hide_send(&self) {
+        if let Some(window) = self.get_webview_window("send") {
+            let _ = window.close();
+        }
     }
 
     fn show_send(&self) -> WebviewWindow<R> {

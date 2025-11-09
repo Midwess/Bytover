@@ -34,8 +34,13 @@ impl AppCommand {
                 None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?
             };
 
-            let (thumbnail_png_opt, thumbnail_path_opt) = self.run(
-                DeviceOperation::load_thumbnail_png(local_resource.order_id, selection.path.clone(), local_resource.r#type.clone())).await;
+            let (thumbnail_png_opt, thumbnail_path_opt) = self
+                .run(DeviceOperation::load_thumbnail_png(
+                    local_resource.order_id,
+                    selection.path.clone(),
+                    local_resource.r#type.clone()
+                ))
+                .await;
 
             if let Some(thumbnail_png) = thumbnail_png_opt {
                 match self

@@ -44,7 +44,7 @@ impl AppCommand {
                 return;
             }
         };
-        
+
         WebViewOperation::open_url(url).into_future(self.ctx()).await;
     }
 

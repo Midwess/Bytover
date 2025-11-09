@@ -20,11 +20,7 @@ pub struct NativeExecutor {
 }
 
 impl NativeExecutor {
-    pub async fn handle(
-        &self,
-        request: CoreRequest,
-        effect: CoreOperation,
-    ) -> CoreOperationOutput {
+    pub async fn handle(&self, request: CoreRequest, effect: CoreOperation) -> CoreOperationOutput {
         match effect {
             CoreOperation::Rpc(rpc_effect) => {
                 let response = self.rpc.handle(rpc_effect).await;

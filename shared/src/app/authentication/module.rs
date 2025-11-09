@@ -57,7 +57,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
                     Ok(())
                 })
-            },
+            }
             AuthenticationEvent::SignUp => Command::handle_result(|ctx| async move {
                 ctx.app().sign_up().await;
                 Ok(())

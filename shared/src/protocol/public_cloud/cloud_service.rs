@@ -350,11 +350,11 @@ where
                                 Status::TransferredAmountInBytes(total_sent as u32)
                             )
                             .await?;
-                   }
+                    }
 
-                   let progress_update_event =
-                       CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
-                   core_request.response_throttle(progress_update_event).await;
+                    let progress_update_event =
+                        CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()));
+                    core_request.response_throttle(progress_update_event).await;
                 }
                 NetStreamEvent::Completed(completion) => {
                     upload_completion = completion;

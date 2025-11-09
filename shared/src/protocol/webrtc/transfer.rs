@@ -1,14 +1,14 @@
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use core_services::utils::cancellation::{CancellationToken};
+use core_services::utils::cancellation::CancellationToken;
+use futures::channel::mpsc;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::sleep;
+use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
-use futures::channel::mpsc;
-use n0_future::StreamExt;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransferDelimiterShema {
@@ -19,7 +19,11 @@ pub struct TransferDelimiterShema {
 
 impl TransferDelimiterShema {
     pub fn new(session_id: u64, resource_id: u64, is_start: bool) -> Self {
-        Self { resource_id, is_start, session_id }
+        Self {
+            resource_id,
+            is_start,
+            session_id
+        }
     }
 
     pub fn start(session_id: u64, resource_id: u64) -> Self {
@@ -48,10 +52,7 @@ impl TransferDelimiterShema {
         Ok(buffer.into_boxed_slice())
     }
 
-    pub async fn forward_to_next_resource(
-        rx: &mut mpsc::Receiver<Packet>,
-        session_id: u64
-    ) -> Result<Self, WebRtcErrors> {
+    pub async fn forward_to_next_resource(rx: &mut mpsc::Receiver<Packet>, session_id: u64) -> Result<Self, WebRtcErrors> {
         loop {
             let Some(packet) = rx.next().await else {
                 return Err(WebRtcErrors::InvalidDelimiter(

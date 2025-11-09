@@ -1,8 +1,8 @@
 use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
-use crate::protocol::rpc::auth_server::AuthServer;
-use core_services::utils::maybe::MaybeSend;
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
+use crate::protocol::rpc::auth_server::AuthServer;
+use core_services::utils::maybe::MaybeSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -18,7 +18,7 @@ where
 {
     fn auth_server(&self) -> &AuthServer<T>;
 
-    async fn handle(&self, effect: RpcOperation) ->  Result<CoreOperationOutput, CoreError> {
+    async fn handle(&self, effect: RpcOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
             RpcOperation::GetSignInUrl(device_info) => {
                 let response = self.auth_server().request_signin_url(device_info).await?;

@@ -12,6 +12,7 @@ pub mod native;
 pub mod network;
 pub mod repository;
 
+use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use crate::repository::path_resolver::PathResolverImpl;
 use bincode::Options;
@@ -28,7 +29,6 @@ use std::sync::Arc;
 use tokio::spawn;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
-use crate::core_api_impl::bridge::CoreBridgeImpl;
 
 pub static TOKIO_RT: OnceCell<tokio::runtime::Runtime> = OnceCell::const_new();
 
@@ -133,9 +133,7 @@ impl NativeProcessor {
 
         let native_executor = di_container.get_native_executor();
 
-        Self {
-            native_executor,
-        }
+        Self { native_executor }
     }
 
     pub async fn handle(&self, id: u32, effect: Vec<u8>) -> Vec<u8> {

@@ -26,7 +26,7 @@ pub enum CoreError {
     ParsingError(String),
 
     #[error("")]
-    NotImplemented(String),
+    NotImplemented(String)
 }
 
 impl From<CloudTransferErrors> for CoreError {

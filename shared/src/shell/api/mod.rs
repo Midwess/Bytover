@@ -4,8 +4,11 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
+use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension};
+use crux_core::RequestHandle;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
+use futures_util::lock::Mutex;
 use matchbox_socket::PeerBuffered;
 use n0_future::Stream;
 use schema::devlog::bitbridge::client_upload_request::Upload;
@@ -13,9 +16,6 @@ use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use crux_core::RequestHandle;
-use futures_util::lock::Mutex;
-use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -67,7 +67,10 @@ impl Clone for CoreRequest {
 
 impl CoreRequest {
     pub fn new(crux_request: CruxRequest, bridge: &'static dyn CoreBridge) -> Self {
-        Self { crux_request: Arc::new(Mutex::new(crux_request)), bridge }
+        Self {
+            crux_request: Arc::new(Mutex::new(crux_request)),
+            bridge
+        }
     }
 
     pub async fn response(&self, response: impl Into<CoreOperationOutput>) {
@@ -147,7 +150,7 @@ impl BufferExt for PeerBuffered {
         let cancel = CancellationToken::timeout(timeout);
         self.flush(index).with_cancel(&cancel).await?;
         Ok(())
-   }
+    }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
         for i in 0..self.len() {

@@ -1,15 +1,22 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::thread;
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rdev::{set_is_main_thread, Button, EventType};
 use tauri::{AppHandle, LogicalPosition, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
+static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
+
 #[cfg(target_os = "macos")]
 static MACOS_DRAG_HAS_ITEMS: AtomicBool = AtomicBool::new(false);
 
 static DRAG_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+pub fn notify_user_did_drop() {
+    USER_DID_DROP.store(true, Ordering::SeqCst);
+}
 
 pub fn drag_start_gesture() {
     DRAG_ACTIVE.store(true, Ordering::SeqCst);
@@ -74,7 +81,7 @@ pub fn start_macos_drag_pasteboard_monitor() {
                 MACOS_DRAG_HAS_ITEMS.store(current_dragging, Ordering::SeqCst);
             }
 
-            thread::sleep(Duration::from_millis(250));
+            sleep(Duration::from_millis(250));
         };
     });
 }
@@ -185,20 +192,32 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let mut current_mouse_position = PhysicalPosition::default();
         let mut start_mouse_position = PhysicalPosition::default();
         let mut last_shake_time = Instant::now();
+        let mut is_already_current_shown = app_handle.is_send_window_open();
         let _ = rdev::listen(move |event| {
             match event.event_type {
                 EventType::ButtonPress(Button::Left) => {
+                    USER_DID_DROP.store(false, Ordering::SeqCst);
                     start_mouse_position = current_mouse_position.clone();
+                    is_already_current_shown = app_handle.is_send_window_open();
                     drag_start_gesture();
                 }
-
                 EventType::ButtonRelease(Button::Left) => {
+                    sleep(Duration::from_millis(400));
+                    let is_dropped =  USER_DID_DROP.load(Ordering::SeqCst);
+                    if !is_dropped && app_handle.is_send_window_open() && !is_already_current_shown {
+                        let _ = app_handle.hide_send();
+                        return;
+                    }
+
                     drag_end_gesture();
                     shake_count = 0;
                     last_direction = 0;
                 }
-
                 EventType::MouseMove { x, y } => {
+                    if is_already_current_shown {
+                        return;
+                    }
+
                     if last_sampling.elapsed() < sampling_interval {
                         return;
                     }

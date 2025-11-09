@@ -18,7 +18,7 @@ function Window() {
 
     return (
         <main className="w-screen h-screen dark rounded-lg">
-            <Card className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-lg gap-10 container border-1 border-white/20"}>
+            <Card className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-3xl gap-10 container"}>
                 <div className="absolute inset-0 pointer-events-none">
                     <div
                         className="absolute rounded-full opacity-10 blur-[150px]"
@@ -41,7 +41,7 @@ function Window() {
                         }}
                     />
                 </div>
-                <div className="relative w-full h-[45%] mt-4 z-10">
+                <div className="relative w-full h-[55%] scale-110 mt-4 z-10">
                     <img
                         src="/earth.png"
                         alt="earth"
@@ -57,10 +57,15 @@ function Window() {
                         <span className={"text-2xl font-bold text-foreground"}>that we can trust 🚀 </span>
                     </div>
                 </div>
-                <Button onClick={() => {
-                    invoke("sign_in").then(console.log)
-                }} className={"bg-bluePrimary text-foreground hover:bg-bluePrimary/60"}>Get started</Button>
-            </Card>
+                <div className={"flex flex-col gap-2"}>
+                    <Button onClick={() => {
+                        invoke("sign_in")
+                    }} className={"bg-bluePrimary text-foreground"}>Sign in</Button>
+                    <Button variant={"ghost"} onClick={() => {
+                        invoke("sign_up")
+                    }}>You don't have an account ? Sign up</Button>
+                </div>
+           </Card>
         </main>
     )
 }
