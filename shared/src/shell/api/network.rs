@@ -46,7 +46,7 @@ impl InternetConnection {
         let client = reqwest::Client::new();
 
         let body = geo_location.map(|geo_location| serde_json::to_value(&geo_location).unwrap()).unwrap_or(json!({}));
-        let response = retry!(retries = 30, delay = Duration::from_millis(250), |_| true, {
+        let response = retry!(retries = 3, delay = Duration::from_millis(2500), |_| true, {
             let Ok(response) = client.post(&self.locator_server_url).json(&body).send().await else {
                 return Err(CoreError::Network("Failed to get public IP address".to_string()));
             };
