@@ -1,10 +1,11 @@
+use std::panic::catch_unwind;
 use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self) -> WebviewWindow<R>;
-    fn show_receive(&self) -> WebviewWindow<R>;
+    fn create_receive(&self) -> WebviewWindow<R>;
     fn show_send(&self) -> WebviewWindow<R>;
     fn hide_auth(&self);
     fn toggle_receive(&self);
@@ -52,7 +53,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         window
     }
 
-    fn show_receive(&self) -> WebviewWindow<R> {
+    fn create_receive(&self) -> WebviewWindow<R> {
         let window = match self.get_webview_window("receive") {
             Some(window) => window,
             None => {
@@ -76,9 +77,6 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         };
 
-
-        let _ = window.show();
-        let _ = window.move_window(Position::TrayBottomCenter);
         window
     }
 
@@ -86,13 +84,16 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         if let Some(window) = self.get_webview_window("receive") {
             if !window.is_visible().unwrap_or_default() {
                 let _ = window.show();
+                let _ = window.move_window(Position::TrayBottomCenter);
             }
             else {
                 let _ = window.hide();
             }
         }
         else {
-            self.show_receive();
+            let window = self.create_receive();
+            let _ = window.show();
+            let _ = window.move_window(Position::TrayBottomCenter);
         }
     }
 
@@ -131,12 +132,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn is_send_window_open(&self) -> bool {
-        self.get_webview_window("send").is_some()
+        self.get_webview_window("send").map(|it| it.is_visible().unwrap_or_default()).unwrap_or_default()
     }
 
     fn hide_send(&self) {
         if let Some(window) = self.get_webview_window("send") {
-            let _ = window.close();
+            let _ = window.hide();
         }
     }
 }

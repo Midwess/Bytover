@@ -181,7 +181,7 @@ fn calculate_window_position(
 
 pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
     let mut last_sampling = Instant::now();
-    let sampling_interval = Duration::from_millis(100);
+    let sampling_interval = Duration::from_millis(50);
     let mut last_direction: i32 = 0;
     let mut shake_count = 0;
 
@@ -192,10 +192,12 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let mut start_mouse_position = PhysicalPosition::default();
         let mut last_shake_time = Instant::now();
         let mut is_already_current_shown = app_handle.is_send_window_open();
+        let mut is_handled_shown = false;
         let _ = rdev::listen(move |event| {
             match event.event_type {
                 EventType::ButtonPress(Button::Left) => {
                     USER_DID_DROP.store(false, Ordering::SeqCst);
+                    is_handled_shown = false;
                     start_mouse_position = current_mouse_position.clone();
                     is_already_current_shown = app_handle.is_send_window_open();
                     drag_start_gesture();
@@ -213,6 +215,10 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     last_direction = 0;
                 }
                 EventType::MouseMove { x, y } => {
+                    if is_handled_shown {
+                        return;
+                    }
+
                     if is_already_current_shown {
                         return;
                     }
@@ -259,6 +265,8 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
 
                         if shake_count >= config.required_shakes {
                             let win = app_handle.show_send();
+                            // Temporary hide it to avoid flickering
+                            let _ = win.hide();
 
                             if let Ok(window_size) = win.outer_size() {
                                 let window_physical_size: PhysicalSize<u32> = window_size.into();
@@ -278,7 +286,9 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 }
                             }
 
+                            let _ = win.show();
                             let _ = win.set_focus();
+                            is_handled_shown = true;
 
                             shake_count = 0;
                         }

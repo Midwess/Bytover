@@ -93,9 +93,13 @@ export function Shelf() {
         `}>
             <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
+                 onDoubleClick={() => {
+                     console.log("close")
+                     getCurrentWindow()?.hide()
+                 }}
                  className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
                 <Minus
-                    className={"scale-x-200 scale-y-200 pointer-events-none text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                   className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
             {isDraggingOver && (
                 <div

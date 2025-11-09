@@ -8,6 +8,7 @@
     "receive"
   ],
   "permissions": [
+    "core:window:allow-hide",
     "core:default",
     "opener:default",
     "core:webview:allow-create-webview-window",

@@ -18,6 +18,7 @@ use shared::entities::device::DeviceInfo;
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri::menu::MenuItem;
 use tauri::menu::Menu;
@@ -25,6 +26,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::{fs, spawn};
+use tokio::time::sleep;
 use uuid::Uuid;
 use {hostname, machine_uid};
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
@@ -307,6 +309,7 @@ pub async fn run() {
             start_mouse_monitor(MouseMonitorConfig::default(), handle);
             #[cfg(target_os = "macos")]
             mouse_tracking::start_macos_drag_pasteboard_monitor();
+
             Ok(())
         })
         .run(tauri::generate_context!())
