@@ -45,7 +45,6 @@ pub fn detect_drag(start: &PhysicalPosition<f64>, current: &PhysicalPosition<f64
         return MACOS_DRAG_HAS_ITEMS.load(Ordering::SeqCst)
     }
 
-    // Linux fallback + macOS fallback
     const THRESHOLD: f64 = 30f64;
     let dx = (current.x - start.x).abs();
     let dy = (current.y - start.y).abs();

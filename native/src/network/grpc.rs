@@ -58,10 +58,6 @@ impl RpcNetworkModule<Channel> for RpcNetworkModuleImpl {
             return Ok(self.channel.lock().await.clone().unwrap())
         }
 
-        if !self.internet_connection.is_connected().await {
-            return Err(RpcErrors::InternalServerError("No internet".to_string()));
-        }
-
         self.new_connection().await?;
         Ok(self.channel.lock().await.clone().unwrap())
     }

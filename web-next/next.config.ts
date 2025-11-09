@@ -19,14 +19,6 @@ const nextConfig: NextConfig = {
     output: "standalone",
     poweredByHeader: false,
     compress: true,
-    async rewrites() {
-        return [
-            {
-                source: '/:path*',
-                destination: 'http://localhost:8000/:path*',
-            },
-        ];
-    },
 };
 
 export default nextConfig;

@@ -46,7 +46,7 @@ impl InternetConnection {
         let client = reqwest::Client::new();
 
         let body = geo_location.map(|geo_location| serde_json::to_value(&geo_location).unwrap()).unwrap_or(json!({}));
-        let response = retry!(retries = 3, delay = Duration::from_millis(2500), |_| true, {
+        let response = retry!(retries = 3, delay = Duration::from_millis(3000), |_| true, {
             let Ok(response) = client.post(&self.locator_server_url).json(&body).send().await else {
                 return Err(CoreError::Network("Failed to get public IP address".to_string()));
             };
@@ -62,34 +62,5 @@ impl InternetConnection {
         })?;
 
         Ok(response)
-    }
-
-    pub async fn is_connected(&self) -> bool {
-        let mut last_passed = self.last_passed.lock().await;
-        if let Some(last_passed) = last_passed.as_ref() {
-            if last_passed.elapsed() < Duration::from_secs(5) {
-                return true;
-            }
-        }
-
-        let ns = "internet-check";
-        let addr = "https://devlog.studio/locator";
-        let client = reqwest::Client::new();
-
-        match client.post(addr).json(&json!({})).timeout(Duration::from_millis(5000)).send().await {
-            Ok(_) => {
-                *last_passed = Some(Instant::now());
-                true
-            }
-            Err(err) => {
-                log::info!(
-                    target: ns,
-                    "No internet connection in the last {:?}: {:?}",
-                    last_passed.as_ref(),
-                    err
-                );
-                false
-            }
-        }
     }
 }
