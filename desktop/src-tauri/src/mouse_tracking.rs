@@ -98,7 +98,7 @@ impl Default for MouseMonitorConfig {
         Self {
             required_shakes: 3,
             min_changed: 50f64,
-            shake_timeout: Duration::from_millis(2000),
+            shake_timeout: Duration::from_millis(2000)
         }
     }
 }

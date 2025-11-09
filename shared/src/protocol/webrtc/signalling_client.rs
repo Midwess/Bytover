@@ -82,6 +82,7 @@ impl SignallingClient {
 
                         if let WsEvent::Closed = msg {
                             log::info!("websocket closed");
+                            Delay::new(Duration::from_secs(3)).await;
                             break;
                         }
 
