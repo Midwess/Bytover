@@ -10,13 +10,34 @@
 - [Surreal DB Installation](https://surrealdb.com/docs/surrealdb/installation/linux)
     ```bash
     surreal start --bind 127.0.0.1:8500 --user root --pass root --log debug
+    ```
 
     # on another shell
+    ```bash
     surreal sql --endpoint http://127.0.0.1:8500 --auth-level root --username root --password root
-    > DEFINE NAMESPACE development;
-    > USE NS development;
-    > DEFINE USER devlog ON NAMESPACE PASSWORD 'ssh' ROLES OWNER;
-    ``
+    ```
+
+    ```sql
+    DEFINE NAMESPACE development;
+    USE NS development;
+    DEFINE DATABASE `app-gateway`;
+    DEFINE DATABASE system;
+    DEFINE DATABASE bitbridge;
+    USE DB `app-gateway`;
+    DEFINE USER devlog ON NAMESPACE PASSWORD 'ssh' ROLES OWNER;
+    CREATE application:[ 'BitBridge', 50515741832650750 ] CONTENT {
+        avatar_urls: [],
+        icon_url: 'icon_url',
+        maximum_device: 6,
+        name: 'BitBridge',
+        order_id: 50515741832650750,
+        random_avatar: true,
+        redirect_url: [
+            { platform: 'Web', url: 'http://localhost:8000/' },
+            { platform: 'Ios', url: 'BitBridge://authorize' }
+        ]
+    };
+    ```
 
 - Kong gateway
     ```bash
@@ -24,11 +45,15 @@
     ```
 - auth-gateway
     ```bash
-    cd auth-gateway && cargo run
+    cd auth-gateway && DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" DEVLOG_GOOGLE_CLIENT_SECRET="DEVLOG_GOOGLE_CLIENT_SECRET" DEVLOG_KONG_GATEWAY_ADMIN_URL="http://localhost:8001" cargo run
+    ```
+- Back-end DB:
+    ```bash
+    cd backend && docker compose up
     ```
 - Back-end
     ```bash
-    cd backend && AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5433/bitbridge" DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
     ```
 
 # Front-end & native development
@@ -62,8 +87,9 @@
     cd web-next
     pnpm install
     deno run wasm:dev
-    deno task dev
+    DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 deno task dev
     ```
+- Access your app at `http://localhost:8000`.
 
 ## Android
 - `Android NDK 28`
