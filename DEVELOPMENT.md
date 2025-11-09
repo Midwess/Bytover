@@ -87,7 +87,7 @@
     cd web-next
     pnpm install
     deno run wasm:dev
-    DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 deno task dev
+    DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 pnpm dev
     ```
 - Access your app at `http://localhost:8000`.
 
