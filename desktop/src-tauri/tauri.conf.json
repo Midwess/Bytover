@@ -28,23 +28,7 @@
         "scope": ["$APPDATA/**"]
       }
     },
-    "windows": [
-      {
-        "url": "auth.html",
-        "title": "auth",
-        "label": "auth",
-        "width": 270,
-        "height": 420,
-        "backgroundColor": "#00000000",
-        "decorations": false,
-        "transparent": true,
-        "focus": true,
-        "skipTaskbar": false,
-        "resizable": false,
-        "shadow": true,
-        "devtools": true
-      }
-    ]
+    "windows": []
   },
   "bundle": {
     "active": true,

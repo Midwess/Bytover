@@ -1,10 +1,13 @@
 use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri_plugin_positioner::{Position, WindowExt};
 
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
-    fn show_auth(&self);
-    fn hide_auth(&self);
+    fn show_auth(&self) -> WebviewWindow<R>;
+    fn show_receive(&self) -> WebviewWindow<R>;
     fn show_send(&self) -> WebviewWindow<R>;
+    fn hide_auth(&self);
+    fn toggle_receive(&self);
     fn is_send_window_open(&self) -> bool;
     fn hide_send(&self);
 }
@@ -20,25 +23,76 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
     }
 
-    fn show_auth(&self) {
+    fn show_auth(&self) -> WebviewWindow<R> {
         self.close_all_windows(vec!["auth"]);
-        let auth = self.get_webview_window("auth").expect("auth window not found");
-        let _ = auth.show();
+
+        let window = match self.get_webview_window("auth") {
+            Some(window) => window,
+            None => {
+                WebviewWindowBuilder::new(
+                    self,
+                    "auth",
+                    WebviewUrl::App("auth.html".into())
+                )
+                    .title("auth")
+                    .inner_size(270.0, 420.0)
+                    .decorations(false)
+                    .transparent(true)
+                    .focused(true)
+                    .skip_taskbar(false)
+                    .resizable(false)
+                    .shadow(true)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create auth window")
+            }
+        };
+
+        let _ = window.show();
+        window
     }
 
-    fn hide_auth(&self) {
-        if let Some(window) = self.get_webview_window("auth") {
-            let _ = window.hide();
+    fn show_receive(&self) -> WebviewWindow<R> {
+        let window = match self.get_webview_window("receive") {
+            Some(window) => window,
+            None => {
+                WebviewWindowBuilder::new(
+                    self,
+                    "receive",
+                    WebviewUrl::App("receive.html".into())
+                )
+                    .title("receive")
+                    .inner_size(270.0, 420.0)
+                    .decorations(false)
+                    .focused(true)
+                    .transparent(true)
+                    .always_on_top(true)
+                    .skip_taskbar(false)
+                    .resizable(false)
+                    .shadow(true)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create auth window")
+            }
+        };
+
+
+        let _ = window.show();
+        let _ = window.move_window(Position::TrayBottomCenter);
+        window
+    }
+
+    fn toggle_receive(&self) {
+        if let Some(window) = self.get_webview_window("receive") {
+            if !window.is_visible().unwrap_or_default() {
+                let _ = window.show();
+            }
+            else {
+                let _ = window.hide();
+            }
         }
-    }
-
-    fn is_send_window_open(&self) -> bool {
-        self.get_webview_window("send").is_some()
-    }
-
-    fn hide_send(&self) {
-        if let Some(window) = self.get_webview_window("send") {
-            let _ = window.close();
+        else {
+            self.show_receive();
         }
     }
 
@@ -68,5 +122,21 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
         let _ = window.show();
         window
+    }
+
+    fn hide_auth(&self) {
+        if let Some(window) = self.get_webview_window("auth") {
+            let _ = window.hide();
+        }
+    }
+
+    fn is_send_window_open(&self) -> bool {
+        self.get_webview_window("send").is_some()
+    }
+
+    fn hide_send(&self) {
+        if let Some(window) = self.get_webview_window("send") {
+            let _ = window.close();
+        }
     }
 }
