@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, thiserror::Error, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum CoreError {
     /// The upstream has something to say
-    #[error("The request could not be processed.")]
+    #[error("{0}")]
     BadRequest(String),
 
     /// User is not authenticated or session expired

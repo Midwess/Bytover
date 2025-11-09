@@ -130,11 +130,12 @@ where
         let request_body = FindSessionRequest { alias: Some(alias) };
 
         let mut client = BitBridgeCloudServiceClient::new(channel);
-        let mut request = Request::new(request_body);
-        self.auth_provider.with_auth(&mut request).await?;
+        let request = Request::new(request_body);
         let response = client.find_session(request).await?;
+        let response = response.into_inner();
+        log::info!("{:?}", response);
 
-        Ok(response.into_inner())
+        Ok(response)
     }
 
     pub async fn subscribe_public_session_events(
@@ -145,7 +146,7 @@ where
     ) -> Result<Streaming<SubscribeSessionInfoResponse>, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let mut client = BitBridgeCloudServiceClient::new(channel);
-        let mut request = Request::new(SubscribeSessionInfoRequest {
+        let request = Request::new(SubscribeSessionInfoRequest {
             id: PublicSessionId {
                 user_id,
                 order_id: session_order_id
@@ -153,7 +154,6 @@ where
             password
         });
 
-        self.auth_provider.with_auth(&mut request).await?;
         let response = client.subscribe_session_info(request).await?;
         let response = response.into_inner();
 

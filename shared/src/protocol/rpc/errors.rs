@@ -2,7 +2,7 @@ use anyhow::anyhow;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcErrors {
-    #[error("Auth error {0}")]
+    #[error("{0}")]
     AuthError(anyhow::Error),
     #[error("{0}")]
     BadRequest(String),

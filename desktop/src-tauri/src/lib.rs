@@ -19,6 +19,9 @@ use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri::menu::MenuItem;
+use tauri::menu::Menu;
+use tauri::tray::TrayIconBuilder;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::{fs, spawn};
@@ -243,6 +246,13 @@ pub async fn run() {
         .plugin(tauri_plugin_drag::init())
         .invoke_handler(tauri::generate_handler![sign_in, sign_up, start_transfer, add_resources, remove_resource, ui_launched, public_transfer, cancel_send, cancel_receive])
         .setup(|app| {
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&quit_i])?;
+            let tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .build(app)?;
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
 

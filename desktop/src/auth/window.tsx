@@ -18,7 +18,7 @@ function Window() {
 
     return (
         <main className="w-screen h-screen dark rounded-lg">
-            <Card className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-3xl gap-10 container"}>
+            <Card className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-3xl gap-8 container"}>
                 <div className="absolute inset-0 pointer-events-none">
                     <div
                         className="absolute rounded-full opacity-10 blur-[150px]"
@@ -50,14 +50,14 @@ function Window() {
                         filter hue-rotate-10 saturate-95 contrast-90"
                     />
                 </div>
-                <div className={"w-full h-fit flex flex-col z-20 gap-4"}>
+                <div className={"w-full h-fit flex flex-col z-20 gap-2"}>
                     <p className={"text-md font-bold text-green-100"}>We feel thankful that you're here 🙌</p>
                     <div className={"flex flex-col gap-1"}> 
                         <span className={"text-2xl font-bold text-foreground"}>The file transfer</span>
                         <span className={"text-2xl font-bold text-foreground"}>that we can trust 🚀 </span>
                     </div>
                 </div>
-                <div className={"flex flex-col gap-2"}>
+                <div className={"flex flex-col gap-1 mb-3"}>
                     <Button onClick={() => {
                         invoke("sign_in")
                     }} className={"bg-bluePrimary text-foreground"}>Sign in</Button>

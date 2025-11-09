@@ -134,6 +134,7 @@ function ContentBoard() {
                                className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
                                color={'white'}/>
                         This session is password protected</p>
+                    <input type="password" name="fake-password" style={{ display: 'none' }} />
                     <Input
                         className="h-10"
                         placeholder="Enter password"

@@ -43,9 +43,15 @@ impl UploadContext {
         upload_id: String,
         resource: StaticResource,
         resource_size: u64,
-        chunk_size: Option<u64>,
+        mut chunk_size: Option<u64>,
         chunk_stream_enabled: bool
     ) -> Result<UploadContext, CloudStorageErrors> {
+        if let Some(size) = chunk_size {
+            if size < 1 {
+                chunk_size.take();
+            }
+        }
+
         let chunk_size = chunk_size.unwrap_or(5 * GB);
         let max_allowed_parts = match &resource.source {
             Some(Source::S3Path(_)) => resource_size.div_ceil(chunk_size) as usize + 1,
