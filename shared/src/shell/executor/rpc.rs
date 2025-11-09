@@ -24,6 +24,10 @@ where
                 let response = self.auth_server().request_signin_url(device_info).await?;
                 Ok(response.into())
             }
+            RpcOperation::GetSignUpUrl(device_info) => {
+                let response = self.auth_server().request_signup_url(device_info).await?;
+                Ok(response.into())
+            }
             RpcOperation::GetMe() => {
                 let response = self.auth_server().get_me().await?;
                 Ok(RpcOperationOutput::GetMe(response).into())

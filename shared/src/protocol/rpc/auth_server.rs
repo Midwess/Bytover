@@ -7,7 +7,7 @@ use core_services::utils::maybe::MaybeSend;
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::auth_gateway::rpc::{FindUserRequest, MeRequest, SigninRequest};
+use schema::devlog::auth_gateway::rpc::{FindUserRequest, MeRequest, SigninRequest, SignupRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
@@ -60,6 +60,27 @@ where
         let response = auth_client.clone().signin(request).await.map(|it| it.into_inner())?;
 
         Ok(response.signin_url.clone())
+    }
+
+    pub async fn request_signup_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let request = SignupRequest {
+            app_name: "BitBridge".to_string(),
+            method: AuthMethod::Google.into(),
+            device: RegisteringDevice {
+                device_name: device.name,
+                device_unique_key: device.unique_id,
+                platform: device.platform.into(),
+                device_type: device.device_type.into()
+            },
+            original_web_page_url: None
+        };
+
+        let auth_client = AuthServiceClient::new(channel);
+        let response = auth_client.clone().signup(request).await.map(|it| it.into_inner())?;
+
+        log::info!("{response:?}");
+        Ok(response.signup_url.clone())
     }
 
     pub async fn get_me(&self) -> Result<User, RpcErrors> {

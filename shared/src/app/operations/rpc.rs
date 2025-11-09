@@ -14,6 +14,7 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperation {
     GetSignInUrl(DeviceInfo),
+    GetSignUpUrl(DeviceInfo),
     GetMe()
 }
 
@@ -44,7 +45,7 @@ impl RpcOperation {
     }
 
     pub fn get_sign_up_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignInUrl(device_info))).map(|res| match res {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetSignUpUrl(device_info))).map(|res| match res {
             CoreOperationOutput::String(url) => Ok(url),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetSignInUrl")
