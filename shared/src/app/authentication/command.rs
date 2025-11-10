@@ -49,7 +49,11 @@ impl AppCommand {
     }
 
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
-        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
+        let Ok(user) = RpcOperation::get_me().into_future(self.ctx()).await else {
+            // User is not logged in is fine, some flow not require user to be logged in
+            return Ok(())
+        };
+
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
         Ok(())

@@ -192,6 +192,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let mut start_mouse_position = PhysicalPosition::default();
         let mut last_shake_time = Instant::now();
         let mut is_already_current_shown = app_handle.is_send_window_open();
+        // During the drag gesture, if the user shake the second time, we will ignored.
         let mut is_handled_shown = false;
         let _ = rdev::listen(move |event| {
             match event.event_type {

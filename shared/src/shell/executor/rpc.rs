@@ -21,11 +21,11 @@ where
     async fn handle(&self, effect: RpcOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
             RpcOperation::GetSignInUrl(device_info) => {
-                let response = self.auth_server().request_signin_url(device_info).await?;
+                let response = self.auth_server().request_sign_in_url(device_info).await?;
                 Ok(response.into())
             }
             RpcOperation::GetSignUpUrl(device_info) => {
-                let response = self.auth_server().request_signup_url(device_info).await?;
+                let response = self.auth_server().request_sign_up_url(device_info).await?;
                 Ok(response.into())
             }
             RpcOperation::GetMe() => {

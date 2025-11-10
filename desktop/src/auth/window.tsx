@@ -52,7 +52,7 @@ function Window() {
                 </div>
                 <div className={"w-full h-fit flex flex-col z-20 gap-2"}>
                     <p className={"text-md font-bold text-green-100"}>We feel thankful that you're here 🙌</p>
-                    <div className={"flex flex-col gap-1"}> 
+                    <div className={"flex flex-col gap-1"}>
                         <span className={"text-2xl font-bold text-foreground"}>The file transfer</span>
                         <span className={"text-2xl font-bold text-foreground"}>that we can trust 🚀 </span>
                     </div>
@@ -63,9 +63,9 @@ function Window() {
                     }} className={"bg-bluePrimary text-foreground"}>Sign in</Button>
                     <Button variant={"ghost"} onClick={() => {
                         invoke("sign_up")
-                    }}>You don't have an account ? Sign up</Button>
+                    }}><p className={"text-muted-foreground font-normal"}>New to our platform?</p> <p className={"text-foreground"}>Sign up</p> </Button>
                 </div>
-           </Card>
+            </Card>
         </main>
     )
 }

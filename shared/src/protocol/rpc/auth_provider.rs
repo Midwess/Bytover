@@ -22,7 +22,7 @@ impl AuthProvider {
             .map_err(|e| RpcErrors::AuthError(anyhow!("Failed to load authentication session {e:?}")))?;
 
         if session.is_none() {
-            return Err(RpcErrors::AuthError(anyhow!("Session not found")));
+            return Err(RpcErrors::AuthError(anyhow!("You need to login first")));
         }
 
         let token = session.unwrap().token;

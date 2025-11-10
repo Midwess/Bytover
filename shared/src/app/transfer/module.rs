@@ -311,7 +311,6 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
-                    log::info!("Session not found");
                     return Command::done()
                 };
 

@@ -42,7 +42,7 @@ where
         }
     }
 
-    pub async fn request_signin_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
+    pub async fn request_sign_in_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request = SigninRequest {
             app_name: "BitBridge".to_string(),
@@ -62,7 +62,7 @@ where
         Ok(response.signin_url.clone())
     }
 
-    pub async fn request_signup_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
+    pub async fn request_sign_up_url(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request = SignupRequest {
             app_name: "BitBridge".to_string(),
@@ -107,8 +107,7 @@ where
             order_id: Some(user_order_id)
         };
 
-        let mut request = Request::new(req);
-        self.auth_provider.with_auth(&mut request).await?;
+        let request = Request::new(req);
 
         let channel = self.rpc_module.connect().await?;
         let mut client = PeopleServiceClient::new(channel);
