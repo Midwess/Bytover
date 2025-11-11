@@ -133,25 +133,23 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let channel_name = format!("transfer_session_{}_{}", user_order_id, order_id);
 
+        let mut listener = PgListener::connect_with(&self.pg_pool).await.map_err(|err| {
+            log::error!("Failed to connect PgListener: {err}");
+            Status::internal("Unable to connect to session notifications")
+        })?;
+
+        if let Err(err) = listener.listen(&channel_name).await {
+            log::error!("Failed to listen on channel {channel_name}: {err}");
+            return Err(Status::internal("Unable to subscribe to session updates"));
+        }
+
         let cloud_storage = self.cloud_storage.clone();
         let app = app.clone();
         let tx_updates = tx.clone();
         let mut current_session = initial_session;
-        let pool = self.pg_pool.clone();
 
         tokio::spawn(async move {
-            let mut listener = match PgListener::connect_with(&pool).await {
-                Ok(listener) => listener,
-                Err(err) => {
-                    log::error!("Failed to connect PgListener: {err}");
-                    return;
-                }
-            };
-
-            if let Err(err) = listener.listen(&channel_name).await {
-                log::error!("Failed to listen on channel {channel_name}: {err}");
-                return;
-            }
+            let mut listener = listener;
 
             loop {
                 let notification = match listener.recv().await {
