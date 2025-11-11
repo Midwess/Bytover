@@ -1,9 +1,8 @@
 use devlog_sdk::distributed_id::gen_id;
 use schema::value::static_resource::{S3Path, StaticResource};
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransferResourceType {
     File,
     Folder,
@@ -11,10 +10,9 @@ pub enum TransferResourceType {
     Video
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransferResource {
     order_id: u64,
-    #[surreal(ignore)]
     session_id: u64,
     name: String,
     size: u64,

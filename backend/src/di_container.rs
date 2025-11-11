@@ -11,11 +11,8 @@ use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
 use crate::user::Token;
-use core_services::db::surrealdb::connection::SurrealDbConnection;
-use core_services::utils::pool::request::PoolRequest;
 use devlog_sdk::distributed_id::init_id_generator;
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
-use devlog_sdk::live_query::live_query::LiveQuery;
 use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
 use migration::{Migrator, MigratorTrait};
 use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
@@ -39,7 +36,6 @@ static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
-    live_query: Arc<LiveQuery>,
     db_connection: DatabaseConnection,
     pub pg_pool: PgPool
 }
@@ -51,8 +47,6 @@ impl DiContainer {
         devlog_sdk.enable_db("bitbridge".to_owned(), 2, 256).await;
 
         init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
-
-        let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
         let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
         let pg_pool = PgPoolOptions::new()
@@ -72,7 +66,6 @@ impl DiContainer {
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
-            live_query: Arc::new(LiveQuery::new(app_db).await),
             db_connection,
             pg_pool
         }
@@ -86,10 +79,6 @@ impl DiContainer {
 
     pub fn get_db_connection(&self) -> DatabaseConnection {
         self.db_connection.clone()
-    }
-
-    pub async fn db(&self) -> PoolRequest<SurrealDbConnection> {
-        self.devlog_sdk.db("bitbridge".to_owned()).await
     }
 
     pub fn markov_generator(&self) -> impl Markov {
@@ -133,7 +122,6 @@ impl DiContainer {
     pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
         CloudGrpcService {
             cloud_storage: Arc::new(self.get_cloud_storage()),
-            live_query: self.live_query.clone(),
             session_repository: Box::new(self.get_transfer_session_repository().await),
             app_service: Box::new(self.get_app_service().await),
             pg_pool: self.pg_pool.clone()

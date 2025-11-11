@@ -5,7 +5,6 @@ use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
-use devlog_sdk::live_query::live_query::LiveQuery;
 use schema::devlog::auth_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
@@ -40,7 +39,6 @@ use tonic::{Request, Response, Status};
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Box<dyn TransferSessionRepository>,
-    pub live_query: Arc<LiveQuery>,
     pub app_service: Box<dyn AppInfoService>,
     pub pg_pool: PgPool
 }
