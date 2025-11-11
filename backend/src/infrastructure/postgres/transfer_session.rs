@@ -5,7 +5,7 @@ use core_services::db::repository::abstraction::repository::Repository;
 use devlog_sdk::distributed_id::gen_id;
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value as SeaValue};
 use serde_json::{json, Value};
 
 use migration::model::transfer_session as transfer_session_model;
@@ -122,7 +122,56 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
         Err(RepositoryError::DbError("Not implemented for Postgres repository".to_string()))
     }
 
-    async fn update_one(&self, _data: TransferSession) -> Result<TransferSession, RepositoryError> {
-        Err(RepositoryError::DbError("Not implemented for Postgres repository".to_string()))
+    async fn update_one(&self, data: TransferSession) -> Result<TransferSession, RepositoryError> {
+        let session = TransferSessionEntity::find()
+            .filter(TransferSessionColumn::OwnerUserOrderId.eq(data.user_order_id() as i64))
+            .filter(TransferSessionColumn::OrderId.eq(data.order_id() as i64))
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?
+            .ok_or_else(|| RepositoryError::DbError("Transfer session not found".to_string()))?;
+
+        let alias = data.alias();
+        let password = data.password();
+        let to_emails_val = serde_json::to_value(data.to_emails()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let resources_val = serde_json::to_value(data.resources()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let progress_val = serde_json::to_value(data.progresses()).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        let mut active: TransferSessionActiveModel = session.into();
+        active.alias = Set(alias);
+        active.password = Set(password.clone());
+        active.to_emails = Set(Some(to_emails_val));
+        active.resources = Set(Some(resources_val));
+        active.progress = Set(Some(progress_val));
+
+        active
+            .update(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        self.notify(&data).await?;
+
+        Ok(data)
+    }
+}
+
+impl TransferSessionPostgresRepository {
+    async fn notify(&self, session: &TransferSession) -> Result<(), RepositoryError> {
+        let channel = format!("transfer_session_{}_{}", session.user_order_id(), session.order_id());
+        let payload = serde_json::to_string(session).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        let statement = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT pg_notify($1, $2)",
+            vec![SeaValue::from(channel), SeaValue::from(payload)]
+        );
+
+        self
+            .db
+            .execute(statement)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        Ok(())
     }
 }

@@ -5,9 +5,7 @@ use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
-use core_services::db::repository::abstraction::table::Table;
-use core_services::db::surrealdb::id::SurrealDbId;
-use devlog_sdk::live_query::live_query::{LiveId, LiveQuery};
+use devlog_sdk::live_query::live_query::LiveQuery;
 use schema::devlog::auth_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
@@ -32,7 +30,7 @@ use schema::devlog::bitbridge::{
 };
 use std::pin::Pin;
 use std::sync::Arc;
-use surreal_devl::proxy::default::SurrealDeserializer;
+use sqlx::postgres::PgListener;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
@@ -98,27 +96,11 @@ impl BitBridgeCloudService for CloudGrpcService {
             user_order_id: Some(request.id.user_id)
         };
 
-        let tb = TransferSession::get_table();
-        let thing = session_id.clone().id(tb);
-        let live_id = LiveId::Record(thing);
-        let live_stream = self.live_query.subscribe(live_id).await?;
-        let subscription = live_stream.subscribe().await;
-        let value = subscription.borrow().clone();
-        let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
-
-        let initial_session = match value {
-            Some(value) => Some(
-                TransferSession::deserialize(&(value.data.into_inner()))
-                    .map_err(|_| Status::internal("Cannot deserialize session"))?
-            ),
-            None => self.session_repository.find_one(&session_id).await?
-        };
-
-        let Some(initial_session) = initial_session else {
+        let Some(initial_session) = self.session_repository.find_one(&session_id).await? else {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         };
 
-        if !initial_session.validate_access(request.password) {
+        if !initial_session.validate_access(request.password.clone()) {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         }
 
@@ -126,51 +108,84 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::invalid_argument("Session not found or password is not correct"))
         }
 
+        let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
         let is_completed = initial_session.is_completed();
         log::info!("Session: {:?}", initial_session);
-        tx.send(Ok(SubscribeSessionInfoResponse {
-            event: Some(Event::SessionUpdated(SessionUpdated {
-                session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
+
+        tx
+            .send(Ok(SubscribeSessionInfoResponse {
+                event: Some(Event::SessionUpdated(SessionUpdated {
+                    session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
+                }))
             }))
-        }))
-        .await
-        .map_err(|_| Status::internal("Cannot send initial session"))?;
+            .await
+            .map_err(|_| Status::internal("Cannot send initial session"))?;
 
         if is_completed {
             return Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
         }
 
+        let TransferSessionId { order_id, user_order_id } = session_id;
+        let order_id = order_id.ok_or_else(|| Status::invalid_argument("Session id must be defined"))?;
+        let user_order_id = user_order_id.ok_or_else(|| Status::invalid_argument("Session id must be defined"))?;
+
+        let channel_name = format!("transfer_session_{}_{}", user_order_id, order_id);
+
+        let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING")
+            .map_err(|_| Status::internal("Database configuration missing"))?;
+
         let cloud_storage = self.cloud_storage.clone();
         let app = app.clone();
+        let tx_updates = tx.clone();
+        let mut current_session = initial_session;
+
         tokio::spawn(async move {
-            let mut stream = live_stream.subscribe().await;
-            let mut curr_session = initial_session.clone();
+            let mut listener = match PgListener::connect(&database_url).await {
+                Ok(listener) => listener,
+                Err(err) => {
+                    log::error!("Failed to connect PgListener: {err}");
+                    return;
+                }
+            };
+
+            if let Err(err) = listener.listen(&channel_name).await {
+                log::error!("Failed to listen on channel {channel_name}: {err}");
+                return;
+            }
+
             loop {
-                if let Err(e) = stream.changed().await {
-                    log::error!("Error: {e}");
-                    break;
-                };
-
-                let Some(value) = subscription.borrow().clone() else {
-                    break;
-                };
-
-                let Ok(session) = TransferSession::deserialize(&value.data.into_inner()) else {
-                    break;
-                };
-
-                let is_completed = session.is_completed();
-                let events = curr_session.get_change_events(&session, &cloud_storage, &app).await;
-                for event in events {
-                    if let Err(_e) = tx.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await {
-                        log::error!("Cannot send session, closing stream...");
+                let notification = match listener.recv().await {
+                    Ok(notification) => notification,
+                    Err(err) => {
+                        log::error!("Failed to receive notification: {err}");
                         break;
-                    };
+                    }
+                };
+
+                let payload = notification.payload();
+                let session: TransferSession = match serde_json::from_str(payload) {
+                    Ok(session) => session,
+                    Err(err) => {
+                        log::error!("Failed to deserialize session payload: {err}");
+                        continue;
+                    }
+                };
+
+                let events = current_session.get_change_events(&session, &cloud_storage, &app).await;
+                for event in events {
+                    if tx_updates
+                        .send(Ok(SubscribeSessionInfoResponse { event: Some(event) }))
+                        .await
+                        .is_err()
+                    {
+                        log::info!("Client disconnected from session info stream");
+                        return;
+                    }
                 }
 
-                curr_session = session;
+                current_session = session;
 
-                if is_completed {
+                if current_session.is_completed() {
                     log::info!("Session is completed, closing stream...");
                     break;
                 }
