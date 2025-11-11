@@ -5,8 +5,8 @@ use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
+use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
-use crate::infrastructure::surrealdb::transfer_session::TransferSessionSurrealdbRepository;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
@@ -22,6 +22,8 @@ use schema::devlog::auth_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::auth_gateway::rpc::mail_service_client::MailServiceClient;
 use schema::devlog::auth_gateway::rpc::user_service_client::UserServiceClient;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
@@ -38,7 +40,8 @@ pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
     live_query: Arc<LiveQuery>,
-    db_connection: DatabaseConnection
+    db_connection: DatabaseConnection,
+    pub pg_pool: PgPool
 }
 
 impl DiContainer {
@@ -52,7 +55,14 @@ impl DiContainer {
         let app_db = devlog_sdk.db("bitbridge".to_owned()).await;
 
         let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
-        let mut opt = ConnectOptions::new(database_url);
+        let pg_pool = PgPoolOptions::new()
+            .min_connections(5)
+            .max_connections(10)
+            .connect(&database_url)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to create SQLx pool: {e}"));
+
+        let mut opt = ConnectOptions::new(database_url.clone());
         opt.max_connections(20).min_connections(5);
         let db_connection = Database::connect(opt).await.unwrap_or_else(|e| panic!("Failed to connect to Postgres: {e}"));
         Migrator::up(&db_connection, None)
@@ -63,7 +73,8 @@ impl DiContainer {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
             live_query: Arc::new(LiveQuery::new(app_db).await),
-            db_connection
+            db_connection,
+            pg_pool
         }
     }
 
@@ -124,7 +135,8 @@ impl DiContainer {
             cloud_storage: Arc::new(self.get_cloud_storage()),
             live_query: self.live_query.clone(),
             session_repository: Box::new(self.get_transfer_session_repository().await),
-            app_service: Box::new(self.get_app_service().await)
+            app_service: Box::new(self.get_app_service().await),
+            pg_pool: self.pg_pool.clone()
         }
     }
 
@@ -146,7 +158,7 @@ impl DiContainer {
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
-        TransferSessionSurrealdbRepository { db: self.db().await }
+        TransferSessionPostgresRepository { db: self.get_db_connection() }
     }
 
     pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
