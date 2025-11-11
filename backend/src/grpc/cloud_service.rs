@@ -31,6 +31,7 @@ use schema::devlog::bitbridge::{
 use std::pin::Pin;
 use std::sync::Arc;
 use sqlx::postgres::PgListener;
+use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
@@ -40,7 +41,8 @@ pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Box<dyn TransferSessionRepository>,
     pub live_query: Arc<LiveQuery>,
-    pub app_service: Box<dyn AppInfoService>
+    pub app_service: Box<dyn AppInfoService>,
+    pub pg_pool: PgPool
 }
 
 type SubscribeSessionResponseStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<SubscribeSessionInfoResponse, Status>> + Send>>;
@@ -131,16 +133,14 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let channel_name = format!("transfer_session_{}_{}", user_order_id, order_id);
 
-        let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING")
-            .map_err(|_| Status::internal("Database configuration missing"))?;
-
         let cloud_storage = self.cloud_storage.clone();
         let app = app.clone();
         let tx_updates = tx.clone();
         let mut current_session = initial_session;
+        let pool = self.pg_pool.clone();
 
         tokio::spawn(async move {
-            let mut listener = match PgListener::connect(&database_url).await {
+            let mut listener = match PgListener::connect_with(&pool).await {
                 Ok(listener) => listener,
                 Err(err) => {
                     log::error!("Failed to connect PgListener: {err}");
