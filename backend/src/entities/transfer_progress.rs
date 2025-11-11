@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
-
 use super::transfer_resource::TransferResource;
 
 #[derive(Debug, thiserror::Error)]
@@ -9,14 +7,14 @@ pub enum TransferProgressErrors {
     AlreadyCommitted
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransferProgressStatus {
     InProgress(f32),
     Success,
     Failed(String)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransferProgress {
     resource_id: u64,
     resource_size: u64,
