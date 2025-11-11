@@ -149,7 +149,6 @@ impl BitBridgeCloudService for CloudGrpcService {
         let mut current_session = initial_session;
 
         tokio::spawn(async move {
-            let mut listener = listener;
 
             loop {
                 let notification = match listener.recv().await {
