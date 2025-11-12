@@ -2729,6 +2729,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cacao",
+ "cocoa",
  "core-services",
  "crux_core",
  "dispatch",

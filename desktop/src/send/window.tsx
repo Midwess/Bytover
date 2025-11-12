@@ -48,7 +48,7 @@ function Window() {
                    {/* Toggle button at the middle-right edge */}
                    <Button
                        onClick={toggleExpand}
-                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-3 aspect-square h-auto bg-card border-2 shadow-lg rounded-full flex items-center justify-center hover:bg-muted"
+                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-3 aspect-square h-auto bg-card border-2 shadow-lg rounded-full flex items-center justify-center"
                    >
                        <ArrowRight 
                            className={`w-3 h-3 text-white transition-transform duration-400 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}

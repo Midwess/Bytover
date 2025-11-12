@@ -13,7 +13,7 @@ import {
     FileIcon,
     MoreVertical,
     Trash2,
-    Minus,
+    Minus, UploadCloud, ImportIcon, Circle, CircleChevronDown, Plus,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -80,18 +80,19 @@ export function Shelf() {
     return <>
         <Card className={`
             rounded-3xl
-            px-0
             flex flex-col
             justify-center
             items-center
-            w-full h-full bg-card shadow-md shadow-background border-2
+            w-full h-full border-2
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
-            ? 'border-bluePrimary border-2 shadow-lg shadow-bluePrimary/20'
+            ? 'border-2 border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
             : 'border-border'
         }
+        }
         `}>
-            <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
+            <div
+                className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
                  onDoubleClick={() => {
                      console.log("close")
@@ -99,24 +100,20 @@ export function Shelf() {
                  }}
                  className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
                 <Minus
-                   className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                    className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
-            {isDraggingOver && (
-                <div
-                    className="absolute inset-0 bg-bluePrimary/10 backdrop-blur-[1px] flex items-center justify-center z-10 animate-in fade-in duration-200">
-                    <div className="flex flex-col items-center gap-2 text-primary">
-                        <Upload className="h-12 w-12 animate-bounce opacity-80"/>
-                        <span className="text-sm font-bold">Drop files here</span>
-                    </div>
+            <div
+                className={`absolute inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center z-10 animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
+                <div className="flex flex-col items-center w-full gap-2 text-primary">
+                    <Plus className="h-12 w-12 text-bluePrimary"/>
                 </div>
-            )}
-
+            </div>
             {/* Resources List */}
-            <div className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
+            <div
+                className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
                 {selectedResources.length === 0 ? (
                     <div
-                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-                        <Upload className="h-8 w-8 opacity-40"/>
+                        className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <p className="text-sm opacity-70">Drop files here</p>
                     </div>
                 ) : (
@@ -124,10 +121,12 @@ export function Shelf() {
                         {selectedResources.map((resource, index) => (
                             <ResourceView key={index} model={resource}/>
                         ))}
+                        {/*Padding item*/}
+                        <div className={"h-5"}></div>
                     </div>
                 )}
             </div>
-            
+
             {/* Bottom fade mask */}
             <div className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
         </Card>
@@ -149,7 +148,7 @@ function ResourceView(props: { model: SelectedResourceViewModel }) {
                 item: [filePath],
                 icon: thumbnailPath,
             }, console.log)
-       }}>
+        }}>
         {
             isFile
                 ? <FileView model={model}/>

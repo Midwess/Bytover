@@ -1,4 +1,3 @@
-use std::panic::catch_unwind;
 use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
@@ -63,9 +62,8 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("receive.html".into())
                 )
                     .title("receive")
-                    .inner_size(270.0, 420.0)
+                    .inner_size(470.0, 260.0)
                     .decorations(false)
-                    .focused(true)
                     .transparent(true)
                     .always_on_top(true)
                     .skip_taskbar(false)
@@ -77,6 +75,18 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         };
 
+        #[cfg(target_os = "macos")]
+        // Remove the default border
+        unsafe {
+            use cocoa::appkit::NSWindowStyleMask;
+            use cocoa::base::id;
+            use cocoa::appkit::NSWindow;
+
+            if let Ok(ns_window) = window.ns_window().map(|it| it as id) {
+                ns_window.setStyleMask_(NSWindowStyleMask::NSBorderlessWindowMask);
+                ns_window.setHasShadow_(false);
+            }
+        }
         window
     }
 
