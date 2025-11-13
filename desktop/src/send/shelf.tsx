@@ -172,7 +172,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
     }
 
     return (
-        <div
+        <Card
             className="w-full bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
@@ -209,7 +209,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-        </div>
+        </Card>
     );
 }
 
@@ -228,8 +228,8 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
     }
 
     return (
-        <div
-            className="w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
+        <Card
+            className="border-0 w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -268,6 +268,6 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-        </div>
+        </Card>
     );
 }
