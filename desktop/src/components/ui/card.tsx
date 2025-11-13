@@ -15,7 +15,7 @@ const Card = React.forwardRef<
     )}
     style={{
       transform: 'translateZ(1)',
-      boxShadow: '2px 2px 12px 0px rgba(253, 253, 253, 0.03) inset, 0px 24px 24px -16px rgba(8, 8, 8, 0.08), 0px 6px 13px 0px rgba(8, 8, 8, 0.12), 0px 6px 4px -4px rgba(8, 8, 8, 0.16), 0px 5px 1.5px -4px rgba(8, 8, 8, 0.2), 0px 2.15px 0.5px -2px rgba(0, 0, 0, 0.25), 0px 16px 24px -13px rgba(0, 0, 0, 0.5)',
+      boxShadow: '2px 4px 16px 0px rgba(253, 253, 253, 0.05) inset, 0px 24px 32px -16px rgba(8, 8, 8, 0.03), 0px 6px 20px 0px rgba(8, 8, 8, 0.05), 0px 6px 8px -4px rgba(8, 8, 8, 0.06), 0px 5px 3px -4px rgba(8, 8, 8, 0.08), 0px 2.15px 1px -2px rgba(0, 0, 0, 0.10), 0px 16px 32px -13px rgba(0, 0, 0, 0.20)',
       ...style,
     }}
     {...props}

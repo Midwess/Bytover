@@ -16,7 +16,20 @@ import {
 } from "@/components/ui/card"
 import {Input} from "@/components/ui/input"
 import {Label} from "@/components/ui/label"
-import {Lock, Mail, MapPin, SendHorizonal, Copy, Check, Link} from "lucide-react"
+import {
+    Lock,
+    Mail,
+    MapPin,
+    SendHorizonal,
+    Copy,
+    Check,
+    Link,
+    PersonStanding,
+    Users,
+    Globe,
+    Laptop,
+    Phone, Smartphone
+} from "lucide-react"
 import core from "@/core.ts"
 import {Avatar, AvatarImage} from "@/components/ui/avatar"
 import {
@@ -46,9 +59,9 @@ export function Transfer() {
                 offset={380}>
                 <Tabs defaultValue="people" className="w-full items-start">
                     <TabsList className={"ml-2 border-2 shadow-background shadow-sm"}>
-                        <TabsTab value="people">People</TabsTab>
-                        <TabsTab value="public">Public</TabsTab>
-                        <TabsTab value="devices">Devices</TabsTab>
+                        <TabsTab value="people"><Users/> People</TabsTab>
+                        <TabsTab value="public"><Globe/>Link</TabsTab>
+                        <TabsTab value="devices"><Smartphone/>Device</TabsTab>
                     </TabsList>
                     <div className="px-2 border-none bg-transparent relative">
                         <TabsPanels>

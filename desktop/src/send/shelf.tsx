@@ -78,7 +78,8 @@ export function Shelf() {
     }, [windowInfo]);
 
     return <>
-        <Card className={`
+        <Card
+            className={`
             rounded-3xl
             flex flex-col
             justify-center
@@ -173,7 +174,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <Card
-            className="w-full bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
+            className="w-full border-none bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -229,7 +230,7 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <Card
-            className="border-0 w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
+            className="border-none w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (

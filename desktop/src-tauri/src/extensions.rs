@@ -1,4 +1,6 @@
 use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::webview::Color;
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
 pub trait AppHandleExt<R: Runtime> {
@@ -56,13 +58,13 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("receive") {
             Some(window) => window,
             None => {
-                WebviewWindowBuilder::new(
+                let window = WebviewWindowBuilder::new(
                     self,
                     "receive",
                     WebviewUrl::App("receive.html".into())
                 )
                     .title("receive")
-                    .inner_size(470.0, 280.0)
+                    .inner_size(510.0, 310.0)
                     .decorations(false)
                     .transparent(true)
                     .always_on_top(true)
@@ -71,22 +73,23 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .shadow(true)
                     .devtools(true)
                     .build()
-                    .expect("failed to create auth window")
+                    .expect("failed to create auth window");
+
+                let _ = window.set_effects(
+                    EffectsBuilder::new()
+                        .effect(Effect::HudWindow)
+                        .effect(Effect::Blur)
+                        .state(EffectState::Active)
+                        .radius(25.0)
+                        .color(Color(0, 0, 0, 0))
+                        .build()
+                );
+
+                window
             }
         };
 
-        #[cfg(target_os = "macos")]
-        // Remove the default border
-        unsafe {
-            use cocoa::appkit::NSWindowStyleMask;
-            use cocoa::base::id;
-            use cocoa::appkit::NSWindow;
 
-            if let Ok(ns_window) = window.ns_window().map(|it| it as id) {
-                ns_window.setStyleMask_(NSWindowStyleMask::NSBorderlessWindowMask);
-                ns_window.setHasShadow_(false);
-            }
-        }
         window
     }
 
