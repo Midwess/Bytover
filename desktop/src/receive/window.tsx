@@ -35,30 +35,37 @@ function Window() {
                 </div>
                 <div
                     className={"flex-3/5 gap-1 pb-2 rounded-t-4xl h-fit w-full px-2 flex flex-col items-center shadow-lg shadow-background/20 pt-2 border-b-1 border-muted-foreground/10 bg-card/10 backdrop-blur-2xl overflow-clip justify-between text-foreground"}>
-                    <div className={"flex flex-row items-center p-1 justify-between w-full"}>
-                        <div className={"flex flex-row gap-1 items-center"}>
-                            <div
-                                className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex z-10"}>
-                                <Avatar
-                                    className={"p-1 rounded-2xl h-10 w-10 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
-                                    <AvatarImage
-                                        src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
-                                </Avatar>
-                            </div>
-                            <div className={"flex flex-col items-start p-1 z-10"}>
-                                <p className={"text-primaryText text-foreground font-thin"}>{"Ciao,"}</p>
-                                <p className={"text-primaryText"}>{"Tien Dang"}</p>
-                            </div>
-                        </div>
-                        <div className={"flex flex-row items-center gap-2"}>
-                            <Button className={"bg-bluePrimary text-foreground"}>New shelf</Button>
-                        </div>
-                    </div>
+                    <Intro/>
                     <SessionTitle/>
+                    <ResourceList/>
                 </div>
             </div>
         </main>
     )
+}
+
+function Intro() {
+    return <>
+        <div className={"flex flex-row items-center p-1 justify-between w-full"}>
+            <div className={"flex flex-row gap-1 items-center"}>
+                <div
+                    className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex z-10"}>
+                    <Avatar
+                        className={"p-1 rounded-2xl h-10 w-10 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
+                        <AvatarImage
+                            src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
+                    </Avatar>
+                </div>
+                <div className={"flex flex-col items-start p-1 z-10"}>
+                    <p className={"text-primaryText text-foreground font-thin"}>{"Ciao,"}</p>
+                    <p className={"text-primaryText"}>{"Tien Dang"}</p>
+                </div>
+            </div>
+            <div className={"flex flex-row items-center gap-2"}>
+                <Button className={"bg-bluePrimary text-foreground"}>New shelf</Button>
+            </div>
+        </div>
+    </>
 }
 
 function SessionTitle() {
@@ -126,6 +133,23 @@ function SessionList() {
             </Card>
         ))}
     </div>
+}
+
+function ResourceList() {
+    const selectedSessionId = core.useSelectedSession()?.id
+    const session = core.useSession(selectedSessionId || BigInt(0))
+    if (!session) {
+        return <></>
+    }
+
+    return <>
+        {
+        }
+    </>
+}
+
+function ResourceItem() {
+    return <></>
 }
 
 export default Window;
