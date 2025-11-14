@@ -6,7 +6,17 @@ import {Avatar, AvatarImage} from "@/components/ui/avatar.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import CircleProgress from "@/components/ui/progress.tsx";
 import {Label} from "@/components/ui/label.tsx";
-import {ArrowRightCircle, DoorOpen, Inbox, Info, Trash2} from "lucide-react";
+import {ArrowRightCircle, DoorOpen, Inbox, Info, Trash2, FolderIcon, FileIcon, Play, MoreVertical} from "lucide-react";
+import {convertFileSrc} from "@tauri-apps/api/core";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
+import {
+    ResourceTypeVariantFolder,
+} from "shared_types/types/shared_types";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -22,7 +32,7 @@ function Window() {
     return (
         <main className="flex flex-col w-screen h-screen dark rounded-4xl overflow-clip no-drag p-0 bg-card/20">
             <div className={"flex flex-row h-full w-full z-20 p-1 "}>
-                <div className={"h-full flex flex-2/5 flex-col gap-2"}>
+                <div className={"h-full flex flex-4/12 flex-col gap-2"}>
                     <Card
                         shadowSize={0.8}
                         className={"h-full bg-muted/10 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
@@ -34,10 +44,12 @@ function Window() {
                     </Card>
                 </div>
                 <div
-                    className={"flex-3/5 gap-1 pb-2 rounded-t-4xl h-fit w-full px-2 flex flex-col items-center shadow-lg shadow-background/20 pt-2 border-b-1 border-muted-foreground/10 bg-card/10 backdrop-blur-2xl overflow-clip justify-between text-foreground"}>
+                    className={"flex-7/12 gap-1 pb-2 rounded-t-4xl h-full w-full px-2 flex flex-col shadow-lg shadow-background/20 pt-2 border-b-1 border-muted-foreground/10 bg-card/10 backdrop-blur-2xl overflow-clip text-foreground"}>
                     <Intro/>
                     <SessionTitle/>
-                    <ResourceList/>
+                    <div className="flex-1 min-h-0">
+                        <ResourceList/>
+                    </div>
                 </div>
             </div>
         </main>
@@ -77,7 +89,7 @@ function SessionTitle() {
     return <>
         <Card
             shadowSize={0.5}
-            className={"bg-muted-foreground/10 border-1 shadow-md h-12 w-full flex flex-row gap-2 items-center px-2 rounded-2xl overflow-clip justify-between text-foreground"}>
+            className={"bg-muted-foreground/10 border-1 shadow-md h-10 w-full flex flex-row gap-2 items-center px-2 rounded-2xl overflow-clip justify-between text-foreground"}>
             <div className={"flex flex-row gap-2 items-center"}>
                 <div className={"flex flex-col items-start p-1 z-10"}>
                     <p className={"text-primaryText"}>{
@@ -142,14 +154,88 @@ function ResourceList() {
         return <></>
     }
 
-    return <>
-        {
-        }
-    </>
+    // Combine all resources
+    const allResources = [
+        ...(session.file_resources || []).map(r => ({...r, resourceType: 'file' as const})),
+        ...(session.image_resources || []).map(r => ({...r, resourceType: 'image' as const})),
+        ...(session.video_resources || []).map(r => ({...r, resourceType: 'video' as const})),
+    ]
+
+    if (allResources.length === 0) {
+        return <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p className="text-sm opacity-70">No resources</p>
+        </div>
+    }
+
+    return <div className="w-full h-full overflow-y-auto px-2 py-2">
+        <div className="grid grid-cols-3 gap-1 auto-rows-max">
+            {allResources.map((resource, index) => (
+                <ResourceItem key={index} resource={resource} />
+            ))}
+        </div>
+    </div>
 }
 
-function ResourceItem() {
-    return <></>
+function ResourceItem({resource}: {resource: any}) {
+    const {model, completion, is_completed, resourceType} = resource;
+    
+    let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
+    const isFolder = model.type instanceof ResourceTypeVariantFolder;
+    const isVideo = resourceType === 'video';
+    const isImage = resourceType === 'image';
+    
+    // Convert absolute path to Tauri asset URL
+    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
+
+    let displaySize = `${model.size_mb} MB`;
+    if (model.size_gb > 0) {
+        displaySize = `${model.size_gb} GB`;
+    }
+
+    return (
+        <Card
+            shadowSize={0.0}
+            className="border-0 bg-transparent rounded-xl flex flex-col hover:bg-muted-foreground/30 p-2 relative group transition-colors">
+            {/* Thumbnail */}
+            <div className="w-full aspect-square rounded-lg bg-muted-foreground/40 p-1 overflow-hidden relative mb-2">
+                {thumbnailUrl ? (
+                    <img 
+                        src={thumbnailUrl} 
+                        alt={model.name}
+                        className="w-full h-full object-cover rounded-md overflow-hidden"/>
+                ) : isFolder ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <FolderIcon className="w-8 h-8 text-primary"/>
+                    </div>
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <FileIcon className="w-8 h-8 text-primary"/>
+                    </div>
+                )}
+                {isVideo && (
+                    <div className="absolute top-2 right-2">
+                        <Play className="w-4 h-4 text-white bg-black/50 rounded-md p-1"/>
+                    </div>
+                )}
+                {!is_completed && (
+                    <div className="absolute bottom-2 left-2 right-2">
+                        <div className="h-1 bg-black/30 rounded-full overflow-hidden">
+                            <div 
+                                className="h-full bg-bluePrimary rounded-full transition-all duration-300"
+                                style={{width: `${completion * 100}%`}}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-primaryText truncate mb-0.5">{model.name}</p>
+                <p className="text-xs text-muted-foreground">{displaySize}</p>
+            </div>
+        </Card>
+    );
 }
 
 export default Window;
