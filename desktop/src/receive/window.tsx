@@ -25,12 +25,13 @@ function Window() {
                 <div className={"h-full flex flex-2/5 flex-col gap-2"}>
                     <Card
                         className={"h-full bg-card/50 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
-                        <Label className={"flex flex-row items-center gap-2 px-2 py-1 text-muted-foreground"}>
+                        <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
                             <Inbox size={20} className={"bg-muted-foreground/10 border rounded-md p-1"}/>
                             <p>Inbox</p>
                         </Label>
-                        <div
-                            className={"p-2 border-none bg-muted-foreground/10 flex flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
+                        <Card
+                            shadowSize={0.2}
+                            className={"p-2 bg-muted/80 border-1 flex flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
                             <Avatar
                                 className={"p-1 border-none rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
                                 <AvatarImage
@@ -40,9 +41,10 @@ function Window() {
                                 <p className="font-medium">Jenny</p>
                                 <p className={"text-xs text-muted-foreground"}>{"2025/11/20 09:11"}</p>
                             </div>
-                        </div>
-                        <div
-                            className={"p-2 border-none flex border-1 bg-muted-foreground/10 flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
+                        </Card>
+                        <Card
+                            shadowSize={0.4}
+                            className={"p-2 bg-muted/80 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
                             <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
                                 <AvatarImage
                                     src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
@@ -51,11 +53,11 @@ function Window() {
                                 <p className="font-medium">James</p>
                                 <p className={"text-xs text-muted-foreground"}>{"Receiving..."}</p>
                             </div>
-                        </div>
+                        </Card>
                     </Card>
                 </div>
                 <div
-                    className={"flex-3/5 gap-1 pb-2 rounded-t-4xl h-fit w-full px-2 flex flex-col items-center shadow-lg pt-2 border-b-1 border-muted-foreground/10 bg-muted-foreground/1 backdrop-blur-2xl overflow-clip justify-between text-foreground"}>
+                    className={"flex-3/5 gap-1 pb-2 rounded-t-4xl h-fit w-full px-2 flex flex-col items-center shadow-lg shadow-background/20 pt-2 border-b-1 border-muted-foreground/10 bg-card/10 backdrop-blur-2xl overflow-clip justify-between text-foreground"}>
                     <div className={"flex flex-row items-center p-1 justify-between w-full"}>
                         <div className={"flex flex-row gap-1 items-center"}>
                             <div
