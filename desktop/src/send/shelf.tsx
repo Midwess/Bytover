@@ -7,13 +7,13 @@ import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState} from "react";
 import core from "@/core.ts";
 import {
-    Upload,
     Play,
     FolderIcon,
     FileIcon,
     MoreVertical,
     Trash2,
-    Minus, UploadCloud, ImportIcon, Circle, CircleChevronDown, Plus,
+    Minus,
+    Plus,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -80,7 +80,7 @@ export function Shelf() {
     return <>
         <Card
             className={`
-            rounded-3xl
+            rounded-4xl
             flex flex-col
             justify-center
             items-center

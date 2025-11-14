@@ -21,7 +21,7 @@ type Props = {
 export default function CircleProgress({
     progress,
     size = 80,
-    strokeWidth = 4,
+    strokeWidth = 2,
     duration = 800,
     onClick = () => {},
     center
