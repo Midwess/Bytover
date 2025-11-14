@@ -2,12 +2,12 @@ import {
     AppViewModel,
     AuthenticationViewModel,
     DialogOperationVariantMessage,
-    EnvironmentViewModel,
+    EnvironmentViewModel, FileReceiveResourceViewModel, ImageReceiveResourceViewModel,
     NearbyViewModel, PeerViewModel,
     ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel, SelectedResourceViewModel,
     ShelfViewModel,
-    TransferViewModel
+    TransferViewModel, VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import { listen } from '@tauri-apps/api/event'
 import {Observable} from "@/utils/observable.ts";
@@ -22,7 +22,7 @@ export class Core {
     transferState: Observable<TransferViewModel> = new Observable()
     shelfState: Observable<ShelfViewModel> = new Observable()
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
-    selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
+    selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
 
     isLaunched = false;
 
@@ -37,6 +37,52 @@ export class Core {
         }, [state.length]);
 
         return state
+    }
+
+    public useSelectedSession() {
+        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel>()
+
+        useEffect(() => {
+            return this.selectedSession.subscribe(setSelectedSession)
+        }, []);
+
+        return selectedSession
+    }
+
+    public useNearbySessionsList() {
+        const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.received_sessions?.length != sessions.length) {
+                    setSessions(
+                        transferState?.received_sessions ?? []
+                    )
+                }
+            })
+        }, [])
+
+        return sessions
+    }
+
+    public useSession(id: bigint) {
+        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(() => {
+            const transferState = this.transferState.get()
+            return transferState?.received_sessions?.find(it => it.id === id) ||
+                transferState?.received_cloud_sessions?.find(it => it.id === id)
+        })
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
+                    transferState?.received_cloud_sessions?.find(it => it.id === id)
+
+                if (foundSession && !isEqual(session, foundSession)) {
+                    setSession(foundSession)
+                }
+            })
+        }, [id, session])
+
+        return session
     }
 
     public useSelectedResources() {
@@ -55,6 +101,28 @@ export class Core {
         }, [state.length])
 
         return state
+    }
+
+    public useReceiveResource(id: bigint) {
+        const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (!transferState) return
+
+                const foundResource = transferState.received_sessions?.flatMap(session => [
+                        ...session.file_resources,
+                        ...session.image_resources,
+                        ...session.video_resources
+                    ]).find(r => BigInt(r.model.order_id) === id)
+
+                if (foundResource && !isEqual(resource, foundResource)) {
+                    setResource(foundResource)
+                }
+            })
+        }, [id, resource])
+
+        return resource
     }
 
     usePeerState(peerId: string | undefined) {

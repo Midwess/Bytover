@@ -6,7 +6,7 @@ import {Avatar, AvatarImage} from "@/components/ui/avatar.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import CircleProgress from "@/components/ui/progress.tsx";
 import {Label} from "@/components/ui/label.tsx";
-import {Inbox} from "lucide-react";
+import {ArrowRightCircle, DoorOpen, Inbox, Info, Trash2} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -26,34 +26,11 @@ function Window() {
                     <Card
                         className={"h-full bg-card/50 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
                         <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
-                            <Inbox size={20} className={"bg-muted-foreground/10 border rounded-md p-1"}/>
-                            <p>Inbox</p>
+                            <Inbox size={20}
+                                   className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[1.5px] pr-[3.5px]"}/>
+                            Inbox
                         </Label>
-                        <Card
-                            shadowSize={0.2}
-                            className={"p-2 bg-muted/80 border-1 flex flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
-                            <Avatar
-                                className={"p-1 border-none rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
-                                <AvatarImage
-                                    src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
-                            </Avatar>
-                            <div className={"flex flex-col gap-1"}>
-                                <p className="font-medium">Jenny</p>
-                                <p className={"text-xs text-muted-foreground"}>{"2025/11/20 09:11"}</p>
-                            </div>
-                        </Card>
-                        <Card
-                            shadowSize={0.4}
-                            className={"p-2 bg-muted/80 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
-                            <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
-                                <AvatarImage
-                                    src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
-                            </Avatar>
-                            <div className={"flex flex-col gap-1"}>
-                                <p className="font-medium">James</p>
-                                <p className={"text-xs text-muted-foreground"}>{"Receiving..."}</p>
-                            </div>
-                        </Card>
+                        <SessionList/>
                     </Card>
                 </div>
                 <div
@@ -62,7 +39,8 @@ function Window() {
                         <div className={"flex flex-row gap-1 items-center"}>
                             <div
                                 className={"bg-bluePrimary rounded-full aspect-square justify-center items-center text-primaryText flex z-10"}>
-                                <Avatar className={"p-1 rounded-2xl h-10 w-10 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
+                                <Avatar
+                                    className={"p-1 rounded-2xl h-10 w-10 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
                                     <AvatarImage
                                         src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
                                 </Avatar>
@@ -76,22 +54,72 @@ function Window() {
                             <Button className={"bg-bluePrimary text-foreground"}>New shelf</Button>
                         </div>
                     </div>
-                    <Card
-                        className={"bg-muted/40 border-1 shadow-md h-fit w-full flex flex-row gap-2 items-center px-2 py-1 rounded-2xl overflow-clip justify-between text-foreground"}>
-                        <div className={"flex flex-row gap-2 items-center"}>
-                            <div className={"flex flex-col items-start p-1 z-10"}>
-                                <p className={"text-primaryText"}>{"30 GB"}</p>
-                            </div>
-                        </div>
-                        <div className={"flex flex-row items-center gap-3 h-2"}>
-                            <p className={"text-muted-foreground"}>{"3 MB/s"}</p>
-                            <CircleProgress progress={0.35} size={22}/>
-                        </div>
-                    </Card>
+                    <SessionTitle/>
                 </div>
             </div>
         </main>
     )
+}
+
+function SessionTitle() {
+    const session = core.useSelectedSession()
+    return <>
+        <Card
+            className={"bg-muted/40 border-1 shadow-md h-12 w-full flex flex-row gap-2 items-center px-2 rounded-2xl overflow-clip justify-between text-foreground"}>
+            <div className={"flex flex-row gap-2 items-center"}>
+                <div className={"flex flex-col items-start p-1 z-10"}>
+                    <p className={"text-primaryText"}>{session?.display_datetime}</p>
+                </div>
+            </div>
+            {
+                session?.is_in_progress &&
+                <div className={"flex flex-row items-center gap-3"}>
+                    <p className={"text-muted-foreground"}>{session.display_download_speed}</p>
+                    <CircleProgress progress={session.progress} size={22}/>
+                </div>
+            }
+            {
+                !session?.is_in_progress &&
+                <div className={"flex flex-row items-center gap-1 h-fit"}>
+                    <Button variant={"secondary"} className={"w-fit px-2"}>
+                        <ArrowRightCircle className={"-rotate-45"}/>
+                        <p></p>
+                    </Button>
+                    <Button variant={"ghost"} className={"text-muted-foreground px-2"}>
+                        <Trash2/>
+                    </Button>
+                </div>
+            }
+        </Card>
+    </>
+}
+
+function SessionList() {
+    const sessions = core.useNearbySessionsList()
+
+    return <>
+        {sessions.map((session) => (
+            <Card
+                onClick={() => {
+                    core.selectedSession.set(session)
+                }}
+                shadowSize={0.4}
+                className={"p-2 bg-muted/80 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
+                <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
+                    <AvatarImage
+                        src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
+                </Avatar>
+                <div className={"flex flex-col gap-0.5"}>
+                    <p className="font-medium">{session.peer_name}</p>
+                    {
+                        session.is_in_progress
+                            ? <p className={"text-muted-foreground"}>Receiving...</p>
+                            : <p className={"text-muted-foreground"}>{session.display_datetime}</p>
+                    }
+                </div>
+            </Card>
+        ))}
+    </>
 }
 
 export default Window;
