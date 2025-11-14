@@ -65,18 +65,16 @@ export class Core {
     }
 
     public useSession(id: bigint) {
-        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(() => {
+        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>(() => {
             const transferState = this.transferState.get()
-            return transferState?.received_sessions?.find(it => it.id === id) ||
-                transferState?.received_cloud_sessions?.find(it => it.id === id)
+            return transferState?.received_sessions?.find(it => it.id === id)
         })
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
-                    transferState?.received_cloud_sessions?.find(it => it.id === id)
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id)
 
-                if (foundSession && !isEqual(session, foundSession)) {
+                if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
                 }
             })
