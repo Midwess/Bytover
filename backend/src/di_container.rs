@@ -11,7 +11,7 @@ use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::transfer_service::TransferService;
 use crate::user::Token;
-use devlog_sdk::distributed_id::init_id_generator;
+use devlog_sdk::distributed_id::{init_id_generator, EtcdWorkerOptions};
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use devlog_sdk::sdk::{DependenciesInjection, DevlogSdk};
 use migration::{Migrator, MigratorTrait};
@@ -43,10 +43,32 @@ pub struct DiContainer {
 impl DiContainer {
     pub async fn new() -> Self {
         let devlog_sdk = DevlogSdk::new();
-        devlog_sdk.enable_system_db().await;
-        devlog_sdk.enable_db("bitbridge".to_owned(), 2, 256).await;
 
-        init_id_generator("bitbridge".to_owned(), devlog_sdk.system_db().await).await;
+        let etcd_endpoints = std::env::var("SNOWFLAKE_ETCD_ENDPOINTS")
+            .unwrap_or_else(|_| "http://localhost:2379".to_string());
+        let endpoints: Vec<String> = etcd_endpoints
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        
+        let mut etcd_options = EtcdWorkerOptions::new(endpoints);
+        
+        let namespace = std::env::var("SNOWFLAKE_ETCD_NAMESPACE")
+            .unwrap_or_else(|_| "dev".to_string());
+        if !namespace.trim().is_empty() {
+            etcd_options = etcd_options.namespace(namespace);
+        }
+        
+        let ttl_secs = std::env::var("SNOWFLAKE_ETCD_LEASE_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(30);
+        etcd_options = etcd_options.lease_ttl(std::time::Duration::from_secs(ttl_secs.max(1)));
+        
+        init_id_generator("bitbridge".to_owned(), etcd_options)
+            .await
+            .unwrap_or_else(|err| panic!("Failed to initialise distributed id generator: {err}"));
 
         let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").expect("BITBRIDGE_DB_CONNECTION_STRING must be defined.");
         let pg_pool = PgPoolOptions::new()
