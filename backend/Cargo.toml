@@ -7,21 +7,16 @@ edition.workspace = true
 [dependencies]
 schema = { path = "../libs/schema/rust", features = ["client", "server"] }
 devlog-sdk = { path = "../libs/devlog-sdk", features = ["distributed_id", "s3", "grpc-server", "grpc-client"] }
-core-services = { path = "../libs/core-services", features = ["db-remote", "local-storage", "s3", "grpc-server", "grpc-client", "token"] }
+core-services = { path = "../libs/core-services", features = ["local-storage", "s3", "grpc-server", "grpc-client", "token"] }
 migration = { path = "migration" }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
-chrono = { workspace = true }
 tonic-middleware = { workspace = true }
 log = { workspace = true }
-reqwest = { workspace = true }
-tonic-web = { workspace = true }
 async-trait = { workspace = true }
-lazy_static = { workspace = true }
 tokio-stream = "0.1.17"
 sea-orm = { workspace = true }
 sqlx = { version = "0.8.5", features = ["runtime-tokio-rustls", "postgres"] }
