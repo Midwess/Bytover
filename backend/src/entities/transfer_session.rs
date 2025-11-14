@@ -1,7 +1,6 @@
 use devlog_sdk::distributed_id::gen_id;
 use schema::value::static_resource::StaticResource;
 use serde::{Deserialize, Serialize};
-use surreal_derive_plus::SurrealDerive;
 
 use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatus};
 use crate::entities::transfer_resource::TransferResource;
@@ -21,7 +20,7 @@ pub enum TransferSessionErrors {
     MaxResourceExceed(usize)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, SurrealDerive)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransferSession {
     order_id: u64,
     owner_user_order_id: u64,
