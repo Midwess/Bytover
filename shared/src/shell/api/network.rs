@@ -7,7 +7,6 @@ use n0_future::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct InternetConnection {

@@ -1,15 +1,18 @@
 version: "3.8"
 
 services:
-  kong-database:
-    image: postgres:13
-    container_name: kong-database
+  database:
+    image: postgres:15
+    container_name: bitbridge-database
     environment:
-      POSTGRES_USER: "kong"
-      POSTGRES_DB: "kong"
-      POSTGRES_PASSWORD: "kongdbpass"
+      POSTGRES_USER: "bitbridge"
+      POSTGRES_PASSWORD: "bitbridgepass"
+      POSTGRES_DB: "postgres"
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
     networks:
       - kong-net
 
@@ -18,14 +21,15 @@ services:
     container_name: kong-migration
     environment:
       KONG_DATABASE: "postgres"
-      KONG_PG_HOST: "kong-database"
-      KONG_PG_PASSWORD: "kongdbpass"
+      KONG_PG_HOST: "bitbridge-database"
+      KONG_PG_USER: "bitbridge"
+      KONG_PG_PASSWORD: "bitbridgepass"
       KONG_PASSWORD: "kongadminpassword"
     networks:
       - kong-net
     entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap"]
     depends_on:
-      - kong-database
+      - database
     restart: on-failure
 
   kong-gateway:
@@ -33,12 +37,13 @@ services:
     container_name: kong-gateway
     environment:
       KONG_ROUTER_FLAVOR: "expressions"
+      KONG_NGINX_WORKER_CONNECTIONS: "512"
       KONG_DATABASE: "postgres"
       KONG_REAL_IP_RECURSIVE: "on"
       KONG_TRUSTED_IPS: "0.0.0.0/0,::/0"
-      KONG_PG_HOST: "kong-database"
-      KONG_PG_USER: "kong"
-      KONG_PG_PASSWORD: "kongdbpass"
+      KONG_PG_HOST: "bitbridge-database"
+      KONG_PG_USER: "bitbridge"
+      KONG_PG_PASSWORD: "bitbridgepass"
       KONG_NGINX_WORKER_PROCESSES: "1"
       KONG_PROXY_ACCESS_LOG: "/dev/stdout"
       KONG_ADMIN_ACCESS_LOG: "/dev/stdout"
@@ -64,7 +69,7 @@ services:
       - kong-net
     restart: always
     depends_on:
-      - kong-database
+      - database
       - kong-migration
 
   etcd:
@@ -87,3 +92,6 @@ services:
 networks:
   kong-net:
     driver: bridge
+
+volumes:
+  postgres_data:

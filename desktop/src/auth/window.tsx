@@ -18,7 +18,7 @@ function Window() {
 
     return (
         <main className="w-screen h-screen dark rounded-lg">
-            <Card className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-3xl gap-8 container"}>
+            <div className={"w-full h-full flex bg-black flex-col relative overflow-hidden rounded-3xl gap-8 container"}>
                 <div className="absolute inset-0 pointer-events-none">
                     <div
                         className="absolute rounded-full opacity-10 blur-[150px]"
@@ -65,7 +65,7 @@ function Window() {
                         invoke("sign_up")
                     }}><p className={"text-muted-foreground font-normal"}>New to our platform?</p> <p className={"text-foreground"}>Sign up</p> </Button>
                 </div>
-            </Card>
+            </div>
         </main>
     )
 }

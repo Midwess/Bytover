@@ -4,7 +4,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rdev::{set_is_main_thread, Button, EventType};
-use tauri::{AppHandle, LogicalPosition, PhysicalPosition, PhysicalSize};
+use tauri::{AppHandle, LogicalPosition, Manager, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
@@ -201,6 +201,15 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     is_handled_shown = false;
                     start_mouse_position = current_mouse_position.clone();
                     is_already_current_shown = app_handle.is_send_window_open();
+                    if is_already_current_shown || is_handled_shown {
+                        if let (Some(monitor), Some(send_monitor)) = (get_monitor_at_position(&current_mouse_position, &app_handle), app_handle.get_webview_window("send").and_then(|it| it.current_monitor().ok().flatten())) {
+                            if monitor.position() != send_monitor.position() {
+                                is_already_current_shown = false;
+                                is_handled_shown = false;
+                            }
+                        }
+                    }
+
                     drag_start_gesture();
                 }
                 EventType::ButtonRelease(Button::Left) => {
@@ -265,6 +274,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                         }
 
                         if shake_count >= config.required_shakes {
+                            log::info!("Shaking detected, showing send window");
                             let win = app_handle.show_send();
                             // Temporary hide it to avoid flickering
                             let _ = win.hide();

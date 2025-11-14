@@ -254,3 +254,11 @@
 .os-theme-custom.os-scrollbar .os-scrollbar-handle:hover {
   background: rgba(120, 120, 120, 0.9);
 }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .drag {
+    -webkit-app-region: drag;
+  }
