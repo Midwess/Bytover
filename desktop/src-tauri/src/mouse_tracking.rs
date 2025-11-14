@@ -197,7 +197,6 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let _ = rdev::listen(move |event| {
             match event.event_type {
                 EventType::ButtonPress(Button::Left) => {
-                    log::info!("Mouse button pressed, starting drag gesture");
                     USER_DID_DROP.store(false, Ordering::SeqCst);
                     is_handled_shown = false;
                     start_mouse_position = current_mouse_position.clone();
@@ -205,7 +204,6 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     if is_already_current_shown || is_handled_shown {
                         if let (Some(monitor), Some(send_monitor)) = (get_monitor_at_position(&current_mouse_position, &app_handle), app_handle.get_webview_window("send").and_then(|it| it.current_monitor().ok().flatten())) {
                             if monitor.position() != send_monitor.position() {
-                                log::info!("Mouse is not on send window, detect it again");
                                 is_already_current_shown = false;
                                 is_handled_shown = false;
                             }
