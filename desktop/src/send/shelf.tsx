@@ -78,25 +78,26 @@ export function Shelf() {
     }, [windowInfo]);
 
     return <>
-        <Card
+        <div
             className={`
-            rounded-4xl
+            rounded-[35px]
+            bg-card
             flex flex-col
             justify-center
             items-center
+            px-1
             w-full h-full border-2
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
-            ? 'border-2 border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
-            : 'border-border'
-        }
+                ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
+                : 'border-border'
+            }
         }
         `}>
             <div
                 className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
                  onDoubleClick={() => {
-                     console.log("close")
                      getCurrentWindow()?.hide()
                  }}
                  className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
@@ -115,7 +116,7 @@ export function Shelf() {
                 {selectedResources.length === 0 ? (
                     <div
                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
-                        <p className="text-sm opacity-70">Drop files here</p>
+                        <p className="text-lg text-muted-foreground animate-pulse duration-1500">Drop files here</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">
@@ -127,18 +128,22 @@ export function Shelf() {
                 )}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
-            <div className={"absolute bottom-3 left-0 z-80 h-5 flex items-center justify-center w-full"}>
-                <Button onClick={() => {
-                    invoke("clear_shelf")
-                }} className="group px-1 h-7 w-7 border rounded-full bg-card/5 backdrop-blur-xl p-1 text-muted-foreground transition-all duration-300 ease-out hover:w-22">
-                    <XCircle className="h-10 w-10 transition-all ease-out " />
-                    <p className="ml-1 hidden opacity-0 -translate-x-1 transition-all duration-300 ease-out delay-250 group-hover:flex group-hover:opacity-100 group-hover:translate-x-0">
-                        Clear
-                    </p>
+            <div
+                className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
+            <div className="absolute bottom-3 left-0 z-80 h-5 flex flex-col items-center justify-center w-full">
+                <Button
+                    onClick={() => {
+                        invoke("clear_shelf")
+                    }}
+                    className="group translate-x-[6px] relative items-center border-none justify-center overflow-hidden px-1.5 h-7 w-7 border rounded-full bg-card/5 backdrop-blur-xl text-muted-foreground transition-all duration-500 ease-out hover:w-24 hover:px-3 hover:justify-start"
+                >
+                    <XCircle className="h-5 w-5 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-90" />
+                    <div className="overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-out group-hover:max-w-[60px] group-hover:opacity-100">
+            Clear
+        </div>
                 </Button>
             </div>
-        </Card>
+        </div>
     </>
 }
 
@@ -182,6 +187,7 @@ function FileView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <Card
+            shadowSize={0.35}
             className="w-full border-none bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
@@ -238,6 +244,7 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
 
     return (
         <Card
+            shadowSize={0.35}
             className="border-none w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
