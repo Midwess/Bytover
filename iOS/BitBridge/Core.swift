@@ -54,16 +54,25 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
 
     @Environment(\.openURL) private var openURL
 
+    // MARK: - Location Management
     var lastKnownLocation: CLLocationCoordinate2D?
-    var manager = CLLocationManager()
+    private let manager: CLLocationManager = {
+        let mgr = CLLocationManager()
+        return mgr
+    }()
+
+    // MARK: - Native Processor
     var nativeProcessor: NativeProcessor?
 
     override init() {
         super.init()
+        configureLocationManager()
         let app: AppViewModel = try! .bincodeDeserialize(input: [UInt8](BitBridge.view()))
-        manager.delegate = self
-
         update_view(app)
+    }
+
+    private func configureLocationManager() {
+        manager.delegate = self
     }
 
     func update_view(_ model: AppViewModel) {
@@ -736,3 +745,4 @@ extension View {
             }
     }
 }
+

@@ -246,7 +246,7 @@
 }
 
 .os-theme-custom.os-scrollbar .os-scrollbar-handle {
-  background-color: rgba(80, 80, 80, 0.8);
+  background-color: --muted-foreground;
   border-radius: 4px;
   transition: background-color 0.2s ease;
 }

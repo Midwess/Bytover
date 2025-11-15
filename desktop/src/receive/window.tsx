@@ -6,14 +6,9 @@ import {Avatar, AvatarImage} from "@/components/ui/avatar.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import CircleProgress from "@/components/ui/progress.tsx";
 import {Label} from "@/components/ui/label.tsx";
-import {ArrowRightCircle, DoorOpen, Inbox, Info, Trash2, FolderIcon, FileIcon, Play, MoreVertical} from "lucide-react";
+import {ArrowRightCircle, Inbox, Trash2, FolderIcon, FileIcon, Play, Loader, Loader2} from "lucide-react";
 import {convertFileSrc} from "@tauri-apps/api/core";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
+
 import {
     ResourceTypeVariantFolder,
 } from "shared_types/types/shared_types";
@@ -30,25 +25,29 @@ function Window() {
     }, [])
 
     return (
-        <main className="flex flex-col w-screen h-screen dark rounded-4xl overflow-clip no-drag p-0 bg-card/20">
-            <div className={"flex flex-row h-full w-full z-20 p-1 "}>
-                <div className={"h-full flex flex-4/12 flex-col gap-2"}>
-                    <Card
-                        shadowSize={0.8}
-                        className={"h-full bg-muted/10 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
-                        <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
-                            <Inbox size={21} className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[2px] pr-[3px]"}/>
-                            Inbox
-                        </Label>
-                        <SessionList/>
-                    </Card>
-                </div>
-                <div
-                    className={"flex-7/12 gap-1 pb-2 rounded-t-4xl h-full w-full px-2 flex flex-col shadow-lg shadow-background/20 pt-2 border-b-1 border-muted-foreground/10 bg-card/10 backdrop-blur-2xl overflow-clip text-foreground"}>
+        <main className="flex flex-col w-screen h-screen dark rounded-4xl overflow-clip no-drag p-0 relative bg-card/10">
+            <div className={"w-full justify-end flex flex-row absolute z-10 pr-3 py-2 border-b border-gray-200/10 backdrop-blur-[20px] bg h-fit bg-gradient-to-b from-card"}>
+                <div className={"w-[60%] flex flex-col gap-1.5 z-100 pl-3"}>
                     <Intro/>
                     <SessionTitle/>
-                    <div className="flex-1 min-h-0">
-                        <ResourceList/>
+                </div>
+            </div>
+            <div className={"h-full w-[40%] flex flex-col gap-2 absolute z-20"}>
+                <Card
+                    shadowSize={0.8}
+                    className={"h-full bg-muted-foreground/10 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
+                    <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
+                        <Inbox size={21} className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[2px] pr-[3px]"}/>
+                        Inbox
+                    </Label>
+                    <SessionList/>
+                </Card>
+            </div>
+            <div className={"flex flex-row h-full w-[60%] absolute z-0 self-end"}>
+               <div
+                   className={"flex-7/12 gap-1 pb-2 rounded-t-4xl h-full w-full flex flex-col shadow-background/20 pt-2 overflow-hidden text-foreground"}>
+                  <div className="flex-1 min-h-0">
+                       <ResourceList/>
                     </div>
                 </div>
             </div>
@@ -70,7 +69,7 @@ function Intro() {
                 </div>
                 <div className={"flex flex-col items-start p-1 z-10"}>
                     <p className={"text-primaryText text-foreground font-thin"}>{"Ciao,"}</p>
-                    <p className={"text-primaryText"}>{"Tien Dang"}</p>
+                    <p className={"text-foreground"}>{"Tien Dang"}</p>
                 </div>
             </div>
             <div className={"flex flex-row items-center gap-2"}>
@@ -89,7 +88,7 @@ function SessionTitle() {
     return <>
         <Card
             shadowSize={0.5}
-            className={"bg-muted-foreground/10 border-1 shadow-md h-10 w-full flex flex-row gap-2 items-center px-2 rounded-2xl overflow-clip justify-between text-foreground"}>
+            className={"bg-muted-foreground/15 border-1 shadow-md h-10 w-full flex flex-row gap-2 items-center px-2 rounded-2xl overflow-clip justify-between text-foreground"}>
             <div className={"flex flex-row gap-2 items-center"}>
                 <div className={"flex flex-col items-start p-1 z-10"}>
                     <p className={"text-primaryText"}>{
@@ -120,6 +119,7 @@ function SessionTitle() {
 }
 
 function SessionList() {
+    const selectedSessionId = core.useSelectedSession()?.id
     const sessions = core.useNearbySessionsList()
 
     return <div className={"gap-1.5 flex flex-col"}>
@@ -129,13 +129,13 @@ function SessionList() {
                     core.selectedSession.set(session)
                 }}
                 shadowSize={0.0}
-                className={"p-2 transition-all duration-300 flex border-1 bg-muted-foreground/10 flex-row rounded-2xl items-center gap-2.5 cursor-pointer"}>
+                className={`p-2 bg-muted-foreground/10 ${selectedSessionId === session.id && 'border-muted-foreground/50 bg-muted-foreground/30'} transition-all duration-300 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer`}>
                 <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
                     <AvatarImage
                         src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
                 </Avatar>
                 <div className={"flex flex-col gap-0.5"}>
-                    <p className="font-medium">{session.peer_name}</p>
+                    <p className={`${session.id === selectedSessionId && 'font-bold'}`}>{session.peer_name}</p>
                     {
                         session.is_in_progress
                             ? <p className={"text-muted-foreground"}>Receiving...</p>
@@ -168,7 +168,8 @@ function ResourceList() {
     }
 
     return <div className="w-full h-full overflow-y-auto px-2 py-2">
-        <div className="grid grid-cols-3 gap-1 auto-rows-max">
+        <div className={"h-[90px]"}></div>
+        <div className="grid grid-cols-3 h-full gap-1 auto-rows-max">
             {allResources.map((resource, index) => (
                 <ResourceItem key={index} resource={resource} />
             ))}
@@ -195,9 +196,9 @@ function ResourceItem({resource}: {resource: any}) {
     return (
         <Card
             shadowSize={0.0}
-            className="border-0 bg-transparent rounded-xl flex flex-col hover:bg-muted-foreground/30 p-2 relative group transition-colors">
+            className="border-0 bg-transparent rounded-2xl flex flex-col hover:bg-muted-foreground/10 p-1.5 relative group transition-colors">
             {/* Thumbnail */}
-            <div className="w-full aspect-square rounded-lg bg-muted-foreground/40 p-1 overflow-hidden relative mb-2">
+            <div className="w-full aspect-square rounded-xl bg-muted-foreground/40 border overflow-hidden relative mb-2">
                 {thumbnailUrl ? (
                     <img 
                         src={thumbnailUrl} 
@@ -218,13 +219,8 @@ function ResourceItem({resource}: {resource: any}) {
                     </div>
                 )}
                 {!is_completed && (
-                    <div className="absolute bottom-2 left-2 right-2">
-                        <div className="h-1 bg-black/30 rounded-full overflow-hidden">
-                            <div 
-                                className="h-full bg-bluePrimary rounded-full transition-all duration-300"
-                                style={{width: `${completion * 100}%`}}
-                            />
-                        </div>
+                    <div className="absolute content-center w-full h-full top-0 left-0 flex items-center justify-center">
+                        <Loader2 className="animate-spin duration-3000 text-foreground backdrop-blur-2xl rounded-full w-5 h-5" />
                     </div>
                 )}
             </div>
