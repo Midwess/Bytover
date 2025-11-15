@@ -282,9 +282,9 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             if let Ok(window_size) = win.outer_size() {
                                 let window_physical_size: PhysicalSize<u32> = window_size.into();
 
-                                if let Some(monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
+                                if let Some(monitor) = get_monitor_at_position(&start_mouse_position, &app_handle) {
                                     let final_pos = calculate_window_position(
-                                        &current_mouse_position,
+                                        &start_mouse_position,
                                         &window_physical_size,
                                         &monitor,
                                     );
@@ -293,7 +293,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 }
                                 else {
                                     log::warn!("Could not find monitor at position, using logical fallback");
-                                    let _ = win.set_position(current_mouse_position.clone());
+                                    let _ = win.set_position(start_mouse_position.clone());
                                 }
                             }
 

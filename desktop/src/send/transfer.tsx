@@ -67,7 +67,7 @@ export function Transfer() {
                         <TabsPanels>
                             <TabsPanel value="people" className="flex flex-col">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
-                                    <Card className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 min-h-fit">
+                                    <Card shadowSize={0.5} className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 min-h-fit">
                                         <Label htmlFor="tabs-input-email"
                                                className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
                                             <div
@@ -85,6 +85,7 @@ export function Transfer() {
                                         </div>
                                     </Card>
                                     <Card
+                                        shadowSize={0.5}
                                         className="flex flex-col gap-5 bg-card/95 p-1.5 overflow-y-scroll">
                                         <Label
                                             className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black"}>
@@ -157,6 +158,7 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
 
     return <>
         <Card
+            shadowSize={0}
             className={"flex flex-row overflow-clip bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
             onClick={() => {
                 invoke("start_transfer", {targetId: peer.id}).then(noop)
@@ -179,7 +181,7 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             </div>
             {
                 <div className={"w-[40px] h-[40px] flex flex-col justify-center items-center"}>
-                    {peer.transfer_progress ? <CircleProgress strokeWidth={3} progress={Number(peer.transfer_progress) * 10} size={35}/> : <></>}
+                    {peer.transfer_progress ? <CircleProgress strokeWidth={3} progress={Number(peer.transfer_progress)} size={35}/> : <></>}
                 </div>
             }
         </Card>
@@ -192,7 +194,7 @@ function PublicTransfer() {
     const progress = (cloudSession?.progress ?? 0) * 100
 
     return <>
-        <Card className="flex flex-col gap-2 p-2">
+        <Card shadowSize={0} className="flex flex-col gap-2 p-2">
             <Label
                 className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
                 <div
