@@ -178,9 +178,8 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
                 </div>
             </div>
             {
-                <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
-                    {peer.transfer_progress}
-                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress * 2} size={35}/> : <></>}
+                <div className={"w-[40px] h-[40px] flex flex-col justify-center items-center"}>
+                    {peer.transfer_progress ? <CircleProgress strokeWidth={3} progress={Number(peer.transfer_progress) * 10} size={35}/> : <></>}
                 </div>
             }
         </Card>

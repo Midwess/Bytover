@@ -13,7 +13,7 @@ import {
     MoreVertical,
     Trash2,
     Minus,
-    Plus,
+    Plus, X, XCircle,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -114,7 +114,7 @@ export function Shelf() {
                 className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
                 {selectedResources.length === 0 ? (
                     <div
-                        className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+                        className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
                         <p className="text-sm opacity-70">Drop files here</p>
                     </div>
                 ) : (
@@ -122,14 +122,22 @@ export function Shelf() {
                         {selectedResources.map((resource, index) => (
                             <ResourceView key={index} model={resource}/>
                         ))}
-                        {/*Padding item*/}
                         <div className={"h-5"}></div>
                     </div>
                 )}
             </div>
 
-            {/* Bottom fade mask */}
             <div className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
+            <div className={"absolute bottom-3 left-0 z-80 h-5 flex items-center justify-center w-full"}>
+                <Button onClick={() => {
+                    invoke("clear_shelf")
+                }} className="group px-1 h-7 w-7 border rounded-full bg-card/5 backdrop-blur-xl p-1 text-muted-foreground transition-all duration-300 ease-out hover:w-22">
+                    <XCircle className="h-10 w-10 transition-all ease-out " />
+                    <p className="ml-1 hidden opacity-0 -translate-x-1 transition-all duration-300 ease-out delay-250 group-hover:flex group-hover:opacity-100 group-hover:translate-x-0">
+                        Clear
+                    </p>
+                </Button>
+            </div>
         </Card>
     </>
 }

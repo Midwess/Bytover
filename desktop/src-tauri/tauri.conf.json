@@ -16,7 +16,8 @@
           "bitbridge"
         ]
       }
-    }
+    },
+    "opener": {}
   },
   "app": {
     "withGlobalTauri": true,

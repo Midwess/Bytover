@@ -7,7 +7,7 @@ import {Button} from "@/components/ui/button.tsx";
 import CircleProgress from "@/components/ui/progress.tsx";
 import {Label} from "@/components/ui/label.tsx";
 import {ArrowRightCircle, Inbox, Trash2, FolderIcon, FileIcon, Play, Loader, Loader2} from "lucide-react";
-import {convertFileSrc} from "@tauri-apps/api/core";
+import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 
 import {
     ResourceTypeVariantFolder,
@@ -26,7 +26,7 @@ function Window() {
 
     return (
         <main className="flex flex-col w-screen h-screen dark rounded-4xl overflow-clip no-drag p-0 relative bg-card/10">
-            <div className={"w-full justify-end flex flex-row absolute z-10 pr-3 py-2 border-b border-gray-200/10 backdrop-blur-[20px] bg h-fit bg-gradient-to-b from-card"}>
+            <div className={"w-full justify-end flex flex-row absolute z-10 pr-3 py-2 border-b border-gray-200/5 backdrop-blur-[20px] bg h-fit bg-gradient-to-b from-card/30"}>
                 <div className={"w-[60%] flex flex-col gap-1.5 z-100 pl-3"}>
                     <Intro/>
                     <SessionTitle/>
@@ -35,7 +35,7 @@ function Window() {
             <div className={"h-full w-[40%] flex flex-col gap-2 absolute z-20"}>
                 <Card
                     shadowSize={0.8}
-                    className={"h-full bg-muted-foreground/10 backdrop-blur-lg flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
+                    className={"h-full bg-muted/50 backdrop-blur-xl flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
                     <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
                         <Inbox size={21} className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[2px] pr-[3px]"}/>
                         Inbox
@@ -73,7 +73,9 @@ function Intro() {
                 </div>
             </div>
             <div className={"flex flex-row items-center gap-2"}>
-                <Button className={"bg-bluePrimary text-foreground"}>New shelf</Button>
+                <Button onClick={() => {
+                    invoke("open_shelf")
+                }} className={"bg-bluePrimary text-foreground"}>Open shelf</Button>
             </div>
         </div>
     </>
@@ -106,10 +108,18 @@ function SessionTitle() {
             {
                 session?.is_completed &&
                 <div className={"flex flex-row items-center h-fit"}>
-                    <Button variant={"ghost"} className={"w-fit px-1"}>
+                    <Button onClick={() => {
+                        invoke("open_session", {
+                            sessionId: sessionId?.toString()
+                        })
+                    }} variant={"ghost"} className={"w-fit px-1"}>
                         <ArrowRightCircle className={"-rotate-45"}/>
                     </Button>
-                    <Button variant={"ghost"} className={"text-muted-foreground px-2"}>
+                    <Button onClick={() => {
+                        invoke("delete_receive_session", {
+                            sessionId: sessionId?.toString(),
+                        })
+                    }} variant={"ghost"} className={"text-muted-foreground px-2"}>
                         <Trash2/>
                     </Button>
                 </div>
@@ -122,36 +132,51 @@ function SessionList() {
     const selectedSessionId = core.useSelectedSession()?.id
     const sessions = core.useNearbySessionsList()
 
-    return <div className={"gap-1.5 flex flex-col"}>
-        {sessions.map((session) => (
-            <Card
-                onClick={() => {
-                    core.selectedSession.set(session)
-                }}
-                shadowSize={0.0}
-                className={`p-2 bg-muted-foreground/10 ${selectedSessionId === session.id && 'border-muted-foreground/50 bg-muted-foreground/30'} transition-all duration-300 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer`}>
-                <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
-                    <AvatarImage
-                        src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
-                </Avatar>
-                <div className={"flex flex-col gap-0.5"}>
-                    <p className={`${session.id === selectedSessionId && 'font-bold'}`}>{session.peer_name}</p>
-                    {
-                        session.is_in_progress
-                            ? <p className={"text-muted-foreground"}>Receiving...</p>
-                            : <p className={"text-muted-foreground"}>{session.display_datetime}</p>
-                    }
-                </div>
-            </Card>
-        ))}
+    return <div className={"gap-1.5 flex flex-col h-full"}>
+        {
+            sessions.length === 0 && <div className={"flex flex-col items-center justify-center h-[90%] text-muted-foreground"}>
+                <p>Empty</p>
+            </div>
+        }
+        {sessions.map((session) => <SessionItem sessionId={session.id} key={session.id.toString()}/>)}
     </div>
+}
+
+function SessionItem({sessionId}: { sessionId: bigint }) {
+    const selectedSessionId = core.useSelectedSession()?.id
+    const session = core.useSession(sessionId)
+    if (!session) return null
+
+    return <Card
+        onClick={() => {
+            core.selectedSession.set(session)
+        }}
+        shadowSize={0.0}
+        className={`p-2 bg-muted-foreground/10 ${selectedSessionId === session.id && 'border-muted-foreground/50 bg-muted-foreground/30'} transition-all duration-300 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer`}>
+        <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
+            <AvatarImage
+                src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
+        </Avatar>
+        <div className={"flex flex-col gap-0.5"}>
+            <p className={`${session.id === selectedSessionId && 'text-white'}`}>{session.peer_name}</p>
+            {
+                session.is_in_progress
+                    ? <p className="text-muted-foreground animate-pulse">
+                        Receiving...
+                    </p>
+                    : <p className={"text-muted-foreground"}>{session.display_datetime}</p>
+            }
+        </div>
+    </Card>
 }
 
 function ResourceList() {
     const selectedSessionId = core.useSelectedSession()?.id
     const session = core.useSession(selectedSessionId || BigInt(0))
     if (!session) {
-        return <></>
+        return <div className="flex items-center justify-center w-full h-full text-muted-foreground">
+            <p className="text-muted-foreground">Empty</p>
+        </div>
     }
 
     // Combine all resources
@@ -161,9 +186,9 @@ function ResourceList() {
         ...(session.video_resources || []).map(r => ({...r, resourceType: 'video' as const})),
     ]
 
-    if (allResources.length === 0) {
-        return <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p className="text-sm opacity-70">No resources</p>
+    if (!allResources.length) {
+        return <div className="flex items-center justify-center w-full h-full text-muted-foreground">
+            <p className="text-muted-foreground">Empty</p>
         </div>
     }
 
@@ -171,13 +196,13 @@ function ResourceList() {
         <div className={"h-[90px]"}></div>
         <div className="grid grid-cols-3 h-full gap-1 auto-rows-max">
             {allResources.map((resource, index) => (
-                <ResourceItem key={index} resource={resource} />
+                <ResourceItem key={index} sessionId={selectedSessionId} resource={resource} />
             ))}
         </div>
     </div>
 }
 
-function ResourceItem({resource}: {resource: any}) {
+function ResourceItem({resource, sessionId}: {resource: any, sessionId: any}) {
     const {model, completion, is_completed, resourceType} = resource;
     
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
@@ -195,6 +220,12 @@ function ResourceItem({resource}: {resource: any}) {
 
     return (
         <Card
+            onDoubleClick={() => {
+                invoke("open_received_resource", {
+                    resourceId: resource.id.toString(),
+                    sessionId
+                })
+            }}
             shadowSize={0.0}
             className="border-0 bg-transparent rounded-2xl flex flex-col hover:bg-muted-foreground/10 p-1.5 relative group transition-colors">
             {/* Thumbnail */}

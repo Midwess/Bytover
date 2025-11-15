@@ -218,16 +218,15 @@ impl AppCommand {
             });
         }
 
-        let response_transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
+        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
-        let mut transfer_session = self.run(TransferSessionPersistentOperation::save(response_transfer_session.clone())).await?;
         // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
         transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
         self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
 
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),
-            session: Some(response_transfer_session),
+            session: Some(transfer_session.clone()),
             session_id: transfer_session.order_id
         });
 
@@ -276,7 +275,6 @@ impl AppCommand {
 
         // Remove the session and add the new session
         if matches!(transfer_session.status(), TransferSessionStatus::Success) {
-            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
             self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await?;
             self.update_model_series(vec![
                 TransferSessionModelEvent::Remove(transfer_session.id()),

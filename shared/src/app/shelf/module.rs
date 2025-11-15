@@ -31,6 +31,7 @@ pub enum ShelfEvent {
     OpenResource(u64),
     AddResources(Vec<ResourceSelection>),
     RemoveResource(u64),
+    Clear,
 
     #[serde(skip)]
     ModelEvent(LocalResourceEvent)
@@ -113,6 +114,17 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::new(move |it| async move {
                     let _ = DeviceOperation::open(resource_path).into_future(it.clone()).await;
                 })
+            },
+            Self::Event::Clear => {
+                let commands = model.shelf.shelf.resources.iter().map(|it| {
+                    let resource_id = it.order_id;
+                    Command::handle_result(move |it| async move {
+                        let _ = it.app().remove_resource(resource_id).await;
+                        Ok(())
+                    })
+                }).collect::<Vec<_>>();
+
+                Command::all(commands)
             }
         }
     }

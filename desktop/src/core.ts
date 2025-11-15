@@ -53,13 +53,15 @@ export class Core {
         const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (transferState?.received_sessions?.length != sessions.length) {
+                console.log(transferState?.received_sessions.length, sessions.length, "sessions")
+                if ((transferState?.received_sessions?.length ?? 0) !== sessions.length) {
+                    console.log("update sessions")
                     setSessions(
                         transferState?.received_sessions ?? []
                     )
                 }
             })
-        }, [])
+        }, [sessions.length])
 
         return sessions
     }

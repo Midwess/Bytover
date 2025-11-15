@@ -24,7 +24,7 @@ use tauri::menu::MenuItem;
 use tauri::menu::Menu;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_opener::{open_path, OpenerExt};
 use tokio::{fs, spawn};
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -63,6 +63,11 @@ async fn cancel_receive(app_handle: AppHandle, session_id: String) {
 }
 
 #[tauri::command]
+async fn clear_shelf(app_handle: AppHandle) {
+    process_event(ShelfEvent::Clear, app_handle).await;
+}
+
+#[tauri::command]
 async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
     process_event(TransferEvent::StartPublicTransfer {
         password,
@@ -79,6 +84,38 @@ async fn ui_launched(app_handle: AppHandle) {
 async fn remove_resource(resource_id: String, app_handle: AppHandle) {
     let resource_id = resource_id.parse::<u64>().unwrap_or_default();
     process_event(ShelfEvent::RemoveResource(resource_id), app_handle).await;
+}
+
+#[tauri::command]
+async fn delete_receive_session(session_id: String, app_handle: AppHandle) {
+    let session_id = session_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::DeleteSession {
+        session_id,
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn open_session(session_id: String, app_handle: AppHandle) {
+    let session_id = session_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::OpenSession {
+        session_id
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn open_received_resource(session_id: String, resource_id: String, app_handle: AppHandle) {
+    let session_id = session_id.parse::<u64>().unwrap_or_default();
+    let resource_id = resource_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::OpenResource {
+        session_id,
+        resource_id
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn open_shelf(app_handle: AppHandle) {
+    notify_user_did_drop();
+    app_handle.show_send();
 }
 
 #[tauri::command]
@@ -174,8 +211,18 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     CORE.resolve(&mut handle, CoreOperationOutput::DeviceInfo(device)).unwrap_or_default()
                 }
                 DeviceOperation::GetGeoLocation => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DeviceOperation::OpenSession(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
-                DeviceOperation::Open(_) => CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default(),
+                DeviceOperation::OpenSession(session) => {
+                    let path = DiContainer::get_instance().path_resolver().get_session_dir_path(session).await;
+                    open_path(path, Option::<&str>::None).unwrap_or_default();
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
+                DeviceOperation::Open(path) => {
+                    if let LocalResourcePath::AbsolutePath(path) = path {
+                        open_path(path, Option::<&str>::None).unwrap_or_default();
+                    }
+
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                },
                 DeviceOperation::LoadThumbnailPng { path, resource_type, id } => match path {
                     LocalResourcePath::AbsolutePath(path) => {
                         let path = PathBuf::from(path);
@@ -247,7 +294,13 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_positioner::init())
-        .invoke_handler(tauri::generate_handler![sign_in, sign_up, start_transfer, add_resources, remove_resource, ui_launched, public_transfer, cancel_send, cancel_receive])
+        .invoke_handler(tauri::generate_handler![
+            sign_in, sign_up, start_transfer, add_resources,
+            remove_resource, ui_launched, public_transfer,
+            cancel_send, cancel_receive, delete_receive_session,
+            open_received_resource, open_session, open_shelf,
+            clear_shelf
+        ])
         .setup(|app| {
             let tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())

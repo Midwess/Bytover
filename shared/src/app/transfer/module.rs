@@ -246,7 +246,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 model.transfer.sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
 
-                Command::done()
+                Command::render()
             }
             TransferEvent::UpdateTransferTargets { added: new, removed } => {
                 model.transfer.targets.extend(new);
@@ -429,7 +429,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                     let is_loading = file_resources.is_empty() && video_resources.is_empty() && image_resources.is_empty();
                     Some(ReceiveCloudSessionViewModel {
-                        id: it.order_id,
+                        id: it.order_id.to_string(),
                         password,
                         is_loading,
                         avatar_url: avatar,
@@ -518,7 +518,7 @@ impl AppModule<BitBridge> for TransferModule {
                         .collect();
 
                     Some(ReceiveSessionViewModel {
-                        id: it.order_id,
+                        id: it.order_id.to_string(),
                         peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                         peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                         peer_description: "Nearby".to_owned(),
