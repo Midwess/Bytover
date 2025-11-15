@@ -1,3 +1,4 @@
+use tokio::time::Instant;
 use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 use crate::app_gateway::markov::{Markov, MarkovErrors};
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
@@ -208,7 +209,6 @@ impl TransferService {
         };
 
         let platform = device.platform();
-        let first_resource_upload_request = self.cloud_storage.get_upload_solution(user, platform, &first_resource).await?;
 
         let download_url = session.access_url(app.link.clone());
         let resources = session
@@ -236,16 +236,36 @@ impl TransferService {
             }
         }
 
-        let mut thumbnail_upload_urls = vec![];
-        for (order_id, source) in thumbnails.iter() {
-            let upload_request = Upload::SingleUrl(self.cloud_storage.get_upload_url(source).await?);
-            let Upload::SingleUrl(url) = upload_request else {
-                panic!("Invalid upload request, the thumbnail upload request must be a single url");
-            };
+        let instant = Instant::now();
+        let first_resource_future = self
+            .cloud_storage
+            .get_upload_solution(user, platform, &first_resource);
 
-            thumbnail_upload_urls.push((*order_id, url));
-        }
+        let thumbnail_futures = thumbnails.iter().map(|(order_id, source)| {
+            let cloud = &self.cloud_storage;
 
+            async move {
+                (order_id, cloud.get_upload_url(source).await)
+            }
+        });
+
+        let (first_resource_upload_request, thumbnail_upload_urls) = tokio::join!(
+            first_resource_future,
+            async {
+                let results = futures::future::join_all(thumbnail_futures).await;
+                let mut collected = Vec::with_capacity(results.len());
+                for (order_id, result) in results {
+                    collected.push((*order_id, result?));
+                }
+
+                Ok::<_, CloudStorageErrors>(collected)
+            }
+        );
+
+        // Unwrap the results
+        let first_resource_upload_request = first_resource_upload_request?;
+        let thumbnail_upload_urls = thumbnail_upload_urls?;
+        log::info!("Upload solution for first resource is ready in {} ms", instant.elapsed().as_millis());
         let response = TransferResourcesResponse {
             session_id: session_order_id,
             first_resource,

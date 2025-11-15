@@ -1218,6 +1218,7 @@ dependencies = [
  "async-trait",
  "core-services",
  "devlog-sdk",
+ "futures",
  "log",
  "migration",
  "schema",
