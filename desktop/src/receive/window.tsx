@@ -221,8 +221,9 @@ function ResourceItem({resource, sessionId}: {resource: any, sessionId: any}) {
     return (
         <Card
             onDoubleClick={() => {
+                console.log("double click")
                 invoke("open_received_resource", {
-                    resourceId: resource.id.toString(),
+                    resourceId: model.order_id,
                     sessionId
                 })
             }}
