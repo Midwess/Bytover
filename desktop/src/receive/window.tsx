@@ -129,7 +129,6 @@ function SessionTitle() {
 }
 
 function SessionList() {
-    const selectedSessionId = core.useSelectedSession()?.id
     const sessions = core.useNearbySessionsList()
 
     return <div className={"gap-1.5 flex flex-col h-full"}>

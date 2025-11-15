@@ -1,5 +1,5 @@
 use dispatch::Queue;
-use tauri::{Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri::webview::Color;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -136,6 +136,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         };
 
         let _ = window.show();
+        let _ = window.emit("window-shown", {});
         window
     }
 
