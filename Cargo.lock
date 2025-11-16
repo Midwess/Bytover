@@ -6037,6 +6037,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tonic 0.13.1",

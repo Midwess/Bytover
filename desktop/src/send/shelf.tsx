@@ -143,7 +143,7 @@ export function Shelf() {
                     </p>
                 </div>
                 <XCircle
-                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-90"/>
+                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-95"/>
             </Button>
     </div>
         </Card>
