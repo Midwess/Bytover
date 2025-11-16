@@ -65,7 +65,7 @@ impl UploadContext {
                     1
                 }
                 else {
-                    resource_size.div_ceil(chunk_size) as usize + 1
+                    resource_size.div_ceil(chunk_size) as usize + 2
                 }
             },
             _ => {

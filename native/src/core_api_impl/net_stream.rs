@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use core_services::local_storage::file_system::FileCursor;
 use core_services::local_storage::stream::IOCursor;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures_util::SinkExt;
@@ -9,6 +10,7 @@ use shared::protocol::rpc::cloud_server::CloudServer;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::{NetStream, NetStreamEvent, NetStreamInner};
 use std::sync::Arc;
+use tempfile::NamedTempFile;
 use tokio::io::{AsyncWriteExt, DuplexStream};
 use tokio::task::JoinHandle;
 use tokio::{io, spawn, try_join};
@@ -137,18 +139,51 @@ impl NetStreamInnerImpl {
             };
         }
 
-        // Flushing remaining data if any
-        let bytes = cursor.read_all().await?;
-        if bytes.is_empty() {
+        // When we reach this point, it means that the file size has been incorrectly calculated
+        // we need to dump all remaining data to a temporary file and upload it in chunks
+        let temp_file = NamedTempFile::new()?;
+        let temp_path = temp_file.path().to_path_buf();
+        let mut temp_writer = tokio::fs::File::create(&temp_path).await?;
+        
+        let mut written_bytes = 0u64;
+        loop {
+            let Some(data) = cursor.next(None).await? else { break };
+            temp_writer.write_all(data).await?;
+            written_bytes += data.len() as u64;
+        }
+        temp_writer.flush().await?;
+        drop(temp_writer);
+        
+        if written_bytes == 0 {
+            log::info!("No remaining data to upload");
             return Ok(Some(completion));
         }
+        
+        log::info!("Wrote {} bytes to temporary file, preparing to upload in chunks", written_bytes);
+        
+        let mut temp_cursor = FileCursor::new(temp_path, READ_CHUNK_SIZE).await?;
+        
+        let mut remaining = written_bytes;
+        while remaining > 0 {
+            let chunk_size = remaining.min(main_chunk_size as u64);
 
-        let content_length = bytes.len() as u64;
-        log::info!("Flushed {} bytes of remaining data to the server", content_length);
-        let etag = Self::perform_upload(&upload.upload_url, bytes, content_length).await?;
-        completion.e_tags.push(etag);
+            let etag = Self::perform_upload_from_cursor(&upload.upload_url, &mut temp_cursor, chunk_size).await?;
+            completion.e_tags.push(etag);
+            
+            remaining -= chunk_size;
+            
+            if remaining > 0 {
+                upload = match server.complete_part_upload(&upload.context_token).await? {
+                    Some(continue_upload) => continue_upload,
+                    None => {
+                        log::warn!("Server did not provide continuation upload but we still have {} bytes remaining", remaining);
+                        break;
+                    }
+                };
+            }
+        }
 
-        log::info!("Resource upload completed {:?} ", completion);
+        log::info!("Resource upload completed {:?}", completion);
         Ok(Some(completion))
     }
 
@@ -193,6 +228,29 @@ impl NetStreamInnerImpl {
         Ok(etag)
     }
 
+    async fn perform_upload_from_cursor(url: &str, cursor: &mut FileCursor, chunk_size: u64) -> Result<String> {
+        log::info!("Uploading chunk of size {} bytes from cursor", chunk_size);
+
+        let (mut writer, reader) = io::duplex(5 * MB as usize);
+
+        let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
+        let write_task = async {
+            let mut remaining = chunk_size;
+            while remaining > 0 {
+                let Some(data) = cursor.next(Some(remaining)).await? else { break };
+                let data_len = data.len() as u64;
+                writer.write_all(data).await?;
+                remaining -= data_len;
+                writer.flush().await?;
+            }
+            writer.shutdown().await?;
+            Ok::<_, anyhow::Error>(())
+        };
+
+        let (etag, _) = try_join!(upload_task, write_task)?;
+        Ok(etag)
+    }
+
     async fn write_data(
         writer: &mut DuplexStream,
         cursor: &mut Box<dyn IOCursor>,
@@ -205,7 +263,7 @@ impl NetStreamInnerImpl {
             uploaded_bytes: *total_uploaded
         });
 
-        let mut uploaded_amount = 0;
+        let mut _uploaded_amount = 0;
         while remaining > 0 {
             let Some(data) = cursor.next(Some(remaining)).await? else { break };
             let data_len = data.len() as u64;
@@ -213,7 +271,7 @@ impl NetStreamInnerImpl {
             writer.write_all(data).await?;
             remaining -= data_len;
             *total_uploaded += data_len;
-            uploaded_amount += data_len;
+            _uploaded_amount += data_len;
 
             let _ = tx.try_send(NetStreamEvent::Progress {
                 uploaded_bytes: *total_uploaded
