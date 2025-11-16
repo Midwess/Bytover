@@ -273,7 +273,11 @@
 @keyframes popup {
     0% {
         opacity: 0;
-        transform: scale(0.85) translateY(-8px);
+        transform: scale(0.5) translateY(-8px);
+    }
+    60% {
+        opacity: 1;
+        transform: scale(1.1) translateY(0);
     }
     100% {
         opacity: 1;

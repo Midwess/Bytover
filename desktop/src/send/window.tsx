@@ -26,8 +26,10 @@ function Window() {
 
         window.listen("window-shown", () => {
             setIsExpanded(false)
-            setShowAnimation(true)
-            setTimeout(() => setShowAnimation(false), 300)
+            setTimeout(() => {
+                setShowAnimation(true)
+                setTimeout(() => setShowAnimation(false), 300)
+            }, 50)
         }).then(unlisten => { unlistenShow = unlisten });
 
         return () => {
@@ -56,7 +58,7 @@ function Window() {
     }, [isExpanded])
 
     return (
-        <main className={`w-screen h-screen dark bg-transparent flex flex-col p-1 transition-all opacity-100 duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
+        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 transition-all duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
                 <div className={`h-full bg-transparent relative min-w-[235px] w-[235px]`}>
                    <Shelf/>

@@ -56,13 +56,12 @@ function Window() {
             <div className={"h-full w-[40%] flex flex-col gap-2 absolute z-20"}>
                 <Card
                     shadowSize={0.8}
-                    className={"h-full bg-muted/50 backdrop-blur-xl flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
+                    className={"h-full bg-muted/20 backdrop-blur-xl flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
                     <Label className={"flex flex-row items-center gap-2 px-1 pt-1 pb-2 text-muted-foreground"}>
                         <Inbox size={21} className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[2px] pr-[3px]"}/>
                         Inbox
                     </Label>
                     <SessionList/>
-                    <div className={"h-20 w-full"}></div>
                 </Card>
             </div>
             <div className={"flex flex-row h-full w-[60%] absolute z-0 self-end"}>
@@ -174,13 +173,16 @@ function SessionTitle() {
 function SessionList() {
     const sessions = core.useNearbySessionsList()
 
-    return <div className={"gap-1.5 flex flex-col h-full"}>
+    return <div className={"gap-2 flex flex-col h-fit"}>
         {
-            sessions.length === 0 && <div className={"flex flex-col items-center justify-center h-[90%] text-muted-foreground"}>
+            sessions.length === 0 && <div className={"flex flex-col items-center justify-center h-[70vh] text-muted-foreground"}>
                 <p>Empty</p>
             </div>
         }
         {sessions.map((session) => <SessionItem sessionId={session.id} key={session.id.toString()}/>)}
+        {
+            sessions.length > 4 && <div className={"flex flex-row items-center justify-center h-10"}/>
+        }
     </div>
 }
 
@@ -194,7 +196,7 @@ function SessionItem({sessionId}: { sessionId: string }) {
             core.selectedSession.set(session)
         }}
         shadowSize={0.0}
-        className={`p-2 bg-muted-foreground/10 ${selectedSessionId === session.id && 'border-muted-foreground/50 bg-muted-foreground/30'} transition-all duration-300 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer`}>
+        className={`p-2 bg-muted-foreground/10 ${selectedSessionId === session.id && 'border-muted-foreground/50 bg-muted-foreground/30'} hover:bg-muted-foreground/20 transition-all duration-300 flex border-1 flex-row rounded-2xl items-center gap-2.5 cursor-pointer`}>
         <Avatar className={"p-1 rounded-xl h-9 w-9 bg-yellow-600/90 ring-2 ring-yellow-500/30"}>
             <AvatarImage
                 src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
@@ -263,11 +265,12 @@ function ResourceItem({resource, sessionId}: {resource: any, sessionId: any}) {
     return (
         <Card
             onDoubleClick={() => {
-                console.log("double click")
-                invoke("open_received_resource", {
-                    resourceId: model.order_id,
-                    sessionId
-                })
+                if(is_completed) {
+                    invoke("open_received_resource", {
+                        resourceId: model.order_id,
+                        sessionId
+                    })
+                }
             }}
             shadowSize={0.0}
             className="border-0 bg-transparent rounded-2xl flex flex-col hover:bg-muted-foreground/10 p-1.5 relative group transition-colors">
