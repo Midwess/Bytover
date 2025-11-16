@@ -115,13 +115,20 @@ impl NetStreamInnerImpl {
         let main_chunk_size = upload.x_content_length;
 
         // Upload all main chunks
-        while uploaded < total_size && upload.x_content_length.eq(&main_chunk_size) {
-            let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await?;
+        while uploaded < total_size && !upload.is_last {
+            let etag = match Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await {
+                Ok(etag) => etag,
+                Err(e) => {
+                    log::error!("Failed to upload: {upload:?}");
+                    return Err(e);
+                }
+            };
             completion.e_tags.push(etag);
             upload = match server.complete_part_upload(&upload.context_token).await? {
                 Some(mut continue_upload) => {
-                    let remaining = total_size - uploaded;
+                    let remaining = total_size - uploaded.min(total_size);
                     continue_upload.x_content_length = continue_upload.x_content_length.min(remaining as u32);
+                    continue_upload.is_last = continue_upload.is_last || continue_upload.x_content_length != main_chunk_size;
                     continue_upload
                 },
                 None => {
@@ -137,9 +144,11 @@ impl NetStreamInnerImpl {
         }
 
         let content_length = bytes.len() as u64;
+        log::info!("Flushed {} bytes of remaining data to the server", content_length);
         let etag = Self::perform_upload(&upload.upload_url, bytes, content_length).await?;
         completion.e_tags.push(etag);
 
+        log::info!("Resource upload completed {:?} ", completion);
         Ok(Some(completion))
     }
 
@@ -151,18 +160,6 @@ impl NetStreamInnerImpl {
         chunk_size: u64
     ) -> Result<String> {
         log::info!("Uploading chunk of size {} bytes", chunk_size);
-
-        // If it is less than 5MB, it must be the last chunk
-        if chunk_size < 5 * MB {
-            let data = cursor.read_all().await?;
-            let content_length = data.len() as u64;
-            *uploaded += content_length;
-            let _ = tx.try_send(NetStreamEvent::Progress {
-                uploaded_bytes: *uploaded
-            });
-
-            return Self::perform_upload(url, data, content_length).await;
-        }
 
         let (mut writer, reader) = io::duplex(5 * MB as usize);
 

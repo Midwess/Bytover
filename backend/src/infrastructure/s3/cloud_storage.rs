@@ -33,19 +33,15 @@ impl CloudStorage for S3CloudStorageImpl {
                     break 'dynamically_choose_chunk_size (Some(file_size), false);
                 }
 
-                log::info!("File size is {} bytes, trying to find optimal chunk size", file_size);
                 let mut best: Option<(u64, u64)> = None;
 
                 for leftover in 2..=9 {
                     let chunkable = (file_size - leftover);
 
                     let min_count = ((chunkable + 5 * GB - 1) as f64) / (5f64 * GB as f64);
-                    let min_count = min_count.ceil() as u64;
+                    let min_count = min_count as u64;
 
                     let chunk_size = chunkable / min_count;
-                    if chunk_size < 1 {
-                        log::warn!("Chunk size is too small, falling back to default chunk size {} {chunkable}", min_count);
-                    }
 
                     if file_size % chunk_size == leftover {
                         let count = chunkable / chunk_size;
@@ -75,12 +71,14 @@ impl CloudStorage for S3CloudStorageImpl {
             chunk_size,
             chunk_stream_enabled
         )?;
+
         let token = context.as_token(self.get_jwt_secret());
         let part = MultiPartUpload {
             context_token: token,
             upload_url,
             x_content_length: context.x_content_length,
-            chunk_stream_enabled
+            chunk_stream_enabled,
+            is_last: context.is_last()
         };
 
         Ok(Upload::Multipart(part))
@@ -111,7 +109,8 @@ impl CloudStorage for S3CloudStorageImpl {
             upload_url: part_url,
             context_token: next_part.as_token(self.get_jwt_secret()),
             x_content_length: next_part.x_content_length,
-            chunk_stream_enabled
+            chunk_stream_enabled,
+            is_last: next_part.is_last()
         }))
     }
 

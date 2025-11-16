@@ -31,7 +31,13 @@ pub struct UploadContext {
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
     pub x_content_length: u32,
-    pub chunk_stream_enabled: bool
+    pub chunk_stream_enabled: bool,
+}
+
+impl UploadContext {
+    pub fn is_last(&self) -> bool {
+        self.part_number == self.max_allowed_parts
+    }
 }
 
 pub const MB: u64 = 1024 * 1024;
