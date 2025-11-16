@@ -1,6 +1,6 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::SessionPersistentOperation;
+use crate::app::operations::persistent::{PersistentOperation, SessionPersistentOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::AppEvent;
@@ -12,6 +12,7 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::dialog::DialogOperation;
 use devlog_sdk::distributed_id::gen_id;
+use crate::CoreOperation;
 
 impl AppCommand {
     pub async fn sign_in(&self) {
@@ -29,6 +30,12 @@ impl AppCommand {
         };
 
         WebViewOperation::open_url(url).into_future(self.ctx()).await;
+    }
+
+    pub async fn sign_out(&self) -> Result<(), CoreError> {
+        self.run(SessionPersistentOperation::remove_session()).await?;
+        self.re_authorize().await?;
+        Ok(())
     }
 
     pub async fn sign_up(&self) {
@@ -56,6 +63,7 @@ impl AppCommand {
 
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
+        self.notify_shell(CoreOperation::Render);
         Ok(())
     }
 

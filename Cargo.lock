@@ -2248,6 +2248,7 @@ dependencies = [
  "idb",
  "js-sys",
  "jsonwebtoken 10.2.0",
+ "jwalk",
  "lazy_static",
  "lettre",
  "log",
@@ -2269,7 +2270,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
- "walkdir",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-streams",
@@ -2320,6 +2320,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "crossbeam"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1137cd7e7fc0fb5d3c5a8678be38ec56e819125d8d7907411fe24ccb943faca8"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-deque",
+ "crossbeam-epoch",
+ "crossbeam-queue",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -5342,6 +5355,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jwalk"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2735847566356cd2179a2a38264839308f7079fa96e6bd5a42d740460e003c56"
+dependencies = [
+ "crossbeam",
+ "rayon",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6014,6 +6037,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tonic 0.13.1",

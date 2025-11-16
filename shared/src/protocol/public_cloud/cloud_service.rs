@@ -372,8 +372,6 @@ where
 
         net_stream.end().await?;
 
-        log::info!("Resource {resource_path:?} uploaded, total sent = {total_sent} bytes");
-
         let session_guard = transfer_session.lock().await;
         let progress = session_guard.resource_progress(resource_order_id).expect("Progress not found");
         if !progress.is_completed() {

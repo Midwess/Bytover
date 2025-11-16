@@ -124,6 +124,7 @@ impl TransferService {
                 if let Err(e) = self.cloud_storage.complete_upload(user, completion).await {
                     current_progress.cancel();
                     self.transfer_repository.update_one(session).await?;
+                    log::info!("Failed to complete upload for completion {completion:?}: {e}");
                     return Err(TransferErrors::CloudStorageError(e))
                 }
 
@@ -133,6 +134,7 @@ impl TransferService {
                         "Id {resource_id} is not matched with current resource {expected_id} session_id {}",
                         session.order_id()
                     );
+
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
                 }
 
@@ -262,7 +264,6 @@ impl TransferService {
             }
         );
 
-        // Unwrap the results
         let first_resource_upload_request = first_resource_upload_request?;
         let thumbnail_upload_urls = thumbnail_upload_urls?;
         log::info!("Upload solution for first resource is ready in {} ms", instant.elapsed().as_millis());

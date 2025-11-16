@@ -119,6 +119,11 @@ async fn open_shelf(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn sign_out(app_handle: AppHandle) {
+    process_event(AuthenticationEvent::SignOut, app_handle).await;
+}
+
+#[tauri::command]
 async fn sign_in(app_handle: AppHandle) {
     process_event(AuthenticationEvent::SignIn, app_handle).await;
 }
@@ -299,7 +304,7 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
-            clear_shelf
+            clear_shelf, sign_out
         ])
         .setup(|app| {
             let tray = TrayIconBuilder::new()

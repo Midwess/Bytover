@@ -41,6 +41,7 @@ pub enum UserPersistentOperation {
 pub enum SessionPersistentOperation {
     WriteToken(Token),
     WriteUser(User),
+    Remove,
     Get()
 }
 
@@ -80,6 +81,10 @@ impl SessionPersistentOperation {
 
     pub fn get_session() -> AppRequestBuilder<impl Future<Output = Result<Option<Session>, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::Session(SessionPersistentOperation::Get())).map(|it| it.result_option())
+    }
+
+    pub fn remove_session() -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Session(SessionPersistentOperation::Remove)).map(|it| it.result())
     }
 }
 

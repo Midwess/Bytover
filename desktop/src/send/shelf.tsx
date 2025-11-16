@@ -130,12 +130,12 @@ export function Shelf() {
             </div>
 
             <div
-                className="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-card to-transparent pointer-events-none z-20"/>
+                className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-3">
             <Button
                 onClick={() => {
                     invoke("clear_shelf")
                 }}
-                className="absolute bottom-3 translate-1 group z-20 flex-col items-center justify-between border-none overflow-hidden py-1 w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
+                className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
                 <div
                     className="overflow-hidden text-foreground bg-card px-2 rounded-full opacity-0 transition-all duration-500 ease-out group-hover:opacity-100 group-hover:mt-1">
                     <p>
@@ -143,8 +143,9 @@ export function Shelf() {
                     </p>
                 </div>
                 <XCircle
-                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-90"/>
+                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-95"/>
             </Button>
+    </div>
         </Card>
     </>
 }

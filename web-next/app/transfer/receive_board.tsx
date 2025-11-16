@@ -64,7 +64,8 @@ function ContentBoard() {
     const isLoading = selectedSession instanceof ReceiveCloudSessionViewModel
         ? (selectedSession as ReceiveCloudSessionViewModel)?.is_loading
         : false
-    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSession?.id!));
+    const selectedSessionId = selectedSession?.id ? BigInt(selectedSession!.id!) : BigInt(0)
+    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSessionId));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
@@ -101,7 +102,7 @@ function ContentBoard() {
         }
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
-            enteredPassword ? enteredPassword : null, selectedSession!.id, new TransferTypeVariantReceive()
+            enteredPassword ? enteredPassword : null, BigInt(selectedSession!.id), new TransferTypeVariantReceive()
         )))
     }
 
@@ -111,7 +112,7 @@ function ContentBoard() {
             if (!cloud.is_required_password && isLoading) {
                 core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
                     null,
-                    cloud.id,
+                    BigInt(cloud.id),
                     new TransferTypeVariantReceive(),
                 )))
             }
@@ -183,7 +184,7 @@ function ContentBoard() {
                         selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={BigInt(image.model.order_id)}/>
+                                    <MediaView key={index} id={image.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -201,7 +202,7 @@ function ContentBoard() {
                         selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={BigInt(video.model.order_id)}/>
+                                    <MediaView key={index} id={video.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -220,7 +221,7 @@ function ContentBoard() {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={file.model.order_id} index={index}>
                                 <div className={"h-fit"}>
-                                    <FileView key={file.model.order_id} id={BigInt(file.model.order_id)}/>
+                                    <FileView key={file.model.order_id} id={file.model.order_id}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -372,7 +373,7 @@ function Board() {
 }
 
 function TransferSession(props: {
-    id: bigint,
+    id: string,
     onPress: () => void
 }) {
     const {
@@ -433,7 +434,7 @@ function TransferSession(props: {
                 <CircleProgress center={is_public ? <Download/> : undefined} progress={progress} size={30}
                                 onClick={() => {
                                     if (!is_public) {
-                                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(id, new TransferTypeVariantReceive())))
+                                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
                                     }
                                 }}/>}
             {is_required_password &&
@@ -444,7 +445,7 @@ function TransferSession(props: {
 }
 
 function FileView(props: {
-    id: bigint
+    id: String
 }) {
     const {id} = props;
     const file = core.useReceiveResource(id);
@@ -512,7 +513,7 @@ function FileView(props: {
 }
 
 function MediaView(props: {
-    id: bigint
+    id: String
 }) {
     const {id} = props;
     const media = core.useReceiveResource(id);

@@ -31,7 +31,13 @@ pub struct UploadContext {
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
     pub x_content_length: u32,
-    pub chunk_stream_enabled: bool
+    pub chunk_stream_enabled: bool,
+}
+
+impl UploadContext {
+    pub fn is_last(&self) -> bool {
+        self.part_number == self.max_allowed_parts
+    }
 }
 
 pub const MB: u64 = 1024 * 1024;
@@ -54,7 +60,14 @@ impl UploadContext {
 
         let chunk_size = chunk_size.unwrap_or(5 * GB);
         let max_allowed_parts = match &resource.source {
-            Some(Source::S3Path(_)) => resource_size.div_ceil(chunk_size) as usize + 1,
+            Some(Source::S3Path(_)) => {
+                if chunk_size < 5 * MB {
+                    1
+                }
+                else {
+                    resource_size.div_ceil(chunk_size) as usize + 2
+                }
+            },
             _ => {
                 log::error!("Invalid resource type: {:?}", resource);
                 return Err(CloudStorageErrors::InvalidUploadContext)

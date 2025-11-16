@@ -102,7 +102,7 @@ export class WasmCore {
         return selectedSession
     }
 
-    public useSession(id: bigint) {
+    public useSession(id: String) {
         const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(() => {
             const transferState = this.transferState.get()
             return transferState?.received_sessions?.find(it => it.id === id) ||
@@ -123,7 +123,7 @@ export class WasmCore {
         return session
     }
 
-    public useReceiveResource(id: bigint) {
+    public useReceiveResource(id: String) {
         const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
 
         useEffect(() => {
@@ -134,12 +134,12 @@ export class WasmCore {
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
-                ]).find(r => BigInt(r.model.order_id) === id) ||
+                ]).find(r => r.model.order_id === id) ||
                 transferState.received_cloud_sessions?.flatMap(session => [
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
-                ]).find(r => BigInt(r.model.order_id) === id)
+                ]).find(r => r.model.order_id === id)
 
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
