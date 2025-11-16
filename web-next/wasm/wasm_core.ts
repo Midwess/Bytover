@@ -96,7 +96,10 @@ export class WasmCore {
         const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
 
         useEffect(() => {
-            return this.selectedSession.subscribe(setSelectedSession)
+            return this.selectedSession.subscribe((value) => {
+                console.log("Selected session changed", value?.id)
+                setSelectedSession(value)
+            })
         }, []);
 
         return selectedSession
@@ -114,7 +117,7 @@ export class WasmCore {
                 const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
                                    transferState?.received_cloud_sessions?.find(it => it.id === id)
                 
-                if (foundSession && !isEqual(session, foundSession)) {
+                if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
                 }
             })
@@ -123,29 +126,30 @@ export class WasmCore {
         return session
     }
 
-    public useReceiveResource(id: String) {
+    public useReceiveResource(id: String, isCloud: boolean = false) {
         const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 if (!transferState) return
 
-                const foundResource = transferState.received_sessions?.flatMap(session => [
+                const foundResource = isCloud ?
+                    transferState.received_cloud_sessions?.flatMap(session => [
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
-                ]).find(r => r.model.order_id === id) ||
-                transferState.received_cloud_sessions?.flatMap(session => [
+                ]).find(r => r.model.order_id === id)
+                : transferState.received_sessions?.flatMap(session => [
                     ...session.file_resources,
                     ...session.image_resources,
                     ...session.video_resources
                 ]).find(r => r.model.order_id === id)
 
-                if (foundResource && !isEqual(resource, foundResource)) {
+                if (!isEqual(resource, foundResource)) {
                     setResource(foundResource)
                 }
             })
-        }, [id, resource])
+        }, [id, resource, isCloud])
 
         return resource
     }

@@ -17,7 +17,7 @@ import {
     Loader2,
     Settings2,
     Settings,
-    LogOut, ArrowRight
+    LogOut, ArrowRight, DoorClosed, CircleX
 } from "lucide-react";
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {
@@ -100,12 +100,18 @@ function Intro() {
                             <Settings size={15} className={"text-muted-foreground"}/>
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 dark items-center justify-center">
+                    <DropdownMenuContent align="end" className="w-36 dark items-center justify-center">
                         <DropdownMenuItem className={"items-center h-full w-fit"} onClick={() => {
                             invoke("sign_out")
                         }}>
                             <ArrowRightCircle className={"mt-[1px]"}/>
                             Sign out
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className={"items-center h-full w-fit"} onClick={() => {
+                            invoke("quit")
+                        }}>
+                            <CircleX className={"mt-[1px]"}/>
+                            Quit
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

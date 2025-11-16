@@ -57,15 +57,16 @@ export default function ReceiveBoard() {
 }
 
 function ContentBoard() {
-    const selectedSession = core.useSelectedSession()
+    const selectedSessionId = core.useSelectedSession()?.id
+    const selectedSession = core.useSession(selectedSessionId ?? '');
     const cloudSessions = core.useCloudSessionsList()
+    const isCloud = selectedSession instanceof ReceiveCloudSessionViewModel
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
     const isLoading = selectedSession instanceof ReceiveCloudSessionViewModel
         ? (selectedSession as ReceiveCloudSessionViewModel)?.is_loading
         : false
-    const selectedSessionId = selectedSession?.id ? BigInt(selectedSession!.id!) : BigInt(0)
-    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(selectedSessionId));
+    const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
 
     useEffect(() => {
@@ -76,7 +77,7 @@ function ContentBoard() {
                 })
             }
         }
-    }, [selectedSession?.id])
+    }, [selectedSession])
 
     useEffect(() => {
         if (url.session && coreReady) {
@@ -172,6 +173,7 @@ function ContentBoard() {
             }
         </div>
     }
+    console.log(selectedSession)
 
     return <>
         <Collapsible
@@ -184,7 +186,7 @@ function ContentBoard() {
                         selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={image.model.order_id}/>
+                                    <MediaView key={index} id={image.model.order_id} isCloud={isCloud}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -202,7 +204,7 @@ function ContentBoard() {
                         selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={index} index={index}>
                                 <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={video.model.order_id}/>
+                                    <MediaView key={index} id={video.model.order_id} isCloud={isCloud}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -221,7 +223,7 @@ function ContentBoard() {
                         selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                             return <ItemEffect key={file.model.order_id} index={index}>
                                 <div className={"h-fit"}>
-                                    <FileView key={file.model.order_id} id={file.model.order_id}/>
+                                    <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
                                 </div>
                             </ItemEffect>
                         })
@@ -445,10 +447,11 @@ function TransferSession(props: {
 }
 
 function FileView(props: {
-    id: String
+    id: String,
+    isCloud: boolean
 }) {
-    const {id} = props;
-    const file = core.useReceiveResource(id);
+    const {id, isCloud} = props;
+    const file = core.useReceiveResource(id, isCloud);
     const model = file?.model;
 
     const fallbackThumbnail = model?.type instanceof ResourceTypeVariantFolder
@@ -458,12 +461,16 @@ function FileView(props: {
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
     useEffect(() => {
-        if (!model) return
+        if (!model?.thumbnail_path) {
+            // Remove thumbnail
+            setThumbnailSource(undefined)
+            return
+        }
 
         if (model.thumbnail_path && !thumbnailSource) {
             core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
         }
-    }, [model?.thumbnail_path, thumbnailSource]);
+    }, [model, model?.thumbnail_path, thumbnailSource]);
 
     const onDownloadClick = useCallback(() => {
         if (!model) return
@@ -513,10 +520,11 @@ function FileView(props: {
 }
 
 function MediaView(props: {
-    id: String
+    id: String,
+    isCloud: boolean
 }) {
-    const {id} = props;
-    const media = core.useReceiveResource(id);
+    const {id, isCloud} = props;
+    const media = core.useReceiveResource(id, isCloud);
 
     const model: SelectedResourceViewModel | undefined = media?.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;

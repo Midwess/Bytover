@@ -45,6 +45,11 @@ mod mouse_tracking;
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 
 #[tauri::command]
+async fn quit(app_handle: AppHandle) {
+    app_handle.close_all_windows(vec![]);
+}
+
+#[tauri::command]
 async fn cancel_send(app_handle: AppHandle, session_id: String) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
     process_event(TransferEvent::CancelTransfer {
@@ -304,7 +309,7 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
-            clear_shelf, sign_out
+            clear_shelf, sign_out, quit
         ])
         .setup(|app| {
             let tray = TrayIconBuilder::new()

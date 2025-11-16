@@ -110,7 +110,6 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
         let is_completed = initial_session.is_completed();
-        log::info!("Session: {:?}", initial_session);
 
         tx
             .send(Ok(SubscribeSessionInfoResponse {
@@ -147,7 +146,6 @@ impl BitBridgeCloudService for CloudGrpcService {
         let mut current_session = initial_session;
 
         tokio::spawn(async move {
-
             loop {
                 let notification = match listener.recv().await {
                     Ok(notification) => notification,
