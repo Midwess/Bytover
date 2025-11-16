@@ -17,7 +17,6 @@ pub enum TransferTargetId {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct TransferSessionId {
     pub r#type: Option<TransferType>,
-    pub target: Option<TransferTargetId>,
     pub order_id: Option<u64>
 }
 
@@ -60,7 +59,6 @@ impl Table<TransferSessionId> for TransferSession {
     fn id(&self) -> TransferSessionId {
         TransferSessionId {
             r#type: Some(self.transfer_type.clone()),
-            target: Some((&self.target).into()),
             order_id: Some(self.order_id)
         }
     }
@@ -72,13 +70,6 @@ impl DbId for TransferSessionId {
     fn is_represent(&self, table: &Self::Table) -> bool {
         if let Some(r#type) = &self.r#type {
             if r#type != &table.transfer_type {
-                return false;
-            }
-        }
-
-        if let Some(target) = &self.target {
-            let table_target_id: TransferTargetId = (&table.target).into();
-            if target != &table_target_id {
                 return false;
             }
         }

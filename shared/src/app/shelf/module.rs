@@ -10,6 +10,7 @@ use crate::entities::shelf::Shelf;
 use crate::repository::local_resource::LocalResourceId;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Debug, Clone, Default)]
 pub struct ShelfModel {
@@ -84,7 +85,11 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::all(commands)
             }
             Self::Event::RemoveResource(id) => {
-                log::info!("Remove resource: {}", id);
+                let Some(resource) = model.shelf.shelf.get(&LocalResourceId { order_id: Some(id), ..Default::default() }) else {
+                    return Command::done();
+                };
+
+                let id = resource.id();
                 Command::handle_result(move |it| async move { it.app().remove_resource(id).await })
             }
             Self::Event::ModelEvent(event) => {
@@ -117,9 +122,9 @@ impl AppModule<BitBridge> for ShelfModule {
             },
             Self::Event::Clear => {
                 let commands = model.shelf.shelf.resources.iter().map(|it| {
-                    let resource_id = it.order_id;
+                    let id = it.id();
                     Command::handle_result(move |it| async move {
-                        let _ = it.app().remove_resource(resource_id).await;
+                        let _ = it.app().remove_resource(id).await;
                         Ok(())
                     })
                 }).collect::<Vec<_>>();

@@ -45,7 +45,7 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
         };
 
         Ok(IdbIdWrapper(LocalResourceId {
-            r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
+            path: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
             order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
         }))
     }
@@ -195,5 +195,30 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
         let reader = self.read(path.clone(), 0).await?;
         Ok(reader.entry().await?.size)
+    }
+
+    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
+        let from_id = LocalResourceId {
+            path: Some(path),
+            order_id: None
+        };
+
+        let items = IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(
+            self,
+            Some(&IdbIdWrapper(from_id)),
+            None,
+            None
+        ).await?;
+
+        let mut removed_items = vec![];
+        for item in items.iter() {
+            let id: LocalResourceId = Table::<LocalResourceId>::id(item);
+            let removed = Repository::<LocalResource, LocalResourceId>::delete_one(self, &id).await;
+            if let Ok(item) = removed {
+                removed_items.push(item);
+            }
+        }
+
+        Ok(removed_items)
     }
 }

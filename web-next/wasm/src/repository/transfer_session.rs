@@ -41,7 +41,6 @@ impl IdbId for IdbIdWrapper<TransferSessionId> {
 
         Ok(IdbIdWrapper(TransferSessionId {
             r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
-            target: json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()),
             order_id: json_array.get(2).and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
         }))
     }

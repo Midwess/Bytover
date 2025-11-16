@@ -397,6 +397,7 @@ impl WebRtcPeer {
         let buffer = self.buffer.clone();
         let thumbnail_handle = {
             let thumbnail_cancel_signal = cancellation_signal.clone();
+            log::info!("Begin sending {} thumbnails for session {session_id}", session_thumbnail_paths.len());
             spawn(async move {
                 while let Some((id, thumbnail_path)) = session_thumbnail_paths.pop() {
                     if !context.is_active(session_id).await {
@@ -405,8 +406,11 @@ impl WebRtcPeer {
 
                     let Ok(Ok(mut reader)) = repo.read(thumbnail_path.clone(), 63 * 1024).with_cancel(&thumbnail_cancel_signal).await
                     else {
+                        log::warn!("Found thumbnail path {thumbnail_path:?} for resource {id} but it does not exist, skipping");
                         continue;
                     };
+
+                    log::info!("Begin sending thumbnail for resource {id} {thumbnail_path:?}");
 
                     let begin_delimiter = TransferDelimiterShema::new(session_id, id, true).as_bytes()?;
 

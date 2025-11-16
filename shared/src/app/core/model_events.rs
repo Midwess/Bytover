@@ -14,7 +14,7 @@ use std::fmt::Debug;
 pub enum ModelEvent<D, I, U> {
     Update(I, U),
     Add(D),
-    Remove(I)
+    Remove(I),
 }
 
 #[delegatable_trait]

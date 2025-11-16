@@ -29,7 +29,7 @@ pub struct LocalResourceRepositoryImpl {
 
 impl RedbId for RedbIdWrapper<LocalResourceId> {
     fn lower_id(&self) -> Vec<Vec<u8>> {
-        let code = bincode::serialize(&self.0.r#type).unwrap();
+        let code = bincode::serialize(&self.0.path).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
         vec![code, id]
     }
@@ -255,5 +255,30 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         };
 
         Ok(cursor.entry().await?.size)
+    }
+
+    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
+        let from_id = LocalResourceId {
+            path: Some(path),
+            order_id: None
+        };
+
+        let items = RedbRepository::<LocalResource, RedbIdWrapper<LocalResourceId>>::find_all(
+            self,
+            Some(&RedbIdWrapper(from_id)),
+            None,
+            None
+        ).await?;
+
+        let mut removed_items = vec![];
+        for item in items.iter() {
+            let id: LocalResourceId = Table::<LocalResourceId>::id(item);
+            let removed = Repository::<LocalResource, LocalResourceId>::delete_one(self, &id).await;
+            if let Ok(item) = removed {
+                removed_items.push(item);
+            }
+        }
+
+        Ok(removed_items)
     }
 }
