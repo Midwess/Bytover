@@ -30,6 +30,7 @@ import {
 import {
     ResourceTypeVariantFolder,
 } from "shared_types/types/shared_types";
+import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -38,6 +39,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 function Window() {
+    useOverlayScrollbars();
+    
     useEffect(() => {
         core.launch()
     }, [])
@@ -54,16 +57,17 @@ function Window() {
                 <Card
                     shadowSize={0.8}
                     className={"h-full bg-muted/50 backdrop-blur-xl flex flex-col border rounded-3xl gap-1.5 p-2 m-1 overflow-y-auto"}>
-                    <Label className={"flex flex-row items-center gap-2 px-1 py-1 text-muted-foreground"}>
+                    <Label className={"flex flex-row items-center gap-2 px-1 pt-1 pb-2 text-muted-foreground"}>
                         <Inbox size={21} className={"bg-muted-foreground/10 border rounded-md pl-[3px] pb-[2px] pr-[3px]"}/>
                         Inbox
                     </Label>
                     <SessionList/>
+                    <div className={"h-20 w-full"}></div>
                 </Card>
             </div>
             <div className={"flex flex-row h-full w-[60%] absolute z-0 self-end"}>
                <div
-                   className={"flex-7/12 gap-1 pb-2 rounded-t-4xl h-full w-full flex flex-col shadow-background/20 pt-2 overflow-hidden text-foreground"}>
+                   className={"flex-7/12 gap-1 pb-2 rounded-t-4xl h-full w-full flex flex-col shadow-background/20 pt-2 overflow-hidden text-foreground overflow-y-auto"}>
                   <div className="flex-1 min-h-0">
                        <ResourceList/>
                     </div>
