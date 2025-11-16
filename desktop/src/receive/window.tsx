@@ -230,7 +230,7 @@ function ResourceList() {
         </div>
     }
 
-    return <div className="w-full h-full overflow-y-auto px-2 py-2">
+    return <div className="w-full h-full px-2 py-2">
         <div className={"h-[90px]"}></div>
         <div className="grid grid-cols-3 h-full gap-1 auto-rows-max">
             {allResources.map((resource, index) => (

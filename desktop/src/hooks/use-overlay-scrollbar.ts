@@ -41,7 +41,12 @@ export const useOverlayScrollbars = () => {
                             scrollbars: {
                                 theme: "os-theme-custom",
                                 autoHide: "never",
+                                autoHideDelay: 500,
                             },
+                            overflow: {
+                                x: "hidden",
+                                y: "scroll"
+                            }
                         });
                         instances.set(element, instance);
                     } catch (error) {
