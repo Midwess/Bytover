@@ -221,8 +221,9 @@ impl AppCommand {
         let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
 
         // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
-        transfer_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
-        self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
+        let mut rendered_session = transfer_session.clone();
+        rendered_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
+        self.update_model(TransferSessionModelEvent::Add(rendered_session.clone()));
 
         let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
             peer_id: peer_id.to_string(),

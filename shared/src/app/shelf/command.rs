@@ -5,6 +5,7 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::shelf::module::ResourceSelection;
 use crate::app::AppEvent;
+use crate::entities::local_resource::LocalResourcePath;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 
@@ -74,13 +75,14 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn remove_resource(&self, id: u64) -> Result<(), CoreError> {
-        let removed = self.run(LocalResourcePersistentOperation::remove(id)).await?;
+    pub async fn remove_resource(&self, local_resource_id: LocalResourceId) -> Result<(), CoreError> {
+        let Some(path) = local_resource_id.path.clone() else {
+            return Ok(());
+        };
+
+        let removed = self.run(LocalResourcePersistentOperation::remove(path)).await?;
         if removed {
-            self.update_model(LocalResourceEvent::Remove(LocalResourceId {
-                order_id: Some(id),
-                ..Default::default()
-            }));
+            self.update_model(LocalResourceEvent::Remove(local_resource_id));
         }
 
         Ok(())

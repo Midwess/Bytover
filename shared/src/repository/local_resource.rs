@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct LocalResourceId {
-    pub r#type: Option<ResourceType>,
+    pub path: Option<LocalResourcePath>,
     pub order_id: Option<u64>
 }
 
@@ -28,6 +28,7 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
         session_id: Option<u64>,
         resource_ids: Vec<u64>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
+    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError>;
 }
 
 impl Table<LocalResourceId> for LocalResource {
@@ -37,7 +38,7 @@ impl Table<LocalResourceId> for LocalResource {
 
     fn id(&self) -> LocalResourceId {
         LocalResourceId {
-            r#type: Some(self.r#type.clone()),
+            path: Some(self.path.clone()),
             order_id: Some(self.order_id)
         }
     }
@@ -53,8 +54,8 @@ impl DbId for LocalResourceId {
             }
         }
 
-        if let Some(r#type) = &self.r#type {
-            if r#type != &table.r#type {
+        if let Some(path) = &self.path {
+            if path != &table.path {
                 return false;
             }
         }

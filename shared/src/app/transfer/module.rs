@@ -305,7 +305,6 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
-                    target: Some(TransferTargetId::Internet),
                     order_id: Some(session_id),
                     r#type: Some(TransferType::Receive)
                 };

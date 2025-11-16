@@ -26,9 +26,8 @@ pub struct TransferSessionRepositoryImpl {
 impl RedbId for RedbIdWrapper<TransferSessionId> {
     fn lower_id(&self) -> Vec<Vec<u8>> {
         let code = bincode::serialize(&self.0.r#type).unwrap();
-        let target = bincode::serialize(&self.0.target).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
-        vec![code, target, id]
+        vec![code, id]
     }
 }
 

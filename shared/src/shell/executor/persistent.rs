@@ -83,14 +83,12 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(id)) => {
-                self.local_resource_repository()
-                    .delete_one(&LocalResourceId {
-                        order_id: Some(id),
-                        ..Default::default()
-                    })
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
+                let removed = self.local_resource_repository()
+                    .remove(path)
                     .await?;
 
+                log::info!("Removed resources: {:?}", removed);
                 Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll) => {
