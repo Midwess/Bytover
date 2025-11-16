@@ -26,14 +26,36 @@ impl CloudStorage for S3CloudStorageImpl {
         resource: &TransferResource
     ) -> Result<Upload, CloudStorageErrors> {
         let file_size = resource.size_in_bytes();
-        let file_size_buffered = file_size + file_size.min(32 * MB);
         let (chunk_size, chunk_stream_enabled) = match (resource.r#type(), platform) {
             (TransferResourceType::Folder, Platform::Web) => (Some(8 * MB), true),
-            _ => (Some((5 * GB).min(file_size_buffered)), false) // Using max chunk size of s3
+            _ => 'dynamically_choose_chunk_size: {
+                if file_size <= 5 * MB {
+                    break 'dynamically_choose_chunk_size (Some(file_size), false);
+                }
+
+                let mut best: Option<(u64, u64)> = None;
+
+                for leftover in 2..=9 {
+                    let chunkable = file_size - leftover;
+
+                    let min_count = (chunkable + 5 * GB - 1) / 5 * GB;
+
+                    let chunk_size = chunkable / min_count;
+
+                    if chunk_size >= 5 * MB && file_size % chunk_size == leftover {
+                        let count = chunkable / chunk_size;
+
+                        if best.is_none() || chunk_size > best.unwrap().0 {
+                            best = Some((chunk_size, count));
+                        }
+                    }
+                }
+
+                (best.map(|it| it.0), false)
+            }
         };
 
         let source = resource.source();
-        log::info!("Get upload solution for resource: {:?} size: {:?}", source, file_size_buffered);
         let upload_id = self.s3_client.create_multipart_upload(&source).await?;
         let upload_url = self
             .s3_client
@@ -44,7 +66,7 @@ impl CloudStorage for S3CloudStorageImpl {
             user.id.clone(),
             upload_id,
             source.clone(),
-            file_size, // Use the file size not the buffered size to calculate exact chunk size of each part
+            file_size,
             chunk_size,
             chunk_stream_enabled
         )?;

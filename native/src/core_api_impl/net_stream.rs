@@ -109,11 +109,19 @@ impl NetStreamInnerImpl {
         let mut uploaded = 0u64;
         let total_size = cursor.entry().await?.size;
 
-        while uploaded < total_size {
+        // This is the main chunk size, every chunk must be equal in size except the last one
+        let main_chunk_size = upload.x_content_length;
+
+        // Upload all main chunks
+        while uploaded < total_size && upload.x_content_length.eq(&main_chunk_size) {
             let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await?;
             completion.e_tags.push(etag);
             upload = match server.complete_part_upload(&upload.context_token).await? {
-                Some(continue_upload) => continue_upload,
+                Some(mut continue_upload) => {
+                    let remaining = total_size - uploaded;
+                    continue_upload.x_content_length = continue_upload.x_content_length.min(remaining as u32);
+                    continue_upload
+                },
                 None => break
             };
         }
@@ -138,14 +146,7 @@ impl NetStreamInnerImpl {
         uploaded: &mut u64,
         chunk_size: u64
     ) -> Result<String> {
-        let total_size = cursor.entry().await?.size;
-        let remaining_size = total_size - *uploaded;
-
-        if remaining_size == 0 {
-            return Err(anyhow!("No data to upload"));
-        }
-
-        let chunk_size = remaining_size.min(chunk_size);
+        log::info!("Uploading chunk of size {} bytes", chunk_size);
 
         // If it is less than 5MB, it must be the last chunk
         if chunk_size < 5 * MB {
@@ -155,6 +156,7 @@ impl NetStreamInnerImpl {
             let _ = tx.try_send(NetStreamEvent::Progress {
                 uploaded_bytes: *uploaded
             });
+
             return Self::perform_upload(url, data, content_length).await;
         }
 
