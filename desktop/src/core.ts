@@ -66,7 +66,7 @@ export class Core {
         return sessions
     }
 
-    public useSession(id: bigint) {
+    public useSession(id: string) {
         const [session, setSession] = useState<ReceiveSessionViewModel | undefined>(() => {
             const transferState = this.transferState.get()
             return transferState?.received_sessions?.find(it => it.id === id)

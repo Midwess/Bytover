@@ -91,7 +91,8 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>
     ) -> Result<Option<MultiPartUploadComplete>> {
-        Self::upload_chunk(url, cursor, tx, &mut 0, 1024 * 1024 * 1024 * 5).await?;
+        let chunk_size = cursor.entry().await?.size.min(1024 * 1024 * 1024 * 5);
+        Self::upload_chunk(url, cursor, tx, &mut 0, chunk_size).await?;
         Ok(None)
     }
 
@@ -108,6 +109,7 @@ impl NetStreamInnerImpl {
 
         let mut uploaded = 0u64;
         let total_size = cursor.entry().await?.size;
+        log::info!("Total size of resource is {} bytes", total_size);
 
         // This is the main chunk size, every chunk must be equal in size except the last one
         let main_chunk_size = upload.x_content_length;
@@ -122,7 +124,9 @@ impl NetStreamInnerImpl {
                     continue_upload.x_content_length = continue_upload.x_content_length.min(remaining as u32);
                     continue_upload
                 },
-                None => break
+                None => {
+                    return Ok(Some(completion));
+                }
             };
         }
 

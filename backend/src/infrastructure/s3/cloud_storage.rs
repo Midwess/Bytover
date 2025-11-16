@@ -33,16 +33,21 @@ impl CloudStorage for S3CloudStorageImpl {
                     break 'dynamically_choose_chunk_size (Some(file_size), false);
                 }
 
+                log::info!("File size is {} bytes, trying to find optimal chunk size", file_size);
                 let mut best: Option<(u64, u64)> = None;
 
                 for leftover in 2..=9 {
-                    let chunkable = file_size - leftover;
+                    let chunkable = (file_size - leftover);
 
-                    let min_count = (chunkable + 5 * GB - 1) / 5 * GB;
+                    let min_count = ((chunkable + 5 * GB - 1) as f64) / (5f64 * GB as f64);
+                    let min_count = min_count.ceil() as u64;
 
                     let chunk_size = chunkable / min_count;
+                    if chunk_size < 1 {
+                        log::warn!("Chunk size is too small, falling back to default chunk size {} {chunkable}", min_count);
+                    }
 
-                    if chunk_size >= 5 * MB && file_size % chunk_size == leftover {
+                    if file_size % chunk_size == leftover {
                         let count = chunkable / chunk_size;
 
                         if best.is_none() || chunk_size > best.unwrap().0 {

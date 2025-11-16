@@ -43,6 +43,10 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::None)
             }
+            PersistentOperation::Session(SessionPersistentOperation::Remove) => {
+                self.auth_session_repository().delete_one(&AuthSessionId { r#type: SessionType::Access }).await?;
+                Ok(CoreOperationOutput::None)
+            }
             PersistentOperation::Session(SessionPersistentOperation::Get()) => {
                 let session = self
                     .auth_session_repository()

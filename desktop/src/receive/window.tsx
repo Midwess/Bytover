@@ -6,8 +6,26 @@ import {Avatar, AvatarImage} from "@/components/ui/avatar.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import CircleProgress from "@/components/ui/progress.tsx";
 import {Label} from "@/components/ui/label.tsx";
-import {ArrowRightCircle, Inbox, Trash2, FolderIcon, FileIcon, Play, Loader, Loader2} from "lucide-react";
+import {
+    ArrowRightCircle,
+    Inbox,
+    Trash2,
+    FolderIcon,
+    FileIcon,
+    Play,
+    Loader,
+    Loader2,
+    Settings2,
+    Settings,
+    LogOut
+} from "lucide-react";
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/animate-ui/components/radix/dropdown-menu";
 
 import {
     ResourceTypeVariantFolder,
@@ -75,15 +93,30 @@ function Intro() {
             <div className={"flex flex-row items-center gap-2"}>
                 <Button onClick={() => {
                     invoke("open_shelf")
-                }} className={"bg-bluePrimary text-foreground"}>Open shelf</Button>
+                }} className={"bg-muted border text-foreground px-2"}>Open shelf</Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant={"ghost"} className={"px-2"}>
+                            <Settings size={15} className={"text-muted-foreground"}/>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 dark">
+                        <DropdownMenuItem onClick={() => {
+                            invoke("sign_out")
+                        }}>
+                            <LogOut />
+                            Sign out
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </div>
     </>
 }
 
 function SessionTitle() {
-    const sessionId = core.useSelectedSession()?.id
-    const session = core.useSession(sessionId || BigInt(0))
+    const sessionId = core.useSelectedSession()?.id ?? ''
+    const session = core.useSession(sessionId)
 
     if (!session) return <></>
 
@@ -141,7 +174,7 @@ function SessionList() {
     </div>
 }
 
-function SessionItem({sessionId}: { sessionId: bigint }) {
+function SessionItem({sessionId}: { sessionId: string }) {
     const selectedSessionId = core.useSelectedSession()?.id
     const session = core.useSession(sessionId)
     if (!session) return null
@@ -170,8 +203,8 @@ function SessionItem({sessionId}: { sessionId: bigint }) {
 }
 
 function ResourceList() {
-    const selectedSessionId = core.useSelectedSession()?.id
-    const session = core.useSession(selectedSessionId || BigInt(0))
+    const selectedSessionId = core.useSelectedSession()?.id ?? ''
+    const session = core.useSession(selectedSessionId)
     if (!session) {
         return <div className="flex items-center justify-center w-full h-full text-muted-foreground">
             <p className="text-muted-foreground">Empty</p>
