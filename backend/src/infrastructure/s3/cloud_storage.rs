@@ -16,6 +16,7 @@ pub struct S3CloudStorageImpl {
     pub cached_sign: Arc<Mutex<HashMap<StaticResource, (Instant, String)>>>
 }
 
+
 #[async_trait::async_trait]
 impl CloudStorage for S3CloudStorageImpl {
     async fn get_upload_solution(
@@ -25,7 +26,7 @@ impl CloudStorage for S3CloudStorageImpl {
         resource: &TransferResource
     ) -> Result<Upload, CloudStorageErrors> {
         let file_size = resource.size_in_bytes();
-        let file_size_buffered = file_size + file_size.min(GB);
+        let file_size_buffered = file_size + file_size.min(32 * MB);
         let (chunk_size, chunk_stream_enabled) = match (resource.r#type(), platform) {
             (TransferResourceType::Folder, Platform::Web) => (Some(8 * MB), true),
             _ => (Some((5 * GB).min(file_size_buffered)), false) // Using max chunk size of s3
@@ -38,11 +39,12 @@ impl CloudStorage for S3CloudStorageImpl {
             .s3_client
             .generate_part_upload_url(&source, &upload_id, 1, self.get_download_duration())
             .await?;
+
         let context = UploadContext::new(
             user.id.clone(),
             upload_id,
             source.clone(),
-            file_size_buffered,
+            file_size, // Use the file size not the buffered size to calculate exact chunk size of each part
             chunk_size,
             chunk_stream_enabled
         )?;

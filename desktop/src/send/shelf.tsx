@@ -135,7 +135,7 @@ export function Shelf() {
                 onClick={() => {
                     invoke("clear_shelf")
                 }}
-                className="absolute bottom-3 translate-1 group z-20 flex-col items-center justify-between border-none overflow-hidden py-1 w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
+                className="absolute bottom-3 translate-x-[1px] group z-20 flex-col items-center justify-between border-none overflow-hidden py-1 w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
                 <div
                     className="overflow-hidden text-foreground bg-card px-2 rounded-full opacity-0 transition-all duration-500 ease-out group-hover:opacity-100 group-hover:mt-1">
                     <p>

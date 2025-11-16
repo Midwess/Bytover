@@ -17,6 +17,7 @@ use tonic::transport::Channel;
 
 const EVENT_QUEUE_SIZE: usize = 8;
 const READ_CHUNK_SIZE: usize = 256 * 1024;
+const MB: u64 = 1024 * 1024;
 
 pub struct NetStreamImpl {
     pub repository: Arc<dyn LocalResourceRepository>,
@@ -111,13 +112,10 @@ impl NetStreamInnerImpl {
         while uploaded < total_size {
             let etag = Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await?;
             completion.e_tags.push(etag);
-
-            if uploaded < total_size {
-                upload = match server.complete_part_upload(&upload.context_token).await? {
-                    Some(continue_upload) => continue_upload,
-                    None => break
-                }
-            }
+            upload = match server.complete_part_upload(&upload.context_token).await? {
+                Some(continue_upload) => continue_upload,
+                None => break
+            };
         }
 
         // Flushing remaining data if any
@@ -148,7 +146,19 @@ impl NetStreamInnerImpl {
         }
 
         let chunk_size = remaining_size.min(chunk_size);
-        let (mut writer, reader) = io::duplex(1024 * 1024 * 5);
+
+        // If it is less than 5MB, it must be the last chunk
+        if chunk_size < 5 * MB {
+            let data = cursor.read_all().await?;
+            let content_length = data.len() as u64;
+            *uploaded += content_length;
+            let _ = tx.try_send(NetStreamEvent::Progress {
+                uploaded_bytes: *uploaded
+            });
+            return Self::perform_upload(url, data, content_length).await;
+        }
+
+        let (mut writer, reader) = io::duplex(5 * MB as usize);
 
         let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
         let write_task = Self::write_data(&mut writer, cursor, tx, chunk_size, uploaded);
@@ -192,16 +202,15 @@ impl NetStreamInnerImpl {
             uploaded_bytes: *total_uploaded
         });
 
+        let mut uploaded_amount = 0;
         while remaining > 0 {
-            let data = cursor.next(Some(remaining)).await?.unwrap_or_default();
+            let Some(data) = cursor.next(Some(remaining)).await? else { break };
             let data_len = data.len() as u64;
-            if data_len == 0 {
-                break;
-            }
 
             writer.write_all(data).await?;
             remaining -= data_len;
             *total_uploaded += data_len;
+            uploaded_amount += data_len;
 
             let _ = tx.try_send(NetStreamEvent::Progress {
                 uploaded_bytes: *total_uploaded

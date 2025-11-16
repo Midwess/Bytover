@@ -54,7 +54,14 @@ impl UploadContext {
 
         let chunk_size = chunk_size.unwrap_or(5 * GB);
         let max_allowed_parts = match &resource.source {
-            Some(Source::S3Path(_)) => resource_size.div_ceil(chunk_size) as usize + 1,
+            Some(Source::S3Path(_)) => {
+                if chunk_size < 5 * MB {
+                    1
+                }
+                else {
+                    resource_size.div_ceil(chunk_size) as usize + 1
+                }
+            },
             _ => {
                 log::error!("Invalid resource type: {:?}", resource);
                 return Err(CloudStorageErrors::InvalidUploadContext)
