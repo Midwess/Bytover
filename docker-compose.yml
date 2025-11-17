@@ -37,6 +37,8 @@ services:
     container_name: kong-gateway
     environment:
       KONG_ROUTER_FLAVOR: "expressions"
+      KONG_WORKER_CONSISTENCY: "eventual"
+      KONG_ROUTER_CONSISTENCY: "eventual"
       KONG_NGINX_WORKER_CONNECTIONS: "512"
       KONG_DATABASE: "postgres"
       KONG_REAL_IP_RECURSIVE: "on"

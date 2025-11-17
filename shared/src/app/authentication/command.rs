@@ -1,6 +1,6 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::{PersistentOperation, SessionPersistentOperation};
+use crate::app::operations::persistent::SessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::AppEvent;

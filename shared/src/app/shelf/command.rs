@@ -5,7 +5,6 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::shelf::module::ResourceSelection;
 use crate::app::AppEvent;
-use crate::entities::local_resource::LocalResourcePath;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 

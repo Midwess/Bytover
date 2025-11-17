@@ -20,7 +20,7 @@ use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
-use crate::repository::transfer_session::{TransferSessionId, TransferTargetId};
+use crate::repository::transfer_session::TransferSessionId;
 use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};

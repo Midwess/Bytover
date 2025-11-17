@@ -36,7 +36,7 @@ impl CloudStorage for S3CloudStorageImpl {
                 let mut best: Option<(u64, u64)> = None;
 
                 for leftover in 2..=9 {
-                    let chunkable = (file_size - leftover);
+                    let chunkable = file_size - leftover;
 
                     let min_count = ((chunkable + 5 * GB - 1) as f64) / (5f64 * GB as f64);
                     let min_count = min_count as u64;

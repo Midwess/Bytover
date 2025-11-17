@@ -9,7 +9,7 @@ use crate::entities::session::{Session, SessionType};
 use crate::entities::transfer_session::TransferType;
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
-use crate::repository::local_resource::{LocalResourceId, LocalResourceRepository};
+use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]

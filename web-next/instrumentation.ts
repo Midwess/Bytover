@@ -63,8 +63,8 @@ export async function registerApiGateway() {
   })
 
   await createOrUpdate('/services/bitbridge-website/routes', '/routes/bitbridge-website-route', {
-    expression: `(net.protocol == "http" || net.protocol == "https") && http.path ^= "/" && http.host == "${DOMAIN}"`,
+    expression: `(net.protocol == "http" || net.protocol == "https") && http.path ^= "/" && http.host == "${DOMAIN}" && !(http.headers.content_type == "application/grpc" || http.headers.content_type == "application/grpc+proto" || http.headers.content_type =^ "application/grpc-web")`,
     name: 'bitbridge-website-route',
-    priority: 1,
+    priority: 0,
   });
 }
