@@ -2,10 +2,10 @@ use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 use crate::app_gateway::markov::{Markov, MarkovErrors};
 use async_trait::async_trait;
 use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
-use schema::devlog::auth_gateway::models::Application;
-use schema::devlog::auth_gateway::rpc::application_service_client::ApplicationServiceClient;
-use schema::devlog::auth_gateway::rpc::markov_generator_service_client::MarkovGeneratorServiceClient;
-use schema::devlog::auth_gateway::rpc::{GenerateNameRequest, GetApplicationInfoRequest};
+use schema::devlog::app_gateway::models::Application;
+use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
+use schema::devlog::app_gateway::rpc::markov_generator_service_client::MarkovGeneratorServiceClient;
+use schema::devlog::app_gateway::rpc::{GenerateNameRequest, GetApplicationInfoRequest};
 
 pub struct AppGatewayImpl {
     pub channel: GrpcGatewayChannel

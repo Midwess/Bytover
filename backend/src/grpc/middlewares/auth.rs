@@ -1,4 +1,4 @@
-use schema::devlog::auth_gateway::rpc::MeRequest;
+use schema::devlog::app_gateway::rpc::MeRequest;
 use tonic::body::Body;
 use tonic::codegen::http::Request;
 use tonic::metadata::MetadataValue;

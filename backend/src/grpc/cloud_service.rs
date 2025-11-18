@@ -5,7 +5,7 @@ use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
-use schema::devlog::auth_gateway::models::{Application, Device, User};
+use schema::devlog::app_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};

@@ -2,7 +2,7 @@ use crate::cloud_storage::storage::CloudStorage;
 use crate::entities::transfer_progress::TransferProgress;
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::TransferSession;
-use schema::devlog::auth_gateway::models::Application;
+use schema::devlog::app_gateway::models::Application;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, ProgressUpdated, ResourceUpdated, SessionUpdated};

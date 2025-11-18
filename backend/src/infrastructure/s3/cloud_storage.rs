@@ -1,7 +1,7 @@
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors, UploadContext, GB, MB};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use core_services::s3::S3Client;
-use schema::devlog::auth_gateway::models::User;
+use schema::devlog::app_gateway::models::User;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
 use schema::value::platform::Platform;

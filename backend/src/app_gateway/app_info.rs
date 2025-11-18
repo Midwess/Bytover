@@ -1,4 +1,4 @@
-use schema::devlog::auth_gateway::models::Application;
+use schema::devlog::app_gateway::models::Application;
 use thiserror::Error;
 use tonic::Status;
 

@@ -1,8 +1,8 @@
 use crate::mail::service::{EmailService, EmailServiceErrors};
 use crate::user::Token;
 use schema::crafter::EmailTemplate;
-use schema::devlog::auth_gateway::rpc::mail_service_client::MailServiceClient;
-use schema::devlog::auth_gateway::rpc::SendMailRequest;
+use schema::devlog::app_gateway::rpc::mail_service_client::MailServiceClient;
+use schema::devlog::app_gateway::rpc::SendMailRequest;
 use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 use tonic::Request;

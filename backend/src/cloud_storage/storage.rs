@@ -1,8 +1,8 @@
 use crate::entities::transfer_resource::TransferResource;
 use core_services::token::jwt;
 use core_services::token::jwt::{create_jwt_token, JwtErrors};
-use schema::devlog::auth_gateway::models::user::UserId;
-use schema::devlog::auth_gateway::models::User;
+use schema::devlog::app_gateway::models::user::UserId;
+use schema::devlog::app_gateway::models::User;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::{MultiPartUpload, MultiPartUploadComplete};
 use schema::value::platform::Platform;

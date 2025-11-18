@@ -10,7 +10,7 @@ use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRe
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
-use schema::devlog::auth_gateway::models::{Application, Device, User};
+use schema::devlog::app_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::value::datetime::Datetime;
