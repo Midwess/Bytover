@@ -77,7 +77,7 @@ impl BitBridgeCloudService for CloudGrpcService {
                 order_id: session.order_id(),
                 user_id: session.user_order_id()
             }),
-            access_url: session.access_url(app.unwrap().link),
+            access_url: session.access_url(app.unwrap().web_url().to_string()),
             is_required_password: session.password().is_some()
         };
 

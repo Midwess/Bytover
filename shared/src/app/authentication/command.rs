@@ -1,3 +1,4 @@
+use url::quirks::domain_to_ascii;
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::SessionPersistentOperation;
@@ -72,6 +73,10 @@ impl AppCommand {
             log::warn!("The redirect url is invalid: {url}");
             return Ok(());
         };
+
+        if let Some(error_msg) = url.query_pairs().find(|it| it.0 == "message") {
+            return Err(CoreError::BadRequest(error_msg.1.to_string()));
+        }
 
         let Some(token) = url.query_pairs().find(|it| it.0 == "access_token").map(|it| it.1.to_string()) else {
             log::info!("The redirect url does not contain access token");

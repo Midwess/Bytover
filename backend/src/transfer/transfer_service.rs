@@ -212,7 +212,7 @@ impl TransferService {
 
         let platform = device.platform();
 
-        let download_url = session.access_url(app.link.clone());
+        let download_url = session.access_url(app.web_url().to_owned());
         let resources = session
             .resources()
             .iter()

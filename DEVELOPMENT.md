@@ -12,12 +12,6 @@
     ```bash
     docker compose up 
     ```
-- auth-gateway
-  
-  Follow the setup guide in README.md in folder auth-gateway
-    ```bash
-    cd auth-gateway && DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" DEVLOG_GOOGLE_CLIENT_SECRET="DEVLOG_GOOGLE_CLIENT_SECRET" DEVLOG_KONG_GATEWAY_ADMIN_URL="http://localhost:8001" cargo run
-    ```
 - Back-end DB:
     ```bash
     cd backend && docker compose up

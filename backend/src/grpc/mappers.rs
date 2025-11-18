@@ -76,7 +76,7 @@ impl TransferSession {
             order_id: self.order_id(),
             user_id: self.user_order_id(),
             password: self.password(),
-            access_url: self.access_url(app.link.clone()),
+            access_url: self.access_url(app.web_url().to_owned()),
             resources,
             progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
             to_emails: self.to_emails().clone()

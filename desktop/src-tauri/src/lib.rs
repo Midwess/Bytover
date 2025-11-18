@@ -215,6 +215,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                             .and_then(|it| it.to_str().map(|it| it.to_owned()))
                             .unwrap_or(Uuid::new_v4().to_string()),
                         device_type,
+                        url: "bytover://".to_owned(),
                         unique_id: machine_uid::get().unwrap_or(Uuid::new_v4().to_string())
                     };
 

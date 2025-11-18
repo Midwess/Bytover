@@ -8,7 +8,7 @@ import {
 } from "shared_types/types/shared_types";
 
 function CoreStartProcess() {
-    const [url, setUrl] = useUrlState(['access_token', 'session'])
+    const [url, setUrl] = useUrlState(['access_token', 'session', 'code', 'message'])
     const isReady = core.useCoreReady()
 
     useEffect(() => {
@@ -17,14 +17,16 @@ function CoreStartProcess() {
     }, [])
 
     useEffect(() => {
-        if (url.access_token && isReady) {
+        if ((url.access_token || url.message || url.code) && isReady) {
             core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantOnRedirected(window.location.href)))
             setUrl({
                 ...url,
-                access_token: undefined
+                access_token: undefined,
+                message: undefined,
+                code: undefined,
             })
         }
-    }, [url.access_token, isReady]);
+    }, [url.access_token, url.message, url.code, isReady]);
 
     return <></>
 }

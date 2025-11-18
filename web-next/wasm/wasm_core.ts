@@ -341,6 +341,7 @@ export class WasmCore {
                             "Browser",
                             Date.now().toString(),
                             new DeviceTypeVariantOtherPhone(),
+                            window.location.origin
                         ))));
                     }
                     case DeviceOperationVariantOpen: {
