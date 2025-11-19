@@ -129,13 +129,8 @@ async fn sign_out(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-async fn sign_in(app_handle: AppHandle) {
-    process_event(AuthenticationEvent::SignIn, app_handle).await;
-}
-
-#[tauri::command]
-async fn sign_up(app_handle: AppHandle) {
-    process_event(AuthenticationEvent::SignUp, app_handle).await;
+async fn authenticate(app_handle: AppHandle) {
+    process_event(AuthenticationEvent::Authenticate, app_handle).await;
 }
 
 #[tauri::command]
@@ -306,7 +301,7 @@ pub async fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_positioner::init())
         .invoke_handler(tauri::generate_handler![
-            sign_in, sign_up, start_transfer, add_resources,
+            authenticate, start_transfer, add_resources,
             remove_resource, ui_launched, public_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,

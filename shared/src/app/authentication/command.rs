@@ -1,4 +1,3 @@
-use url::quirks::domain_to_ascii;
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::SessionPersistentOperation;
@@ -16,13 +15,13 @@ use devlog_sdk::distributed_id::gen_id;
 use crate::CoreOperation;
 
 impl AppCommand {
-    pub async fn sign_in(&self) {
+    pub async fn authenticate(&self) {
         let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
             return
         };
 
-        let url = match RpcOperation::get_sign_in_url(device_info).into_future(self.ctx()).await {
+        let url = match RpcOperation::get_authenticate_url(device_info).into_future(self.ctx()).await {
             Ok(url) => url,
             Err(e) => {
                 log::error!(target: "auth", "Failed to get sign in url: {e:?}");
@@ -37,23 +36,6 @@ impl AppCommand {
         self.run(SessionPersistentOperation::remove_session()).await?;
         self.re_authorize().await?;
         Ok(())
-    }
-
-    pub async fn sign_up(&self) {
-        let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
-            self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return
-        };
-
-        let url = match RpcOperation::get_sign_up_url(device_info).into_future(self.ctx()).await {
-            Ok(url) => url,
-            Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
-                return;
-            }
-        };
-
-        WebViewOperation::open_url(url).into_future(self.ctx()).await;
     }
 
     pub async fn re_authorize(&self) -> Result<(), CoreError> {

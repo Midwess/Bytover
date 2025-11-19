@@ -1,7 +1,6 @@
 import ReactDOM from "react-dom/client"
 import React, {useEffect} from "react"
 import core from "@/core.ts"
-import {Card} from "@/components/ui/card.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
@@ -59,11 +58,8 @@ function Window() {
                 </div>
                 <div className={"flex flex-col gap-1 mb-3"}>
                     <Button onClick={() => {
-                        invoke("sign_in")
-                    }} className={"bg-bluePrimary text-foreground"}>Sign in</Button>
-                    <Button variant={"ghost"} onClick={() => {
-                        invoke("sign_up")
-                    }}><p className={"text-muted-foreground font-normal"}>New to our platform?</p> <p className={"text-foreground"}>Sign up</p> </Button>
+                        invoke("authenticate")
+                    }} className={"bg-bluePrimary text-foreground"}>Get started</Button>
                 </div>
             </div>
         </main>

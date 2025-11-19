@@ -24,8 +24,7 @@ pub struct AuthenticationViewModel {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AuthenticationEvent {
-    SignIn,
-    SignUp,
+    Authenticate,
     SignOut,
     OnRedirected { url: String },
     Authorized { user: User }
@@ -42,8 +41,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            AuthenticationEvent::SignIn => Command::handle_result(|ctx| async move {
-                ctx.app().sign_in().await;
+            AuthenticationEvent::Authenticate => Command::handle_result(|ctx| async move {
+                ctx.app().authenticate().await;
                 Ok(())
             }),
             AuthenticationEvent::SignOut => Command::handle_result(|ctx| async move {
@@ -61,10 +60,6 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     Ok(())
                 })
             }
-            AuthenticationEvent::SignUp => Command::handle_result(|ctx| async move {
-                ctx.app().sign_up().await;
-                Ok(())
-            }),
             AuthenticationEvent::Authorized { user } => {
                 let is_authorized = model.authentication.user.is_some();
 
