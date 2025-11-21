@@ -591,7 +591,7 @@ function MediaView(props: {
             {/* Video play icon with modern styling */}
             {isVideo && (
                 <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
-                               transition-all duration-300 group-hover:scale-110 group-hover:bg-bluePrimary/80">
+                               transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
                     <Play className="w-4 h-4 text-white fill-white"/>
                 </div>
             )}
@@ -617,12 +617,7 @@ function MediaView(props: {
                             {model.name}
                         </p>
                         <div className="flex items-center gap-2">
-                            <span className={clsx(
-                                "text-xs px-2 py-0.5 rounded-full border font-medium",
-                                isVideo 
-                                    ? "bg-bluePrimary/20 border-bluePrimary/40 text-bluePrimary"
-                                    : "bg-greenSecondary/20 border-greenSecondary/40 text-greenSecondary"
-                            )}>
+                            <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
                                 {displaySize}
                             </span>
                             <span className="text-xs text-white/60">
@@ -635,10 +630,10 @@ function MediaView(props: {
                     <div className="flex-shrink-0">
                         {media.is_completed
                             ? <button
-                                className="rounded-xl p-2 bg-bluePrimary/90 hover:bg-bluePrimary border border-white/20
+                                className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
                                            transition-all duration-300 hover:scale-110 shadow-lg"
                                 onClick={() => core.downloadFile(model.path, model.name)}>
-                                <ArrowDown className="w-4 h-4 text-white"/>
+                                <ArrowDown className="w-5 h-5 text-white"/>
                             </button>
                             : <CircleProgress progress={media.completion} size={36}/>
                         }
