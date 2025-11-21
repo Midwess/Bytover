@@ -7,6 +7,77 @@ import windows from '@/public/windows.svg'
 import Image from 'next/image'
 import TransferBoard from "@/app/transfer";
 import { Suspense } from "react";
+import { Pricing2 } from "@/components/pricing2";
+
+function PricingPlans() {
+    const plans = [
+        {
+            id: "free",
+            name: "Free",
+            description: "For personal use",
+            monthlyPrice: "$0",
+            yearlyPrice: "$0",
+            features: [
+                { text: "Up to 5GB file size" },
+                { text: "Basic file sharing" },
+                { text: "7-day file retention" },
+                { text: "Community support" },
+            ],
+            button: {
+                text: "Get Started",
+                url: "/transfer",
+            },
+        },
+        {
+            id: "pro",
+            name: "Pro",
+            description: "For power users",
+            monthlyPrice: "$9",
+            yearlyPrice: "$89",
+            features: [
+                { text: "Up to 50GB file size" },
+                { text: "Advanced file sharing" },
+                { text: "30-day file retention" },
+                { text: "Priority support" },
+                { text: "Password protection" },
+                { text: "Custom expiration dates" },
+            ],
+            button: {
+                text: "Upgrade to Pro",
+                url: "/transfer",
+            },
+        },
+        {
+            id: "business",
+            name: "Business",
+            description: "For teams",
+            monthlyPrice: "$29",
+            yearlyPrice: "$279",
+            features: [
+                { text: "Unlimited file size" },
+                { text: "Team collaboration" },
+                { text: "Unlimited retention" },
+                { text: "24/7 dedicated support" },
+                { text: "Advanced security" },
+                { text: "Custom branding" },
+                { text: "API access" },
+                { text: "Analytics dashboard" },
+            ],
+            button: {
+                text: "Contact Sales",
+                url: "/transfer",
+            },
+        },
+    ];
+
+    return (
+        <Pricing2
+            heading="Simple, Transparent Pricing"
+            description="Choose the perfect plan for your file transfer needs"
+            plans={plans}
+        />
+    );
+}
 
 export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-blackBase">
@@ -56,6 +127,9 @@ export default function Home() {
             <Suspense fallback={null}>
                 <TransferBoard/>
             </Suspense>
+        </div>
+        <div className={"w-full bg-blackBase"}>
+            <PricingPlans/>
         </div>
         <div className={"h-36 w-full"}></div>
     </div>
