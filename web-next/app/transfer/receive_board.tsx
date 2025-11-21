@@ -484,20 +484,14 @@ function FileView(props: {
     return (
         <div
             className="gap-4 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group 
-                       bg-gradient-to-r from-muted/80 via-muted/60 to-muted/40
+                       bg-muted/60
                        backdrop-blur-xl border border-white/10 p-3
                        transition-all duration-300 ease-out
-                       hover:shadow-xl hover:shadow-bluePrimary/10 hover:border-bluePrimary/30
-                       hover:from-muted/90 hover:via-muted/70">
+                       hover:shadow-xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
+                       hover:bg-muted/80">
             <div className={"flex flex-row gap-4 items-center flex-1 min-w-0"}>
                 {/* Icon Container */}
-                <div className={clsx(
-                    "relative w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0",
-                    "bg-gradient-to-br shadow-md",
-                    isFolder 
-                        ? "from-greenSecondary/20 via-greenSecondary/15 to-greenSecondary/10 border border-greenSecondary/30 group-hover:from-greenSecondary/30" 
-                        : "from-bluePrimary/20 via-bluePrimary/15 to-bluePrimary/10 border border-bluePrimary/30 group-hover:from-bluePrimary/30"
-                )}>
+                <div className="relative w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
                     <div className="relative w-10 h-10">
                         <Image
                             className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110"
@@ -507,23 +501,13 @@ function FileView(props: {
                             onError={() => setThumbnailSource(fallbackThumbnail)}
                         />
                     </div>
-                    {/* Glow effect */}
-                    <div className={clsx(
-                        "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-lg",
-                        isFolder ? "bg-greenSecondary/20" : "bg-bluePrimary/20"
-                    )} />
                 </div>
 
                 {/* File Info */}
                 <div className="flex flex-col text-white items-start gap-1.5 flex-1 min-w-0">
                     <p className="text-sm font-medium text-white/90 break-words w-full line-clamp-2">{model.name}</p>
                     <div className="flex items-center gap-2">
-                        <span className={clsx(
-                            "text-xs px-2 py-0.5 rounded-full border font-medium",
-                            isFolder 
-                                ? "bg-greenSecondary/10 border-greenSecondary/30 text-greenSecondary" 
-                                : "bg-bluePrimary/10 border-bluePrimary/30 text-bluePrimary"
-                        )}>
+                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
                             {displaySize}
                         </span>
                         <span className="text-xs text-white/50">
@@ -537,7 +521,7 @@ function FileView(props: {
             {
                 file.is_completed
                     ? <button
-                        className="rounded-xl p-2.5 bg-bluePrimary/90 hover:bg-bluePrimary border border-white/20
+                        className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
                         onClick={onDownloadClick}
                     >

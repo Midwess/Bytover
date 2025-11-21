@@ -241,14 +241,14 @@ function FileView(props: {
                        bg-muted/60
                        backdrop-blur-xl border border-white/10
                        transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30
-                       hover:from-muted/90 hover:via-muted/70 hover:to-muted/50">
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
+                       hover:bg-muted/80">
             
             {/* Remove Button Overlay */}
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center rounded-2xl",
-                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-sm transition-all duration-300"
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300"
                 )}>
                 <Button 
                     size="sm"
@@ -263,13 +263,7 @@ function FileView(props: {
 
             {/* Icon/Thumbnail Container */}
             <div className="flex-1 flex items-center justify-center p-3 relative">
-                <div className={clsx(
-                    "relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300",
-                    "bg-gradient-to-br shadow-lg",
-                    isFolder 
-                        ? "from-greenSecondary/20 via-greenSecondary/15 to-greenSecondary/10 border border-greenSecondary/30 group-hover:from-greenSecondary/30 group-hover:via-greenSecondary/25" 
-                        : "from-bluePrimary/20 via-bluePrimary/15 to-bluePrimary/10 border border-bluePrimary/30 group-hover:from-bluePrimary/30 group-hover:via-bluePrimary/25"
-                )}>
+                <div className="relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
                     <div className="relative w-16 h-16">
                         <Image
                             className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
@@ -278,12 +272,6 @@ function FileView(props: {
                             src={thumbnailPath}
                         />
                     </div>
-                    
-                    {/* Glow effect */}
-                    <div className={clsx(
-                        "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl",
-                        isFolder ? "bg-greenSecondary/20" : "bg-bluePrimary/20"
-                    )} />
                 </div>
             </div>
 
@@ -293,12 +281,7 @@ function FileView(props: {
                     {model.name}
                 </p>
                 <div className="flex items-center justify-center gap-2">
-                    <span className={clsx(
-                        "text-xs px-2 py-0.5 rounded-full border font-medium",
-                        isFolder 
-                            ? "bg-greenSecondary/10 border-greenSecondary/30 text-greenSecondary" 
-                            : "bg-bluePrimary/10 border-bluePrimary/30 text-bluePrimary"
-                    )}>
+                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
                         {displaySize}
                     </span>
                     <span className="text-xs text-white/50">
