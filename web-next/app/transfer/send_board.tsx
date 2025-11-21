@@ -111,7 +111,7 @@ function FileSelections() {
 
     return (
         <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden"}>
-            <div className="w-full flex flex-row gap-2">
+            <div className="w-full flex flex-row gap-2 pt-2">
                 <div
                     role="button"
                     onClick={openFileDialog}
