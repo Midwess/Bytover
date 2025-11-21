@@ -15,8 +15,7 @@ function PricingPlans() {
             id: "free",
             name: "Free",
             description: "For personal use",
-            monthlyPrice: "$0",
-            yearlyPrice: "$0",
+            price: "$0",
             features: [
                 { text: "Up to 5GB file size" },
                 { text: "Basic file sharing" },
@@ -32,8 +31,7 @@ function PricingPlans() {
             id: "pro",
             name: "Pro",
             description: "For power users",
-            monthlyPrice: "$9",
-            yearlyPrice: "$89",
+            price: "$99",
             features: [
                 { text: "Up to 50GB file size" },
                 { text: "Advanced file sharing" },
@@ -43,28 +41,7 @@ function PricingPlans() {
                 { text: "Custom expiration dates" },
             ],
             button: {
-                text: "Upgrade to Pro",
-                url: "/transfer",
-            },
-        },
-        {
-            id: "business",
-            name: "Business",
-            description: "For teams",
-            monthlyPrice: "$29",
-            yearlyPrice: "$279",
-            features: [
-                { text: "Unlimited file size" },
-                { text: "Team collaboration" },
-                { text: "Unlimited retention" },
-                { text: "24/7 dedicated support" },
-                { text: "Advanced security" },
-                { text: "Custom branding" },
-                { text: "API access" },
-                { text: "Analytics dashboard" },
-            ],
-            button: {
-                text: "Contact Sales",
+                text: "Buy Now",
                 url: "/transfer",
             },
         },
@@ -73,7 +50,7 @@ function PricingPlans() {
     return (
         <Pricing2
             heading="Simple, Transparent Pricing"
-            description="Choose the perfect plan for your file transfer needs"
+            description="One-time purchase. Lifetime access. No hidden fees."
             plans={plans}
         />
     );
@@ -81,15 +58,19 @@ function PricingPlans() {
 
 export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-blackBase">
-        <div className={'relative flex flex-col w-full items-center gap-10 pb-16'}>
-            <Suspense fallback={null}>
-                <Header/>
-            </Suspense>
+        {/* Fixed Header */}
+        <Suspense fallback={null}>
+            <Header/>
+        </Suspense>
+        
+        {/* Hero Section */}
+        <div className={'relative flex flex-col w-full items-center gap-10 pb-16 pt-32'}>
+
             <div
                 className="absolute top-0 h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
             </div>
             <div className={'flex flex-col items-center gap-4 container z-2'}>
-                <h2 className="text-lg tracking-widest  text-greenSecondary text-center">
+                <h2 className="text-lg tracking-widest text-greenSecondary text-center">
                     Powering your productivity
                 </h2>
                 <TypingText
@@ -123,14 +104,20 @@ export default function Home() {
                 </div>
             </div>
         </div>
-        <div className={"container flex flex-col pt-10"}>
+
+        {/* Transfer Board Section */}
+        <div className={"container flex flex-col py-16"}>
             <Suspense fallback={null}>
                 <TransferBoard/>
             </Suspense>
         </div>
+
+        {/* Pricing Section */}
         <div className={"w-full bg-blackBase"}>
             <PricingPlans/>
         </div>
-        <div className={"h-36 w-full"}></div>
+
+        {/* Footer Spacing */}
+        <div className={"h-24 w-full"}></div>
     </div>
 }
