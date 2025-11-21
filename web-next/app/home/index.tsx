@@ -19,7 +19,7 @@ export default function Home() {
             </div>
             <div className={'flex flex-col items-center gap-4 container z-2'}>
                 <h2 className="text-lg tracking-widest  text-greenSecondary text-center">
-                    Powering your productivity 👋
+                    Powering your productivity
                 </h2>
                 <TypingText
                     delay={200}

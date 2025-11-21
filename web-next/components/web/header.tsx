@@ -2,7 +2,8 @@
 import {GitHubStarsButton} from '@/components/animate-ui/buttons/github-stars'
 import Image from "next/image";
 import {
-    AppEventVariantAuthentication, AuthenticationEventVariantAuthenticate,
+    AppEventVariantAuthentication,
+    AuthenticationEventVariantAuthenticate,
 } from 'shared_types/types/shared_types'
 import {Button} from "@/components/ui/button.tsx";
 

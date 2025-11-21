@@ -51,12 +51,12 @@ import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 export default function SendBoard() {
     return <>
         <div
-            className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
-            <div className={"grid grid-cols-11 w-full h-full gap-2"}>
+            className="h-[950px] max-h-[95vh] w-full rounded-xl overflow-x-clip bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
+            <div className={"grid grid-cols-12 w-full h-full gap-2"}>
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-8 h-full overflow-y-scroll"}>
+                <div className={"col-span-9 h-full overflow-y-scroll pt-2 w-full"}>
                     <FileSelections/>
                 </div>
             </div>
@@ -110,8 +110,8 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
-            <div className="relative w-full flex flex-row gap-4">
+        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8"}>
+            <div className="w-full flex flex-row gap-4">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -181,10 +181,10 @@ function FileSelections() {
                 </div>
             )}
             <div
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full">
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full overflow-scroll">
                 {
                     selectedResources.map((resource) => (
-                        <div className={"h-[220px] flex items-start flex-row"} key={resource.order_id}>
+                        <div className={"h-[210px] flex items-start flex-row"} key={resource.order_id}>
                             <ResourceView model={resource}/>
                         </div>
                     ))

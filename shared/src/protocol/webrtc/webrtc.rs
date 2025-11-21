@@ -41,11 +41,6 @@ impl WebRtc {
         }
     }
 
-    pub async fn is_peer_connected(&self, peer_id: String) -> bool {
-        let peer_id = PeerId(peer_id.parse().unwrap());
-        self.shared_context.get_peer(&peer_id).await.is_some()
-    }
-
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
         self.shared_context.update_finding_scopes(scopes).await;
     }
