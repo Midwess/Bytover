@@ -453,15 +453,13 @@ function FileView(props: {
     const file = core.useReceiveResource(id, isCloud);
     const model = file?.model;
 
-    const fallbackThumbnail = model?.type instanceof ResourceTypeVariantFolder
-        ? "/folder.svg"
-        : "/file.svg";
+    const isFolder = model?.type instanceof ResourceTypeVariantFolder;
+    const fallbackThumbnail = isFolder ? "/folder.svg" : "/file.svg";
 
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
     useEffect(() => {
         if (!model?.thumbnail_path) {
-            // Remove thumbnail
             setThumbnailSource(undefined)
             return
         }
@@ -485,34 +483,69 @@ function FileView(props: {
 
     return (
         <div
-            className="gap-3 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group bg-black-base p-2 border-1 border-primaryText/5 bg-muted/50 hover:bg-muted-foreground/30">
-            <div className={"flex flex-row gap-3"}>
-                <div className="relative aspect-square w-12 h-12">
-                    <Image
-                        className="w-full h-auto bg-muted rounded-xl p-1.5"
-                        layout="fill"
-                        alt="Thumbnail"
-                        src={thumbnailSource || fallbackThumbnail}
-                        onError={() => setThumbnailSource(fallbackThumbnail)}
-                    />
+            className="gap-4 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group 
+                       bg-gradient-to-r from-muted/80 via-muted/60 to-muted/40
+                       backdrop-blur-xl border border-white/10 p-3
+                       transition-all duration-300 ease-out
+                       hover:shadow-xl hover:shadow-bluePrimary/10 hover:border-bluePrimary/30
+                       hover:from-muted/90 hover:via-muted/70">
+            <div className={"flex flex-row gap-4 items-center flex-1 min-w-0"}>
+                {/* Icon Container */}
+                <div className={clsx(
+                    "relative w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0",
+                    "bg-gradient-to-br shadow-md",
+                    isFolder 
+                        ? "from-greenSecondary/20 via-greenSecondary/15 to-greenSecondary/10 border border-greenSecondary/30 group-hover:from-greenSecondary/30" 
+                        : "from-bluePrimary/20 via-bluePrimary/15 to-bluePrimary/10 border border-bluePrimary/30 group-hover:from-bluePrimary/30"
+                )}>
+                    <div className="relative w-10 h-10">
+                        <Image
+                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110"
+                            layout="fill"
+                            alt="Thumbnail"
+                            src={thumbnailSource || fallbackThumbnail}
+                            onError={() => setThumbnailSource(fallbackThumbnail)}
+                        />
+                    </div>
+                    {/* Glow effect */}
+                    <div className={clsx(
+                        "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-lg",
+                        isFolder ? "bg-greenSecondary/20" : "bg-bluePrimary/20"
+                    )} />
                 </div>
 
-                <div className="flex flex-col text-white items-start mt-1">
-                    <p className="text-sm text-start font-poppins break-words w-full">{model.name}</p>
-                    <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
+                {/* File Info */}
+                <div className="flex flex-col text-white items-start gap-1.5 flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white/90 break-words w-full line-clamp-2">{model.name}</p>
+                    <div className="flex items-center gap-2">
+                        <span className={clsx(
+                            "text-xs px-2 py-0.5 rounded-full border font-medium",
+                            isFolder 
+                                ? "bg-greenSecondary/10 border-greenSecondary/30 text-greenSecondary" 
+                                : "bg-bluePrimary/10 border-bluePrimary/30 text-bluePrimary"
+                        )}>
+                            {displaySize}
+                        </span>
+                        <span className="text-xs text-white/50">
+                            {isFolder ? "Folder" : "File"}
+                        </span>
+                    </div>
                 </div>
             </div>
+            
+            {/* Download Button / Progress */}
             {
                 file.is_completed
                     ? <button
-                        className={"rounded-lg p-2 border bg-muted hover:cursor-pointer"}
+                        className="rounded-xl p-2.5 bg-bluePrimary/90 hover:bg-bluePrimary border border-white/20
+                                   transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
                         onClick={onDownloadClick}
                     >
-                        <ArrowDown color={'var(--primary)'}/>
+                        <ArrowDown className="w-5 h-5 text-white"/>
                     </button>
-                    : <>
-                        <CircleProgress progress={file.completion} size={30}/>
-                    </>
+                    : <div className="flex-shrink-0">
+                        <CircleProgress progress={file.completion} size={40}/>
+                    </div>
             }
         </div>
     );
@@ -544,65 +577,90 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full bg-muted-foreground overflow-hidden rounded-2xl relative group">
-            <div
-                className={clsx(
-                    "z-3 w-full h-[100%] absolute bg-gradient-to-t from-blackBase bottom-0",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            ></div>
-
-            {
-                isVideo && <div className={"absolute z-2 flex w-full h-full justify-center items-center"}>
-                    <Button className={"bg-muted-foreground hover:bg-muted"}>
-                        <Play color={"white"} fill={"white"}/>
-                    </Button>
-                </div>
-            }
-
-            <div
-                className={clsx(
-                    "flex w-full flex-row z-4 bottom-0 absolute items-center px-3 justify-between py-1",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}
-            >
-                <div className="flex flex-col items-start gap-1 w-[80%]">
-                    <p className="text-primaryText text-sm line-clamp-3 w-full">
-                        {model.name}
-                    </p>
-                    <p className="text-sm text-primaryText/80">
-                        {displaySize}
-                    </p>
-                </div>
-                <div className={"flex-1 w-fit flex"}>
-                    {media.is_completed
-                        ? <button
-                            className={"rounded-lg ml-2 bg-muted border border-muted-foreground p-1 hover:cursor-pointer"}
-                            onClick={() => core.downloadFile(model.path, model.name)}>
-                            <ArrowDown color={'white'}/>
-                        </button>
-                        : <>
-                            <CircleProgress progress={media.completion} size={30}/>
-                        </>
-                    }</div>
-
-            </div>
-
-            {
-                thumbnailSource
-                    ? <Image
-                        className={`object-cover w-full h-full rounded-2xl fill-white bg-muted/40 ${model.display_path ? '' : 'p-10'}`}
+        <div className="w-full h-full overflow-hidden rounded-2xl relative group 
+                       border border-white/10 backdrop-blur-sm
+                       transition-all duration-300 ease-out
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
+            {/* Thumbnail */}
+            <div className="absolute inset-0 z-0">
+                {thumbnailSource ? (
+                    <Image
+                        className="object-cover w-full h-full"
                         alt={model.name}
-                        src={thumbnailSource || ''}
+                        src={thumbnailSource}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
-                    : <></>
-            }
+                ) : (
+                    <div className="w-full h-full bg-muted/40 flex items-center justify-center">
+                        <Image
+                            className="w-16 h-16 opacity-50"
+                            width={64}
+                            height={64}
+                            alt="placeholder"
+                            src="/file.svg"
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Video play icon with modern styling */}
+            {isVideo && (
+                <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
+                               transition-all duration-300 group-hover:scale-110 group-hover:bg-bluePrimary/80">
+                    <Play className="w-4 h-4 text-white fill-white"/>
+                </div>
+            )}
+
+            {/* Gradient overlay - always visible but subtle */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+
+            {/* Background overlay for hover effect */}
+            <div
+                className={clsx(
+                    "absolute inset-0 bg-black/40 backdrop-blur-sm z-15",
+                    isMobile
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
+                )}
+            />
+
+            {/* File info - positioned at bottom with enhanced styling */}
+            <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t to-transparent backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
+                            {model.name}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <span className={clsx(
+                                "text-xs px-2 py-0.5 rounded-full border font-medium",
+                                isVideo 
+                                    ? "bg-bluePrimary/20 border-bluePrimary/40 text-bluePrimary"
+                                    : "bg-greenSecondary/20 border-greenSecondary/40 text-greenSecondary"
+                            )}>
+                                {displaySize}
+                            </span>
+                            <span className="text-xs text-white/60">
+                                {isVideo ? "Video" : "Image"}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Download Button / Progress */}
+                    <div className="flex-shrink-0">
+                        {media.is_completed
+                            ? <button
+                                className="rounded-xl p-2 bg-bluePrimary/90 hover:bg-bluePrimary border border-white/20
+                                           transition-all duration-300 hover:scale-110 shadow-lg"
+                                onClick={() => core.downloadFile(model.path, model.name)}>
+                                <ArrowDown className="w-4 h-4 text-white"/>
+                            </button>
+                            : <CircleProgress progress={media.completion} size={36}/>
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

@@ -110,7 +110,7 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8"}>
+        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden"}>
             <div className="w-full flex flex-row gap-2">
                 <div
                     role="button"
@@ -180,12 +180,12 @@ function FileSelections() {
                     <span>{errors[0]}</span>
                 </div>
             )}
-            <div className="relative w-full h-full flex-1">
+            <div className="relative w-full h-full flex-1 overflow-x-hidden">
                 {/* Top shadow fade effect */}
                 <div
                     className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-blackBase to-transparent z-10 pointer-events-none"/>
 
-                <div className={"w-full h-full overflow-y-scroll pb-[300px]"}>
+                <div className={"w-full h-full overflow-y-scroll pb-[300px] overflow-x-hidden"}>
                     <div
                         className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
                         {
@@ -225,8 +225,9 @@ function FileView(props: {
     const isMobile = useIsMobile();
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    const isFolder = model.type instanceof ResourceTypeVariantFolder;
     if (!thumbnailPath) {
-        thumbnailPath = model.type instanceof ResourceTypeVariantFolder ? "/folder.svg" : "/file.svg";
+        thumbnailPath = isFolder ? "/folder.svg" : "/file.svg";
     }
 
     let displaySize = `${model.size_mb} MB`;
@@ -236,31 +237,74 @@ function FileView(props: {
 
     return (
         <div
-            className="px-2 w-full h-full overflow-hidden items-center gap-3 justify-center rounded-2xl flex flex-col relative group bg-muted p-4 border-1 border-primaryText/5">
+            className="w-full h-full overflow-hidden rounded-2xl flex flex-col relative group 
+                       bg-muted/60
+                       backdrop-blur-xl border border-white/10
+                       transition-all duration-300 ease-out
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30
+                       hover:from-muted/90 hover:via-muted/70 hover:to-muted/50">
+            
+            {/* Remove Button Overlay */}
             <div
                 className={clsx(
-                    "absolute z-20 inset-0 flex items-center justify-center",
-                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
+                    "absolute z-20 inset-0 flex items-center justify-center rounded-2xl",
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-sm transition-all duration-300"
                 )}>
-                <Button className={"rounded-xl"} onClick={async () => {
-                    await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
-                }}>
-                    <X/>
+                <Button 
+                    size="sm"
+                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4" 
+                    onClick={async () => {
+                        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+                    }}>
+                    <X className="w-4 h-4"/>
+                    <span className="ml-1 text-xs">Remove</span>
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-fit h-[40%] rounded-2xl">
-                <Image
-                    className="w-full h-auto text-primaryText"
-                    layout="fill"
-                    alt={`${model.type}`}
-                    src={thumbnailPath}
-                />
+            {/* Icon/Thumbnail Container */}
+            <div className="flex-1 flex items-center justify-center p-3 relative">
+                <div className={clsx(
+                    "relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300",
+                    "bg-gradient-to-br shadow-lg",
+                    isFolder 
+                        ? "from-greenSecondary/20 via-greenSecondary/15 to-greenSecondary/10 border border-greenSecondary/30 group-hover:from-greenSecondary/30 group-hover:via-greenSecondary/25" 
+                        : "from-bluePrimary/20 via-bluePrimary/15 to-bluePrimary/10 border border-bluePrimary/30 group-hover:from-bluePrimary/30 group-hover:via-bluePrimary/25"
+                )}>
+                    <div className="relative w-16 h-16">
+                        <Image
+                            className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
+                            layout="fill"
+                            alt={`${model.type}`}
+                            src={thumbnailPath}
+                        />
+                    </div>
+                    
+                    {/* Glow effect */}
+                    <div className={clsx(
+                        "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl",
+                        isFolder ? "bg-greenSecondary/20" : "bg-bluePrimary/20"
+                    )} />
+                </div>
             </div>
 
-            <div className="flex h-fit flex-col text-white items-center mt-3">
-                <p className="text-sm text-center font-poppins break-words w-full line-clamp-3-ellipsis">{model.name}</p>
-                <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
+            {/* Info Section */}
+            <div className="flex flex-col gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3">
+                <p className="text-sm font-medium text-center text-white/90 break-words line-clamp-2 leading-tight">
+                    {model.name}
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                    <span className={clsx(
+                        "text-xs px-2 py-0.5 rounded-full border font-medium",
+                        isFolder 
+                            ? "bg-greenSecondary/10 border-greenSecondary/30 text-greenSecondary" 
+                            : "bg-bluePrimary/10 border-bluePrimary/30 text-bluePrimary"
+                    )}>
+                        {displaySize}
+                    </span>
+                    <span className="text-xs text-white/50">
+                        {isFolder ? "Folder" : "File"}
+                    </span>
+                </div>
             </div>
         </div>
     );
@@ -300,26 +344,33 @@ function MediaView(props: {
 
     return (
         <div
-            className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
+            className="w-full h-full overflow-hidden rounded-2xl relative group 
+                       border border-white/10 backdrop-blur-sm
+                       transition-all duration-300 ease-out
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
             {/* Thumbnail - lowest z-index */}
             <div className="absolute inset-0 z-0">
                 {thumbnail}
             </div>
 
-            {/* Video play icon */}
+            {/* Video play icon with modern styling */}
             {isVideo && (
-                <div className="absolute top-2 right-2 z-20">
-                    <Play className="w-5 h-5 bg-muted p-1 rounded-sm"/>
+                <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
+                               transition-all duration-300 group-hover:scale-110 group-hover:bg-bluePrimary/80">
+                    <Play className="w-4 h-4 text-white fill-white"/>
                 </div>
             )}
+
+            {/* Gradient overlay - always visible but subtle */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
 
             {/* Background overlay for hover effect */}
             <div
                 className={clsx(
-                    "absolute inset-0 bg-gradient-to-t from-blackBase/70 via-transparent to-transparent z-10",
+                    "absolute inset-0 bg-black/40 backdrop-blur-sm z-15",
                     isMobile
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
                 )}
             />
 
@@ -329,32 +380,38 @@ function MediaView(props: {
                     "absolute inset-0 flex items-center justify-center z-30",
                     isMobile
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
                 )}>
                 <Button
-                    className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md"
+                    size="sm"
+                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4"
                     onClick={() => {
                         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
                     <X className="w-4 h-4"/>
+                    <span className="ml-1 text-xs">Remove</span>
                 </Button>
             </div>
 
-            {/* File info - positioned at bottom */}
-            <div
-                className={clsx(
-                    "absolute bottom-0 left-0 right-0 p-2 z-20",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}>
-                <div className="flex flex-col items-start gap-1">
-                    <p className="text-primaryText text-sm font-medium">
+            {/* File info - positioned at bottom with enhanced styling */}
+            <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm">
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
                         {model.name}
                     </p>
-                    <p className="text-sm text-primaryText/80">
-                        {displaySize}
-                    </p>
+                    <div className="flex items-center gap-2">
+                        <span className={clsx(
+                            "text-xs px-2 py-0.5 rounded-full border font-medium",
+                            isVideo 
+                                ? "bg-bluePrimary/20 border-bluePrimary/40 text-bluePrimary" 
+                                : "bg-greenSecondary/20 border-greenSecondary/40 text-greenSecondary"
+                        )}>
+                            {displaySize}
+                        </span>
+                        <span className="text-xs text-white/60">
+                            {isVideo ? "Video" : "Image"}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
