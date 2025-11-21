@@ -11,10 +11,14 @@ import { useEffect, useState } from "react";
 export default function Header() {
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
+    const [isAtTop, setIsAtTop] = useState(true);
 
     useEffect(() => {
         const controlHeader = () => {
             const currentScrollY = window.scrollY;
+            
+            // Check if at top
+            setIsAtTop(currentScrollY < 50);
             
             if (currentScrollY < 10) {
                 setIsVisible(true);
@@ -38,7 +42,7 @@ export default function Header() {
     }
 
     return (
-        <div className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center w-full py-6 px-4 backdrop-blur-xl bg-blackBase/90 border-b border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+        <div className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center w-full py-6 px-4 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'} ${isAtTop ? 'bg-transparent border-b border-transparent shadow-none' : 'backdrop-blur-xl bg-blackBase/90 border-b border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]'}`}>
             <div className="container mx-auto flex justify-between items-center">
             <div className="flex flex-row gap-2 items-center">
                 <Image
