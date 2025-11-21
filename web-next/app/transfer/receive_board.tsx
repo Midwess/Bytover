@@ -173,7 +173,6 @@ function ContentBoard() {
             }
         </div>
     }
-    console.log(selectedSession)
 
     return <>
         <Collapsible

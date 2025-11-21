@@ -52,11 +52,11 @@ export default function SendBoard() {
     return <>
         <div
             className="h-[950px] max-h-[95vh] w-full rounded-xl overflow-x-clip bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
-            <div className={"grid grid-cols-12 w-full h-full gap-2"}>
+            <div className={"grid grid-cols-12 w-full h-full gap-4"}>
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-9 h-full overflow-y-scroll pt-2 w-full"}>
+                <div className={"col-span-9 h-full overflow-y-hidden pt-2 w-full"}>
                     <FileSelections/>
                 </div>
             </div>
@@ -111,7 +111,7 @@ function FileSelections() {
 
     return (
         <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8"}>
-            <div className="w-full flex flex-row gap-4">
+            <div className="w-full flex flex-row gap-2">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -120,14 +120,14 @@ function FileSelections() {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     data-dragging={isDragging || undefined}
-                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed pt-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
                 >
                     <input
                         {...getInputProps()}
                         className="sr-only"
                         aria-label="Upload files"
                     />
-                    <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                    <div className="flex flex-col items-center justify-center px-4 py-1 text-center">
                         <div
                             className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
                             aria-hidden="true"
@@ -180,15 +180,23 @@ function FileSelections() {
                     <span>{errors[0]}</span>
                 </div>
             )}
-            <div
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full overflow-scroll">
-                {
-                    selectedResources.map((resource) => (
-                        <div className={"h-[210px] flex items-start flex-row"} key={resource.order_id}>
-                            <ResourceView model={resource}/>
-                        </div>
-                    ))
-                }
+            <div className="relative w-full h-full flex-1">
+                {/* Top shadow fade effect */}
+                <div
+                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-blackBase to-transparent z-10 pointer-events-none"/>
+
+                <div className={"w-full h-full overflow-y-scroll pb-[300px]"}>
+                    <div
+                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
+                        {
+                            selectedResources.map((resource) => (
+                                <div className={"h-[210px] flex items-start flex-row"} key={resource.order_id}>
+                                    <ResourceView model={resource}/>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     )
@@ -228,7 +236,7 @@ function FileView(props: {
 
     return (
         <div
-            className="px-2 w-full h-full overflow-hidden gap-3 justify-center rounded-2xl flex flex-col relative group bg-muted p-4 border-1 border-primaryText/5">
+            className="px-2 w-full h-full overflow-hidden items-center gap-3 justify-center rounded-2xl flex flex-col relative group bg-muted p-4 border-1 border-primaryText/5">
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center",
@@ -241,7 +249,7 @@ function FileView(props: {
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-auto h-[40%]">
+            <div className="relative aspect-square w-fit h-[40%] rounded-2xl">
                 <Image
                     className="w-full h-auto text-primaryText"
                     layout="fill"
@@ -250,7 +258,6 @@ function FileView(props: {
                 />
             </div>
 
-            {/* Metadata */}
             <div className="flex h-fit flex-col text-white items-center mt-3">
                 <p className="text-sm text-center font-poppins break-words w-full line-clamp-3-ellipsis">{model.name}</p>
                 <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
@@ -292,7 +299,8 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
+        <div
+            className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
             {/* Thumbnail - lowest z-index */}
             <div className="absolute inset-0 z-0">
                 {thumbnail}
@@ -323,8 +331,8 @@ function MediaView(props: {
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 )}>
-                <Button 
-                    className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
+                <Button
+                    className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md"
                     onClick={() => {
                         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
@@ -437,8 +445,7 @@ function PublicSend() {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
             setIsInProgressDefer(true)
-        }
-        else {
+        } else {
             setIsInProgress(false)
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {
@@ -464,7 +471,8 @@ function PublicSend() {
 
             <div className={"flex flex-col w-full gap-3"}>
                 <Label htmlFor={"password"}>Password (optional)</Label>
-                <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
+                <Input id={"password"} disabled={isInProgress} value={password}
+                       onChange={(it) => setPassword(it.target.value)}
                        type={"password"} maxLength={20} placeholder={"pwd@123"}/>
                 {
                     cloudSession?.access_url &&
@@ -475,19 +483,20 @@ function PublicSend() {
                 }
                 {
                     isInProgressDefer
-                        && <div className={"flex flex-col w-full gap-2"}>
-                            <Progress value={progress} className="w-full space-y-2">
-                                <div className="flex items-center justify-between gap-1">
+                    && <div className={"flex flex-col w-full gap-2"}>
+                        <Progress value={progress} className="w-full space-y-2">
+                            <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm">
                                         {cloudSession?.display_download_speed}
                                     </span>
-                                </div>
-                                <ProgressTrack/>
-                            </Progress>
-                        </div>
+                            </div>
+                            <ProgressTrack/>
+                        </Progress>
+                    </div>
                 }
                 {
-                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                    isInProgress &&
+                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
@@ -513,7 +522,7 @@ function PublicSend() {
     </div>
 }
 
-function UrlInputWithCopy({url}: {url: string}) {
+function UrlInputWithCopy({url}: { url: string }) {
     const [isCopied, setIsCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -529,12 +538,12 @@ function UrlInputWithCopy({url}: {url: string}) {
     // Function to trim from the center
     const getTrimmedUrl = (url: string, maxLength: number = 40) => {
         if (url.length <= maxLength) return url
-        
+
         const ellipsis = '...'
         const availableLength = maxLength - ellipsis.length
         const frontLength = Math.ceil(availableLength / 2)
         const backLength = Math.floor(availableLength / 2)
-        
+
         return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
     }
 
@@ -543,14 +552,14 @@ function UrlInputWithCopy({url}: {url: string}) {
             <div className="relative">
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Input 
-                            value={getTrimmedUrl(url)} 
+                        <Input
+                            value={getTrimmedUrl(url)}
                             disabled={true}
                             className="pr-12 cursor-default" // Add padding for the button and cursor
                         />
                     </TooltipTrigger>
-                    <TooltipContent 
-                        side="top" 
+                    <TooltipContent
+                        side="top"
                         className="max-w-xs break-all"
                     >
                         {url}
@@ -562,9 +571,9 @@ function UrlInputWithCopy({url}: {url: string}) {
                     title={isCopied ? "Copied!" : "Copy to clipboard"}
                 >
                     {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-green-500"/>
                     ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
                     )}
                 </button>
             </div>
@@ -587,8 +596,7 @@ function NearbySend() {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
             setIsInProgressDefer(true)
-        }
-        else {
+        } else {
             setIsInProgress(false)
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {
@@ -622,19 +630,20 @@ function NearbySend() {
                 />
                 {
                     isInProgressDefer
-                        && <div className={"flex flex-col w-full gap-2"}>
-                            <Progress value={progress} className="w-full space-y-2">
-                                <div className="flex items-center justify-between gap-1">
+                    && <div className={"flex flex-col w-full gap-2"}>
+                        <Progress value={progress} className="w-full space-y-2">
+                            <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm">
                                         {cloudSession?.display_download_speed}
                                     </span>
-                                </div>
-                                <ProgressTrack/>
-                            </Progress>
-                        </div>
+                            </div>
+                            <ProgressTrack/>
+                        </Progress>
+                    </div>
                 }
                 {
-                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                    isInProgress &&
+                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
@@ -642,14 +651,15 @@ function NearbySend() {
                 }
                 {
                     !cloudSession &&
-                    <Button 
+                    <Button
                         className="w-fit h-[35px] bg-bluePrimary text-primary"
                         disabled={emails.length === 0}
                         onClick={() => {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
                         }}
                     >
-                        Send to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
+                        Send
+                        to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
                     </Button>
                 }
                 {
@@ -675,7 +685,7 @@ function NearbySend() {
     </>
 }
 
-function NearbyPeer(props: {peer: PeerViewModel}) {
+function NearbyPeer(props: { peer: PeerViewModel }) {
     const peer = core.usePeerState(props.peer?.id) || props.peer
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
 
