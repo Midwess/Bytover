@@ -14,7 +14,7 @@ pub fn get_gateway_grpc_url() -> String {
 }
 
 pub fn get_locator_url() -> String {
-    LOCATOR_URL.unwrap_or("https://devlog.studio/locator").to_string()
+    LOCATOR_URL.unwrap_or("https://bytover.com/locator").to_string()
 }
 
 pub fn get_signalling_server_ws_url() -> String {

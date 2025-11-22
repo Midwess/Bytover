@@ -30,7 +30,7 @@ impl Display for TransferSessionStatus {
         match self {
             TransferSessionStatus::Initializing => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
-                let kb_per_second = *bytes_per_second as f64 / 1024.0;
+                let kb_per_second = *bytes_per_second as f64 / 1000.0;
                 if kb_per_second < 100.0 {
                     write!(f, "{kb_per_second:.1} KB/s")
                 } else {
@@ -157,11 +157,7 @@ impl TransferProgress {
         }
     }
 
-    pub fn speed(&self, interval: u64) -> u64 {
-        if self.last_update_time_ms < Utc::now().timestamp_millis() as u64 - interval {
-            return 0;
-        }
-
+    pub fn speed(&self) -> u64 {
         self.bytes_per_second
     }
 }
@@ -302,8 +298,8 @@ impl TransferSession {
         total_bytes_sent as f64 / total_size as f64
     }
 
-    pub fn speed(&self, interval: u64) -> u64 {
-        self.progress.iter().map(|it| it.speed(interval)).sum::<u64>()
+    pub fn speed(&self, _interval: u64) -> u64 {
+        self.progress.iter().map(|it| it.speed()).sum::<u64>()
     }
 
     pub fn is_completed(&self) -> bool {

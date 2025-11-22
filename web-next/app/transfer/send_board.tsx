@@ -252,7 +252,7 @@ function FileView(props: {
                 )}>
                 <Button 
                     size="sm"
-                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4" 
+                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-destructive" 
                     onClick={async () => {
                         await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
@@ -367,7 +367,7 @@ function MediaView(props: {
                 )}>
                 <Button
                     size="sm"
-                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4"
+                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-destructive"
                     onClick={() => {
                         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>

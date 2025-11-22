@@ -155,6 +155,10 @@ function NearbyList() {
 function NearbyPeer(props: { peer: PeerViewModel }) {
     const peer = core.usePeerState(props.peer?.id) || props.peer
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
+    
+    // Check if transfer is completed (progress reaches 1.0)
+    const isCompleted = peer.transfer_progress >= 1.0 && peer.transfer_progress > 0;
+    const isInProgress = peer.transfer_progress > 0 && !isCompleted;
 
     return <>
         <Card
@@ -181,7 +185,13 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             </div>
             {
                 <div className={"w-[40px] h-[40px] flex flex-col justify-center items-center"}>
-                    {peer.transfer_progress ? <CircleProgress strokeWidth={3} progress={Number(peer.transfer_progress)} size={35}/> : <></>}
+                    <CircleProgress 
+                        strokeWidth={3} 
+                        progress={Number(peer.transfer_progress)} 
+                        isInProgress={isInProgress}
+                        isCompleted={isCompleted}
+                        size={30}
+                    />
                 </div>
             }
         </Card>
@@ -243,7 +253,7 @@ function PublicTransfer() {
                 )
             }
             {
-                cloudSession?.progress && (
+                !!cloudSession?.progress && (
                     <div className="flex flex-col w-full gap-2 pb-2">
                         <div className="flex items-center justify-between gap-1">
                             <span className="text-sm">

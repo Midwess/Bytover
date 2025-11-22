@@ -54,14 +54,25 @@ export default function Header() {
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
-                <div className="flex flex-row gap-5 rounded-full border border-primaryText/30 px-8 py-2">
-                    {["About", "Pricing", "How it works"].map((item) => (
+                <div className="flex flex-row gap-5 rounded-xl border border-primaryText/30 px-8 py-2">
+                    {[
+                        { label: "Transfer", href: "#transfer" },
+                        { label: "Pricing", href: "#pricing" },
+                        { label: "Features", href: "#features" }
+                    ].map((item) => (
                         <a
-                            key={item}
-                            href="#"
+                            key={item.label}
+                            href={item.href}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                const element = document.querySelector(item.href);
+                                if (element) {
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }
+                            }}
                             className="nav-link text-primaryText/80"
                         >
-                            <h2>{item}</h2>
+                            <h2>{item.label}</h2>
                         </a>
                     ))}
                 </div>
@@ -89,7 +100,7 @@ export default function Header() {
 
             </div>
                 <div className="flex flex-row gap-2 font-bold text-primaryText">
-                    <GitHubStarsButton className={"bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
+                    <GitHubStarsButton className={"under-development bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
                     <Button variant={"default"} className={"h-10 bg-bluePrimary/70 border border-bluePrimary text-foreground"} onClick={onAuthenticate}>Join now</Button>
                 </div>
             </div>

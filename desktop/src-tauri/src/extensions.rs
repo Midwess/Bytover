@@ -126,6 +126,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
+                    .visible_on_all_workspaces(true)
                     .always_on_top(true)
                     .skip_taskbar(false)
                     .shadow(false)
