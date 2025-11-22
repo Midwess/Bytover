@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import React, {useCallback, useEffect, useState} from "react";
+import React, {useEffect, useState} from "react";
 import { Shelf } from "./shelf";
 import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
@@ -45,27 +45,23 @@ function Window() {
         core.launch()
     }, [])
 
-    const toggleExpand = useCallback(() => {
-        if (isExpanded) {
-            // Collapse - make window smaller
-            setIsExpanded(false)
-            setWindowSize(new LogicalSize(260, 280))
+    useEffect(() => {
+        if (!isExpanded) {
+            setWindowSize(new LogicalSize(250, 260))
         } else {
-            // Expand - make window larger
-            setIsExpanded(true)
-            setWindowSize(new LogicalSize(480, 280))
+            setWindowSize(new LogicalSize(450, 260))
         }
     }, [isExpanded])
 
     return (
         <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 transition-all duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
-                <div className={`h-full bg-transparent relative min-w-[235px] w-[235px]`}>
+                <div className={`h-full bg-transparent relative min-w-[225px] w-[225px]`}>
                    <Shelf/>
                    {/* Toggle button at the middle-right edge */}
                    <Button
-                       onClick={toggleExpand}
-                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-3 aspect-square h-auto bg-card border-2 shadow-lg rounded-full flex items-center justify-center"
+                       onClick={() => setIsExpanded(!isExpanded)}
+                       className="absolute top-1/2 -right-4 -translate-y-1/2 z-10 w-3 aspect-square h-auto bg-card border-2 border-white/20 hover:bg-background hover:opacity-100 shadow-lg rounded-full flex items-center justify-center"
                    >
                        <ArrowRight
                            className={`w-3 h-3 text-white transition-transform duration-400 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}

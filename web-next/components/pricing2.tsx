@@ -73,8 +73,9 @@ const Pricing2 = ({
   ],
 }: Pricing2Props) => {
   return (
-    <section className="w-full relative">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-12 text-center px-4 py-20 w-full">
+    <section className="w-full flex justify-center">
+      <div className="w-full rounded-xl bg-muted/30 border-primaryText/20 border-1 p-8 md:p-12 lg:p-16 relative overflow-hidden">
+        <div className="flex flex-col items-center gap-12 text-center relative z-10">
         <div className="flex flex-col items-center gap-4">
           <h2 className="text-4xl font-bold lg:text-5xl text-primaryText">
             {heading}
@@ -135,6 +136,7 @@ const Pricing2 = ({
             </Card>
           ))}
         </div>
+      </div>
       </div>
     </section>
   );

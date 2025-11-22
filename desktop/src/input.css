@@ -239,7 +239,7 @@
 }
 
 .os-theme-custom.os-scrollbar {
-    --os-size: 4px;
+    --os-size: 2px;
 }
 
 .os-theme-custom.os-scrollbar .os-scrollbar-track {

@@ -113,7 +113,7 @@ export default function Home() {
         </div>
 
         {/* Pricing Section */}
-        <div className={"w-full bg-blackBase"}>
+        <div className={"w-full bg-blackBase container"}>
             <PricingPlans/>
         </div>
 

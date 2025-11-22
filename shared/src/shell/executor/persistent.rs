@@ -88,7 +88,6 @@ pub trait NativePersistent: Send + Sync {
                     .remove(path)
                     .await?;
 
-                log::info!("Removed resources: {:?}", removed);
                 Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::FindAll) => {

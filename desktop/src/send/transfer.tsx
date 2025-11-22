@@ -52,7 +52,7 @@ import {
 
 export function Transfer() {
     return (
-        <div className="flex w-full max-w-sm flex-col gap-6">
+        <div className="flex w-full flex-col gap-6">
             <Slide
                 delay={240}
                 direction={"left"}
@@ -63,7 +63,7 @@ export function Transfer() {
                         <TabsTab value="public"><Globe/>Link</TabsTab>
                         <TabsTab value="devices"><Smartphone/>Device</TabsTab>
                     </TabsList>
-                    <div className="px-2 border-none bg-transparent relative">
+                    <div className="pl-2 border-none bg-transparent relative w-full">
                         <TabsPanels>
                             <TabsPanel value="people" className="flex flex-col">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
