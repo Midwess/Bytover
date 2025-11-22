@@ -153,7 +153,7 @@
   --color-fileColor: oklch(73.11% 0.196 142.85);
   --color-folderColor: oklch(90.65% 0.192 97.91);
   --color-greenSecondary: oklch(0.8 0.2464 130.54);
-  --color-blackBase: oklch(12.69% 0.007 268.06);
+  --color-blackBase: black;
   --color-blackSecondary: oklch(24.79% 0.017 270.00);
   --color-bluePrimary: oklch(50% 0.273 266.23);
   --font-sfbold: SFProDisplay-Bold;
@@ -238,4 +238,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.under-development {
+  visibility: hidden;
 }

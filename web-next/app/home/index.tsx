@@ -8,6 +8,44 @@ import Image from 'next/image'
 import TransferBoard from "@/app/transfer";
 import { Suspense } from "react";
 import { Pricing2 } from "@/components/pricing2";
+import { Feature72 } from "@/components/feature72";
+
+function FeaturesSection() {
+    const features = [
+        {
+            id: "shelf",
+            heading: "Organize Your Files",
+            description: "Keep all your files organized in a beautiful shelf interface. Easy drag-and-drop, quick access, and seamless file management.",
+            video: "/demo/desktop-shelf.mp4",
+        },
+        {
+            id: "public-share",
+            heading: "Public Sharing",
+            description: "Share files with anyone using a simple link. Optional password protection keeps your content secure while making sharing effortless.",
+            video: "/demo/desktop-share-public.mp4",
+        },
+        {
+            id: "nearby-share",
+            heading: "Nearby and P2P Transfer",
+            description: "Transfer files directly to any device instantly with Peer to Peer connection. And automatically matching nearby users.",
+            video: "/demo/desktop-share-nearby.mp4",
+        },
+        {
+            id: "all-platform",
+            heading: "Available on All Platforms",
+            description: "Coming soon this year! Native apps for Windows, macOS, iOS, and Android. Experience BitBridge seamlessly across all your devices with full feature parity and consistent performance.",
+            image: "/demo/bitbridge_mockup_1.png",
+        },
+    ];
+
+    return (
+        <Feature72
+            title="Powerful Features"
+            description="Experience seamless file transfer with our intuitive interface. Share files publicly, transfer peer to peer, organize everything in your personal shelf."
+            features={features}
+        />
+    );
+}
 
 function PricingPlans() {
     const plans = [
@@ -57,7 +95,7 @@ function PricingPlans() {
 }
 
 export default function Home() {
-    return <div className="flex flex-col w-full h-full items-center bg-blackBase">
+    return <div className="flex flex-col w-full h-full items-center bg-black">
         {/* Fixed Header */}
         <Suspense fallback={null}>
             <Header/>
@@ -67,7 +105,7 @@ export default function Home() {
         <div className={'relative flex flex-col w-full items-center gap-10 pb-16 pt-32'}>
 
             <div
-                className="absolute top-0 h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
+                className="absolute top-0 h-full w-screen bg-black bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
             </div>
             <div className={'flex flex-col items-center gap-4 container z-2'}>
                 <h2 className="text-lg tracking-widest text-greenSecondary text-center">
@@ -112,8 +150,15 @@ export default function Home() {
             </Suspense>
         </div>
 
+        {/* Features Section */}
+        <div className={"w-full bg-black py-16"}>
+            <div className="container">
+                <FeaturesSection/>
+            </div>
+        </div>
+
         {/* Pricing Section */}
-        <div className={"w-full bg-blackBase container"}>
+        <div className={"w-full bg-black container"}>
             <PricingPlans/>
         </div>
 

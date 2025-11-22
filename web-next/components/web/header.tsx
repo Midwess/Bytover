@@ -89,7 +89,7 @@ export default function Header() {
 
             </div>
                 <div className="flex flex-row gap-2 font-bold text-primaryText">
-                    <GitHubStarsButton className={"bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
+                    <GitHubStarsButton className={"under-development bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
                     <Button variant={"default"} className={"h-10 bg-bluePrimary/70 border border-bluePrimary text-foreground"} onClick={onAuthenticate}>Join now</Button>
                 </div>
             </div>
