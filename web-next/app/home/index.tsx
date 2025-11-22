@@ -140,21 +140,21 @@ export default function Home() {
         </div>
 
         {/* Transfer Board Section */}
-        <div className={"container flex flex-col py-16"}>
+        <div id="transfer" className={"container flex flex-col py-16 scroll-mt-20"}>
             <Suspense fallback={null}>
                 <TransferBoard/>
             </Suspense>
         </div>
 
         {/* Features Section */}
-        <div className={"w-full bg-black py-16"}>
+        <div id="features" className={"w-full bg-black py-16 scroll-mt-20"}>
             <div className="container">
                 <FeaturesSection/>
             </div>
         </div>
 
         {/* Pricing Section */}
-        <div className={"w-full bg-black container"}>
+        <div id="pricing" className={"w-full bg-black scroll-mt-20"}>
             <PricingPlans/>
         </div>
 

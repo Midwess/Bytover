@@ -55,13 +55,24 @@ export default function Header() {
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
                 <div className="flex flex-row gap-5 rounded-xl border border-primaryText/30 px-8 py-2">
-                    {["About", "Pricing", "How it works"].map((item) => (
+                    {[
+                        { label: "Transfer", href: "#transfer" },
+                        { label: "Pricing", href: "#pricing" },
+                        { label: "Features", href: "#features" }
+                    ].map((item) => (
                         <a
-                            key={item}
-                            href="#"
+                            key={item.label}
+                            href={item.href}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                const element = document.querySelector(item.href);
+                                if (element) {
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }
+                            }}
                             className="nav-link text-primaryText/80"
                         >
-                            <h2>{item}</h2>
+                            <h2>{item.label}</h2>
                         </a>
                     ))}
                 </div>

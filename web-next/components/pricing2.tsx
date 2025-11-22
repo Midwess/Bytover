@@ -76,9 +76,9 @@ const Pricing2 = ({
   ],
 }: Pricing2Props) => {
   return (
-    <section className="w-full flex justify-center">
-      <div className="w-full rounded-xl bg-muted/30 border-primaryText/20 border-1 p-8 md:p-12 lg:p-16 relative overflow-hidden">
-        <div className="flex flex-col items-center gap-12 text-center relative z-10">
+    <section className="w-full flex justify-center bg-black">
+      <div className="w-full p-8 md:p-12 lg:p-16">
+        <div className="flex flex-col items-center gap-12 text-center">
         <div className="flex flex-col items-center gap-4">
           <h2 className="text-4xl font-bold lg:text-5xl text-primaryText">
             {heading}
@@ -90,7 +90,7 @@ const Pricing2 = ({
           {plans.map((plan) => (
             <Card
               key={plan.id}
-              className="flex w-full md:w-80 lg:w-96 flex-col justify-between text-left bg-muted/60 backdrop-blur-xl border border-white/10 hover:border-white/30 hover:shadow-2xl hover:shadow-bluePrimary/10 transition-all duration-300"
+              className="flex w-full md:w-80 lg:w-96 flex-col justify-between text-left bg-black border border-white/10 hover:border-white/30 hover:shadow-2xl hover:shadow-bluePrimary/10 transition-all duration-300"
             >
               <CardHeader className="space-y-4">
                 <div className="space-y-2">
@@ -101,14 +101,21 @@ const Pricing2 = ({
                     {plan.description}
                   </p>
                 </div>
-                <div className="flex items-end gap-1">
-                  <span className="text-5xl font-bold text-primaryText">
-                    {plan.price}
-                  </span>
-                  {showOneTime && plan.price.toLowerCase() !== "free" && plan.price.toLowerCase() !== "coming soon" && plan.price.toLowerCase() !== "comming soon" && (
-                    <span className="text-primaryText/60 text-lg font-semibold pb-2">
-                      one-time
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-end gap-1">
+                    <span className="text-5xl font-bold text-primaryText">
+                      {plan.price}
                     </span>
+                    {showOneTime && plan.price.toLowerCase() !== "free" && plan.price.toLowerCase() !== "coming soon" && plan.price.toLowerCase() !== "comming soon" && (
+                      <span className="text-primaryText/60 text-lg font-semibold pb-2">
+                        one-time
+                      </span>
+                    )}
+                  </div>
+                  {(plan.price.toLowerCase() === "coming soon" || plan.price.toLowerCase() === "comming soon") && (
+                    <p className="text-primaryText/50 text-sm">
+                      Less than $15 USD • One-time purchase
+                    </p>
                   )}
                 </div>
               </CardHeader>
@@ -143,7 +150,7 @@ const Pricing2 = ({
             </Card>
           ))}
         </div>
-      </div>
+        </div>
       </div>
     </section>
   );
