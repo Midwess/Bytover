@@ -55,8 +55,10 @@ function PricingPlans() {
             description: "Perfect for basic users who need simple peer-to-peer file transfers",
             price: "Free",
             features: [
-                { text: "Peer-to-peer transfer with limited bandwidth", included: true },
+                { text: "Peer-to-peer transfers with limited bandwidth", included: true },
+                { text: "Transfer to your own devices", included: true },
                 { text: "Public sharing", included: false },
+                { text: "Email sharing", included: false },
             ],
             button: {
                 text: "Get Started",
@@ -66,11 +68,13 @@ function PricingPlans() {
         {
             id: "pro",
             name: "Pro",
-            description: "Advanced features for peer-to-peer transfers across the internet and public sharing",
+            description: "Advanced features for peer-to-peer transfers across the internet and public sharing.",
             price: "Coming soon",
             features: [
-                { text: "Peer-to-peer transfer with unlimited bandwidth", included: true },
+                { text: "Peer-to-peer transfers with unlimited bandwidth", included: true },
+                { text: "Transfer to your own devices", included: true },
                 { text: "Public sharing with password protection", included: true },
+                { text: "Public cloud storage up to 500GB / month", included: true },
                 { text: "Send files via email", included: true },
             ],
             button: {
