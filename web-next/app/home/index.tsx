@@ -52,13 +52,11 @@ function PricingPlans() {
         {
             id: "free",
             name: "Free",
-            description: "For personal use",
-            price: "$0",
+            description: "Perfect for basic users who need simple peer-to-peer file transfers",
+            price: "Free",
             features: [
-                { text: "Up to 5GB file size" },
-                { text: "Basic file sharing" },
-                { text: "7-day file retention" },
-                { text: "Community support" },
+                { text: "Peer-to-peer transfer with limited bandwidth", included: true },
+                { text: "Public sharing", included: false },
             ],
             button: {
                 text: "Get Started",
@@ -68,15 +66,12 @@ function PricingPlans() {
         {
             id: "pro",
             name: "Pro",
-            description: "For power users",
-            price: "$99",
+            description: "Advanced features for peer-to-peer transfers across the internet and public sharing",
+            price: "Coming soon",
             features: [
-                { text: "Up to 50GB file size" },
-                { text: "Advanced file sharing" },
-                { text: "30-day file retention" },
-                { text: "Priority support" },
-                { text: "Password protection" },
-                { text: "Custom expiration dates" },
+                { text: "Peer-to-peer transfer with unlimited bandwidth", included: true },
+                { text: "Public sharing with password protection", included: true },
+                { text: "Send files via email", included: true },
             ],
             button: {
                 text: "Buy Now",
@@ -88,7 +83,8 @@ function PricingPlans() {
     return (
         <Pricing2
             heading="Simple, Transparent Pricing"
-            description="One-time purchase. Lifetime access. No hidden fees."
+            description="Choose the plan that fits your needs. Free for basic transfers, Pro for advanced features."
+            showOneTime={false}
             plans={plans}
         />
     );

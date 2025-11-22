@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 
 interface PricingFeature {
   text: string;
+  included?: boolean; // true for checkmark, false for X, undefined defaults to true
 }
 
 interface PricingPlan {
@@ -32,11 +33,13 @@ interface Pricing2Props {
   heading?: string;
   description?: string;
   plans?: PricingPlan[];
+  showOneTime?: boolean; // Flag to show/hide "one-time" text
 }
 
 const Pricing2 = ({
   heading = "Pricing",
   description = "Check out our affordable pricing plans",
+  showOneTime = true,
   plans = [
     {
       id: "plus",
@@ -102,28 +105,32 @@ const Pricing2 = ({
                   <span className="text-5xl font-bold text-primaryText">
                     {plan.price}
                   </span>
-                  <span className="text-primaryText/60 text-lg font-semibold pb-2">
-                    one-time
-                  </span>
+                  {showOneTime && plan.price.toLowerCase() !== "free" && plan.price.toLowerCase() !== "coming soon" && plan.price.toLowerCase() !== "comming soon" && (
+                    <span className="text-primaryText/60 text-lg font-semibold pb-2">
+                      one-time
+                    </span>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="flex-1">
                 <Separator className="mb-6 bg-white/10" />
-                {plan.id === "pro" && (
-                  <p className="mb-4 font-semibold text-greenSecondary text-sm">
-                    Everything in Free, and:
-                  </p>
-                )}
                 <ul className="space-y-3">
-                  {plan.features.map((feature, index) => (
-                    <li
-                      key={index}
-                      className="flex items-start gap-3 text-sm text-primaryText/80"
-                    >
-                      <CircleCheck className="size-5 text-greenSecondary flex-shrink-0 mt-0.5" />
-                      <span>{feature.text}</span>
-                    </li>
-                  ))}
+                  {plan.features.map((feature, index) => {
+                    const isIncluded = feature.included !== false; // Default to true if not specified
+                    return (
+                      <li
+                        key={index}
+                        className="flex items-start gap-3 text-sm text-primaryText/80"
+                      >
+                        {isIncluded ? (
+                          <CircleCheck className="size-5 text-greenSecondary flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <X className="size-5 text-primaryText/40 flex-shrink-0 mt-0.5" />
+                        )}
+                        <span className={isIncluded ? "" : "text-primaryText/50"}>{feature.text}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </CardContent>
               <CardFooter className="mt-auto pt-6">

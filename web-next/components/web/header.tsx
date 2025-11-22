@@ -54,7 +54,7 @@ export default function Header() {
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
-                <div className="flex flex-row gap-5 rounded-full border border-primaryText/30 px-8 py-2">
+                <div className="flex flex-row gap-5 rounded-xl border border-primaryText/30 px-8 py-2">
                     {["About", "Pricing", "How it works"].map((item) => (
                         <a
                             key={item}
