@@ -7,19 +7,71 @@ import windows from '@/public/windows.svg'
 import Image from 'next/image'
 import TransferBoard from "@/app/transfer";
 import { Suspense } from "react";
+import { Pricing2 } from "@/components/pricing2";
+
+function PricingPlans() {
+    const plans = [
+        {
+            id: "free",
+            name: "Free",
+            description: "For personal use",
+            price: "$0",
+            features: [
+                { text: "Up to 5GB file size" },
+                { text: "Basic file sharing" },
+                { text: "7-day file retention" },
+                { text: "Community support" },
+            ],
+            button: {
+                text: "Get Started",
+                url: "/transfer",
+            },
+        },
+        {
+            id: "pro",
+            name: "Pro",
+            description: "For power users",
+            price: "$99",
+            features: [
+                { text: "Up to 50GB file size" },
+                { text: "Advanced file sharing" },
+                { text: "30-day file retention" },
+                { text: "Priority support" },
+                { text: "Password protection" },
+                { text: "Custom expiration dates" },
+            ],
+            button: {
+                text: "Buy Now",
+                url: "/transfer",
+            },
+        },
+    ];
+
+    return (
+        <Pricing2
+            heading="Simple, Transparent Pricing"
+            description="One-time purchase. Lifetime access. No hidden fees."
+            plans={plans}
+        />
+    );
+}
 
 export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-blackBase">
-        <div className={'relative flex flex-col w-full items-center gap-10 pb-16'}>
-            <Suspense fallback={null}>
-                <Header/>
-            </Suspense>
+        {/* Fixed Header */}
+        <Suspense fallback={null}>
+            <Header/>
+        </Suspense>
+        
+        {/* Hero Section */}
+        <div className={'relative flex flex-col w-full items-center gap-10 pb-16 pt-32'}>
+
             <div
                 className="absolute top-0 h-full w-screen bg-blackBase bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
             </div>
             <div className={'flex flex-col items-center gap-4 container z-2'}>
-                <h2 className="text-lg tracking-widest  text-greenSecondary text-center">
-                    Powering your productivity 👋
+                <h2 className="text-lg tracking-widest text-greenSecondary text-center">
+                    Powering your productivity
                 </h2>
                 <TypingText
                     delay={200}
@@ -52,11 +104,20 @@ export default function Home() {
                 </div>
             </div>
         </div>
-        <div className={"container flex flex-col pt-10"}>
+
+        {/* Transfer Board Section */}
+        <div className={"container flex flex-col py-16"}>
             <Suspense fallback={null}>
                 <TransferBoard/>
             </Suspense>
         </div>
-        <div className={"h-36 w-full"}></div>
+
+        {/* Pricing Section */}
+        <div className={"w-full bg-blackBase container"}>
+            <PricingPlans/>
+        </div>
+
+        {/* Footer Spacing */}
+        <div className={"h-24 w-full"}></div>
     </div>
 }

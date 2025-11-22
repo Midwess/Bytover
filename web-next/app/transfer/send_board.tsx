@@ -51,12 +51,12 @@ import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 export default function SendBoard() {
     return <>
         <div
-            className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
-            <div className={"grid grid-cols-11 w-full h-full gap-2"}>
+            className="h-[950px] max-h-[95vh] w-full rounded-xl overflow-x-clip bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
+            <div className={"grid grid-cols-12 w-full h-full gap-4"}>
                 <div className={"col-span-3 h-full"}>
                     <Board/>
                 </div>
-                <div className={"col-span-8 h-full overflow-y-scroll"}>
+                <div className={"col-span-9 h-full overflow-y-hidden pt-2 w-full"}>
                     <FileSelections/>
                 </div>
             </div>
@@ -110,8 +110,8 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className={"flex flex-col w-full h-full rounded-2xl items-center p-5 gap-8"}>
-            <div className="relative w-full flex flex-row gap-4">
+        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden"}>
+            <div className="w-full flex flex-row gap-2 pt-2">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -120,14 +120,14 @@ function FileSelections() {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     data-dragging={isDragging || undefined}
-                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed pt-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
                 >
                     <input
                         {...getInputProps()}
                         className="sr-only"
                         aria-label="Upload files"
                     />
-                    <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
+                    <div className="flex flex-col items-center justify-center px-4 py-1 text-center">
                         <div
                             className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
                             aria-hidden="true"
@@ -180,15 +180,23 @@ function FileSelections() {
                     <span>{errors[0]}</span>
                 </div>
             )}
-            <div
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full">
-                {
-                    selectedResources.map((resource) => (
-                        <div className={"h-[220px] flex items-start flex-row"} key={resource.order_id}>
-                            <ResourceView model={resource}/>
-                        </div>
-                    ))
-                }
+            <div className="relative w-full h-full flex-1 overflow-x-hidden">
+                {/* Top shadow fade effect */}
+                <div
+                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-blackBase to-transparent z-10 pointer-events-none"/>
+
+                <div className={"w-full h-full overflow-y-scroll pb-[100px] overflow-x-hidden"}>
+                    <div
+                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
+                        {
+                            selectedResources.map((resource) => (
+                                <div className={"h-[210px] flex items-start flex-row"} key={resource.order_id}>
+                                    <ResourceView model={resource}/>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     )
@@ -217,8 +225,9 @@ function FileView(props: {
     const isMobile = useIsMobile();
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
+    const isFolder = model.type instanceof ResourceTypeVariantFolder;
     if (!thumbnailPath) {
-        thumbnailPath = model.type instanceof ResourceTypeVariantFolder ? "/folder.svg" : "/file.svg";
+        thumbnailPath = isFolder ? "/folder.svg" : "/file.svg";
     }
 
     let displaySize = `${model.size_mb} MB`;
@@ -228,32 +237,57 @@ function FileView(props: {
 
     return (
         <div
-            className="px-2 w-full h-full overflow-hidden gap-3 justify-center rounded-2xl flex flex-col relative group bg-muted p-4 border-1 border-primaryText/5">
+            className="w-full h-full overflow-hidden rounded-2xl flex flex-col relative group 
+                       bg-muted/60
+                       backdrop-blur-xl border border-white/10
+                       transition-all duration-300 ease-out
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
+                       hover:bg-muted/80">
+            
+            {/* Remove Button Overlay */}
             <div
                 className={clsx(
-                    "absolute z-20 inset-0 flex items-center justify-center",
-                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 w-full h-full bg-blackBase/40 transition-opacity duration-300"
+                    "absolute z-20 inset-0 flex items-center justify-center rounded-2xl",
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300"
                 )}>
-                <Button className={"rounded-xl"} onClick={async () => {
-                    await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
-                }}>
-                    <X/>
+                <Button 
+                    size="sm"
+                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4" 
+                    onClick={async () => {
+                        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+                    }}>
+                    <X className="w-4 h-4"/>
+                    <span className="ml-1 text-xs">Remove</span>
                 </Button>
             </div>
 
-            <div className="relative aspect-square w-auto h-[40%]">
-                <Image
-                    className="w-full h-auto text-primaryText"
-                    layout="fill"
-                    alt={`${model.type}`}
-                    src={thumbnailPath}
-                />
+            {/* Icon/Thumbnail Container */}
+            <div className="flex-1 flex items-center justify-center p-3 relative">
+                <div className="relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
+                    <div className="relative w-16 h-16">
+                        <Image
+                            className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
+                            layout="fill"
+                            alt={`${model.type}`}
+                            src={thumbnailPath}
+                        />
+                    </div>
+                </div>
             </div>
 
-            {/* Metadata */}
-            <div className="flex h-fit flex-col text-white items-center mt-3">
-                <p className="text-sm text-center font-poppins break-words w-full line-clamp-3-ellipsis">{model.name}</p>
-                <p className="text-sm text-center text-white/80 font-poppins">{displaySize}</p>
+            {/* Info Section */}
+            <div className="flex flex-col gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3">
+                <p className="text-sm font-medium text-center text-white/90 break-words line-clamp-2 leading-tight">
+                    {model.name}
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                        {displaySize}
+                    </span>
+                    <span className="text-xs text-white/50">
+                        {isFolder ? "Folder" : "File"}
+                    </span>
+                </div>
             </div>
         </div>
     );
@@ -292,26 +326,34 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full bg-muted-foreground/20 border border-muted/10 overflow-hidden rounded-2xl relative group">
+        <div
+            className="w-full h-full overflow-hidden rounded-2xl relative group 
+                       border border-white/10 backdrop-blur-sm
+                       transition-all duration-300 ease-out
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
             {/* Thumbnail - lowest z-index */}
             <div className="absolute inset-0 z-0">
                 {thumbnail}
             </div>
 
-            {/* Video play icon */}
+            {/* Video play icon with modern styling */}
             {isVideo && (
-                <div className="absolute top-2 right-2 z-20">
-                    <Play className="w-5 h-5 bg-muted p-1 rounded-sm"/>
+                <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
+                               transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
+                    <Play className="w-4 h-4 text-white fill-white"/>
                 </div>
             )}
+
+            {/* Gradient overlay - always visible but subtle */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
 
             {/* Background overlay for hover effect */}
             <div
                 className={clsx(
-                    "absolute inset-0 bg-gradient-to-t from-blackBase/70 via-transparent to-transparent z-10",
+                    "absolute inset-0 bg-black/40 backdrop-blur-sm z-15",
                     isMobile
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
                 )}
             />
 
@@ -321,32 +363,33 @@ function MediaView(props: {
                     "absolute inset-0 flex items-center justify-center z-30",
                     isMobile
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
                 )}>
-                <Button 
-                    className="rounded-xl bg-white/90 hover:bg-white text-black shadow-md" 
+                <Button
+                    size="sm"
+                    className="rounded-full bg-destructive/90 hover:bg-destructive shadow-lg border border-white/20 px-4"
                     onClick={() => {
                         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
                     <X className="w-4 h-4"/>
+                    <span className="ml-1 text-xs">Remove</span>
                 </Button>
             </div>
 
-            {/* File info - positioned at bottom */}
-            <div
-                className={clsx(
-                    "absolute bottom-0 left-0 right-0 p-2 z-20",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                )}>
-                <div className="flex flex-col items-start gap-1">
-                    <p className="text-primaryText text-sm font-medium">
+            {/* File info - positioned at bottom with enhanced styling */}
+            <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm">
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
                         {model.name}
                     </p>
-                    <p className="text-sm text-primaryText/80">
-                        {displaySize}
-                    </p>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                            {displaySize}
+                        </span>
+                        <span className="text-xs text-white/60">
+                            {isVideo ? "Video" : "Image"}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -437,8 +480,7 @@ function PublicSend() {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
             setIsInProgressDefer(true)
-        }
-        else {
+        } else {
             setIsInProgress(false)
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {
@@ -464,7 +506,8 @@ function PublicSend() {
 
             <div className={"flex flex-col w-full gap-3"}>
                 <Label htmlFor={"password"}>Password (optional)</Label>
-                <Input id={"password"} disabled={isInProgress} value={password} onChange={(it) => setPassword(it.target.value)}
+                <Input id={"password"} disabled={isInProgress} value={password}
+                       onChange={(it) => setPassword(it.target.value)}
                        type={"password"} maxLength={20} placeholder={"pwd@123"}/>
                 {
                     cloudSession?.access_url &&
@@ -475,19 +518,20 @@ function PublicSend() {
                 }
                 {
                     isInProgressDefer
-                        && <div className={"flex flex-col w-full gap-2"}>
-                            <Progress value={progress} className="w-full space-y-2">
-                                <div className="flex items-center justify-between gap-1">
+                    && <div className={"flex flex-col w-full gap-2"}>
+                        <Progress value={progress} className="w-full space-y-2">
+                            <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm">
                                         {cloudSession?.display_download_speed}
                                     </span>
-                                </div>
-                                <ProgressTrack/>
-                            </Progress>
-                        </div>
+                            </div>
+                            <ProgressTrack/>
+                        </Progress>
+                    </div>
                 }
                 {
-                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                    isInProgress &&
+                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
@@ -513,7 +557,7 @@ function PublicSend() {
     </div>
 }
 
-function UrlInputWithCopy({url}: {url: string}) {
+function UrlInputWithCopy({url}: { url: string }) {
     const [isCopied, setIsCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -529,12 +573,12 @@ function UrlInputWithCopy({url}: {url: string}) {
     // Function to trim from the center
     const getTrimmedUrl = (url: string, maxLength: number = 40) => {
         if (url.length <= maxLength) return url
-        
+
         const ellipsis = '...'
         const availableLength = maxLength - ellipsis.length
         const frontLength = Math.ceil(availableLength / 2)
         const backLength = Math.floor(availableLength / 2)
-        
+
         return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
     }
 
@@ -543,14 +587,14 @@ function UrlInputWithCopy({url}: {url: string}) {
             <div className="relative">
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Input 
-                            value={getTrimmedUrl(url)} 
+                        <Input
+                            value={getTrimmedUrl(url)}
                             disabled={true}
                             className="pr-12 cursor-default" // Add padding for the button and cursor
                         />
                     </TooltipTrigger>
-                    <TooltipContent 
-                        side="top" 
+                    <TooltipContent
+                        side="top"
                         className="max-w-xs break-all"
                     >
                         {url}
@@ -562,9 +606,9 @@ function UrlInputWithCopy({url}: {url: string}) {
                     title={isCopied ? "Copied!" : "Copy to clipboard"}
                 >
                     {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-green-500"/>
                     ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
                     )}
                 </button>
             </div>
@@ -587,8 +631,7 @@ function NearbySend() {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
             setIsInProgressDefer(true)
-        }
-        else {
+        } else {
             setIsInProgress(false)
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {
@@ -622,19 +665,20 @@ function NearbySend() {
                 />
                 {
                     isInProgressDefer
-                        && <div className={"flex flex-col w-full gap-2"}>
-                            <Progress value={progress} className="w-full space-y-2">
-                                <div className="flex items-center justify-between gap-1">
+                    && <div className={"flex flex-col w-full gap-2"}>
+                        <Progress value={progress} className="w-full space-y-2">
+                            <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm">
                                         {cloudSession?.display_download_speed}
                                     </span>
-                                </div>
-                                <ProgressTrack/>
-                            </Progress>
-                        </div>
+                            </div>
+                            <ProgressTrack/>
+                        </Progress>
+                    </div>
                 }
                 {
-                    isInProgress && <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
+                    isInProgress &&
+                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
                         }
@@ -642,14 +686,15 @@ function NearbySend() {
                 }
                 {
                     !cloudSession &&
-                    <Button 
+                    <Button
                         className="w-fit h-[35px] bg-bluePrimary text-primary"
                         disabled={emails.length === 0}
                         onClick={() => {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
                         }}
                     >
-                        Send to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
+                        Send
+                        to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
                     </Button>
                 }
                 {
@@ -675,7 +720,7 @@ function NearbySend() {
     </>
 }
 
-function NearbyPeer(props: {peer: PeerViewModel}) {
+function NearbyPeer(props: { peer: PeerViewModel }) {
     const peer = core.usePeerState(props.peer?.id) || props.peer
     const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
 

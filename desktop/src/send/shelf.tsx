@@ -86,12 +86,12 @@ export function Shelf() {
             flex flex-col
             justify-center
             items-center
-            px-1
+            px-0
             w-full h-full border-2
             transition-all duration-200 relative overflow-hidden
             ${isDraggingOver
                 ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
-                : 'border-border'
+                : 'border-white/20'
             }
         }
         `}>
@@ -106,7 +106,7 @@ export function Shelf() {
                     className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
             <div
-                className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center z-10 animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
+                className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
                     <Plus className="h-12 w-12 text-bluePrimary"/>
                 </div>
@@ -138,13 +138,13 @@ export function Shelf() {
                 }}
                 className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
                 <div
-                    className="overflow-hidden text-foreground bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1">
+                    className="overflow-hidden text-foreground bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1 border border-border">
                     <p>
                         Clear all
                     </p>
                 </div>
-                <XCircle
-                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform duration-500 ease-out group-hover:rotate-95 text-foreground/92"/>
+                <X
+                    className="h-8 w-8 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out group-hover:rotate-95 bg-muted/90 rounded-full"/>
             </Button>
                 }
     </div>
