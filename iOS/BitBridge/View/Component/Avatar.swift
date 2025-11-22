@@ -55,5 +55,5 @@ struct Avartar: View {
 }
 
 #Preview {
-    Avartar(avatar: AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85))
+    Avartar(avatar: AvatarViewModel(url: "https://cdn.bytover.com/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85))
 }

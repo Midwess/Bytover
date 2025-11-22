@@ -15,7 +15,7 @@ pub struct HostInfo {
 }
 
 pub fn get_locator_url() -> String {
-    LOCATOR_URL.unwrap_or("https://devlog.studio/locator").to_string()
+    LOCATOR_URL.unwrap_or("https://bytover.com/locator").to_string()
 }
 
 pub fn get_host_info() -> Result<HostInfo, JsValue> {

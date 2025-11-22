@@ -161,13 +161,13 @@ impl NetStreamInnerImpl {
         
         log::info!("Wrote {} bytes to temporary file, preparing to upload in chunks", written_bytes);
         
-        let mut temp_cursor = FileCursor::new(temp_path, READ_CHUNK_SIZE).await?;
+        let mut temp_cursor: Box<dyn IOCursor> = Box::new(FileCursor::new(temp_path, READ_CHUNK_SIZE).await?);
         
         let mut remaining = written_bytes;
         while remaining > 0 {
             let chunk_size = remaining.min(main_chunk_size as u64);
 
-            let etag = Self::perform_upload_from_cursor(&upload.upload_url, &mut temp_cursor, chunk_size).await?;
+            let etag = Self::upload_chunk(&upload.upload_url, &mut temp_cursor, tx, &mut uploaded, chunk_size).await?;
             completion.e_tags.push(etag);
             
             remaining -= chunk_size;
@@ -225,29 +225,6 @@ impl NetStreamInnerImpl {
             .trim_matches('"')
             .to_string();
 
-        Ok(etag)
-    }
-
-    async fn perform_upload_from_cursor(url: &str, cursor: &mut FileCursor, chunk_size: u64) -> Result<String> {
-        log::info!("Uploading chunk of size {} bytes from cursor", chunk_size);
-
-        let (mut writer, reader) = io::duplex(5 * MB as usize);
-
-        let upload_task = Self::perform_upload(url, reqwest::Body::wrap_stream(ReaderStream::new(reader)), chunk_size);
-        let write_task = async {
-            let mut remaining = chunk_size;
-            while remaining > 0 {
-                let Some(data) = cursor.next(Some(remaining)).await? else { break };
-                let data_len = data.len() as u64;
-                writer.write_all(data).await?;
-                remaining -= data_len;
-                writer.flush().await?;
-            }
-            writer.shutdown().await?;
-            Ok::<_, anyhow::Error>(())
-        };
-
-        let (etag, _) = try_join!(upload_task, write_task)?;
         Ok(etag)
     }
 

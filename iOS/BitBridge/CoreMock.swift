@@ -17,9 +17,9 @@ class CoreMock: Core {
         let x = CoreMock() as Core
 
         // Create avatar view models
-        let bearAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
-        let foxAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Fox.png?r=221&g=155&b=104", dominant_color_r: 221, dominant_color_g: 155, dominant_color_b: 104)
-        let wolfAvatar = AvatarViewModel(url: "https://cdn.devlog.studio/public/animal_avatars/Wolf.png?r=128&g=128&b=128", dominant_color_r: 128, dominant_color_g: 128, dominant_color_b: 128)
+        let bearAvatar = AvatarViewModel(url: "https://cdn.bytover.com/public/animal_avatars/Bear.png?r=146&g=108&b=85", dominant_color_r: 146, dominant_color_g: 108, dominant_color_b: 85)
+        let foxAvatar = AvatarViewModel(url: "https://cdn.bytover.com/public/animal_avatars/Fox.png?r=221&g=155&b=104", dominant_color_r: 221, dominant_color_g: 155, dominant_color_b: 104)
+        let wolfAvatar = AvatarViewModel(url: "https://cdn.bytover.com/public/animal_avatars/Wolf.png?r=128&g=128&b=128", dominant_color_r: 128, dominant_color_g: 128, dominant_color_b: 128)
 
         // Create resource view models
         let path = LocalResourcePath.absolutePath("")
@@ -85,7 +85,7 @@ class CoreMock: Core {
             nearby_peers: [],
             received_sessions: [receive_session1, receive_session2, receive_session3],
             received_cloud_sessions: [],
-            cloud_session: CloudSession(access_url: "https://bitbridge.devlog.studio/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
+            cloud_session: CloudSession(access_url: "https://bitbridge.bytover.com/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
         ))
 
         // Add selected resources

@@ -47,9 +47,9 @@ function Window() {
 
     useEffect(() => {
         if (!isExpanded) {
-            setWindowSize(new LogicalSize(250, 260))
+            setWindowSize(new LogicalSize(250, 270))
         } else {
-            setWindowSize(new LogicalSize(450, 260))
+            setWindowSize(new LogicalSize(450, 270))
         }
     }, [isExpanded])
 

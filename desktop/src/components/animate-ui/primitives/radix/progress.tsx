@@ -30,7 +30,7 @@ type ProgressIndicatorProps = React.ComponentProps<
 >;
 
 function ProgressIndicator({
-  transition = { type: 'spring', stiffness: 100, damping: 30 },
+  transition = { type: 'spring', stiffness: 100, damping: 20 },
   ...props
 }: ProgressIndicatorProps) {
   const { value } = useProgress();
