@@ -18,9 +18,9 @@ export default function Header() {
             const currentScrollY = window.scrollY;
             
             // Check if at top
-            setIsAtTop(currentScrollY < 50);
+            setIsAtTop(currentScrollY < 100);
             
-            if (currentScrollY < 10) {
+            if (currentScrollY < 100) {
                 setIsVisible(true);
             } else if (currentScrollY > lastScrollY) {
                 // Scrolling down
@@ -47,15 +47,15 @@ export default function Header() {
             <div className="flex flex-row gap-2 items-center">
                 <Image
                    className={"rounded-lg aspect-square"}
-                   width={55}
-                   height={55}
+                   width={45}
+                   height={45}
                    src="logo.svg"
                    alt="Logo"
                 />
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2">
-                <div className="flex flex-row gap-5 rounded-xl border border-primaryText/30 px-8 py-2">
+                <div className="flex flex-row gap-5 rounded-xl px-8 py-2">
                     {[
                         { label: "Transfer", href: "#transfer" },
                         { label: "Pricing", href: "#pricing" },

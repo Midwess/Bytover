@@ -30,22 +30,25 @@ export default function Introduction() {
                         <div className={"flex flex-col gap-3 items-center"}>
                         <Button className={"flex flex-row gap-3"}>Try it now on web</Button>
                         <h2 className={"text-lg text-muted-foreground"}>Available on many other platforms</h2>
-                       <div className={"flex flex-row gap-2"}>
-                           <Button className={"flex flex-row gap-3"}>
-                               <img src={"/android.svg"} alt={"android"} className={"w-6 h-6"}/>
-                                Android
+                       <div className={"flex flex-row items-center justify-center gap-0 bg-white rounded-xl border border-gray-200 px-2 py-1 shadow-sm"}>
+                           <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-white/10 px-4 py-2 rounded-lg transition-colors"}>
+                               <img src={"/android.svg"} alt={"android"} className={"w-5 h-5"}/>
+                                <span className="text-sm font-medium">Android</span>
                             </Button>
-                            <Button className={"flex flex-row gap-3"}>
-                                <img src={"/apple.svg"} alt={"apple"} className={"w-6 h-6"}/>
-                                iOS
+                            <div className="h-6 w-px bg-gray-200 mx-1" />
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                                <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
+                                <span className="text-sm font-medium">iOS</span>
                             </Button>
-                            <Button className={"flex flex-row gap-3"}>
-                                <img src={"/windows.svg"} alt={"windows"} className={"w-6 h-6"}/>
-                                Windows
+                            <div className="h-6 w-px bg-gray-200 mx-1" />
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                                <img src={"/windows.svg"} alt={"windows"} className={"w-5 h-5"}/>
+                                <span className="text-sm font-medium">Windows</span>
                             </Button>
-                            <Button className={"flex flex-row gap-3"}>
-                                <img src={"/apple.svg"} alt={"apple"} className={"w-6 h-6"}/>
-                                Mac OS
+                            <div className="h-6 w-px bg-gray-200 mx-1" />
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                                <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
+                                <span className="text-sm font-medium">Mac OS</span>
                             </Button>
                         </div>
                     </div>
