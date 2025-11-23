@@ -28,8 +28,8 @@ export default function Introduction() {
                         />
                         </div>
                         <div className={"flex flex-col gap-3 items-center"}>
-                        <Button className={"flex flex-row gap-3 bg-bluePrimary text-white"}>Try it now on web</Button>
-                        <h2 className={"text-lg text-muted-foreground"}>Available on many other platforms</h2>
+                        <Button className={"flex flex-row gap-3 bg-bluePrimary text-white font-bold"}>Try it now on web</Button>
+                        <h2 className={"text-lg text-foreground/90"}>Available on many other platforms</h2>
                        <div className={"flex flex-row items-center justify-center gap-0 bg-white rounded-xl border border-gray-200 px-2 py-1 shadow-sm"}>
                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
                                <img src={"/android.svg"} alt={"android"} className={"w-5 h-5"}/>
