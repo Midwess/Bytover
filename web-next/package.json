@@ -26,11 +26,13 @@
     "filepond": "^4.32.8",
     "filepond-plugin-file-poster": "^2.5.2",
     "filepond-plugin-image-preview": "^4.6.12",
+    "framer-motion": "^12.23.24",
+    "gsap": "^3.13.0",
     "heic2any": "^0.0.4",
     "libheif-js": "^1.19.8",
     "lodash": "4.17.21",
     "lucide-react": "^0.554.0",
-    "motion": "^12.23.6",
+    "motion": "^12.23.24",
     "next": "15.3.5",
     "overlayscrollbars": "^2.12.0",
     "radix-ui": "^1.4.2",
@@ -40,7 +42,9 @@
     "react-hot-toast": "^2.5.2",
     "react-use-measure": "^2.1.7",
     "shared_types": "file:../shared_types/generated/typescript",
-    "tailwind-merge": "^3.4.0"
+    "simplex-noise": "^4.0.3",
+    "tailwind-merge": "^3.4.0",
+    "three": "^0.181.2"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.35.1",

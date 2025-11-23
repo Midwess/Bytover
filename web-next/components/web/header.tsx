@@ -18,9 +18,9 @@ export default function Header() {
             const currentScrollY = window.scrollY;
             
             // Check if at top
-            setIsAtTop(currentScrollY < 50);
+            setIsAtTop(currentScrollY < 100);
             
-            if (currentScrollY < 10) {
+            if (currentScrollY < 100) {
                 setIsVisible(true);
             } else if (currentScrollY > lastScrollY) {
                 // Scrolling down
@@ -42,19 +42,20 @@ export default function Header() {
     }
 
     return (
-        <div className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center w-full py-6 px-4 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'} ${isAtTop ? 'bg-transparent border-b border-transparent shadow-none' : 'backdrop-blur-xl bg-blackBase/90 border-b border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]'}`}>
-            <div className="container mx-auto flex justify-between items-center">
+        <div className={`fixed top-0 left-0 right-0 z-50 flex justify-between items-center w-full py-3 md:py-6 px-3 md:px-4 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'} ${isAtTop ? 'bg-transparent border-b border-transparent shadow-none' : 'backdrop-blur-xl bg-blackBase/90 border-b border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]'}`}>
+            <div className="container mx-auto flex justify-between items-center w-full">
             <div className="flex flex-row gap-2 items-center">
                 <Image
-                    width={35}
-                    height={35}
-                    src="logo.svg"
-                    alt="Logo"
+                   width={35}
+                   height={35}
+                   src="logo.svg"
+                   alt="Logo"
+                   className="rounded-lg aspect-square w-8 h-8 md:w-[45px] md:h-[45px]"
                 />
             </div>
 
-            <div className="absolute left-1/2 transform -translate-x-1/2">
-                <div className="flex flex-row gap-5 rounded-xl border border-primaryText/30 px-8 py-2">
+            <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2">
+                <div className="flex flex-row gap-3 md:gap-5 rounded-xl px-4 md:px-8 py-2">
                     {[
                         { label: "Transfer", href: "#transfer" },
                         { label: "Pricing", href: "#pricing" },
@@ -70,9 +71,9 @@ export default function Header() {
                                     element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                 }
                             }}
-                            className="nav-link text-primaryText/80"
+                            className="nav-link text-primaryText/80 text-sm md:text-base"
                         >
-                            <h2>{item.label}</h2>
+                            <h2 className="text-sm md:text-base">{item.label}</h2>
                         </a>
                     ))}
                 </div>
@@ -99,9 +100,9 @@ export default function Header() {
                 </style>
 
             </div>
-                <div className="flex flex-row gap-2 font-bold text-primaryText">
-                    <GitHubStarsButton className={"under-development bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
-                    <Button variant={"default"} className={"h-10 bg-bluePrimary/70 border border-bluePrimary text-foreground"} onClick={onAuthenticate}>Join now</Button>
+                <div className="flex flex-row gap-1.5 md:gap-2 font-bold text-primaryText items-center">
+                    <GitHubStarsButton className={"hidden sm:flex under-development bg-muted-foreground/10 border h-8 md:h-10 text-foreground text-xs md:text-sm"} username="Dev-log" repo="animate-ui"/>
+                    <Button variant={"default"} className={"h-8 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4"} onClick={onAuthenticate}>Sign in</Button>
                 </div>
             </div>
         </div>
