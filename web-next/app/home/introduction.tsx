@@ -28,25 +28,25 @@ export default function Introduction() {
                         />
                         </div>
                         <div className={"flex flex-col gap-3 items-center"}>
-                        <Button className={"flex flex-row gap-3"}>Try it now on web</Button>
+                        <Button className={"flex flex-row gap-3 bg-bluePrimary text-white"}>Try it now on web</Button>
                         <h2 className={"text-lg text-muted-foreground"}>Available on many other platforms</h2>
                        <div className={"flex flex-row items-center justify-center gap-0 bg-white rounded-xl border border-gray-200 px-2 py-1 shadow-sm"}>
-                           <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-white/10 px-4 py-2 rounded-lg transition-colors"}>
+                           <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
                                <img src={"/android.svg"} alt={"android"} className={"w-5 h-5"}/>
                                 <span className="text-sm font-medium">Android</span>
                             </Button>
                             <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
                                 <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
                                 <span className="text-sm font-medium">iOS</span>
                             </Button>
                             <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
                                 <img src={"/windows.svg"} alt={"windows"} className={"w-5 h-5"}/>
                                 <span className="text-sm font-medium">Windows</span>
                             </Button>
                             <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors"}>
+                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
                                 <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
                                 <span className="text-sm font-medium">Mac OS</span>
                             </Button>
@@ -63,9 +63,9 @@ export function GravityBackground() {
     return <>
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
             <LiquidEther
-                colors={[ '#5227FF', '#FF9FFC', '#B19EEF' ]}
+                colors={[ '#3B82F6', '#60A5FA', '#93C5FD' ]}
                 mouseForce={30}
-                cursorSize={90}
+                cursorSize={86}
                 isViscous={false}
                 viscous={20}
                 iterationsViscous={20}
@@ -73,7 +73,7 @@ export function GravityBackground() {
                 resolution={0.4}
                 isBounce={false}
                 autoDemo={true}
-                autoSpeed={0.5}
+                autoSpeed={0.3}
                 autoIntensity={0.9}
                 takeoverDuration={0.15}
                 autoResumeDelay={500}

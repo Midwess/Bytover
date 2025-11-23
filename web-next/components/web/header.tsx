@@ -102,7 +102,7 @@ export default function Header() {
             </div>
                 <div className="flex flex-row gap-2 font-bold text-primaryText">
                     <GitHubStarsButton className={"under-development bg-muted-foreground/10 border h-10 text-foreground"} username="Dev-log" repo="animate-ui"/>
-                    <Button variant={"default"} className={"h-10 bg-white border text-black"} onClick={onAuthenticate}>Sign in</Button>
+                    <Button variant={"default"} className={"h-10 bg-bluePrimary text-white"} onClick={onAuthenticate}>Sign in</Button>
                 </div>
             </div>
         </div>
