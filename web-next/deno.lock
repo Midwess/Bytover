@@ -25,6 +25,7 @@
     "npm:filepond-plugin-image-preview@^4.6.12": "4.6.12_filepond@4.32.10",
     "npm:filepond@^4.32.8": "4.32.10",
     "npm:framer-motion@^12.23.24": "12.23.24_react@19.2.0_react-dom@19.2.0__react@19.2.0",
+    "npm:gsap@^3.13.0": "3.13.0",
     "npm:heic2any@^0.0.4": "0.0.4",
     "npm:libheif-js@^1.19.8": "1.19.8",
     "npm:lodash@4.17.21": "4.17.21",
@@ -2807,6 +2808,9 @@
     "graphemer@1.4.0": {
       "integrity": "sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag=="
     },
+    "gsap@3.13.0": {
+      "integrity": "sha512-QL7MJ2WMjm1PHWsoFrAQH/J8wUeqZvMtHO58qdekHpCfhvhSL4gSiz6vJf5EeMP0LOn3ZCprL2ki/gjED8ghVw=="
+    },
     "has-bigints@1.1.0": {
       "integrity": "sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg=="
     },
@@ -4178,6 +4182,7 @@
         "npm:filepond-plugin-image-preview@^4.6.12",
         "npm:filepond@^4.32.8",
         "npm:framer-motion@^12.23.24",
+        "npm:gsap@^3.13.0",
         "npm:heic2any@^0.0.4",
         "npm:libheif-js@^1.19.8",
         "npm:lodash@4.17.21",

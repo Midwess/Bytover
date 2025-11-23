@@ -27,6 +27,7 @@
     "filepond-plugin-file-poster": "^2.5.2",
     "filepond-plugin-image-preview": "^4.6.12",
     "framer-motion": "^12.23.24",
+    "gsap": "^3.13.0",
     "heic2any": "^0.0.4",
     "libheif-js": "^1.19.8",
     "lodash": "4.17.21",

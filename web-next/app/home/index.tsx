@@ -3,7 +3,7 @@ import Header from "@/components/web/header";
 
 import {Suspense} from "react";
 import {Pricing2} from "@/components/pricing2";
-import {Feature72} from "@/components/feature72";
+import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
 
 function FeaturesSection() {
@@ -13,33 +13,57 @@ function FeaturesSection() {
             heading: "Organize Your Files",
             description: "Keep all your files organized in a beautiful shelf interface. Easy drag-and-drop, quick access, and seamless file management.",
             video: "/demo/desktop-shelf.mp4",
+            color: '#060010',
         },
         {
             id: "public-share",
             heading: "Public Sharing",
             description: "Share files with anyone using a simple link. Optional password protection keeps your content secure while making sharing effortless.",
             video: "/demo/desktop-share-public.mp4",
+            color: '#060010',
         },
         {
             id: "nearby-share",
             heading: "Nearby and P2P Transfer",
             description: "Transfer files directly to any device instantly with Peer to Peer connection. And automatically matching nearby users.",
             video: "/demo/desktop-share-nearby.mp4",
+            color: '#060010',
         },
         {
             id: "all-platform",
             heading: "Available on All Platforms",
             description: "Coming soon this year! Native apps for Windows, macOS, iOS, and Android. Experience Bytover seamlessly across all your devices with full feature parity and consistent performance.",
             image: "/demo/mobile_mockup_1.png",
+            color: '#060010',
         },
     ];
 
     return (
-        <Feature72
-            title="Powerful Features"
-            description="Experience seamless file transfer with our intuitive interface. Share files publicly, transfer peer to peer, organize everything in your personal shelf."
-            features={features}
-        />
+        <section className="py-32">
+            <div className="container w-full flex flex-col items-center h-[1400px] max-h-[80vh] min-h-[1200px]">
+                <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
+                    <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
+                        Powerful Features
+                    </h2>
+                    <p className="text-primaryText/70 text-lg lg:text-xl">
+                        Experience seamless file transfer with our intuitive interface. Share files publicly, transfer peer to peer, organize everything in your personal shelf.
+                    </p>
+                </div>
+                <MagicBento 
+                    textAutoHide={true}
+                    enableStars={true}
+                    enableSpotlight={true}
+                    enableBorderGlow={true}
+                    enableTilt={true}
+                    enableMagnetism={true}
+                    clickEffect={true}
+                    spotlightRadius={300}
+                    particleCount={12}
+                    glowColor="132, 0, 255"
+                    cardData={features}
+                />
+            </div>
+        </section>
     );
 }
 
