@@ -7,23 +7,18 @@
 -   ```bash
     git submodule update --init --recursive
     ```
-
-- Kong gateway
+- [Protocol Buffer Compiler Installation](https://protobuf.dev/installation/)
+- Kong gateway & Back-end DB:
     ```bash
     docker compose up 
     ```
-- Back-end DB:
-    ```bash
-    cd backend && docker compose up
-    ```
+- Run `app-gateway`.
 - Back-end
     ```bash
-    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5433/bitbridge" DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5432/bitbridge" DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
     ```
 
 # Front-end & native development
-- [Protocol Buffer Compiler Installation](https://protobuf.dev/installation/)
-
 - Generate types for language of your choice
     - `Swift` for `iOS`
     - `Java` for `Android`
