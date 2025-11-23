@@ -10,45 +10,45 @@ export default function Introduction() {
             <div className={"w-full h-screen absolute"}>
                 <GravityBackground/>
             </div>
-            <div className={'relative flex flex-col w-full items-center gap-10 pb-16 pt-32 justify-center'}>
-                <div className={'flex flex-col items-center justify-center gap-32 container z-2 w-full'}>
-                    <div className={"flex flex-col items-center gap-20"}>
-                        <div className={"flex flex-col items-center gap-4"}>
-                            <div className={"rounded-2xl text-white px-3 py-0.5 font-bold gap-2 backdrop-blur-2xl flex flex-row items-center justify-center border text-md"}>
-                                <img src={"/logo-color.svg"} alt={"logo"} className={"w-10 h-10"}/>
-                                Bytover
+            <div className={'relative flex flex-col w-full items-center gap-4 md:gap-10 pb-8 md:pb-16 pt-20 md:pt-32 justify-center px-4'}>
+                <div className={'flex flex-col items-center justify-center gap-12 md:gap-32 container z-2 w-full'}>
+                    <div className={"flex flex-col items-center gap-8 md:gap-20"}>
+                        <div className={"flex flex-col items-center gap-2 md:gap-4"}>
+                            <div className={"rounded-xl md:rounded-2xl text-white px-2 md:px-3 py-0.5 font-bold gap-1.5 md:gap-2 backdrop-blur-2xl flex flex-row items-center justify-center border text-xs md:text-md"}>
+                                <img src={"/logo-color.svg"} alt={"logo"} className={"w-6 h-6 md:w-10 md:h-10"}/>
+                                <span className="whitespace-nowrap">Bytover</span>
                             </div>
                         <TypingText
                             delay={200}
                             duration={15}
-                            className="text-2xl md:text-7xl font-black text-center h1 pointer-events-none"
+                            className="text-xl sm:text-2xl md:text-5xl lg:text-7xl font-black text-center h1 pointer-events-none px-2"
                             text={"A seamless file transfer that you can trust"}
                             cursor
-                            cursorClassName="h-9"
+                            cursorClassName="h-6 md:h-9"
                         />
                         </div>
-                        <div className={"flex flex-col gap-3 items-center"}>
-                        <Button className={"flex flex-row gap-3 bg-bluePrimary text-white font-bold"}>Try it now on web</Button>
-                        <h2 className={"text-lg text-foreground/90"}>Available on many other platforms</h2>
-                       <div className={"flex flex-row items-center justify-center gap-0 bg-white rounded-xl border border-gray-200 px-2 py-1 shadow-sm"}>
-                           <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
-                               <img src={"/android.svg"} alt={"android"} className={"w-5 h-5"}/>
-                                <span className="text-sm font-medium">Android</span>
+                        <div className={"flex flex-col gap-2 md:gap-3 items-center w-full px-4 md:px-0"}>
+                        <Button className={"flex flex-row gap-2 md:gap-3 bg-bluePrimary text-white font-bold text-sm md:text-base px-4 md:px-6 py-2 md:py-3"}>Try it now on web</Button>
+                        <h2 className={"text-sm md:text-lg text-foreground/90"}>Available on many other platforms</h2>
+                       <div className={"flex flex-row items-center justify-center gap-0 bg-white rounded-lg md:rounded-xl border border-gray-200 px-1 md:px-2 py-0.5 md:py-1 shadow-sm w-fit max-w-full"}>
+                           <Button className={"flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/30 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors"}>
+                               <img src={"/android.svg"} alt={"android"} className={"hidden md:block w-4 h-4 md:w-5 md:h-5"}/>
+                                <span className="text-xs md:text-sm font-medium">Android</span>
                             </Button>
-                            <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
-                                <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
-                                <span className="text-sm font-medium">iOS</span>
+                            <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1" />
+                            <Button className={"flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/30 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors"}>
+                                <img src={"/apple.svg"} alt={"apple"} className={"hidden md:block w-4 h-4 md:w-5 md:h-5"}/>
+                                <span className="text-xs md:text-sm font-medium">iOS</span>
                             </Button>
-                            <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
-                                <img src={"/windows.svg"} alt={"windows"} className={"w-5 h-5"}/>
-                                <span className="text-sm font-medium">Windows</span>
+                            <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1" />
+                            <Button className={"flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/30 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors"}>
+                                <img src={"/windows.svg"} alt={"windows"} className={"hidden md:block w-4 h-4 md:w-5 md:h-5"}/>
+                                <span className="text-xs md:text-sm font-medium">Windows</span>
                             </Button>
-                            <div className="h-6 w-px bg-gray-200 mx-1" />
-                            <Button className={"flex flex-row items-center gap-2 bg-transparent hover:bg-black/30 px-4 py-2 rounded-lg transition-colors"}>
-                                <img src={"/apple.svg"} alt={"apple"} className={"w-5 h-5"}/>
-                                <span className="text-sm font-medium">Mac OS</span>
+                            <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1" />
+                            <Button className={"flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/30 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors"}>
+                                <img src={"/apple.svg"} alt={"apple"} className={"hidden md:block w-4 h-4 md:w-5 md:h-5"}/>
+                                <span className="text-xs md:text-sm font-medium">Mac OS</span>
                             </Button>
                         </div>
                     </div>

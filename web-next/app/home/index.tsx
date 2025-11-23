@@ -40,7 +40,7 @@ function FeaturesSection() {
 
     return (
         <section className="py-32">
-            <div className="">
+            <div className="w-full h-full container min-h-[1200px] max-h-[80vh] flex flex-col items-center">
                 <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
                     <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
                         Powerful Features
@@ -127,8 +127,10 @@ export default function Home() {
         </div>
 
         {/* Features Section */}
-        <div id="features" className={"w-full bg-black container flex flex-col items-center h-[1500px] max-h-[80vh] min-h-fit"}>
+        <div id="features" className={"w-full bg-black"}>
+            <div className="w-full bg-black container">
                 <FeaturesSection/>
+            </div>
         </div>
 
         {/* Pricing Section */}
