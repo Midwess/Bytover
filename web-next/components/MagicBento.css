@@ -13,7 +13,7 @@
 .card-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  gap: 0.75em;
   padding: 0.5em;
   max-width: 100%;
   width: 100%;
@@ -32,6 +32,7 @@
 }
 
 .magic-bento-card {
+  margin-top: 1rem;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -367,6 +368,7 @@
     width: 90%;
     margin: 0 auto;
     padding: 0.5em;
+    gap: 1em;
   }
 
   .magic-bento-card {
@@ -379,6 +381,7 @@
   .card-grid {
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 0.75em;
   }
 
   .magic-bento-card {

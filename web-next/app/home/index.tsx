@@ -40,7 +40,7 @@ function FeaturesSection() {
 
     return (
         <section className="py-32">
-            <div className="w-full h-full container min-h-[1200px] max-h-[80vh] flex flex-col items-center">
+            <div className="w-full container lg:h-[1400px] flex flex-col items-center">
                 <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
                     <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
                         Powerful Features
