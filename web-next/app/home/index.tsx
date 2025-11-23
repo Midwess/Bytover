@@ -59,7 +59,7 @@ function FeaturesSection() {
                     clickEffect={true}
                     spotlightRadius={300}
                     particleCount={12}
-                    glowColor="132, 0, 255"
+                    glowColor="59, 130, 246"
                     cardData={features}
                 />
             </div>
