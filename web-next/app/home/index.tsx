@@ -40,7 +40,7 @@ function FeaturesSection() {
 
     return (
         <section className="py-32">
-            <div className="container w-full flex flex-col items-center h-[1400px] max-h-[80vh] min-h-[1200px]">
+            <div className="">
                 <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
                     <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
                         Powerful Features
@@ -126,22 +126,13 @@ export default function Home() {
             <Introduction/>
         </div>
 
-        {/* Transfer Board Section */}
-        {/*<div id="transfer" className={"container flex flex-col py-16 scroll-mt-20"}>*/}
-        {/*    <Suspense fallback={null}>*/}
-        {/*        <TransferBoard/>*/}
-        {/*    </Suspense>*/}
-        {/*</div>*/}
-
         {/* Features Section */}
-        <div id="features" className={"w-full bg-black py-16 scroll-mt-20"}>
-            <div className="container">
+        <div id="features" className={"w-full bg-black container flex flex-col items-center h-[1500px] max-h-[80vh] min-h-fit"}>
                 <FeaturesSection/>
-            </div>
         </div>
 
         {/* Pricing Section */}
-        <div id="pricing" className={"w-full bg-black scroll-mt-20"}>
+        <div id="pricing" className={"w-full bg-black sm:pt-30 lg:pt-2 scroll-mt-20"}>
             <PricingPlans/>
         </div>
 

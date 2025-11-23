@@ -21,7 +21,7 @@ export default function Introduction() {
                         <TypingText
                             delay={200}
                             duration={15}
-                            className="text-7xl font-black text-center h1 pointer-events-none max-w-[800px]"
+                            className="text-2xl md:text-7xl font-black text-center h1 pointer-events-none"
                             text={"A seamless file transfer that you can trust"}
                             cursor
                             cursorClassName="h-9"

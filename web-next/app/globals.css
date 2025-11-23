@@ -117,12 +117,25 @@
 }
 
 @layer base {
+  html {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
   * {
     @apply border-border outline-ring/50;
     outline-color: white !important;
   }
   body {
     @apply bg-background text-foreground;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    position: relative;
   }
 }
 
