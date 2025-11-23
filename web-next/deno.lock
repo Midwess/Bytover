@@ -41,6 +41,7 @@
     "npm:simplex-noise@^4.0.3": "4.0.3",
     "npm:tailwind-merge@^3.4.0": "3.4.0",
     "npm:tailwindcss@4": "4.1.17",
+    "npm:three@~0.181.2": "0.181.2",
     "npm:tw-animate-css@^1.3.5": "1.4.0",
     "npm:typescript@5.9.3": "5.9.3"
   },
@@ -3921,6 +3922,9 @@
     "tapable@2.3.0": {
       "integrity": "sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg=="
     },
+    "three@0.181.2": {
+      "integrity": "sha512-k/CjiZ80bYss6Qs7/ex1TBlPD11whT9oKfT8oTGiHa34W4JRd1NiH/Tr1DbHWQ2/vMUypxksLnF2CfmlmM5XFQ=="
+    },
     "tinyglobby@0.2.15_picomatch@4.0.3": {
       "integrity": "sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==",
       "dependencies": [
@@ -4190,6 +4194,7 @@
         "npm:simplex-noise@^4.0.3",
         "npm:tailwind-merge@^3.4.0",
         "npm:tailwindcss@4",
+        "npm:three@~0.181.2",
         "npm:tw-animate-css@^1.3.5",
         "npm:typescript@5.9.3"
       ]

@@ -42,7 +42,8 @@
     "react-use-measure": "^2.1.7",
     "shared_types": "file:../shared_types/generated/typescript",
     "simplex-noise": "^4.0.3",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "three": "^0.181.2"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.35.1",
