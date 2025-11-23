@@ -244,7 +244,6 @@ function FileView(props: {
                        hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
                        hover:bg-muted/80">
             
-            {/* Remove Button Overlay */}
             <div
                 className={clsx(
                     "absolute z-20 inset-0 flex items-center justify-center rounded-2xl",
@@ -261,7 +260,6 @@ function FileView(props: {
                 </Button>
             </div>
 
-            {/* Icon/Thumbnail Container */}
             <div className="flex-1 flex items-center justify-center p-3 relative">
                 <div className="relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
                     <div className="relative w-16 h-16">
@@ -275,7 +273,6 @@ function FileView(props: {
                 </div>
             </div>
 
-            {/* Info Section */}
             <div className="flex flex-col gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3">
                 <p className="text-sm font-medium text-center text-white/90 break-words line-clamp-2 leading-tight">
                     {model.name}

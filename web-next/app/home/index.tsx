@@ -1,14 +1,10 @@
 import {TypingText} from "@/components/animate-ui/text/typing";
 import Header from "@/components/web/header";
-import {LiquidButton} from '@/components/animate-ui/buttons/liquid'
-import Android from '@/public/android.svg'
-import apple from '@/public/apple.svg'
-import windows from '@/public/windows.svg'
-import Image from 'next/image'
-import TransferBoard from "@/app/transfer";
-import { Suspense } from "react";
-import { Pricing2 } from "@/components/pricing2";
-import { Feature72 } from "@/components/feature72";
+
+import {Suspense} from "react";
+import {Pricing2} from "@/components/pricing2";
+import {Feature72} from "@/components/feature72";
+import Introduction from "@/app/home/introduction.tsx";
 
 function FeaturesSection() {
     const features = [
@@ -33,8 +29,8 @@ function FeaturesSection() {
         {
             id: "all-platform",
             heading: "Available on All Platforms",
-            description: "Coming soon this year! Native apps for Windows, macOS, iOS, and Android. Experience BitBridge seamlessly across all your devices with full feature parity and consistent performance.",
-            image: "/demo/bitbridge_mockup_1.png",
+            description: "Coming soon this year! Native apps for Windows, macOS, iOS, and Android. Experience Bytover seamlessly across all your devices with full feature parity and consistent performance.",
+            image: "/demo/mobile_mockup_1.png",
         },
     ];
 
@@ -55,10 +51,10 @@ function PricingPlans() {
             description: "Perfect for basic users who need simple peer-to-peer file transfers",
             price: "Free",
             features: [
-                { text: "Peer-to-peer transfers with limited bandwidth", included: true },
-                { text: "Transfer to your own devices", included: true },
-                { text: "Public sharing", included: false },
-                { text: "Email sharing", included: false },
+                {text: "Peer-to-peer transfers with limited bandwidth", included: true},
+                {text: "Transfer to your own devices", included: true},
+                {text: "Public sharing", included: false},
+                {text: "Email sharing", included: false},
             ],
             button: {
                 text: "Get Started",
@@ -71,11 +67,11 @@ function PricingPlans() {
             description: "Advanced features for peer-to-peer transfers across the internet and public sharing.",
             price: "Coming soon",
             features: [
-                { text: "Peer-to-peer transfers with unlimited bandwidth", included: true },
-                { text: "Transfer to your own devices", included: true },
-                { text: "Public sharing with password protection", included: true },
-                { text: "Public cloud storage up to 500GB / month", included: true },
-                { text: "Send files via email", included: true },
+                {text: "Peer-to-peer transfers with unlimited bandwidth", included: true},
+                {text: "Transfer to your own devices", included: true},
+                {text: "Public sharing with password protection", included: true},
+                {text: "Public cloud storage up to 500GB / month", included: true},
+                {text: "Send files via email", included: true},
             ],
             button: {
                 text: "Buy Now",
@@ -100,55 +96,18 @@ export default function Home() {
         <Suspense fallback={null}>
             <Header/>
         </Suspense>
-        
-        {/* Hero Section */}
-        <div className={'relative flex flex-col w-full items-center gap-10 pb-16 pt-32'}>
 
-            <div
-                className="absolute top-0 h-full w-screen bg-black bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,255,121,0.2),rgba(255,255,255,0))]">
-            </div>
-            <div className={'flex flex-col items-center gap-4 container z-2'}>
-                <h2 className="text-lg tracking-widest text-greenSecondary text-center">
-                    Powering your productivity
-                </h2>
-                <TypingText
-                    delay={200}
-                    duration={15}
-                    className="text-5xl font-bold text-center h1"
-                    text="Seamless file transfer that you can trust"
-                    cursor
-                    cursorClassName="h-9"
-                />
-            </div>
-            <div className={"flex flex-col items-center gap-4"}>
-                <h2 className={"font-bold text-lg text-primaryText/80"}>Available on all platforms</h2>
-                <div className={"flex flex-row gap-2"}>
-                    <LiquidButton className={"flex flex-row gap-3"}>
-                        <Image src={Android} alt="Android" width={20} height={20}/>
-                        Android
-                    </LiquidButton>
-                    <LiquidButton className={"flex flex-row gap-3"}>
-                        <Image src={apple} alt="iOS" width={20} height={20}/>
-                        iOS
-                    </LiquidButton>
-                    <LiquidButton className={"flex flex-row gap-3"}>
-                        <Image src={windows} alt="Windows" width={20} height={20}/>
-                        Windows
-                    </LiquidButton>
-                    <LiquidButton className={"flex flex-row gap-3"}>
-                        <Image src={apple} alt="Mac" width={20} height={20}/>
-                        Mac OS
-                    </LiquidButton>
-                </div>
-            </div>
+        {/* Hero Section */}
+       <div id="intro" className={"w-screen h-screen"}>
+            <Introduction/>
         </div>
 
         {/* Transfer Board Section */}
-        <div id="transfer" className={"container flex flex-col py-16 scroll-mt-20"}>
-            <Suspense fallback={null}>
-                <TransferBoard/>
-            </Suspense>
-        </div>
+        {/*<div id="transfer" className={"container flex flex-col py-16 scroll-mt-20"}>*/}
+        {/*    <Suspense fallback={null}>*/}
+        {/*        <TransferBoard/>*/}
+        {/*    </Suspense>*/}
+        {/*</div>*/}
 
         {/* Features Section */}
         <div id="features" className={"w-full bg-black py-16 scroll-mt-20"}>

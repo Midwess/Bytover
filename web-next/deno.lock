@@ -24,11 +24,12 @@
     "npm:filepond-plugin-file-poster@^2.5.2": "2.5.2_filepond@4.32.10",
     "npm:filepond-plugin-image-preview@^4.6.12": "4.6.12_filepond@4.32.10",
     "npm:filepond@^4.32.8": "4.32.10",
+    "npm:framer-motion@^12.23.24": "12.23.24_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:heic2any@^0.0.4": "0.0.4",
     "npm:libheif-js@^1.19.8": "1.19.8",
     "npm:lodash@4.17.21": "4.17.21",
     "npm:lucide-react@0.554": "0.554.0_react@19.2.0",
-    "npm:motion@^12.23.6": "12.23.24_react@19.2.0_react-dom@19.2.0__react@19.2.0",
+    "npm:motion@^12.23.24": "12.23.24_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:next@15.3.5": "15.3.5_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:overlayscrollbars@^2.12.0": "2.12.0",
     "npm:radix-ui@^1.4.2": "1.4.3_@types+react@19.2.6_@types+react-dom@19.2.3__@types+react@19.2.6_react@19.2.0_react-dom@19.2.0__react@19.2.0",
@@ -37,6 +38,7 @@
     "npm:react-hot-toast@^2.5.2": "2.6.0_react@19.2.0_react-dom@19.2.0__react@19.2.0_csstype@3.2.3",
     "npm:react-use-measure@^2.1.7": "2.1.7_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:react@19": "19.2.0",
+    "npm:simplex-noise@^4.0.3": "4.0.3",
     "npm:tailwind-merge@^3.4.0": "3.4.0",
     "npm:tailwindcss@4": "4.1.17",
     "npm:tw-animate-css@^1.3.5": "1.4.0",
@@ -3804,6 +3806,9 @@
         "side-channel-weakmap"
       ]
     },
+    "simplex-noise@4.0.3": {
+      "integrity": "sha512-qSE2I4AngLQG7BXqoZj51jokT4WUXe8mOBrvfOXpci8+6Yu44+/dD5zqDpOx3Ux792eamTd2lLcI8jqFntk/lg=="
+    },
     "source-map-js@1.2.1": {
       "integrity": "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="
     },
@@ -4168,11 +4173,12 @@
         "npm:filepond-plugin-file-poster@^2.5.2",
         "npm:filepond-plugin-image-preview@^4.6.12",
         "npm:filepond@^4.32.8",
+        "npm:framer-motion@^12.23.24",
         "npm:heic2any@^0.0.4",
         "npm:libheif-js@^1.19.8",
         "npm:lodash@4.17.21",
         "npm:lucide-react@0.554",
-        "npm:motion@^12.23.6",
+        "npm:motion@^12.23.24",
         "npm:next@15.3.5",
         "npm:overlayscrollbars@^2.12.0",
         "npm:radix-ui@^1.4.2",
@@ -4181,6 +4187,7 @@
         "npm:react-hot-toast@^2.5.2",
         "npm:react-use-measure@^2.1.7",
         "npm:react@19",
+        "npm:simplex-noise@^4.0.3",
         "npm:tailwind-merge@^3.4.0",
         "npm:tailwindcss@4",
         "npm:tw-animate-css@^1.3.5",
