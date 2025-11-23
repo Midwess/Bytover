@@ -158,7 +158,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
 impl TransferSessionPostgresRepository {
     async fn notify(&self, session: &TransferSession) -> Result<(), RepositoryError> {
         let channel = format!("transfer_session_{}_{}", session.user_order_id(), session.order_id());
-        let payload = serde_json::to_string(session).map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let payload = session.order_id().to_string();
 
         let statement = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
