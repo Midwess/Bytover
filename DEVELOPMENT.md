@@ -27,7 +27,7 @@
     # all
     cargo build -p shared_types --target wasm32-unknown-unknown
 
-    # typescript only
+    # typescript only (you'll need pnpm installed)
     cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
 
     # swift and java
@@ -46,7 +46,7 @@
     ```bash
     cd web-next
     pnpm install
-    pnpm wasm:dev
+    pnpm wasm:build
     DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 pnpm dev
     ```
 - Access your app at `http://localhost:8000`.

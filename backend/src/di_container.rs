@@ -144,7 +144,7 @@ impl DiContainer {
     pub async fn get_grpc_cloud_service(&'static self) -> CloudGrpcService {
         CloudGrpcService {
             cloud_storage: Arc::new(self.get_cloud_storage()),
-            session_repository: Box::new(self.get_transfer_session_repository().await),
+            session_repository: Arc::new(self.get_transfer_session_repository().await),
             app_service: Box::new(self.get_app_service().await),
             pg_pool: self.pg_pool.clone()
         }
