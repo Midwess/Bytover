@@ -7,6 +7,3 @@
 [submodule "libs/core-services"]
 	path = libs/core-services
 	url = git@github.com:dev-logs/core-services.git
-[submodule "auth-gateway"]
-	path = auth-gateway
-	url = git@github.com:dev-logs/auth-gateway.git

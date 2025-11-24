@@ -1,7 +1,7 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
-use crate::entities::transfer_session::TransferSession;
+
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
@@ -38,7 +38,7 @@ use tonic::{Request, Response, Status};
 
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
-    pub session_repository: Box<dyn TransferSessionRepository>,
+    pub session_repository: Arc<dyn TransferSessionRepository>,
     pub app_service: Box<dyn AppInfoService>,
     pub pg_pool: PgPool
 }
@@ -144,10 +144,16 @@ impl BitBridgeCloudService for CloudGrpcService {
         let app = app.clone();
         let tx_updates = tx.clone();
         let mut current_session = initial_session;
+        let session_repository = self.session_repository.clone();
 
         tokio::spawn(async move {
+            let session_id = TransferSessionId {
+                order_id: Some(order_id),
+                user_order_id: Some(user_order_id)
+            };
+
             loop {
-                let notification = match listener.recv().await {
+                let _ = match listener.recv().await {
                     Ok(notification) => notification,
                     Err(err) => {
                         log::error!("Failed to receive notification: {err}");
@@ -155,11 +161,14 @@ impl BitBridgeCloudService for CloudGrpcService {
                     }
                 };
 
-                let payload = notification.payload();
-                let session: TransferSession = match serde_json::from_str(payload) {
-                    Ok(session) => session,
+                let session = match session_repository.find_one(&session_id).await {
+                    Ok(Some(session)) => session,
+                    Ok(None) => {
+                        log::warn!("Session not found after notification");
+                        continue;
+                    }
                     Err(err) => {
-                        log::error!("Failed to deserialize session payload: {err}");
+                        log::error!("Failed to fetch session: {err}");
                         continue;
                     }
                 };

@@ -7,7 +7,6 @@
       "dom.iterable",
       "esnext"
     ],
-
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -27,7 +26,12 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ],
+      "shared_types/*": [
+        "./node_modules/shared_types/*"
+      ]
     }
   },
   "include": [
