@@ -80,9 +80,9 @@ const Pricing2 = ({
       <div className="w-full p-8 md:p-12 lg:p-16">
         <div className="flex flex-col items-center gap-12 text-center">
         <div className="flex flex-col items-center gap-4">
-          <h2 className="text-4xl font-bold lg:text-5xl text-primaryText">
+          <h1 className="text-4xl font-bold lg:text-6xl text-primaryText">
             {heading}
-          </h2>
+          </h1>
           <p className="text-primaryText/70 text-lg max-w-2xl">{description}</p>
         </div>
         

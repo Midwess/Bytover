@@ -1,5 +1,6 @@
 import {TypingText} from "@/components/animate-ui/text/typing";
 import Header from "@/components/web/header";
+import Footer from "@/components/web/footer";
 
 import {Suspense} from "react";
 import {Pricing2} from "@/components/pricing2";
@@ -135,7 +136,7 @@ export default function Home() {
         </div>
 
         {/* Pricing Section */}
-        <div id="pricing" className={"w-full bg-black sm:pt-30 lg:pt-2 scroll-mt-20"}>
+        <div id="pricing" className={"w-full bg-black sm:pt-30 lg:pt-2 scroll-mt-20 flex items-center justify-center lg:my-25"}>
             <PricingPlans/>
         </div>
 
@@ -144,7 +145,7 @@ export default function Home() {
             <JoinWaitList/>
         </div>
 
-        {/* Footer Spacing */}
-        <div className={"h-24 w-full"}></div>
+        {/* Footer */}
+        <Footer/>
     </div>
 }
