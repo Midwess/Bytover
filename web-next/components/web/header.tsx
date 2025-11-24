@@ -4,11 +4,34 @@ import Image from "next/image";
 import {
     AppEventVariantAuthentication,
     AuthenticationEventVariantAuthenticate,
+    AuthenticationEventVariantSignOut,
 } from 'shared_types/types/shared_types'
 import {Button} from "@/components/ui/button.tsx";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/animate-ui/radix/dropdown-menu";
+import core from '@/wasm/wasm_core';
 
 export default function Header() {
+    const authState = core.useAuthenticationState();
+    const isSignedIn = !!authState?.user;
 
+    const scrollToSection = (href: string) => {
+        const element = document.querySelector(href);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    const handleSignOut = () => {
+        core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantSignOut()));
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    };
 
     return (
         <div 
@@ -36,10 +59,7 @@ export default function Header() {
                             href={item.href}
                             onClick={(e) => {
                                 e.preventDefault();
-                                const element = document.querySelector(item.href);
-                                if (element) {
-                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                }
+                                scrollToSection(item.href);
                             }}
                             className="nav-link text-primaryText/80 text-sm md:text-base"
                         >
@@ -51,8 +71,41 @@ export default function Header() {
             </div>
                 <div className="flex flex-row gap-1.5 md:gap-2 font-bold text-primaryText items-center">
                     <GitHubStarsButton className={"hidden sm:flex under-development bg-muted-foreground/10 border h-8 md:h-10 text-foreground text-xs md:text-sm"} username="Dev-log" repo="animate-ui"/>
-                    <Button variant={"default"} className={"h-8 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4"} onClick={() => core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantAuthenticate()))}
-                    >Sign in</Button>
+                    {isSignedIn ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button 
+                                    variant="outline" 
+                                    className="h-8 md:h-10 bg-background/80 backdrop-blur-sm border-border/50 text-primaryText hover:bg-background/90 text-xs md:text-sm px-3 md:px-4"
+                                >
+                                    {authState?.user?.email || 'Account'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="!z-[200]">
+                                <DropdownMenuItem
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        scrollToSection('#transfer');
+                                    }}
+                                >
+                                    Transfer
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleSignOut}
+                                >
+                                    Sign out
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : (
+                        <Button 
+                            variant="default" 
+                            className="h-8 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4" 
+                            onClick={() => core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantAuthenticate()))}
+                        >
+                            Sign in
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>

@@ -1,4 +1,3 @@
-import {TypingText} from "@/components/animate-ui/text/typing";
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 

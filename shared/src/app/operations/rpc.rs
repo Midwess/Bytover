@@ -14,12 +14,16 @@ use super::{CoreOperation, CoreOperationOutput};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperation {
     GetAuthenticateUrl(DeviceInfo),
-    GetMe()
+    GetMe(),
+    Feedback {
+        email: String,
+        message: String,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
-    GetMe(User)
+    GetMe(User),
 }
 
 impl Operation for RpcOperation {
@@ -40,6 +44,14 @@ impl RpcOperation {
             CoreOperationOutput::String(value) => Ok(value),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetSignInUrl")
+        })
+    }
+
+    pub fn feedback(email: String, message: String) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::Feedback { email, message })).map(|res| match res {
+            CoreOperationOutput::None => Ok(()),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::Feedback")
         })
     }
 }

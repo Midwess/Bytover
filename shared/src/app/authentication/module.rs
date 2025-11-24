@@ -8,6 +8,7 @@ use crate::entities::user::User;
 
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
+use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::ShelfEvent;
 
 pub struct AuthenticationModule;
@@ -27,7 +28,8 @@ pub enum AuthenticationEvent {
     Authenticate,
     SignOut,
     OnRedirected { url: String },
-    Authorized { user: User }
+    Authorized { user: User },
+    Feedback { message: Option<String>, email: String }
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -73,6 +75,11 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     app.notify_event(ShelfEvent::Launch);
                     app.notify_event(TransferEvent::Launch);
                     app.notify_event(NearbyEvent::Launch);
+                })
+            }
+            AuthenticationEvent::Feedback {email, message} => {
+                Command::handle_result(|ctx| async move {
+                    ctx.app().run(RpcOperation::feedback(email, message.unwrap_or_default())).await
                 })
             }
         }

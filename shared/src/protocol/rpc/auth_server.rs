@@ -7,13 +7,14 @@ use core_services::utils::maybe::MaybeSend;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{AuthenticateRequest, FindUserRequest, MeRequest};
+use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
 use schema::devlog::app_gateway::rpc::authenticate_response::Action;
+use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 
-pub struct AuthServer<T>
+pub struct AppServer<T>
 where
     T: Clone,
     T: tonic::client::GrpcService<tonic::body::Body>,
@@ -26,7 +27,7 @@ where
     auth_provider: AuthProvider
 }
 
-impl<T> AuthServer<T>
+impl<T> AppServer<T>
 where
     T: Clone,
     T: MaybeSend + Sync,
@@ -104,5 +105,23 @@ where
         };
 
         Ok(Some(user))
+    }
+
+    pub async fn feedback(
+        &self,
+        email: String,
+        message: String
+    ) -> Result<(), RpcErrors> {
+        let request = AppFeedbackRequest {
+            app_name: "BitBridge".to_string(),
+            user_email: Some(email),
+            title: None,
+            message
+        };
+
+        let channel = self.rpc_module.connect().await?;
+        let mut client = FeedbackServiceClient::new(channel);
+        client.feedback_app(request).await?;
+        Ok(())
     }
 }

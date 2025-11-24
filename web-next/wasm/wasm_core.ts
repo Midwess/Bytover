@@ -260,6 +260,15 @@ export class WasmCore {
         return state
     }
 
+    public useAuthenticationState() {
+        const [state, setState] = useState(this.authenticationState.get());
+        useEffect(() => {
+            return this.authenticationState.subscribe(setState)
+        }, []);
+
+        return state
+    }
+
     usePeerState(peerId: string | undefined) {
         const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
 

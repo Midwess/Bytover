@@ -3,7 +3,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::entities::transfer_session::TransferSession;
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
-use crate::protocol::rpc::auth_server::AuthServer;
+use crate::protocol::rpc::auth_server::AppServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;
@@ -29,7 +29,7 @@ where
 
     fn cloud_server(&self) -> &CloudServer<T>;
 
-    fn auth_server(&self) -> &AuthServer<T>;
+    fn app_server(&self) -> &AppServer<T>;
 
     async fn handle(&self, request: CoreRequest, effect: TransferOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
@@ -76,7 +76,7 @@ where
                     return Ok(CoreOperationOutput::None);
                 };
 
-                let Some(user) = self.auth_server().find_user(session_key.user_id).await? else {
+                let Some(user) = self.app_server().find_user(session_key.user_id).await? else {
                     return Err(CoreError::BadRequest("Not found session".to_owned()));
                 };
 

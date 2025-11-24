@@ -33,10 +33,22 @@ export default function Footer() {
 
                     {/* Links Section */}
                     <div className="flex flex-col md:flex-row gap-8 md:gap-12">
-                        {/* Product */}
+                        {/* Sections */}
                         <div className="flex flex-col gap-3">
-                            <h3 className="font-semibold text-primaryText text-sm md:text-base">Product</h3>
+                            <h3 className="font-semibold text-primaryText text-sm md:text-base">Sections</h3>
                             <ul className="flex flex-col gap-2">
+                                <li>
+                                    <a
+                                        href="#intro"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            scrollToSection('#intro');
+                                        }}
+                                        className="text-muted-foreground hover:text-primaryText transition-colors text-sm md:text-base"
+                                    >
+                                        Home
+                                    </a>
+                                </li>
                                 <li>
                                     <a
                                         href="#features"
@@ -46,47 +58,32 @@ export default function Footer() {
                                         }}
                                         className="text-muted-foreground hover:text-primaryText transition-colors text-sm md:text-base"
                                     >
-                                        Overview
+                                        Features
                                     </a>
                                 </li>
                                 <li>
                                     <a
-                                        href="#transfer"
+                                        href="#pricing"
                                         onClick={(e) => {
                                             e.preventDefault();
-                                            scrollToSection('#transfer');
+                                            scrollToSection('#pricing');
                                         }}
                                         className="text-muted-foreground hover:text-primaryText transition-colors text-sm md:text-base"
                                     >
-                                        Download
+                                        Pricing
                                     </a>
                                 </li>
-                            </ul>
-                        </div>
-
-                        {/* Discover */}
-                        <div className="flex flex-col gap-3">
-                            <h3 className="font-semibold text-primaryText text-sm md:text-base">Discover</h3>
-                            <ul className="flex flex-col gap-2">
                                 <li>
                                     <a
-                                        href="#features"
+                                        href="#waitlist"
                                         onClick={(e) => {
                                             e.preventDefault();
-                                            scrollToSection('#features');
+                                            scrollToSection('#waitlist');
                                         }}
                                         className="text-muted-foreground hover:text-primaryText transition-colors text-sm md:text-base"
                                     >
-                                        What's New
+                                        Join Waitlist
                                     </a>
-                                </li>
-                                <li>
-                                    <Link
-                                        href="#"
-                                        className="text-muted-foreground hover:text-primaryText transition-colors text-sm md:text-base"
-                                    >
-                                        TestFlight
-                                    </Link>
                                 </li>
                             </ul>
                         </div>

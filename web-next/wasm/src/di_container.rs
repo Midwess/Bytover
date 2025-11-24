@@ -19,7 +19,7 @@ use idb::Database;
 use once_cell::sync::OnceCell;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
-use shared::protocol::rpc::auth_server::AuthServer;
+use shared::protocol::rpc::auth_server::AppServer;
 use shared::protocol::rpc::cloud_server::CloudServer;
 use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
@@ -69,8 +69,8 @@ impl DiContainer {
         })
     }
 
-    pub fn get_authentication_server(&'static self) -> AuthServer<Client> {
-        AuthServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
+    pub fn get_authentication_server(&'static self) -> AppServer<Client> {
+        AppServer::new(self.get_auth_provider(), Box::new(self.rpc_connection.clone()))
     }
 
     pub async fn init(&self) {
