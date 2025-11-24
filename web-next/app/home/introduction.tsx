@@ -61,7 +61,7 @@ export default function Introduction() {
 
 export function GravityBackground() {
     return <>
-        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <div className={"w-full h-full absolute top-0 left-0 z-1 pointer-events-none"}>
             <LiquidEther
                 colors={[ '#3B82F6', '#60A5FA', '#93C5FD' ]}
                 mouseForce={30}
@@ -74,9 +74,9 @@ export function GravityBackground() {
                 isBounce={false}
                 autoDemo={true}
                 autoSpeed={0.3}
-                autoIntensity={0.9}
+                autoIntensity={1.8}
                 takeoverDuration={0.15}
-                autoResumeDelay={500}
+                autoResumeDelay={100}
                 autoRampDuration={0.4}
             />
         </div>

@@ -5,6 +5,7 @@ import {Suspense} from "react";
 import {Pricing2} from "@/components/pricing2";
 import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
+import { JoinWaitList } from "@/components/join-waitlist";
 
 function FeaturesSection() {
     const features = [
@@ -98,7 +99,7 @@ function PricingPlans() {
                 {text: "Send files via email", included: true},
             ],
             button: {
-                text: "Buy Now",
+                text: "Join waiting list",
                 url: "/transfer",
             },
         },
@@ -122,13 +123,13 @@ export default function Home() {
         </Suspense>
 
         {/* Hero Section */}
-       <div id="intro" className={"w-screen h-screen"}>
+       <div id="intro" className={"w-screen h-screen bg-black"}>
             <Introduction/>
         </div>
 
         {/* Features Section */}
-        <div id="features" className={"w-full bg-black"}>
-            <div className="w-full bg-black container">
+        <div id="features" className={"w-full bg-zinc-900"}>
+            <div className="w-full container">
                 <FeaturesSection/>
             </div>
         </div>
@@ -136,6 +137,11 @@ export default function Home() {
         {/* Pricing Section */}
         <div id="pricing" className={"w-full bg-black sm:pt-30 lg:pt-2 scroll-mt-20"}>
             <PricingPlans/>
+        </div>
+
+        {/* Join Waitlist Section */}
+        <div id="waitlist" className={"w-full bg-zinc-900"}>
+            <JoinWaitList/>
         </div>
 
         {/* Footer Spacing */}
