@@ -51,23 +51,23 @@ export default function Introduction() {
                         <div className={"flex flex-col gap-2 md:gap-3 items-center w-full px-4 md:px-0"}>
                         <Button className={"flex flex-row gap-2 md:gap-3 bg-bluePrimary text-white font-bold text-sm md:text-base px-4 md:px-6 py-2 md:py-3"}>Try it now on web</Button>
                         <h2 className={"text-sm md:text-lg text-foreground/90"}>Available on many other platforms</h2>
-                       <div className={"flex flex-col items-center justify-center gap-0 bg-white rounded-lg md:rounded-xl border border-gray-200 px-1 md:px-2 py-0.5 md:py-1 shadow-sm w-fit max-w-full overflow-hidden"}>
-                           <div className={"flex flex-row items-center justify-center"}>
+                       <div className={"inline-flex flex-col items-stretch gap-0 bg-white rounded-lg md:rounded-xl border border-gray-200 px-1 md:px-2 py-0.5 md:py-1 shadow-sm overflow-hidden"}>
+                           <div className={"flex flex-row items-center justify-center shrink-0"}>
                                {platforms.map((platform, index) => (
-                                   <div key={platform.id} className="flex flex-row items-center">
+                                   <div key={platform.id} className="flex flex-row items-center shrink-0">
                                        <Button 
                                            onClick={() => handlePlatformClick(platform.id)}
-                                           className={`flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/30 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors ${expandedPlatform === platform.id ? 'bg-black/20' : ''}`}
+                                           className={`flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/10 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors shrink-0 ${expandedPlatform === platform.id ? 'bg-black/10' : ''}`}
                                        >
                                            <img 
                                                src={platform.icon} 
                                                alt={platform.id} 
-                                               className={"hidden md:block w-4 h-4 md:w-5 md:h-5"}
+                                               className={"hidden md:block w-4 h-4 md:w-5 md:h-5 shrink-0"}
                                            />
-                                           <span className="text-xs md:text-sm font-medium">{platform.label}</span>
+                                           <span className="text-xs md:text-sm font-medium whitespace-nowrap">{platform.label}</span>
                                        </Button>
                                        {index < platforms.length - 1 && (
-                                           <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1" />
+                                           <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1 shrink-0" />
                                        )}
                                    </div>
                                ))}
@@ -78,19 +78,28 @@ export default function Introduction() {
                                        initial={{ opacity: 0, height: 0 }}
                                        animate={{ opacity: 1, height: 'auto' }}
                                        exit={{ opacity: 0, height: 0 }}
-                                       transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                       transition={{ 
+                                           duration: 0.5, 
+                                           ease: [0.4, 0, 0.2, 1],
+                                           height: { duration: 0.5, ease: [0.4, 0, 0.2, 1] },
+                                           opacity: { duration: 0.4, ease: 'easeInOut' }
+                                       }}
                                        className="overflow-hidden w-full"
+                                       style={{ width: '100%', maxWidth: '100%' }}
                                    >
-                                       <div className="pt-2 md:pt-3 px-2 md:px-4 pb-1 md:pb-2">
-                                           <p className="text-xs md:text-sm text-gray-600 text-center mb-2 md:mb-3">
-                                               We're currently developing native versions and will release soon this year.
+                                       <div className="pt-2 md:pt-3 px-2 md:px-4 pb-1 md:pb-2 text-center">
+                                           <p className="text-xs md:text-sm text-gray-600 mb-1">
+                                               We're currently developing native versions
                                            </p>
-                                           <button
-                                               onClick={scrollToWaitlist}
-                                               className="text-xs md:text-sm text-bluePrimary hover:text-blue-600 underline transition-colors mx-auto block"
-                                           >
-                                               Join the waitlist
-                                           </button>
+                                           <p className="text-xs md:text-sm text-gray-600 mb-2 md:mb-3">
+                                               and will release soon this year.{' '}
+                                               <button
+                                                   onClick={scrollToWaitlist}
+                                                   className="text-bluePrimary hover:text-blue-600 underline transition-colors"
+                                               >
+                                                   Join the waitlist
+                                               </button>
+                                           </p>
                                        </div>
                                    </motion.div>
                                )}
