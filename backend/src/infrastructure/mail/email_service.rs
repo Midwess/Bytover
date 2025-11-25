@@ -22,6 +22,7 @@ impl EmailServiceImpl {
 impl EmailService for EmailServiceImpl {
     async fn send_email(&self, user_email: &str, template: EmailTemplate) -> Result<(), EmailServiceErrors> {
         let request = Request::new(SendMailRequest {
+            from: "team@bytover.com".to_owned(),
             to: user_email.to_string(),
             template
         });

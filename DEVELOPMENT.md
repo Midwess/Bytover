@@ -15,7 +15,7 @@
 - Run `app-gateway`.
 - Back-end
     ```bash
-    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5432/bitbridge" DEVLOG_GOOGLE_CLIENT_ID="DEVLOG_GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5432/bitbridge" GOOGLE_CLIENT_ID="GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
     ```
 
 # Front-end & native development
@@ -47,7 +47,7 @@
     cd web-next
     pnpm wasm:build
     pnpm install
-    DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 pnpm dev
+    KONG_GATEWAY_ADMIN_URL=http://localhost:8001 pnpm dev
     ```
 - Access your app at `http://localhost`.
 
@@ -60,8 +60,8 @@
     ```
 
 ```bash
-export DEVLOG_GOOGLE_CLIENT_ID=
-export DEVLOG_GOOGLE_CLIENT_SECRET=
+export GOOGLE_CLIENT_ID=
+export GOOGLE_CLIENT_SECRET=
 export ANDROID_HOME=/Users/tiendang/Library/Android/sdk
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.12916984
 export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64
