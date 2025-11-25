@@ -100,7 +100,7 @@ function PricingPlans() {
             ],
             button: {
                 text: "Join waiting list",
-                url: "/transfer",
+                url: "#waitlist",
             },
         },
     ];
