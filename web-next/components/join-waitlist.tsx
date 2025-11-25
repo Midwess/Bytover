@@ -1,7 +1,6 @@
 'use client'
 
 import core from '@/wasm/wasm_core'
-import { BackgroundLines } from "@/components/aceternity/background-lines";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {AppEventVariantAuthentication, AuthenticationEventVariantFeedback} from "shared_types/types/shared_types"
