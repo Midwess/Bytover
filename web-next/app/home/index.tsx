@@ -135,7 +135,7 @@ export default function Home() {
         </div>
 
         {/* Pricing Section */}
-        <div id="pricing" className={"w-full bg-black sm:pt-30 lg:pt-2 scroll-mt-20 flex items-center justify-center lg:my-25"}>
+        <div id="pricing" className={"w-full bg-black sm:pt-30 flex items-center justify-center lg:py-25"}>
             <PricingPlans/>
         </div>
 

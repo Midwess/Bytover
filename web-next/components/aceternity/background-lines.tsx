@@ -69,26 +69,17 @@ const SVG = ({
 
   const colors = [
     "#46A5CA",
-    "#8C2F2F",
-    "#4FAE4D",
     "#D6590C",
     "#811010",
     "#247AFB",
     "#A534A0",
     "#A8A438",
     "#D6590C",
-    "#46A29C",
-    "#670F6D",
-    "#D7C200",
     "#59BBEB",
     "#504F1C",
     "#55BC54",
-    "#4D3568",
     "#9F39A5",
     "#363636",
-    "#860909",
-    "#6A286F",
-    "#604483",
   ];
   return (
     <motion.svg
@@ -97,14 +88,14 @@ const SVG = ({
       xmlns="http://www.w3.org/2000/svg"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 1 }}
+      transition={{ duration: 5 }}
       className="absolute inset-0 w-full h-full"
     >
       {paths.map((path, idx) => (
         <motion.path
           d={path}
           stroke={colors[idx]}
-          strokeWidth="2.3"
+          strokeWidth="4"
           strokeLinecap="round"
           variants={pathVariants}
           initial="initial"

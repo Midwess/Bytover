@@ -119,18 +119,18 @@ export function GravityBackground() {
             <LiquidEther
                 colors={[ '#3B82F6', '#60A5FA', '#93C5FD' ]}
                 mouseForce={30}
-                cursorSize={86}
+                cursorSize={56}
                 isViscous={false}
-                viscous={20}
+                viscous={40}
                 iterationsViscous={20}
                 iterationsPoisson={26}
                 resolution={0.4}
                 isBounce={false}
                 autoDemo={true}
-                autoSpeed={0.3}
-                autoIntensity={1.8}
+                autoSpeed={0.2}
+                autoIntensity={1.5}
                 takeoverDuration={0.15}
-                autoResumeDelay={100}
+                autoResumeDelay={1000}
                 autoRampDuration={0.4}
             />
         </div>

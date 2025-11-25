@@ -36,7 +36,6 @@ export function JoinWaitList()  {
 
   return (
     <section className="relative flex h-[50vh] md:h-[60vh] lg:h-[70vh] w-screen items-center justify-center overflow-hidden py-16">
-      <BackgroundLines className="relative container flex w-full flex-col items-center justify-center px-4 h-full overflow-hidden bg-transparent">
         <AnimatePresence mode="wait">
           {!isSubmitted ? (
             <motion.div
@@ -143,7 +142,6 @@ export function JoinWaitList()  {
             </motion.div>
           )}
         </AnimatePresence>
-      </BackgroundLines>
     </section>
   );
 };
