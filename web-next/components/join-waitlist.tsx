@@ -138,7 +138,7 @@ export function JoinWaitList()  {
                 transition={{ delay: 0.5, duration: 0.5 }}
                 className="text-md text-muted-foreground mx-auto max-w-xl text-center lg:text-lg px-8"
               >
-                We've received your feedback and will be in touch soon.
+                We&apos;ve received your feedback and will be in touch soon.
               </motion.p>
             </motion.div>
           )}

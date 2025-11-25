@@ -68,8 +68,6 @@ function GravityStarsBackground({
   });
   const mouseVelocityRef = React.useRef<{ x: number; y: number; magnitude: number }>({ x: 0, y: 0, magnitude: 0 });
   const waveTimeRef = React.useRef(0);
-  const lastMouseRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const waveHeightMapRef = React.useRef<Map<string, number>>(new Map());
   const wavePropagationRef = React.useRef<Array<{ x: number; y: number; time: number; strength: number }>>([]);
   const [dpr, setDpr] = React.useState(1);
   const [canvasSize, setCanvasSize] = React.useState({
@@ -160,7 +158,6 @@ function GravityStarsBackground({
       const magnitude = Math.hypot(dx, dy);
       
       // Add wave drop at cursor position (perturbance model from jquery.ripples)
-      const dropRadius = 25;
       const strength = Math.min(1, magnitude * 0.05); // Clamp strength 0-1
       
       if (magnitude > 0.5) {

@@ -36,7 +36,6 @@ import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useUrlState} from "@/hooks/use-url";
-import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 
 export default function ReceiveBoard() {
     return <>
@@ -263,8 +262,8 @@ function ReceiveCategory(props: {
 }
 
 function Board() {
-    let publicSessions = core.useCloudSessionsList()
-    let nearbySessions = core.useNearbySessionsList()
+    const publicSessions = core.useCloudSessionsList()
+    const nearbySessions = core.useNearbySessionsList()
 
     const [url, setUrl] = useUrlState(['session'])
 
@@ -327,7 +326,7 @@ function Board() {
                                  className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
                         nearbySessions.map((item, index) => {
-                            return <ItemEffect index={index}>
+                            return <ItemEffect key={item.id} index={index}>
                                 <TransferSession
                                     onPress={() => {
                                         core.updateSelectedSession(item)
@@ -357,7 +356,7 @@ function Board() {
                     className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                     {
                         publicSessions.map((item, index) => {
-                            return <ItemEffect index={index}><TransferSession
+                            return <ItemEffect key={item.id} index={index}><TransferSession
                                 onPress={() => {
                                     core.updateSelectedSession(item)
                                 }}
@@ -446,7 +445,7 @@ function TransferSession(props: {
 }
 
 function FileView(props: {
-    id: String,
+    id: string,
     isCloud: boolean
 }) {
     const {id, isCloud} = props;
@@ -536,7 +535,7 @@ function FileView(props: {
 }
 
 function MediaView(props: {
-    id: String,
+    id: string,
     isCloud: boolean
 }) {
     const {id, isCloud} = props;

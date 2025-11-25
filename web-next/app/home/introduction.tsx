@@ -89,7 +89,7 @@ export default function Introduction() {
                                    >
                                        <div className="pt-2 md:pt-3 px-2 md:px-4 pb-1 md:pb-2 text-center">
                                            <p className="text-xs md:text-sm text-gray-600 mb-1">
-                                               We're currently developing native versions
+                                               We&apos;re currently developing native versions
                                            </p>
                                            <p className="text-xs md:text-sm text-gray-600 mb-2 md:mb-3">
                                                and will release soon this year.{' '}
