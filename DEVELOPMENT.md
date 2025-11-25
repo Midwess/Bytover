@@ -15,7 +15,7 @@
 - Run `app-gateway`.
 - Back-end
     ```bash
-    cd backend && BITBRIDGE_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5432/bitbridge" GOOGLE_CLIENT_ID="GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
+    cd backend && BYTOVER_DB_CONNECTION_STRING="postgres://bitbridge:bitbridgepass@localhost:5432/bitbridge" GOOGLE_CLIENT_ID="GOOGLE_CLIENT_ID" AWS_ACCESS_KEY_ID="AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="AWS_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL="AWS_ENDPOINT_URL" cargo run
     ```
 
 # Front-end & native development
@@ -85,7 +85,7 @@ Build the rust binary by selecting the `shared` module, and
 Instead, we will explicitly set access token via environment variable.
 - Environment variables are applied at build time
 ```bash
-export BTIBRIDGE_ACCESS_TOKEN='<token>'
+export BYTOVER_ACCESS_TOKEN='<token>'
 ```
 
 ```bash

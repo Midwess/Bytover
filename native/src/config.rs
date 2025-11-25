@@ -1,7 +1,7 @@
 pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST");
 pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
-pub const WITH_SSL: Option<&str> = option_env!("BITBRIDGE_WITH_SSL");
-pub const LOCATOR_URL: Option<&str> = option_env!("BITBRIDGE_LOCATOR_URL");
+pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
+pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 
 pub fn get_gateway_grpc_url() -> String {
     let gateway_host = GATEWAY_HOST.unwrap_or("localhost");

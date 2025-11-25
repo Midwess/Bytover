@@ -70,7 +70,7 @@ impl DiContainer {
             .await
             .unwrap_or_else(|err| panic!("Failed to initialise distributed id generator: {err}"));
 
-        let database_url = std::env::var("BITBRIDGE_DB_CONNECTION_STRING").unwrap_or_else(|_| "postgresql://bitbridge:bitbridgepass@localhost:5432/bitbridge".to_string());
+        let database_url = std::env::var("BYTOVER_DB_CONNECTION_STRING").unwrap_or_else(|_| "postgresql://bitbridge:bitbridgepass@localhost:5432/bitbridge".to_string());
         let pg_pool = PgPoolOptions::new()
             .min_connections(5)
             .max_connections(10)
