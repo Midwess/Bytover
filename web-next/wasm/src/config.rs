@@ -3,8 +3,8 @@ use wasm_bindgen::JsValue;
 use web_sys::window;
 
 /// If these are not specified, we will use the host of the current webpage.
-pub const GATEWAY_HOST: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_HOST");
-pub const GATEWAY_PORT: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_PORT");
+pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST");
+pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
 pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
 pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 

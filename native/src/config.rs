@@ -1,5 +1,5 @@
-pub const GATEWAY_HOST: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_HOST");
-pub const GATEWAY_PORT: Option<&str> = option_env!("DEVLOG_PUBLIC_GATEWAY_PORT");
+pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST");
+pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
 pub const WITH_SSL: Option<&str> = option_env!("BITBRIDGE_WITH_SSL");
 pub const LOCATOR_URL: Option<&str> = option_env!("BITBRIDGE_LOCATOR_URL");
 

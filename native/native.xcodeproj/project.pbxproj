@@ -231,8 +231,8 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
-				DEVLOG_PUBLIC_GATEWAY_PORT = 80;
+				BYTOVER_PUBLIC_GATEWAY_HOST = tiendang.local;
+				BYTOVER_PUBLIC_GATEWAY_PORT = 80;
 				BITBRIDGE_WITH_SSL = 0;
 				INSTALL_GROUP = "";
 				INSTALL_MODE_FLAG = "";
@@ -263,8 +263,8 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
-				DEVLOG_PUBLIC_GATEWAY_PORT = 80;
+				BYTOVER_PUBLIC_GATEWAY_HOST = tiendang.local;
+				BYTOVER_PUBLIC_GATEWAY_PORT = 80;
 				BITBRIDGE_WITH_SSL = 0;
 				INSTALL_GROUP = "";
 				INSTALL_MODE_FLAG = "";
@@ -345,8 +345,8 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
-				DEVLOG_PUBLIC_GATEWAY_PORT = 80;
+				BYTOVER_PUBLIC_GATEWAY_HOST = tiendang.local;
+				BYTOVER_PUBLIC_GATEWAY_PORT = 80;
 				BITBRIDGE_WITH_SSL = 0;
 				PRODUCT_NAME = "uniffi-bindgen";
 				SUPPORTED_PLATFORMS = macosx;
@@ -373,8 +373,8 @@
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*]" = "ios-sim";
 				"CARGO_XCODE_TARGET_OS[sdk=iphonesimulator*][arch=x86_64*]" = ios;
 				"CARGO_XCODE_TARGET_OS[sdk=macosx*]" = darwin;
-				DEVLOG_PUBLIC_GATEWAY_HOST = tiendang.local;
-				DEVLOG_PUBLIC_GATEWAY_PORT = 80;
+				BYTOVER_PUBLIC_GATEWAY_HOST = tiendang.local;
+				BYTOVER_PUBLIC_GATEWAY_PORT = 80;
 				BITBRIDGE_WITH_SSL = 0;
 				PRODUCT_NAME = "uniffi-bindgen";
 				SUPPORTED_PLATFORMS = macosx;
