@@ -45,11 +45,11 @@
 -
     ```bash
     cd web-next
-    pnpm install
     pnpm wasm:build
+    pnpm install
     DEVLOG_KONG_GATEWAY_ADMIN_URL=http://localhost:8001 pnpm dev
     ```
-- Access your app at `http://localhost:8000`.
+- Access your app at `http://localhost`.
 
 ## Android
 - `Android NDK 28`

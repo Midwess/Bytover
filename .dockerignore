@@ -1,23 +1,92 @@
-target/
-build/
-generated/
-node_modules/
-.idea/
-.workspace/
-*.iml
-.gradle
-local.properties
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+CHANGELOG.md
+DEVELOPMENT.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.cursor
+
+# OS files
 .DS_Store
-build
-captures
-.externalNativeBuild
-.cxx
-local.properties
-.bin
+Thumbs.db
+
+# Build artifacts
+**/target/debug
+**/target/release/build
+**/target/release/deps
+**/target/release/examples
+**/target/release/incremental
+**/node_modules
+**/.next
+**/dist
+**/build
+**/dist
+**/out
+**/target
+
+# Logs
+logs
+*.log
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Temporary files
+.cache
+.temp
+tmp
+*.tmp
+
+# Testing
+coverage
+.nyc_output
+
+# Environment files
+.env*.local
+.env.development
+.env.test
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+**/Dockerfile
+**/.dockerignore
+**/docker-compose*.yml
+
+# Platform-specific builds (keep backend/ and native/ for workspace)
+auth-gateway/
+route-registration/
+desktop/dist
+desktop/node_modules
+iOS/
+Android/
+
+# Generated files that will be rebuilt
+web-next/wasm/pkg
+web-next/worker/pkg
+web-next/public/core-worker
+web-next/public/opfs-worker
+shared_types/generated/swift
+shared_types/generated/java
+
+# Rust ICE reports
 rustc-ice-*.txt
-**/*.xcodeproj/xcuserdata/
-**/*.xcworkspace/xcuserdata/
-.fleet
-iOS
-Android
-**/public/worker
+
+# Database
+*.sql
+docker-compose.yml
+postgres-init.sql
