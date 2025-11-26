@@ -43,7 +43,7 @@ export function JoinWaitList() {
             transition={{ duration: 0.3 }}
             className="relative z-20 w-full max-w-md flex flex-col items-center"
           >
-            <h2 className="relative z-20 text-center font-sans text-4xl font-semibold tracking-tighter md:py-10 lg:text-6xl">
+            <h2 className="relative z-20 text-center font-sans text-4xl font-semibold tracking-tighter md:py-5 lg:text-6xl">
               Join the Waitlist
             </h2>
             <p className="text-md text-muted-foreground mx-auto max-w-xl text-center lg:text-lg px-8">

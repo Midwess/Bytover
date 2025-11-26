@@ -11,7 +11,7 @@ export default function Footer() {
     };
 
     return (
-        <footer className="w-full bg-black border-t border-zinc-800 container justify-center">
+        <footer className="w-full bg-black border-t border-zinc-800 justify-center">
             <div className="container mx-auto px-4 md:px-6 py-12 md:py-16">
                 <div className="flex flex-col md:flex-row justify-between gap-8 md:gap-12">
                     {/* Brand Section */}
