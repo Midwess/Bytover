@@ -14,23 +14,19 @@ import { useUrlState } from "@/hooks/use-url";
 import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
+import { DownloadPlatforms } from "@/components/download-platforms";
+import { JoinWaitList } from "@/components/join-waitlist";
 
 function TransferLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex flex-col w-full min-h-screen items-center bg-black">
-            {/* Fixed Header */}
+        <div className="flex flex-col w-screen min-h-screen items-center bg-black">
             <Suspense fallback={null}>
                 <Header />
             </Suspense>
 
-            {/* Main content */}
             <main id="transfer" className="w-full flex-1 bg-black">
-                <div className="container mx-auto px-4 py-24">
                     {children}
-                </div>
             </main>
-
-            {/* Footer */}
             <Footer />
         </div>
     );
@@ -96,31 +92,53 @@ export default function TransferBoard() {
         );
     }
 
-    // Main transfer area with Send/Receive tabs
     return (
         <TransferLayout>
-            <Tabs
-                defaultValue={url.session ? 'Receive' : 'Send'}
-                onValueChange={(tab: 'Send' | 'Receive') => {
-                    if (tab === 'Send') {
-                        setUrl({ session: undefined });
-                    }
-                }}
-                className="flex flex-col w-full h-full items-center"
-            >
-                <TabsList className="grid grid-cols-2 mb-4">
-                    <TabsTrigger value="Send">Send</TabsTrigger>
-                    <TabsTrigger value="Receive">Receive</TabsTrigger>
-                </TabsList>
-                <TabsContents className="w-full h-full">
-                    <TabsContent value="Send">
-                        <SendBoard />
-                    </TabsContent>
-                    <TabsContent value="Receive">
-                        <ReceiveBoard />
-                    </TabsContent>
-                </TabsContents>
-            </Tabs>
+            <div className="flex w-full flex-col gap-16">
+                {/* Transfer-specific hero */}
+                <section className="w-full flex flex-col items-center text-center gap-4 h-[25vh] pt-20 justify-center">
+                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primaryText">
+                        Transfer files between all your devices
+                    </h1>
+                    <p className="text-sm md:text-base text-primaryText/70 max-w-2xl">
+                        Desktop and mobile apps with a lot of features are coming soon.
+                    </p>
+                    <DownloadPlatforms />
+                </section>
+
+                {/* Main transfer area with Send/Receive tabs */}
+                <section className="w-full container h-[75vh]">
+                    <Tabs
+                        defaultValue={url.session ? 'Receive' : 'Send'}
+                        onValueChange={(tab: 'Send' | 'Receive') => {
+                            if (tab === 'Send') {
+                                setUrl({ session: undefined });
+                            }
+                        }}
+                        className="flex flex-col w-full h-full items-center"
+                    >
+                        <TabsList className="grid grid-cols-2 mb-4">
+                            <TabsTrigger value="Send">Send</TabsTrigger>
+                            <TabsTrigger value="Receive">Receive</TabsTrigger>
+                        </TabsList>
+                        <TabsContents className="w-full h-full">
+                            <TabsContent value="Send">
+                                <SendBoard />
+                            </TabsContent>
+                            <TabsContent value="Receive">
+                                <ReceiveBoard />
+                            </TabsContent>
+                        </TabsContents>
+                    </Tabs>
+                </section>
+
+                {/* Join Waitlist section (similar background treatment as home) */}
+                <section id="waitlist" className="w-full bg-zinc-900">
+                    <div className="w-full container mx-auto px-4 py-16 flex items-center justify-center">
+                        <JoinWaitList title="Join the Waitlist" />
+                    </div>
+                </section>
+            </div>
         </TransferLayout>
     );
 }

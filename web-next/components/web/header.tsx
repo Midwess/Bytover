@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/animate-ui/radix/dropdown-menu";
 import core from '@/wasm/wasm_core';
+import Link from 'next/link';
 
 export default function Header() {
     const authState = core.useAuthenticationState();
@@ -35,36 +36,49 @@ export default function Header() {
 
     return (
         <div 
-            className={`fixed backdrop-blur-lg bg-blackBase/50 top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 px-3 md:px-4 transition-all duration-300`}>
+            className={`fixed backdrop-blur-2xl bg-black/10 top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 px-3 md:px-4 transition-all duration-300`}>
             <div className="container mx-auto flex justify-between items-center w-full">
             <div className="flex flex-row gap-2 items-center">
-                <Image
-                   width={35}
-                   height={35}
-                   src="logo.svg"
-                   alt="Logo"
-                   className="rounded-lg aspect-square w-8 h-8 md:w-[45px] md:h-[45px]"
-                />
+                <Link href="/" className="flex items-center">
+                    <Image
+                        width={35}
+                        height={35}
+                        src="logo.svg"
+                        alt="Logo"
+                        className="rounded-lg aspect-square w-8 h-8 md:w-[45px] md:h-[45px]"
+                    />
+                </Link>
             </div>
 
             <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2">
                 <div className="flex flex-row gap-3 md:gap-5 rounded-xl px-4 md:px-8 py-2">
                     {[
-                        { label: "Transfer", href: "#transfer" },
+                        { label: "Transfer", href: "/transfer" },
                         { label: "Pricing", href: "#pricing" },
                         { label: "Features", href: "#features" }
                     ].map((item) => (
-                        <a
+                        <Link
                             key={item.label}
                             href={item.href}
                             onClick={(e) => {
                                 e.preventDefault();
-                                scrollToSection(item.href);
+
+                                if (item.href.startsWith('#')) {
+                                    // Always go to home first, then scroll
+                                    const target = `/${item.href}`;
+                                    if (window.location.pathname !== '/') {
+                                        window.location.href = target;
+                                    } else {
+                                        scrollToSection(item.href);
+                                    }
+                                } else {
+                                    window.location.href = item.href;
+                                }
                             }}
                             className="nav-link text-primaryText/80 text-sm md:text-base"
                         >
                             <h2 className="text-sm md:text-base">{item.label}</h2>
-                        </a>
+                        </Link>
                     ))}
                 </div>
 
@@ -85,7 +99,7 @@ export default function Header() {
                                 <DropdownMenuItem
                                     onClick={(e) => {
                                         e.preventDefault();
-                                        scrollToSection('#transfer');
+                                        window.location.href = '/transfer';
                                     }}
                                 >
                                     Transfer
