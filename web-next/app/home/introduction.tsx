@@ -123,6 +123,7 @@ export function GravityBackground() {
                 isViscous={false}
                 viscous={40}
                 iterationsViscous={20}
+                dt={0.01}
                 iterationsPoisson={26}
                 resolution={0.4}
                 isBounce={false}

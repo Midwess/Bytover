@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import './LiquidEther.css';
+import { debounce, throttle } from 'lodash';
 
 export default function LiquidEther({
   mouseForce = 20,
@@ -133,9 +134,9 @@ export default function LiquidEther({
         this.takeoverFrom = new THREE.Vector2();
         this.takeoverTo = new THREE.Vector2();
         this.onInteract = null;
-        this._onMouseMove = this.onDocumentMouseMove.bind(this);
+        this._onMouseMove = throttle(this.onDocumentMouseMove.bind(this), 24);
         this._onTouchStart = this.onDocumentTouchStart.bind(this);
-        this._onTouchMove = this.onDocumentTouchMove.bind(this);
+        this._onTouchMove = throttle(this.onDocumentTouchMove.bind(this), 24);
         this._onTouchEnd = this.onTouchEnd.bind(this);
         this._onDocumentLeave = this.onDocumentLeave.bind(this);
       }
