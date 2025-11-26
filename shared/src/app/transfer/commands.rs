@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use core_services::db::repository::abstraction::table::Table;
 use devlog_sdk::distributed_id::gen_id_sync;
 use futures_util::StreamExt;
+use core_services::utils::string::StringExt;
 use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core::command::AppCommand;
@@ -64,15 +65,7 @@ impl AppCommand {
         let mut transfer_session = match transfer_target {
             TransferTarget::Internet { password, to_emails, .. } => {
                 for email in to_emails.iter() {
-                    let has_at = email.contains('@');
-                    let has_dot = email.contains('.');
-                    let has_valid_length = email.len() >= 3;
-                    let parts: Vec<&str> = email.split('@').collect();
-                    let valid_parts = parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty();
-                    let domain_parts: Vec<&str> = parts.get(1).unwrap_or(&"").split('.').collect();
-                    let valid_domain = domain_parts.len() >= 2 && domain_parts.iter().all(|p| !p.is_empty());
-
-                    if !(has_at && has_dot && has_valid_length && valid_parts && valid_domain) {
+                   if !email.is_email() {
                         self.run(DialogOperation::toast("Invalid email format".to_string())).await;
                         return Ok(());
                     }

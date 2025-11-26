@@ -9,9 +9,9 @@ import { AnimatePresence, motion } from "motion/react";
 
 export function JoinWaitList()  {
   const authState = core.useAuthenticationState()
+  const isSubmitted = authState?.is_already_feedback;
   const [email, setEmail] = useState<string>('')
   const [message, setMessage] = useState<string>('')
-  const [isSubmitted, setIsSubmitted] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
 
   useEffect(() => {
@@ -29,7 +29,6 @@ export function JoinWaitList()  {
     // Simulate a brief delay for animation
     setTimeout(() => {
       setIsSubmitting(false);
-      setIsSubmitted(true);
     }, 800);
   };
 

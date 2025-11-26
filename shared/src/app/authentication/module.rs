@@ -1,6 +1,6 @@
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
-
+use core_services::utils::string::StringExt;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
@@ -8,19 +8,23 @@ use crate::entities::user::User;
 
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
+use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::ShelfEvent;
+use crate::CoreOperation;
 
 pub struct AuthenticationModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
-    pub user: Option<User>
+    pub user: Option<User>,
+    pub is_already_feedback: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationViewModel {
-    pub user: Option<User>
+    pub user: Option<User>,
+    pub is_already_feedback: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -78,7 +82,23 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 })
             }
             AuthenticationEvent::Feedback {email, message} => {
+                if let Some(message) = message.as_ref() {
+                    if message.len() > 4024 {
+                        return Command::new(|it| async move {
+                            it.app().run(DialogOperation::toast("Message is too long".to_string())).await;
+                        })
+                    }
+                }
+
+                if !email.is_email() {
+                    return Command::new(|it| async move {
+                        it.app().run(DialogOperation::toast("Invalid email format".to_string())).await;
+                    });
+                }
+
+                model.authentication.is_already_feedback = true;
                 Command::handle_result(|ctx| async move {
+                    ctx.app().notify_shell(CoreOperation::Render);
                     ctx.app().run(RpcOperation::feedback(email, message.unwrap_or_default())).await
                 })
             }
@@ -87,7 +107,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         AuthenticationViewModel {
-            user: model.authentication.user.clone()
+            user: model.authentication.user.clone(),
+            is_already_feedback: model.authentication.is_already_feedback
         }
     }
 }
