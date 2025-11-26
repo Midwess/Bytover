@@ -21,4 +21,4 @@ tokio-stream = "0.1.17"
 sea-orm = { workspace = true }
 sqlx = { version = "0.8.5", features = ["runtime-tokio-rustls", "postgres"] }
 futures.workspace = true
-tokio-cron-scheduler = "0.15.1"
+tokio-cron-scheduler = { workspace = true }
