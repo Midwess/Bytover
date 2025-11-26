@@ -9,6 +9,7 @@
     "npm:@radix-ui/react-label@^2.1.7": "2.1.8_@types+react@19.2.6_@types+react-dom@19.2.3__@types+react@19.2.6_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@radix-ui/react-separator@^1.1.7": "1.1.8_@types+react@19.2.6_@types+react-dom@19.2.3__@types+react@19.2.6_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@radix-ui/react-slot@^1.2.4": "1.2.4_@types+react@19.2.6_react@19.2.0",
+    "npm:@radix-ui/react-switch@^1.2.6": "1.2.6_@types+react@19.2.6_@types+react-dom@19.2.3__@types+react@19.2.6_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@tailwindcss/postcss@4": "4.1.17",
     "npm:@tailwindcss/typography@~0.5.16": "0.5.19_tailwindcss@4.1.17",
     "npm:@types/bluebird@^3.5.42": "3.5.42",
@@ -32,6 +33,7 @@
     "npm:lucide-react@0.554": "0.554.0_react@19.2.0",
     "npm:motion@^12.23.24": "12.23.24_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:next@15.3.5": "15.3.5_react@19.2.0_react-dom@19.2.0__react@19.2.0",
+    "npm:ogl@^1.0.11": "1.0.11",
     "npm:overlayscrollbars@^2.12.0": "2.12.0",
     "npm:radix-ui@^1.4.2": "1.4.3_@types+react@19.2.6_@types+react-dom@19.2.3__@types+react@19.2.6_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:react-dom@19": "19.2.0_react@19.2.0",
@@ -3359,6 +3361,9 @@
         "es-object-atoms"
       ]
     },
+    "ogl@1.0.11": {
+      "integrity": "sha512-kUpC154AFfxi16pmZUK4jk3J+8zxwTWGPo03EoYA8QPbzikHoaC82n6pNTbd+oEaJonaE8aPWBlX7ad9zrqLsA=="
+    },
     "optionator@0.9.4": {
       "integrity": "sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==",
       "dependencies": [
@@ -4190,6 +4195,7 @@
         "npm:lucide-react@0.554",
         "npm:motion@^12.23.24",
         "npm:next@15.3.5",
+        "npm:ogl@^1.0.11",
         "npm:overlayscrollbars@^2.12.0",
         "npm:radix-ui@^1.4.2",
         "npm:react-dom@19",
