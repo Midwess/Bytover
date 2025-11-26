@@ -187,10 +187,10 @@ function FileSelections() {
 
                 <div className={"w-full h-full overflow-y-scroll pb-[100px] overflow-x-hidden"}>
                     <div
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
+                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
                         {
                             selectedResources.map((resource) => (
-                                <div className={"h-[210px] flex items-start flex-row"} key={resource.order_id}>
+                                <div className={"p-0.5 h-[210px] flex items-start flex-row"} key={resource.order_id}>
                                     <ResourceView model={resource}/>
                                 </div>
                             ))
@@ -251,7 +251,7 @@ function FileView(props: {
                 )}>
                 <Button 
                     size="sm"
-                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-destructive" 
+                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white" 
                     onClick={async () => {
                         await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
@@ -364,7 +364,7 @@ function MediaView(props: {
                 )}>
                 <Button
                     size="sm"
-                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-destructive"
+                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
                     onClick={() => {
                         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
                     }}>
