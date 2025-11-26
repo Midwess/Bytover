@@ -30,4 +30,5 @@ impl DbId for TransferSessionId {
 #[async_trait::async_trait]
 pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
     async fn find_session_by_alias(&self, alias: String) -> Result<Option<TransferSession>, RepositoryError>;
+    async fn delete_expired_or_canceled_sessions(&self) -> Result<(), RepositoryError>;
 }

@@ -7,7 +7,8 @@ use tonic::Status;
 impl From<DiContainerError> for Status {
     fn from(value: DiContainerError) -> Self {
         match value {
-            DiContainerError::GrpcGatewayChannelError(error) => Status::internal(error.to_string())
+            DiContainerError::GrpcGatewayChannelError(error) => Status::internal(error.to_string()),
+            DiContainerError::CronError(error) => Status::internal(error)
         }
     }
 }

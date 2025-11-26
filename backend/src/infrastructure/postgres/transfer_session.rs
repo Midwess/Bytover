@@ -2,7 +2,7 @@ use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
-use devlog_sdk::distributed_id::gen_id;
+use devlog_sdk::distributed_id::{gen_id, EPOCH_SINCE};
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value as SeaValue};
@@ -64,6 +64,23 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
             Some(model) => TransferSession::try_from(model).map(Some).map_err(|e| RepositoryError::DbError(e.to_string())),
             None => Ok(None)
         }
+    }
+
+    async fn delete_expired_or_canceled_sessions(&self) -> Result<(), RepositoryError> {
+        let epoch_ms = EPOCH_SINCE as i64;
+        
+        let statement = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r#"DELETE FROM transfer_session 
+               WHERE ((order_id >> 23) + $1) < 
+                     EXTRACT(EPOCH FROM (NOW() - INTERVAL '1 month'))::bigint * 1000
+                  OR progress @> '[{"status": {"Failed": "Canceled"}}]'"#,
+            vec![SeaValue::from(epoch_ms)]
+        );
+
+        self.db.execute(statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        
+        Ok(())
     }
 }
 

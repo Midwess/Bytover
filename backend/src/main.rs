@@ -24,14 +24,19 @@ enum MainErrors {
     #[error("Core service error {0}")]
     CoreServiceErrors(#[from] core_services::services::errors::Errors),
     #[error("Transport error {0}")]
-    TransportError(#[from] tonic::transport::Error)
+    TransportError(#[from] tonic::transport::Error),
+    #[error("DI container error {0}")]
+    DiContainerError(#[from] di_container::DiContainerError)
 }
 
 #[tokio::main]
 async fn main() -> Result<(), MainErrors> {
     logger::setup();
-    let grpc_connection = find_grpc_listener().await?;
+    let grpc_connection = find_grpc_listener(None).await?;
 
+    let di = di_container::DiContainer::instance().await;
+    di.start_cron_jobs().await?;
+    
     setup_grpc_gateway(&grpc_connection).await?;
     start_grpc_server(grpc_connection).await?;
 
