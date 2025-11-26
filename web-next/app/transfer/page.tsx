@@ -32,7 +32,7 @@ function TransferLayout({ children }: { children: React.ReactNode }) {
     );
 }
 
-export default function TransferBoard() {
+function TransferBoardInner() {
     const [url, setUrl] = useUrlState(['session']);
     const coreReady = core.useCoreReady();
     const coreNotCompatible = !core.useIsCoreCompatible();
@@ -76,7 +76,7 @@ export default function TransferBoard() {
     if (!coreReady) {
         return (
             <TransferLayout>
-                <div className="flex items-center justify-center w-full h-[300px]">
+                <div className="flex items-center justify-center w-full h-[50vh]">
                     <div className="flex flex-col items-center gap-4">
                         <div className="relative">
                             <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -96,7 +96,7 @@ export default function TransferBoard() {
         <TransferLayout>
             <div className="flex w-full flex-col gap-16">
                 {/* Transfer-specific hero */}
-                <section className="w-full flex flex-col items-center text-center gap-4 h-[25vh] pt-20 justify-center">
+                <section className="w-full flex flex-col items-center text-center gap-4 h-[30vh] pt-20 justify-center">
                     <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primaryText">
                         Transfer files between all your devices
                     </h1>
@@ -107,7 +107,7 @@ export default function TransferBoard() {
                 </section>
 
                 {/* Main transfer area with Send/Receive tabs */}
-                <section className="w-full container h-[75vh]">
+                <section className="w-full container h-[95vh]">
                     <Tabs
                         defaultValue={url.session ? 'Receive' : 'Send'}
                         onValueChange={(tab: 'Send' | 'Receive') => {
@@ -135,10 +135,33 @@ export default function TransferBoard() {
                 {/* Join Waitlist section (similar background treatment as home) */}
                 <section id="waitlist" className="w-full bg-zinc-900">
                     <div className="w-full container mx-auto px-4 py-16 flex items-center justify-center">
-                        <JoinWaitList title="Join the Waitlist" />
+                        <JoinWaitList/>
                     </div>
                 </section>
             </div>
         </TransferLayout>
+    );
+}
+
+export default function TransferBoard() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center w-full h-[300px]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="relative">
+                        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                        <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-r-primary/40 rounded-full animate-spin animation-delay-75" />
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                        <h3 className="text-lg font-semibold text-foreground">Loading transfer...</h3>
+                        <p className="text-sm text-muted-foreground animate-pulse">
+                            Preparing your transfer experience.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }>
+            <TransferBoardInner />
+        </Suspense>
     );
 }

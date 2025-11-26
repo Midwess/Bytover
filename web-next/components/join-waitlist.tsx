@@ -7,7 +7,7 @@ import { AppEventVariantAuthentication, AuthenticationEventVariantFeedback } fro
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
-export function JoinWaitList({title = "Join the Waitlist"}: {title: string}) {
+export function JoinWaitList() {
   const authState = core.useAuthenticationState()
   const isSubmitted = authState?.is_already_feedback;
   const [email, setEmail] = useState<string>('')
@@ -44,7 +44,7 @@ export function JoinWaitList({title = "Join the Waitlist"}: {title: string}) {
             className="relative z-20 w-full max-w-md flex flex-col items-center"
           >
             <h2 className="relative z-20 text-center font-sans text-4xl font-semibold tracking-tighter md:py-5 lg:text-6xl">
-              {title}
+              Join the Waitlist
             </h2>
             <p className="text-md text-muted-foreground mx-auto max-w-xl text-center lg:text-lg px-8">
               Get early access to high-bandwidth transfers and the full native apps experience.
