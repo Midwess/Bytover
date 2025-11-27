@@ -5,6 +5,7 @@
     "npm:@bufbuild/buf@1.35.1": "1.35.1",
     "npm:@bufbuild/protobuf@^2.2.2": "2.9.0",
     "npm:@eslint/eslintrc@3": "3.3.1",
+    "npm:@floating-ui/react@~0.27.16": "0.27.16_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@radix-ui/react-avatar@^1.1.10": "1.1.11_@types+react@19.2.7_@types+react-dom@19.2.3__@types+react@19.2.7_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@radix-ui/react-label@^2.1.7": "2.1.8_@types+react@19.2.7_@types+react-dom@19.2.3__@types+react@19.2.7_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@radix-ui/react-separator@^1.1.8": "1.1.8_@types+react@19.2.7_@types+react-dom@19.2.3__@types+react@19.2.7_react@19.2.0_react-dom@19.2.0__react@19.2.0",
@@ -229,6 +230,16 @@
         "@floating-ui/dom",
         "react",
         "react-dom"
+      ]
+    },
+    "@floating-ui/react@0.27.16_react@19.2.0_react-dom@19.2.0__react@19.2.0": {
+      "integrity": "sha512-9O8N4SeG2z++TSM8QA/KTeKFBVCNEz/AGS7gWPJf6KFRzmRWixFRnCnkPHRDwSVZW6QPDO6uT0P2SpWNKCc9/g==",
+      "dependencies": [
+        "@floating-ui/react-dom",
+        "@floating-ui/utils",
+        "react",
+        "react-dom",
+        "tabbable"
       ]
     },
     "@floating-ui/utils@0.2.10": {
@@ -4172,6 +4183,7 @@
         "npm:@bufbuild/buf@1.35.1",
         "npm:@bufbuild/protobuf@^2.2.2",
         "npm:@eslint/eslintrc@3",
+        "npm:@floating-ui/react@~0.27.16",
         "npm:@radix-ui/react-avatar@^1.1.10",
         "npm:@radix-ui/react-label@^2.1.7",
         "npm:@radix-ui/react-separator@^1.1.8",

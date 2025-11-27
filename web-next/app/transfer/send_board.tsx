@@ -47,21 +47,66 @@ import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
 import Image from "next/image";
 import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
+import {
+    SidebarProvider,
+    SidebarInset,
+    SidebarTrigger,
+    Sidebar,
+    SidebarHeader,
+    SidebarContent,
+    SidebarRail,
+    SidebarMenu,
+    SidebarMenuItem,
+    SidebarMenuButton,
+    useSidebar,
+} from '@/components/animate-ui/components/radix/sidebar';
+import { Separator } from '@/components/ui/separator';
+
+enum TransferType {
+    Public,
+    People
+}
+
+const activeMethods = [
+    {
+        name: 'People',
+        icon: Users,
+        type: TransferType.People
+    },
+    {
+        name: 'Public',
+        icon: Globe,
+        type: TransferType.Public
+    },
+]
 
 export default function SendBoard() {
-    return <>
-        <div
-            className="h-[950px] max-h-[95vh] w-full rounded-xl overflow-x-clip bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
-            <div className={"grid grid-cols-12 w-full h-full gap-4"}>
-                <div className={"col-span-3 h-full"}>
-                    <Board/>
-                </div>
-                <div className={"col-span-9 h-full overflow-y-hidden pt-2 w-full"}>
-                    <FileSelections/>
-                </div>
-            </div>
+    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
+
+    return (
+        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[95vh]">
+            <SidebarProvider>
+                <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
+                    <SidebarHeader className="rounded-tl-xl">
+                        <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod} />
+                    </SidebarHeader>
+                    <SidebarContentWrapper activeMethod={activeMethod} />
+                    <SidebarRail />
+                </Sidebar>
+                <SidebarInset>
+                    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                        <div className="flex items-center gap-2 px-4">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="mr-2 h-4" />
+                        </div>
+                    </header>
+                    <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full overflow-hidden">
+                        <FileSelections />
+                    </div>
+                </SidebarInset>
+            </SidebarProvider>
         </div>
-    </>
+    );
 }
 
 function FileSelections() {
@@ -393,75 +438,77 @@ function MediaView(props: {
     );
 }
 
-enum TransferType {
-    Public,
-    People
+function TransferMethodSelector({ activeMethod, onActiveMethodChange }: { activeMethod: typeof activeMethods[0], onActiveMethodChange: (method: typeof activeMethods[0]) => void }) {
+    const isMobile = useIsMobile();
+
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        >
+                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                <activeMethod.icon className="size-4" />
+                            </div>
+                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                <span className="truncate font-semibold">
+                                    {activeMethod.name}
+                                </span>
+                            </div>
+                            <ChevronsUpDown className="ml-auto" />
+                        </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                        align="start"
+                        side={isMobile ? 'bottom' : 'right'}
+                        sideOffset={4}
+                    >
+                        {activeMethods.map((method) => (
+                            <DropdownMenuCheckboxItem
+                                key={method.name}
+                                checked={activeMethod === method}
+                                onCheckedChange={() => onActiveMethodChange(method)}
+                                className="gap-2 p-2"
+                            >
+                                <method.icon className="size-4" />
+                                {method.name}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
 }
 
-const activeMethods = [
-    {
-        name: 'People',
-        icon: Users,
-        type: TransferType.People
-    },
-    {
-        name: 'Public',
-        icon: Globe,
-        type: TransferType.Public
-    },
-]
+function SidebarContentWrapper({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
+    const { state } = useSidebar();
+    
+    if (state === 'collapsed') {
+        return null;
+    }
+    
+    return (
+        <SidebarContent className="rounded-bl-xl px-1">
+            <TransferForm activeMethod={activeMethod} />
+        </SidebarContent>
+    );
+}
 
-function Board() {
-    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
-
+function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
     const content = activeMethod.type === TransferType.Public
         ? <PublicSend/>
         : <NearbySend/>
 
-    return <>
-        <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-2"}>
-            <DropdownMenu>
-                <DropdownMenuContent className={"font-medium w-[200px]"}>
-                    <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[0])}
-                                              onCheckedChange={() => {
-                                                  setActiveMethod(activeMethods[0])
-                                              }}>
-                        <Users/>
-                        People
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
-                                              checked={(activeMethod === activeMethods[1])} onCheckedChange={() => {
-                        setActiveMethod(activeMethods[1])
-                    }}>
-                        <Globe/>
-                        Public
-                    </DropdownMenuCheckboxItem>
-
-                </DropdownMenuContent>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        className="h-12">
-                        <div
-                            className="flex aspect-square size-8 items-center justify-center rounded-lg bg-bluePrimary text-primaryText">
-                            <activeMethod.icon className="size-4"/>
-                        </div>
-                        <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">
-                                    {activeMethod.name}
-                                </span>
-                        </div>
-                        <ChevronsUpDown className="ml-auto"/>
-                    </Button>
-                </DropdownMenuTrigger>
-            </DropdownMenu>
-            <div className={"px-2 flex flex-col items-center justify-center pt-5"}>
-                {
-                    content
-                }
-            </div>
+    return (
+        <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit"}>
+            {content}
         </div>
-    </>
+    )
 }
 
 function PublicSend() {
@@ -487,7 +534,7 @@ function PublicSend() {
         }
     }, [cloudSession?.is_in_progress])
 
-    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center px-2 mt-4"}>
+    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center mt-1"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
             slide={{

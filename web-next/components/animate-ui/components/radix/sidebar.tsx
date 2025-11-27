@@ -376,7 +376,7 @@ function SidebarHeader({ className, ...props }: SidebarHeaderProps) {
     <div
       data-slot="sidebar-header"
       data-sidebar="header"
-      className={cn('flex flex-col gap-2 p-2', className)}
+      className={cn('flex flex-col gap-2 pl-1.5 pt-2 pr-1', className)}
       {...props}
     />
   );
