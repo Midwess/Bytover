@@ -93,7 +93,7 @@ export default function SendBoard() {
                     <SidebarContentWrapper activeMethod={activeMethod} />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset className="flex flex-col h-[55vh]">
+                <SidebarInset className="flex flex-col h-[100%]">
                     <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
@@ -155,8 +155,9 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className="relative flex flex-col w-full h-full rounded-2xl gap-8 overflow-x-hidden min-h-0">
-            <div className="w-full flex flex-row gap-2 pt-2 shrink-0">
+        <div className="flex flex-col w-full h-full">
+            {/* Simplified Resource Selection Area */}
+            <div className="flex gap-2 w-full shrink-0 h-32 md:h-50">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -165,25 +166,14 @@ function FileSelections() {
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     data-dragging={isDragging || undefined}
-                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed pt-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                    className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                 >
-                    <input
-                        {...getInputProps()}
-                        className="sr-only"
-                        aria-label="Upload files"
-                    />
-                    <div className="flex flex-col items-center justify-center px-4 py-1 text-center">
-                        <div
-                            className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
-                            aria-hidden="true"
-                        >
-                            <ImageUpIcon className="size-4 opacity-60"/>
-                        </div>
-                        <p className="mb-1.5 text-sm font-medium">
-                            <span className="block md:hidden">File</span>
-                            <span className="hidden md:block">Drop files here or click to browse</span>
-                        </p>
-                    </div>
+                    <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                    <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                    <p className="text-sm font-medium">
+                        <span className="block md:hidden">File</span>
+                        <span className="hidden md:block">Drop files or click</span>
+                    </p>
                 </div>
 
                 {supportsDirectories && (
@@ -195,54 +185,35 @@ function FileSelections() {
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
                         data-dragging={isDragging || undefined}
-                        className="border-input flex-2/3 w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                        className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                     >
                         <input
                             {...getDirectoryInputProps()}
                             className="sr-only"
                             aria-label="Upload folder"
                         />
-                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
-                            <div
-                                className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
-                                aria-hidden="true"
-                            >
-                                <FolderIcon className="size-4 opacity-60"/>
-                            </div>
-                            <p className="mb-1.5 text-sm font-medium">
-                                <span className="block md:hidden">Folder</span>
-                                <span className="hidden md:block">Drop folders here or click to browse folders</span>
-                            </p>
-                        </div>
+                        <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                        <p className="text-sm font-medium">
+                            <span className="block md:hidden">Folder</span>
+                            <span className="hidden md:block">Drop folders or click</span>
+                        </p>
                     </div>
                 )}
             </div>
 
-            {errors.length > 0 && (
-                <div
-                    className="text-destructive flex items-center gap-1 text-xs shrink-0"
-                    role="alert"
-                >
-                    <AlertCircleIcon className="size-3 shrink-0"/>
-                    <span>{errors[0]}</span>
-                </div>
-            )}
-            <div className="relative w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-                {/* Top shadow fade effect */}
-                <div
-                    className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
+            {/* Resource List with Shadow */}
+            <div className="relative flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
+                {/* Top shadow */}
+                <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
 
-                <div className="w-full pt-5 pb-8 px-0">
-                    <div
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-4 w-full">
-                        {
-                            selectedResources.map((resource) => (
-                                <div className={"p-0.5 h-[220px] flex items-start flex-row"} key={resource.order_id}>
-                                    <ResourceView model={resource}/>
-                                </div>
-                            ))
-                        }
-                    </div>
+                {/* Resource grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-3 gap-y-1">
+                    {selectedResources.map((resource) => (
+                        <div className="p-0.5 h-[220px] flex items-start flex-row" key={resource.order_id}>
+                            <ResourceView model={resource}/>
+                        </div>
+                    ))}
+                    <div className="h-[350px]"></div>
                 </div>
             </div>
         </div>
