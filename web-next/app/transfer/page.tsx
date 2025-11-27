@@ -97,7 +97,7 @@ function TransferBoardInner() {
                     <TabsTrigger value="Send">Send</TabsTrigger>
                     <TabsTrigger value="Receive">Receive</TabsTrigger>
                 </TabsList>
-                <TabsContents className="w-full h-full">
+                <TabsContents className="w-full h-full bg-background">
                     <TabsContent value="Send">
                         <SendBoard/>
                     </TabsContent>
@@ -123,7 +123,7 @@ export default function TransferBoard() {
                 </p>
                 <DownloadPlatforms/>
             </section>
-            <section className="w-full container py-10 min-h-fit h-[80vh]">
+            <section className="md:min-w-[800px] max-w-[95vw] lg:w-[1200px] md:max-w-[80vw] py-10 min-h-fit h-[80vh]">
                 <TransferBoardInner/>
             </section>
             <section id="waitlist" className="w-full bg-zinc-900">

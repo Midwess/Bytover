@@ -93,14 +93,14 @@ export default function SendBoard() {
                     <SidebarContentWrapper activeMethod={activeMethod} />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset>
+                <SidebarInset className="flex flex-col h-[55vh]">
                     <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 h-4" />
                         </div>
                     </header>
-                    <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full overflow-hidden">
+                    <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full">
                         <FileSelections />
                     </div>
                 </SidebarInset>
@@ -155,7 +155,7 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className="relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden min-h-0">
+        <div className="relative flex flex-col w-full h-full rounded-2xl gap-8 overflow-x-hidden min-h-0">
             <div className="w-full flex flex-row gap-2 pt-2 shrink-0">
                 <div
                     role="button"
@@ -230,7 +230,7 @@ function FileSelections() {
             <div className="relative w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                 {/* Top shadow fade effect */}
                 <div
-                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
+                    className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
 
                 <div className="w-full pt-5 pb-8 px-0">
                     <div
