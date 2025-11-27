@@ -155,8 +155,8 @@ function FileSelections() {
     }, [files, folders]);
 
     return (
-        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden"}>
-            <div className="w-full flex flex-row gap-2 pt-2">
+        <div className="relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden min-h-0">
+            <div className="w-full flex flex-row gap-2 pt-2 shrink-0">
                 <div
                     role="button"
                     onClick={openFileDialog}
@@ -174,13 +174,14 @@ function FileSelections() {
                     />
                     <div className="flex flex-col items-center justify-center px-4 py-1 text-center">
                         <div
-                            className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                            className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
                             aria-hidden="true"
                         >
                             <ImageUpIcon className="size-4 opacity-60"/>
                         </div>
                         <p className="mb-1.5 text-sm font-medium">
-                            Drop files here or click to browse
+                            <span className="block md:hidden">File</span>
+                            <span className="hidden md:block">Drop files here or click to browse</span>
                         </p>
                     </div>
                 </div>
@@ -203,13 +204,14 @@ function FileSelections() {
                         />
                         <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
                             <div
-                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
+                                className="mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
                                 aria-hidden="true"
                             >
                                 <FolderIcon className="size-4 opacity-60"/>
                             </div>
                             <p className="mb-1.5 text-sm font-medium">
-                                Drop folders here or click to browse folders
+                                <span className="block md:hidden">Folder</span>
+                                <span className="hidden md:block">Drop folders here or click to browse folders</span>
                             </p>
                         </div>
                     </div>
@@ -218,24 +220,24 @@ function FileSelections() {
 
             {errors.length > 0 && (
                 <div
-                    className="text-destructive flex items-center gap-1 text-xs"
+                    className="text-destructive flex items-center gap-1 text-xs shrink-0"
                     role="alert"
                 >
                     <AlertCircleIcon className="size-3 shrink-0"/>
                     <span>{errors[0]}</span>
                 </div>
             )}
-            <div className="relative w-full h-full flex-1 overflow-x-hidden">
+            <div className="relative w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                 {/* Top shadow fade effect */}
                 <div
-                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-blackBase to-transparent z-10 pointer-events-none"/>
+                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
 
-                <div className={"w-full h-full overflow-y-scroll pb-[100px] overflow-x-hidden"}>
+                <div className="w-full pt-5 pb-8 px-0">
                     <div
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
+                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-4 w-full">
                         {
                             selectedResources.map((resource) => (
-                                <div className={"p-0.5 h-[210px] flex items-start flex-row"} key={resource.order_id}>
+                                <div className={"p-0.5 h-[220px] flex items-start flex-row"} key={resource.order_id}>
                                     <ResourceView model={resource}/>
                                 </div>
                             ))
@@ -286,7 +288,7 @@ function FileView(props: {
                        bg-muted/60
                        backdrop-blur-xl border border-white/10
                        transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
+                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-muted/10 hover:border-white/30 hover:backdrop-blur-sm
                        hover:bg-muted/80">
             
             <div
@@ -372,7 +374,7 @@ function MediaView(props: {
             className="w-full h-full overflow-hidden rounded-2xl relative group 
                        border border-white/10 backdrop-blur-sm
                        transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
+                       hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30">
             {/* Thumbnail - lowest z-index */}
             <div className="absolute inset-0 z-0">
                 {thumbnail}
