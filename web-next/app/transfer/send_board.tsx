@@ -2,12 +2,11 @@
 
 import {
     DropdownMenuTrigger,
-    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem
+    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
-    AlertCircleIcon,
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check, FolderIcon,
+    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -47,26 +46,71 @@ import {useIsMobile} from "@/hooks/use-mobile";
 import clsx from "clsx";
 import Image from "next/image";
 import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
+import {
+    SidebarProvider,
+    SidebarInset,
+    SidebarTrigger,
+    Sidebar,
+    SidebarHeader,
+    SidebarContent,
+    SidebarRail,
+    SidebarMenu,
+    SidebarMenuItem,
+    SidebarMenuButton,
+    useSidebar,
+} from '@/components/animate-ui/components/radix/sidebar';
+import { Separator } from '@/components/ui/separator';
+
+enum TransferType {
+    Public,
+    People
+}
+
+const activeMethods = [
+    {
+        name: 'People',
+        icon: Users,
+        type: TransferType.People
+    },
+    {
+        name: 'Public',
+        icon: Globe,
+        type: TransferType.Public
+    },
+]
 
 export default function SendBoard() {
-    return <>
-        <div
-            className="h-[950px] max-h-[95vh] w-full rounded-xl overflow-x-clip bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1 overflow-scroll">
-            <div className={"grid grid-cols-12 w-full h-full gap-4"}>
-                <div className={"col-span-3 h-full"}>
-                    <Board/>
-                </div>
-                <div className={"col-span-9 h-full overflow-y-hidden pt-2 w-full"}>
-                    <FileSelections/>
-                </div>
-            </div>
+    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
+
+    return (
+        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[75vh]">
+            <SidebarProvider>
+                <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
+                    <SidebarHeader className="rounded-tl-xl">
+                        <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod} />
+                    </SidebarHeader>
+                    <SidebarContentWrapper activeMethod={activeMethod} />
+                    <SidebarRail />
+                </Sidebar>
+                <SidebarInset className="flex flex-col h-[100%]">
+                    <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                        <div className="flex items-center gap-2 px-4">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="mr-2 h-4" />
+                        </div>
+                    </header>
+                    <div className="flex flex-1 flex-col min-h-0 px-2 pt-0">
+                        <FileSelections />
+                    </div>
+                </SidebarInset>
+            </SidebarProvider>
         </div>
-    </>
+    );
 }
 
 function FileSelections() {
     const [
-        {files, folders, isDragging, errors, supportsDirectories},
+        {files, folders, isDragging, supportsDirectories},
         {
             handleDragEnter,
             handleDragLeave,
@@ -109,93 +153,99 @@ function FileSelections() {
         }
     }, [files, folders]);
 
+    const isMobile = useIsMobile();
+
     return (
-        <div className={"relative flex flex-col w-full h-full rounded-2xl items-center gap-8 overflow-x-hidden"}>
-            <div className="w-full flex flex-row gap-2 pt-2">
-                <div
-                    role="button"
-                    onClick={openFileDialog}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    data-dragging={isDragging || undefined}
-                    className="border-input w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed pt-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
-                >
-                    <input
-                        {...getInputProps()}
-                        className="sr-only"
-                        aria-label="Upload files"
-                    />
-                    <div className="flex flex-col items-center justify-center px-4 py-1 text-center">
-                        <div
-                            className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
-                            aria-hidden="true"
-                        >
-                            <ImageUpIcon className="size-4 opacity-60"/>
-                        </div>
-                        <p className="mb-1.5 text-sm font-medium">
-                            Drop files here or click to browse
-                        </p>
+        <div className="flex flex-col w-full h-full">
+            {/* Resource Selection Area */}
+            {isMobile ? (
+                // Mobile: Dropdown Button
+                <div className="relative w-full h-10 flex-shrink-0">
+                    <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                    <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
+                    <div className="absolute top-2 right-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button 
+                                    size="sm"
+                                    className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
+                                >
+                                    <Plus className="h-4 w-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={openFileDialog}
+                                >
+                                    <ImageUpIcon className="w-4 h-4 mr-2"/>
+                                    <span>Select file</span>
+                                </DropdownMenuItem>
+                                {supportsDirectories && (
+                                    <DropdownMenuItem
+                                        onClick={openDirectoryDialog}
+                                    >
+                                        <FolderIcon className="w-4 h-4 mr-2"/>
+                                        <span>Select folder</span>
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
-
-                {supportsDirectories && (
+            ) : (
+                // Desktop: Two separate drop zones
+                <div className="flex gap-2 w-full flex-shrink-0 h-32 md:h-50">
                     <div
                         role="button"
-                        onClick={openDirectoryDialog}
+                        onClick={openFileDialog}
                         onDragEnter={handleDragEnter}
                         onDragLeave={handleDragLeave}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
                         data-dragging={isDragging || undefined}
-                        className="border-input flex-2/3 w-full hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 relative flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[img]:border-none has-[input:focus]:ring-[3px]"
+                        className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                     >
-                        <input
-                            {...getDirectoryInputProps()}
-                            className="sr-only"
-                            aria-label="Upload folder"
-                        />
-                        <div className="flex flex-col items-center justify-center px-4 py-3 text-center">
-                            <div
-                                className="bg-background mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border"
-                                aria-hidden="true"
-                            >
-                                <FolderIcon className="size-4 opacity-60"/>
-                            </div>
-                            <p className="mb-1.5 text-sm font-medium">
-                                Drop folders here or click to browse folders
-                            </p>
-                        </div>
+                        <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                        <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                        <p className="text-sm font-medium">Drop files or click</p>
                     </div>
-                )}
-            </div>
 
-            {errors.length > 0 && (
-                <div
-                    className="text-destructive flex items-center gap-1 text-xs"
-                    role="alert"
-                >
-                    <AlertCircleIcon className="size-3 shrink-0"/>
-                    <span>{errors[0]}</span>
+                    {supportsDirectories && (
+                        <div
+                            role="button"
+                            onClick={openDirectoryDialog}
+                            onDragEnter={handleDragEnter}
+                            onDragLeave={handleDragLeave}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            data-dragging={isDragging || undefined}
+                            className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
+                        >
+                            <input
+                                {...getDirectoryInputProps()}
+                                className="sr-only"
+                                aria-label="Upload folder"
+                            />
+                            <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                            <p className="text-sm font-medium">Drop folders or click</p>
+                        </div>
+                    )}
                 </div>
             )}
-            <div className="relative w-full h-full flex-1 overflow-x-hidden">
-                {/* Top shadow fade effect */}
-                <div
-                    className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-blackBase to-transparent z-10 pointer-events-none"/>
 
-                <div className={"w-full h-full overflow-y-scroll pb-[100px] overflow-x-hidden"}>
-                    <div
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 gap-x-4 gap-y-4 pb-8 w-full pt-5 h-fit">
-                        {
-                            selectedResources.map((resource) => (
-                                <div className={"p-0.5 h-[210px] flex items-start flex-row"} key={resource.order_id}>
-                                    <ResourceView model={resource}/>
-                                </div>
-                            ))
-                        }
-                    </div>
+            {/* Resource List with Shadow */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                {/* Top shadow */}
+                <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
+
+                {/* Resource grid - single column on mobile, grid on desktop */}
+                <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
+                    {selectedResources.map((resource) => (
+                        <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
+                            <ResourceView model={resource}/>
+                        </div>
+                    ))}
+                    <div className="h-[80px] md:h-[350px] md:block"></div>
                 </div>
             </div>
         </div>
@@ -235,34 +285,69 @@ function FileView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
+    const handleRemove = async () => {
+        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+    }
+
     return (
         <div
-            className="w-full h-full overflow-hidden rounded-2xl flex flex-col relative group 
-                       bg-muted/60
-                       backdrop-blur-xl border border-white/10
-                       transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
-                       hover:bg-muted/80">
+            className={clsx(
+                "w-full overflow-hidden rounded-2xl flex relative group",
+                "bg-muted/60 backdrop-blur-xl border border-white/10",
+                "transition-all duration-300 ease-out",
+                "hover:scale-[1.02] hover:shadow-2xl hover:shadow-muted/10 hover:border-white/30 hover:backdrop-blur-sm hover:bg-muted/80",
+                isMobile ? "flex-row items-center gap-3 p-3 h-auto" : "flex-col h-full"
+            )}>
             
-            <div
-                className={clsx(
-                    "absolute z-20 inset-0 flex items-center justify-center rounded-2xl",
-                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300"
-                )}>
-                <Button 
-                    size="sm"
-                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white" 
-                    onClick={async () => {
-                        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
-                    }}>
-                    <X className="w-4 h-4"/>
-                    <span className="ml-1 text-xs">Remove</span>
-                </Button>
-            </div>
+            {/* Desktop: Remove button overlay */}
+            {!isMobile && (
+                <div className="absolute z-20 inset-0 flex items-center justify-center rounded-2xl opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300">
+                    <Button 
+                        size="sm"
+                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white" 
+                        onClick={handleRemove}>
+                        <X className="w-4 h-4"/>
+                        <span className="ml-1 text-xs">Remove</span>
+                    </Button>
+                </div>
+            )}
 
-            <div className="flex-1 flex items-center justify-center p-3 relative">
-                <div className="relative w-20 h-20 flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
-                    <div className="relative w-16 h-16">
+            {/* Mobile: Dropdown menu */}
+            {isMobile && (
+                <div className="absolute top-1/2 right-2 -translate-y-1/2 z-20">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button 
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
+                                <MoreVertical className="h-4 w-4"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onClick={handleRemove}
+                                variant="destructive"
+                                className="text-destructive"
+                            >
+                                <X className="w-4 h-4"/>
+                                <span>Remove</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
+
+            {/* Thumbnail */}
+            <div className={clsx(
+                "flex items-center justify-center relative",
+                isMobile ? "w-16 h-16 shrink-0" : "flex-1 p-3"
+            )}>
+                <div className={clsx(
+                    "relative flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md",
+                    isMobile ? "w-12 h-12" : "w-20 h-20"
+                )}>
+                    <div className={clsx("relative", isMobile ? "w-10 h-10" : "w-16 h-16")}>
                         <Image
                             className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
                             layout="fill"
@@ -273,11 +358,21 @@ function FileView(props: {
                 </div>
             </div>
 
-            <div className="flex flex-col gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3">
-                <p className="text-sm font-medium text-center text-white/90 break-words line-clamp-2 leading-tight">
+            {/* File info */}
+            <div className={clsx(
+                "flex flex-col",
+                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3"
+            )}>
+                <p className={clsx(
+                    "text-sm font-medium text-white/90 break-words leading-tight",
+                    isMobile ? "line-clamp-1 text-left" : "line-clamp-2 text-center"
+                )}>
                     {model.name}
                 </p>
-                <div className="flex items-center justify-center gap-2">
+                <div className={clsx(
+                    "flex items-center gap-2",
+                    isMobile ? "mt-1" : "justify-center"
+                )}>
                     <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
                         {displaySize}
                     </span>
@@ -305,13 +400,13 @@ function MediaView(props: {
         src={'/file.svg'}
     />
 
-    const [thumbnail, setThumbnail] = useState(defaultThumbnail)
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
     useEffect(() => {
         if ((isVideo || isImage) && model.thumbnail_path) {
             core.getDownloadUrl(model.thumbnail_path).then((it) => {
                 if (it) {
-                    setThumbnail(<Image className={"w-full h-full object-cover"} fill src={it} alt={model.name}/>)
+                    setThumbnailUrl(it)
                 }
             })
         }
@@ -322,146 +417,200 @@ function MediaView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
+    const handleRemove = () => {
+        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+    }
+
     return (
         <div
-            className="w-full h-full overflow-hidden rounded-2xl relative group 
-                       border border-white/10 backdrop-blur-sm
-                       transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
-            {/* Thumbnail - lowest z-index */}
-            <div className="absolute inset-0 z-0">
-                {thumbnail}
-            </div>
+            className={clsx(
+                "w-full overflow-hidden rounded-2xl relative group",
+                "border border-white/10 backdrop-blur-sm",
+                "transition-all duration-300 ease-out",
+                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",
+                isMobile ? "flex flex-row items-center gap-3 p-3 h-auto" : "h-full"
+            )}>
+            {/* Desktop: Thumbnail - full background */}
+            {!isMobile && (
+                <>
+                    <div className="absolute inset-0 z-0">
+                        {thumbnailUrl ? (
+                            <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
+                        ) : (
+                            defaultThumbnail
+                        )}
+                    </div>
+                    {/* Video play icon */}
+                    {isVideo && (
+                        <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
+                                       transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
+                            <Play className="w-4 h-4 text-white fill-white"/>
+                        </div>
+                    )}
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+                    {/* Background overlay for hover effect */}
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                </>
+            )}
 
-            {/* Video play icon with modern styling */}
-            {isVideo && (
-                <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
-                               transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                    <Play className="w-4 h-4 text-white fill-white"/>
+            {/* Mobile: Thumbnail - small square */}
+            {isMobile && (
+                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+                    {thumbnailUrl ? (
+                        <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <ImageUpIcon className="w-6 h-6 opacity-40"/>
+                        </div>
+                    )}
+                    {isVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <Play className="w-4 h-4 text-white fill-white"/>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Gradient overlay - always visible but subtle */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+            {/* Desktop: Remove button - centered */}
+            {!isMobile && (
+                <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <Button
+                        size="sm"
+                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
+                        onClick={handleRemove}>
+                        <X className="w-4 h-4"/>
+                        <span className="ml-1 text-xs">Remove</span>
+                    </Button>
+                </div>
+            )}
 
-            {/* Background overlay for hover effect */}
-            <div
-                className={clsx(
-                    "absolute inset-0 bg-black/40 backdrop-blur-sm z-15",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
-                )}
-            />
+            {/* Mobile: Dropdown menu */}
+            {isMobile && (
+                <div className="absolute top-1/2 right-2 -translate-y-1/2 z-30">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button 
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 rounded-full bg-black/60 hover:bg-black/80">
+                                <MoreVertical className="h-4 w-4 text-white"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onClick={handleRemove}
+                                variant="destructive"
+                                className="text-destructive"
+                            >
+                                <X className="w-4 h-4"/>
+                                <span>Remove</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
 
-            {/* Remove button - centered with high z-index */}
-            <div
-                className={clsx(
-                    "absolute inset-0 flex items-center justify-center z-30",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
+            {/* File info */}
+            <div className={clsx(
+                "flex flex-col z-20",
+                isMobile 
+                    ? "flex-1 min-w-0" 
+                    : "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm"
+            )}>
+                <p className={clsx(
+                    "text-white text-sm font-medium leading-tight",
+                    isMobile ? "line-clamp-1 text-left" : "line-clamp-2"
                 )}>
-                <Button
-                    size="sm"
-                    className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
-                    onClick={() => {
-                        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
-                    }}>
-                    <X className="w-4 h-4"/>
-                    <span className="ml-1 text-xs">Remove</span>
-                </Button>
-            </div>
-
-            {/* File info - positioned at bottom with enhanced styling */}
-            <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm">
-                <div className="flex flex-col gap-1.5">
-                    <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
-                        {model.name}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
-                            {displaySize}
-                        </span>
-                        <span className="text-xs text-white/60">
-                            {isVideo ? "Video" : "Image"}
-                        </span>
-                    </div>
+                    {model.name}
+                </p>
+                <div className={clsx(
+                    "flex items-center gap-2",
+                    isMobile ? "mt-1" : ""
+                )}>
+                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                        {displaySize}
+                    </span>
+                    <span className="text-xs text-white/60">
+                        {isVideo ? "Video" : "Image"}
+                    </span>
                 </div>
             </div>
         </div>
     );
 }
 
-enum TransferType {
-    Public,
-    People
+function TransferMethodSelector({ activeMethod, onActiveMethodChange }: { activeMethod: typeof activeMethods[0], onActiveMethodChange: (method: typeof activeMethods[0]) => void }) {
+    const isMobile = useIsMobile();
+
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        >
+                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                <activeMethod.icon className="size-4" />
+                            </div>
+                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                <span className="truncate font-semibold">
+                                    {activeMethod.name}
+                                </span>
+                            </div>
+                            <ChevronsUpDown className="ml-auto" />
+                        </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                        align="start"
+                        side={isMobile ? 'bottom' : 'right'}
+                        sideOffset={4}
+                    >
+                        {activeMethods.map((method) => (
+                            <DropdownMenuCheckboxItem
+                                key={method.name}
+                                checked={activeMethod === method}
+                                onCheckedChange={() => onActiveMethodChange(method)}
+                                className="gap-2 p-2"
+                            >
+                                <method.icon className="size-4" />
+                                {method.name}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
 }
 
-const activeMethods = [
-    {
-        name: 'People',
-        icon: Users,
-        type: TransferType.People
-    },
-    {
-        name: 'Public',
-        icon: Globe,
-        type: TransferType.Public
-    },
-]
+function SidebarContentWrapper({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
+    const { state } = useSidebar();
+    
+    if (state === 'collapsed') {
+        return null;
+    }
+    
+    return (
+        <SidebarContent className="rounded-bl-xl px-1">
+            <TransferForm activeMethod={activeMethod} />
+        </SidebarContent>
+    );
+}
 
-function Board() {
-    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
-
+function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
     const content = activeMethod.type === TransferType.Public
         ? <PublicSend/>
         : <NearbySend/>
 
-    return <>
-        <div className={"flex flex-col border-1 w-full h-full bg-sidebar rounded-xl p-2"}>
-            <DropdownMenu>
-                <DropdownMenuContent className={"font-medium w-[200px]"}>
-                    <DropdownMenuCheckboxItem className={"w-[200px] h2"} checked={(activeMethod === activeMethods[0])}
-                                              onCheckedChange={() => {
-                                                  setActiveMethod(activeMethods[0])
-                                              }}>
-                        <Users/>
-                        People
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem className={"w-[200px] flex flex-row h2"}
-                                              checked={(activeMethod === activeMethods[1])} onCheckedChange={() => {
-                        setActiveMethod(activeMethods[1])
-                    }}>
-                        <Globe/>
-                        Public
-                    </DropdownMenuCheckboxItem>
-
-                </DropdownMenuContent>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        className="h-12">
-                        <div
-                            className="flex aspect-square size-8 items-center justify-center rounded-lg bg-bluePrimary text-primaryText">
-                            <activeMethod.icon className="size-4"/>
-                        </div>
-                        <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">
-                                    {activeMethod.name}
-                                </span>
-                        </div>
-                        <ChevronsUpDown className="ml-auto"/>
-                    </Button>
-                </DropdownMenuTrigger>
-            </DropdownMenu>
-            <div className={"px-2 flex flex-col items-center justify-center pt-5"}>
-                {
-                    content
-                }
-            </div>
+    return (
+        <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit"}>
+            {content}
         </div>
-    </>
+    )
 }
 
 function PublicSend() {
@@ -487,7 +636,7 @@ function PublicSend() {
         }
     }, [cloudSession?.is_in_progress])
 
-    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center px-2 mt-4"}>
+    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center mt-1"}>
         <MotionEffect
             className={"flex flex-col w-full gap-3"}
             slide={{

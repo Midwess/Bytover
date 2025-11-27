@@ -2,12 +2,12 @@
 
 import * as React from 'react';
 import { Slot } from 'radix-ui';
-import { VariantProps, cva } from 'class-variance-authority';
+import { cva, VariantProps } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
 import { type Transition } from 'motion/react';
 
-import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -18,17 +18,18 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from '@/components/animate-ui/radix/sheet';
+} from '@/components/animate-ui/components/radix/sheet';
 import {
+  TooltipProvider,
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
-} from '@/components/animate-ui/radix/tooltip';
+} from '@/components/animate-ui/components/animate/tooltip';
 import {
-  MotionHighlight,
-  MotionHighlightItem,
-} from '@/components/animate-ui/effects/motion-highlight';
+  Highlight,
+  HighlightItem,
+} from '@/components/animate-ui/primitives/effects/highlight';
+import { getStrictContext } from '@/lib/get-strict-context';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -47,16 +48,8 @@ type SidebarContextProps = {
   toggleSidebar: () => void;
 };
 
-const SidebarContext = React.createContext<SidebarContextProps | null>(null);
-
-function useSidebar() {
-  const context = React.useContext(SidebarContext);
-  if (!context) {
-    throw new Error('useSidebar must be used within a SidebarProvider.');
-  }
-
-  return context;
-}
+const [LocalSidebarProvider, useSidebar] =
+  getStrictContext<SidebarContextProps>('SidebarContext');
 
 type SidebarProviderProps = React.ComponentProps<'div'> & {
   defaultOpen?: boolean;
@@ -134,8 +127,8 @@ function SidebarProvider({
   );
 
   return (
-    <SidebarContext.Provider value={contextValue}>
-      <TooltipProvider delayDuration={0}>
+    <LocalSidebarProvider value={contextValue}>
+      <TooltipProvider openDelay={0}>
         <div
           data-slot="sidebar-wrapper"
           style={
@@ -154,7 +147,7 @@ function SidebarProvider({
           {children}
         </div>
       </TooltipProvider>
-    </SidebarContext.Provider>
+    </LocalSidebarProvider>
   );
 }
 
@@ -182,7 +175,7 @@ function Sidebar({
 
   if (collapsible === 'none') {
     return (
-      <MotionHighlight
+      <Highlight
         enabled={animateOnHover}
         hover
         controlledItems
@@ -200,7 +193,7 @@ function Sidebar({
         >
           {children}
         </div>
-      </MotionHighlight>
+      </Highlight>
     );
   }
 
@@ -223,7 +216,7 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <MotionHighlight
+          <Highlight
             enabled={animateOnHover}
             hover
             controlledItems
@@ -232,7 +225,7 @@ function Sidebar({
             transition={transition}
           >
             <div className="flex h-full w-full flex-col">{children}</div>
-          </MotionHighlight>
+          </Highlight>
         </SheetContent>
       </Sheet>
     );
@@ -274,7 +267,7 @@ function Sidebar({
         )}
         {...props}
       >
-        <MotionHighlight
+        <Highlight
           containerClassName={cn('size-full', containerClassName)}
           enabled={animateOnHover}
           hover
@@ -286,11 +279,11 @@ function Sidebar({
           <div
             data-sidebar="sidebar"
             data-slot="sidebar-inner"
-            className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex size-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+            className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
           >
             {children}
           </div>
-        </MotionHighlight>
+        </Highlight>
       </div>
     </div>
   );
@@ -383,7 +376,7 @@ function SidebarHeader({ className, ...props }: SidebarHeaderProps) {
     <div
       data-slot="sidebar-header"
       data-sidebar="header"
-      className={cn('flex flex-col gap-2 p-2', className)}
+      className={cn('flex flex-col gap-2 pl-1.5 pt-2 pr-1', className)}
       {...props}
     />
   );
@@ -596,7 +589,7 @@ function SidebarMenuButton({
   const { isMobile, state } = useSidebar();
 
   const button = (
-    <MotionHighlightItem
+    <HighlightItem
       activeClassName={sidebarMenuButtonActiveVariants({ variant })}
     >
       <Comp
@@ -607,7 +600,7 @@ function SidebarMenuButton({
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       />
-    </MotionHighlightItem>
+    </HighlightItem>
   );
 
   if (!tooltip) {
@@ -621,14 +614,9 @@ function SidebarMenuButton({
   }
 
   return (
-    <Tooltip>
+    <Tooltip side="right" align="center">
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent
-        side="right"
-        align="center"
-        hidden={state !== 'collapsed' || isMobile}
-        {...tooltip}
-      />
+      <TooltipContent hidden={state !== 'collapsed' || isMobile} {...tooltip} />
     </Tooltip>
   );
 }
@@ -774,7 +762,7 @@ function SidebarMenuSubButton({
   const Comp = asChild ? Slot.Root : 'a';
 
   return (
-    <MotionHighlightItem activeClassName="bg-sidebar-accent text-sidebar-accent-foreground rounded-md">
+    <HighlightItem activeClassName="bg-sidebar-accent text-sidebar-accent-foreground rounded-md">
       <Comp
         data-slot="sidebar-menu-sub-button"
         data-sidebar="menu-sub-button"
@@ -790,7 +778,7 @@ function SidebarMenuSubButton({
         )}
         {...props}
       />
-    </MotionHighlightItem>
+    </HighlightItem>
   );
 }
 
@@ -819,27 +807,4 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-  type SidebarProps,
-  type SidebarContentProps,
-  type SidebarFooterProps,
-  type SidebarGroupProps,
-  type SidebarGroupActionProps,
-  type SidebarGroupContentProps,
-  type SidebarGroupLabelProps,
-  type SidebarHeaderProps,
-  type SidebarInputProps,
-  type SidebarInsetProps,
-  type SidebarMenuProps,
-  type SidebarMenuActionProps,
-  type SidebarMenuBadgeProps,
-  type SidebarMenuButtonProps,
-  type SidebarMenuItemProps,
-  type SidebarMenuSkeletonProps,
-  type SidebarMenuSubProps,
-  type SidebarMenuSubItemProps,
-  type SidebarMenuSubButtonProps,
-  type SidebarProviderProps,
-  type SidebarRailProps,
-  type SidebarSeparatorProps,
-  type SidebarTriggerProps,
 };
