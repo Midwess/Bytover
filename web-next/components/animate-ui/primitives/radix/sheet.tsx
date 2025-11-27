@@ -91,12 +91,14 @@ type Side = 'top' | 'bottom' | 'left' | 'right';
 type SheetContentProps = React.ComponentProps<typeof SheetPrimitive.Content> &
   HTMLMotionProps<'div'> & {
     side?: Side;
+    children?: React.ReactNode;
   };
 
 function SheetContent({
   side = 'right',
   transition = { type: 'spring', stiffness: 150, damping: 22 },
   style,
+  children,
   ...props
 }: SheetContentProps) {
   const axis = side === 'left' || side === 'right' ? 'x' : 'y';
@@ -130,7 +132,13 @@ function SheetContent({
           ...style,
         }}
         transition={transition}
-      />
+      >
+        <SheetHeader>
+          <SheetTitle className="sr-only">Sheet</SheetTitle>
+          <SheetDescription className="sr-only">Sheet</SheetDescription>
+        </SheetHeader>
+        {children}
+      </motion.div>
     </SheetPrimitive.Content>
   );
 }

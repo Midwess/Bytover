@@ -84,7 +84,7 @@ export default function SendBoard() {
     const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
 
     return (
-        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[82vh]">
+        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[75vh]">
             <SidebarProvider>
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">

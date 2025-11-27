@@ -1,4 +1,5 @@
 import * as React from 'react';
+import * as VisuallyHiddenPrimitive from '@radix-ui/react-visually-hidden';
 
 import {
   Sheet as SheetPrimitive,
@@ -79,6 +80,10 @@ function SheetContent({
         side={side}
         {...props}
       >
+        <SheetHeader>
+          <SheetTitle className="sr-only">Sheet</SheetTitle>
+          <SheetDescription className="sr-only">Sheet</SheetDescription>
+        </SheetHeader>
         {children}
         {showCloseButton && (
           <SheetClose className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
