@@ -67,7 +67,7 @@ import init_core, {
     view
 } from "core_wasm"
 import {process_event, handle_response} from "core_wasm";
-import BPromise from 'bluebird'
+import BPromise, {delay} from 'bluebird'
 import {Observable} from "@/utils/observable";
 import {useEffect, useState} from "react";
 import {FileMetadata, FolderStructure} from "@/hooks/use-file-upload";
@@ -77,6 +77,7 @@ import { noop } from 'lodash';
 export class WasmCore {
     // If it is not compatible, then the current browser is not supported.
     // We should recommend user to download the app instead.
+    cachedGeoLocation: GeoLocation | undefined = undefined;
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
@@ -304,7 +305,39 @@ export class WasmCore {
             return;
         }
 
+        this.updateGeoLocation().then(noop)
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
+    }
+
+    async updateGeoLocation() {
+        while (true) {
+            try {
+                const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocation is not supported'))
+                        return
+                    }
+
+                    navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 15000,
+                            maximumAge: 60000
+                        }
+                    )
+                })
+
+                this.cachedGeoLocation = new GeoLocation(position.coords.latitude, position.coords.longitude);
+            }
+            catch(ignored) {
+                console.log("Failed to get geolocation", ignored)
+            }
+            finally {
+                await delay(10000)
+            }
+        }
     }
 
     public async update(event: AppEvent) {
@@ -376,30 +409,11 @@ export class WasmCore {
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
-                        try {
-                            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-                                if (!navigator.geolocation) {
-                                    reject(new Error('Geolocation is not supported'))
-                                    return
-                                }
-                                
-                                navigator.geolocation.getCurrentPosition(
-                                    resolve,
-                                    reject,
-                                    {
-                                        enableHighAccuracy: true,
-                                        timeout: 15000,
-                                        maximumAge: 60000
-                                    }
-                                )
-                            })
-                            
-                            const location = new GeoLocation(position.coords.latitude, position.coords.longitude);
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantGeoLocation(location)))
+                        if (this.cachedGeoLocation) {
+                            return handle_response(request_id, serialize(new CoreOperationOutputVariantGeoLocation(this.cachedGeoLocation)))
                         }
-                        catch (error) {
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
-                        }
+
+                        return handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                     }
                 }
 

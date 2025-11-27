@@ -41,8 +41,7 @@ impl AppCommand {
             }
         };
 
-        self.notify_event(NearbyEvent::UpdateMe { new_peer: peer.clone() });
-
+        self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
 
