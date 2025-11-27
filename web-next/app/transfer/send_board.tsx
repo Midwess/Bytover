@@ -5,7 +5,6 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
-    AlertCircleIcon,
     Globe, ImageUpIcon, Play,
     Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
 } from 'lucide-react'
@@ -111,7 +110,7 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        {files, folders, isDragging, errors, supportsDirectories},
+        {files, folders, isDragging, supportsDirectories},
         {
             handleDragEnter,
             handleDragLeave,

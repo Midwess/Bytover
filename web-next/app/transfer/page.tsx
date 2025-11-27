@@ -97,8 +97,8 @@ function TransferBoardInner() {
                     <TabsTrigger value="Send">Send</TabsTrigger>
                     <TabsTrigger value="Receive">Receive</TabsTrigger>
                 </TabsList>
-                <TabsContents className="w-full h-full bg-background">
-                    <TabsContent value="Send">
+                <TabsContents className="w-full max-h-[75vh] bg-background">
+                    <TabsContent value="Send" className="h-fit">
                         <SendBoard/>
                     </TabsContent>
                     <TabsContent value="Receive">
@@ -124,7 +124,9 @@ export default function TransferBoard() {
                 <DownloadPlatforms/>
             </section>
             <section className="md:min-w-[800px] max-w-[95vw] lg:w-[1200px] md:max-w-[80vw] py-10 min-h-fit h-[80vh]">
-                <TransferBoardInner/>
+                <React.Suspense fallback={<div className="w-full h-64 flex items-center justify-center"><div className="text-lg text-muted-foreground animate-pulse">Loading transfer board...</div></div>}>
+                    <TransferBoardInner/>
+                </React.Suspense>
             </section>
             <section id="waitlist" className="w-full bg-zinc-900">
                 <div className="w-full container mx-auto px-4 py-16 flex items-center justify-center">

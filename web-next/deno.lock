@@ -4189,6 +4189,7 @@
         "npm:@radix-ui/react-separator@^1.1.8",
         "npm:@radix-ui/react-slot@^1.2.4",
         "npm:@radix-ui/react-switch@^1.2.6",
+        "npm:@radix-ui/react-visually-hidden@^1.2.4",
         "npm:@tailwindcss/postcss@4",
         "npm:@tailwindcss/typography@~0.5.16",
         "npm:@types/bluebird@^3.5.42",
