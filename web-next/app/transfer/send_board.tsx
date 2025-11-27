@@ -7,7 +7,7 @@ import {
 import {
     AlertCircleIcon,
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check, FolderIcon, MoreVertical,
+    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
 } from 'lucide-react'
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
@@ -94,13 +94,13 @@ export default function SendBoard() {
                     <SidebarRail />
                 </Sidebar>
                 <SidebarInset className="flex flex-col h-[100%]">
-                    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                    <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 h-4" />
                         </div>
                     </header>
-                    <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full">
+                    <div className="flex flex-1 flex-col min-h-0 px-2 pt-0">
                         <FileSelections />
                     </div>
                 </SidebarInset>
@@ -154,32 +154,51 @@ function FileSelections() {
         }
     }, [files, folders]);
 
+    const isMobile = useIsMobile();
+
     return (
         <div className="flex flex-col w-full h-full">
-            {/* Simplified Resource Selection Area */}
-            <div className="flex gap-2 w-full shrink-0 h-32 md:h-50">
-                <div
-                    role="button"
-                    onClick={openFileDialog}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    data-dragging={isDragging || undefined}
-                    className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
-                >
+            {/* Resource Selection Area */}
+            {isMobile ? (
+                // Mobile: Dropdown Button
+                <div className="relative w-full h-10 flex-shrink-0">
                     <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
-                    <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                    <p className="text-sm font-medium">
-                        <span className="block md:hidden">File</span>
-                        <span className="hidden md:block">Drop files or click</span>
-                    </p>
+                    <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
+                    <div className="absolute top-2 right-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button 
+                                    size="sm"
+                                    className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
+                                >
+                                    <Plus className="h-4 w-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={openFileDialog}
+                                >
+                                    <ImageUpIcon className="w-4 h-4 mr-2"/>
+                                    <span>Select file</span>
+                                </DropdownMenuItem>
+                                {supportsDirectories && (
+                                    <DropdownMenuItem
+                                        onClick={openDirectoryDialog}
+                                    >
+                                        <FolderIcon className="w-4 h-4 mr-2"/>
+                                        <span>Select folder</span>
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
-
-                {supportsDirectories && (
+            ) : (
+                // Desktop: Two separate drop zones
+                <div className="flex gap-2 w-full flex-shrink-0 h-32 md:h-50">
                     <div
                         role="button"
-                        onClick={openDirectoryDialog}
+                        onClick={openFileDialog}
                         onDragEnter={handleDragEnter}
                         onDragLeave={handleDragLeave}
                         onDragOver={handleDragOver}
@@ -187,22 +206,36 @@ function FileSelections() {
                         data-dragging={isDragging || undefined}
                         className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                     >
-                        <input
-                            {...getDirectoryInputProps()}
-                            className="sr-only"
-                            aria-label="Upload folder"
-                        />
-                        <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                        <p className="text-sm font-medium">
-                            <span className="block md:hidden">Folder</span>
-                            <span className="hidden md:block">Drop folders or click</span>
-                        </p>
+                        <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                        <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                        <p className="text-sm font-medium">Drop files or click</p>
                     </div>
-                )}
-            </div>
+
+                    {supportsDirectories && (
+                        <div
+                            role="button"
+                            onClick={openDirectoryDialog}
+                            onDragEnter={handleDragEnter}
+                            onDragLeave={handleDragLeave}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            data-dragging={isDragging || undefined}
+                            className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
+                        >
+                            <input
+                                {...getDirectoryInputProps()}
+                                className="sr-only"
+                                aria-label="Upload folder"
+                            />
+                            <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                            <p className="text-sm font-medium">Drop folders or click</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Resource List with Shadow */}
-            <div className="relative flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
                 {/* Top shadow */}
                 <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
 
