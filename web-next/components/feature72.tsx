@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface Feature {
   id: string;
   heading: string;
@@ -17,7 +19,7 @@ interface Feature72Props {
 
 const Feature72 = ({
   title = "",
-  description="",
+  description = "",
   features = [],
 }: Feature72Props) => {
   return (
@@ -50,10 +52,11 @@ const Feature72 = ({
                     playsInline
                   />
                 ) : feature.image ? (
-                  <img
+                  <Image
                     src={feature.image}
                     alt={feature.heading}
-                    className="h-full w-full object-cover object-center transition-opacity hover:opacity-80"
+                    fill
+                    className="object-cover object-center transition-opacity hover:opacity-80"
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full w-full">

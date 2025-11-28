@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 
 interface DownloadPlatformsProps {
   className?: string;
@@ -41,13 +42,14 @@ export function DownloadPlatforms({ className }: DownloadPlatformsProps) {
           <div key={platform.id} className="flex flex-row items-center shrink-0">
             <Button
               onClick={() => handlePlatformClick(platform.id)}
-              className={`flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/10 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors shrink-0 ${
-                expandedPlatform === platform.id ? "bg-black/10" : ""
-              }`}
+              className={`flex flex-row items-center gap-1 md:gap-2 bg-transparent hover:bg-black/10 px-2 md:px-4 py-1.5 md:py-2 rounded-lg transition-colors shrink-0 ${expandedPlatform === platform.id ? "bg-black/10" : ""
+                }`}
             >
-              <img
+              <Image
                 src={platform.icon}
                 alt={platform.id}
+                width={20}
+                height={20}
                 className="hidden md:block w-4 h-4 md:w-5 md:h-5 shrink-0"
               />
               <span className="text-xs md:text-sm font-medium whitespace-nowrap">

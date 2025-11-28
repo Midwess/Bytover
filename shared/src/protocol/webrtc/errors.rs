@@ -51,7 +51,9 @@ pub enum WebRtcErrors {
     Canceled(#[from] TaskErrors),
 
     #[error("System error, yield error")]
-    YieldError(#[from] YieldError)
+    YieldError(#[from] YieldError),
+    #[error("uuid parse error: {0}")]
+    Uuid(#[from] uuid::Error),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

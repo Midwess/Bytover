@@ -44,7 +44,7 @@ impl InternetConnection {
     pub async fn locate(&self, geo_location: Option<GeoLocation>) -> Result<NetworkResponse, CoreError> {
         let client = reqwest::Client::new();
 
-        let body = geo_location.map(|geo_location| serde_json::to_value(&geo_location).unwrap()).unwrap_or(json!({}));
+        let body = geo_location.and_then(|geo_location| serde_json::to_value(&geo_location).ok()).unwrap_or(json!({}));
         let response = retry!(retries = 3, delay = Duration::from_millis(3000), |_| true, {
             let Ok(response) = client.post(&self.locator_server_url).json(&body).send().await else {
                 return Err(CoreError::Network("Failed to get public IP address".to_string()));

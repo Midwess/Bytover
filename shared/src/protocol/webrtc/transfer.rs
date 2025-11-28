@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+use anyhow::Context;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransferDelimiterShema {
@@ -35,7 +36,7 @@ impl TransferDelimiterShema {
     }
 
     pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {
-        let bytes = bincode::serialize(self).unwrap();
+        let bytes = bincode::serialize(self).context("Cannot serialize delimiter shema to bytes")?;
         let mut buffer = vec![0u8; 1024];
 
         let len = bytes.len();

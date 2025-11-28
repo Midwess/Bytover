@@ -8,19 +8,19 @@ import {
     Globe, ImageUpIcon, Play,
     Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
 } from 'lucide-react'
-import {Button} from "@/components/ui/button";
-import {ChevronsUpDown} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronsUpDown } from "lucide-react";
 import * as React from "react";
-import {Input} from "@/components/ui/input";
-import {MultiEmailInput} from "@/components/ui/multi-email-input";
-import {Label} from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { MultiEmailInput } from "@/components/ui/multi-email-input";
+import { Label } from "@/components/ui/label";
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/animate-ui/radix/tooltip";
-import {MotionEffect} from "@/components/animate-ui/effects/motion-effect";
+import { MotionEffect } from "@/components/animate-ui/effects/motion-effect";
 import {
     AppEventVariantTransfer,
     LocalResourcePathVariantAbsolutePath,
@@ -38,14 +38,14 @@ import {
     ShelfEventVariantRemoveResource
 } from 'shared_types/types/shared_types'
 import CircleProgress from "@/components/ui/progress";
-import {Avatar, AvatarImage} from "@/components/ui/avatar";
-import {useFileUpload} from "@/hooks/use-file-upload";
-import {useEffect, useRef, useState} from "react";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { useEffect, useRef, useState } from "react";
 import core from "@/wasm/wasm_core";
-import {useIsMobile} from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import clsx from "clsx";
 import Image from "next/image";
-import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
+import { Progress, ProgressTrack } from "@/components/animate-ui/base/progress";
 import {
     SidebarProvider,
     SidebarInset,
@@ -83,8 +83,8 @@ export default function SendBoard() {
     const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
 
     return (
-        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[75vh]">
-            <SidebarProvider>
+        <div className="rounded-xl border-2 overflow-hidden max-h-[70vh] sm:max-h-[80vh] min-h-[450px] h-[950px]">
+            <SidebarProvider className="h-[100%]">
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
                         <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod} />
@@ -92,7 +92,7 @@ export default function SendBoard() {
                     <SidebarContentWrapper activeMethod={activeMethod} />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset className="flex flex-col h-[100%]">
+                <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
@@ -110,7 +110,7 @@ export default function SendBoard() {
 
 function FileSelections() {
     const [
-        {files, folders, isDragging, supportsDirectories},
+        { files, folders, isDragging, supportsDirectories },
         {
             handleDragEnter,
             handleDragLeave,
@@ -160,31 +160,31 @@ function FileSelections() {
             {/* Resource Selection Area */}
             {isMobile ? (
                 // Mobile: Dropdown Button
-                <div className="relative w-full h-10 flex-shrink-0">
+                <div className="relative w-full flex-shrink-0 h-[55px]">
                     <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
                     <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
                     <div className="absolute top-2 right-2">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button 
+                                <Button
                                     size="sm"
                                     className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
                                 >
-                                    <Plus className="h-4 w-4"/>
+                                    <Plus className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                     onClick={openFileDialog}
                                 >
-                                    <ImageUpIcon className="w-4 h-4 mr-2"/>
+                                    <ImageUpIcon className="w-4 h-4 mr-2" />
                                     <span>Select file</span>
                                 </DropdownMenuItem>
                                 {supportsDirectories && (
                                     <DropdownMenuItem
                                         onClick={openDirectoryDialog}
                                     >
-                                        <FolderIcon className="w-4 h-4 mr-2"/>
+                                        <FolderIcon className="w-4 h-4 mr-2" />
                                         <span>Select folder</span>
                                     </DropdownMenuItem>
                                 )}
@@ -206,7 +206,7 @@ function FileSelections() {
                         className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                     >
                         <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
-                        <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                        <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true" />
                         <p className="text-sm font-medium">Drop files or click</p>
                     </div>
 
@@ -226,27 +226,31 @@ function FileSelections() {
                                 className="sr-only"
                                 aria-label="Upload folder"
                             />
-                            <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
+                            <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true" />
                             <p className="text-sm font-medium">Drop folders or click</p>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Resource List with Shadow */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                {/* Top shadow */}
-                <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
+            <div className="h-fit max-h-[95%] overflow-y-auto overflow-x-hidden w-full">
+                <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
 
                 {/* Resource grid - single column on mobile, grid on desktop */}
-                <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
-                    {selectedResources.map((resource) => (
-                        <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
-                            <ResourceView model={resource}/>
-                        </div>
-                    ))}
-                    <div className="h-[80px] md:h-[350px] md:block"></div>
-                </div>
+                {selectedResources.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground/50">
+                        <p className="text-lg font-medium">No selected resources</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
+                        {selectedResources.map((resource) => (
+                            <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
+                                <ResourceView model={resource} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {selectedResources.length > 0 && <div className="h-[50px] sm:h-[80px]"></div>}
             </div>
         </div>
     )
@@ -256,22 +260,22 @@ function FileSelections() {
 function ResourceView(props: {
     model: SelectedResourceViewModel
 }) {
-    const {model} = props;
+    const { model } = props;
 
     const isFile = model.type.constructor == ResourceTypeVariantFile ||
         model.type.constructor == ResourceTypeVariantFolder
 
     if (isFile) {
-        return <FileView model={model}/>
+        return <FileView model={model} />
     } else {
-        return <MediaView model={model}/>
+        return <MediaView model={model} />
     }
 }
 
 function FileView(props: {
     model: SelectedResourceViewModel
 }) {
-    const {model} = props;
+    const { model } = props;
     const isMobile = useIsMobile();
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
@@ -298,15 +302,15 @@ function FileView(props: {
                 "hover:scale-[1.02] hover:shadow-2xl hover:shadow-muted/10 hover:border-white/30 hover:backdrop-blur-sm hover:bg-muted/80",
                 isMobile ? "flex-row items-center gap-3 p-3 h-auto" : "flex-col h-full"
             )}>
-            
+
             {/* Desktop: Remove button overlay */}
             {!isMobile && (
                 <div className="absolute z-20 inset-0 flex items-center justify-center rounded-2xl opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300">
-                    <Button 
+                    <Button
                         size="sm"
-                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white" 
+                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
                         onClick={handleRemove}>
-                        <X className="w-4 h-4"/>
+                        <X className="w-4 h-4" />
                         <span className="ml-1 text-xs">Remove</span>
                     </Button>
                 </div>
@@ -317,11 +321,11 @@ function FileView(props: {
                 <div className="absolute top-1/2 right-2 -translate-y-1/2 z-20">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button 
+                            <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
-                                <MoreVertical className="h-4 w-4"/>
+                                <MoreVertical className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -330,7 +334,7 @@ function FileView(props: {
                                 variant="destructive"
                                 className="text-destructive"
                             >
-                                <X className="w-4 h-4"/>
+                                <X className="w-4 h-4" />
                                 <span>Remove</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -388,7 +392,7 @@ function FileView(props: {
 function MediaView(props: {
     model: SelectedResourceViewModel,
 }) {
-    const {model} = props;
+    const { model } = props;
 
     const isMobile = useIsMobile()
     const isVideo = model.type.constructor == ResourceTypeVariantVideo
@@ -435,7 +439,7 @@ function MediaView(props: {
                 <>
                     <div className="absolute inset-0 z-0">
                         {thumbnailUrl ? (
-                            <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
+                            <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
                         ) : (
                             defaultThumbnail
                         )}
@@ -444,7 +448,7 @@ function MediaView(props: {
                     {isVideo && (
                         <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
                                        transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                            <Play className="w-4 h-4 text-white fill-white"/>
+                            <Play className="w-4 h-4 text-white fill-white" />
                         </div>
                     )}
                     {/* Gradient overlay */}
@@ -458,15 +462,15 @@ function MediaView(props: {
             {isMobile && (
                 <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
                     {thumbnailUrl ? (
-                        <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
+                        <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-6 h-6 opacity-40"/>
+                            <ImageUpIcon className="w-6 h-6 opacity-40" />
                         </div>
                     )}
                     {isVideo && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                            <Play className="w-4 h-4 text-white fill-white"/>
+                            <Play className="w-4 h-4 text-white fill-white" />
                         </div>
                     )}
                 </div>
@@ -479,7 +483,7 @@ function MediaView(props: {
                         size="sm"
                         className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
                         onClick={handleRemove}>
-                        <X className="w-4 h-4"/>
+                        <X className="w-4 h-4" />
                         <span className="ml-1 text-xs">Remove</span>
                     </Button>
                 </div>
@@ -490,11 +494,11 @@ function MediaView(props: {
                 <div className="absolute top-1/2 right-2 -translate-y-1/2 z-30">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button 
+                            <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 w-8 p-0 rounded-full bg-black/60 hover:bg-black/80">
-                                <MoreVertical className="h-4 w-4 text-white"/>
+                                <MoreVertical className="h-4 w-4 text-white" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -503,7 +507,7 @@ function MediaView(props: {
                                 variant="destructive"
                                 className="text-destructive"
                             >
-                                <X className="w-4 h-4"/>
+                                <X className="w-4 h-4" />
                                 <span>Remove</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -514,8 +518,8 @@ function MediaView(props: {
             {/* File info */}
             <div className={clsx(
                 "flex flex-col z-20",
-                isMobile 
-                    ? "flex-1 min-w-0" 
+                isMobile
+                    ? "flex-1 min-w-0"
                     : "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm"
             )}>
                 <p className={clsx(
@@ -589,11 +593,11 @@ function TransferMethodSelector({ activeMethod, onActiveMethodChange }: { active
 
 function SidebarContentWrapper({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
     const { state } = useSidebar();
-    
+
     if (state === 'collapsed') {
         return null;
     }
-    
+
     return (
         <SidebarContent className="rounded-bl-xl px-1">
             <TransferForm activeMethod={activeMethod} />
@@ -603,8 +607,8 @@ function SidebarContentWrapper({ activeMethod }: { activeMethod: typeof activeMe
 
 function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
     const content = activeMethod.type === TransferType.Public
-        ? <PublicSend/>
-        : <NearbySend/>
+        ? <PublicSend />
+        : <NearbySend />
 
     return (
         <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit"}>
@@ -653,13 +657,13 @@ function PublicSend() {
             <div className={"flex flex-col w-full gap-3"}>
                 <Label htmlFor={"password"}>Password (optional)</Label>
                 <Input id={"password"} disabled={isInProgress} value={password}
-                       onChange={(it) => setPassword(it.target.value)}
-                       type={"password"} maxLength={20} placeholder={"pwd@123"}/>
+                    onChange={(it) => setPassword(it.target.value)}
+                    type={"password"} maxLength={20} placeholder={"pwd@123"} />
                 {
                     cloudSession?.access_url &&
                     <>
                         <Label>Generated url</Label>
-                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
+                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''} />
                     </>
                 }
                 {
@@ -667,11 +671,11 @@ function PublicSend() {
                     && <div className={"flex flex-col w-full gap-2"}>
                         <Progress value={progress} className="w-full space-y-2">
                             <div className="flex items-center justify-between gap-1">
-                                    <span className="text-sm">
-                                        {cloudSession?.display_download_speed}
-                                    </span>
+                                <span className="text-sm">
+                                    {cloudSession?.display_download_speed}
+                                </span>
                             </div>
-                            <ProgressTrack/>
+                            <ProgressTrack />
                         </Progress>
                     </div>
                 }
@@ -703,7 +707,7 @@ function PublicSend() {
     </div>
 }
 
-function UrlInputWithCopy({url}: { url: string }) {
+function UrlInputWithCopy({ url }: { url: string }) {
     const [isCopied, setIsCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -752,9 +756,9 @@ function UrlInputWithCopy({url}: { url: string }) {
                     title={isCopied ? "Copied!" : "Copy to clipboard"}
                 >
                     {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500"/>
+                        <Check className="h-4 w-4 text-green-500" />
                     ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                     )}
                 </button>
             </div>
@@ -791,7 +795,7 @@ function NearbySend() {
     return <>
         <MotionEffect
             className="flex flex-col w-full gap-3"
-            slide={{direction: 'down'}}
+            slide={{ direction: 'down' }}
             fade
             zoom
             inView
@@ -814,11 +818,11 @@ function NearbySend() {
                     && <div className={"flex flex-col w-full gap-2"}>
                         <Progress value={progress} className="w-full space-y-2">
                             <div className="flex items-center justify-between gap-1">
-                                    <span className="text-sm">
-                                        {cloudSession?.display_download_speed}
-                                    </span>
+                                <span className="text-sm">
+                                    {cloudSession?.display_download_speed}
+                                </span>
                             </div>
-                            <ProgressTrack/>
+                            <ProgressTrack />
                         </Progress>
                     </div>
                 }
@@ -859,7 +863,7 @@ function NearbySend() {
                     Or share with nearby friends and devices
                 </p>
                 {nearbyPeers.map((peer) => (
-                    <NearbyPeer key={peer.id} peer={peer}/>
+                    <NearbyPeer key={peer.id} peer={peer} />
                 ))}
             </div>
         </MotionEffect>
@@ -879,8 +883,8 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             <div className={"flex flex-row items-center gap-3"}>
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
-                    <Avatar className={"p-1 rounded-xl"} style={{backgroundColor: color}}>
-                        <AvatarImage src={peer.avatar.url}/>
+                    <Avatar className={"p-1 rounded-xl"} style={{ backgroundColor: color }}>
+                        <AvatarImage src={peer.avatar.url} />
                     </Avatar>
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
@@ -894,7 +898,7 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             </div>
             {
                 <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
-                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35}/> : <></>}
+                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35} /> : <></>}
                 </div>
             }
         </div>

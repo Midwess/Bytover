@@ -4,6 +4,7 @@ import { TypingText } from "@/components/animate-ui/text/typing.tsx";
 import Aurora from "@/components/Aurora";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import Link from "next/link";
+import Image from "next/image";
 
 interface IntroductionProps {
     disableBackground?: boolean;
@@ -32,7 +33,7 @@ export default function Introduction({
                     <div className={"flex flex-col items-center gap-8 md:gap-20"}>
                         <div className={"flex flex-col items-center gap-2 md:gap-4"}>
                             <div className={"rounded-xl md:rounded-2xl text-white px-2 md:px-3 py-0.5 font-bold gap-1.5 md:gap-2 backdrop-blur-2xl flex flex-row items-center justify-center border text-xs md:text-md"}>
-                                <img src={"/logo-color.svg"} alt={"logo"} className={"w-6 h-6 md:w-10 md:h-10"} />
+                                <Image src={"/logo-color.svg"} alt={"logo"} width={40} height={40} className={"w-6 h-6 md:w-10 md:h-10"} />
                                 <span className="whitespace-nowrap">Bytover</span>
                             </div>
                             {header && <TypingText
