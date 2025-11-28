@@ -19,6 +19,7 @@ use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
 use std::time::Duration;
+use anyhow::anyhow;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -46,7 +47,7 @@ impl WebRtc {
     }
 
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.cancel_transfer(session_id).await;
 
@@ -63,7 +64,7 @@ impl WebRtc {
         session: Option<TransferSession>,
         session_id: u64
     ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peer_id = PeerId(peer_id.parse()?);
 
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             let result = peer.answer_transfer(core_request, session_id, session).await;
@@ -79,7 +80,10 @@ impl WebRtc {
         core_request: CoreRequest,
         session: TransferSession
     ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let peer_id = session.peer().unwrap().peer_id();
+        let Some(peer_id) = session.peer().map(|it| it.peer_id()) else {
+            return Err(anyhow!("This session is not a peer session").into())
+        };
+
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             let result = peer.transfer_session(core_request, session).await;
 
@@ -90,7 +94,7 @@ impl WebRtc {
     }
 
     pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse().unwrap());
+        let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
             peer.start_core_stream(core_request);
             return Ok(());

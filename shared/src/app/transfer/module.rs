@@ -570,8 +570,10 @@ impl AppModule<BitBridge> for TransferModule {
                             .transfer
                             .sessions
                             .iter()
-                            .filter(|it| it.target.is_peer())
-                            .find(|it| it.transfer_type == TransferType::Send && *it.peer_id().as_ref().unwrap() == peer.id);
+                            .filter(|it| it.target.is_peer() && it.transfer_type == TransferType::Send)
+                            .find(|it| {
+                                it.peer().iter().any(|it| it.id == peer.id)
+                            });
 
                         Some(PeerViewModel {
                             id: peer.id.clone(),

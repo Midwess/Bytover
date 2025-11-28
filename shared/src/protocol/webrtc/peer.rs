@@ -33,6 +33,7 @@ use schema::devlog::bitbridge::{
 };
 use std::sync::Arc;
 use std::time::Duration;
+use anyhow::{anyhow, Context};
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -221,7 +222,7 @@ impl WebRtcPeer {
         let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve().await?;
 
         let msg_channel = self.msg_channel.clone();
-        let peer_id = session.peer().unwrap().peer_id();
+        let peer_id = session.peer().map(|it| it.peer_id()).context("This is not a peer session")?;
         let context = self.transfers_context.clone();
         let response = TransferResponseMessage {};
         if let Some(rtc_request_id) = context.rtc_request_id(session_id).await {
@@ -315,7 +316,10 @@ impl WebRtcPeer {
 
             let mut writer = self.resource_repo.write(resource_path.clone()).await?;
 
-            let progress_update = session.resource_mut_progress(start_delimiter.resource_id).unwrap();
+            let Some(progress_update) = session.resource_mut_progress(start_delimiter.resource_id) else {
+                return Err(anyhow!("Missing progress for resource {}", start_delimiter.resource_id).into())
+            };
+
             let mut total_written_bytes = 0u64;
             log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             while let Ok(Some(packet)) = resource_rx.next().with_cancel(&cancellation_signal).await {
@@ -376,7 +380,7 @@ impl WebRtcPeer {
             resources: session.resources.iter().map(|r| r.to_proto()).collect()
         };
 
-        let peer_id = session.peer().unwrap().peer_id();
+        let peer_id = session.peer().map(|it| it.peer_id()).context("This is not a peer session")?;
         let request = Request::TransferRequest(TransferRequestMessage {
             session: transfer_session_message
         });
@@ -463,7 +467,9 @@ impl WebRtcPeer {
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
             let mut total_sent_bytes = 0u64;
-            let progress_update = session.resource_mut_progress(order_id).unwrap();
+            let Some(progress_update) = session.resource_mut_progress(order_id) else {
+                return Err(anyhow!("Missing progress for resource {}", order_id).into())
+            };
             let delimiter = TransferDelimiterShema::start(session_id, order_id).as_bytes()?;
             if let Err(e) = self.data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");

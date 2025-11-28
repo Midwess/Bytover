@@ -61,11 +61,11 @@ where
                     return Ok(CoreOperationOutput::None);
                 }
 
-                if peer_id.is_none() {
+                let Some(peer_id) = peer_id else {
                     return Ok(CoreOperationOutput::None);
-                }
+                };
 
-                self.web_rtc().cancel_session(peer_id.unwrap(), session_id).await?;
+                self.web_rtc().cancel_session(peer_id, session_id).await?;
                 Ok(CoreOperationOutput::None)
             }
             TransferOperation::FindPublicSession { alias } => {

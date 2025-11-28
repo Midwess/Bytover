@@ -62,11 +62,9 @@ impl AppCommand {
             }
 
             let mut new_resources = self.run(LocalResourcePersistentOperation::add(vec![local_resource])).await?;
-            if new_resources.is_empty() {
+            let Some(new_resource) = new_resources.pop() else {
                 continue;
-            }
-
-            let new_resource = new_resources.pop().unwrap();
+            };
 
             self.update_model(LocalResourceEvent::Add(new_resource));
         }

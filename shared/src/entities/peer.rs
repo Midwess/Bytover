@@ -18,7 +18,8 @@ pub struct Peer {
 
 impl Peer {
     pub fn id(&self) -> uuid::Uuid {
-        self.id.clone().parse().unwrap()
+        // The id is always be String with uuid format, so we can unwrap safely
+        self.id.clone().parse().unwrap_or_default()
     }
 
     pub fn peer_id(&self) -> PeerId {

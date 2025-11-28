@@ -21,13 +21,11 @@ impl AuthProvider {
             .await
             .map_err(|e| RpcErrors::AuthError(anyhow!("Failed to load authentication session {e:?}")))?;
 
-        if session.is_none() {
+        let Some(session) = session else {
             return Err(RpcErrors::AuthError(anyhow!("You need to login first")));
-        }
+        };
 
-        let token = session.unwrap().token;
-
-        if let Ok(token) = MetadataValue::from_str(&token.value) {
+        if let Ok(token) = MetadataValue::from_str(&session.token.value) {
             request.metadata_mut().insert("authorization", token);
         }
 
