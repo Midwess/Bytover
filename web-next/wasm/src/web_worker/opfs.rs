@@ -104,7 +104,14 @@ impl OpfsWorker {
             Some(r) => r.clone(),
             None => {
                 let root_future = JsFuture::from(get_directory());
-                let root: FileSystemDirectoryHandle = root_future.await.unwrap().into();
+                let root: FileSystemDirectoryHandle = match root_future.await.map(|it| it.into()) {
+                    Err(e) => {
+                        log::error!("Failed to get root directory: {:?}", e);
+                        return OpfsOperationOutput::Error(JsValue::from(format!("Opfs failed to get root dir {e:?}")));
+                    },
+                    Ok(it) => it
+                };
+
                 let root = Arc::new(root);
                 let _ = self.root.set(root.clone());
                 root
@@ -300,7 +307,7 @@ impl OpfsWorker {
                 match async {
                     if let Some(device_file) = self.device_files.lock().await.get(&file_path).cloned() {
                         let file_guard = device_file.lock().await;
-                        let blob = file_guard.file.slice_with_f64_and_f64(0.0, file_guard.file.size() as f64).unwrap();
+                        let blob = file_guard.file.slice_with_f64_and_f64(0.0, file_guard.file.size())?;
                         return Ok::<Blob, JsValue>(blob);
                     }
 
