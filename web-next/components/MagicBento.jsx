@@ -1,6 +1,7 @@
 'use client'
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { gsap } from 'gsap';
+import Image from 'next/image';
 import './MagicBento.css';
 
 const DEFAULT_PARTICLE_COUNT = 12;
@@ -452,13 +453,13 @@ const GlobalSpotlight = ({
 
 const BentoCardGrid = ({ children, gridRef }) => {
   const cards = React.Children.toArray(children);
-  
+
   // Split cards into left and right columns based on position classes
   const leftCards = cards.filter((card) => {
     const className = card.props?.className || '';
     return className.includes('pos-shelf') || className.includes('pos-nearby-share');
   });
-  
+
   const rightCards = cards.filter((card) => {
     const className = card.props?.className || '';
     return className.includes('pos-public-share') || className.includes('pos-all-platform');
@@ -518,7 +519,7 @@ const MagicBento = ({
           const isTallContent = card.id === 'shelf' || card.id === 'public-share';
           const isShortCard = card.id === 'shelf';
           const isTallCard = card.id === 'nearby-share';
-          
+
           // Grid positioning classes for bento layout
           let gridClass = '';
           if (card.id === 'shelf') {
@@ -530,7 +531,7 @@ const MagicBento = ({
           } else if (card.id === 'all-platform') {
             gridClass = 'magic-bento-card--pos-all-platform';
           }
-          
+
           const baseClassName = `magic-bento-card ${textAutoHide && !isTallContent ? 'magic-bento-card--text-autohide' : ''} ${enableBorderGlow ? 'magic-bento-card--border-glow' : ''} ${isTallContent ? 'magic-bento-card--tall-content' : ''} ${isShortCard ? 'magic-bento-card--short' : ''} ${isTallCard ? 'magic-bento-card--extra-tall' : ''} ${gridClass}`;
           const cardProps = {
             className: baseClassName,
@@ -562,9 +563,11 @@ const MagicBento = ({
                       playsInline
                     />
                   ) : card.image ? (
-                    <img
+                    <Image
                       src={card.image}
                       alt={card.heading || card.title}
+                      fill
+                      className="object-contain"
                     />
                   ) : null}
                 </div>
@@ -705,9 +708,11 @@ const MagicBento = ({
                     playsInline
                   />
                 ) : card.image ? (
-                  <img
+                  <Image
                     src={card.image}
                     alt={card.heading || card.title}
+                    fill
+                    className="object-contain"
                   />
                 ) : null}
               </div>
