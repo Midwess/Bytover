@@ -20,7 +20,7 @@ import {
     ChevronsUpDown, Download,
     Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
 } from 'lucide-react'
-import {Button} from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -32,17 +32,17 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
-import {ReactElement, useCallback, useEffect, useState} from "react";
-import {MotionEffect} from '@/components/animate-ui/effects/motion-effect';
+import { ReactElement, useCallback, useEffect, useState } from "react";
+import { MotionEffect } from '@/components/animate-ui/effects/motion-effect';
 import Image from "next/image";
-import {useIsMobile} from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import clsx from "clsx";
-import {Input} from "@/components/ui/input";
-import {MotionHighlight} from "@/components/animate-ui/effects/motion-highlight";
+import { Input } from "@/components/ui/input";
+import { MotionHighlight } from "@/components/animate-ui/effects/motion-highlight";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
-import {Avatar, AvatarImage} from "@/components/ui/avatar";
-import {useUrlState} from "@/hooks/use-url";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { useUrlState } from "@/hooks/use-url";
 import {
     SidebarProvider,
     SidebarInset,
@@ -60,8 +60,8 @@ import { Separator } from '@/components/ui/separator';
 
 export default function ReceiveBoard() {
     return (
-        <div className="rounded-xl border-2 overflow-hidden h-full max-h-[80vh] md:h-[950px]">
-            <SidebarProvider>
+        <div className="rounded-xl border-2 overflow-hidden min-h-[450px] max-h-[70vh] sm:max-h-[80vh] h-[950px]">
+            <SidebarProvider className="h-[100%]">
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
                         <SessionSelector />
@@ -109,11 +109,11 @@ function SessionSelector() {
 
 function SidebarContentWrapper() {
     const { state } = useSidebar();
-    
+
     if (state === 'collapsed') {
         return null;
     }
-    
+
     return (
         <SidebarContent className="rounded-bl-xl px-1">
             <Board />
@@ -199,8 +199,8 @@ function ContentBoard() {
                 <div className={"w-[50%] flex flex-col gap-4"}>
                     <p className={"font-poppins text-muted-foreground flex flex-row items-center"}>
                         <Image alt={"lock"} width={10} height={10}
-                               className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
-                               color={'white'}/>
+                            className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                            color={'white'} />
                         This session is password protected</p>
                     <input type="password" name="fake-password" style={{ display: 'none' }} />
                     <Input
@@ -233,7 +233,7 @@ function ContentBoard() {
                 loadMessage.message
                     ? <p>{loadMessage.message}</p>
                     : <>
-                        <LoaderCircle className={"animate-spin"}/>
+                        <LoaderCircle className={"animate-spin"} />
                         <p>Loading...</p>
                     </>
             }
@@ -245,14 +245,14 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`} />
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={index} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView key={index} id={image.model.order_id} isCloud={isCloud}/>
+                                        <MediaView key={index} id={image.model.order_id} isCloud={isCloud} />
                                     </div>
                                 </ItemEffect>
                             })
@@ -263,14 +263,14 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`} />
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={index} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView key={index} id={video.model.order_id} isCloud={isCloud}/>
+                                        <MediaView key={index} id={video.model.order_id} isCloud={isCloud} />
                                     </div>
                                 </ItemEffect>
                             })
@@ -281,7 +281,7 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`} />
                 <CollapsibleContent className={"h-full"}>
                     <div
                         className="flex flex-col gap-4 h-fit min-h-[400px]">
@@ -289,7 +289,7 @@ function ContentBoard() {
                             selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={file.model.order_id} index={index}>
                                     <div className={"h-fit"}>
-                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
+                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} />
                                     </div>
                                 </ItemEffect>
                             })
@@ -302,7 +302,7 @@ function ContentBoard() {
 }
 
 function ItemEffect(props: { children: ReactElement, index: number }) {
-    const {children, index} = props
+    const { children, index } = props
     return <MotionEffect
         key={index}
         slide={{
@@ -318,12 +318,12 @@ function ItemEffect(props: { children: ReactElement, index: number }) {
 function ReceiveCategory(props: {
     title: string
 }) {
-    const {title} = props
+    const { title } = props
     return <CollapsibleTrigger asChild>
         <Button variant="secondary" className="w-full cursor-pointer mb-4 rounded-xl h-10 border border-primaryText/5">
             <div className={"flex flex-row w-full items-center justify-between"}>
                 <p className={"font-bold h2 text-md"}>{title}</p>
-                <ChevronsUpDown className="h-4 w-4"/>
+                <ChevronsUpDown className="h-4 w-4" />
                 <span className="sr-only">Toggle</span>
             </div>
         </Button>
@@ -348,7 +348,7 @@ function Board() {
     const handleFind = useCallback(() => {
         message?.resolveMessage()
         console.log(keywords)
-        setUrl({session: keywords?.trim() || null})
+        setUrl({ session: keywords?.trim() || null })
 
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
     }, [keywords])
@@ -359,13 +359,13 @@ function Board() {
                 <p className={"opacity-80 text-sm"}>Find session</p>
                 <div className={"relative"}>
                     <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
-                           placeholder={"Session name or url"}
-                           onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
-                           onKeyDown={(e) => {
-                               if (e.key === 'Enter') {
-                                   handleFind()
-                               }
-                           }}/>
+                        placeholder={"Session name or url"}
+                        onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleFind()
+                            }
+                        }} />
                     <Button
                         variant="ghost"
                         size="sm"
@@ -384,16 +384,16 @@ function Board() {
             <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
                 <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
                     <Button variant="secondary"
-                            className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
                         Nearby
-                        <ChevronsUpDown className="h-4 w-4"/>
+                        <ChevronsUpDown className="h-4 w-4" />
                         <span className="sr-only">Toggle</span>
                     </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className={"flex flex-col gap-3"}>
                     {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
                     <MotionHighlight hover
-                                     className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                        className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
                         {
                             nearbySessions.map((item, index) => {
                                 return <ItemEffect key={item.id} index={index}>
@@ -413,9 +413,9 @@ function Board() {
             <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
                 <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
                     <Button variant="secondary"
-                            className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
                         Public
-                        <ChevronsUpDown className="h-4 w-4"/>
+                        <ChevronsUpDown className="h-4 w-4" />
                         <span className="sr-only">Toggle</span>
                     </Button>
                 </CollapsibleTrigger>
@@ -487,13 +487,13 @@ function TransferSession(props: {
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
                     <Avatar className={"p-1"}>
-                        <AvatarImage src={avatar_url}/>
+                        <AvatarImage src={avatar_url} />
                     </Avatar>
                     {is_public
                         ? <Globe
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
                         : <Wifi
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"}/>
+                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
                     }
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
@@ -502,15 +502,15 @@ function TransferSession(props: {
                 </div>
             </div>
             {!!progress && !is_completed &&
-                <CircleProgress center={is_public ? <Download/> : undefined} progress={progress} size={30}
-                                onClick={() => {
-                                    if (!is_public) {
-                                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
-                                    }
-                                }}/>}
+                <CircleProgress center={is_public ? <Download /> : undefined} progress={progress} size={30}
+                    onClick={() => {
+                        if (!is_public) {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
+                        }
+                    }} />}
             {is_required_password &&
                 <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
-                       src={"/lock.svg"} color={'white'}/>}
+                    src={"/lock.svg"} color={'white'} />}
         </button>
     </>
 }
@@ -519,7 +519,7 @@ function FileView(props: {
     id: string,
     isCloud: boolean
 }) {
-    const {id, isCloud} = props;
+    const { id, isCloud } = props;
     const file = core.useReceiveResource(id, isCloud);
     const model = file?.model;
 
@@ -586,7 +586,7 @@ function FileView(props: {
                     </div>
                 </div>
             </div>
-            
+
             {/* Download Button / Progress */}
             {
                 file.is_completed
@@ -595,10 +595,10 @@ function FileView(props: {
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
                         onClick={onDownloadClick}
                     >
-                        <ArrowDown className="w-5 h-5 text-white"/>
+                        <ArrowDown className="w-5 h-5 text-white" />
                     </button>
                     : <div className="flex-shrink-0">
-                        <CircleProgress progress={file.completion} size={40}/>
+                        <CircleProgress progress={file.completion} size={40} />
                     </div>
             }
         </div>
@@ -609,7 +609,7 @@ function MediaView(props: {
     id: string,
     isCloud: boolean
 }) {
-    const {id, isCloud} = props;
+    const { id, isCloud } = props;
     const media = core.useReceiveResource(id, isCloud);
 
     const model: SelectedResourceViewModel | undefined = media?.model;
@@ -672,7 +672,7 @@ function MediaView(props: {
                     {isVideo && (
                         <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
                                        transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                            <Play className="w-4 h-4 text-white fill-white"/>
+                            <Play className="w-4 h-4 text-white fill-white" />
                         </div>
                     )}
                     {/* Gradient overlay */}
@@ -686,15 +686,15 @@ function MediaView(props: {
             {isMobile && (
                 <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
                     {thumbnailSource ? (
-                        <Image className="w-full h-full object-cover" fill src={thumbnailSource} alt={model.name}/>
+                        <Image className="w-full h-full object-cover" fill src={thumbnailSource} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-6 h-6 opacity-40"/>
+                            <ImageUpIcon className="w-6 h-6 opacity-40" />
                         </div>
                     )}
                     {isVideo && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                            <Play className="w-4 h-4 text-white fill-white"/>
+                            <Play className="w-4 h-4 text-white fill-white" />
                         </div>
                     )}
                 </div>
@@ -717,7 +717,7 @@ function MediaView(props: {
                                 </span>
                             </div>
                         </div>
-                        
+
                         {/* Download Button / Progress */}
                         <div className="flex-shrink-0">
                             {media.is_completed
@@ -725,9 +725,9 @@ function MediaView(props: {
                                     className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
                                                transition-all duration-300 hover:scale-110 shadow-lg"
                                     onClick={onDownloadClick}>
-                                    <ArrowDown className="w-5 h-5 text-white"/>
+                                    <ArrowDown className="w-5 h-5 text-white" />
                                 </button>
-                                : <CircleProgress progress={media.completion} size={36}/>
+                                : <CircleProgress progress={media.completion} size={36} />
                             }
                         </div>
                     </div>
@@ -757,24 +757,24 @@ function MediaView(props: {
                     {media.is_completed ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button 
+                                <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
-                                    <MoreVertical className="h-4 w-4"/>
+                                    <MoreVertical className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                     onClick={onDownloadClick}
                                 >
-                                    <ArrowDown className="w-4 h-4 mr-2"/>
+                                    <ArrowDown className="w-4 h-4 mr-2" />
                                     <span>Download</span>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     ) : (
-                        <CircleProgress progress={media.completion} size={32}/>
+                        <CircleProgress progress={media.completion} size={32} />
                     )}
                 </div>
             )}
