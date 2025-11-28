@@ -295,7 +295,15 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => {
+            TransferEvent::FindPublicSession { mut keywords } => {
+                if let Ok(url) = url::Url::parse(&keywords) {
+                    let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
+                        return Command::done()
+                    };
+
+                    keywords = query;
+                }
+
                 model.transfer.keywords = keywords.clone();
                 if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords, true)) {
                     return Command::render();
