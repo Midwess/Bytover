@@ -124,7 +124,6 @@ function SidebarContentWrapper() {
 function ContentBoard() {
     const selectedSessionId = core.useSelectedSession()?.id
     const selectedSession = core.useSession(selectedSessionId ?? '');
-    const cloudSessions = core.useCloudSessionsList()
     const isCloud = selectedSession instanceof ReceiveCloudSessionViewModel
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
@@ -143,25 +142,13 @@ function ContentBoard() {
                 })
             }
         }
-    }, [selectedSession])
+    }, [selectedSession?.id])
 
     useEffect(() => {
         if (url.session && coreReady) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(url.session)))
         }
     }, [coreReady])
-
-    useEffect(() => {
-        if (!url?.session || !cloudSessions?.length) return
-
-        const session = cloudSessions?.find((it) => {
-            return it.alias === url!.session!
-        })
-
-        if (session) {
-            core.updateSelectedSession(session)
-        }
-    }, [cloudSessions?.length])
 
     const onSelected = () => {
         if (!selectedSession) {
@@ -310,7 +297,7 @@ function ItemEffect(props: { children: ReactElement, index: number }) {
         }}
         fade
         zoom
-        delay={0.2 + index * 0.1}>
+        delay={0.8 + index * 0.15}>
         {children}
     </MotionEffect>
 }
@@ -346,12 +333,20 @@ function Board() {
     }, []);
 
     const handleFind = useCallback(() => {
-        message?.resolveMessage()
-        console.log(keywords)
-        setUrl({ session: keywords?.trim() || null })
+        if (!keywords) {
+            setUrl({ session: null })
+        }
 
+        message?.resolveMessage()
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
     }, [keywords])
+
+    useEffect(() => {
+        if (publicSessions?.length === 1 && keywords) {
+            setUrl({ session: publicSessions[0].alias })
+            core.updateSelectedSession(publicSessions[0])
+        }
+    }, [publicSessions, keywords])
 
     return (
         <div className="flex flex-col gap-4 h-full overflow-y-auto px-2 pb-4">
