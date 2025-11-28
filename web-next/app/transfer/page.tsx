@@ -98,7 +98,7 @@ function TransferBoardInner() {
                     <TabsTrigger value="Receive">Receive</TabsTrigger>
                 </TabsList>
                 <TabsContents className="w-full max-h-[75vh] bg-background">
-                    <TabsContent value="Send" className="h-fit">
+                    <TabsContent value="Send">
                         <SendBoard/>
                     </TabsContent>
                     <TabsContent value="Receive">

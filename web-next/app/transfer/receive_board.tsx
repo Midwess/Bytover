@@ -16,10 +16,17 @@ import {
 } from 'shared_types/types/shared_types'
 import {
     ArrowDown,
+    Book,
     ChevronsUpDown, Download,
-    Globe, LoaderCircle, Play, Wifi
+    Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/animate-ui/radix/dropdown-menu';
 import {
     Collapsible,
     CollapsibleContent,
@@ -36,23 +43,82 @@ import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useUrlState} from "@/hooks/use-url";
+import {
+    SidebarProvider,
+    SidebarInset,
+    SidebarTrigger,
+    Sidebar,
+    SidebarHeader,
+    SidebarContent,
+    SidebarRail,
+    SidebarMenu,
+    SidebarMenuItem,
+    SidebarMenuButton,
+    useSidebar,
+} from '@/components/animate-ui/components/radix/sidebar';
+import { Separator } from '@/components/ui/separator';
 
 export default function ReceiveBoard() {
-    return <>
-        <div
-            className="h-[950px] max-h-[85vh] w-full rounded-xl bg-blackBase flex flex-col border-primaryText/20 items-center justify-center border-1">
-            <div className={"grid grid-cols-11 w-full h-full gap-2"}>
-                <div
-                    className={"col-span-3 lg:col-span-3 h-[100%] flex flex-col border-1 w-full overflow-scroll bg-sidebar rounded-xl p-4 gap-4 scrollbar-dark"}>
-                    <Board/>
-                </div>
-                <div
-                    className={`col-span-8 lg:col-span-8 h-full p-4 flex flex-col overflow-y-scroll pb-20 scrollbar-dark`}>
-                    <ContentBoard/>
-                </div>
-            </div>
+    return (
+        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[82vh]">
+            <SidebarProvider>
+                <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
+                    <SidebarHeader className="rounded-tl-xl">
+                        <SessionSelector />
+                    </SidebarHeader>
+                    <SidebarContentWrapper />
+                    <SidebarRail />
+                </Sidebar>
+                <SidebarInset className="flex flex-col h-[100%]">
+                    <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                        <div className="flex items-center gap-2 px-4">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="mr-2 h-4" />
+                        </div>
+                    </header>
+                    <div className="flex flex-1 flex-col min-h-0 px-2 pt-0 overflow-y-auto">
+                        <ContentBoard />
+                    </div>
+                </SidebarInset>
+            </SidebarProvider>
         </div>
-    </>
+    );
+}
+
+function SessionSelector() {
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <SidebarMenuButton
+                    size="lg"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                        <Book className="size-4" />
+                    </div>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-semibold">
+                            Sessions
+                        </span>
+                    </div>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
+}
+
+function SidebarContentWrapper() {
+    const { state } = useSidebar();
+    
+    if (state === 'collapsed') {
+        return null;
+    }
+    
+    return (
+        <SidebarContent className="rounded-bl-xl px-1">
+            <Board />
+        </SidebarContent>
+    );
 }
 
 function ContentBoard() {
@@ -67,6 +133,7 @@ function ContentBoard() {
         : false
     const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
+    const isMobile = useIsMobile();
 
     useEffect(() => {
         if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
@@ -173,63 +240,65 @@ function ContentBoard() {
         </div>
     }
 
-    return <>
-        <Collapsible
-            className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
-            <ReceiveCategory
-                title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
-            <CollapsibleContent className={"space-y-2"}>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
-                    {
-                        selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
-                            return <ItemEffect key={index} index={index}>
-                                <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={image.model.order_id} isCloud={isCloud}/>
-                                </div>
-                            </ItemEffect>
-                        })
-                    }
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
-        <Collapsible
-            className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
-            <ReceiveCategory
-                title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
-            <CollapsibleContent className={"space-y-2"}>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4 pb-8">
-                    {
-                        selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
-                            return <ItemEffect key={index} index={index}>
-                                <div className={"h-[200px]"}>
-                                    <MediaView key={index} id={video.model.order_id} isCloud={isCloud}/>
-                                </div>
-                            </ItemEffect>
-                        })
-                    }
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
-        <Collapsible
-            className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
-            <ReceiveCategory
-                title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
-            <CollapsibleContent className={"h-full"}>
-                <div
-                    className="flex flex-col gap-4 h-fit min-h-[400px]">
-                    {
-                        selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
-                            return <ItemEffect key={file.model.order_id} index={index}>
-                                <div className={"h-fit"}>
-                                    <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
-                                </div>
-                            </ItemEffect>
-                        })
-                    }
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
-    </>
+    return (
+        <div className="w-full h-full flex flex-col gap-4 pb-4">
+            <Collapsible
+                className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
+                <ReceiveCategory
+                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
+                <CollapsibleContent className={"space-y-2"}>
+                    <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
+                        {
+                            selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
+                                return <ItemEffect key={index} index={index}>
+                                    <div className={isMobile ? "h-auto" : "h-[200px]"}>
+                                        <MediaView key={index} id={image.model.order_id} isCloud={isCloud}/>
+                                    </div>
+                                </ItemEffect>
+                            })
+                        }
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+            <Collapsible
+                className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
+                <ReceiveCategory
+                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
+                <CollapsibleContent className={"space-y-2"}>
+                    <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
+                        {
+                            selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
+                                return <ItemEffect key={index} index={index}>
+                                    <div className={isMobile ? "h-auto" : "h-[200px]"}>
+                                        <MediaView key={index} id={video.model.order_id} isCloud={isCloud}/>
+                                    </div>
+                                </ItemEffect>
+                            })
+                        }
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+            <Collapsible
+                className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
+                <ReceiveCategory
+                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
+                <CollapsibleContent className={"h-full"}>
+                    <div
+                        className="flex flex-col gap-4 h-fit min-h-[400px]">
+                        {
+                            selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
+                                return <ItemEffect key={file.model.order_id} index={index}>
+                                    <div className={"h-fit"}>
+                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
+                                    </div>
+                                </ItemEffect>
+                            })
+                        }
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+        </div>
+    );
 }
 
 function ItemEffect(props: { children: ReactElement, index: number }) {
@@ -284,92 +353,94 @@ function Board() {
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
     }, [keywords])
 
-    return <>
-        <div className={"flex flex-col justify-start text-primaryText gap-4"}>
-            <p className={"opacity-80 text-sm"}>Find session</p>
-            <div className={"relative"}>
-                <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
-                       placeholder={"Session name or url"}
-                       onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
-                       onKeyDown={(e) => {
-                           if (e.key === 'Enter') {
-                               handleFind()
-                           }
-                       }}/>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
-                    onClick={() => {
-                        setKeywords('')
-                        handleFind()
-                    }}
-                >
-                    ×
-                </Button>
+    return (
+        <div className="flex flex-col gap-4 h-full overflow-y-auto px-2 pb-4">
+            <div className={"flex flex-col justify-start text-primaryText gap-4"}>
+                <p className={"opacity-80 text-sm"}>Find session</p>
+                <div className={"relative"}>
+                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
+                           placeholder={"Session name or url"}
+                           onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
+                           onKeyDown={(e) => {
+                               if (e.key === 'Enter') {
+                                   handleFind()
+                               }
+                           }}/>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
+                        onClick={() => {
+                            setKeywords('')
+                            handleFind()
+                        }}
+                    >
+                        ×
+                    </Button>
+                </div>
+                {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
+                <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
             </div>
-            {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
-            <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
-        </div>
-        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
-            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                <Button variant="secondary"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
-                    Nearby
-                    <ChevronsUpDown className="h-4 w-4"/>
-                    <span className="sr-only">Toggle</span>
-                </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className={"flex flex-col gap-3"}>
-                {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-                <MotionHighlight hover
-                                 className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                    {
-                        nearbySessions.map((item, index) => {
-                            return <ItemEffect key={item.id} index={index}>
-                                <TransferSession
+            <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
+                <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
+                    <Button variant="secondary"
+                            className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                        Nearby
+                        <ChevronsUpDown className="h-4 w-4"/>
+                        <span className="sr-only">Toggle</span>
+                    </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className={"flex flex-col gap-3"}>
+                    {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
+                    <MotionHighlight hover
+                                     className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                        {
+                            nearbySessions.map((item, index) => {
+                                return <ItemEffect key={item.id} index={index}>
+                                    <TransferSession
+                                        onPress={() => {
+                                            core.updateSelectedSession(item)
+                                        }}
+                                        id={item.id}
+                                        key={item.id}
+                                    />
+                                </ItemEffect>
+                            })
+                        }
+                    </MotionHighlight>
+                </CollapsibleContent>
+            </Collapsible>
+            <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
+                <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
+                    <Button variant="secondary"
+                            className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                        Public
+                        <ChevronsUpDown className="h-4 w-4"/>
+                        <span className="sr-only">Toggle</span>
+                    </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className={"flex flex-col gap-3"}>
+                    {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
+                    <MotionHighlight
+                        hover
+                        className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                        {
+                            publicSessions.map((item, index) => {
+                                return <ItemEffect key={item.id} index={index}><TransferSession
                                     onPress={() => {
                                         core.updateSelectedSession(item)
                                     }}
                                     id={item.id}
                                     key={item.id}
                                 />
-                            </ItemEffect>
-                        })
-                    }
-                </MotionHighlight>
-            </CollapsibleContent>
-        </Collapsible>
-        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
-            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                <Button variant="secondary"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
-                    Public
-                    <ChevronsUpDown className="h-4 w-4"/>
-                    <span className="sr-only">Toggle</span>
-                </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className={"flex flex-col gap-3"}>
-                {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-                <MotionHighlight
-                    hover
-                    className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                    {
-                        publicSessions.map((item, index) => {
-                            return <ItemEffect key={item.id} index={index}><TransferSession
-                                onPress={() => {
-                                    core.updateSelectedSession(item)
-                                }}
-                                id={item.id}
-                                key={item.id}
-                            />
-                            </ItemEffect>
-                        })
-                    }
-                </MotionHighlight>
-            </CollapsibleContent>
-        </Collapsible>
-    </>
+                                </ItemEffect>
+                            })
+                        }
+                    </MotionHighlight>
+                </CollapsibleContent>
+            </Collapsible>
+        </div>
+    );
 }
 
 function TransferSession(props: {
@@ -552,6 +623,11 @@ function MediaView(props: {
         }
     }, [model?.thumbnail_path]);
 
+    const onDownloadClick = useCallback(() => {
+        if (!model) return
+        core.downloadFile(model.path, model.name)
+    }, [model?.path, model?.name])
+
     if (!media || !model) return null;
 
     let displaySize = `${model.size_mb} MB`;
@@ -560,85 +636,148 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full overflow-hidden rounded-2xl relative group 
-                       border border-white/10 backdrop-blur-sm
-                       transition-all duration-300 ease-out
-                       hover:scale-[1.02] hover:shadow-2xl hover:shadow-bluePrimary/20 hover:border-bluePrimary/30">
-            {/* Thumbnail */}
-            <div className="absolute inset-0 z-0">
-                {thumbnailSource ? (
-                    <Image
-                        className="object-cover w-full h-full"
-                        alt={model.name}
-                        src={thumbnailSource}
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    />
-                ) : (
-                    <div className="w-full h-full bg-muted/40 flex items-center justify-center">
-                        <Image
-                            className="w-16 h-16 opacity-50"
-                            width={64}
-                            height={64}
-                            alt="placeholder"
-                            src="/file.svg"
-                        />
+        <div
+            className={clsx(
+                "w-full overflow-hidden rounded-2xl relative group",
+                "border border-white/10 backdrop-blur-sm",
+                "transition-all duration-300 ease-out",
+                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",
+                isMobile ? "flex flex-row items-center gap-3 p-3 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
+            )}>
+            {/* Desktop: Thumbnail - full background */}
+            {!isMobile && (
+                <>
+                    <div className="absolute inset-0 z-0">
+                        {thumbnailSource ? (
+                            <Image
+                                className="object-cover w-full h-full"
+                                alt={model.name}
+                                src={thumbnailSource}
+                                fill
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-muted/40 flex items-center justify-center">
+                                <Image
+                                    className="w-16 h-16 opacity-50"
+                                    width={64}
+                                    height={64}
+                                    alt="placeholder"
+                                    src="/file.svg"
+                                />
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
+                    {/* Video play icon */}
+                    {isVideo && (
+                        <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
+                                       transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
+                            <Play className="w-4 h-4 text-white fill-white"/>
+                        </div>
+                    )}
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+                    {/* Background overlay for hover effect */}
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                </>
+            )}
 
-            {/* Video play icon with modern styling */}
-            {isVideo && (
-                <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
-                               transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                    <Play className="w-4 h-4 text-white fill-white"/>
+            {/* Mobile: Thumbnail - small square */}
+            {isMobile && (
+                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+                    {thumbnailSource ? (
+                        <Image className="w-full h-full object-cover" fill src={thumbnailSource} alt={model.name}/>
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <ImageUpIcon className="w-6 h-6 opacity-40"/>
+                        </div>
+                    )}
+                    {isVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <Play className="w-4 h-4 text-white fill-white"/>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Gradient overlay - always visible but subtle */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-
-            {/* Background overlay for hover effect */}
-            <div
-                className={clsx(
-                    "absolute inset-0 bg-black/40 backdrop-blur-sm z-15",
-                    isMobile
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100 transition-all duration-300"
-                )}
-            />
-
-            {/* File info - positioned at bottom with enhanced styling */}
-            <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t to-transparent backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                        <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
-                            {model.name}
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
-                                {displaySize}
-                            </span>
-                            <span className="text-xs text-white/60">
-                                {isVideo ? "Video" : "Image"}
-                            </span>
+            {/* Desktop: Download Button / Progress - centered */}
+            {!isMobile && (
+                <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
+                                {model.name}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                                    {displaySize}
+                                </span>
+                                <span className="text-xs text-white/60">
+                                    {isVideo ? "Video" : "Image"}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        {/* Download Button / Progress */}
+                        <div className="flex-shrink-0">
+                            {media.is_completed
+                                ? <button
+                                    className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
+                                               transition-all duration-300 hover:scale-110 shadow-lg"
+                                    onClick={onDownloadClick}>
+                                    <ArrowDown className="w-5 h-5 text-white"/>
+                                </button>
+                                : <CircleProgress progress={media.completion} size={36}/>
+                            }
                         </div>
                     </div>
-                    
-                    {/* Download Button / Progress */}
-                    <div className="flex-shrink-0">
-                        {media.is_completed
-                            ? <button
-                                className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
-                                           transition-all duration-300 hover:scale-110 shadow-lg"
-                                onClick={() => core.downloadFile(model.path, model.name)}>
-                                <ArrowDown className="w-5 h-5 text-white"/>
-                            </button>
-                            : <CircleProgress progress={media.completion} size={36}/>
-                        }
+                </div>
+            )}
+
+            {/* Mobile: File info */}
+            {isMobile && (
+                <div className="flex flex-col flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium leading-tight line-clamp-1 text-left">
+                        {model.name}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                            {displaySize}
+                        </span>
+                        <span className="text-xs text-white/60">
+                            {isVideo ? "Video" : "Image"}
+                        </span>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {/* Mobile: Actions */}
+            {isMobile && (
+                <div className="flex-shrink-0">
+                    {media.is_completed ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button 
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
+                                    <MoreVertical className="h-4 w-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={onDownloadClick}
+                                >
+                                    <ArrowDown className="w-4 h-4 mr-2"/>
+                                    <span>Download</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : (
+                        <CircleProgress progress={media.completion} size={32}/>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

@@ -36,7 +36,7 @@ export default function Header() {
 
     return (
         <div 
-            className={`fixed backdrop-blur-2xl bg-black/10 top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 px-3 md:px-4 transition-all duration-300`}>
+            className={`fixed backdrop-blur-md bg-black/35 top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 px-3 md:px-4 transition-all duration-300`}>
             <div className="container mx-auto flex justify-between items-center w-full">
             <div className="flex flex-row gap-2 items-center">
                 <Link href="/" className="flex items-center">
