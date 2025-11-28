@@ -365,9 +365,9 @@
 @media (max-width: 599px) {
   .card-grid {
     flex-direction: column;
-    width: 90%;
+    width: 100%;
     margin: 0 auto;
-    padding: 0.5em;
+    padding: 0.5em 0;
     gap: 1em;
   }
 
@@ -433,20 +433,24 @@
   }
 
   .magic-bento-card--pos-nearby-share {
-    flex: 0.8; /* 25% shorter than flex: 2 */
+    flex: 0.8;
+    /* 25% shorter than flex: 2 */
   }
 
   /* Right column: public-share (top, taller) + all-platform (bottom) */
   .magic-bento-card--pos-public-share {
-    flex: 0.8; /* 25% shorter than flex: 2 */
+    flex: 0.8;
+    /* 25% shorter than flex: 2 */
   }
 
   .magic-bento-card--pos-all-platform {
-    flex: 1.8; /* 25% shorter than flex: 2 */
+    flex: 1.8;
+    /* 25% shorter than flex: 2 */
   }
 
   .magic-bento-card--tall-content {
-    flex: 1.5; /* 25% shorter than flex: 2 */
+    flex: 1.5;
+    /* 25% shorter than flex: 2 */
   }
 
   .magic-bento-card--short {
@@ -462,11 +466,11 @@
     grid-row: span 2;
   }
 
-.magic-bento-card--extra-tall .magic-bento-card__text-content {
-  min-height: auto;
-  padding: 0.5em 0.75em;
-  flex: 0 1 auto;
-}
+  .magic-bento-card--extra-tall .magic-bento-card__text-content {
+    min-height: auto;
+    padding: 0.5em 0.75em;
+    flex: 0 1 auto;
+  }
 }
 
 /* Border glow effect */
@@ -475,12 +479,10 @@
   position: absolute;
   inset: 0;
   padding: 6px;
-  background: radial-gradient(
-    var(--glow-radius) circle at var(--glow-x) var(--glow-y),
-    rgba(var(--glow-color), calc(var(--glow-intensity) * 0.8)) 0%,
-    rgba(var(--glow-color), calc(var(--glow-intensity) * 0.4)) 30%,
-    transparent 60%
-  );
+  background: radial-gradient(var(--glow-radius) circle at var(--glow-x) var(--glow-y),
+      rgba(var(--glow-color), calc(var(--glow-intensity) * 0.8)) 0%,
+      rgba(var(--glow-color), calc(var(--glow-intensity) * 0.4)) 30%,
+      transparent 60%);
   border-radius: inherit;
   mask:
     linear-gradient(#fff 0 0) content-box,

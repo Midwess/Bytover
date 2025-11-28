@@ -123,13 +123,13 @@ export default function TransferBoard() {
                 </p>
                 <DownloadPlatforms />
             </section>
-            <section className="w-full px-2 md:px-0 md:min-w-[800px] lg:w-[1200px] md:max-w-[80vw] py-10 flex items-center justify-center min-h-[80vh]">
+            <section className="w-full px-2 md:px-0 md:min-w-[800px] lg:w-[1200px] md:max-w-[80vw] py-10 flex items-center justify-center">
                 <React.Suspense fallback={<div className="w-full h-64 flex items-center justify-center"><div className="text-lg text-muted-foreground animate-pulse">Loading transfer board...</div></div>}>
                     <TransferBoardInner />
                 </React.Suspense>
             </section>
             <section id="waitlist" className="w-full bg-zinc-900">
-                <div className="w-full container mx-auto px-4 py-16 flex items-center justify-center">
+                <div className="w-full py-16 flex items-center justify-center">
                     <JoinWaitList />
                 </div>
             </section>

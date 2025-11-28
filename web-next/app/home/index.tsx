@@ -1,8 +1,8 @@
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 
-import {Suspense} from "react";
-import {Pricing2} from "@/components/pricing2";
+import { Suspense } from "react";
+import { Pricing2 } from "@/components/pricing2";
 import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
 import { JoinWaitList } from "@/components/join-waitlist";
@@ -41,7 +41,7 @@ function FeaturesSection() {
 
     return (
         <section className="py-32">
-            <div className="w-full container lg:h-[1400px] flex flex-col items-center">
+            <div className="w-full lg:h-[1400px] flex flex-col items-center">
                 <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
                     <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
                         Powerful Features
@@ -50,7 +50,7 @@ function FeaturesSection() {
                         Experience seamless file transfer with our intuitive interface. Share files publicly, transfer peer to peer, organize everything in your personal shelf.
                     </p>
                 </div>
-                <MagicBento 
+                <MagicBento
                     textAutoHide={true}
                     enableStars={true}
                     enableSpotlight={true}
@@ -76,10 +76,10 @@ function PricingPlans() {
             description: "Perfect for basic users who need simple peer-to-peer file transfers",
             price: "Free",
             features: [
-                {text: "Peer-to-peer transfers with limited bandwidth", included: true},
-                {text: "Transfer to your own devices", included: true},
-                {text: "Public sharing", included: false},
-                {text: "Email sharing", included: false},
+                { text: "Peer-to-peer transfers with limited bandwidth", included: true },
+                { text: "Transfer to your own devices", included: true },
+                { text: "Public sharing", included: false },
+                { text: "Email sharing", included: false },
             ],
             button: {
                 text: "Get Started",
@@ -92,11 +92,11 @@ function PricingPlans() {
             description: "Advanced features for peer-to-peer transfers across the internet and public sharing.",
             price: "Coming soon",
             features: [
-                {text: "Peer-to-peer transfers with unlimited bandwidth", included: true},
-                {text: "Transfer to your own devices", included: true},
-                {text: "Public sharing with password protection", included: true},
-                {text: "Public cloud storage up to 500GB / month", included: true},
-                {text: "Send files via email", included: true},
+                { text: "Peer-to-peer transfers with unlimited bandwidth", included: true },
+                { text: "Transfer to your own devices", included: true },
+                { text: "Public sharing with password protection", included: true },
+                { text: "Public cloud storage up to 500GB / month", included: true },
+                { text: "Send files via email", included: true },
             ],
             button: {
                 text: "Join waiting list",
@@ -119,32 +119,32 @@ export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-black">
         {/* Fixed Header */}
         <Suspense fallback={null}>
-            <Header/>
+            <Header />
         </Suspense>
 
         {/* Hero Section */}
-       <div id="intro" className={"w-screen h-screen bg-black"}>
-            <Introduction/>
+        <div id="intro" className={"w-screen h-screen bg-black"}>
+            <Introduction />
         </div>
 
         {/* Features Section */}
         <div id="features" className={"w-full bg-zinc-900"}>
             <div className="w-full container">
-                <FeaturesSection/>
+                <FeaturesSection />
             </div>
         </div>
 
         {/* Pricing Section */}
         <div id="pricing" className={"w-full bg-black sm:pt-30 flex items-center justify-center lg:py-25"}>
-            <PricingPlans/>
+            <PricingPlans />
         </div>
 
         {/* Join Waitlist Section */}
         <div id="waitlist" className={"w-full bg-zinc-900"}>
-            <JoinWaitList/>
+            <JoinWaitList />
         </div>
 
         {/* Footer */}
-        <Footer/>
+        <Footer />
     </div>
 }
