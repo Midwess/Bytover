@@ -60,7 +60,7 @@ import { Separator } from '@/components/ui/separator';
 
 export default function ReceiveBoard() {
     return (
-        <div className="rounded-xl border-2 overflow-hidden h-[950px] max-h-[82vh]">
+        <div className="rounded-xl border-2 overflow-hidden h-full max-h-[80vh] md:h-[950px]">
             <SidebarProvider>
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
@@ -69,7 +69,7 @@ export default function ReceiveBoard() {
                     <SidebarContentWrapper />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset className="flex flex-col h-[100%]">
+                <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />

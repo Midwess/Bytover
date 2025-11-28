@@ -83,8 +83,8 @@ export default function SendBoard() {
     const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
 
     return (
-        <div className="rounded-xl border-2 overflow-hidden h-full md:h-[950px] md:max-h-[75vh]">
-            <SidebarProvider>
+        <div className="rounded-xl border-2 overflow-hidden max-h-[70vh] sm:max-h-[80vh] min-h-[450px] h-[950px]">
+            <SidebarProvider className="h-[100%]">
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
                         <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod} />
@@ -92,7 +92,7 @@ export default function SendBoard() {
                     <SidebarContentWrapper activeMethod={activeMethod} />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset className="flex flex-col h-[100%]">
+                <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
@@ -160,7 +160,7 @@ function FileSelections() {
             {/* Resource Selection Area */}
             {isMobile ? (
                 // Mobile: Dropdown Button
-                <div className="relative w-full h-10 flex-shrink-0">
+                <div className="relative w-full flex-shrink-0 h-[55px]">
                     <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
                     <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
                     <div className="absolute top-2 right-2">
@@ -233,20 +233,24 @@ function FileSelections() {
                 </div>
             )}
 
-            {/* Resource List with Shadow */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
-                {/* Top shadow */}
+            <div className="h-fit max-h-[95%] overflow-y-auto overflow-x-hidden w-full">
                 <div className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
 
                 {/* Resource grid - single column on mobile, grid on desktop */}
-                <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
-                    {selectedResources.map((resource) => (
-                        <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
-                            <ResourceView model={resource} />
-                        </div>
-                    ))}
-                    <div className="h-[50px]"></div>
-                </div>
+                {selectedResources.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground/50">
+                        <p className="text-lg font-medium">No selected resources</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
+                        {selectedResources.map((resource) => (
+                            <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
+                                <ResourceView model={resource} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {selectedResources.length > 0 && <div className="h-[50px] sm:h-[80px]"></div>}
             </div>
         </div>
     )
