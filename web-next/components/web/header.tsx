@@ -16,8 +16,9 @@ import {
 } from "@/components/animate-ui/radix/dropdown-menu";
 import core from '@/wasm/wasm_core';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
-export default function Header() {
+export default function Header({ className }: { className?: string }) {
     const authState = core.useAuthenticationState();
     const isSignedIn = !!authState?.user;
     const [isScrolled, setIsScrolled] = React.useState(false);
@@ -68,7 +69,7 @@ export default function Header() {
             <div
                 className={`fixed top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md shadow-lg' : 'bg-transparent backdrop-blur-none'
                     }`}>
-                <div className="flex justify-between items-center w-full px-2 container">
+                <div className={cn("flex justify-between items-center w-full container px-3", className)}>
                     <div className="flex flex-row gap-2 items-center">
                         <Link href="/" className="flex items-center">
                             <Image

@@ -41,7 +41,7 @@ function FeaturesSection() {
 
     return (
         <section className="py-32">
-            <div className="w-full lg:h-[1400px] flex flex-col items-center">
+            <div className="w-full lg:h-[1400px] flex flex-col items-center px-0">
                 <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
                     <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
                         Powerful Features
@@ -119,7 +119,7 @@ export default function Home() {
     return <div className="flex flex-col w-full h-full items-center bg-black">
         {/* Fixed Header */}
         <Suspense fallback={null}>
-            <Header />
+            <Header className="px-6 sm:px-4 container" />
         </Suspense>
 
         {/* Hero Section */}
@@ -140,7 +140,7 @@ export default function Home() {
         </div>
 
         {/* Join Waitlist Section */}
-        <div id="waitlist" className={"w-full bg-zinc-900"}>
+        <div id="waitlist" className={"w-full bg-zinc-900 min-h-[60vh] items-center flex"}>
             <JoinWaitList />
         </div>
 
