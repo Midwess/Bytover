@@ -45,7 +45,6 @@ impl AppModule<BitBridge> for NearbyModule {
         match event {
             NearbyEvent::Launch => {
                 let user = model.authentication.user.clone();
-
                 Command::all(vec![
                     Command::new(|it| async move {
                         it.app().start_nearby_server(user).await;

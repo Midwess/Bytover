@@ -9,6 +9,7 @@ use crate::entities::user::User;
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::ShelfEvent;
 use crate::CoreOperation;
@@ -53,16 +54,17 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => Command::handle_result(|ctx| async move {
                 ctx.app().sign_out().await?;
+                let _ = ctx.app().run(P2POperation::stop()).await;
                 Ok(())
             }),
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
+                    log::info!("User is already authorized, skipping...");
                     return Command::done();
                 }
 
                 Command::handle_result(|ctx| async move {
                     ctx.app().authorize(url).await?;
-
                     Ok(())
                 })
             }

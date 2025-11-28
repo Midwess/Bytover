@@ -54,7 +54,7 @@ where
                 device_unique_key: device.unique_id,
                 platform: device.platform.into(),
                 device_type: device.device_type.into(),
-                url: device.url
+                url: format!("{}/oauth", device.url)
             },
         };
 

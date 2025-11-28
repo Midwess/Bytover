@@ -12,6 +12,7 @@ use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::protocol::webrtc::signalling::SharedContext;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -33,7 +34,7 @@ impl SignallingClient {
         }
     }
 
-    pub async fn start(&self) -> Result<(), WebRtcErrors> {
+    pub async fn start(&self, context: SharedContext) -> Result<(), WebRtcErrors> {
         let (signal_sender, mut signal_receiver) = unbounded::<Message>();
         let mut options = Options::default();
         options.read_timeout = Some(Duration::from_secs(60));
@@ -107,6 +108,10 @@ impl SignallingClient {
                         sender.send(WsMessage::Binary(bytes));
                     }
                 }
+
+                // When it goes here, the websocket was already being disconnected, we need to notify all peers to cancel
+                log::info!("websocket disconnected, notifying all peers to cancel");
+                context.remove_all().await;
             }
         });
 

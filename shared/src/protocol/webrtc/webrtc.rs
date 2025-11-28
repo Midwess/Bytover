@@ -18,6 +18,7 @@ use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
 
@@ -30,7 +31,8 @@ pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 4;
 pub struct WebRtc {
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
-    shared_context: SharedContext
+    shared_context: SharedContext,
+    is_stopped: AtomicBool
 }
 
 impl WebRtc {
@@ -38,8 +40,14 @@ impl WebRtc {
         Self {
             addr,
             local_resource_repository,
-            shared_context: SharedContext::new()
+            shared_context: SharedContext::new(),
+            is_stopped: AtomicBool::new(false)
         }
+    }
+
+    pub async fn stop(&self) {
+        self.is_stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+        // self.shared_context.remove_all().await;
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -107,6 +115,7 @@ impl WebRtc {
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
+        self.is_stopped.store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.set_current_id(current_user.peer_id());
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
@@ -131,6 +140,13 @@ impl WebRtc {
         let mut handles = vec![];
 
         loop {
+            if self.is_stopped.load(std::sync::atomic::Ordering::SeqCst) {
+                log::info!("The webrtc server is stopped, will cleanup");
+
+                core_request.response(P2POperationOutput::NearbyServerStopped).await;
+                break;
+            }
+
             for (peer_id, state) in socket.try_update_peers()? {
                 if state == matchbox_socket::PeerState::Connected {
                     log::info!("Peer {peer_id} connected");
@@ -175,8 +191,9 @@ impl WebRtc {
                             let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         }));
                     }
-                } else if state == matchbox_socket::PeerState::Disconnected {
-                    log::info!("Peer {peer_id} disconnected");
+                }
+                else if state == matchbox_socket::PeerState::Disconnected {
+                    log::info!("Peer2 {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }
             }
@@ -270,6 +287,14 @@ impl WebRtc {
             }
         }
 
+        socket.close();
+
         Ok(())
+    }
+}
+
+impl Drop for WebRtc {
+    fn drop(&mut self) {
+        self.stop();
     }
 }

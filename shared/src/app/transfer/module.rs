@@ -207,7 +207,11 @@ impl AppModule<BitBridge> for TransferModule {
                     .cloned();
 
                 let Some(user) = model.authentication.user.clone() else {
-                    return Command::operate(DialogOperation::Toast("unauthenticated".to_owned()));
+                    log::info!("User is not login, open login page");
+                    return Command::handle_result(|it| async move {
+                        it.app().authenticate().await;
+                        Ok(())
+                    });
                 };
 
                 Command::handle_result(|it| async move {

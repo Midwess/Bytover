@@ -142,10 +142,21 @@ impl SharedContext {
         peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
     }
 
+    pub async fn remove_all(&self) {
+        let mut peers = self.peers.lock().await.drain().collect::<Vec<_>>();
+        for (id, peer) in peers {
+            if let Some(peer) = peer.get() {
+                log::info!("Removing peer: {id}");
+                peer.peer_disconnected().await;
+            }
+        }
+    }
+
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        let mut peers = self.peers.lock().await;
-        if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get()) {
-            drop(peers);
+        let peer = self.peers.lock().await.remove(peer_id).and_then(|it| it.get());
+        log::info!("Removing2 peer: {}", peer.is_some());
+        if let Some(peer) = peer {
+            log::info!("Removing peer: {peer_id:?}");
             peer.peer_disconnected().await;
         }
     }
@@ -277,7 +288,7 @@ impl WebSignaller {
         };
 
         // Send the join msg right after the socket connected
-        let result = self.client.start().await;
+        let result = self.client.start(self.shared_context.clone()).await;
         self.client.send(first_msg).await?;
         result
     }

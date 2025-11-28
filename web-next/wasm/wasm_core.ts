@@ -54,7 +54,8 @@ import {
     MessageReason,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl,
+    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer,
+    EnvironmentEventVariantLaunchTransfer,
 } from 'shared_types/types/shared_types'
 import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
 import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
@@ -80,6 +81,7 @@ export class WasmCore {
     cachedGeoLocation: GeoLocation | undefined = undefined;
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
+    isTransferReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
@@ -307,6 +309,14 @@ export class WasmCore {
 
         this.updateGeoLocation().then(noop)
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
+    }
+
+    public async launchTransferModule() {
+        if (this.isTransferReady.get()) return;
+        if (this.isCoreReady.get()) {
+            this.isTransferReady.set(true)
+            await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantLaunchTransfer()))
+        }
     }
 
     async updateGeoLocation() {

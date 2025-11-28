@@ -1,6 +1,6 @@
 'use client';
 
-import React from "react";
+import React, {useEffect} from "react";
 import {
     Tabs,
     TabsList,
@@ -111,6 +111,13 @@ function TransferBoardInner() {
 }
 
 export default function TransferBoard() {
+    const isCoreReady = core.useCoreReady();
+    useEffect(() => {
+        if (isCoreReady) {
+            core.launchTransferModule()
+        }
+    }, [isCoreReady]);
+
     return (
         <div className="flex flex-col w-screen items-center bg-black">
             <Header />

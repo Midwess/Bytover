@@ -14,17 +14,28 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
+use crate::CoreOperation;
+use crate::entities::device::DeviceInfo;
+use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn start_nearby_server(&self, user: Option<User>) {
+    pub async fn restart(&self, user: Option<User>) -> Result<(), CoreError> {
         let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return;
+            return Ok(())
         };
 
+        let peer = self.gen_peer(user, device).await;
+        self.run(P2POperation::stop()).await?;
+        self.run(P2POperation::start(peer)).await?;
+
+        Ok(())
+    }
+
+    pub async fn gen_peer(&self, user: Option<User>, device: DeviceInfo) -> Peer {
         let peer_id = Uuid::now_v7().to_string();
 
-        let peer = match user {
+        match user {
             Some(user) => Peer {
                 id: peer_id.clone(),
                 name: Some(user.name),
@@ -34,17 +45,27 @@ impl AppCommand {
             },
             None => Peer {
                 id: peer_id.clone(),
-                name: None,
+                name: Some(device.name.clone()),
                 avatar_url: Peer::random_avatar(),
                 email: None,
                 device
             }
+        }
+    }
+
+    pub async fn start_nearby_server(&self, user: Option<User>) {
+        let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
+            self.run(DialogOperation::toast("Device not found".to_string())).await;
+            return;
         };
+
+        let peer = self.gen_peer(user, device).await;
 
         self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
 
+        let _ = self.run(P2POperation::stop()).await;
         log::info!(target: "nearby", "Starting nearby server");
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
@@ -115,6 +136,10 @@ impl AppCommand {
                         peer: peer.clone()
                     };
                     self.notify_event(request);
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
+                    log::info!("Nearby server stopped");
+                    break;
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");
