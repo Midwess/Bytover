@@ -34,6 +34,7 @@ impl AppCommand {
     }
 
     pub async fn sign_out(&self) -> Result<(), CoreError> {
+        self.run(SessionPersistentOperation::remove_session()).await?;
         self.run(TransferSessionPersistentOperation::clear_all()).await?;
         self.notify_event(TransferEvent::Clear);
         self.re_authorize().await?;
