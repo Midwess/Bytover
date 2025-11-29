@@ -1,13 +1,12 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
-use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::CoreOperation;
-use crate::app::shelf::module::ShelfEvent;
-use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use crate::app::shelf::module::ShelfEvent;
+use crate::app::transfer::module::TransferEvent;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
@@ -22,7 +21,6 @@ pub struct EnvironmentModule;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
     AppLaunched,
-    LaunchTransfer,
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -38,15 +36,11 @@ impl AppModule<BitBridge> for EnvironmentModule {
         match event {
             EnvironmentEvent::AppLaunched => Command::handle_result(|ctx| async move {
                 ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
+                ctx.app().notify_event(TransferEvent::Launch);
+                ctx.app().notify_event(ShelfEvent::Launch);
                 ctx.app().re_authorize().await?;
 
                 Ok(())
-            }),
-            EnvironmentEvent::LaunchTransfer => Command::new(|ctx| async move {
-                let app = ctx.app();
-                app.notify_event(ShelfEvent::Launch);
-                app.notify_event(TransferEvent::Launch);
-                app.notify_event(NearbyEvent::Launch);
             }),
         }
     }

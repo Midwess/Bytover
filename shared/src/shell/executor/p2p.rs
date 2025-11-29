@@ -27,6 +27,9 @@ pub trait P2PNativeExecutor: Send + Sync {
                 self.web_rtc().stop().await;
                 Ok(CoreOperationOutput::None)
             }
+            P2POperation::IsRunning => {
+                Ok(CoreOperationOutput::Bool(self.web_rtc().is_running()))
+            }
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
                 spawn(async move {

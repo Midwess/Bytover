@@ -19,7 +19,7 @@ use crate::entities::device::DeviceInfo;
 use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn restart(&self, user: Option<User>) -> Result<(), CoreError> {
+    pub async fn restart_nearby(&self, user: Option<User>) -> Result<(), CoreError> {
         let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
             return Ok(())
@@ -54,6 +54,12 @@ impl AppCommand {
     }
 
     pub async fn start_nearby_server(&self, user: Option<User>) {
+        let is_already_running = self.run(P2POperation::is_running()).await;
+        if is_already_running.unwrap_or(false) {
+            log::info!("Nearby server is already running");
+            return;
+        }
+
         let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
             return;

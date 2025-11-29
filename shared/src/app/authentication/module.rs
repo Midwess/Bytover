@@ -34,6 +34,8 @@ pub enum AuthenticationEvent {
     SignOut,
     OnRedirected { url: String },
     Authorized { user: User },
+    // User not signed in
+    UnAuthorized,
     Feedback { message: Option<String>, email: String }
 }
 
@@ -52,11 +54,15 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 ctx.app().authenticate().await;
                 Ok(())
             }),
-            AuthenticationEvent::SignOut => Command::handle_result(|ctx| async move {
-                ctx.app().sign_out().await?;
-                let _ = ctx.app().run(P2POperation::stop()).await;
-                Ok(())
-            }),
+            AuthenticationEvent::SignOut => {
+                model.authentication.user.take();
+                Command::handle_result(|ctx| async move {
+                    ctx.app().sign_out().await?;
+                    ctx.notify_shell(CoreOperation::Render);
+                    let _ = ctx.app().restart_nearby(None).await;
+                    Ok(())
+                })
+            },
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
                     log::info!("User is already authorized, skipping...");
@@ -78,8 +84,13 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    app.notify_event(ShelfEvent::Launch);
-                    app.notify_event(TransferEvent::Launch);
+                    let _ = app.run(P2POperation::stop()).await;
+                    app.notify_event(NearbyEvent::Launch);
+                })
+            }
+            AuthenticationEvent::UnAuthorized => {
+                Command::new(|ctx| async move {
+                    let app = ctx.app();
                     app.notify_event(NearbyEvent::Launch);
                 })
             }

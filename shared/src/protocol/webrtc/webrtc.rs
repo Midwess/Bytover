@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
+use n0_future::time::sleep;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -32,7 +33,7 @@ pub struct WebRtc {
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
     shared_context: SharedContext,
-    is_stopped: AtomicBool
+    is_running: AtomicBool
 }
 
 impl WebRtc {
@@ -41,13 +42,19 @@ impl WebRtc {
             addr,
             local_resource_repository,
             shared_context: SharedContext::new(),
-            is_stopped: AtomicBool::new(false)
+            is_running: AtomicBool::new(false)
         }
     }
 
+    pub fn is_running(&self) -> bool {
+        self.is_running.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     pub async fn stop(&self) {
-        self.is_stopped.store(true, std::sync::atomic::Ordering::SeqCst);
-        // self.shared_context.remove_all().await;
+        self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.shared_context.remove_all().await;
+        // Waiting for the socket to close
+        sleep(Duration::from_millis(1000)).await;
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -114,8 +121,13 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+        if self.is_running() {
+            log::info!("The webrtc server is already running");
+            return Ok(())
+        }
+
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
-        self.is_stopped.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.set_current_id(current_user.peer_id());
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
@@ -140,7 +152,7 @@ impl WebRtc {
         let mut handles = vec![];
 
         loop {
-            if self.is_stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            if !self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 log::info!("The webrtc server is stopped, will cleanup");
 
                 core_request.response(P2POperationOutput::NearbyServerStopped).await;
@@ -288,6 +300,7 @@ impl WebRtc {
         }
 
         socket.close();
+        self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
 
         Ok(())
     }

@@ -17,7 +17,8 @@ pub enum P2POperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
     UpdateFindingScopes(Vec<FindingScope>),
-    PeerEvents(String)
+    PeerEvents(String),
+    IsRunning
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -44,5 +45,9 @@ impl P2POperation {
 
     pub fn start(peer: Peer) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::StartNearbyServer(peer))).map(|it| it.result())
+    }
+
+    pub fn is_running() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::IsRunning)).map(|it| it.result())
     }
 }

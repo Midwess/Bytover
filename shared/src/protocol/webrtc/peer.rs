@@ -81,9 +81,12 @@ impl WebRtcPeer {
             }
         };
 
+        log::info!("Sending introduce request to other peer {:?}", introduce_request.mine.peer_id);
         let IntroduceResponse(response) = msg_channel.send(Request::IntroduceRequest(introduce_request), None).await? else {
             return Err(WebRtcErrors::FailedToIntroducePeer)
         };
+
+        log::info!("Received introduce response from other peer {:?}", response.peer.peer_id);
 
         let peer: PeerEntity = response.peer.into();
 
@@ -103,8 +106,8 @@ impl WebRtcPeer {
         })
     }
 
-    pub fn core_request(&self) -> &CoreRequest {
-        self.core_request.get().expect("Core request is not set")
+    pub fn core_request(&self) -> Option<&CoreRequest> {
+        self.core_request.get()
     }
 
     pub async fn from_introduce_request(
@@ -131,6 +134,7 @@ impl WebRtcPeer {
         });
 
         msg_channel.send_response(request_id, introduce_response).await?;
+        log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
         Ok(Self {
             msg_channel,
@@ -163,7 +167,9 @@ impl WebRtcPeer {
                     remote_session: request.session
                 });
 
-                let _ = self.core_request().response(response).await;
+                if let Some(core_request) = self.core_request() {
+                    core_request.response(response).await;
+                }
             }
             _ => {}
         }
@@ -181,7 +187,9 @@ impl WebRtcPeer {
         log::info!("Peer disconnected, will cancel all transfers");
         self.transfers_context.stop_all().await;
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
-        let _ = self.core_request().response(response).await;
+        if let Some(core_request) = self.core_request() {
+            core_request.response(response).await;
+        }
     }
 
     pub async fn cancel_transfer(&self, session_id: u64) {
