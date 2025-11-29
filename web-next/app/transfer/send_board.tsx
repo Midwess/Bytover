@@ -898,7 +898,7 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
             </div>
             {
                 <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
-                    {peer.transfer_progress ? <CircleProgress progress={peer.transfer_progress} size={35} /> : <></>}
+                    <CircleProgress isCompleted={!Number(peer.transfer_progress)} isInProgress={!!peer.transfer_progress && peer.transfer_progress < 1} progress={peer.transfer_progress} size={35} strokeWidth={4} />
                 </div>
             }
         </div>

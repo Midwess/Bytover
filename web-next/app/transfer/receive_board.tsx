@@ -483,13 +483,12 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {!!progress && !is_completed &&
-                <CircleProgress center={is_public ? <Download /> : undefined} progress={progress} size={30}
-                    onClick={() => {
-                        if (!is_public) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
-                        }
-                    }} />}
+            <CircleProgress isCompleted={is_completed} isInProgress={!is_completed} center={is_public ? <Download /> : undefined} progress={progress} size={30} strokeWidth={3}
+                onClick={() => {
+                    if (!is_public) {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
+                    }
+                }} />
             {is_required_password &&
                 <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
                     src={"/lock.svg"} color={'white'} />}
@@ -580,7 +579,7 @@ function FileView(props: {
                         <ArrowDown className="w-5 h-5 text-white" />
                     </button>
                     : <div className="flex-shrink-0">
-                        <CircleProgress progress={file.completion} size={40} />
+                        <CircleProgress isCompleted={file.is_completed} isInProgress={!file.is_completed} progress={file.completion} size={40} strokeWidth={4} />
                     </div>
             }
         </div>
