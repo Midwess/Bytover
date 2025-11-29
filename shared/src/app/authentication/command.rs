@@ -1,6 +1,6 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::SessionPersistentOperation;
+use crate::app::operations::persistent::{SessionPersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::AppEvent;
@@ -12,6 +12,7 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::dialog::DialogOperation;
 use devlog_sdk::distributed_id::gen_id;
+use crate::app::transfer::module::TransferEvent;
 use crate::CoreOperation;
 
 impl AppCommand {
@@ -34,6 +35,8 @@ impl AppCommand {
 
     pub async fn sign_out(&self) -> Result<(), CoreError> {
         self.run(SessionPersistentOperation::remove_session()).await?;
+        self.run(TransferSessionPersistentOperation::clear_all()).await?;
+        self.notify_event(TransferEvent::Clear);
         self.re_authorize().await?;
         Ok(())
     }
@@ -41,6 +44,7 @@ impl AppCommand {
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let Ok(user) = RpcOperation::get_me().into_future(self.ctx()).await else {
             // User is not logged in is fine, some flow not require user to be logged in
+            self.notify_event(AppEvent::Authentication(AuthenticationEvent::UnAuthorized));
             return Ok(())
         };
 

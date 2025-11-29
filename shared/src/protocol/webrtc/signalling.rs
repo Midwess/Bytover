@@ -7,7 +7,6 @@ use futures_util::lock::Mutex;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
-use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::rpc_signalling::server::{
     AnswerMessage,
@@ -20,7 +19,6 @@ use schema::devlog::rpc_signalling::server::{
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
-use anyhow::Context;
 
 pub enum WebRtcPeerConnectionProcess {
     Connecting(Instant),
@@ -49,8 +47,8 @@ pub struct SharedContext {
     peers: Arc<Mutex<HashMap<PeerId, WebRtcPeerConnectionProcess>>>,
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
-    current_id: OnceCell<PeerId>,
-    signaller: Arc<OnceCell<Weak<SignallingClient>>>
+    current_id: Arc<Mutex<PeerId>>,
+    signaller: Arc<Mutex<Weak<SignallingClient>>>
 }
 
 impl Default for SharedContext {
@@ -62,7 +60,7 @@ impl Default for SharedContext {
 impl SharedContext {
     pub fn new() -> Self {
         Self {
-            current_id: Default::default(),
+            current_id: Arc::new(Mutex::new(PeerId(Default::default()))),
             finding_scopes: Default::default(),
             peers: Default::default(),
             peer_msg_channels: Default::default(),
@@ -70,27 +68,20 @@ impl SharedContext {
         }
     }
 
-    pub fn signaller(&self) -> Option<Arc<SignallingClient>> {
-        self.signaller.get().and_then(|it| it.upgrade())
+    pub async fn signaller(&self) -> Option<Arc<SignallingClient>> {
+        self.signaller.lock().await.upgrade()
     }
 
-    pub fn set_current_id(&self, id: PeerId) {
-        let _ = self.current_id.set(id);
+    pub async fn set_current_id(&self, id: PeerId) {
+        *self.current_id.lock().await = id;
     }
 
-    pub fn get_current_id(&self) -> Option<PeerId> {
-        self.current_id.get().map(|it| *it)
+    pub async fn get_current_id(&self) -> PeerId {
+        self.current_id.lock().await.clone()
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
-        if self.current_id.get().is_none() {
-            return;
-        }
-
-        let Some(id) = self.get_current_id() else {
-            return;
-        };
-
+        let id = self.get_current_id().await;
         let mut finding_scopes = self.finding_scopes.lock().await;
         if scopes.ne(&*finding_scopes) {
             log::info!("Updating finding scopes: {scopes:?}");
@@ -100,7 +91,7 @@ impl SharedContext {
         finding_scopes.extend(scopes);
         let scopes = finding_scopes.iter().map(|it| it.as_string()).collect::<Vec<_>>();
         drop(finding_scopes);
-        if let Some(signaller) = self.signaller() {
+        if let Some(signaller) = self.signaller().await {
             let _ = signaller
                 .send(Message {
                     from_id: id.to_string(),
@@ -142,10 +133,22 @@ impl SharedContext {
         peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
     }
 
+    pub async fn remove_all(&self) -> Vec<PeerId> {
+        let peers = self.peers.lock().await.drain().collect::<Vec<_>>();
+        let mut removed_peers = Vec::new();
+        for (id, peer) in peers {
+            if let Some(peer) = peer.get() {
+                removed_peers.push(id);
+                peer.peer_disconnected().await;
+            }
+        }
+
+        removed_peers
+    }
+
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        let mut peers = self.peers.lock().await;
-        if let Some(peer) = peers.remove(peer_id).and_then(|it| it.get()) {
-            drop(peers);
+        let peer = self.peers.lock().await.remove(peer_id).and_then(|it| it.get());
+        if let Some(peer) = peer {
             peer.peer_disconnected().await;
         }
     }
@@ -277,7 +280,7 @@ impl WebSignaller {
         };
 
         // Send the join msg right after the socket connected
-        let result = self.client.start().await;
+        let result = self.client.start(self.shared_context.clone()).await;
         self.client.send(first_msg).await?;
         result
     }
@@ -346,11 +349,8 @@ impl WebSignallerBuilder {
 impl SignallerBuilder for WebSignallerBuilder {
     async fn new_signaller(&self, _attempts: Option<u16>, socket_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
         let client = Arc::new(SignallingClient::new(socket_url));
-        let _ = self.shared_context.signaller.set(Arc::downgrade(&client));
-        let Some(id) = self.shared_context.get_current_id() else {
-            return Err(SignalingError::UserImplementationError("No peer id".to_string()));
-        };
-
+        *self.shared_context.signaller.lock().await = Arc::downgrade(&client);
+        let id = self.shared_context.get_current_id().await;
         let mut signaller = WebSignaller::new(client, id, self.shared_context.clone());
         signaller.start().await.map_err(Into::<SignalingError>::into)?;
 

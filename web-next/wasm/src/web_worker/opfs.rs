@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
+use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle};
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:
@@ -62,7 +62,8 @@ pub enum FileOperation {
     FileEntry,
     LocalResourceInstance,
     GenerateSource,
-    Blob
+    Blob,
+    ClearAll
 }
 
 unsafe impl Send for OpfsOperation {}
@@ -140,6 +141,45 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
+            FileOperation::ClearAll => {
+                let remove_options = FileSystemRemoveOptions::new();
+                remove_options.set_recursive(true);
+                let entries = root.entries();
+                let options = FileSystemRemoveOptions::new();
+                options.set_recursive(true);
+                loop {
+                    let Ok(fut) = entries.next() else {
+                        break;
+                    };
+                    let val = JsFuture::from(fut).await;
+                    match val {
+                        Ok(val) => {
+                            let entry: js_sys::Object = val.into();
+                            let Ok(done) = js_sys::Reflect::get(&entry, &JsValue::from_str("done")) else {
+                                continue;
+                            };
+
+                            if done.as_bool().unwrap_or(false) {
+                                break;
+                            }
+
+                            let Ok(value) = js_sys::Reflect::get(&entry, &JsValue::from_str("value")) else {
+                                continue;
+                            };
+
+                            let array: js_sys::Array = value.into();
+                            let name = array.get(0);
+                            let fut = root.remove_entry_with_options(name.as_string().unwrap_or_default().as_str(), &options);
+                            let _ = JsFuture::from(fut).await;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to get next entry: {:?}", e);
+                            break;
+                        }
+                    }
+                }
+                OpfsOperationOutput::Void
+            },
             FileOperation::Cursor { buffer_size } => {
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;

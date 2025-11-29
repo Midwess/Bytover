@@ -18,8 +18,11 @@ use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
+use futures::executor::block_on;
+use crate::app::operations::CoreOperationOutput;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -30,7 +33,8 @@ pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 4;
 pub struct WebRtc {
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
-    shared_context: SharedContext
+    shared_context: SharedContext,
+    is_running: AtomicBool
 }
 
 impl WebRtc {
@@ -38,8 +42,18 @@ impl WebRtc {
         Self {
             addr,
             local_resource_repository,
-            shared_context: SharedContext::new()
+            shared_context: SharedContext::new(),
+            is_running: AtomicBool::new(false)
         }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub async fn stop(&self) {
+        self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.shared_context.remove_all().await;
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -106,8 +120,14 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+        if self.is_running() {
+            log::info!("The webrtc server is already running");
+            return Ok(())
+        }
+
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
-        self.shared_context.set_current_id(current_user.peer_id());
+        self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.shared_context.set_current_id(current_user.peer_id()).await;
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
@@ -121,7 +141,7 @@ impl WebRtc {
 
         let loop_fut = loop_fut.fuse();
         futures::pin_mut!(loop_fut);
-        let timeout = Delay::new(Duration::from_millis(5));
+        let timeout = Delay::new(Duration::from_millis(8));
         futures::pin_mut!(timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
@@ -130,7 +150,12 @@ impl WebRtc {
 
         let mut handles = vec![];
 
-        loop {
+        let result = loop {
+            if !self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
+                log::info!("The webrtc server is stopped, will cleanup");
+                break Ok(());
+            }
+
             for (peer_id, state) in socket.try_update_peers()? {
                 if state == matchbox_socket::PeerState::Connected {
                     log::info!("Peer {peer_id} connected");
@@ -175,7 +200,8 @@ impl WebRtc {
                             let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         }));
                     }
-                } else if state == matchbox_socket::PeerState::Disconnected {
+                }
+                else if state == matchbox_socket::PeerState::Disconnected {
                     log::info!("Peer {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }
@@ -264,12 +290,30 @@ impl WebRtc {
                 _ = (&mut timeout).fuse() => {
                     timeout.reset(Duration::from_millis(5));
                 }
-                _ = &mut loop_fut => {
-                    break;
+                result = &mut loop_fut => {
+                    break result;
                 }
             }
-        }
+        };
+
+        socket.close();
+        self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        if let Err(err) = result {
+            let web_rtc_errors = WebRtcErrors::SignallingClientError(anyhow!("WebRTC loop failed: {err}"));
+            core_request.response(CoreOperationOutput::Error(web_rtc_errors.into())).await;
+            return Ok(())
+        };
+
+        core_request.response(P2POperationOutput::NearbyServerStopped).await;
 
         Ok(())
+    }
+}
+
+impl Drop for WebRtc {
+    fn drop(&mut self) {
+        block_on(async {
+            self.stop().await;
+        });
     }
 }

@@ -28,6 +28,7 @@ use devlog_sdk::distributed_id::id_to_datetime;
 use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use crate::app::operations::persistent::TransferSessionPersistentOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -91,6 +92,7 @@ pub enum TransferEvent {
         session_id: u64,
         transfer_type: TransferType
     },
+    Clear,
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -108,11 +110,17 @@ impl AppModule<BitBridge> for TransferModule {
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             TransferEvent::Launch => Command::handle_result(|it| async move { it.app().load_transfer_sessions().await }),
-            TransferEvent::CancelTransfer { session_id, transfer_type } => {
+            TransferEvent::Clear => {
+                model.transfer.sessions.clear();
+                Command::handle_result(|it| async move {
+                    let _  = it.app().run(TransferSessionPersistentOperation::clear_all()).await;
+                    Ok(())
+                })
+            },
+            TransferEvent::CancelTransfer { session_id, transfer_type} => {
                 let id = TransferSessionId {
-                    order_id: Some(session_id),
-                    r#type: Some(transfer_type),
-                    ..Default::default()
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(transfer_type),
                 };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::new(|it| async move {
@@ -146,7 +154,7 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::DeleteSession { session_id } => {
                 let id = TransferSessionId {
-                    order_id: Some(session_id),
+                    order_id: Some(session_id.to_string()),
                     ..Default::default()
                 };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
@@ -163,7 +171,7 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let id = TransferSessionId {
-                    order_id: Some(session_id),
+                    order_id: Some(session_id.to_string()),
                     ..Default::default()
                 };
                 let Some(session) = model.transfer.sessions.lookup_mut(&id) else {
@@ -207,7 +215,11 @@ impl AppModule<BitBridge> for TransferModule {
                     .cloned();
 
                 let Some(user) = model.authentication.user.clone() else {
-                    return Command::operate(DialogOperation::Toast("unauthenticated".to_owned()));
+                    log::info!("User is not login, open login page");
+                    return Command::handle_result(|it| async move {
+                        it.app().authenticate().await;
+                        Ok(())
+                    });
                 };
 
                 Command::handle_result(|it| async move {
@@ -295,7 +307,15 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { keywords } => {
+            TransferEvent::FindPublicSession { mut keywords } => {
+                if let Ok(url) = url::Url::parse(&keywords) {
+                    let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
+                        return Command::done()
+                    };
+
+                    keywords = query;
+                }
+
                 model.transfer.keywords = keywords.clone();
                 if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords, true)) {
                     return Command::render();
@@ -305,8 +325,8 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
-                    order_id: Some(session_id),
-                    r#type: Some(TransferType::Receive)
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
                 };
 
                 let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {

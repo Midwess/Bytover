@@ -2,6 +2,7 @@
 import React from 'react';
 import { GitHubStarsButton } from '@/components/animate-ui/buttons/github-stars'
 import Image from "next/image";
+import { Loader2 } from "lucide-react";
 import {
     AppEventVariantAuthentication,
     AuthenticationEventVariantAuthenticate,
@@ -19,20 +20,20 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 export default function Header({ className }: { className?: string }) {
-    const authState = core.useAuthenticationState();
-    const isSignedIn = !!authState?.user;
+    const coreReady = core.useCoreReady();
+    const authState = core.useAuthenticationState()
+    const isSignedIn = coreReady && !!authState?.user;
     const [isScrolled, setIsScrolled] = React.useState(false);
     const sentinelRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         const observer = new IntersectionObserver(
             ([entry]) => {
-                // When sentinel is not visible, we've scrolled down
                 setIsScrolled(!entry.isIntersecting);
             },
             {
                 threshold: 0,
-                rootMargin: '0px 0px 0px 0px', // Trigger when 50px from top
+                rootMargin: '0px 0px 0px 0px',
             }
         );
 
@@ -57,7 +58,7 @@ export default function Header({ className }: { className?: string }) {
     const handleSignOut = () => {
         core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantSignOut()));
         setTimeout(() => {
-            window.location.reload();
+            // window.location.reload();
         }, 1000);
     };
 
@@ -138,19 +139,28 @@ export default function Header({ className }: { className?: string }) {
                                         Transfer
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                        className={"text-destructive/80"}
                                         onClick={handleSignOut}
                                     >
-                                        Sign out
+                                        Sign out & clear data
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         ) : (
                             <Button
                                 variant="default"
+                                disabled={!coreReady}
                                 className="h-8 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4"
                                 onClick={() => core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantAuthenticate()))}
                             >
-                                Sign in
+                                {!coreReady ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Loading
+                                    </>
+                                ) : (
+                                    "Sign in"
+                                )}
                             </Button>
                         )}
                     </div>

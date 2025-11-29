@@ -21,25 +21,25 @@ type MotionEffectProps = HTMLMotionProps<'div'> & {
   inViewOnce?: boolean;
   blur?: string | boolean;
   slide?:
-    | {
-        direction?: 'up' | 'down' | 'left' | 'right';
-        offset?: number;
-      }
-    | boolean;
+  | {
+    direction?: 'up' | 'down' | 'left' | 'right';
+    offset?: number;
+  }
+  | boolean;
   fade?: { initialOpacity?: number; opacity?: number } | boolean;
   zoom?:
-    | {
-        initialScale?: number;
-        scale?: number;
-      }
-    | boolean;
+  | {
+    initialScale?: number;
+    scale?: number;
+  }
+  | boolean;
 };
 
 function MotionEffect({
   ref,
   children,
   className,
-  transition = { type: 'spring', stiffness: 200, damping: 20 },
+  transition = { type: 'tween', stiffness: 200, damping: 20 },
   delay = 0,
   inView = false,
   inViewMargin = '0px',

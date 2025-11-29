@@ -22,8 +22,6 @@ use schema::devlog::bitbridge::{
     UpdateTransferProgressRequest
 };
 use tonic::{Request, Streaming};
-use schema::devlog::app_gateway::rpc::AppFeedbackRequest;
-use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 
 pub struct CloudServer<T>
 where

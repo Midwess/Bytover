@@ -17,7 +17,7 @@ import {
 import {
     ArrowDown,
     Book,
-    ChevronsUpDown, Download,
+    ChevronsUpDown,
     Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -57,6 +57,7 @@ import {
     useSidebar,
 } from '@/components/animate-ui/components/radix/sidebar';
 import { Separator } from '@/components/ui/separator';
+import { Label } from "@/components/ui/label";
 
 export default function ReceiveBoard() {
     return (
@@ -124,7 +125,6 @@ function SidebarContentWrapper() {
 function ContentBoard() {
     const selectedSessionId = core.useSelectedSession()?.id
     const selectedSession = core.useSession(selectedSessionId ?? '');
-    const cloudSessions = core.useCloudSessionsList()
     const isCloud = selectedSession instanceof ReceiveCloudSessionViewModel
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
@@ -143,25 +143,13 @@ function ContentBoard() {
                 })
             }
         }
-    }, [selectedSession])
+    }, [selectedSession?.id])
 
     useEffect(() => {
         if (url.session && coreReady) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(url.session)))
         }
     }, [coreReady])
-
-    useEffect(() => {
-        if (!url?.session || !cloudSessions?.length) return
-
-        const session = cloudSessions?.find((it) => {
-            return it.alias === url!.session!
-        })
-
-        if (session) {
-            core.updateSelectedSession(session)
-        }
-    }, [cloudSessions?.length])
 
     const onSelected = () => {
         if (!selectedSession) {
@@ -250,9 +238,9 @@ function ContentBoard() {
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
-                                return <ItemEffect key={index} index={index}>
+                                return <ItemEffect key={image.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView key={index} id={image.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={image.model.order_id} isCloud={isCloud} />
                                     </div>
                                 </ItemEffect>
                             })
@@ -268,9 +256,9 @@ function ContentBoard() {
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
-                                return <ItemEffect key={index} index={index}>
+                                return <ItemEffect key={video.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView key={index} id={video.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={video.model.order_id} isCloud={isCloud} />
                                     </div>
                                 </ItemEffect>
                             })
@@ -304,13 +292,12 @@ function ContentBoard() {
 function ItemEffect(props: { children: ReactElement, index: number }) {
     const { children, index } = props
     return <MotionEffect
-        key={index}
         slide={{
             direction: 'down',
         }}
         fade
         zoom
-        delay={0.2 + index * 0.1}>
+        delay={0.8 + index * 0.15}>
         {children}
     </MotionEffect>
 }
@@ -330,35 +317,41 @@ function ReceiveCategory(props: {
     </CollapsibleTrigger>
 }
 
-function Board() {
-    const publicSessions = core.useCloudSessionsList()
-    const nearbySessions = core.useNearbySessionsList()
-
+function FindSessionSection({ publicSessions }: { publicSessions: ReceiveCloudSessionViewModel[] }) {
     const [url, setUrl] = useUrlState(['session'])
-
     const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
-    const [keywords, setKeywords] = useState<string>()
+    const [keywords, setKeywords] = useState<string>(url.session || '')
 
     useEffect(() => {
         if (url.session) {
             setKeywords(url.session)
         }
-    }, []);
+    }, [])
 
-    const handleFind = useCallback(() => {
+    const handleFind = useCallback((overrideKeywords?: string) => {
+        const searchTerms = overrideKeywords !== undefined ? overrideKeywords : keywords;
+
+        if (!searchTerms) {
+            setUrl({ session: null })
+        }
+
         message?.resolveMessage()
-        console.log(keywords)
-        setUrl({ session: keywords?.trim() || null })
+        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(searchTerms || '')))
+    }, [keywords, message, setUrl])
 
-        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(keywords || '')))
-    }, [keywords])
+    useEffect(() => {
+        if (publicSessions?.length === 1 && keywords) {
+            setUrl({ session: publicSessions[0].alias })
+            core.updateSelectedSession(publicSessions[0])
+        }
+    }, [publicSessions, keywords, setUrl])
 
     return (
-        <div className="flex flex-col gap-4 h-full overflow-y-auto px-2 pb-4">
-            <div className={"flex flex-col justify-start text-primaryText gap-4"}>
-                <p className={"opacity-80 text-sm"}>Find session</p>
+        <div className={"flex flex-col justify-start text-primaryText gap-3"}>
+            <div className={"flex flex-col gap-1 pt-2"}>
+                <Label htmlFor={"session-name"} className={"pl-1 text-muted-foreground text-sm"}>Find session</Label>
                 <div className={"relative"}>
-                    <Input value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
+                    <Input id="session-name" value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
                         placeholder={"Session name or url"}
                         onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
                         onKeyDown={(e) => {
@@ -372,73 +365,63 @@ function Board() {
                         className={"absolute right-1 top-1/2 transform -translate-y-1/2 text-xl cursor-pointer h-8 w-8 p-0"}
                         onClick={() => {
                             setKeywords('')
-                            handleFind()
+                            handleFind('')
                         }}
                     >
                         ×
                     </Button>
                 </div>
-                {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
-                <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={handleFind}>Find</Button>
             </div>
-            <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
-                <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                    <Button variant="secondary"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
-                        Nearby
-                        <ChevronsUpDown className="h-4 w-4" />
-                        <span className="sr-only">Toggle</span>
-                    </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className={"flex flex-col gap-3"}>
-                    {nearbySessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-                    <MotionHighlight hover
-                        className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                        {
-                            nearbySessions.map((item, index) => {
-                                return <ItemEffect key={item.id} index={index}>
-                                    <TransferSession
-                                        onPress={() => {
-                                            core.updateSelectedSession(item)
-                                        }}
-                                        id={item.id}
-                                        key={item.id}
-                                    />
-                                </ItemEffect>
-                            })
-                        }
-                    </MotionHighlight>
-                </CollapsibleContent>
-            </Collapsible>
-            <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
-                <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                    <Button variant="secondary"
-                        className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
-                        Public
-                        <ChevronsUpDown className="h-4 w-4" />
-                        <span className="sr-only">Toggle</span>
-                    </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className={"flex flex-col gap-3"}>
-                    {publicSessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-                    <MotionHighlight
-                        hover
-                        className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                        {
-                            publicSessions.map((item, index) => {
-                                return <ItemEffect key={item.id} index={index}><TransferSession
+            {message.message && <p className={"text-foreground text-sm"}>{message.message}</p>}
+            <Button className={"w-fit h-8 text-foreground bg-bluePrimary"} onClick={() => handleFind()}>Find</Button>
+        </div>
+    )
+}
+
+const SessionList = React.memo(({ sessions, title }: { sessions: (ReceiveCloudSessionViewModel | ReceiveSessionViewModel)[], title: string }) => {
+    return (
+        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
+            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
+                <Button variant="secondary"
+                    className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
+                    {title}
+                    <ChevronsUpDown className="h-4 w-4" />
+                    <span className="sr-only">Toggle</span>
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className={"flex flex-col gap-3"}>
+                {sessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
+                <MotionHighlight controlledItems={true} hover exitDelay={0.5}
+                    className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                    {
+                        sessions.map((item) => {
+                            return (
+                                <TransferSession
                                     onPress={() => {
                                         core.updateSelectedSession(item)
                                     }}
                                     id={item.id}
                                     key={item.id}
                                 />
-                                </ItemEffect>
-                            })
-                        }
-                    </MotionHighlight>
-                </CollapsibleContent>
-            </Collapsible>
+                            )
+                        })
+                    }
+                </MotionHighlight>
+            </CollapsibleContent>
+        </Collapsible>
+    )
+});
+SessionList.displayName = 'SessionList';
+
+function Board() {
+    const publicSessions = core.useCloudSessionsList()
+    const nearbySessions = core.useNearbySessionsList()
+
+    return (
+        <div className="flex flex-col gap-6 h-full overflow-y-auto px-2 pb-4">
+            <FindSessionSection publicSessions={publicSessions} />
+            <SessionList title="Nearby" sessions={nearbySessions} />
+            <SessionList title="Public" sessions={publicSessions} />
         </div>
     );
 }
@@ -482,7 +465,7 @@ function TransferSession(props: {
     return <>
         <button
             onClick={onPress}
-            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between"}>
+            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between hover:bg-muted-foreground/50 hover:cursor-pointer"}>
             <div className={"flex flex-row items-center gap-5"}>
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
@@ -501,13 +484,12 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            {!!progress && !is_completed &&
-                <CircleProgress center={is_public ? <Download /> : undefined} progress={progress} size={30}
-                    onClick={() => {
-                        if (!is_public) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
-                        }
-                    }} />}
+            <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3}
+                onClick={() => {
+                    if (!is_public) {
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
+                    }
+                }} />
             {is_required_password &&
                 <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
                     src={"/lock.svg"} color={'white'} />}
@@ -598,7 +580,7 @@ function FileView(props: {
                         <ArrowDown className="w-5 h-5 text-white" />
                     </button>
                     : <div className="flex-shrink-0">
-                        <CircleProgress progress={file.completion} size={40} />
+                        <CircleProgress isCompleted={file.is_completed} isInProgress={!file.is_completed} progress={file.completion} size={40} strokeWidth={4} />
                     </div>
             }
         </div>

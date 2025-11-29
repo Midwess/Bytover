@@ -171,7 +171,7 @@ impl TransferSession {
     }
 
     pub fn access_url(&self, base_url: String) -> String {
-        format!("{base_url}?session={}", self.alias)
+        format!("{base_url}/transfer?session={}", self.alias)
     }
 
     pub fn password(&self) -> Option<String> {

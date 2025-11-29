@@ -5,6 +5,7 @@ pub trait WebExtLocalResourcePath {
     fn device_file_id(&self) -> Option<u64>;
     fn session_resource(session_id: u64, resource_id: u64, extension: String) -> Self;
     fn resource_thumbnail(session_id: Option<u64>, resource_id: u64) -> Self;
+    fn session_path(&self, session_id: u64) -> String;
     fn opfs_path(&self) -> Option<String>;
 }
 
@@ -18,6 +19,10 @@ impl WebExtLocalResourcePath for LocalResourcePath {
             Self::PlatformIdentifier(path) => path.trim_start_matches("opfs://device/").to_string().parse::<u64>().ok(),
             _ => None
         }
+    }
+
+    fn session_path(&self, session_id: u64) -> String {
+        format!("opfs://sessions-{session_id}/")
     }
 
     fn resource_thumbnail(session_id: Option<u64>, resource_id: u64) -> Self {

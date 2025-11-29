@@ -23,6 +23,13 @@ pub trait P2PNativeExecutor: Send + Sync {
                 let _ = web_rtc.update_finding_scopes(update_finding_scopes).await;
                 Ok(CoreOperationOutput::None)
             }
+            P2POperation::StopNearbyServer => {
+                self.web_rtc().stop().await;
+                Ok(CoreOperationOutput::None)
+            }
+            P2POperation::IsRunning => {
+                Ok(CoreOperationOutput::Bool(self.web_rtc().is_running()))
+            }
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
                 spawn(async move {
@@ -30,6 +37,7 @@ pub trait P2PNativeExecutor: Send + Sync {
                         log::error!("Failed to start nearby server: {e:?}");
                     }
                 });
+
                 Ok(CoreOperationOutput::None)
             }
         }

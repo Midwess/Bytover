@@ -9,9 +9,11 @@ use futures_util::{SinkExt, StreamExt};
 use n0_future::task::{spawn, JoinHandle};
 use once_cell::sync::OnceCell;
 use prost::Message as prost_message;
-use schema::devlog::rpc_signalling::server::Message;
+use schema::devlog::rpc_signalling::server::{LeftMessage, Message};
 use std::sync::Arc;
 use std::time::Duration;
+use futures::executor::block_on;
+use crate::protocol::webrtc::signalling::SharedContext;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -33,13 +35,14 @@ impl SignallingClient {
         }
     }
 
-    pub async fn start(&self) -> Result<(), WebRtcErrors> {
+    pub async fn start(&self, context: SharedContext) -> Result<(), WebRtcErrors> {
         let (signal_sender, mut signal_receiver) = unbounded::<Message>();
         let mut options = Options::default();
         options.read_timeout = Some(Duration::from_secs(60));
 
         let mut msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
+        let mut left_signal_sender = signal_sender.clone();
         let handle = spawn(async move {
             loop {
                 let (mut sender, receiver) = match connect(addr.clone(), options.clone()) {
@@ -107,6 +110,18 @@ impl SignallingClient {
                         sender.send(WsMessage::Binary(bytes));
                     }
                 }
+
+                // When it goes here, the websocket was already being disconnected, we need to notify all peers to cancel
+                log::info!("websocket disconnected, notifying all peers to cancel");
+                let removed_peers = context.remove_all().await;
+                for peer_id in removed_peers {
+                    let _ = left_signal_sender.send(Message {
+                        left_message: Some(LeftMessage {
+                            id: peer_id.to_string()
+                        }),
+                        ..Default::default()
+                    }).await;
+                }
             }
         });
 
@@ -131,7 +146,7 @@ impl SignallingClient {
         Ok(())
     }
 
-    pub async fn stop(mut self) {
+    pub async fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
             let _ = self.sender.close().await;
@@ -142,10 +157,7 @@ impl SignallingClient {
 
 impl Drop for SignallingClient {
     fn drop(&mut self) {
-        let Some(handle) = self.handle.get() else {
-            return;
-        };
-
-        handle.abort();
+        log::info!("Signalling client dropped, aborting websocket");
+        block_on(async { self.stop().await })
     }
 }

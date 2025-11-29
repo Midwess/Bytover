@@ -48,6 +48,7 @@ pub enum SessionPersistentOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferSessionPersistentOperation {
     Save(TransferSession),
+    Clear,
     UpdateProgresses(u64, Vec<TransferProgress>),
     Remove(TransferSessionId),
     GetAllReceivedSessions(),
@@ -173,6 +174,11 @@ impl TransferSessionPersistentOperation {
             TransferSessionPersistentOperation::Remove(id)
         ))
         .map(|it| it.result())
+    }
+
+    pub fn clear_all() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear))
+            .map(|it| it.result())
     }
 
     pub fn generate_thumbnail_paths(

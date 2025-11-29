@@ -54,10 +54,10 @@ import {
     MessageReason,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl,
+    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer,
 } from 'shared_types/types/shared_types'
-import {BincodeDeserializer} from "shared_types/bincode/bincodeDeserializer";
-import {BincodeSerializer} from "shared_types/bincode/bincodeSerializer";
+import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
+import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
 import init_core, {
     add_device_files, add_device_folder, create_file,
     execute,
@@ -66,12 +66,12 @@ import init_core, {
     init, is_compatible,
     view
 } from "core_wasm"
-import {process_event, handle_response} from "core_wasm";
-import BPromise, {delay} from 'bluebird'
-import {Observable} from "@/utils/observable";
-import {useEffect, useState} from "react";
-import {FileMetadata, FolderStructure} from "@/hooks/use-file-upload";
-import {getThumbnailFromFile} from "@/utils/thumbnail";
+import { process_event, handle_response } from "core_wasm";
+import BPromise, { delay } from 'bluebird'
+import { Observable } from "@/utils/observable";
+import { useEffect, useState } from "react";
+import { FileMetadata, FolderStructure } from "@/hooks/use-file-upload";
+import { getThumbnailFromFile } from "@/utils/thumbnail";
 import { noop } from 'lodash';
 
 export class WasmCore {
@@ -80,6 +80,7 @@ export class WasmCore {
     cachedGeoLocation: GeoLocation | undefined = undefined;
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
+    isTransferReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
@@ -91,14 +92,13 @@ export class WasmCore {
 
     selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
 
-    constructor() {}
+    constructor() { }
 
     public useSelectedSession() {
         const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
 
         useEffect(() => {
             return this.selectedSession.subscribe((value) => {
-                console.log("Selected session changed", value?.id)
                 setSelectedSession(value)
             })
         }, []);
@@ -107,17 +107,13 @@ export class WasmCore {
     }
 
     public useSession(id: String) {
-        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(() => {
-            const transferState = this.transferState.get()
-            return transferState?.received_sessions?.find(it => it.id === id) ||
-                   transferState?.received_cloud_sessions?.find(it => it.id === id)
-        })
+        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(undefined)
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
-                                   transferState?.received_cloud_sessions?.find(it => it.id === id)
-                
+                    transferState?.received_cloud_sessions?.find(it => it.id === id)
+
                 if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
                 }
@@ -136,15 +132,15 @@ export class WasmCore {
 
                 const foundResource = isCloud ?
                     transferState.received_cloud_sessions?.flatMap(session => [
-                    ...session.file_resources,
-                    ...session.image_resources,
-                    ...session.video_resources
-                ]).find(r => r.model.order_id === id)
-                : transferState.received_sessions?.flatMap(session => [
-                    ...session.file_resources,
-                    ...session.image_resources,
-                    ...session.video_resources
-                ]).find(r => r.model.order_id === id)
+                        ...session.file_resources,
+                        ...session.image_resources,
+                        ...session.video_resources
+                    ]).find(r => r.model.order_id === id)
+                    : transferState.received_sessions?.flatMap(session => [
+                        ...session.file_resources,
+                        ...session.image_resources,
+                        ...session.video_resources
+                    ]).find(r => r.model.order_id === id)
 
                 if (!isEqual(resource, foundResource)) {
                     setResource(foundResource)
@@ -158,7 +154,7 @@ export class WasmCore {
     public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
         this.selectedSession.set(session)
     }
-    
+
     public useMessage(reason: MessageReason) {
         const [messages, setMessages] = useState<DialogOperationVariantMessage[]>([])
 
@@ -227,8 +223,7 @@ export class WasmCore {
         const [clouds, setClouds] = useState(this.transferState.get()?.received_cloud_sessions ?? []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (transferState?.received_cloud_sessions?.length != clouds.length)
-                {
+                if (transferState?.received_cloud_sessions?.length != clouds.length) {
                     setClouds(transferState?.received_cloud_sessions ?? [])
                 }
             })
@@ -331,7 +326,7 @@ export class WasmCore {
 
                 this.cachedGeoLocation = new GeoLocation(position.coords.latitude, position.coords.longitude);
             }
-            catch(ignored) {
+            catch (ignored) {
                 console.log("Failed to get geolocation", ignored)
             }
             finally {
@@ -357,7 +352,7 @@ export class WasmCore {
     async processEffect(request_id: number, effect: AppOperation): Promise<Uint8Array> {
         const effectOperation = effect as AppOperationVariantOperation;
         const coreOperation = effectOperation.value;
-        switch(coreOperation.constructor) {
+        switch (coreOperation.constructor) {
             case CoreOperationVariantInitNativeExecutor: {
                 await init()
                 this.isCoreReady.set(true)
@@ -365,7 +360,7 @@ export class WasmCore {
             }
             case CoreOperationVariantWebView: {
                 const webOperation = coreOperation as CoreOperationVariantWebView;
-                switch(webOperation.value.constructor) {
+                switch (webOperation.value.constructor) {
                     case WebViewOperationVariantOpenUrl: {
                         const operation = webOperation.value as WebViewOperationVariantOpenUrl
                         window.open(operation.value, "_blank")
@@ -376,7 +371,7 @@ export class WasmCore {
             }
             case CoreOperationVariantDevice: {
                 const device = coreOperation as CoreOperationVariantDevice;
-                switch(device.value.constructor) {
+                switch (device.value.constructor) {
                     case DeviceOperationVariantGetDeviceInfo: {
                         return await handle_response(request_id, serialize(new CoreOperationOutputVariantDeviceInfo(new DeviceInfo(
                             new PlatformVariantWeb(),
@@ -445,7 +440,7 @@ export class WasmCore {
             }
             case CoreOperationVariantDialog: {
                 const operation = coreOperation as CoreOperationVariantDialog;
-                switch(operation.value.constructor) {
+                switch (operation.value.constructor) {
                     case DialogOperationVariantToast: {
                         const toastOp = operation.value as DialogOperationVariantToast;
                         toast(toastOp.value)
@@ -477,7 +472,7 @@ export class WasmCore {
         return serialize(new CoreOperationOutputVariantNone())
     }
 
-    async addFiles(files: (File | FileMetadata) []) {
+    async addFiles(files: (File | FileMetadata)[]) {
         const files_only = files.filter(f => f instanceof File) as File[]
         const data = await add_device_files(files_only)
         if (!data) return [];
@@ -508,7 +503,7 @@ export class WasmCore {
 
     async downloadFile(path: LocalResourcePath, filename: string): Promise<void> {
         const downloadUrl = await this.getDownloadUrl(path)
-        
+
         if (!downloadUrl) {
             throw new Error(`Failed to get download URL ${JSON.stringify(path)}`)
         }
@@ -562,7 +557,7 @@ export class WasmCore {
 
             return
         }
-        catch(ignored) {
+        catch (ignored) {
             console.error(ignored)
         }
 

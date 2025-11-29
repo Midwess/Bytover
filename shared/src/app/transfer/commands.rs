@@ -163,17 +163,13 @@ impl AppCommand {
 
     pub async fn accept_session(&self, remote_session: TransferSessionMessage, peer: Peer) -> Result<(), CoreError> {
         let peer_id = peer.id();
-        let (generate_file_paths_request, _generate_thumbnail_paths_request) = {
+        let generate_file_paths_request = {
             let mut result = HashMap::new();
-            let mut thumbnail_paths = HashMap::new();
             for resource in remote_session.resources.iter() {
                 result.insert(resource.order_id, resource.name.clone());
-                if resource.is_thumbnail_included {
-                    thumbnail_paths.insert(resource.order_id, resource.name.clone());
-                }
             }
 
-            (result, thumbnail_paths)
+            result
         };
 
         let mut generated_thumbnails_paths = self
@@ -197,7 +193,10 @@ impl AppCommand {
                 continue;
             };
 
-            let generated_thumbnail_path = generated_thumbnails_paths.remove(&order_id);
+            let generated_thumbnail_path = match resource_request.is_thumbnail_included {
+                true => generated_thumbnails_paths.remove(&order_id),
+                false => None
+            };
 
             resources.push(LocalResource {
                 path: saved_path,

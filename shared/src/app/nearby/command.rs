@@ -14,17 +14,22 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
+use crate::CoreOperation;
+use crate::entities::device::DeviceInfo;
+use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn start_nearby_server(&self, user: Option<User>) {
-        let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
-            self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return;
-        };
+    pub async fn restart_nearby(&self) -> Result<(), CoreError> {
+        self.run(P2POperation::stop()).await?;
+        self.notify_event(NearbyEvent::Launch);
 
+        Ok(())
+    }
+
+    pub async fn gen_peer(&self, user: Option<User>, device: DeviceInfo) -> Peer {
         let peer_id = Uuid::now_v7().to_string();
 
-        let peer = match user {
+        match user {
             Some(user) => Peer {
                 id: peer_id.clone(),
                 name: Some(user.name),
@@ -34,17 +39,33 @@ impl AppCommand {
             },
             None => Peer {
                 id: peer_id.clone(),
-                name: None,
+                name: Some(device.name.clone()),
                 avatar_url: Peer::random_avatar(),
                 email: None,
                 device
             }
+        }
+    }
+
+    pub async fn start_nearby_server(&self, user: Option<User>) {
+        let is_already_running = self.run(P2POperation::is_running()).await;
+        if is_already_running.unwrap_or(false) {
+            log::info!("Nearby server is already running");
+            return;
+        }
+
+        let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
+            self.run(DialogOperation::toast("Device not found".to_string())).await;
+            return;
         };
+
+        let peer = self.gen_peer(user, device).await;
 
         self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
 
+        let _ = self.run(P2POperation::stop()).await;
         log::info!(target: "nearby", "Starting nearby server");
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
@@ -66,12 +87,16 @@ impl AppCommand {
                     });
                 }
                 CoreOperationOutput::Error(error) => {
-                    log::error!("Error: {error:?}");
+                    log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
+                    let _ = self.run(P2POperation::stop()).await;
+
+                    self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
+                    self.notify_event(NearbyEvent::Launch);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
-                    log::info!(target: "nearby", "Nearby server stopped");
+                    log::info!(target: "nearby", "Nearby server stopped, stop server");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
@@ -102,6 +127,7 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
+                    log::info!("Peer disconnected: {}", peer.id);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
@@ -115,6 +141,10 @@ impl AppCommand {
                         peer: peer.clone()
                     };
                     self.notify_event(request);
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
+                    log::info!("Nearby server stopped, stop peer connection");
+                    break;
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");

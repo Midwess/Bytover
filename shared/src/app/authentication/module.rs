@@ -2,7 +2,6 @@ use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 use core_services::utils::string::StringExt;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
-use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::user::User;
 
@@ -10,7 +9,6 @@ use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::rpc::RpcOperation;
-use crate::app::shelf::module::ShelfEvent;
 use crate::CoreOperation;
 
 pub struct AuthenticationModule;
@@ -33,6 +31,8 @@ pub enum AuthenticationEvent {
     SignOut,
     OnRedirected { url: String },
     Authorized { user: User },
+    // User not signed in
+    UnAuthorized,
     Feedback { message: Option<String>, email: String }
 }
 
@@ -51,18 +51,23 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 ctx.app().authenticate().await;
                 Ok(())
             }),
-            AuthenticationEvent::SignOut => Command::handle_result(|ctx| async move {
-                ctx.app().sign_out().await?;
-                Ok(())
-            }),
+            AuthenticationEvent::SignOut => {
+                model.authentication.user.take();
+                Command::handle_result(|ctx| async move {
+                    ctx.app().sign_out().await?;
+                    ctx.notify_shell(CoreOperation::Render);
+                    let _ = ctx.app().restart_nearby().await;
+                    Ok(())
+                })
+            },
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
+                    log::info!("User is already authorized, skipping...");
                     return Command::done();
                 }
 
                 Command::handle_result(|ctx| async move {
                     ctx.app().authorize(url).await?;
-
                     Ok(())
                 })
             }
@@ -76,8 +81,12 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    app.notify_event(ShelfEvent::Launch);
-                    app.notify_event(TransferEvent::Launch);
+                    let _ = app.restart_nearby().await;
+                })
+            }
+            AuthenticationEvent::UnAuthorized => {
+                Command::new(|ctx| async move {
+                    let app = ctx.app();
                     app.notify_event(NearbyEvent::Launch);
                 })
             }
