@@ -84,7 +84,7 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
-                let removed = self.local_resource_repository()
+                self.local_resource_repository()
                     .remove(path)
                     .await?;
 

@@ -14,20 +14,13 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
-use crate::CoreOperation;
 use crate::entities::device::DeviceInfo;
 use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn restart_nearby(&self, user: Option<User>) -> Result<(), CoreError> {
-        let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
-            self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return Ok(())
-        };
-
-        let peer = self.gen_peer(user, device).await;
+    pub async fn restart_nearby(&self) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
-        self.run(P2POperation::start(peer)).await?;
+        self.notify_event(NearbyEvent::Launch);
 
         Ok(())
     }
@@ -98,7 +91,7 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
-                    log::info!(target: "nearby", "Nearby server stopped");
+                    log::info!(target: "nearby", "Nearby server stopped, stop server");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
@@ -129,6 +122,7 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
+                    log::info!("Peer disconnected: {}", peer.id);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
@@ -144,7 +138,7 @@ impl AppCommand {
                     self.notify_event(request);
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
-                    log::info!("Nearby server stopped");
+                    log::info!("Nearby server stopped, stop peer connection");
                     break;
                 }
                 CoreOperationOutput::Error(error) => {

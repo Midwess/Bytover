@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
-use n0_future::time::sleep;
+use futures::executor::block_on;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -53,8 +53,6 @@ impl WebRtc {
     pub async fn stop(&self) {
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.remove_all().await;
-        // Waiting for the socket to close
-        sleep(Duration::from_millis(1000)).await;
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -128,7 +126,7 @@ impl WebRtc {
 
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
         self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
-        self.shared_context.set_current_id(current_user.peer_id());
+        self.shared_context.set_current_id(current_user.peer_id()).await;
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
@@ -154,8 +152,6 @@ impl WebRtc {
         loop {
             if !self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 log::info!("The webrtc server is stopped, will cleanup");
-
-                core_request.response(P2POperationOutput::NearbyServerStopped).await;
                 break;
             }
 
@@ -205,7 +201,7 @@ impl WebRtc {
                     }
                 }
                 else if state == matchbox_socket::PeerState::Disconnected {
-                    log::info!("Peer2 {peer_id} disconnected");
+                    log::info!("Peer {peer_id} disconnected");
                     self.shared_context.remove_peer(&peer_id).await
                 }
             }
@@ -301,6 +297,7 @@ impl WebRtc {
 
         socket.close();
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        core_request.response(P2POperationOutput::NearbyServerStopped).await;
 
         Ok(())
     }
@@ -308,6 +305,8 @@ impl WebRtc {
 
 impl Drop for WebRtc {
     fn drop(&mut self) {
-        self.stop();
+        block_on(async {
+            self.stop().await;
+        });
     }
 }

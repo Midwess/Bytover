@@ -2,7 +2,6 @@ use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 use core_services::utils::string::StringExt;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
-use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::user::User;
 
@@ -11,7 +10,6 @@ use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
-use crate::app::shelf::module::ShelfEvent;
 use crate::CoreOperation;
 
 pub struct AuthenticationModule;
@@ -59,7 +57,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 Command::handle_result(|ctx| async move {
                     ctx.app().sign_out().await?;
                     ctx.notify_shell(CoreOperation::Render);
-                    let _ = ctx.app().restart_nearby(None).await;
+                    let _ = ctx.app().restart_nearby().await;
                     Ok(())
                 })
             },

@@ -2,15 +2,11 @@ use crate::app::operations::device::GeoLocation;
 use crate::entities::finding_scope::FindingScope;
 use crate::errors::CoreError;
 use core_services::retry;
-use futures_util::lock::Mutex;
-use n0_future::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct InternetConnection {
-    last_passed: Arc<Mutex<Option<Instant>>>,
     locator_server_url: String
 }
 
@@ -36,7 +32,6 @@ impl NetworkResponse {
 impl InternetConnection {
     pub fn new(locator_server_url: String) -> Self {
         Self {
-            last_passed: Arc::new(Mutex::new(None)),
             locator_server_url
         }
     }
@@ -44,9 +39,9 @@ impl InternetConnection {
     pub async fn locate(&self, geo_location: Option<GeoLocation>) -> Result<NetworkResponse, CoreError> {
         let client = reqwest::Client::new();
 
-        let body = geo_location.and_then(|geo_location| serde_json::to_value(&geo_location).ok()).unwrap_or(json!({}));
+        let query = geo_location.and_then(|geo_location| serde_json::to_value(&geo_location).ok()).unwrap_or(json!({}));
         let response = retry!(retries = 3, delay = Duration::from_millis(3000), |_| true, {
-            let Ok(response) = client.post(&self.locator_server_url).json(&body).send().await else {
+            let Ok(response) = client.get(&self.locator_server_url).query(&query).send().await else {
                 return Err(CoreError::Network("Failed to get public IP address".to_string()));
             };
 

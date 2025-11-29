@@ -17,7 +17,7 @@ dependencies = [
  "image",
  "log",
  "machine-uid",
- "n0-future",
+ "n0-future 0.3.1",
  "native",
  "rdev",
  "schema",
@@ -1194,7 +1194,7 @@ dependencies = [
  "bitflags 2.10.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -1407,9 +1407,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
-version = "1.10.1"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
+checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
 dependencies = [
  "serde",
 ]
@@ -1959,7 +1959,7 @@ dependencies = [
  "lazy_static",
  "lettre",
  "log",
- "n0-future",
+ "n0-future 0.2.0",
  "parking_lot",
  "pretty_env_logger",
  "prost 0.13.5",
@@ -2423,7 +2423,7 @@ dependencies = [
  "lazy_static",
  "lettre",
  "log",
- "n0-future",
+ "n0-future 0.2.0",
  "regex",
  "reqwest",
  "serde",
@@ -2470,7 +2470,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2869,7 +2869,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4641,7 +4641,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5104,7 +5104,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#69a9446e9dee74f39cac43e2b8edbac4a519440e"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#233280088547dc67d56965da730b4e984003fc25"
 dependencies = [
  "cfg-if",
  "derive_more 2.0.1",
@@ -5115,7 +5115,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#69a9446e9dee74f39cac43e2b8edbac4a519440e"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#233280088547dc67d56965da730b4e984003fc25"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -5331,6 +5331,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "n0-future"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c0709ac8235ce13b82bc4d180ee3c42364b90c1a8a628c3422d991d75a728b5"
+dependencies = [
+ "cfg_aliases",
+ "derive_more 1.0.0",
+ "futures-buffered",
+ "futures-lite",
+ "futures-util",
+ "js-sys",
+ "pin-project",
+ "send_wrapper 0.6.0",
+ "tokio",
+ "tokio-util",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
+]
+
+[[package]]
 name = "native"
 version = "0.1.0"
 dependencies = [
@@ -5477,7 +5498,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6993,7 +7014,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.1",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7556,7 +7577,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8342,7 +8363,7 @@ dependencies = [
  "log",
  "matchbox_protocol",
  "matchbox_socket",
- "n0-future",
+ "n0-future 0.3.1",
  "once_cell",
  "prost 0.13.5",
  "reqwest",
@@ -9401,7 +9422,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9668,9 +9689,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.16"
+version = "0.7.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14307c986784f72ef81c89db7d9e28d6ac26d16213b109ea501696195e6e3ce5"
+checksum = "2efa149fe76073d6e8fd97ef4f4eca7b67f599660115591483572e406e165594"
 dependencies = [
  "bytes",
  "futures-core",
@@ -10683,7 +10704,7 @@ dependencies = [
  "js-sys",
  "log",
  "mime_guess",
- "n0-future",
+ "n0-future 0.3.1",
  "once_cell",
  "schema",
  "serde",
@@ -11123,7 +11144,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
