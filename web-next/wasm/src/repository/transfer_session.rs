@@ -40,7 +40,8 @@ impl IdbId for IdbIdWrapper<TransferSessionId> {
         };
 
         Ok(IdbIdWrapper(TransferSessionId {
-            order_id: json_array.get(0).and_then(|v| v.as_str().to_owned()).map(|it| it.to_string())
+            transfer_type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
+            order_id: json_array.get(1).and_then(|v| v.as_str().to_owned()).map(|it| it.to_string())
         }))
     }
 }
@@ -113,6 +114,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     ) -> Result<Option<TransferSession>, PersistenceError> {
         let id = TransferSessionId {
             order_id: Some(order_id.to_string()),
+            ..Default::default()
         };
 
         let session = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(id)).await?;

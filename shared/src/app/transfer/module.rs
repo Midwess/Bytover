@@ -67,6 +67,7 @@ pub enum TransferEvent {
     },
     CancelTransfer {
         session_id: u64,
+        transfer_type: TransferType
     },
     TransferCanceled {
         session_id: u64
@@ -116,9 +117,10 @@ impl AppModule<BitBridge> for TransferModule {
                     Ok(())
                 })
             },
-            TransferEvent::CancelTransfer { session_id} => {
+            TransferEvent::CancelTransfer { session_id, transfer_type} => {
                 let id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
+                    transfer_type: Some(transfer_type),
                 };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::new(|it| async move {
@@ -224,6 +226,7 @@ impl AppModule<BitBridge> for TransferModule {
                     if let Some(duplicated_session) = duplicated_session {
                         it.notify_event(TransferEvent::CancelTransfer {
                             session_id: duplicated_session.order_id,
+                            transfer_type: duplicated_session.transfer_type
                         });
                         return Ok(());
                     }
@@ -323,6 +326,7 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::ViewPublicSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
                 };
 
                 let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {

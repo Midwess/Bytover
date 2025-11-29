@@ -1,7 +1,6 @@
 'use client'
 import core from "@/wasm/wasm_core";
 import {Suspense, useEffect} from "react";
-import {useUrlState} from "@/hooks/use-url";
 import {
     AppEventVariantAuthentication,
     AuthenticationEventVariantOnRedirected

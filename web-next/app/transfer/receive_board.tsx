@@ -17,7 +17,7 @@ import {
 import {
     ArrowDown,
     Book,
-    ChevronsUpDown, Download,
+    ChevronsUpDown,
     Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -410,7 +410,8 @@ const SessionList = React.memo(({ sessions, title }: { sessions: (ReceiveCloudSe
             </CollapsibleContent>
         </Collapsible>
     )
-})
+});
+SessionList.displayName = 'SessionList';
 
 function Board() {
     const publicSessions = core.useCloudSessionsList()

@@ -1,6 +1,6 @@
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferProgress, TransferSession};
+use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferType};
 use crate::repository::errors::PersistenceError;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
@@ -16,6 +16,7 @@ pub enum TransferTargetId {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct TransferSessionId {
+    pub transfer_type: Option<TransferType>,
     pub order_id: Option<String>
 }
 
@@ -57,6 +58,7 @@ impl Table<TransferSessionId> for TransferSession {
 
     fn id(&self) -> TransferSessionId {
         TransferSessionId {
+            transfer_type: Some(self.transfer_type.clone()),
             order_id: Some(self.order_id.to_string())
         }
     }
