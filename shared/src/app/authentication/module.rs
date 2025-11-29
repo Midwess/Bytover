@@ -8,7 +8,6 @@ use crate::entities::user::User;
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::DialogOperation;
-use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::CoreOperation;
 
@@ -82,8 +81,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    let _ = app.run(P2POperation::stop()).await;
-                    app.notify_event(NearbyEvent::Launch);
+                    let _ = app.restart_nearby().await;
                 })
             }
             AuthenticationEvent::UnAuthorized => {

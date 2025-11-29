@@ -36,8 +36,8 @@ impl AppModule<BitBridge> for EnvironmentModule {
         match event {
             EnvironmentEvent::AppLaunched => Command::handle_result(|ctx| async move {
                 ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                ctx.app().notify_event(TransferEvent::Launch);
                 ctx.app().notify_event(ShelfEvent::Launch);
+                ctx.app().notify_event(TransferEvent::Launch);
                 ctx.app().re_authorize().await?;
 
                 Ok(())

@@ -40,8 +40,7 @@ impl IdbId for IdbIdWrapper<TransferSessionId> {
         };
 
         Ok(IdbIdWrapper(TransferSessionId {
-            r#type: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
-            order_id: json_array.get(2).and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
+            order_id: json_array.get(0).and_then(|v| v.as_str().to_owned()).map(|it| it.to_string())
         }))
     }
 }
@@ -96,8 +95,8 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
     }
 
     async fn delete_one(&self, id: &TransferSessionId) -> Resolve<TransferSession> {
-        log::info!("delete session: {:?}", id);
-        IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(id.clone())).await
+        let returned = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(id.clone())).await?;
+        Ok(returned)
     }
 
     async fn update_one(&self, data: TransferSession) -> Resolve<TransferSession> {
@@ -113,8 +112,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         progresses: Vec<TransferProgress>
     ) -> Result<Option<TransferSession>, PersistenceError> {
         let id = TransferSessionId {
-            order_id: Some(order_id),
-            ..Default::default()
+            order_id: Some(order_id.to_string()),
         };
 
         let session = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(id)).await?;
@@ -149,7 +147,8 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     }
 
     async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
-        IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(session_id.clone())).await?;
+        IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(session_id)).await?;
+
         Ok(())
     }
 

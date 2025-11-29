@@ -139,9 +139,10 @@ export default function Header({ className }: { className?: string }) {
                                         Transfer
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                        className={"text-destructive/80"}
                                         onClick={handleSignOut}
                                     >
-                                        Sign out
+                                        Sign out & clear data
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

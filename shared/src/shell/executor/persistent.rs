@@ -1,3 +1,4 @@
+use core_services::db::repository::abstraction::table::Table;
 use crate::app::operations::persistent::{
     LocalResourcePersistentOperation,
     PersistentOperation,
@@ -6,11 +7,10 @@ use crate::app::operations::persistent::{
 };
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
-use crate::entities::transfer_session::TransferType;
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::LocalResourceRepository;
-use crate::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use crate::repository::transfer_session::TransferSessionRepository;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -114,12 +114,8 @@ pub trait NativePersistent: Send + Sync {
                 Ok(session.into())
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GetAllReceivedSessions()) => {
-                let id = TransferSessionId {
-                    r#type: Some(TransferType::Receive),
-                    ..Default::default()
-                };
-
-                let sessions = self.transfer_session_repository().find_all(Some(&id), None, None).await?;
+                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
+                log::info!("Found sessions: {:?}", sessions.len());
                 Ok(CoreOperationOutput::TransferSessions(sessions))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)) => {
@@ -153,6 +149,15 @@ pub trait NativePersistent: Send + Sync {
             }) => {
                 let result = self.local_resource_repository().generate_thumbnail_paths(session_id, resource_ids).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
+                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
+                for session in sessions {
+                    let result = self.transfer_session_repository().delete_session(session.id()).await;
+                    log::info!("Deleted session: {:?}", result);
+                }
+
+                Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string()))
         }

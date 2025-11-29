@@ -99,7 +99,6 @@ export class WasmCore {
 
         useEffect(() => {
             return this.selectedSession.subscribe((value) => {
-                console.log("Selected session changed", value?.id)
                 setSelectedSession(value)
             })
         }, []);

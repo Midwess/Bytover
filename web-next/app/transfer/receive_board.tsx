@@ -483,7 +483,7 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            <CircleProgress isCompleted={is_completed} isInProgress={!is_completed} center={is_public ? <Download /> : undefined} progress={progress} size={30} strokeWidth={3}
+            <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3}
                 onClick={() => {
                     if (!is_public) {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))

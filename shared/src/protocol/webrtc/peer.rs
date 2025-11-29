@@ -220,14 +220,15 @@ impl WebRtcPeer {
             return Ok(TransferSessionStatus::Canceled);
         };
 
+        log::info!("Thumbnails info {:?}", session.resources.iter().map(|r| r.thumbnail_path.clone()).collect::<Vec<_>>());
         let Some(cancellation_signal) = self.transfers_context.cancellation_token(session.order_id).await else {
             return Err(WebRtcErrors::Canceled(TaskErrors::Cancelled))
         };
 
         let _drop_guard = cancellation_signal.drop_guard();
 
-        let mut resource_rx = self.inbound_data_stream_receiver.retrieve().await?;
-        let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve().await?;
+        let mut resource_rx = self.inbound_data_stream_receiver.retrieve_timed(Duration::from_secs(11)).await?;
+        let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve_timed(Duration::from_secs(11)).await?;
 
         let msg_channel = self.msg_channel.clone();
         let peer_id = session.peer().map(|it| it.peer_id()).context("This is not a peer session")?;
@@ -354,6 +355,7 @@ impl WebRtcPeer {
         }
 
         // Giving max 10s more for thumbnail to complete
+        drop(resource_rx);
         cancellation_signal.cancel_after(Duration::from_secs(10));
         let _ = thumbnail_handle.await;
         self.transfers_context.stop_transfer(session_id).await;
@@ -375,7 +377,7 @@ impl WebRtcPeer {
         let _drop_guard = cancellation_signal.drop_guard();
 
         let session_id = session.order_id;
-        log::info!("Requesting peer to transfer session {session_id}");
+        log::info!("Requesting peer to transfer session {session_id}, thumbnails{:?}", session.resources.iter().map(|r| r.thumbnail_path.clone()).collect::<Vec<_>>());
 
         for resource in session.resources.iter_mut() {
             if matches!(resource.r#type, ResourceType::Folder) {
