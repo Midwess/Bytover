@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
 use futures::executor::block_on;
+use crate::app::operations::CoreOperationOutput;
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
@@ -140,7 +141,7 @@ impl WebRtc {
 
         let loop_fut = loop_fut.fuse();
         futures::pin_mut!(loop_fut);
-        let timeout = Delay::new(Duration::from_millis(5));
+        let timeout = Delay::new(Duration::from_millis(8));
         futures::pin_mut!(timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
@@ -149,10 +150,10 @@ impl WebRtc {
 
         let mut handles = vec![];
 
-        loop {
+        let result = loop {
             if !self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 log::info!("The webrtc server is stopped, will cleanup");
-                break;
+                break Ok(());
             }
 
             for (peer_id, state) in socket.try_update_peers()? {
@@ -289,14 +290,20 @@ impl WebRtc {
                 _ = (&mut timeout).fuse() => {
                     timeout.reset(Duration::from_millis(5));
                 }
-                _ = &mut loop_fut => {
-                    break;
+                result = &mut loop_fut => {
+                    break result;
                 }
             }
-        }
+        };
 
         socket.close();
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        if let Err(err) = result {
+            let web_rtc_errors = WebRtcErrors::SignallingClientError(anyhow!("WebRTC loop failed: {err}"));
+            core_request.response(CoreOperationOutput::Error(web_rtc_errors.into())).await;
+            return Ok(())
+        };
+
         core_request.response(P2POperationOutput::NearbyServerStopped).await;
 
         Ok(())

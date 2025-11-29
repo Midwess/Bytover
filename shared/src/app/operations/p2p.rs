@@ -27,6 +27,8 @@ pub enum P2POperationOutput {
     PeerDisconnected(),
     ReceivedSessionRequest { remote_session: TransferSessionMessage },
     CancelSessionRequest { session_id: u64 },
+    // Happily stopped
+    // if error happened, it will be OperationOutput::Error(CoreError)
     NearbyServerStopped
 }
 

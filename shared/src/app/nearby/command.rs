@@ -14,6 +14,7 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
+use crate::CoreOperation;
 use crate::entities::device::DeviceInfo;
 use crate::errors::CoreError;
 
@@ -86,8 +87,12 @@ impl AppCommand {
                     });
                 }
                 CoreOperationOutput::Error(error) => {
-                    log::error!("Error: {error:?}");
+                    log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
+                    let _ = self.run(P2POperation::stop()).await;
+
+                    self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
+                    self.notify_event(NearbyEvent::Launch);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
