@@ -6,6 +6,7 @@ import { Pricing2 } from "@/components/pricing2";
 import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
 import { JoinWaitList } from "@/components/join-waitlist";
+import { AdditionalFeatures } from "@/components/additional-features";
 
 function FeaturesSection() {
     const features = [
@@ -139,8 +140,13 @@ export default function Home() {
             <PricingPlans />
         </div>
 
+        {/* Additional Features Section */}
+        <div id="more-features" className={"w-full bg-indigo-700/20"}>
+            <AdditionalFeatures />
+        </div>
+
         {/* Join Waitlist Section */}
-        <div id="waitlist" className={"w-full bg-zinc-900 min-h-[60vh] items-center flex"}>
+        <div id="waitlist" className={"w-full bg-black min-h-[60vh] items-center flex"}>
             <JoinWaitList />
         </div>
 

@@ -42,6 +42,7 @@ type TypingTextProps = Omit<React.ComponentProps<'span'>, 'children'> & {
   text: string | string[];
   cursorClassName?: string;
   animateOnChange?: boolean;
+  enableAnimation?: boolean;
 };
 
 function TypingText({
@@ -57,6 +58,7 @@ function TypingText({
   text,
   cursorClassName,
   animateOnChange = true,
+  enableAnimation = true,
   ...props
 }: TypingTextProps) {
   const localRef = React.useRef<HTMLSpanElement>(null);
@@ -69,9 +71,16 @@ function TypingText({
   const isInView = !inView || inViewResult;
 
   const [started, setStarted] = React.useState(false);
-  const [displayedText, setDisplayedText] = React.useState<string>('');
+  const [displayedText, setDisplayedText] = React.useState<string>(
+    !enableAnimation ? (typeof text === 'string' ? text : text[0] ?? '') : '',
+  );
 
   React.useEffect(() => {
+    if (!enableAnimation) {
+      setDisplayedText(typeof text === 'string' ? text : text[0] ?? '');
+      return;
+    }
+
     // Reset animation when text changes (if animateOnChange is true)
     if (animateOnChange) {
       setStarted(false);
@@ -89,10 +98,10 @@ function TypingText({
       }, delay);
       return () => clearTimeout(timeoutId);
     }
-  }, [isInView, delay, ...(animateOnChange ? [text] : [])]);
+  }, [isInView, delay, enableAnimation, ...(animateOnChange ? [text] : [])]);
 
   React.useEffect(() => {
-    if (!started) return;
+    if (!enableAnimation || !started) return;
     const timeoutIds: Array<ReturnType<typeof setTimeout>> = [];
     const texts: string[] = typeof text === 'string' ? [text] : text;
 
@@ -147,12 +156,12 @@ function TypingText({
     return () => {
       timeoutIds.forEach(clearTimeout);
     };
-  }, [text, duration, started, loop, holdDelay]);
+  }, [text, duration, started, loop, holdDelay, enableAnimation]);
 
   return (
     <span ref={localRef} data-slot="typing-text" {...props}>
       <motion.span>{displayedText}</motion.span>
-      {cursor && <CursorBlinker className={cursorClassName} />}
+      {enableAnimation && cursor && <CursorBlinker className={cursorClassName} />}
     </span>
   );
 }
