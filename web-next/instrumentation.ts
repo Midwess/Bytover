@@ -1,4 +1,10 @@
 // This file only allowed to be run on server side
+import { promises as fs } from 'fs';
+import path from 'path';
+import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import mime from 'mime-types';
+import Bluebird from 'bluebird';
+
 if (typeof window !== 'undefined') {
   throw new Error('This file should only be used on the server side.');
 }
@@ -83,12 +89,6 @@ export async function setupCDN(): Promise<void> {
     console.warn('Invalid configuration: VERSION or S3_CDN_PREFIX is missing.');
     return;
   }
-
-  const { S3Client, PutObjectCommand, HeadObjectCommand } = await import('@aws-sdk/client-s3');
-  const { promises: fs } = await import('fs');
-  const path = await import('path');
-  const mime = await import('mime-types');
-  const { default: Bluebird } = await import('bluebird');
 
   try {
     const entry = `${__dirname}/../../`;
