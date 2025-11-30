@@ -177,7 +177,7 @@ export default function Footer() {
                         </p>
 
                         {/* Social Links */}
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 under-development">
                             <Link
                                 href="https://github.com/dev-logs/bit-bridge"
                                 target="_blank"

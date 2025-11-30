@@ -21,43 +21,43 @@ interface Feature {
 
 const features: Feature[] = [
     {
-        title: "Peer to peer with a relay server",
-        description: "All transfer are truely peer to peer unless the sender or receiver is behind a NAT or firewall.",
+        title: "Secure Peer-to-Peer File Transfer with Relay Backup",
+        description: "Fast and private P2P transfers with an automatic relay fallback. Ensures reliable file delivery even behind NATs or firewalls.",
         icon: Network,
     },
     {
-        title: "No file size limits.",
-        description: "Transfer files of any size without restrictions or compression.",
+        title: "No File Size Limits — Transfer Anything",
+        description: "Send large files, videos, backups, and archives with zero size restrictions. Share without compression or quality loss.",
         icon: Infinity,
     },
     {
-        title: "Cross-platform support.",
-        description: "Works seamlessly across Windows, macOS, Linux, iOS, and Android.",
+        title: "Cross-Platform Sharing on Any Device",
+        description: "Effortlessly transfer files across Windows, macOS, Linux, iPhone, iPad, and Android devices with full compatibility.",
         icon: Laptop,
     },
     {
-        title: "Folder transfer.",
-        description: "Transfer entire folders without any zip processing.",
+        title: "Transfer Entire Folders Easily",
+        description: "Share complete folders while preserving structure. No need to zip—send full directories in one simple action.",
         icon: FolderOpen,
     },
     {
-        title: "Nearby transfers.",
-        description: "Auto detect and transfer files to nearby devices.",
+        title: "Auto-Detect Nearby Devices on Local Network",
+        description: "Instantly find and send files to nearby devices on the same Wi-Fi or LAN. Perfect for quick office or home transfers.",
         icon: MapPin,
     },
     {
-        title: "To email inbox.",
-        description: "Send files to multiple people simultaneously with one link.",
+        title: "Share Files to Multiple Email Recipients",
+        description: "Send files directly to one or many email addresses at once. Ideal for teams, clients, and group sharing.",
         icon: Mail,
     },
     {
-        title: "Public transfer with password protected link.",
-        description: "Share files with anyone using a simple link. Optional password protection keeps your content secure while making sharing effortless.",
+        title: "Password-Protected Sharing Links",
+        description: "Create secure public links with optional passwords. Control who can access your shared files at all times.",
         icon: Lock,
     },
     {
-        title: "Public url is ready right after transfer.",
-        description: "No need to wait for the transfer to finish before sharing. The public url is ready right after the transfer is completed.",
+        title: "Instant Share Links After Upload",
+        description: "Get a ready-to-use share link immediately after upload. Start sharing right away—no waiting or extra processing.",
         icon: Zap,
     }
 ];
