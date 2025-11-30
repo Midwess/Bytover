@@ -13,7 +13,7 @@ function FeaturesSection() {
         {
             id: "shelf",
             heading: "Organize Your Files",
-            description: "Keep all your files organized in a beautiful shelf interface. Easy drag-and-drop, quick access, and seamless file management.",
+            description: "Keep all your files organized in a beautiful shelf interface. Easy drag-and-drop, quick access.",
             video: "/demo/desktop-shelf.mp4",
             color: '#060010',
         },

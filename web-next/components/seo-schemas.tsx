@@ -57,22 +57,22 @@ export function SEOSchemas() {
         `}
             </Script>
             <Script
+                id="schema-organization"
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
             />
             <Script
+                id="schema-website"
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
             />
             <Script
+                id="schema-homepage"
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
-            < Script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }
-                }
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }}
             />
-            < Script
+            <Script
+                id="schema-service"
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceSchema) }}
             />

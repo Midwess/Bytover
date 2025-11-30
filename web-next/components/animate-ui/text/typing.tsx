@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 function CursorBlinker({ className }: { className?: string }) {
   return (
-    <motion.h1
+    <motion.span
       data-slot="cursor-blinker"
       variants={{
         blinking: {

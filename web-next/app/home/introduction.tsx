@@ -40,11 +40,10 @@ export default function Introduction({
                             </div>
                             {header && <TypingText
                                 enableAnimation={!isMobile}
-                                delay={200}
+                                delay={500}
                                 duration={15}
                                 className="text-4xl md:text-5xl lg:text-7xl font-black text-center h1 pointer-events-none px-2"
                                 text={header}
-                                cursor
                                 cursorClassName="h-6 md:h-9"
                             />}
                         </div>
