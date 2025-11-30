@@ -141,12 +141,12 @@ export default function Home() {
         </div>
 
         {/* Additional Features Section */}
-        <div id="more-features" className={"w-full bg-indigo-700/20"}>
+        <div id="more-features" className={"w-full bg-blue-800/10"}>
             <AdditionalFeatures />
         </div>
 
         {/* Join Waitlist Section */}
-        <div id="waitlist" className={"w-full bg-black min-h-[60vh] items-center flex"}>
+        <div id="waitlist" className={"w-full bg-zinc-900 min-h-[60vh] items-center flex"}>
             <JoinWaitList />
         </div>
 

@@ -6,7 +6,7 @@ import {
     Infinity,
     Laptop,
     FolderOpen,
-    Radar,
+    MapPin,
     Mail,
     Lock,
     Zap,
@@ -43,7 +43,7 @@ const features: Feature[] = [
     {
         title: "Nearby transfers.",
         description: "Auto detect and transfer files to nearby devices.",
-        icon: Radar,
+        icon: MapPin,
     },
     {
         title: "To email inbox.",
@@ -82,7 +82,7 @@ export function AdditionalFeatures() {
                             There's more
                         </h2>
                         <p className="text-primaryText/60 text-lg max-w-2xl mx-auto">
-                            Discover powerful features that make file sharing effortless
+                            Discover even more ways to effortlessly manage and share your files.
                         </p>
                     </div>
                 </MotionEffect>
@@ -107,15 +107,15 @@ export function AdditionalFeatures() {
                                                     hover:bg-white/10 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10
                                                     hover:-translate-y-1">
                                         {/* Icon */}
-                                        <div className="mb-4 relative">
+                                        <div className="mb-4 relative w-fit">
                                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 
                                                           flex items-center justify-center
                                                           group-hover:from-indigo-500/30 group-hover:to-purple-500/30
-                                                          transition-all duration-300">
+                                                          transition-all duration-300 relative z-10">
                                                 <Icon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300 transition-colors duration-300" />
                                             </div>
-                                            {/* Glow effect on hover */}
-                                            <div className="absolute inset-0 rounded-xl bg-indigo-500/20 blur-xl opacity-0 
+                                            {/* Glow effect on hover - only around icon */}
+                                            <div className="absolute inset-0 w-12 h-12 rounded-xl bg-indigo-500/30 blur-xl opacity-0 
                                                           group-hover:opacity-100 transition-opacity duration-300 -z-10" />
                                         </div>
 
