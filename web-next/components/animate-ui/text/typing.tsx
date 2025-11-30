@@ -159,10 +159,10 @@ function TypingText({
   }, [text, duration, started, loop, holdDelay, enableAnimation]);
 
   return (
-    <div ref={localRef} data-slot="typing-text" {...props}>
+    <span ref={localRef} data-slot="typing-text" {...props}>
       <motion.h1>{displayedText}</motion.h1>
       {enableAnimation && cursor && <CursorBlinker className={cursorClassName} />}
-    </div>
+    </span>
   );
 }
 
