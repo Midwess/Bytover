@@ -49,6 +49,11 @@ impl MigrationTrait for Migration {
                             .json_binary()
                             .null(),
                     )
+                    .col(
+                        ColumnDef::new(TransferSession::Status)
+                            .text()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -77,11 +82,32 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Index for (order_id, status)
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_transfer_session_order_id_status")
+                    .table(TransferSession::Table)
+                    .col(TransferSession::OrderId)
+                    .col(TransferSession::Status)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop indexes first, then table
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx_transfer_session_order_id_status")
+                    .table(TransferSession::Table)
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .drop_index(
                 Index::drop()
@@ -117,4 +143,5 @@ enum TransferSession {
     OwnerUserOrderId,
     Progress,
     Resources,
+    Status,
 }

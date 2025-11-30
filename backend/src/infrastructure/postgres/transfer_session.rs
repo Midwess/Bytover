@@ -7,7 +7,8 @@ use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value as SeaValue};
 use serde_json::{json, Value};
-use chrono::{Utc, Months};
+use chrono::{Duration, Utc, Months};
+use crate::entities::transfer_progress::TransferProgressStatus;
 
 use migration::model::transfer_session as transfer_session_model;
 use transfer_session_model::{
@@ -19,6 +20,57 @@ use transfer_session_model::{
 
 pub struct TransferSessionPostgresRepository {
     pub db: DatabaseConnection
+}
+
+enum TransferSessionStatus {
+    Created,
+    InProgress,
+    Success,
+    Failed,
+    Canceled,
+}
+
+impl ToString for TransferSessionStatus {
+    fn to_string(&self) -> String {
+        match self {
+            TransferSessionStatus::Created => "Created".to_string(),
+            TransferSessionStatus::InProgress => "InProgress".to_string(),
+            TransferSessionStatus::Success => "Success".to_string(),
+            TransferSessionStatus::Failed => "Failed".to_string(),
+            TransferSessionStatus::Canceled => "Canceled".to_string(),
+        }
+    }
+}
+
+fn compute_status(session: &TransferSession) -> TransferSessionStatus {
+    let progresses = session.progresses();
+    
+    if progresses.is_empty() {
+        return TransferSessionStatus::Created;
+    }
+
+    let has_in_progress = progresses.iter().any(|p| matches!(p.status(), TransferProgressStatus::InProgress(_)));
+    if has_in_progress {
+        return TransferSessionStatus::InProgress;
+    }
+
+    // All are completed (Success or Failed)
+    let has_non_canceled_failed = progresses.iter().any(|p| {
+        matches!(p.status(), TransferProgressStatus::Failed(msg) if msg != "Canceled")
+    });
+    if has_non_canceled_failed {
+        return TransferSessionStatus::Failed;
+    }
+
+    let has_canceled = progresses.iter().any(|p| {
+        matches!(p.status(), TransferProgressStatus::Failed(msg) if msg == "Canceled")
+    });
+    if has_canceled {
+        return TransferSessionStatus::Canceled;
+    }
+
+    // All Success
+    TransferSessionStatus::Success
 }
 
 impl TryFrom<TransferSessionModel> for TransferSession {
@@ -75,13 +127,20 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
         let one_month_ago_ms = one_month_ago.timestamp_millis();
         
         // Convert cutoff to order_id format by subtracting epoch and shifting
-        let cutoff_order_id = (one_month_ago_ms - epoch_ms) << 23;        
+        let cutoff_order_id = (one_month_ago_ms - epoch_ms) << 23;
+
+        // Compute 7 days ago for InProgress sessions
+        let seven_days_ago = Utc::now() - Duration::days(7);
+        let seven_days_ago_ms = seven_days_ago.timestamp_millis();
+        let seven_days_cutoff = (seven_days_ago_ms - epoch_ms) << 23;
+        
         let statement = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             r#"DELETE FROM transfer_session 
                WHERE order_id < $1
-                  OR progress @> '[{"status": {"Failed": "Canceled"}}]'"#,
-            vec![SeaValue::from(cutoff_order_id)]
+                  OR status = 'Canceled'
+                  OR (status = 'InProgress' AND order_id < $2)"#,
+            vec![SeaValue::from(cutoff_order_id), SeaValue::from(seven_days_cutoff)]
         );
 
         self.db.execute(statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
@@ -107,7 +166,8 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
             order_id: Set(data.order_id() as i64),
             owner_user_order_id: Set(data.user_order_id() as i64),
             progress: Set(Some(progress_val)),
-            resources: Set(Some(resources_val))
+            resources: Set(Some(resources_val)),
+            status: Set(compute_status(&data).to_string()),
         };
 
         let _ = active.insert(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
@@ -166,6 +226,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
         active.to_emails = Set(Some(to_emails_val));
         active.resources = Set(Some(resources_val));
         active.progress = Set(Some(progress_val));
+        active.status = Set(compute_status(&data).to_string());
 
         active
             .update(&self.db)
