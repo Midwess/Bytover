@@ -571,7 +571,7 @@ function FileView(props: {
 
     return (
         <div
-            className="gap-4 flex flex-row w-full justify-between items-center h-fit overflow-hidden rounded-2xl relative group 
+            className="gap-4 flex flex-row w-full overflow-clip justify-between items-center h-fit rounded-2xl relative group 
                        bg-muted/60
                        backdrop-blur-xl border border-white/10 p-3
                        transition-all duration-300 ease-out
@@ -581,9 +581,8 @@ function FileView(props: {
                 {/* Icon Container */}
                 <div className="relative w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
                     <div className="relative w-10 h-10">
-                        <Image
+                        <img
                             className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110"
-                            layout="fill"
                             alt="Thumbnail"
                             src={thumbnailSource || fallbackThumbnail}
                             onError={() => setThumbnailSource(fallbackThumbnail)}
@@ -656,10 +655,10 @@ function MediaView(props: {
     return (
         <div
             className={clsx(
-                "w-full rounded-2xl relative group",
+                "w-full rounded-2xl relative group overflow-clip",
                 "border border-white/10 backdrop-blur-sm",
                 "transition-all duration-300 ease-out",
-                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",
+                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-muted-foreground m-1",
                 isMobile ? "flex flex-row items-center gap-3 p-3 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
             )}>
             {/* Desktop: Thumbnail - full background */}
@@ -667,11 +666,10 @@ function MediaView(props: {
                 <>
                     <div className="absolute inset-0 z-0">
                         {thumbnailSource ? (
-                            <Image
-                                className="object-cover w-full h-full"
+                            <img
+                                className="object-cover w-full h-full rounded-2xl"
                                 alt={model.name}
                                 src={thumbnailSource}
-                                fill
                                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             />
                         ) : (
@@ -695,8 +693,6 @@ function MediaView(props: {
                     )}
                     {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                    {/* Background overlay for hover effect */}
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300" />
                 </>
             )}
 
