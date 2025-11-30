@@ -60,13 +60,13 @@ impl TransferResource {
         if matches!(self.r#type, TransferResourceType::Folder) {
             let name = self.name.trim_end_matches(".tar").trim_end_matches(".zip").trim_end_matches(".rar");
             return StaticResource::s3_path(S3Path::use_default_bucket(format!(
-                "bitbridge/sessions/{}/{}.zip",
+                "sessions/{}/{}.zip",
                 self.session_id, name
             )))
         }
 
         StaticResource::s3_path(S3Path::use_default_bucket(format!(
-            "bitbridge/sessions/{}/{}",
+            "sessions/{}/{}",
             self.session_id, self.name
         )))
     }
@@ -77,7 +77,7 @@ impl TransferResource {
         }
 
         Some(StaticResource::s3_path(S3Path::use_default_bucket(format!(
-            "bitbridge/thumbnails/sessions/{}/{}.png",
+            "thumbnails/sessions/{}/{}.png",
             self.session_id, self.order_id
         ))))
     }

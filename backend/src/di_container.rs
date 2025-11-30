@@ -66,7 +66,7 @@ impl DiContainer {
             .unwrap_or(30);
         etcd_options = etcd_options.lease_ttl(std::time::Duration::from_secs(ttl_secs.max(1)));
         
-        init_id_generator("bitbridge".to_owned(), etcd_options)
+        init_id_generator("bytover".to_owned(), etcd_options)
             .await
             .unwrap_or_else(|err| panic!("Failed to initialise distributed id generator: {err}"));
 
