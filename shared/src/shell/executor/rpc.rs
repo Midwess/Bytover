@@ -32,6 +32,10 @@ where
                 self.app_server().feedback(email, message).await?;
                 Ok(CoreOperationOutput::None)
             }
+            RpcOperation::RandomAvatar => {
+                let avatar = self.app_server().random_avatar().await?;
+                Ok(CoreOperationOutput::String(avatar))
+            }
         }
     }
 }

@@ -18,7 +18,8 @@ pub enum RpcOperation {
     Feedback {
         email: String,
         message: String,
-    }
+    },
+    RandomAvatar
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,6 +53,14 @@ impl RpcOperation {
             CoreOperationOutput::None => Ok(()),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::Feedback")
+        })
+    }
+
+    pub fn random_avatar() -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::RandomAvatar)).map(|res| match res {
+            CoreOperationOutput::String(value) => Ok(value),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::RandomAvatar")
         })
     }
 }

@@ -445,6 +445,7 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
+                let op = coreOperation as CoreOperationVariantP2P;
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
@@ -476,14 +477,16 @@ export class WasmCore {
                 break
             }
             case CoreOperationVariantDelay: {
-                const delay = coreOperation as CoreOperationVariantDelay;
-                const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
-                await BPromise.delay(ms)
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
-            }
+                (async () => {
+                    const delay = coreOperation as CoreOperationVariantDelay;
+                    const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
+                    await BPromise.delay(ms)
+                    return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
+                })().then(noop)
+           }
         }
 
-        return serialize(new CoreOperationOutputVariantNone())
+        return new Uint8Array();
     }
 
     async addFiles(files: (File | FileMetadata)[]) {

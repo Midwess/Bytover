@@ -120,12 +120,12 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
+        log::info!("Starting WebRTC server with my peer = {current_user:?}");
         if self.is_running() {
             log::info!("The webrtc server is already running");
             return Ok(())
         }
 
-        log::info!("Starting WebRTC server with my peer = {current_user:?}");
         self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.set_current_id(current_user.peer_id()).await;
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
