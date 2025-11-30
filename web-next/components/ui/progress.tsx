@@ -28,7 +28,7 @@ export default function CircleProgress({
     isCompleted = false,
     size = 80,
     strokeWidth = 2,
-    duration = 100,
+    duration = 300,
     onClick = () => { },
     center
 }: Props) {
