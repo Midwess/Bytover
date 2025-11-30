@@ -21,6 +21,7 @@ use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -47,7 +48,9 @@ pub enum CloudTransferErrors {
     #[error("IO Error {0}")]
     IOError(#[from] PersistenceError),
     #[error("{0}")]
-    TonicStatus(#[from] tonic::Status)
+    TonicStatus(#[from] tonic::Status),
+    #[error("Task cancelled")]
+    TaskCancelled(#[from] TaskErrors)
 }
 
 pub struct CloudService<T>
@@ -114,6 +117,7 @@ where
 
         let session = Arc::new(Mutex::new(session));
         *session_guard = Arc::downgrade(&session);
+        let token = session.lock().await.token().clone();
 
         drop(session_guard);
 
@@ -134,7 +138,7 @@ where
 
         drop(session_guard);
 
-        let response = self.server.add_resources(session_order_id, resources).await?;
+        let response = self.server.add_resources(session_order_id, resources).with_cancel(&token).await??;
 
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
@@ -151,12 +155,12 @@ where
 
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = join!(
-            self.upload_thumbnails(&session, thumbnail_upload_requests),
-            self.upload_resources(&session, response.first_resource_upload_request, core_request)
+            self.upload_thumbnails(&session, thumbnail_upload_requests).with_cancel(&token),
+            self.upload_resources(&session, response.first_resource_upload_request, core_request).with_cancel(&token)
         );
 
-        thumbnail_result?;
-        upload_result?;
+        thumbnail_result??;
+        upload_result??;
 
         Ok(TransferSessionStatus::Success)
     }
@@ -310,6 +314,7 @@ where
         core_request: CoreRequest
     ) -> Result<MultiPartUploadComplete, CloudTransferErrors> {
         let session_guard = transfer_session.lock().await;
+        let token = session_guard.token().clone();
         let resource_path = match session_guard.resources.iter().find(|it| it.order_id == resource_order_id) {
             Some(resource) => resource.path.clone(),
             None => return Err(CloudTransferErrors::ResourceNotFound)
@@ -325,10 +330,10 @@ where
         let mut ticker = Instant::now();
         let progress_update_interval = std::time::Duration::from_millis(3000);
 
-        let mut net_stream = self.net_stream.upload_resource(upload, resource_path.clone()).await?;
-        let mut event_stream = net_stream.start().await?;
+        let mut net_stream = self.net_stream.upload_resource(upload, resource_path.clone()).with_cancel(&token).await??;
+        let mut event_stream = net_stream.start().with_cancel(&token).await??;
         let mut upload_completion = None;
-        while let Some(event) = event_stream.next().await {
+        while let Some(event) = event_stream.next().with_cancel(&token).await? {
             let mut session_guard = transfer_session.lock().await;
             if session_guard.is_canceled() {
                 net_stream.end().await?;
