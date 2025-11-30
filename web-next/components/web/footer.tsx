@@ -27,9 +27,12 @@ export default function Footer() {
                             />
                             <h2 className="text-xl font-bold text-primaryText">Bytover</h2>
                         </div>
-                        <p className="text-muted-foreground text-sm max-w-xs">
-                            A seamless file transfer that you can trust. Share files securely across all your devices.
-                        </p>
+                        <h2 className="text-muted-foreground text-sm max-w-xs">
+                            A seamless file transfer that you can trust.
+                        </h2>
+                        <address className="text-muted-foreground text-sm not-italic">
+                            Đồng Tháp, Việt Nam
+                        </address>
                     </div>
 
                     {/* Sections Links */}

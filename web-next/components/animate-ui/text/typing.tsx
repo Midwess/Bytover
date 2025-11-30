@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 function CursorBlinker({ className }: { className?: string }) {
   return (
-    <motion.span
+    <motion.h1
       data-slot="cursor-blinker"
       variants={{
         blinking: {
@@ -30,7 +30,7 @@ function CursorBlinker({ className }: { className?: string }) {
   );
 }
 
-type TypingTextProps = Omit<React.ComponentProps<'span'>, 'children'> & {
+type TypingTextProps = Omit<React.ComponentProps<'h1'>, 'children'> & {
   duration?: number;
   delay?: number;
   inView?: boolean;
@@ -61,8 +61,8 @@ function TypingText({
   enableAnimation = true,
   ...props
 }: TypingTextProps) {
-  const localRef = React.useRef<HTMLSpanElement>(null);
-  React.useImperativeHandle(ref, () => localRef.current as HTMLSpanElement);
+  const localRef = React.useRef<HTMLHeadingElement>(null);
+  React.useImperativeHandle(ref, () => localRef.current as HTMLHeadingElement);
 
   const inViewResult = useInView(localRef, {
     once: inViewOnce,
@@ -159,10 +159,10 @@ function TypingText({
   }, [text, duration, started, loop, holdDelay, enableAnimation]);
 
   return (
-    <span ref={localRef} data-slot="typing-text" {...props}>
-      <motion.span>{displayedText}</motion.span>
+    <div ref={localRef} data-slot="typing-text" {...props}>
+      <motion.h1>{displayedText}</motion.h1>
       {enableAnimation && cursor && <CursorBlinker className={cursorClassName} />}
-    </span>
+    </div>
   );
 }
 
