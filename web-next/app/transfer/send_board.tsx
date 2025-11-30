@@ -823,7 +823,7 @@ function MyPeerInfo() {
                 <div className="flex flex-row items-center gap-3 flex-1 justify-between bg-muted-foreground/10 border px-3 py-2 rounded-xl">
                     <div className="flex flex-col gap-[0.5] items-start">
                         <p className="text-start w-full text-primaryText/70 text-xs">
-                            You're online as
+                            You&apos;re online as
                         </p>
                         <p className="text-primaryText font-bold text-base">{myPeer.display_name}</p>
                     </div>

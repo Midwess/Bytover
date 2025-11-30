@@ -79,7 +79,7 @@ export function AdditionalFeatures() {
                 >
                     <div className="text-center mb-16 md:mb-20">
                         <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primaryText mb-4">
-                            There's more
+                            There&apos;s more
                         </h2>
                         <p className="text-primaryText/60 text-lg max-w-2xl mx-auto">
                             Discover even more ways to effortlessly manage and share your files.

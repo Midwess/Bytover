@@ -38,7 +38,7 @@ import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 import clsx from "clsx";
 import { Input } from "@/components/ui/input";
-import { MotionHighlight, MotionHighlightItem } from "@/components/animate-ui/effects/motion-highlight";
+import { MotionHighlight } from "@/components/animate-ui/effects/motion-highlight";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";

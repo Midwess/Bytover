@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import CoreStart from "@/app/core_start";
 import AppToaster from "@/components/ui/toaster";
+import { getCanonicalUrl } from "@/lib/canonical";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
   appleWebApp: {
     title: "Bytover",
+  },
+  alternates: {
+    canonical: getCanonicalUrl('/'),
   },
 };
 
