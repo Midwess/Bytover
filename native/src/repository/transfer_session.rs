@@ -25,7 +25,7 @@ pub struct TransferSessionRepositoryImpl {
 
 impl RedbId for RedbIdWrapper<TransferSessionId> {
     fn lower_id(&self) -> Vec<Vec<u8>> {
-        let code = bincode::serialize(&self.0.r#type).unwrap();
+        let code = bincode::serialize(&self.0.transfer_type).unwrap();
         let id = bincode::serialize(&self.0.order_id).unwrap();
         vec![code, id]
     }
@@ -96,7 +96,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         progresses: Vec<TransferProgress>
     ) -> Result<Option<TransferSession>, PersistenceError> {
         let id = TransferSessionId {
-            order_id: Some(order_id),
+            order_id: Some(order_id.to_string()),
             ..Default::default()
         };
         let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(self, &RedbIdWrapper(id)).await?;
