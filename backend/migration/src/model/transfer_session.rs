@@ -16,6 +16,7 @@ pub struct Model {
 	pub progress: Option<JsonValue>,
 	#[sea_orm(column_type = "JsonBinary", nullable)]
 	pub resources: Option<JsonValue>,
+	pub status: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -24,11 +24,14 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::transport::Channel;
+use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
     #[error("Grpc gateway channel error")]
-    GrpcGatewayChannelError(#[from] tonic::transport::Error)
+    GrpcGatewayChannelError(#[from] tonic::transport::Error),
+    #[error("Cron error {0}")]
+    CronError(String)
 }
 
 static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
@@ -175,5 +178,25 @@ impl DiContainer {
         let mail_service = self.get_mail_service().await?;
 
         Ok(EmailServiceImpl::new(mail_service, Some(token)))
+    }
+
+    pub async fn start_cron_jobs(&'static self) -> Result<(), DiContainerError> {
+        let sched = JobScheduler::new().await.map_err(|e| DiContainerError::CronError(e.to_string()))?;
+        
+        let job = Job::new_async("0 */5 * * * *", |_uuid, _l| {
+            Box::pin(async move {
+                log::info!("Running cleanup cron job...");
+                let repo = DiContainer::instance().await.get_transfer_session_repository().await;
+                if let Err(e) = repo.delete_expired_or_canceled_sessions().await {
+                    log::error!("Failed to cleanup sessions: {}", e);
+                }
+                log::info!("Cleanup cron job finished.");
+            })
+        }).map_err(|e| DiContainerError::CronError(e.to_string()))?;
+
+        sched.add(job).await.map_err(|e| DiContainerError::CronError(e.to_string()))?;
+        sched.start().await.map_err(|e| DiContainerError::CronError(e.to_string()))?;
+
+        Ok(())
     }
 }
