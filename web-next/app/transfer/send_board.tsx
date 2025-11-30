@@ -812,7 +812,16 @@ function MyPeerInfo() {
     const myPeer = core.useMyPeer()
 
     if (!myPeer) {
-        return null
+        return (
+            <div className="w-full mb-6">
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/0 p-4 backdrop-blur-sm">
+                    <div className="flex items-center justify-center gap-3 py-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        <span className="text-sm font-medium text-muted-foreground animate-pulse">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
@@ -820,14 +829,14 @@ function MyPeerInfo() {
     return (
         <div className="flex flex-col w-full gap-2 mb-4">
             <div className="flex flex-row rounded-2xl items-center w-full">
-                <div className="flex flex-row items-center gap-3 flex-1 justify-between bg-muted-foreground/10 border px-3 py-2 rounded-xl">
+                <div className="flex flex-row items-center gap-5 justify-between flex-1 rounded-xl">
                     <div className="flex flex-col gap-[0.5] items-start">
                         <p className="text-start w-full text-primaryText/70 text-xs">
                             You&apos;re online as
                         </p>
-                        <p className="text-primaryText font-bold text-base">{myPeer.display_name}</p>
+                        <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
                     </div>
-                    <div className="relative bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px]">
+                    <div className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-2 rounded-2xl">
                         <Avatar className="p-1 rounded-xl" style={{ backgroundColor: color }}>
                             <AvatarImage src={myPeer.avatar.url} />
                         </Avatar>

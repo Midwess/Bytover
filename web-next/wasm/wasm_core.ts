@@ -12,6 +12,7 @@ import {
     CoreOperationVariantDevice,
     DeviceOperationVariantGetDeviceInfo,
     DeviceTypeVariantOtherPhone,
+    DeviceTypeVariantOtherLaptop,
     PlatformVariantWeb,
     DeviceInfo,
     DeviceOperationVariantOpen,
@@ -387,11 +388,12 @@ export class WasmCore {
                 const device = coreOperation as CoreOperationVariantDevice;
                 switch (device.value.constructor) {
                     case DeviceOperationVariantGetDeviceInfo: {
+                        const { name, isMobile } = getBrowserDeviceInfo();
                         return await handle_response(request_id, serialize(new CoreOperationOutputVariantDeviceInfo(new DeviceInfo(
                             new PlatformVariantWeb(),
-                            "Browser",
+                            name,
                             Date.now().toString(),
-                            new DeviceTypeVariantOtherPhone(),
+                            isMobile ? new DeviceTypeVariantOtherPhone() : new DeviceTypeVariantOtherLaptop(),
                             window.location.origin
                         ))));
                     }
@@ -445,6 +447,7 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
+                let op = coreOperation as CoreOperationVariantP2P;
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
@@ -476,14 +479,16 @@ export class WasmCore {
                 break
             }
             case CoreOperationVariantDelay: {
-                const delay = coreOperation as CoreOperationVariantDelay;
-                const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
-                await BPromise.delay(ms)
-                return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
+                (async () => {
+                    const delay = coreOperation as CoreOperationVariantDelay;
+                    const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
+                    await BPromise.delay(ms)
+                    return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
+                })().then(noop)
             }
         }
 
-        return serialize(new CoreOperationOutputVariantNone())
+        return new Uint8Array();
     }
 
     async addFiles(files: (File | FileMetadata)[]) {
@@ -600,3 +605,61 @@ export function serialize(object: any): Uint8Array {
 const core = new WasmCore();
 
 export default core
+
+function getBrowserDeviceInfo(): { name: string, isMobile: boolean } {
+    if (typeof navigator === 'undefined') return { name: "Browser", isMobile: false };
+
+    const ua = navigator.userAgent;
+    let browser = "Browser";
+    let os = "Unknown OS";
+    let isMobile = false;
+
+    // Detect Browser
+    if (ua.indexOf("Firefox") > -1) {
+        browser = "Firefox";
+    } else if (ua.indexOf("SamsungBrowser") > -1) {
+        browser = "Samsung Internet";
+    } else if (ua.indexOf("Opera") > -1 || ua.indexOf("OPR") > -1) {
+        browser = "Opera";
+    } else if (ua.indexOf("Trident") > -1) {
+        browser = "Internet Explorer";
+    } else if (ua.indexOf("Edge") > -1 || ua.indexOf("Edg") > -1) {
+        browser = "Edge";
+    } else if (ua.indexOf("Chrome") > -1) {
+        browser = "Chrome";
+    } else if (ua.indexOf("Safari") > -1) {
+        browser = "Safari";
+    }
+
+    // Detect OS
+    if (ua.indexOf("Win") > -1) {
+        os = "Windows";
+    } else if (ua.indexOf("Mac") > -1) {
+        os = "macOS";
+        // Check for iPad/iPhone
+        if (navigator.maxTouchPoints > 0 && /Mac/.test(navigator.platform)) {
+            os = "iPad";
+            isMobile = true;
+        }
+    } else if (ua.indexOf("Linux") > -1) {
+        os = "Linux";
+    } else if (ua.indexOf("Android") > -1) {
+        os = "Android";
+        isMobile = true;
+    } else if (ua.indexOf("like Mac") > -1) {
+        os = "iOS";
+        if (ua.indexOf("iPhone") > -1) {
+            os = "iPhone";
+        } else if (ua.indexOf("iPad") > -1) {
+            os = "iPad";
+        }
+        isMobile = true;
+    }
+
+    // Additional mobile check
+    if (/Mobi|Android/i.test(ua)) {
+        isMobile = true;
+    }
+
+    return { name: `${os} ${browser}`, isMobile };
+}

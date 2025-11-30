@@ -14,6 +14,7 @@ use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
+use crate::app::operations::rpc::RpcOperation;
 use crate::CoreOperation;
 use crate::entities::device::DeviceInfo;
 use crate::errors::CoreError;
@@ -40,7 +41,7 @@ impl AppCommand {
             None => Peer {
                 id: peer_id.clone(),
                 name: Some(device.name.clone()),
-                avatar_url: Peer::random_avatar(),
+                avatar_url: self.run(RpcOperation::random_avatar()).await.unwrap_or_default(),
                 email: None,
                 device
             }

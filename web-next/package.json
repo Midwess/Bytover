@@ -12,6 +12,7 @@
     "start": "deno task deno-next start --turbopack"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.940.0",
     "@base-ui-components/react": "^1.0.0-beta.6",
     "@bufbuild/protobuf": "^2.2.2",
     "@floating-ui/react": "^0.27.16",
@@ -35,6 +36,7 @@
     "libheif-js": "^1.19.8",
     "lodash": "4.17.21",
     "lucide-react": "^0.555.0",
+    "mime-types": "^3.0.2",
     "motion": "^12.23.24",
     "next": "15.3.5",
     "ogl": "^1.0.11",
@@ -56,6 +58,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/bluebird": "^3.5.42",
     "@types/lodash": "4.17.20",
+    "@types/mime-types": "^3.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

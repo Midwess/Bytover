@@ -7,10 +7,11 @@ use core_services::utils::maybe::MaybeSend;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
+use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, GenerateRandomAvatarRequest, MeRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
+use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
 use schema::devlog::app_gateway::rpc::authenticate_response::Action;
 use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 
@@ -105,6 +106,17 @@ where
         };
 
         Ok(Some(user))
+    }
+
+    pub async fn random_avatar(&self) -> Result<String, RpcErrors> {
+        let req = GenerateRandomAvatarRequest {
+            app_name: Some("BitBridge".to_owned())
+        };
+
+        let channel = self.rpc_module.connect().await?;
+        let mut client = ApplicationServiceClient::new(channel);
+        let avatar = client.get_avatar(req).await?;
+        Ok(avatar.into_inner().avatar.unwrap_or_default())
     }
 
     pub async fn feedback(
