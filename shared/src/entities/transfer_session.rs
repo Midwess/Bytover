@@ -9,6 +9,7 @@ use crate::repository::local_resource::LocalResourceId;
 use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
 use serde::{Deserialize, Serialize};
+use core_services::utils::cancellation::CancellationToken;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -50,7 +51,8 @@ pub struct TransferSession {
     pub resources: Vec<LocalResource>,
     pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
-    pub target: TransferTarget
+    pub target: TransferTarget,
+    pub cancellation_token: CancellationToken
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -63,7 +65,7 @@ pub struct TransferProgress {
     bytes_sec_counter: u64,
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
-    pub status: TransferStatus
+    pub status: TransferStatus,
 }
 
 impl TransferProgress {
@@ -77,7 +79,7 @@ impl TransferProgress {
             last_update_time_ms: Utc::now().timestamp_millis() as u64,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
-            status: TransferStatus::Pending
+            status: TransferStatus::Pending,
         }
     }
 
@@ -191,7 +193,8 @@ impl TransferSession {
                 .collect(),
             resources: out_resources,
             transfer_type: TransferType::Receive,
-            target
+            target,
+            cancellation_token: CancellationToken::new()
         }
     }
 
@@ -199,6 +202,7 @@ impl TransferSession {
         Self {
             order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            cancellation_token: CancellationToken::new(),
             resources,
             transfer_type: TransferType::Send,
             target: TransferTarget::Internet {
@@ -217,12 +221,13 @@ impl TransferSession {
             progress: vec![],
             resources: vec![],
             transfer_type: TransferType::Receive,
+            cancellation_token: CancellationToken::new(),
             target: TransferTarget::Internet {
                 is_required_password,
                 password: None,
                 access_url: Some(access_url),
                 from_user,
-                to_emails: vec![]
+                to_emails: vec![],
             }
         }
     }
@@ -231,6 +236,7 @@ impl TransferSession {
         let mut resources = resources;
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
+            cancellation_token: CancellationToken::new(),
             order_id,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
@@ -319,6 +325,7 @@ impl TransferSession {
     }
 
     pub fn cancel(&mut self) {
+        self.cancellation_token.cancel();
         self.progress.iter_mut().for_each(|it| {
             if it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending {
                 it.status = TransferStatus::Canceled;
@@ -342,8 +349,7 @@ impl TransferSession {
             return TransferSessionStatus::Initializing;
         }
 
-        let is_canceled = self.progress.iter().any(|it| it.status == TransferStatus::Canceled);
-        if is_canceled {
+        if self.cancellation_token.is_cancelled() {
             return TransferSessionStatus::Canceled;
         }
 
@@ -389,6 +395,10 @@ impl TransferSession {
 
     pub fn remove_resource(&mut self, resource_id: &LocalResourceId) {
         self.resources.retain(|r| !resource_id.is_represent(r));
+    }
+
+    pub fn token(&self) -> &CancellationToken {
+        &self.cancellation_token
     }
 }
 

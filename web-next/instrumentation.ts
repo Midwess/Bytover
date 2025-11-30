@@ -16,7 +16,7 @@ const DOMAIN = 'localhost'
 
 const S3_CDN_PREFIX = process.env.S3_CDN_PREFIX || ''
 // The commit hash
-const VERSION = process.env.VERSION
+const VERSION = process.env.VERSION || process.env.RAILWAY_GIT_COMMIT_SHA
 
 let isRegistered = false
 

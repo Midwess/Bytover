@@ -337,6 +337,7 @@ function FindSessionSection() {
         }
 
         message?.resolveMessage()
+        console.log('finding public session with keywords: ', searchTerms || '')
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(searchTerms || '')))
     }, [keywords, message, setUrl])
 
