@@ -185,7 +185,7 @@ function ContentBoard() {
         if (cloud.is_required_password && !cloud.password && isLoading) {
             return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
                 <div className={"w-[50%] flex flex-col gap-4"}>
-                    <p className={"font-poppins text-muted-foreground flex flex-row items-center"}>
+                    <p className={"text-muted-foreground flex flex-row items-center"}>
                         <Image alt={"lock"} width={10} height={10}
                             className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
                             color={'white'} />
@@ -352,7 +352,7 @@ function FindSessionSection() {
             <div className={"flex flex-col gap-1 pt-2"}>
                 <Label htmlFor={"session-name"} className={"pl-1 text-muted-foreground text-sm"}>Find session</Label>
                 <div className={"relative"}>
-                    <Input id="session-name" value={keywords || ''} className={"rounded-md font-poppins pr-8 min-h-10 h-fit"}
+                    <Input id="session-name" value={keywords || ''} className={"rounded-md pr-8 min-h-10 h-fit"}
                         placeholder={"Session name or url"}
                         onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
                         onKeyDown={(e) => {

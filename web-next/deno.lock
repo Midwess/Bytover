@@ -4179,6 +4179,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@aws-sdk/client-s3@^3.940.0",
         "npm:@base-ui-components/react@^1.0.0-beta.6",
         "npm:@bufbuild/buf@1.35.1",
         "npm:@bufbuild/protobuf@^2.2.2",
@@ -4194,6 +4195,7 @@
         "npm:@tailwindcss/typography@~0.5.16",
         "npm:@types/bluebird@^3.5.42",
         "npm:@types/lodash@4.17.20",
+        "npm:@types/mime-types@^3.0.1",
         "npm:@types/node@20",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",
@@ -4211,6 +4213,7 @@
         "npm:libheif-js@^1.19.8",
         "npm:lodash@4.17.21",
         "npm:lucide-react@0.555",
+        "npm:mime-types@^3.0.2",
         "npm:motion@^12.23.24",
         "npm:next@15.3.5",
         "npm:ogl@^1.0.11",
