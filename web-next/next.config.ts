@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     transpilePackages: ["shared_types"],
-    assetPrefix: `${process.env.S3_CDN_PREFIX}/commit-${process.env.VERSION}` || undefined,
+    assetPrefix: process.env.S3_CDN_PREFIX && process.env.VERSION ? `${process.env.S3_CDN_PREFIX}/commit-${process.env.VERSION}` : undefined,
     images: {
         remotePatterns: [
             {
