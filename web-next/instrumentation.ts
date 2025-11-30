@@ -157,7 +157,7 @@ export async function setupCDN(): Promise<void> {
           await s3.send(command);
           console.log(ns, `Uploaded: ${s3Key} with Content-Type: ${contentType}`);
         }
-      }, { concurrency: 20 });
+      }, { concurrency: 30 });
     };
 
     // Upload public directory
