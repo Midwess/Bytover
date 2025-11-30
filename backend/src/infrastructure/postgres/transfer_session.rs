@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value as SeaValue};
 use serde_json::{json, Value};
-use chrono::{Duration, Utc, Months};
+use chrono::{Days, Utc, Months};
 use crate::entities::transfer_progress::TransferProgressStatus;
 
 use migration::model::transfer_session as transfer_session_model;
@@ -130,7 +130,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
         let cutoff_order_id = (one_month_ago_ms - epoch_ms) << 23;
 
         // Compute 7 days ago for InProgress sessions
-        let seven_days_ago = Utc::now() - Duration::days(7);
+        let seven_days_ago = Utc::now() - Days::new(7);
         let seven_days_ago_ms = seven_days_ago.timestamp_millis();
         let seven_days_cutoff = (seven_days_ago_ms - epoch_ms) << 23;
         
