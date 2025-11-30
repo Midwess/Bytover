@@ -7,6 +7,7 @@ use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value as SeaValue};
 use serde_json::{json, Value};
+use chrono::{Utc, Months};
 
 use migration::model::transfer_session as transfer_session_model;
 use transfer_session_model::{
@@ -69,13 +70,18 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
     async fn delete_expired_or_canceled_sessions(&self) -> Result<(), RepositoryError> {
         let epoch_ms = EPOCH_SINCE as i64;
         
+        // Compute cutoff timestamp in Rust (1 month ago in milliseconds)
+        let one_month_ago = Utc::now() - Months::new(1);
+        let one_month_ago_ms = one_month_ago.timestamp_millis();
+        
+        // Convert cutoff to order_id format by subtracting epoch and shifting
+        let cutoff_order_id = (one_month_ago_ms - epoch_ms) << 23;        
         let statement = Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             r#"DELETE FROM transfer_session 
-               WHERE ((order_id >> 23) + $1) < 
-                     EXTRACT(EPOCH FROM (NOW() - INTERVAL '1 month'))::bigint * 1000
+               WHERE order_id < $1
                   OR progress @> '[{"status": {"Failed": "Canceled"}}]'"#,
-            vec![SeaValue::from(epoch_ms)]
+            vec![SeaValue::from(cutoff_order_id)]
         );
 
         self.db.execute(statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
