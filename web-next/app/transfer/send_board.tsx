@@ -619,6 +619,7 @@ function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] 
 
 function PublicSend() {
     const [password, setPassword] = useState('')
+    const [emails, setEmails] = React.useState<string[]>([])
     const cloudSession = core.useTransferState()?.cloud_session
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const [isInProgress, setIsInProgress] = useState(false)
@@ -651,10 +652,18 @@ function PublicSend() {
             inView
             delay={0.2}>
             <p className="text-start w-full text-primaryText/70 text-sm">
-                Create a sharable URL. Protect access by setting a password to keep your content safe.
+                Create a sharable URL or send files directly to email addresses. Optionally protect with a password.
             </p>
 
             <div className={"flex flex-col w-full gap-3"}>
+                <Label htmlFor={"emails"}>Send to emails (optional)</Label>
+                <MultiEmailInput
+                    emails={emails}
+                    onEmailsChange={setEmails}
+                    placeholder="Enter email addresses..."
+                    maxEmails={10}
+                    disabled={isInProgress}
+                />
                 <Label htmlFor={"password"}>Password (optional)</Label>
                 <Input id={"password"} disabled={isInProgress} value={password}
                     onChange={(it) => setPassword(it.target.value)}
@@ -690,8 +699,12 @@ function PublicSend() {
                 {
                     !cloudSession &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password, [])))
-                    }}>Upload</Button>
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password || null, emails)))
+                    }}>
+                        {emails.length > 0
+                            ? `Send to ${emails.length} recipient${emails.length > 1 ? 's' : ''}`
+                            : 'Upload'}
+                    </Button>
                 }
                 {
                     cloudSession?.is_completed &&
@@ -769,28 +782,6 @@ function UrlInputWithCopy({ url }: { url: string }) {
 function NearbySend() {
     const nearbyState = window.core.useNearbyState()
     const nearbyPeers = nearbyState?.peers || []
-    const [emails, setEmails] = React.useState<string[]>([])
-    const cloudSession = core.useTransferState()?.cloud_session
-    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
-    const [isInProgress, setIsInProgress] = useState(false)
-    const progress = (cloudSession?.progress ?? 0) * 100
-    const cloudRef = useRef(cloudSession)
-    cloudRef.current = cloudSession
-
-    useEffect(() => {
-        if (cloudSession?.is_in_progress) {
-            setIsInProgress(true)
-            setIsInProgressDefer(true)
-        } else {
-            setIsInProgress(false)
-            setTimeout(() => {
-                if (!cloudRef?.current?.is_in_progress) {
-                    setIsInProgressDefer(false)
-                }
-            }, 2000)
-        }
-
-    }, [cloudSession?.is_in_progress])
 
     return <>
         <MotionEffect
@@ -801,73 +792,52 @@ function NearbySend() {
             inView
             delay={0.2}>
 
+            {/* Current User Info */}
+            <MyPeerInfo />
+
             <p className="text-start w-full text-primaryText/70 text-sm pb-1">
-                Send files directly to a friend’s email
+                Share with nearby friends and devices
             </p>
 
             <div className="flex flex-col w-full gap-3">
-                <MultiEmailInput
-                    emails={emails}
-                    onEmailsChange={setEmails}
-                    placeholder="Enter email addresses..."
-                    maxEmails={10}
-                    disabled={isInProgress}
-                />
-                {
-                    isInProgressDefer
-                    && <div className={"flex flex-col w-full gap-2"}>
-                        <Progress value={progress} className="w-full space-y-2">
-                            <div className="flex items-center justify-between gap-1">
-                                <span className="text-sm">
-                                    {cloudSession?.display_download_speed}
-                                </span>
-                            </div>
-                            <ProgressTrack />
-                        </Progress>
-                    </div>
-                }
-                {
-                    isInProgress &&
-                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
-                        if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
-                        }
-                    }}>Cancel</Button>
-                }
-                {
-                    !cloudSession &&
-                    <Button
-                        className="w-fit h-[35px] bg-bluePrimary text-primary"
-                        disabled={emails.length === 0}
-                        onClick={() => {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, emails)))
-                        }}
-                    >
-                        Send
-                        to {emails.length > 0 ? `${emails.length} recipient${emails.length > 1 ? 's' : ''}` : 'Email'}
-                    </Button>
-                }
-                {
-                    cloudSession?.is_completed &&
-                    <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                            BigInt(cloudSession?.session_id),
-                            new TransferTypeVariantSend()
-                        )))
-                    }}>Continue</Button>
-                }
-            </div>
-
-            <div className="flex flex-col w-full gap-3 mt-5">
-                <p className="text-start w-full text-primaryText/70 text-sm pb-1">
-                    Or share with nearby friends and devices
-                </p>
                 {nearbyPeers.map((peer) => (
                     <NearbyPeer key={peer.id} peer={peer} />
                 ))}
             </div>
         </MotionEffect>
     </>
+}
+
+function MyPeerInfo() {
+    const myPeer = core.useMyPeer()
+
+    if (!myPeer) {
+        return null
+    }
+
+    const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
+
+    return (
+        <div className="flex flex-col w-full gap-2 mb-4">
+            <div className="flex flex-row rounded-2xl items-center w-full">
+                <div className="flex flex-row items-center gap-3 flex-1 justify-between bg-muted-foreground/10 border px-3 py-2 rounded-xl">
+                    <div className="flex flex-col gap-[0.5] items-start">
+                        <p className="text-start w-full text-primaryText/70 text-xs">
+                            You're online as
+                        </p>
+                        <p className="text-primaryText font-bold text-base">{myPeer.display_name}</p>
+                    </div>
+                    <div className="relative bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px]">
+                        <Avatar className="p-1 rounded-xl" style={{ backgroundColor: color }}>
+                            <AvatarImage src={myPeer.avatar.url} />
+                        </Avatar>
+                        {/* Online status indicator */}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-2 border-background" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
 }
 
 function NearbyPeer(props: { peer: PeerViewModel }) {

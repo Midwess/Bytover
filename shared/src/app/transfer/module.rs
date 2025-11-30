@@ -186,7 +186,11 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::StartPublicTransfer { password, to_emails } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
                 let Some(user) = model.authentication.user.clone() else {
-                    return Command::operate(DialogOperation::Toast("Unauthenticated".to_owned()))
+                    log::info!("User is not login, open login page");
+                    return Command::handle_result(|it| async move {
+                        it.app().authenticate().await;
+                        Ok(())
+                    });
                 };
 
                 let target = TransferTarget::Internet {
