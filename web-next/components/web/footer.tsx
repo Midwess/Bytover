@@ -27,9 +27,12 @@ export default function Footer() {
                             />
                             <h2 className="text-xl font-bold text-primaryText">Bytover</h2>
                         </div>
-                        <p className="text-muted-foreground text-sm max-w-xs">
-                            A seamless file transfer that you can trust. Share files securely across all your devices.
-                        </p>
+                        <h2 className="text-muted-foreground text-sm max-w-xs">
+                            A seamless file transfer that you can trust.
+                        </h2>
+                        <address className="text-muted-foreground text-sm not-italic">
+                            Đồng Tháp, Việt Nam
+                        </address>
                     </div>
 
                     {/* Sections Links */}
@@ -177,7 +180,7 @@ export default function Footer() {
                         </p>
 
                         {/* Social Links */}
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 under-development">
                             <Link
                                 href="https://github.com/dev-logs/bit-bridge"
                                 target="_blank"

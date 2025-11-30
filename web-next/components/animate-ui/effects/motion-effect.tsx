@@ -59,37 +59,40 @@ function MotionEffect({
   });
   const isInView = !inView || inViewResult;
 
-  const hiddenVariant: Variant = {};
-  const visibleVariant: Variant = {};
+  const { hiddenVariant, visibleVariant } = React.useMemo(() => {
+    const hidden: Variant = {};
+    const visible: Variant = {};
 
-  if (slide) {
-    const offset = typeof slide === 'boolean' ? 100 : (slide.offset ?? 100);
-    const direction =
-      typeof slide === 'boolean' ? 'left' : (slide.direction ?? 'left');
-    const axis = direction === 'up' || direction === 'down' ? 'y' : 'x';
-    hiddenVariant[axis] =
-      direction === 'left' || direction === 'up' ? -offset : offset;
-    visibleVariant[axis] = 0;
-  }
+    if (slide) {
+      const offset = typeof slide === 'boolean' ? 100 : (slide.offset ?? 100);
+      const direction =
+        typeof slide === 'boolean' ? 'left' : (slide.direction ?? 'left');
+      const axis = direction === 'up' || direction === 'down' ? 'y' : 'x';
+      hidden[axis] =
+        direction === 'left' || direction === 'up' ? -offset : offset;
+      visible[axis] = 0;
+    }
 
-  if (fade) {
-    hiddenVariant.opacity =
-      typeof fade === 'boolean' ? 0 : (fade.initialOpacity ?? 0);
-    visibleVariant.opacity =
-      typeof fade === 'boolean' ? 1 : (fade.opacity ?? 1);
-  }
+    if (fade) {
+      hidden.opacity =
+        typeof fade === 'boolean' ? 0 : (fade.initialOpacity ?? 0);
+      visible.opacity = typeof fade === 'boolean' ? 1 : (fade.opacity ?? 1);
+    }
 
-  if (zoom) {
-    hiddenVariant.scale =
-      typeof zoom === 'boolean' ? 0.5 : (zoom.initialScale ?? 0.5);
-    visibleVariant.scale = typeof zoom === 'boolean' ? 1 : (zoom.scale ?? 1);
-  }
+    if (zoom) {
+      hidden.scale =
+        typeof zoom === 'boolean' ? 0.5 : (zoom.initialScale ?? 0.5);
+      visible.scale = typeof zoom === 'boolean' ? 1 : (zoom.scale ?? 1);
+    }
 
-  if (blur) {
-    hiddenVariant.filter =
-      typeof blur === 'boolean' ? 'blur(10px)' : `blur(${blur})`;
-    visibleVariant.filter = 'blur(0px)';
-  }
+    if (blur) {
+      hidden.filter =
+        typeof blur === 'boolean' ? 'blur(10px)' : `blur(${blur})`;
+      visible.filter = 'blur(0px)';
+    }
+
+    return { hiddenVariant: hidden, visibleVariant: visible };
+  }, [slide, fade, zoom, blur]);
 
   return (
     <AnimatePresence>

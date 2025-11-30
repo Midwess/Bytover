@@ -3,14 +3,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import CoreStart from "@/app/core_start";
 import AppToaster from "@/components/ui/toaster";
+import { getCanonicalUrl } from "@/lib/canonical";
+import { SEOSchemas } from "@/components/seo-schemas";
 
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
 });
+
 export const metadata: Metadata = {
-  title: "Bytover",
-  description: "Free nearby and public files transfer on all platforms",
+  title: "Bytover – Peer-to-Peer, Public & Email File Transfer",
+  description: "Transfer files effortlessly. Share directly via peer-to-peer, with nearby peers, or create a public link with optional password protection or send via email.",
   icons: {
     icon: [
       { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
@@ -22,6 +25,9 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
   appleWebApp: {
     title: "Bytover",
+  },
+  alternates: {
+    canonical: getCanonicalUrl('/'),
   },
 };
 
@@ -38,10 +44,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={"w-full h-full"}>
-        <body
-          className={`w-full h-full min-h-screen ${inter.variable} antialiased dark`}>
+      <head>
+        <SEOSchemas />
+      </head>
+      <body
+        className={`w-full h-full min-h-screen ${inter.variable} antialiased dark`}>
         {children}
-        <CoreStart/>
+        <CoreStart />
         <AppToaster />
       </body>
     </html>

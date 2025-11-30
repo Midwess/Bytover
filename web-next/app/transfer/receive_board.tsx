@@ -297,7 +297,7 @@ function ItemEffect(props: { children: ReactElement, index: number }) {
         }}
         fade
         zoom
-        delay={0.8 + index * 0.15}>
+        delay={0.8 + Math.min(index, 5) * 0.15}>
         {children}
     </MotionEffect>
 }
@@ -317,10 +317,11 @@ function ReceiveCategory(props: {
     </CollapsibleTrigger>
 }
 
-function FindSessionSection({ publicSessions }: { publicSessions: ReceiveCloudSessionViewModel[] }) {
+function FindSessionSection() {
     const [url, setUrl] = useUrlState(['session'])
     const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
     const [keywords, setKeywords] = useState<string>(url.session || '')
+    const publicSessions = core.useCloudSessionsList()
 
     useEffect(() => {
         if (url.session) {
@@ -378,7 +379,7 @@ function FindSessionSection({ publicSessions }: { publicSessions: ReceiveCloudSe
     )
 }
 
-const SessionList = React.memo(({ sessions, title }: { sessions: (ReceiveCloudSessionViewModel | ReceiveSessionViewModel)[], title: string }) => {
+const SessionListWrapper = ({ title, children }: { title: string, children: React.ReactNode }) => {
     return (
         <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
             <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
@@ -390,38 +391,73 @@ const SessionList = React.memo(({ sessions, title }: { sessions: (ReceiveCloudSe
                 </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className={"flex flex-col gap-3"}>
-                {sessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-                <MotionHighlight controlledItems={true} hover exitDelay={0.5}
-                    className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
-                    {
-                        sessions.map((item) => {
-                            return (
-                                <TransferSession
-                                    onPress={() => {
-                                        core.updateSelectedSession(item)
-                                    }}
-                                    id={item.id}
-                                    key={item.id}
-                                />
-                            )
-                        })
-                    }
-                </MotionHighlight>
+                {children}
             </CollapsibleContent>
         </Collapsible>
     )
-});
-SessionList.displayName = 'SessionList';
+}
 
-function Board() {
-    const publicSessions = core.useCloudSessionsList()
-    const nearbySessions = core.useNearbySessionsList()
+const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewModel | ReceiveSessionViewModel)[] }) => {
+    const { isMobile, setOpenMobile } = useSidebar();
 
     return (
+        <>
+            {sessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
+            <MotionHighlight controlledItems={true} hover exitDelay={0.5}
+                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+                {
+                    sessions.map((item) => {
+                        return <div key={item.id}>
+                            <TransferSession
+                                onPress={() => {
+                                    core.updateSelectedSession(item)
+                                    if (isMobile) {
+                                        setOpenMobile(false)
+                                    }
+                                }}
+                                id={item.id}
+                                key={item.id}
+                            />
+                        </div>
+                    })
+                }
+            </MotionHighlight >
+        </>
+    )
+}
+
+const PublicSessionItems = () => {
+    const publicSessions = core.useCloudSessionsList()
+    return <SessionItemsList sessions={publicSessions} />
+}
+
+const PublicSessionList = () => {
+    return (
+        <SessionListWrapper title="Public">
+            <PublicSessionItems />
+        </SessionListWrapper>
+    )
+}
+
+const NearbySessionItems = () => {
+    const nearbySessions = core.useNearbySessionsList()
+    return <SessionItemsList sessions={nearbySessions} />
+}
+
+const NearbySessionList = () => {
+    return (
+        <SessionListWrapper title="Nearby">
+            <NearbySessionItems />
+        </SessionListWrapper>
+    )
+}
+
+function Board() {
+    return (
         <div className="flex flex-col gap-6 h-full overflow-y-auto px-2 pb-4">
-            <FindSessionSection publicSessions={publicSessions} />
-            <SessionList title="Nearby" sessions={nearbySessions} />
-            <SessionList title="Public" sessions={publicSessions} />
+            <FindSessionSection />
+            <NearbySessionList />
+            <PublicSessionList />
         </div>
     );
 }
@@ -465,7 +501,7 @@ function TransferSession(props: {
     return <>
         <button
             onClick={onPress}
-            className={"w-full flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between hover:bg-muted-foreground/50 hover:cursor-pointer"}>
+            className={"w-full p-1 flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between hover:bg-muted-foreground/50 hover:cursor-pointer"}>
             <div className={"flex flex-row items-center gap-5"}>
                 <div
                     className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
@@ -620,7 +656,7 @@ function MediaView(props: {
     return (
         <div
             className={clsx(
-                "w-full overflow-hidden rounded-2xl relative group",
+                "w-full rounded-2xl relative group",
                 "border border-white/10 backdrop-blur-sm",
                 "transition-all duration-300 ease-out",
                 "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",

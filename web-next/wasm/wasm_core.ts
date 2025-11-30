@@ -106,6 +106,20 @@ export class WasmCore {
         return selectedSession
     }
 
+    public useMyPeer() {
+        const [myPeer, setMyPeer] = useState<PeerViewModel | undefined>(undefined)
+
+        useEffect(() => {
+            return this.nearbyState.subscribe((nearbyState) => {
+                if (!isEqual(myPeer, nearbyState?.me)) {
+                    setMyPeer(nearbyState?.me || undefined)
+                }
+            })
+        }, [myPeer]);
+
+        return myPeer
+    }
+
     public useSession(id: String) {
         const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(undefined)
 

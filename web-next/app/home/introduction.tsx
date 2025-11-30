@@ -5,6 +5,7 @@ import Aurora from "@/components/Aurora";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import Link from "next/link";
 import Image from "next/image";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface IntroductionProps {
     disableBackground?: boolean;
@@ -15,8 +16,9 @@ interface IntroductionProps {
 export default function Introduction({
     disableBackground = false,
     hidePrimaryButton = false,
-    header = "A seamless file transfer that you can trust",
+    header = "Easy Peer to peer and Public file transfer",
 }: IntroductionProps) {
+    const isMobile = useIsMobile();
     const containerClassName = disableBackground
         ? "w-full flex flex-col items-center justify-center"
         : "w-screen h-screen flex flex-col items-center justify-center";
@@ -37,11 +39,11 @@ export default function Introduction({
                                 <span className="whitespace-nowrap">Bytover</span>
                             </div>
                             {header && <TypingText
-                                delay={200}
+                                enableAnimation={!isMobile}
+                                delay={500}
                                 duration={15}
                                 className="text-4xl md:text-5xl lg:text-7xl font-black text-center h1 pointer-events-none px-2"
                                 text={header}
-                                cursor
                                 cursorClassName="h-6 md:h-9"
                             />}
                         </div>

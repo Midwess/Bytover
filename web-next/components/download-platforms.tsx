@@ -69,10 +69,10 @@ export function DownloadPlatforms({ className }: DownloadPlatformsProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{
-              duration: 0.5,
-              ease: [0.4, 0, 0.2, 1],
-              height: { duration: 0.5, ease: [0.4, 0, 0.2, 1] },
-              opacity: { duration: 0.4, ease: "easeInOut" },
+              duration: 0.4,
+              ease: [0.4, 0, 0.6, 1], // A common cubic bezier for ease-in-out
+              height: { duration: 0.4, ease: [0.4, 0, 0.6, 1] },
+              opacity: { duration: 0.4, ease: [0.4, 0, 0.6, 1] },
             }}
             className="overflow-hidden w-full"
             style={{ width: "100%", maxWidth: "100%" }}
