@@ -16,7 +16,7 @@ interface IntroductionProps {
 export default function Introduction({
     disableBackground = false,
     hidePrimaryButton = false,
-    header = "Easy Peer-to-Peer and Public File Transfer",
+    header = "Easy Peer to peer and Public file transfer",
 }: IntroductionProps) {
     const isMobile = useIsMobile();
     const containerClassName = disableBackground

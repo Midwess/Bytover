@@ -1,12 +1,12 @@
 Bytover
 
-Bytover is a free peer-to-peer file transfer platform available on all major devices. It supports file transfers across Windows, macOS, Linux, iOS, and Android using secure direct connections with optional public sharing.
+Bytover is a free peer to peer file transfer platform available on all major devices. It supports file transfers across Windows, macOS, Linux, iOS, and Android using secure direct connections with optional public sharing.
 
-Bytover uses peer-to-peer technology with automatic relay server fallback. This ensures private transfers even behind NAT or firewall restrictions. Users can transfer files between their own devices, send to nearby devices on the same network, or create public share links with optional password protection.
+Bytover uses peer to peer technology with automatic relay server fallback. This ensures private transfers even behind NAT or firewall restrictions. Users can transfer files between their own devices, send to nearby devices on the same network, or create public share links with optional Password protected.
 
 Core Features
 
--   Secure Peer-to-Peer File Transfer — Direct P2P connections with automatic relay fallback.
+-   Secure Peer to peer File Transfer — Direct P2P connections with automatic relay fallback.
 -   Unlimited File Size — Transfer files of any size without compression or limits.
 -   Cross-Platform Support — Works on Windows, macOS, Linux, iOS, and Android.
 -   Folder Transfer — Send complete folders while preserving directory structure.

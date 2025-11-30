@@ -21,7 +21,7 @@ interface Feature {
 
 const features: Feature[] = [
     {
-        title: "Secure Peer-to-Peer File Transfer with Relay Backup",
+        title: "Secure Peer to peer File Transfer with Relay Backup",
         description: "Fast and private P2P transfers with an automatic relay fallback. Ensures reliable file delivery even behind NATs or firewalls.",
         icon: Network,
     },
@@ -46,12 +46,12 @@ const features: Feature[] = [
         icon: MapPin,
     },
     {
-        title: "Share Files to Multiple Email Recipients",
+        title: "Share Files To email",
         description: "Send files directly to one or many email addresses at once. Ideal for teams, clients, and group sharing.",
         icon: Mail,
     },
     {
-        title: "Password-Protected Sharing Links",
+        title: "Password protected Sharing Links",
         description: "Create secure public links with optional passwords. Control who can access your shared files at all times.",
         icon: Lock,
     },

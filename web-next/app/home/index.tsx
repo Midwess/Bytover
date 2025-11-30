@@ -19,15 +19,15 @@ function FeaturesSection() {
         },
         {
             id: "public-share",
-            heading: "Public Sharing",
-            description: "Share files with anyone using a simple link. Optional password protection keeps your content secure while making sharing effortless.",
+            heading: "Public file transfer",
+            description: "Share files with anyone using a simple link. Optional Password protected keeps your content secure while making sharing effortless.",
             video: "/demo/desktop-share-public.mp4",
             color: '#060010',
         },
         {
             id: "nearby-share",
-            heading: "Nearby and P2P Transfer",
-            description: "Transfer files directly to any device instantly with Peer to Peer connection. And automatically matching nearby users.",
+            heading: "Nearby transfer & Peer to peer",
+            description: "Transfer files directly to any device instantly with Peer to peer connection. And automatically matching nearby users.",
             video: "/demo/desktop-share-nearby.mp4",
             color: '#060010',
         },
@@ -48,7 +48,7 @@ function FeaturesSection() {
                         Powerful Features
                     </h2>
                     <p className="text-primaryText/70 text-lg lg:text-xl">
-                        Experience seamless file transfer with our intuitive interface. Share files publicly, transfer peer to peer, organize everything in your personal shelf.
+                        Experience seamless file transfer with our intuitive interface. Share files publicly, transfer Peer to peer, organize everything in your personal shelf.
                     </p>
                 </div>
                 <MagicBento
@@ -74,13 +74,13 @@ function PricingPlans() {
         {
             id: "free",
             name: "Free",
-            description: "Perfect for basic users who need simple peer-to-peer file transfers",
+            description: "Perfect for basic users who need simple Peer to peer file transfers",
             price: "Free",
             features: [
-                { text: "Peer-to-peer transfers with limited bandwidth", included: true },
+                { text: "Peer to peer transfers with limited bandwidth", included: true },
                 { text: "Transfer to your own devices", included: true },
-                { text: "Public sharing", included: false },
-                { text: "Email sharing", included: false },
+                { text: "Public file transfer", included: false },
+                { text: "To email", included: false },
             ],
             button: {
                 text: "Get Started",
@@ -90,14 +90,14 @@ function PricingPlans() {
         {
             id: "pro",
             name: "Pro",
-            description: "Advanced features for peer-to-peer transfers across the internet and public sharing.",
+            description: "Advanced features for Peer to peer transfers across the internet and Public file transfer.",
             price: "Coming soon",
             features: [
-                { text: "Peer-to-peer transfers with unlimited bandwidth", included: true },
+                { text: "Peer to peer transfers with unlimited bandwidth", included: true },
                 { text: "Transfer to your own devices", included: true },
-                { text: "Public sharing with password protection", included: true },
+                { text: "Public file transfer with Password protected", included: true },
                 { text: "Public cloud storage up to 500GB / month", included: true },
-                { text: "Send files via email", included: true },
+                { text: "Send files To email", included: true },
             ],
             button: {
                 text: "Join waiting list",
