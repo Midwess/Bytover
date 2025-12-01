@@ -748,6 +748,7 @@ function PublicSend() {
 
 function UrlInputWithCopy({ url }: { url: string }) {
     const [isCopied, setIsCopied] = useState(false)
+    const inputRef = useRef<HTMLInputElement>(null)
 
     const handleCopy = async () => {
         try {
@@ -759,17 +760,12 @@ function UrlInputWithCopy({ url }: { url: string }) {
         }
     }
 
-    // Function to trim from the center
-    const getTrimmedUrl = (url: string, maxLength: number = 40) => {
-        if (url.length <= maxLength) return url
-
-        const ellipsis = '...'
-        const availableLength = maxLength - ellipsis.length
-        const frontLength = Math.ceil(availableLength / 2)
-        const backLength = Math.floor(availableLength / 2)
-
-        return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
-    }
+    // Scroll to the end of the input to show the last part of the URL
+    useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.scrollLeft = inputRef.current.scrollWidth
+        }
+    }, [url])
 
     return (
         <TooltipProvider>
@@ -777,7 +773,8 @@ function UrlInputWithCopy({ url }: { url: string }) {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Input
-                            value={getTrimmedUrl(url)}
+                            ref={inputRef}
+                            value={url}
                             disabled={true}
                             className="pr-12 cursor-default" // Add padding for the button and cursor
                         />
