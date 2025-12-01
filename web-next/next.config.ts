@@ -4,6 +4,11 @@ const VERSION = process.env.VERSION || process.env.RAILWAY_GIT_COMMIT_SHA
 const nextConfig: NextConfig = {
     transpilePackages: ["shared_types"],
     assetPrefix: process.env.S3_CDN_PREFIX && VERSION ? `${process.env.S3_CDN_PREFIX}/commit-${VERSION}` : undefined,
+    env: {
+        NEXT_PUBLIC_S3_CDN_PREFIX: process.env.S3_CDN_PREFIX || '',
+        NEXT_PUBLIC_VERSION: process.env.VERSION || '',
+        NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA || '',
+    },
     images: {
         remotePatterns: [
             {
