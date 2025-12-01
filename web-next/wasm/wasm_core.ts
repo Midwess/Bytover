@@ -491,7 +491,7 @@ export class WasmCore {
                     const delay = coreOperation as CoreOperationVariantDelay;
                     const ms = Number(delay.value.secs) * 1000 + Number(delay.value.nanos) / 1000000;
                     await BPromise.delay(ms)
-                    return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
+                    this.forward_core_operation_output(request_id, serialize(new CoreOperationOutputVariantNone()))
                 })().then(noop)
             }
         }

@@ -136,7 +136,7 @@ impl WebRtc {
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_millis(5000)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
             .build();
