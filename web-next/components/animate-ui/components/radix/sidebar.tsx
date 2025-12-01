@@ -4,7 +4,6 @@ import * as React from 'react';
 import { Slot } from 'radix-ui';
 import { cva, VariantProps } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
-import { type Transition } from 'motion/react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -25,10 +24,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/animate-ui/components/animate/tooltip';
-import {
-  Highlight,
-  HighlightItem,
-} from '@/components/animate-ui/primitives/effects/highlight';
 import { getStrictContext } from '@/lib/get-strict-context';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
@@ -155,9 +150,6 @@ type SidebarProps = React.ComponentProps<'div'> & {
   side?: 'left' | 'right';
   variant?: 'sidebar' | 'floating' | 'inset';
   collapsible?: 'offcanvas' | 'icon' | 'none';
-  containerClassName?: string;
-  animateOnHover?: boolean;
-  transition?: Transition;
 };
 
 function Sidebar({
@@ -166,34 +158,22 @@ function Sidebar({
   collapsible = 'offcanvas',
   className,
   children,
-  animateOnHover = true,
-  containerClassName,
-  transition = { type: 'spring', stiffness: 350, damping: 35 },
   ...props
 }: SidebarProps) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
   if (collapsible === 'none') {
     return (
-      <Highlight
-        enabled={animateOnHover}
-        hover
-        controlledItems
-        mode="parent"
-        containerClassName={containerClassName}
-        transition={transition}
+      <div
+        data-slot="sidebar"
+        className={cn(
+          'bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col',
+          className,
+        )}
+        {...props}
       >
-        <div
-          data-slot="sidebar"
-          className={cn(
-            'bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col',
-            className,
-          )}
-          {...props}
-        >
-          {children}
-        </div>
-      </Highlight>
+        {children}
+      </div>
     );
   }
 
@@ -216,16 +196,7 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <Highlight
-            enabled={animateOnHover}
-            hover
-            controlledItems
-            mode="parent"
-            containerClassName={cn('h-full', containerClassName)}
-            transition={transition}
-          >
-            <div className="flex h-full w-full flex-col">{children}</div>
-          </Highlight>
+          <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
     );
@@ -267,23 +238,13 @@ function Sidebar({
         )}
         {...props}
       >
-        <Highlight
-          containerClassName={cn('size-full', containerClassName)}
-          enabled={animateOnHover}
-          hover
-          controlledItems
-          mode="parent"
-          forceUpdateBounds
-          transition={transition}
+        <div
+          data-sidebar="sidebar"
+          data-slot="sidebar-inner"
+          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
         >
-          <div
-            data-sidebar="sidebar"
-            data-slot="sidebar-inner"
-            className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
-          >
-            {children}
-          </div>
-        </Highlight>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -531,21 +492,6 @@ function SidebarMenuItem({ className, ...props }: SidebarMenuItemProps) {
   );
 }
 
-const sidebarMenuButtonActiveVariants = cva(
-  'bg-sidebar-accent text-sidebar-accent-foreground rounded-md',
-  {
-    variants: {
-      variant: {
-        default: 'bg-sidebar-accent text-sidebar-accent-foreground',
-        outline:
-          'bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-    },
-  },
-);
 
 const sidebarMenuButtonVariants = cva(
   'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] [&:not([data-highlight])]:hover:bg-sidebar-accent [&:not([data-highlight])]:hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&:not([data-highlight])]:data-[state=open]:hover:bg-sidebar-accent [&:not([data-highlight])]:data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
@@ -589,18 +535,14 @@ function SidebarMenuButton({
   const { isMobile, state } = useSidebar();
 
   const button = (
-    <HighlightItem
-      activeClassName={sidebarMenuButtonActiveVariants({ variant })}
-    >
-      <Comp
-        data-slot="sidebar-menu-button"
-        data-sidebar="menu-button"
-        data-size={size}
-        data-active={isActive}
-        className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-        {...props}
-      />
-    </HighlightItem>
+    <Comp
+      data-slot="sidebar-menu-button"
+      data-sidebar="menu-button"
+      data-size={size}
+      data-active={isActive}
+      className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+      {...props}
+    />
   );
 
   if (!tooltip) {
@@ -647,7 +589,7 @@ function SidebarMenuAction({
         'peer-data-[size=lg]/menu-button:top-2.5',
         'group-data-[collapsible=icon]:hidden',
         showOnHover &&
-          'peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0',
+        'peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0',
         className,
       )}
       {...props}
@@ -762,23 +704,21 @@ function SidebarMenuSubButton({
   const Comp = asChild ? Slot.Root : 'a';
 
   return (
-    <HighlightItem activeClassName="bg-sidebar-accent text-sidebar-accent-foreground rounded-md">
-      <Comp
-        data-slot="sidebar-menu-sub-button"
-        data-sidebar="menu-sub-button"
-        data-size={size}
-        data-active={isActive}
-        className={cn(
-          'text-sidebar-foreground ring-sidebar-ring [&:not([data-highlight])]:hover:bg-sidebar-accent [&:not([data-highlight])]:hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground [&>svg]:text-sidebar-accent-foreground flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 outline-hidden focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
-          'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
-          size === 'sm' && 'text-xs',
-          size === 'md' && 'text-sm',
-          'group-data-[collapsible=icon]:hidden',
-          className,
-        )}
-        {...props}
-      />
-    </HighlightItem>
+    <Comp
+      data-slot="sidebar-menu-sub-button"
+      data-sidebar="menu-sub-button"
+      data-size={size}
+      data-active={isActive}
+      className={cn(
+        'text-sidebar-foreground ring-sidebar-ring [&:not([data-highlight])]:hover:bg-sidebar-accent [&:not([data-highlight])]:hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground [&>svg]:text-sidebar-accent-foreground flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 outline-hidden focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
+        'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
+        size === 'sm' && 'text-xs',
+        size === 'md' && 'text-sm',
+        'group-data-[collapsible=icon]:hidden',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 

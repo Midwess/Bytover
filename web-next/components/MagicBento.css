@@ -541,3 +541,47 @@
   position: relative;
   user-select: none;
 }
+
+/* Mobile: Remove all animations and border effects */
+@media (max-width: 768px) {
+  .magic-bento-card {
+    transition: none;
+  }
+
+  .magic-bento-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Disable border glow on mobile */
+  .magic-bento-card--border-glow::after {
+    display: none;
+  }
+
+  .magic-bento-card--border-glow:hover {
+    box-shadow: none;
+  }
+
+  .magic-bento-card--border-glow:hover::after {
+    opacity: 0;
+  }
+
+  /* Disable particle container effects */
+  .particle-container:hover {
+    box-shadow: none;
+  }
+
+  /* Hide particles */
+  .particle {
+    display: none !important;
+  }
+
+  .particle::before {
+    display: none;
+  }
+
+  /* Disable spotlight */
+  .global-spotlight {
+    display: none !important;
+  }
+}

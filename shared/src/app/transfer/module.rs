@@ -314,6 +314,7 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::FindPublicSession { mut keywords } => {
                 if let Ok(url) = url::Url::parse(&keywords) {
                     let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
+                        log::info!("Not found query key session");
                         return Command::done()
                     };
 
@@ -321,7 +322,8 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 model.transfer.keywords = keywords.clone();
-                if model.transfer.sessions.iter().any(|it| it.target.is_keyword_match(&keywords, true)) {
+                log::info!("Find public session with keywords: {}", keywords);
+                if model.transfer.sessions.iter().any(|it| matches!(it.transfer_type, TransferType::Receive) && it.target.is_keyword_match(&keywords)) {
                     return Command::render();
                 }
 
@@ -349,8 +351,8 @@ impl AppModule<BitBridge> for TransferModule {
                 .transfer
                 .sessions
                 .iter()
-                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords, false))
                 .filter(|it| it.transfer_type == TransferType::Receive)
+                .filter(|it| it.target.is_keyword_match(&model.transfer.keywords))
                 .filter_map(|it| {
                     let (password, avatar, name, access_url, is_required_password, alias, _to_emails) = match &it.target {
                         TransferTarget::Internet {

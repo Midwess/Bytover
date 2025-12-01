@@ -24,7 +24,7 @@ impl TransferTarget {
         matches!(self, Self::Nearby(_))
     }
 
-    pub fn is_keyword_match(&self, keywords: &str, exact: bool) -> bool {
+    pub fn is_keyword_match(&self, keywords: &str) -> bool {
         if keywords.is_empty() {
             return true;
         }
@@ -44,13 +44,11 @@ impl TransferTarget {
                 return false
             };
 
+            log::info!("Found query key session: {}", query);
             name = query;
         }
 
-        if exact {
-            return from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
-        }
-        from_user.name.to_lowercase().contains(&keywords.to_lowercase()) || name.to_lowercase().contains(&keywords.to_lowercase())
+        from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
     }
 }
 

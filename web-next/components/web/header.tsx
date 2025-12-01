@@ -68,7 +68,7 @@ export default function Header({ className }: { className?: string }) {
             <div ref={sentinelRef} className="absolute top-0 left-0 w-full h-px pointer-events-none" />
 
             <div
-                className={`fixed top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-3 md:py-6 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md shadow-lg' : 'bg-transparent backdrop-blur-none'
+                className={`fixed top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-4 md:py-6 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md shadow-lg' : 'bg-transparent backdrop-blur-none'
                     }`}>
                 <div className={cn("flex justify-between items-center w-full container px-3", className)}>
                     <div className="flex flex-row gap-2 items-center">
@@ -78,7 +78,7 @@ export default function Header({ className }: { className?: string }) {
                                 height={35}
                                 src="logo.svg"
                                 alt="Logo"
-                                className="rounded-lg aspect-square w-8 h-8 md:w-[45px] md:h-[45px]"
+                                className="rounded-lg aspect-square w-10 h-10 md:w-[45px] md:h-[45px]"
                             />
                         </Link>
                     </div>
@@ -118,13 +118,13 @@ export default function Header({ className }: { className?: string }) {
 
                     </div>
                     <div className="flex flex-row gap-1.5 md:gap-2 font-bold text-primaryText items-center">
-                        <GitHubStarsButton className={"hidden sm:flex under-development bg-muted-foreground/10 border h-8 md:h-10 text-foreground text-xs md:text-sm"} username="Dev-log" repo="animate-ui" />
+                        <GitHubStarsButton className={"hidden sm:flex under-development bg-muted-foreground/10 border h-9 md:h-10 text-foreground text-xs md:text-sm"} username="Dev-log" repo="animate-ui" />
                         {isSignedIn ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
                                         variant="outline"
-                                        className="h-8 md:h-10 bg-background/80 backdrop-blur-sm border-border/50 text-primaryText hover:bg-background/90 text-xs md:text-sm px-3 md:px-4"
+                                        className="h-9 md:h-10 bg-background/80 backdrop-blur-sm border-border/50 text-primaryText hover:bg-background/90 text-xs md:text-sm px-3 md:px-4"
                                     >
                                         {authState?.user?.email || 'Account'}
                                     </Button>
@@ -150,7 +150,7 @@ export default function Header({ className }: { className?: string }) {
                             <Button
                                 variant="default"
                                 disabled={!coreReady}
-                                className="h-8 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4"
+                                className="h-9 md:h-10 bg-bluePrimary text-white text-xs md:text-sm px-3 md:px-4"
                                 onClick={() => core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantAuthenticate()))}
                             >
                                 {!coreReady ? (

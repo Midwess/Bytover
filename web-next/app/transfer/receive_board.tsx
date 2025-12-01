@@ -18,27 +18,19 @@ import {
     ArrowDown,
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
+    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/animate-ui/radix/dropdown-menu';
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
 import { ReactElement, useCallback, useEffect, useState } from "react";
-import { MotionEffect } from '@/components/animate-ui/effects/motion-effect';
 import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 import clsx from "clsx";
 import { Input } from "@/components/ui/input";
-import { MotionHighlight } from "@/components/animate-ui/effects/motion-highlight";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
@@ -134,6 +126,7 @@ function ContentBoard() {
     const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
     const isMobile = useIsMobile();
+    const { setOpenMobile } = useSidebar();
 
     useEffect(() => {
         if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
@@ -175,8 +168,14 @@ function ContentBoard() {
     }, [selectedSession?.id]);
 
     if (!selectedSession) {
-        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
-            <p>No session selected</p>
+        return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
+            <p className="text-lg font-medium text-muted-foreground/50">No session selected</p>
+            <Button
+                onClick={() => setOpenMobile(true)}
+                className="block sm:hidden bg-bluePrimary text-white hover:bg-bluePrimary/90"
+            >
+                Select Session
+            </Button>
         </div>
     }
 
@@ -290,16 +289,8 @@ function ContentBoard() {
 }
 
 function ItemEffect(props: { children: ReactElement, index: number }) {
-    const { children, index } = props
-    return <MotionEffect
-        slide={{
-            direction: 'down',
-        }}
-        fade
-        zoom
-        delay={0.8 + Math.min(index, 5) * 0.15}>
-        {children}
-    </MotionEffect>
+    const { children } = props
+    return <>{children}</>
 }
 
 function ReceiveCategory(props: {
@@ -404,8 +395,7 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewMode
     return (
         <>
             {sessions.length === 0 && <p className={"text-muted-foreground text-sm pl-2"}>Empty</p>}
-            <MotionHighlight controlledItems={true} hover exitDelay={0.5}
-                className={"pointer-events-none flex flex-col gap-2 rounded-2xl bg-primaryText/10"}>
+            <div className={"flex flex-col gap-2"}>
                 {
                     sessions.map((item) => {
                         return <div key={item.id}>
@@ -422,7 +412,7 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewMode
                         </div>
                     })
                 }
-            </MotionHighlight >
+            </div>
         </>
     )
 }
@@ -574,7 +564,7 @@ function FileView(props: {
         <div
             className="gap-4 flex flex-row w-full overflow-clip justify-between items-center h-fit rounded-2xl relative group 
                        bg-muted/60
-                       backdrop-blur-xl border border-white/10 p-3
+                       backdrop-blur-xl border border-white/10 p-1.5
                        transition-all duration-300 ease-out
                        hover:shadow-xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
                        hover:bg-muted/80">
@@ -660,7 +650,7 @@ function MediaView(props: {
                 "border border-white/10 backdrop-blur-sm",
                 "transition-all duration-300 ease-out",
                 "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-muted-foreground m-1",
-                isMobile ? "flex flex-row items-center gap-3 p-3 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
+                isMobile ? "flex flex-row items-center gap-3 p-1.5 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
             )}>
             {/* Desktop: Thumbnail - full background */}
             {!isMobile && (
@@ -699,7 +689,7 @@ function MediaView(props: {
 
             {/* Mobile: Thumbnail - small square */}
             {isMobile && (
-                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+                <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
                     {thumbnailSource ? (
                         <Image className="w-full h-full object-cover" fill src={thumbnailSource} alt={model.name} />
                     ) : (
@@ -770,24 +760,13 @@ function MediaView(props: {
             {isMobile && (
                 <div className="flex-shrink-0">
                     {media.is_completed ? (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    onClick={onDownloadClick}
-                                >
-                                    <ArrowDown className="w-4 h-4 mr-2" />
-                                    <span>Download</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                            className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
+                                       transition-all duration-300 hover:scale-110 shadow-lg"
+                            onClick={onDownloadClick}
+                        >
+                            <ArrowDown className="w-5 h-5 text-white" />
+                        </button>
                     ) : (
                         <CircleProgress progress={media.completion} size={32} />
                     )}

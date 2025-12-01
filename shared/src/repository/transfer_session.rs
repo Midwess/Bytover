@@ -68,6 +68,12 @@ impl DbId for TransferSessionId {
     type Table = TransferSession;
 
     fn is_represent(&self, table: &Self::Table) -> bool {
+        if let Some(transfer_type) = &self.transfer_type {
+            if transfer_type != &table.transfer_type {
+                return false;
+            }
+        }
+
         if let Some(order_id) = &self.order_id {
             let order_id: u64 = order_id.parse().unwrap_or_default();
             if order_id != table.order_id {
