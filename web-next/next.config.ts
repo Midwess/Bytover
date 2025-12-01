@@ -51,6 +51,16 @@ const nextConfig: NextConfig = {
                 hostname: "s3.eu-central-2.wasabisys.com",
                 pathname: "/**"
             },
+            {
+                protocol: "https",
+                hostname: "midwess.sgp1.digitaloceanspaces.com",
+                pathname: "/**"
+            },
+            {
+                protocol: "https",
+                hostname: "midwess.sgp1.cdn.digitaloceanspaces.com",
+                pathname: "/**"
+            }
         ],
     },
     output: "standalone",
