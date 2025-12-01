@@ -403,19 +403,16 @@ function FileView(props: {
             )}>
                 <p className={clsx(
                     "text-sm font-medium text-white/90 break-words leading-tight",
-                    isMobile ? "line-clamp-1 text-left" : "line-clamp-2 text-center"
+                    isMobile ? "line-clamp-1 text-left" : "text-center"
                 )}>
                     {model.name}
                 </p>
                 <div className={clsx(
-                    "flex items-center gap-2",
+                    "flex items-center",
                     isMobile ? "mt-1" : "justify-center"
                 )}>
-                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80 whitespace-nowrap">
                         {displaySize}
-                    </span>
-                    <span className="text-xs text-white/50">
-                        {isFolder ? "Folder" : "File"}
                     </span>
                 </div>
             </div>
@@ -554,7 +551,7 @@ function MediaView(props: {
                 "flex flex-col z-20",
                 isMobile
                     ? "flex-1 min-w-0"
-                    : "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm rounded-b-2xl"
+                    : "absolute bottom-0 left-0 right-0 p-3 gap-2.5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm rounded-b-2xl"
             )}>
                 <p className={clsx(
                     "text-white text-sm font-medium leading-tight",
@@ -563,14 +560,11 @@ function MediaView(props: {
                     {model.name}
                 </p>
                 <div className={clsx(
-                    "flex items-center gap-2",
-                    isMobile ? "mt-1" : ""
+                    "flex items-center",
+                    isMobile ? "mt-1" : "justify-center"
                 )}>
-                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80 whitespace-nowrap">
                         {displaySize}
-                    </span>
-                    <span className="text-xs text-white/60">
-                        {isVideo ? "Video" : "Image"}
                     </span>
                 </div>
             </div>
