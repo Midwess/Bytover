@@ -234,7 +234,7 @@ function ContentBoard() {
                 <ReceiveCategory
                     title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`} />
                 <CollapsibleContent className={"space-y-2"}>
-                    <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
+                    <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
@@ -599,7 +599,7 @@ function FileView(props: {
             {
                 file.is_completed
                     ? <button
-                        className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
+                        className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
                         onClick={onDownloadClick}
                     >
@@ -727,7 +727,7 @@ function MediaView(props: {
                         <div className="flex-shrink-0">
                             {media.is_completed
                                 ? <button
-                                    className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
+                                    className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                                transition-all duration-300 hover:scale-110 shadow-lg"
                                     onClick={onDownloadClick}>
                                     <ArrowDown className="w-5 h-5 text-white" />

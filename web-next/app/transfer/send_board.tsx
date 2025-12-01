@@ -276,9 +276,9 @@ function FileSelections() {
                         ) : null}
                     </div>
                 ) : (
-                    <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
+                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 md:gap-4 p-2 md:px-1">
                         {selectedResources.map((resource) => (
-                            <div className="md:p-0.5 md:h-[220px] flex items-start flex-row" key={resource.order_id}>
+                            <div className="md:h-[230px] flex items-start flex-row" key={resource.order_id}>
                                 <ResourceView model={resource} />
                             </div>
                         ))}
@@ -379,13 +379,13 @@ function FileView(props: {
             {/* Thumbnail */}
             <div className={clsx(
                 "flex items-center justify-center relative",
-                isMobile ? "w-14 h-14 shrink-0" : "flex-1 p-1.5"
+                isMobile ? "w-14 h-14 shrink-0" : "flex-1 p-2.5"
             )}>
                 <div className={clsx(
                     "relative flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md",
-                    isMobile ? "w-12 h-12" : "w-20 h-20"
+                    isMobile ? "w-12 h-12" : "w-24 h-24"
                 )}>
-                    <div className={clsx("relative", isMobile ? "w-10 h-10" : "w-16 h-16")}>
+                    <div className={clsx("relative", isMobile ? "w-10 h-10" : "w-20 h-20")}>
                         <Image
                             className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
                             layout="fill"
@@ -399,7 +399,7 @@ function FileView(props: {
             {/* File info */}
             <div className={clsx(
                 "flex flex-col",
-                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-2 pb-2 bg-gradient-to-t from-black/20 to-transparent pt-1.5"
+                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-2 pb-3 bg-gradient-to-t from-black/20 to-transparent pt-2.5"
             )}>
                 <p className={clsx(
                     "text-sm font-medium text-white/90 break-words leading-tight",
