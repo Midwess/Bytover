@@ -691,7 +691,7 @@ function MediaView(props: {
             {isMobile && (
                 <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
                     {thumbnailSource ? (
-                        <Image className="w-full h-full object-cover" fill src={thumbnailSource} alt={model.name} />
+                        <img className="w-full h-full object-cover" src={thumbnailSource} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
                             <ImageUpIcon className="w-6 h-6 opacity-40" />
