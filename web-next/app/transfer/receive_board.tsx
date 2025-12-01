@@ -18,15 +18,9 @@ import {
     ArrowDown,
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, MoreVertical, Play, Wifi
+    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/animate-ui/radix/dropdown-menu';
 import {
     Collapsible,
     CollapsibleContent,
