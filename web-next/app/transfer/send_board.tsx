@@ -60,6 +60,7 @@ import {
     useSidebar,
 } from '@/components/animate-ui/components/radix/sidebar';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 
 enum TransferType {
     Public,
@@ -810,6 +811,13 @@ function NearbySend() {
 
 function MyPeerInfo() {
     const myPeer = core.useMyPeer()
+    const isLocationEnabled = core.useLocationEnabled()
+    const isLocationLoading = core.useLocationLoading()
+
+    // Request location on mount
+    useEffect(() => {
+        core.enableLocation()
+    }, [])
 
     if (!myPeer) {
         return (
@@ -826,8 +834,17 @@ function MyPeerInfo() {
 
     const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
 
+    const handleLocationToggle = async (checked: boolean) => {
+        if (checked) {
+            // Reset and request fresh permission
+            await core.enableLocation()
+        } else {
+            core.disableLocation()
+        }
+    }
+
     return (
-        <div className="flex flex-col w-full gap-2 mb-4">
+        <div className="flex flex-col w-full gap-3 mb-4">
             <div className="flex flex-row rounded-2xl items-center w-full">
                 <div className="flex flex-row items-center gap-5 justify-between flex-1 rounded-xl">
                     <div className="flex flex-col gap-[0.5] items-start">
@@ -843,6 +860,26 @@ function MyPeerInfo() {
                         {/* Online status indicator */}
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-2 border-background" />
                     </div>
+                </div>
+            </div>
+
+            {/* Location Toggle */}
+            <div className="flex items-center justify-between px-2 py-2 rounded-lg border border-white/10 bg-white/5">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-primaryText">Allow Location</span>
+                    <span className="text-[10px] text-muted-foreground">
+                        {isLocationLoading ? "Getting location..." : "Helps find nearby devices"}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {isLocationLoading && (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                    )}
+                    <Switch
+                        checked={isLocationEnabled}
+                        onCheckedChange={handleLocationToggle}
+                        disabled={isLocationLoading}
+                    />
                 </div>
             </div>
         </div>

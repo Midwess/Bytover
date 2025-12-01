@@ -84,6 +84,8 @@ export class WasmCore {
     isCoreReady: Observable<boolean> = new Observable(false)
     isTransferReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
+    isLocationEnabled: Observable<boolean> = new Observable(true)
+    isLocationLoading: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
     nearbyState: Observable<NearbyViewModel> = new Observable()
@@ -308,6 +310,24 @@ export class WasmCore {
         return isCompatible
     }
 
+    public useLocationEnabled() {
+        const [isEnabled, setIsEnabled] = useState(this.isLocationEnabled.get());
+        useEffect(() => {
+            return this.isLocationEnabled.subscribe(setIsEnabled)
+        }, []);
+
+        return isEnabled
+    }
+
+    public useLocationLoading() {
+        const [isLoading, setIsLoading] = useState(this.isLocationLoading.get());
+        useEffect(() => {
+            return this.isLocationLoading.subscribe(setIsLoading)
+        }, []);
+
+        return isLoading
+    }
+
     public async launch() {
         await init_core();
         const isCompatible = await is_compatible()
@@ -323,39 +343,63 @@ export class WasmCore {
         if (this.isTransferReady.get()) return;
         console.log('Launching nearby')
         this.isTransferReady.set(true)
-        this.updateGeoLocation().then(noop)
         await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
     }
 
-    async updateGeoLocation() {
-        while (true) {
-            try {
-                const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-                    if (!navigator.geolocation) {
-                        reject(new Error('Geolocation is not supported'))
-                        return
-                    }
-
-                    navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                            enableHighAccuracy: true,
-                            timeout: 15000,
-                            maximumAge: 60000
-                        }
-                    )
-                })
-
-                this.cachedGeoLocation = new GeoLocation(position.coords.latitude, position.coords.longitude);
-            }
-            catch (ignored) {
-                console.log("Failed to get geolocation", ignored)
-            }
-            finally {
-                await delay(10000)
-            }
+    public async enableLocation() {
+        if (this.isLocationLoading.get()) {
+            console.log("Location request already in progress");
+            return;
         }
+
+        if (!navigator.geolocation) {
+            console.log("Geolocation is not supported");
+            this.isLocationEnabled.set(false);
+            return;
+        }
+
+        // Reset state before requesting
+        this.cachedGeoLocation = undefined;
+        this.isLocationLoading.set(true);
+
+        try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: false,
+                        timeout: 15000,
+                        maximumAge: 0  // Always request fresh location
+                    }
+                );
+            });
+
+            this.cachedGeoLocation = new GeoLocation(
+                position.coords.latitude,
+                position.coords.longitude
+            );
+            this.isLocationEnabled.set(true);
+            this.isLocationLoading.set(false);
+            console.log("Location retrieved:", position.coords);
+        } catch (error) {
+            console.log("Failed to get geolocation", error);
+            this.cachedGeoLocation = undefined;
+            this.isLocationEnabled.set(false);
+            this.isLocationLoading.set(false);
+        }
+    }
+
+    public disableLocation() {
+        this.cachedGeoLocation = undefined;
+        this.isLocationEnabled.set(false);
+        this.isLocationLoading.set(false);
+        console.log("Location tracking disabled");
+    }
+
+    async updateGeoLocation() {
+        await delay(2000)
+        await this.enableLocation();
     }
 
     public async update(event: AppEvent) {
