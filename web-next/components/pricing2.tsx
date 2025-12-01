@@ -90,7 +90,7 @@ const Pricing2 = ({
             {plans.map((plan) => (
               <Card
                 key={plan.id}
-                className="flex w-full md:w-80 lg:w-96 flex-col justify-between text-left bg-black border border-white/10 hover:border-white/30 hover:shadow-2xl hover:shadow-bluePrimary/10 transition-all duration-300"
+                className="flex w-full md:w-96 lg:w-100 flex-col justify-between text-left bg-black border border-white/10 hover:border-white/30 hover:shadow-2xl hover:shadow-bluePrimary/10 transition-all duration-300"
               >
                 <CardHeader className="space-y-4">
                   <div className="space-y-2">

@@ -68,7 +68,9 @@ export default function Header({ className }: { className?: string }) {
             <div ref={sentinelRef} className="absolute top-0 left-0 w-full h-px pointer-events-none" />
 
             <div
-                className={`fixed top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-4 md:py-6 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md shadow-lg' : 'bg-transparent backdrop-blur-none'
+                className={`fixed top-0 left-0 right-0 z-100 flex justify-between items-center w-full py-4 md:py-6 transition-all duration-300 ${isScrolled
+                    ? 'bg-black/40 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20'
+                    : 'bg-transparent'
                     }`}>
                 <div className={cn("flex justify-between items-center w-full container px-3", className)}>
                     <div className="flex flex-row gap-2 items-center">

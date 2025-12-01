@@ -34,7 +34,7 @@ export default function Introduction({
                     <div className={"flex flex-col items-center gap-8 md:gap-20"}>
                         <div className={"flex flex-col items-center gap-2 md:gap-4"}>
                             <div className={"flex bg-muted-foreground/10 py-1 px-2 rounded-lg flex-row gap-1 md:gap-2 text-2xl md:text-3xl lg:text-5xl font-black text-center items-center"}>
-                                <Image src={getAssetUrl("/logo-color.svg")} alt={"logo"} width={40} height={40} className={"w-6 h-6 md:w-10 md:h-10"} />
+                                <Image src={getAssetUrl("/logo-color.svg")} alt={"logo"} width={40} height={40} className={"w-5 h-5 md:w-8 md:h-8"} />
                                 <span className="whitespace-nowrap text-sm sm:text-md">Bytover</span>
                             </div>
                             <h1
