@@ -2,12 +2,6 @@
 
 import * as React from 'react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
-import {
-  AnimatePresence,
-  motion,
-  type HTMLMotionProps,
-  type Transition,
-} from 'motion/react';
 
 type CollapsibleContextType = {
   isOpen: boolean;
@@ -69,39 +63,21 @@ function CollapsibleTrigger(props: CollapsibleTriggerProps) {
 
 type CollapsibleContentProps = React.ComponentProps<
   typeof CollapsiblePrimitive.Content
-> &
-  HTMLMotionProps<'div'> & {
-    transition?: Transition;
-  };
+>;
 
 function CollapsibleContent({
   className,
   children,
-  transition = { type: 'spring', stiffness: 150, damping: 22 },
   ...props
 }: CollapsibleContentProps) {
-  const { isOpen } = useCollapsible();
-
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <CollapsiblePrimitive.Content asChild forceMount {...props}>
-          <motion.div
-            key="collapsible-content"
-            data-slot="collapsible-content"
-            layout
-            initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-            animate={{ opacity: 1, height: 'auto', overflow: 'hidden' }}
-            exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-            transition={transition}
-            className={className}
-            {...props}
-          >
-            {children}
-          </motion.div>
-        </CollapsiblePrimitive.Content>
-      )}
-    </AnimatePresence>
+    <CollapsiblePrimitive.Content
+      data-slot="collapsible-content"
+      className={className}
+      {...props}
+    >
+      {children}
+    </CollapsiblePrimitive.Content>
   );
 }
 

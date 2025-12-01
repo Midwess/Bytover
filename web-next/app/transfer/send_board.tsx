@@ -20,7 +20,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/animate-ui/radix/tooltip";
-import { MotionEffect } from "@/components/animate-ui/effects/motion-effect";
 import {
     AppEventVariantTransfer,
     LocalResourcePathVariantAbsolutePath,
@@ -160,39 +159,41 @@ function FileSelections() {
         <div className="flex flex-col w-full h-full">
             {/* Resource Selection Area */}
             {isMobile ? (
-                // Mobile: Dropdown Button
-                <div className="relative w-full flex-shrink-0 h-[55px]">
-                    <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
-                    <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
-                    <div className="absolute top-2 right-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    onClick={openFileDialog}
-                                >
-                                    <ImageUpIcon className="w-4 h-4 mr-2" />
-                                    <span>Select file</span>
-                                </DropdownMenuItem>
-                                {supportsDirectories && (
-                                    <DropdownMenuItem
-                                        onClick={openDirectoryDialog}
+                // Mobile: Dropdown Button (only show when resources exist)
+                selectedResources.length > 0 && (
+                    <div className="relative w-full flex-shrink-0 h-[50px]">
+                        <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                        <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
+                        <div className="absolute top-2 right-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
                                     >
-                                        <FolderIcon className="w-4 h-4 mr-2" />
-                                        <span>Select folder</span>
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onClick={openFileDialog}
+                                    >
+                                        <ImageUpIcon className="w-4 h-4 mr-2" />
+                                        <span>Select file</span>
                                     </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    {supportsDirectories && (
+                                        <DropdownMenuItem
+                                            onClick={openDirectoryDialog}
+                                        >
+                                            <FolderIcon className="w-4 h-4 mr-2" />
+                                            <span>Select folder</span>
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
-                </div>
+                )
             ) : (
                 // Desktop: Two separate drop zones
                 <div className="flex gap-2 w-full flex-shrink-0 h-32 md:h-50">
@@ -239,8 +240,40 @@ function FileSelections() {
 
                 {/* Resource grid - single column on mobile, grid on desktop */}
                 {selectedResources.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground/50">
+                    <div className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground/50 gap-4">
                         <p className="text-lg font-medium">No selected resources</p>
+                        {isMobile ? (
+                            <>
+                                <input {...getInputProps()} className="sr-only" aria-label="Upload files" />
+                                <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder" />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            className="h-10 w-10 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
+                                        >
+                                            <Plus className="h-5 w-5" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="center">
+                                        <DropdownMenuItem
+                                            onClick={openFileDialog}
+                                        >
+                                            <ImageUpIcon className="w-4 h-4 mr-2" />
+                                            <span>Select file</span>
+                                        </DropdownMenuItem>
+                                        {supportsDirectories && (
+                                            <DropdownMenuItem
+                                                onClick={openDirectoryDialog}
+                                            >
+                                                <FolderIcon className="w-4 h-4 mr-2" />
+                                                <span>Select folder</span>
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </>
+                        ) : null}
                     </div>
                 ) : (
                     <div className="flex flex-col md:grid md:grid-cols-2 md:sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2 md:gap-x-3 md:gap-y-1 p-2 md:p-0">
@@ -301,7 +334,7 @@ function FileView(props: {
                 "bg-muted/60 backdrop-blur-xl border border-white/10",
                 "transition-all duration-300 ease-out",
                 "hover:scale-[1.02] hover:shadow-2xl hover:shadow-muted/10 hover:border-white/30 hover:backdrop-blur-sm hover:bg-muted/80",
-                isMobile ? "flex-row items-center gap-3 p-3 h-auto" : "flex-col h-full"
+                isMobile ? "flex-row items-center gap-3 p-1.5 h-auto" : "flex-col h-full"
             )}>
 
             {/* Desktop: Remove button overlay */}
@@ -346,7 +379,7 @@ function FileView(props: {
             {/* Thumbnail */}
             <div className={clsx(
                 "flex items-center justify-center relative",
-                isMobile ? "w-16 h-16 shrink-0" : "flex-1 p-3"
+                isMobile ? "w-14 h-14 shrink-0" : "flex-1 p-1.5"
             )}>
                 <div className={clsx(
                     "relative flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md",
@@ -366,7 +399,7 @@ function FileView(props: {
             {/* File info */}
             <div className={clsx(
                 "flex flex-col",
-                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-4 pb-4 bg-gradient-to-t from-black/20 to-transparent pt-3"
+                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-2 pb-2 bg-gradient-to-t from-black/20 to-transparent pt-1.5"
             )}>
                 <p className={clsx(
                     "text-sm font-medium text-white/90 break-words leading-tight",
@@ -430,10 +463,10 @@ function MediaView(props: {
         <div
             className={clsx(
                 "w-full overflow-hidden rounded-2xl relative group",
-                "border border-white/10 backdrop-blur-sm",
+                "border border-white/10",
                 "transition-all duration-300 ease-out",
                 "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",
-                isMobile ? "flex flex-row items-center gap-3 p-3 h-auto" : "h-full"
+                isMobile ? "flex flex-row items-center gap-3 p-1.5 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
             )}>
             {/* Desktop: Thumbnail - full background */}
             {!isMobile && (
@@ -455,13 +488,13 @@ function MediaView(props: {
                     {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
                     {/* Background overlay for hover effect */}
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl" />
                 </>
             )}
 
             {/* Mobile: Thumbnail - small square */}
             {isMobile && (
-                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+                <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
                     {thumbnailUrl ? (
                         <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
                     ) : (
@@ -498,8 +531,8 @@ function MediaView(props: {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 w-8 p-0 rounded-full bg-black/60 hover:bg-black/80">
-                                <MoreVertical className="h-4 w-4 text-white" />
+                                className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
+                                <MoreVertical className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -521,7 +554,7 @@ function MediaView(props: {
                 "flex flex-col z-20",
                 isMobile
                     ? "flex-1 min-w-0"
-                    : "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm"
+                    : "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm rounded-b-2xl"
             )}>
                 <p className={clsx(
                     "text-white text-sm font-medium leading-tight",
@@ -643,15 +676,7 @@ function PublicSend() {
     }, [cloudSession?.is_in_progress])
 
     return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center mt-1"}>
-        <MotionEffect
-            className={"flex flex-col w-full gap-3"}
-            slide={{
-                direction: 'down',
-            }}
-            fade
-            zoom
-            inView
-            delay={0.2}>
+        <div className={"flex flex-col w-full gap-3"}>
             <p className="text-start w-full text-primaryText/70 text-sm">
                 Create a sharable URL or send files directly to email addresses. Optionally protect with a password.
             </p>
@@ -717,7 +742,7 @@ function PublicSend() {
                     }}>Continue</Button>
                 }
             </div>
-        </MotionEffect>
+        </div>
     </div>
 }
 
@@ -785,27 +810,19 @@ function NearbySend() {
     const nearbyPeers = nearbyState?.peers || []
 
     return <>
-        <MotionEffect
-            className="flex flex-col w-full gap-3"
-            slide={{ direction: 'down' }}
-            fade
-            zoom
-            inView
-            delay={0.2}>
-
-            {/* Current User Info */}
-            <MyPeerInfo />
-
+        <div className="flex flex-col w-full gap-3">
             <p className="text-start w-full text-primaryText/70 text-sm pb-1">
                 Share with nearby friends and devices
             </p>
-
+            {/* Current User Info */}
+            <MyPeerInfo />
             <div className="flex flex-col w-full gap-3">
+                {nearbyPeers.length > 0 && <span className="text-start w-full text-muted-foreground text-sm font-medium pb-1">Peers:</span>}
                 {nearbyPeers.map((peer) => (
                     <NearbyPeer key={peer.id} peer={peer} />
                 ))}
             </div>
-        </MotionEffect>
+        </div>
     </>
 }
 
@@ -822,7 +839,7 @@ function MyPeerInfo() {
     if (!myPeer) {
         return (
             <div className="w-full mb-6">
-                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/0 p-4 backdrop-blur-sm">
+                <div className="relative overflow-hidden rounded-2xl backdrop-blur-sm">
                     <div className="flex items-center justify-center gap-3 py-2">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
                         <span className="text-sm font-medium text-muted-foreground animate-pulse">Initializing...</span>
@@ -844,7 +861,7 @@ function MyPeerInfo() {
     }
 
     return (
-        <div className="flex flex-col w-full gap-3 mb-4">
+        <div className="flex flex-col w-full gap-3">
             <div className="flex flex-row rounded-2xl items-center w-full">
                 <div className="flex flex-row items-center gap-5 justify-between flex-1 rounded-xl">
                     <div className="flex flex-col gap-[0.5] items-start">
@@ -864,10 +881,10 @@ function MyPeerInfo() {
             </div>
 
             {/* Location Toggle */}
-            <div className="flex items-center justify-between px-2 py-2 rounded-lg border border-white/10 bg-white/5">
+            <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-medium text-primaryText">Allow Location</span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-sm font-medium text-primaryText">Allow Location</span>
+                    <span className="text-xs text-muted-foreground">
                         {isLocationLoading ? "Getting location..." : "Helps find nearby devices"}
                     </span>
                 </div>
