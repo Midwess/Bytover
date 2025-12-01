@@ -98,6 +98,10 @@ impl AppCommand {
                     self.notify_event(NearbyEvent::Launch {auto_launch});
                     break;
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning) => {
+                    log::info!(target: "nearby", "Nearby server already running");
+                    break;
+                }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped, stop server");
                     self.notify_event(NearbyEvent::ClearNearbyPeers);

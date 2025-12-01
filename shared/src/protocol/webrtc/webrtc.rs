@@ -124,6 +124,7 @@ impl WebRtc {
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
         if self.is_running() {
             log::info!("The webrtc server is already running");
+            core_request.response(P2POperationOutput::AlreadyRunning).await;
             return Ok(())
         }
 

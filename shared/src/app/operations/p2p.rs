@@ -29,7 +29,8 @@ pub enum P2POperationOutput {
     CancelSessionRequest { session_id: u64 },
     // Happily stopped
     // if error happened, it will be OperationOutput::Error(CoreError)
-    NearbyServerStopped
+    NearbyServerStopped,
+    AlreadyRunning
 }
 
 impl Operation for P2POperation {

@@ -55,8 +55,9 @@ import {
     MessageReason,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer, AppEventVariantNearby,
-    NearbyEventVariantLaunch, EnvironmentEventVariantUpdateAutoLaunchNearby,
+    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl,
+    NearbyEventVariantLaunch,
+    AppEventVariantNearby,
 } from 'shared_types/types/shared_types'
 import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
 import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
@@ -83,6 +84,7 @@ export class WasmCore {
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
+    isNearbyEnabled: Observable<boolean> = new Observable(false)
     isLocationEnabled: Observable<boolean> = new Observable(true)
     isLocationLoading: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
@@ -329,6 +331,7 @@ export class WasmCore {
 
     public async launch() {
         const isTransferPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/transfer')
+        this.isNearbyEnabled.set(isTransferPage)
         await init_core();
         const isCompatible = await is_compatible()
         if (!isCompatible) {
@@ -340,8 +343,13 @@ export class WasmCore {
     }
 
     public async launchNearby() {
+        if (this.isNearbyEnabled.get()) {
+            return;
+        }
+
+        this.isNearbyEnabled.set(true)
         console.log('Launching nearby')
-        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantUpdateAutoLaunchNearby(true)))
+        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
     }
 
     public async enableLocation() {
