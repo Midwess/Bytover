@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 interface Feature {
   id: string;
   heading: string;
@@ -52,10 +50,9 @@ const Feature72 = ({
                     playsInline
                   />
                 ) : feature.image ? (
-                  <Image
+                  <img
                     src={feature.image}
                     alt={feature.heading}
-                    fill
                     className="object-cover object-center transition-opacity hover:opacity-80"
                   />
                 ) : (
