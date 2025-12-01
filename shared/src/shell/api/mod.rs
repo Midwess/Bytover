@@ -152,7 +152,7 @@ impl BufferExt for PeerBuffered {
         if flushed {
             let new_buffered = self.buffered_amount(index).await;
             return if new_buffered != buffered {
-                log::info!("Flushed from {} bytes to {} bytes buffered amount" buffered, new_buffered);
+                log::info!("Flushed from {} bytes to {} bytes buffered amount", buffered, new_buffered);
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))
