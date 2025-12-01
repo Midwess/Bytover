@@ -1,11 +1,9 @@
 'use client';
 
-import { TypingText } from "@/components/animate-ui/text/typing.tsx";
 import Aurora from "@/components/Aurora";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import Link from "next/link";
 import Image from "next/image";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface IntroductionProps {
     disableBackground?: boolean;
@@ -18,7 +16,6 @@ export default function Introduction({
     hidePrimaryButton = false,
     header = "Easy Peer to peer and Public file transfer",
 }: IntroductionProps) {
-    const isMobile = useIsMobile();
     const containerClassName = disableBackground
         ? "w-full flex flex-col items-center justify-center"
         : "w-screen h-screen flex flex-col items-center justify-center";
