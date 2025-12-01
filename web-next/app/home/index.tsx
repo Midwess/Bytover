@@ -147,7 +147,7 @@ export default function Home() {
         </div>
 
         {/* Join Waitlist Section */}
-        <div id="waitlist" className={"w-full bg-zinc-900 min-h-[60vh] items-center flex"}>
+        <div id="waitlist" className={"w-full bg-zinc-900 h-[60vh] py-5 min-h-fit items-center flex"}>
             <JoinWaitList />
         </div>
 

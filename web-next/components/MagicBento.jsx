@@ -563,10 +563,9 @@ const MagicBento = ({
                       playsInline
                     />
                   ) : card.image ? (
-                    <Image
+                    <img
                       src={card.image}
                       alt={card.heading || card.title}
-                      fill
                       className="object-contain"
                     />
                   ) : null}
