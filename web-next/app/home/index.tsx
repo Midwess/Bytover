@@ -7,6 +7,7 @@ import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
+import { getAssetUrl } from "@/utils/asset-url";
 
 function FeaturesSection() {
     const features = [
@@ -14,28 +15,28 @@ function FeaturesSection() {
             id: "shelf",
             heading: "Organize Your Files",
             description: "Keep all your files organized in a beautiful shelf interface. Easy drag-and-drop, quick access.",
-            video: "/demo/desktop-shelf.mp4",
+            video: getAssetUrl("/demo/desktop-shelf.mp4"),
             color: '#060010',
         },
         {
             id: "public-share",
             heading: "Public file transfer",
             description: "Share files with anyone using a simple link. Optional Password protected keeps your content secure while making sharing effortless.",
-            video: "/demo/desktop-share-public.mp4",
+            video: getAssetUrl("/demo/desktop-share-public.mp4"),
             color: '#060010',
         },
         {
             id: "nearby-share",
             heading: "Nearby transfer & Peer to peer",
             description: "Transfer files directly to any device instantly with Peer to peer connection. And automatically matching nearby users.",
-            video: "/demo/desktop-share-nearby.mp4",
+            video: getAssetUrl("/demo/desktop-share-nearby.mp4"),
             color: '#060010',
         },
         {
             id: "all-platform",
             heading: "Available on All Platforms",
             description: "Coming soon this year! Native apps for Windows, macOS, iOS, and Android. Experience Bytover seamlessly across all your devices with full feature parity and consistent performance.",
-            image: "/demo/mobile_mockup_1.png",
+            image: getAssetUrl("/demo/mobile_mockup_1.png"),
             color: '#060010',
         },
     ];

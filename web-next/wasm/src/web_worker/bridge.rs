@@ -97,7 +97,13 @@ where
                     log::warn!("Failed to send message to main thread: {:?}", e);
                 }
             })
-            .spawn(&format!("/{name}/worker.js"));
+            .spawn(&{
+                // Use CDN prefix if both S3_CDN_PREFIX and VERSION are set at compile time
+                match (option_env!("S3_CDN_PREFIX"), option_env!("VERSION")) {
+                    (Some(prefix), Some(version)) => format!("{}/commit-{}/{}/worker.js", prefix, version, name),
+                    _ => format!("/{}/worker.js", name)
+                }
+            });
 
         let response_streams = Arc::new(Mutex::new(HashMap::<String, oneshot::Sender<W::Output>>::new()));
         spawn({

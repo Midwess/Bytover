@@ -1,5 +1,6 @@
 'use client';
 
+import { getAssetUrl } from "@/utils/asset-url";
 import Aurora from "@/components/Aurora";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import Link from "next/link";
@@ -31,8 +32,8 @@ export default function Introduction({
                 <div className={'flex flex-col items-center justify-center gap-12 md:gap-32 container z-2 w-full'}>
                     <div className={"flex flex-col items-center gap-8 md:gap-20"}>
                         <div className={"flex flex-col items-center gap-2 md:gap-4"}>
-                            <div className={"rounded-xl md:rounded-2xl text-white px-2 md:px-3 py-0.5 font-bold gap-1.5 md:gap-2 backdrop-blur-2xl flex flex-row items-center justify-center border text-xs md:text-md"}>
-                                <Image src={"/logo-color.svg"} alt={"logo"} width={40} height={40} className={"w-6 h-6 md:w-10 md:h-10"} />
+                            <div className={"flex flex-row gap-1 md:gap-2 text-2xl md:text-3xl lg:text-5xl font-black text-center items-center"}>
+                                <Image src={getAssetUrl("/logo-color.svg")} alt={"logo"} width={40} height={40} className={"w-6 h-6 md:w-10 md:h-10"} />
                                 <span className="whitespace-nowrap">Bytover</span>
                             </div>
                             <h1
