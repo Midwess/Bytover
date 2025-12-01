@@ -56,7 +56,7 @@ import {
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
     VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer, AppEventVariantNearby,
-    NearbyEventVariantLaunch,
+    NearbyEventVariantLaunch, EnvironmentEventVariantUpdateAutoLaunchNearby,
 } from 'shared_types/types/shared_types'
 import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
 import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
@@ -82,7 +82,6 @@ export class WasmCore {
     cachedGeoLocation: GeoLocation | undefined = undefined;
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
-    isTransferReady: Observable<boolean> = new Observable(false)
     isCoreLoaded: Observable<boolean> = new Observable(false)
     isLocationEnabled: Observable<boolean> = new Observable(true)
     isLocationLoading: Observable<boolean> = new Observable(false)
@@ -329,6 +328,7 @@ export class WasmCore {
     }
 
     public async launch() {
+        const isTransferPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/transfer')
         await init_core();
         const isCompatible = await is_compatible()
         if (!isCompatible) {
@@ -336,14 +336,12 @@ export class WasmCore {
             return;
         }
 
-        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(false)))
+        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(isTransferPage)))
     }
 
     public async launchNearby() {
-        if (this.isTransferReady.get()) return;
         console.log('Launching nearby')
-        this.isTransferReady.set(true)
-        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
+        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantUpdateAutoLaunchNearby(true)))
     }
 
     public async enableLocation() {

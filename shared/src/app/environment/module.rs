@@ -24,6 +24,7 @@ pub enum EnvironmentEvent {
     AppLaunched {
         auto_launch_nearby: bool
     },
+    UpdateAutoLaunchNearby(bool)
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -48,6 +49,10 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     Ok(())
                 })
             },
+            EnvironmentEvent::UpdateAutoLaunchNearby(value) => {
+                model.environment.auto_launch_nearby = value;
+                Command::done()
+            }
         }
     }
 

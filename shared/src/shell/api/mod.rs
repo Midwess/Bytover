@@ -148,7 +148,17 @@ impl BufferExt for PeerBuffered {
         let timeout = Duration::from_secs_f64(secs);
 
         let cancel = CancellationToken::timeout(timeout);
-        self.flush(index).with_cancel(&cancel).await?;
+        let flushed = self.flush(index).with_cancel(&cancel).await.is_ok();
+        if flushed {
+            let new_buffered = self.buffered_amount(index).await;
+            return if new_buffered != buffered {
+                log::info!("Flushed from {} bytes to {} bytes buffered amount" buffered, new_buffered);
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))
+            }
+        }
+
         Ok(())
     }
 
