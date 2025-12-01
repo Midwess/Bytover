@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::anyhow;
 use futures::executor::block_on;
+use n0_future::time::sleep;
 use crate::app::operations::CoreOperationOutput;
 
 pub static MSG_CHANNEL_ID: usize = 0;
@@ -54,6 +55,7 @@ impl WebRtc {
     pub async fn stop(&self) {
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.remove_all().await;
+        sleep(Duration::from_millis(500)).await;
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -120,7 +122,6 @@ impl WebRtc {
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
-        log::info!("Starting WebRTC server with my peer = {current_user:?}");
         if self.is_running() {
             log::info!("The webrtc server is already running");
             return Ok(())
@@ -128,13 +129,14 @@ impl WebRtc {
 
         self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.set_current_id(current_user.peer_id()).await;
+        log::info!("Starting WebRTC server with my peer = {current_user:?}");
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
             .add_reliable_channel()
             .add_reliable_channel()
             .add_reliable_channel()
-            .signaling_keep_alive_interval(Some(Duration::from_millis(3000)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(5000)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
             .build();

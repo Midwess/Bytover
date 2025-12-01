@@ -11,6 +11,7 @@ use crate::app::transfer::module::TransferEvent;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
     pub device: Option<DeviceInfo>,
+    pub auto_launch_nearby: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -20,7 +21,9 @@ pub struct EnvironmentModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
-    AppLaunched,
+    AppLaunched {
+        auto_launch_nearby: bool
+    },
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -30,18 +33,21 @@ impl AppModule<BitBridge> for EnvironmentModule {
     fn update(
         &self,
         event: Self::Event,
-        _model: &mut AppModel,
+        model: &mut AppModel,
         _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            EnvironmentEvent::AppLaunched => Command::handle_result(|ctx| async move {
-                ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                ctx.app().notify_event(ShelfEvent::Launch);
-                ctx.app().notify_event(TransferEvent::Launch);
-                ctx.app().re_authorize().await?;
+            EnvironmentEvent::AppLaunched { auto_launch_nearby } => {
+                model.environment.auto_launch_nearby = auto_launch_nearby;
+                Command::handle_result(|ctx| async move {
+                    ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
+                    ctx.app().notify_event(ShelfEvent::Launch);
+                    ctx.app().notify_event(TransferEvent::Launch);
+                    ctx.app().re_authorize().await?;
 
-                Ok(())
-            }),
+                    Ok(())
+                })
+            },
         }
     }
 

@@ -55,7 +55,8 @@ import {
     MessageReason,
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer,
+    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl, AppEventVariantTransfer, AppEventVariantNearby,
+    NearbyEventVariantLaunch,
 } from 'shared_types/types/shared_types'
 import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
 import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
@@ -315,8 +316,15 @@ export class WasmCore {
             return;
         }
 
+        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(false)))
+    }
+
+    public async launchNearby() {
+        if (this.isTransferReady.get()) return;
+        console.log('Launching nearby')
+        this.isTransferReady.set(true)
         this.updateGeoLocation().then(noop)
-        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched()))
+        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
     }
 
     async updateGeoLocation() {
@@ -606,60 +614,55 @@ const core = new WasmCore();
 
 export default core
 
-function getBrowserDeviceInfo(): { name: string, isMobile: boolean } {
-    if (typeof navigator === 'undefined') return { name: "Browser", isMobile: false };
+function getBrowserDeviceInfo() {
+    if (typeof navigator === "undefined")
+        return { name: "Browser", isMobile: false };
 
     const ua = navigator.userAgent;
+
+    // ----- Detect Browser -----
     let browser = "Browser";
+    if (/Firefox/i.test(ua)) browser = "Firefox";
+    else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+    else if (/OPR|Opera/i.test(ua)) browser = "Opera";
+    else if (/Edg|Edge/i.test(ua)) browser = "Edge";
+    else if (/Chrome/i.test(ua)) browser = "Chrome";
+    else if (/Safari/i.test(ua)) browser = "Safari";
+
+    // ----- Detect OS -----
     let os = "Unknown OS";
     let isMobile = false;
 
-    // Detect Browser
-    if (ua.indexOf("Firefox") > -1) {
-        browser = "Firefox";
-    } else if (ua.indexOf("SamsungBrowser") > -1) {
-        browser = "Samsung Internet";
-    } else if (ua.indexOf("Opera") > -1 || ua.indexOf("OPR") > -1) {
-        browser = "Opera";
-    } else if (ua.indexOf("Trident") > -1) {
-        browser = "Internet Explorer";
-    } else if (ua.indexOf("Edge") > -1 || ua.indexOf("Edg") > -1) {
-        browser = "Edge";
-    } else if (ua.indexOf("Chrome") > -1) {
-        browser = "Chrome";
-    } else if (ua.indexOf("Safari") > -1) {
-        browser = "Safari";
-    }
-
-    // Detect OS
-    if (ua.indexOf("Win") > -1) {
-        os = "Windows";
-    } else if (ua.indexOf("Mac") > -1) {
-        os = "macOS";
-        // Check for iPad/iPhone
-        if (navigator.maxTouchPoints > 0 && /Mac/.test(navigator.platform)) {
-            os = "iPad";
-            isMobile = true;
-        }
-    } else if (ua.indexOf("Linux") > -1) {
-        os = "Linux";
-    } else if (ua.indexOf("Android") > -1) {
+    if (/Android/i.test(ua)) {
         os = "Android";
         isMobile = true;
-    } else if (ua.indexOf("like Mac") > -1) {
-        os = "iOS";
-        if (ua.indexOf("iPhone") > -1) {
-            os = "iPhone";
-        } else if (ua.indexOf("iPad") > -1) {
-            os = "iPad";
-        }
+
+    } else if (/iPhone/i.test(ua)) {
+        os = "iPhone";
         isMobile = true;
+
+    } else if (/iPad/i.test(ua)) {
+        os = "iPad";
+        isMobile = true;
+
+    } else if (/Macintosh/i.test(ua)) {
+        // Detect iPadOS 13+ which spoofs Mac
+        if (navigator.maxTouchPoints > 1) {
+            os = "iPad";
+            isMobile = true;
+        } else {
+            os = "macOS";
+        }
+
+    } else if (/Win/i.test(ua)) {
+        os = "Windows";
+
+    } else if (/Linux/i.test(ua)) {
+        os = "Linux";
     }
 
-    // Additional mobile check
-    if (/Mobi|Android/i.test(ua)) {
-        isMobile = true;
-    }
+    // Extra mobile detection
+    if (/Mobi|Android/i.test(ua)) isMobile = true;
 
     return { name: `${os} ${browser}`, isMobile };
 }

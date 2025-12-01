@@ -1,6 +1,6 @@
 'use client';
 
-import React from "react";
+import React, { useEffect } from "react";
 import {
     Tabs,
     TabsList,
@@ -21,6 +21,11 @@ function TransferBoardInner() {
     const [url, setUrl] = useUrlState(['session']);
     const coreReady = core.useCoreReady();
     const coreCompatible = core.useIsCoreCompatible();
+    useEffect(() => {
+        if (coreReady && coreCompatible) {
+            core.launchNearby()
+        }
+    }, [coreReady, coreCompatible]);
 
     // Browser not supported
     if (!coreCompatible) {

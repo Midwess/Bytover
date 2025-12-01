@@ -26,7 +26,7 @@ pub struct NearbyModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum NearbyEvent {
-    Launch,
+    Launch { auto_launch: bool },
     UpdateMe { new_peer: Peer },
     UpdateNearbyPeers { new_peer: Vec<Peer>, removed: Vec<Peer> },
     ClearNearbyPeers
@@ -43,11 +43,11 @@ impl AppModule<BitBridge> for NearbyModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            NearbyEvent::Launch => {
-                let user = model.authentication.user.clone();
+            NearbyEvent::Launch {auto_launch} => {
+                model.environment.auto_launch_nearby = auto_launch;
                 Command::all(vec![
                     Command::new(|it| async move {
-                        it.app().start_nearby_server(user).await;
+                        it.app().start_nearby_server(auto_launch).await;
                     }),
                     Command::new(|it| async move {
                         log::info!(target: "nearby", "Starting locator monitor");

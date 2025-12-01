@@ -52,6 +52,7 @@ pub struct TransferSession {
     pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
+    #[serde(skip)]
     pub cancellation_token: CancellationToken
 }
 
@@ -313,6 +314,10 @@ impl TransferSession {
     }
 
     pub fn is_canceled(&self) -> bool {
+        if self.cancellation_token.is_cancelled() {
+            return true;
+        }
+
         self.progress.iter().any(|it| it.is_canceled())
     }
 
@@ -350,6 +355,12 @@ impl TransferSession {
         }
 
         if self.cancellation_token.is_cancelled() {
+            return TransferSessionStatus::Canceled;
+        }
+
+        let is_canceled = self.progress.iter().any(|it| it.status == TransferStatus::Canceled);
+        if is_canceled {
+            self.cancellation_token.cancel();
             return TransferSessionStatus::Canceled;
         }
 
@@ -398,6 +409,10 @@ impl TransferSession {
     }
 
     pub fn token(&self) -> &CancellationToken {
+        if self.is_canceled() {
+            self.cancellation_token.cancel();
+        }
+
         &self.cancellation_token
     }
 }

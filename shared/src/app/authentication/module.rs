@@ -53,10 +53,14 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
+                if !model.environment.auto_launch_nearby {
+                    return Command::render();
+                }
+
                 Command::handle_result(|ctx| async move {
                     ctx.app().sign_out().await?;
                     ctx.notify_shell(CoreOperation::Render);
-                    let _ = ctx.app().restart_nearby().await;
+                    let _ = ctx.app().restart_nearby(true).await;
                     Ok(())
                 })
             },
@@ -79,15 +83,23 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     return Command::done();
                 }
 
+                if !model.environment.auto_launch_nearby {
+                    return Command::render()
+                }
+
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    let _ = app.restart_nearby().await;
+                    let _ = app.restart_nearby(true).await;
                 })
             }
             AuthenticationEvent::UnAuthorized => {
+                if !model.environment.auto_launch_nearby {
+                    return Command::render()
+                }
+
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    app.notify_event(NearbyEvent::Launch);
+                    app.notify_event(NearbyEvent::Launch { auto_launch: true });
                 })
             }
             AuthenticationEvent::Feedback {email, message} => {

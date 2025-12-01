@@ -38,14 +38,10 @@ export default function Introduction({
                                 <Image src={"/logo-color.svg"} alt={"logo"} width={40} height={40} className={"w-6 h-6 md:w-10 md:h-10"} />
                                 <span className="whitespace-nowrap">Bytover</span>
                             </div>
-                            {header && <TypingText
-                                enableAnimation={!isMobile}
-                                delay={500}
-                                duration={15}
+                            <h1
                                 className="text-4xl md:text-5xl lg:text-7xl font-black text-center h1 pointer-events-none px-2"
-                                text={header}
-                                cursorClassName="h-6 md:h-9"
-                            />}
+                            >{header}
+                            </h1>
                         </div>
                         <div className={"flex flex-col gap-2 md:gap-3 items-center w-full px-4 md:px-0"}>
                             {!hidePrimaryButton && (

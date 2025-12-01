@@ -20,9 +20,9 @@ use crate::entities::device::DeviceInfo;
 use crate::errors::CoreError;
 
 impl AppCommand {
-    pub async fn restart_nearby(&self) -> Result<(), CoreError> {
+    pub async fn restart_nearby(&self, auto_launch: bool) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
-        self.notify_event(NearbyEvent::Launch);
+        self.notify_event(NearbyEvent::Launch {auto_launch});
 
         Ok(())
     }
@@ -48,7 +48,9 @@ impl AppCommand {
         }
     }
 
-    pub async fn start_nearby_server(&self, user: Option<User>) {
+    pub async fn start_nearby_server(&self, auto_launch: bool) {
+        let user = RpcOperation::get_me().into_future(self.ctx()).await.ok();
+
         let is_already_running = self.run(P2POperation::is_running()).await;
         if is_already_running.unwrap_or(false) {
             log::info!("Nearby server is already running");
@@ -93,7 +95,7 @@ impl AppCommand {
                     let _ = self.run(P2POperation::stop()).await;
 
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
-                    self.notify_event(NearbyEvent::Launch);
+                    self.notify_event(NearbyEvent::Launch {auto_launch});
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {

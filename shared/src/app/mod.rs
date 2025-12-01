@@ -21,6 +21,7 @@ use modules::AppModule;
 use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use serde::{Deserialize, Serialize};
 use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
+use crate::app::environment::module::EnvironmentModel;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
@@ -51,7 +52,8 @@ pub struct AppModel {
     authentication: AuthenticationModel,
     transfer: TransferModel,
     nearby: NearbyModel,
-    shelf: ShelfModel
+    shelf: ShelfModel,
+    environment: EnvironmentModel
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
