@@ -328,7 +328,7 @@ where
 
         log::info!("Uploading resource {resource_path:?} size = {size}");
         let mut ticker = Instant::now();
-        let progress_update_interval = std::time::Duration::from_millis(3000);
+        let progress_update_interval = std::time::Duration::from_millis(6000);
 
         let mut net_stream = self.net_stream.upload_resource(upload, resource_path.clone()).with_cancel(&token).await??;
         let mut event_stream = net_stream.start().with_cancel(&token).await??;
