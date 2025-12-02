@@ -915,8 +915,8 @@ function NearbyPeer(props: { peer: PeerViewModel }) {
                     <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
                     {
                         peer.display_upload_speed
-                            ? <p className={"text-primaryText/70 text-xs"}>{peer.display_upload_speed}</p>
-                            : <></>
+                            ? <p className={"text-muted-foreground text-xs"}>{peer.display_upload_speed}</p>
+                            : peer?.device?.name !== peer.display_name && <p className="text-muted-foreground text-xs">{peer.device?.name}</p>
                     }
                 </div>
             </div>
