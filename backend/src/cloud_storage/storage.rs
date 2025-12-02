@@ -121,6 +121,8 @@ pub trait CloudStorage: Send + Sync {
     async fn complete_upload_part(&self, user: &User, context_token: &str) -> Result<Option<MultiPartUpload>, CloudStorageErrors>;
     async fn complete_upload(&self, user: &User, completion: &MultiPartUploadComplete) -> Result<(), CloudStorageErrors>;
     async fn generate_download_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors>;
+    async fn delete_resource(&self, source: &StaticResource) -> Result<bool, CloudStorageErrors>;
+    async fn abort_incomplete_multipart_uploads(&self, source: &StaticResource);
     fn get_download_duration(&self) -> Duration {
         Duration::from_secs(60 * 60 * 24 * 7)
     }

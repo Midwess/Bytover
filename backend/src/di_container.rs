@@ -186,8 +186,10 @@ impl DiContainer {
         let job = Job::new_async("0 */5 * * * *", |_uuid, _l| {
             Box::pin(async move {
                 log::info!("Running cleanup cron job...");
-                let repo = DiContainer::instance().await.get_transfer_session_repository().await;
-                if let Err(e) = repo.delete_expired_or_canceled_sessions().await {
+                let di = DiContainer::instance().await;
+                let repo = di.get_transfer_session_repository().await;
+                let cloud_storage = di.get_cloud_storage();
+                if let Err(e) = repo.delete_stale_sessions(&cloud_storage).await {
                     log::error!("Failed to cleanup sessions: {}", e);
                 }
                 log::info!("Cleanup cron job finished.");

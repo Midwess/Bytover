@@ -1,3 +1,4 @@
+use crate::cloud_storage::storage::CloudStorage;
 use crate::entities::transfer_session::TransferSession;
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::id::DbId;
@@ -30,5 +31,5 @@ impl DbId for TransferSessionId {
 #[async_trait::async_trait]
 pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
     async fn find_session_by_alias(&self, alias: String) -> Result<Option<TransferSession>, RepositoryError>;
-    async fn delete_expired_or_canceled_sessions(&self) -> Result<(), RepositoryError>;
+    async fn delete_stale_sessions(&self, cloud_storage: &dyn CloudStorage) -> Result<(), RepositoryError>;
 }
