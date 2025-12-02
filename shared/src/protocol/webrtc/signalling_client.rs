@@ -5,7 +5,7 @@ use ewebsock::{connect, Options, WsEvent, WsMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use n0_future::task::{spawn, JoinHandle};
 use once_cell::sync::OnceCell;
 use prost::Message as prost_message;
@@ -13,7 +13,7 @@ use schema::devlog::rpc_signalling::server::{LeftMessage, Message};
 use std::sync::Arc;
 use std::time::Duration;
 use futures::executor::block_on;
-use n0_future::{stream, StreamExt};
+use n0_future::StreamExt;
 use crate::protocol::webrtc::signalling::SharedContext;
 
 pub struct SignallingClient {
@@ -113,7 +113,7 @@ impl SignallingClient {
                 }
 
                 // When it goes here, the websocket was already being disconnected, we need to notify all peers to cancel
-                let drained_messages = signal_receiver.drain();
+                let drained_messages = signal_receiver.drain().collect::<Vec<_>>().await;
                 log::info!("websocket disconnected, draining {} messages", drained_messages.len());
                 log::info!("websocket disconnected, notifying all peers to cancel");
                 let removed_peers = context.remove_all().await;
