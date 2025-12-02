@@ -151,6 +151,9 @@ impl SharedContext {
         if let Some(peer) = peer {
             peer.peer_disconnected().await;
         }
+        else {
+            log::warn!("Peer not found: {peer_id:?}");
+        }
     }
 
     pub async fn add_peer(&self, peer: WebRtcPeer) {

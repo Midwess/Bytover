@@ -91,6 +91,12 @@ impl TransferSession {
         in_progress_resource
     }
 
+    pub fn next_resource(&self) -> Option<&TransferResource> {
+        let current_resource_id = self.current_resource().map(|it| it.order_id());
+        let next_resource= self.resources.iter().find(|resource| resource.order_id() > current_resource_id.unwrap_or(0));
+        next_resource
+    }
+
     pub fn current_resource_mut(&mut self) -> Option<&mut TransferResource> {
         let Some(current_id) = self.current_resource().map(|it| it.order_id()) else {
             return None;

@@ -1,3 +1,4 @@
+use futures::join;
 use tokio::time::Instant;
 use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 use crate::app_gateway::markov::{Markov, MarkovErrors};
@@ -117,18 +118,30 @@ impl TransferService {
                 Ok(None)
             }
             ClientUploadStatus::Success(completion) => {
+                let next_resource = session.next_resource();
+                let next_resource_id = next_resource.map(|it| it.order_id());
+                let platform = device.platform();
+                let gen_upload_request = async {
+                    if let Some(next_resource) = next_resource {
+                        return self.cloud_storage.get_upload_solution(user, platform, &next_resource).await.map(|it| Some(it))
+                    }
+
+                    return Ok(None)
+                };
+
+                let (next_upload_result, complete_upload_result) = join!(gen_upload_request, self.cloud_storage.complete_upload(user, completion));
+                let current_resource_id = session.current_resource().map(|it| it.order_id()).unwrap_or(0);
                 let Some(current_progress) = session.current_resource_progress_mut() else {
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
                 };
-
-                if let Err(e) = self.cloud_storage.complete_upload(user, completion).await {
+                if let Err(e) = complete_upload_result {
                     current_progress.cancel();
                     self.transfer_repository.update_one(session).await?;
                     log::info!("Failed to complete upload for completion {completion:?}: {e}");
                     return Err(TransferErrors::CloudStorageError(e))
                 }
 
-                let expected_id = current_progress.resource_id();
+                let expected_id = current_resource_id;
                 if expected_id != resource_id {
                     log::warn!(
                         "Id {resource_id} is not matched with current resource {expected_id} session_id {}",
@@ -140,19 +153,22 @@ impl TransferService {
 
                 current_progress.commit(TransferProgressStatus::Success)?;
 
-                let session = self.transfer_repository.update_one(session).await?;
+                let mut session = self.transfer_repository.update_one(session).await?;
 
-                let Some(next_resource_id) = session.current_resource().map(|it| it.order_id()) else {
-                    return Ok(None)
-                };
-
-                let Some(next_resource) = session.into_resource(next_resource_id) else {
-                    return Ok(None)
-                };
-
-                let platform = device.platform();
-                let upload_request = self.cloud_storage.get_upload_solution(user, platform, &next_resource).await?;
-                Ok(Some((next_resource_id, upload_request)))
+                return match next_upload_result {
+                    Err(e) => {
+                        if let Some(next_progress) = session.current_resource_progress_mut() {
+                            next_progress.cancel();
+                            self.transfer_repository.update_one(session).await?;
+                        }
+                        log::info!("Failed to generate upload solution for next resource: {e}");
+                        Err(TransferErrors::CloudStorageError(e))
+                    },
+                    Ok(None) => Ok(None),
+                    Ok(Some(next_upload_request)) => {
+                        Ok(Some((next_resource_id.unwrap_or(0), next_upload_request)))
+                    }
+                }
             }
             ClientUploadStatus::Failed(error_message) => {
                 let Some(current_progress) = session.current_resource_progress_mut() else {
