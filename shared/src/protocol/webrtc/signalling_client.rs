@@ -13,6 +13,7 @@ use schema::devlog::rpc_signalling::server::{LeftMessage, Message};
 use std::sync::Arc;
 use std::time::Duration;
 use futures::executor::block_on;
+use n0_future::{stream, StreamExt};
 use crate::protocol::webrtc::signalling::SharedContext;
 
 pub struct SignallingClient {
@@ -112,6 +113,8 @@ impl SignallingClient {
                 }
 
                 // When it goes here, the websocket was already being disconnected, we need to notify all peers to cancel
+                let drained_messages = signal_receiver.drain();
+                log::info!("websocket disconnected, draining {} messages", drained_messages.len());
                 log::info!("websocket disconnected, notifying all peers to cancel");
                 let removed_peers = context.remove_all().await;
                 for peer_id in removed_peers {
