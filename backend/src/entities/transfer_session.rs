@@ -96,8 +96,17 @@ impl TransferSession {
             return None
         };
 
-        let current_resource_pos = self.resources.iter().position(|resource| resource.order_id() == current_resource_id);
-        current_resource_pos.and_then(|it| self.resources.get(it + 1))
+        let current_progress_index = self.progress.iter().position(|it|
+            matches!(it.status(), TransferProgressStatus::InProgress(_)) && it.resource_id() == current_resource_id);
+        let Some(next_in_progress_resource) = current_progress_index.and_then(|it| self.progress.get(it + 1)) else {
+            return None
+        };
+
+        if !matches!(next_in_progress_resource.status(), TransferProgressStatus::InProgress(_)) {
+            return None;
+        }
+
+        self.resources.iter().find(|it| it.order_id() == next_in_progress_resource.resource_id())
     }
 
     pub fn current_resource_mut(&mut self) -> Option<&mut TransferResource> {
