@@ -374,7 +374,7 @@ export class WasmCore {
                     resolve,
                     reject,
                     {
-                        enableHighAccuracy: false,
+                        enableHighAccuracy: true,
                         timeout: 8888, // Not always available, let's choose a lucky number
                         maximumAge: 0  // Always request fresh location
                     }
