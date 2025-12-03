@@ -37,12 +37,12 @@ impl AppCommand {
         if !transfer_session.is_completed() {
             log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            self.run(TransferOperation::cancel_session(
+            let _ = self.run(TransferOperation::cancel_session(
                 transfer_session.peer_id(),
                 transfer_session.order_id
             ))
-            .await?
-        }
+            .await;
+        };
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
