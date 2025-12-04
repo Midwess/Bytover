@@ -93,10 +93,6 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 })
             }
             AuthenticationEvent::UnAuthorized => {
-                if !model.environment.auto_launch_nearby {
-                    return Command::render()
-                }
-
                 Command::new(|ctx| async move {
                     let app = ctx.app();
                     app.notify_event(NearbyEvent::Launch { auto_launch: true });

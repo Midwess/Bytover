@@ -139,6 +139,9 @@ pub trait BufferExt: Send + Sync {
 impl BufferExt for PeerBuffered {
     async fn flush_timeout(&self, index: usize) -> anyhow::Result<()> {
         let buffered = self.buffered_amount(index).await;
+        if buffered == 0 {
+            return Ok(());
+        }
 
         // Assume min speed = 10 KB/s = 10,000 bytes/s
         let est_secs = buffered as f64 / 10_000.0;
@@ -152,7 +155,6 @@ impl BufferExt for PeerBuffered {
         if flushed {
             let new_buffered = self.buffered_amount(index).await;
             return if new_buffered != buffered {
-                log::info!("Flushed from {} bytes to {} bytes buffered amount", buffered, new_buffered);
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))

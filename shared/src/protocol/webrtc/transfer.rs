@@ -190,6 +190,7 @@ impl TransfersContext {
 
     pub async fn stop_all(&self) {
         let mut actives = self.active_transfers.lock().await;
+        actives.iter().for_each(|it| it.token.cancel());
         actives.clear();
     }
 

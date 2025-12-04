@@ -542,3 +542,9 @@ impl WebRtcPeer {
         Ok(())
     }
 }
+
+impl Drop for WebRtcPeer {
+    fn drop(&mut self) {
+        log::info!("Dropped peer {:?}", self.peer.peer_id());
+    }
+}
