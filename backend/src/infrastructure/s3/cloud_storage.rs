@@ -141,4 +141,36 @@ impl CloudStorage for S3CloudStorageImpl {
 
         Ok(url)
     }
+
+    async fn delete_resource(&self, source: &StaticResource) -> Result<bool, CloudStorageErrors> {
+        use schema::value::static_resource::static_resource::Source;
+        
+        let s3_path = match &source.source {
+            Some(Source::S3Path(path)) => path.clone(),
+            _ => return Ok(false)
+        };
+
+        match self.s3_client.head_object(s3_path.clone()).await {
+            Ok(_) => {
+                self.s3_client.delete_object(s3_path).await.map_err(CloudStorageErrors::S3Errors)?;
+                Ok(true)
+            }
+            Err(core_services::services::errors::Errors::S3NotFound(_)) => Ok(false),
+            Err(e) => Err(CloudStorageErrors::S3Errors(e))
+        }
+
+    }
+
+    async fn abort_incomplete_multipart_uploads(&self, source: &StaticResource) {
+        use schema::value::static_resource::static_resource::Source;
+        
+        let s3_path = match &source.source {
+            Some(Source::S3Path(path)) => path.clone(),
+            _ => return
+        };
+        
+        if let Err(e) = self.s3_client.abort_incomplete_multipart_uploads(s3_path).await {
+            log::error!("Failed to abort incomplete multipart uploads: {:?}", e);
+        }
+    }
 }
