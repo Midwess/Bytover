@@ -145,7 +145,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
                   OR status = 'Canceled'
                   OR (status = 'InProgress' AND order_id < $2)
                LIMIT 10
-               FOR UPDATE"#,
+               FOR UPDATE SKIP LOCKED"#,
             vec![SeaValue::from(cutoff_order_id), SeaValue::from(seven_days_cutoff)]
         );
         
