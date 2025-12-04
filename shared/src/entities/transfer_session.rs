@@ -149,7 +149,8 @@ impl TransferProgress {
         self.bytes_sec_counter += bytes_count;
 
         if elapsed >= 1000 {
-            self.bytes_per_second = self.bytes_sec_counter;
+            let secs = elapsed / 1000;
+            self.bytes_per_second = self.bytes_sec_counter / secs.max(1);
             self.start_time_utc_ms = Utc::now().timestamp_millis() as u64;
             self.bytes_sec_counter = bytes_count;
         }
@@ -354,28 +355,6 @@ impl TransferSession {
             return TransferSessionStatus::Initializing;
         }
 
-        if self.cancellation_token.is_cancelled() {
-            return TransferSessionStatus::Canceled;
-        }
-
-        let is_canceled = self.progress.iter().any(|it| it.status == TransferStatus::Canceled);
-        if is_canceled {
-            self.cancellation_token.cancel();
-            return TransferSessionStatus::Canceled;
-        }
-
-        let is_in_progress = self
-            .progress
-            .iter()
-            .any(|it| it.status == TransferStatus::InProgress || it.status == TransferStatus::Pending);
-
-        if is_in_progress {
-            return TransferSessionStatus::InProgress {
-                bytes_per_second: self.speed(1000),
-                percentage: self.total_progress()
-            }
-        }
-
         let failed_messages = self
             .progress
             .iter()
@@ -389,7 +368,25 @@ impl TransferSession {
             return TransferSessionStatus::Failed(failed_messages.join(", "));
         }
 
-        TransferSessionStatus::Success
+        let is_success = self.progress.iter().all(|it| it.is_success());
+        if is_success {
+            return TransferSessionStatus::Success;
+        }
+
+        if self.cancellation_token.is_cancelled() {
+            return TransferSessionStatus::Canceled;
+        }
+
+        let is_canceled = self.progress.iter().any(|it| it.status == TransferStatus::Canceled);
+        if is_canceled {
+            self.cancellation_token.cancel();
+            return TransferSessionStatus::Canceled;
+        }
+
+        TransferSessionStatus::InProgress {
+            bytes_per_second: self.speed(1000),
+            percentage: self.total_progress()
+        }
     }
 
     pub fn resource_progress(&self, resource_id: u64) -> Option<&TransferProgress> {

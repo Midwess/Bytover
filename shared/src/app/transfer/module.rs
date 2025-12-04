@@ -145,6 +145,7 @@ impl AppModule<BitBridge> for TransferModule {
                         .await;
 
                         if !confirmation {
+                            log::info!("User not agree to cancel transfer");
                             return Ok(());
                         }
                     }

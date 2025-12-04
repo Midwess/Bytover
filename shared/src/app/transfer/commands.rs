@@ -135,7 +135,7 @@ impl AppCommand {
                 CoreOperationOutput::Error(error) => {
                     log::error!("Error: {error:?}");
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    self.run(DialogOperation::toast(format!("{error}"))).await;
+                    // self.run(DialogOperation::toast(format!("{error}"))).await;
                     break;
                 }
                 _ => {

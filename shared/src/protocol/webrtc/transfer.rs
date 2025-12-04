@@ -1,15 +1,14 @@
+use std::cell::OnceCell;
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use core_services::utils::cancellation::CancellationToken;
 use futures::channel::mpsc;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
-use n0_future::time::sleep;
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
 use anyhow::Context;
+use core_services::utils::cancellation::CancellationToken;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TransferDelimiterShema {
@@ -116,20 +115,16 @@ impl TransferDelimiterShema {
 struct SessionContext {
     session_id: u64,
     rtc_request_id: String,
-    token: CancellationToken
+    token: OnceCell<CancellationToken>
 }
 
 impl SessionContext {
     pub fn new(session_id: u64, rtc_request_id: String) -> Self {
         Self {
+            token: OnceCell::new(),
             session_id,
             rtc_request_id,
-            token: CancellationToken::new()
         }
-    }
-
-    pub fn cancellation_token(&self) -> CancellationToken {
-        self.token.clone()
     }
 }
 
@@ -151,51 +146,33 @@ impl TransfersContext {
         }
     }
 
-    pub async fn start_transfer(&self, session_id: u64, rtc_request_id: String) {
-        let mut actives = self.active_transfers.lock().await;
-        if !actives.iter().any(|it| it.session_id == session_id) {
-            actives.push(SessionContext::new(session_id, rtc_request_id));
-        }
-    }
-
-    pub async fn stop_transfer(&self, session_id: u64) {
-        let mut actives = self.active_transfers.lock().await;
-        if let Some(session) = actives.iter().find(|x| x.session_id == session_id) {
-            session.token.cancel();
-        }
-
-        actives.retain(|x| x.session_id != session_id);
-    }
-
-    pub async fn is_active(&self, session_id: u64) -> bool {
-        let actives = self.active_transfers.lock().await;
-        actives.iter().any(|it| it.session_id == session_id)
-    }
-
-    pub async fn wait_for_inactive(&self, session_id: u64) {
-        loop {
-            if self.is_active(session_id).await {
-                sleep(Duration::from_millis(100)).await;
-                continue
-            }
-
-            break;
-        }
-    }
-
     pub async fn rtc_request_id(&self, session_id: u64) -> Option<String> {
         let actives = self.active_transfers.lock().await;
         actives.iter().find(|it| it.session_id == session_id).map(|it| it.rtc_request_id.clone())
     }
 
-    pub async fn stop_all(&self) {
-        let mut actives = self.active_transfers.lock().await;
-        actives.iter().for_each(|it| it.token.cancel());
-        actives.clear();
+    pub async fn add_token(&self, session_id: u64, token: CancellationToken) {
+        let actives = self.active_transfers.lock().await;
+        actives.iter().find(|it| it.session_id == session_id).map(|it| it.token.set(token));
     }
 
-    pub async fn cancellation_token(&self, session_id: u64) -> Option<CancellationToken> {
+    pub async fn start_transfer(&self, session_id: u64, rtc_request_id: String) {
+        let mut actives = self.active_transfers.lock().await;
+        actives.push(SessionContext::new(session_id, rtc_request_id));
+    }
+
+    pub async fn cancel_transfer(&self, session_id: u64) {
         let actives = self.active_transfers.lock().await;
-        actives.iter().find(|it| it.session_id == session_id).map(|it| it.cancellation_token())
+        let item = actives.iter().find(|it| it.session_id == session_id).and_then(|it| it.token.get());
+        if let Some(token) = item {
+            token.cancel();
+        }
+    }
+
+    pub async fn cancel_all_transfers(&self) {
+        let actives = self.active_transfers.lock().await;
+        for item in actives.iter() {
+            item.token.get().map(|it| it.cancel());
+        }
     }
 }
