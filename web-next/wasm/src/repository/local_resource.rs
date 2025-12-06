@@ -18,7 +18,7 @@ use idb::Database;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::repository::errors::PersistenceError;
 use shared::repository::local_resource::{LocalResourceId, LocalResourceRepository};
-use shared::shell::api::{IOReader, IOWriter};
+use shared::shell::api::{CIOCursor, DIOWriter};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 
@@ -160,18 +160,18 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
-            let reader = IOReaderOpfsImpl::new(path.into(), buffer_size).await?;
+            let reader = IOReaderOpfsImpl::new(path.into(), buffer_size, compressed).await?;
             return Ok(Box::new(reader))
         }
 
         Err(PersistenceError::NotFound(format!("{:?}", path)))
     }
 
-    async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
+    async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
-            let writer = IOWriterOpfsImpl::new(path.into()).await?;
+            let writer = IOWriterOpfsImpl::new(path.into(), compressed).await?;
             return Ok(Box::new(writer));
         }
 
@@ -193,7 +193,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError> {
-        let reader = self.read(path.clone(), 0).await?;
+        let reader = self.read(path.clone(), 0, false).await?;
         Ok(reader.entry().await?.size)
     }
 

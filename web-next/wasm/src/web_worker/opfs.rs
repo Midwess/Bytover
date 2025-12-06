@@ -17,6 +17,8 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use lz4_flex::{compress_prepend_size, decompress_size_prepended};
+use n0_future::time::Instant;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle};
@@ -43,7 +45,8 @@ pub enum FileOperation {
     },
     CursorNext {
         instance_id: u32,
-        max: Option<u64>
+        max: Option<u64>,
+        compressed: bool
     },
     CursorEnd(u32),
     AddFile(DeviceFile),
@@ -56,7 +59,8 @@ pub enum FileOperation {
     Write {
         #[serde(with = "serde_wasm_bindgen::preserve")]
         data: Uint8Array,
-        position: usize
+        position: usize,
+        decompress: bool
     },
     Flush,
     FileEntry,
@@ -73,7 +77,8 @@ unsafe impl Sync for OpfsOperation {}
 pub enum OpfsOperationOutput {
     Void,
     Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
-    Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
+    // Binary and raw size (before compressed) and compression time in microsecond if compressed
+    Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array, usize, u64),
     Written(usize),
     File(#[serde(with = "serde_wasm_bindgen::preserve")] File),
     FileEntry(FileEntry),
@@ -203,18 +208,32 @@ impl OpfsWorker {
                 self.cursors.lock().await.insert(id, Arc::new(Mutex::new(cursor)));
                 OpfsOperationOutput::Cursor(id)
             }
-            FileOperation::CursorNext { instance_id, max } => {
+            FileOperation::CursorNext { instance_id, max, compressed } => {
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
                     return OpfsOperationOutput::Error("Cursor not found".into());
                 };
 
                 let mut guard = cursor.lock().await;
                 let Ok(Some(data)) = guard.next(max).await else {
-                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0));
+                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0), 0, 0);
                 };
 
-                let uint8array = Uint8Array::new_from_slice(data);
-                OpfsOperationOutput::Binary(uint8array)
+                if data.len() == 0 {
+                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0), 0, 0);
+                }
+
+                let raw_size = data.len();
+                let (data, elapsed) = match compressed {
+                    true => {
+                        let instant = Instant::now();
+                        let buf = compress_prepend_size(&data);
+                        let elapsed = instant.elapsed();
+                        (Uint8Array::new_from_slice(&buf), elapsed.as_micros() as u64)
+                    },
+                    false => (Uint8Array::new_from_slice(data), 0)
+                };
+
+                OpfsOperationOutput::Binary(data, raw_size, elapsed)
             }
             FileOperation::CursorEnd(instance_id) => {
                 if let Some(c) = self.cursors.lock().await.remove(&instance_id) {
@@ -253,7 +272,7 @@ impl OpfsWorker {
 
                 OpfsOperationOutput::Error("No file selected".into())
             }
-            FileOperation::Write { data, position } => {
+            FileOperation::Write { data, position, decompress } => {
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
@@ -261,6 +280,15 @@ impl OpfsWorker {
                 let file_guard = file_handle.lock().await;
                 let options = FileSystemReadWriteOptions::new();
                 options.set_at(position as f64);
+
+                let data = match decompress {
+                    true => {
+                        let out = decompress_size_prepended(data.to_vec().as_slice()).unwrap();
+                        Uint8Array::new_from_slice(&out)
+                    },
+                    false => data
+                };
+
                 match file_guard.write_with_js_u8_array_and_options(&data, &options) {
                     Ok(written) => OpfsOperationOutput::Written(written as usize),
                     Err(e) => OpfsOperationOutput::Error(e)
