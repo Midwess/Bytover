@@ -1,4 +1,4 @@
-use shared::protocol::rpc::auth_server::AppServer;
+use shared::protocol::rpc::app_server::AppServer;
 use shared::shell::executor::rpc::NativeRpc;
 use tonic::transport::Channel;
 

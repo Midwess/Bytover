@@ -12,7 +12,7 @@ use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
 use matchbox_protocol::PeerId;
-use matchbox_socket::WebRtcSocket;
+use matchbox_socket::{RtcIceServerConfig, WebRtcSocket};
 use n0_future::task::spawn;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
@@ -134,9 +134,9 @@ impl WebRtc {
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
-            .add_reliable_channel()
-            .add_reliable_channel()
-            .add_reliable_channel()
+            .add_unreliable_channel()
+            .add_unreliable_channel()
+            .add_unreliable_channel()
             .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))

@@ -14,24 +14,26 @@ use core_services::utils::cancellation::CancellationToken;
 pub struct TransferDelimiterShema {
     pub session_id: u64,
     pub resource_id: u64,
-    pub is_start: bool
+    pub is_start: bool,
+    pub compressed: bool
 }
 
 impl TransferDelimiterShema {
-    pub fn new(session_id: u64, resource_id: u64, is_start: bool) -> Self {
+    pub fn new(session_id: u64, resource_id: u64, is_start: bool, compressed: bool) -> Self {
         Self {
             resource_id,
             is_start,
-            session_id
+            session_id,
+            compressed
         }
     }
 
-    pub fn start(session_id: u64, resource_id: u64) -> Self {
-        Self::new(session_id, resource_id, true)
+    pub fn start(session_id: u64, resource_id: u64, compressed: bool) -> Self {
+        Self::new(session_id, resource_id, true, compressed)
     }
 
-    pub fn end(session_id: u64, resource_id: u64) -> Self {
-        Self::new(session_id, resource_id, false)
+    pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
+        Self::new(session_id, resource_id, false, compressed)
     }
 
     pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {

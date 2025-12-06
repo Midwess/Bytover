@@ -1,6 +1,6 @@
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::repository::errors::PersistenceError;
-use crate::shell::api::{IOReader, IOWriter};
+use crate::shell::api::{CIOCursor, DIOWriter, IOWriter};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
@@ -20,8 +20,8 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError>;
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError>;
     async fn load_all(&self) -> Result<Vec<LocalResource>, PersistenceError>;
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError>;
-    async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError>;
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError>;
+    async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError>;
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError>;
     async fn generate_thumbnail_paths(
         &self,

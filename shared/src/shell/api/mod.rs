@@ -16,6 +16,8 @@ use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use bytes::Bytes;
+use core_services::local_storage::stream::IOCursor;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -26,13 +28,63 @@ pub enum IOWriterError {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait IOWriter: Send + Sync {
-    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
+    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<usize>;
     async fn flush(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
     async fn end(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
+pub trait CIOCursor: IOCursor {
+    // Return a compressed chunk
+    // and the raw size of the chunk before compression
+    // bandwidth is in bytes/sec
+    async fn c_next(&mut self, bandwidth: Option<f64>) -> anyhow::Result<Option<(&[u8], usize)>>;
+
+    /// Decide whether to compress a chunk based on formula
+    /// # Arguments
+    /// * `chunk_size` - size of the chunk in bytes
+    /// * `compression_time_ms` - time it took to compress this chunk in milliseconds
+    /// * `compressed_size` - resulting compressed size in bytes
+    /// * `network_bandwidth_bps` - estimated network bandwidth in bytes/sec
+    ///
+    /// # Returns
+    /// * `bool` - true if compression is worth it
+    fn should_compress(
+        &self,
+        chunk_size: usize,
+        compression_time_ms: u64,
+        compressed_size: usize,
+        network_bandwidth_bps: f64,
+    ) -> bool {
+        if network_bandwidth_bps <= 0.0 {
+            return true;
+        }
+
+        let ratio = compressed_size as f64 / chunk_size as f64;
+
+        if ratio > 0.95 {
+            return false;
+        }
+
+        let t_comp = compression_time_ms as f64 / 1000.0; // convert ms -> s
+        let t_send_compressed = compressed_size as f64 / network_bandwidth_bps;
+        let t_send_raw = chunk_size as f64 / network_bandwidth_bps;
+
+        (t_comp + t_send_compressed) < t_send_raw
+    }
+}
+
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
+pub trait DIOWriter: IOWriter {
+    /// Receive a compressed chunk
+    /// return an amount data that written (uncompressed size)
+    async fn d_write(&mut self, data: Bytes) -> anyhow::Result<Option<usize>>;
 }
 
 pub enum CruxRequest {

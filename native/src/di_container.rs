@@ -16,7 +16,7 @@ use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::auth_provider::AuthProvider;
-use shared::protocol::rpc::auth_server::AppServer;
+use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::cloud_server::CloudServer;
 use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
