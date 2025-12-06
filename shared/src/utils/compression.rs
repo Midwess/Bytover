@@ -79,7 +79,6 @@ pub static NON_COMPRESSIBLE_EXTENSIONS: &[&str] = &[
     "lzma",
     "zst",
     "zstd",
-    "svg",
     "wasm",
     "ipa"
 ];
@@ -146,26 +145,29 @@ pub fn decompress(encoded: &[u8]) -> anyhow::Result<(Vec<u8>, usize)> {
 /// * `bool` - true if compression is worth it
 pub fn should_compress(
     chunk_size: usize,
-    compression_time_ms: u64,
+    compression_time_micro: u64,
     compressed_size: usize,
     network_bandwidth_bps: f64,
+    disk_bandwidth_bps: u64
 ) -> bool {
-    if network_bandwidth_bps <= 0.0 {
-        // bandwidth unknown, default to compress
-        return true;
-    }
-
-    let ratio = compressed_size as f64 / chunk_size as f64;
-
-    // Skip compression if savings is too small (<5%)
-    if ratio > 0.95 {
+    if network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0 {
         return false;
     }
 
-    let t_comp = compression_time_ms as f64 / 1000.0; // convert ms -> s
-    let t_send_compressed = compressed_size as f64 / network_bandwidth_bps;
-    let t_send_raw = chunk_size as f64 / network_bandwidth_bps;
+    // Don't compress if compression ratio is too small
+    let ratio = compressed_size as f64 / chunk_size as f64;
+    if ratio > 0.90 {
+        return false;
+    }
 
-    // Only compress if total time is less than sending raw
+    // Compute effective bottleneck bandwidth
+    let effective_bw = network_bandwidth_bps.min(disk_bandwidth_bps as f64);
+
+    // Convert ms -> seconds
+    let t_comp = compression_time_micro as f64 / 1000000.0;
+    let t_send_compressed = compressed_size as f64 / effective_bw;
+    let t_send_raw = chunk_size as f64 / effective_bw;
+
+    // Only compress if it actually saves total time
     (t_comp + t_send_compressed) < t_send_raw
 }

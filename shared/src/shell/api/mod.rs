@@ -43,40 +43,10 @@ pub trait CIOCursor: IOCursor {
     // Return a compressed chunk
     // and the raw size of the chunk before compression
     // bandwidth is in bytes/sec
-    async fn c_next(&mut self, bandwidth: Option<f64>) -> anyhow::Result<Option<(&[u8], usize)>>;
+    async fn c_next(&mut self) -> anyhow::Result<Option<(&[u8], usize)>>;
 
-    /// Decide whether to compress a chunk based on formula
-    /// # Arguments
-    /// * `chunk_size` - size of the chunk in bytes
-    /// * `compression_time_ms` - time it took to compress this chunk in milliseconds
-    /// * `compressed_size` - resulting compressed size in bytes
-    /// * `network_bandwidth_bps` - estimated network bandwidth in bytes/sec
-    ///
-    /// # Returns
-    /// * `bool` - true if compression is worth it
-    fn should_compress(
-        &self,
-        chunk_size: usize,
-        compression_time_ms: u64,
-        compressed_size: usize,
-        network_bandwidth_bps: f64,
-    ) -> bool {
-        if network_bandwidth_bps <= 0.0 {
-            return true;
-        }
-
-        let ratio = compressed_size as f64 / chunk_size as f64;
-
-        if ratio > 0.95 {
-            return false;
-        }
-
-        let t_comp = compression_time_ms as f64 / 1000.0; // convert ms -> s
-        let t_send_compressed = compressed_size as f64 / network_bandwidth_bps;
-        let t_send_raw = chunk_size as f64 / network_bandwidth_bps;
-
-        (t_comp + t_send_compressed) < t_send_raw
-    }
+    fn update_bandwidth(&mut self, network: f64);
+    fn update_should_compress(&mut self, should_compress: bool);
 }
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
@@ -182,17 +152,17 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait BufferExt: Send + Sync {
-    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()>;
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize>;
     async fn flush_all_timeout(&self) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl BufferExt for PeerBuffered {
-    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()> {
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize> {
         let buffered = self.buffered_amount(index).await;
         if buffered == 0 {
-            return Ok(());
+            return Ok(0);
         }
 
         // Assume min speed = 10 KB/s = 10,000 bytes/s
@@ -206,14 +176,14 @@ impl BufferExt for PeerBuffered {
         let flushed = self.flush(index).with_cancel(&cancel).await.is_ok();
         if flushed {
             let new_buffered = self.buffered_amount(index).await;
-            return if new_buffered != buffered {
-                Ok(())
+            return if new_buffered < buffered {
+                Ok(buffered - new_buffered)
             } else {
                 Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))
             }
         }
 
-        Ok(())
+        Ok(0)
     }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {
@@ -223,4 +193,43 @@ impl BufferExt for PeerBuffered {
 
         Ok(())
     }
+}
+
+
+/// Decide whether to compress a chunk based on formula
+/// # Arguments
+/// * `chunk_size` - size of the chunk in bytes
+/// * `compression_time_ms` - time it took to compress this chunk in milliseconds
+/// * `compressed_size` - resulting compressed size in bytes
+/// * `network_bandwidth_bps` - estimated network bandwidth in bytes/sec
+///
+/// # Returns
+/// * `bool` - true if compression is worth it
+fn should_compress(
+    chunk_size: usize,
+    compression_time_ms: u64,
+    compressed_size: usize,
+    network_bandwidth_bps: f64,
+    disk_bandwidth_bps: f64, // new parameter
+) -> bool {
+    if network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0.0 {
+        return true; // unknown bandwidth, compress by default
+    }
+
+    // Don't compress if compression ratio is too small
+    let ratio = compressed_size as f64 / chunk_size as f64;
+    if ratio > 0.95 {
+        return false;
+    }
+
+    // Compute effective bottleneck bandwidth
+    let effective_bw = network_bandwidth_bps.min(disk_bandwidth_bps);
+
+    // Convert ms -> seconds
+    let t_comp = compression_time_ms as f64 / 1000.0;
+    let t_send_compressed = compressed_size as f64 / effective_bw;
+    let t_send_raw = chunk_size as f64 / effective_bw;
+
+    // Only compress if it actually saves total time
+    (t_comp + t_send_compressed) < t_send_raw
 }

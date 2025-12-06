@@ -78,7 +78,13 @@ pub enum OpfsOperationOutput {
     Void,
     Error(#[serde(with = "serde_wasm_bindgen::preserve")] JsValue),
     // Binary and raw size (before compressed) and compression time in microsecond if compressed
-    Binary(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array, usize, u64),
+    Binary {
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        data: Uint8Array,
+        raw_size: usize,
+        compression_time_in_micros: u64,
+        read_time_in_micros: u64,
+    },
     Written(usize),
     File(#[serde(with = "serde_wasm_bindgen::preserve")] File),
     FileEntry(FileEntry),
@@ -209,17 +215,29 @@ impl OpfsWorker {
                 OpfsOperationOutput::Cursor(id)
             }
             FileOperation::CursorNext { instance_id, max, compressed } => {
+                let disk_tick = Instant::now();
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
                     return OpfsOperationOutput::Error("Cursor not found".into());
                 };
 
                 let mut guard = cursor.lock().await;
                 let Ok(Some(data)) = guard.next(max).await else {
-                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0), 0, 0);
+                    return OpfsOperationOutput::Binary{
+                        data: Uint8Array::new_with_length(0),
+                        raw_size: 0,
+                        read_time_in_micros: 0,
+                        compression_time_in_micros: 0
+                    };
                 };
 
+                let disk_elapsed = disk_tick.elapsed();
                 if data.len() == 0 {
-                    return OpfsOperationOutput::Binary(Uint8Array::new_with_length(0), 0, 0);
+                    return OpfsOperationOutput::Binary{
+                        data: Uint8Array::new_with_length(0),
+                        raw_size: 0,
+                        read_time_in_micros: 0,
+                        compression_time_in_micros: 0
+                    };
                 }
 
                 let raw_size = data.len();
@@ -233,7 +251,12 @@ impl OpfsWorker {
                     false => (Uint8Array::new_from_slice(data), 0)
                 };
 
-                OpfsOperationOutput::Binary(data, raw_size, elapsed)
+                OpfsOperationOutput::Binary {
+                    data,
+                    raw_size,
+                    compression_time_in_micros: elapsed,
+                    read_time_in_micros: disk_elapsed.as_micros() as u64
+                }
             }
             FileOperation::CursorEnd(instance_id) => {
                 if let Some(c) = self.cursors.lock().await.remove(&instance_id) {

@@ -29,7 +29,7 @@ pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 2;
 
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 2;
+pub static MAX_BUFFER_SIZE: usize = 1024 * 512;
 
 pub struct WebRtc {
     addr: String,
