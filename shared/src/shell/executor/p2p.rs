@@ -1,4 +1,4 @@
-use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
 use crate::protocol::webrtc::webrtc::WebRtc;

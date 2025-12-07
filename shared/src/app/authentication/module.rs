@@ -56,7 +56,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 model.authentication.user.take();
                 if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
                     return Command::new(|it| async move {
-                        it.app().run(P2POperation::stop()).await;
+                        let _ = it.app().run(P2POperation::stop()).await;
                     }).then_render();
                 }
 

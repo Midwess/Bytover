@@ -1,6 +1,6 @@
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::repository::errors::PersistenceError;
-use crate::shell::api::{CIOCursor, DIOWriter, IOWriter};
+use crate::shell::api::{CIOCursor, DIOWriter};
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;

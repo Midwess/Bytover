@@ -12,15 +12,13 @@ use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_CHANNEL
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
-use crate::shell::api::{CIOCursor, DIOWriter};
 use crate::utils::compression::is_compressible;
 use anyhow::{anyhow, Context};
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
+use core_services::utils::cancellation::FutureExtension;
 use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
 use futures::StreamExt;
-use futures_util::{join, FutureExt, SinkExt};
-use futures_util::{pin_mut, select};
+use futures_util::{join, SinkExt};
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
 use n0_future::task::spawn;
@@ -32,8 +30,6 @@ use schema::devlog::bitbridge::{
     CancelTransferSessionRequest, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage, TransferRequestMessage,
     TransferResponseMessage, TransferSessionMessage,
 };
-use std::collections::VecDeque;
-use std::fs::read;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -486,7 +482,7 @@ impl WebRtcPeer {
                 continue;
             }
 
-            let (mut queue_tx, mut queue_rx) = mpsc::unbounded();
+            let (queue_tx, mut queue_rx) = mpsc::unbounded();
             let mut chunk_size = none_compress_chunk_size;
             let mut buff_counter = 0;
             let time_to_drain = Duration::from_secs(5);
@@ -513,9 +509,9 @@ impl WebRtcPeer {
                 progress_update.update_progress(raw as u64);
                 let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
 
-                if buff_counter > MAX_BUFFER_SIZE / 4 {
+                if buff_counter > MAX_BUFFER_SIZE {
                     buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await;
-                    if buff_counter > MAX_BUFFER_SIZE || drain_tick.elapsed() > time_to_drain {
+                    if buff_counter > MAX_BUFFER_SIZE / 2 || drain_tick.elapsed() > time_to_drain {
                         drain_tick = Instant::now();
                         reader.compression_stats_mut().start_over();
                         chunk_size = compress_chunk_size;
@@ -539,7 +535,7 @@ impl WebRtcPeer {
                                 };
 
                                 match rx.try_next() {
-                                    Ok(Some(network_bandwidth)) => {
+                                    Ok(Some(_)) => {
                                         break Result::<(), WebRtcErrors>::Ok(())
                                     },
                                     _ => {}
@@ -556,7 +552,7 @@ impl WebRtcPeer {
 
                         let (flushed, send) = join!(flushed_fut, send_fut);
                         let bw = flushed?;
-                        let send = send?;
+                        send?;
                         if !reader.compression_stats_mut().update_network_bandwidth(bw) {
                             log::info!("Not compress");
                             chunk_size = none_compress_chunk_size;

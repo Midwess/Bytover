@@ -12,7 +12,7 @@ use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
 use matchbox_protocol::PeerId;
-use matchbox_socket::{RtcIceServerConfig, WebRtcSocket};
+use matchbox_socket::WebRtcSocket;
 use n0_future::task::spawn;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;

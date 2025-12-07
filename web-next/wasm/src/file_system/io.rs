@@ -12,7 +12,6 @@ use shared::shell::api::{CIOCursor, DIOWriter, IOReader, IOWriter};
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::{Duration, SystemTime};
-use n0_future::time::Instant;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
@@ -98,7 +97,7 @@ pub struct IOReaderOpfsImpl {
 }
 
 impl IOReaderOpfsImpl {
-    pub async fn new(path: PathBuf, buffer_size: usize, compressed: bool) -> Result<Self> {
+    pub async fn new(path: PathBuf, buffer_size: usize, _compressed: bool) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
 
         let msg = WorkerMessage::new(OpfsOperation {
@@ -151,7 +150,7 @@ impl CIOCursor for IOReaderOpfsImpl {
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
         match response.message {
-            OpfsOperationOutput::Binary { data, raw_size, compression_time_in_micros, read_time_in_micros, is_compressed_failed } => {
+            OpfsOperationOutput::Binary { data, raw_size, compression_time_in_micros, read_time_in_micros, .. } => {
                 if data.length() == 0 {
                     Ok(None)
                 }
@@ -207,7 +206,7 @@ impl IOReader for IOReaderOpfsImpl {
                     }
 
                     data.copy_to(&mut self.buffer[..data.length() as usize]);
-                    Ok(Some((&self.buffer[..data.length() as usize])))
+                    Ok(Some(&self.buffer[..data.length() as usize]))
                 }
             }
             r => Err(anyhow::anyhow!("Read error: {:?}", r))

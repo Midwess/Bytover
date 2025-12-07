@@ -215,7 +215,7 @@ impl OpfsWorker {
                 self.cursors.lock().await.insert(id, Arc::new(Mutex::new(cursor)));
                 OpfsOperationOutput::Cursor(id)
             }
-            FileOperation::CursorNext { instance_id, max, mut compressed } => {
+            FileOperation::CursorNext { instance_id, max, compressed } => {
                 let disk_tick = Instant::now();
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
                     return OpfsOperationOutput::Error("Cursor not found".into());
