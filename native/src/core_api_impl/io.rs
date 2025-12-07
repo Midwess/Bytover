@@ -89,17 +89,16 @@ pub struct CIOCursorBoxWrapper {
     inner: Box<dyn IOCursor>,
     stats: CompressStats,
     buffer: BytesMut,
-    compressed_buffer: BytesMut,
 }
 
 impl CIOCursorBoxWrapper {
     pub fn new(inner: Box<dyn IOCursor>, file_name: &str) -> Self {
         let stats = CompressStats::new(file_name);
+        let buffer = BytesMut::with_capacity(inner.buffer_size().unwrap_or(1024) + 1);
         Self {
             inner,
             stats,
-            buffer: BytesMut::new(),
-            compressed_buffer: BytesMut::new(),
+            buffer,
         }
     }
 }
@@ -130,8 +129,7 @@ impl CIOCursor for CIOCursorBoxWrapper {
         let read_start = Instant::now();
         let data = self.inner.next(max).await?;
         let read_time_micro = read_start.elapsed().as_micros() as u64;
-        log::info!("read time {:?} {}", data.map(|it| it.len()), read_time_micro);
-        
+
         let Some(raw_data) = data else {
             return Ok(None);
         };
@@ -139,13 +137,14 @@ impl CIOCursor for CIOCursorBoxWrapper {
         let raw_size = raw_data.len();
         
         if !self.stats.should_compress() {
-            if self.compressed_buffer.len() < raw_size + 1 {
-                self.compressed_buffer.resize(raw_size + 1, 0);
+            if self.buffer.len() < raw_size + 1 {
+                self.buffer.resize(raw_size + 1, 0);
             }
-            self.compressed_buffer[0] = 0u8;
-            self.compressed_buffer[1..raw_size + 1].copy_from_slice(raw_data);
+
+            self.buffer[0] = 0u8;
+            self.buffer[1..raw_size + 1].copy_from_slice(raw_data);
             self.stats.add_chunk_stats(raw_size, 0, raw_size, read_time_micro);
-            return Ok(Some((&self.compressed_buffer[..raw_size + 1], raw_size)));
+            return Ok(Some((&self.buffer[..raw_size + 1], raw_size)));
         }
         
         let compress_start = Instant::now();
@@ -159,19 +158,19 @@ impl CIOCursor for CIOCursorBoxWrapper {
         let is_compressed_success = self.stats.add_chunk_stats(raw_size, compression_time_micro, compressed_size, read_time_micro);
         
         if is_compressed_success {
-            if self.compressed_buffer.len() < compressed_size + 1 {
-                self.compressed_buffer.resize(compressed_size + 1, 0);
+            if self.buffer.len() < compressed_size + 1 {
+                self.buffer.resize(compressed_size + 1, 0);
             }
-            self.compressed_buffer[0] = 1u8;
-            self.compressed_buffer[1..compressed_size + 1].copy_from_slice(&compressed);
-            Ok(Some((&self.compressed_buffer[..compressed_size + 1], raw_size)))
+            self.buffer[0] = 1u8;
+            self.buffer[1..compressed_size + 1].copy_from_slice(&compressed);
+            Ok(Some((&self.buffer[..compressed_size + 1], raw_size)))
         } else {
-            if self.compressed_buffer.len() < raw_size + 1 {
-                self.compressed_buffer.resize(raw_size + 1, 0);
+            if self.buffer.len() < raw_size + 1 {
+                self.buffer.resize(raw_size + 1, 0);
             }
-            self.compressed_buffer[0] = 0u8;
-            self.compressed_buffer[1..raw_size + 1].copy_from_slice(raw_data);
-            Ok(Some((&self.compressed_buffer[..raw_size + 1], raw_size)))
+            self.buffer[0] = 0u8;
+            self.buffer[1..raw_size + 1].copy_from_slice(raw_data);
+            Ok(Some((&self.buffer[..raw_size + 1], raw_size)))
         }
     }
 
