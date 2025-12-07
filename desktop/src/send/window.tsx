@@ -68,7 +68,7 @@ function Window() {
                        />
                    </Button>
                 </div>
-                <div className={`w-full h-full bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
+                <div className={`w-full h-[100%] overflow-hidden bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
                     <Transfer key={isExpanded ? 'expanded' : 'collapsed'}/>
                 </div>
            </div>
