@@ -489,7 +489,7 @@ impl WebRtcPeer {
             let (mut queue_tx, mut queue_rx) = mpsc::unbounded();
             let mut chunk_size = none_compress_chunk_size;
             let mut buff_counter = 0;
-            let time_to_drain = Duration::from_secs(3);
+            let time_to_drain = Duration::from_secs(5);
             let mut drain_tick = Instant::now();
             while let Some((bytes, raw)) = match queue_rx.try_next() {
                 Ok(Some(data)) => Some(data),            // got from queue
