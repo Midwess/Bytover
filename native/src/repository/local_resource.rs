@@ -17,7 +17,7 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::repository::errors::PersistenceError;
 use shared::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::repository::path_resolver::PathResolver;
-use shared::shell::api::{CIOCursor, DIOWriter, IOReader, IOWriter};
+use shared::shell::api::{CIOCursor, DIOWriter, IOWriter};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -204,7 +204,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize, _compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
         let file_name = path.file_name()

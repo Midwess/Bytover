@@ -349,7 +349,7 @@ export class WasmCore {
 
         this.isNearbyEnabled.set(true)
         console.log('Launching nearby')
-        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true, true)))
+        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
     }
 
     public async enableLocation() {

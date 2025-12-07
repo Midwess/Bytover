@@ -511,7 +511,7 @@ impl WebRtcPeer {
 
                 if buff_counter > MAX_BUFFER_SIZE {
                     buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await;
-                    if buff_counter > MAX_BUFFER_SIZE / 2 || drain_tick.elapsed() > time_to_drain {
+                    if buff_counter > MAX_BUFFER_SIZE / 3 || drain_tick.elapsed() > time_to_drain {
                         drain_tick = Instant::now();
                         reader.compression_stats_mut().start_over();
                         chunk_size = compress_chunk_size;

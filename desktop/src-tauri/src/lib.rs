@@ -18,15 +18,11 @@ use shared::entities::device::DeviceInfo;
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri::menu::MenuItem;
-use tauri::menu::Menu;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
 use tokio::{fs, spawn};
-use tokio::time::sleep;
 use uuid::Uuid;
 use {hostname, machine_uid};
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
@@ -308,7 +304,7 @@ pub async fn run() {
             clear_shelf, sign_out, quit
         ])
         .setup(|app| {
-            let tray = TrayIconBuilder::new()
+            let _ = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {

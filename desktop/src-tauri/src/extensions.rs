@@ -1,4 +1,3 @@
-use dispatch::Queue;
 use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri::webview::Color;
 use tauri::window::{Effect, EffectState, EffectsBuilder};

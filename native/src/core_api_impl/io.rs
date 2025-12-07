@@ -130,6 +130,14 @@ impl CIOCursor for CIOCursorBoxWrapper {
         let data = self.inner.next(max).await?;
         let read_time_micro = read_start.elapsed().as_micros() as u64;
 
+        if !self.stats.is_compression_support() {
+            if let Some(data) = data {
+                return Ok(Some((data, data.len())));
+            }
+
+            return Ok(None);
+        }
+
         let Some(raw_data) = data else {
             return Ok(None);
         };

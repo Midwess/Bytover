@@ -4,7 +4,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rdev::{set_is_main_thread, Button, EventType};
-use tauri::{AppHandle, LogicalPosition, Manager, PhysicalPosition, PhysicalSize};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
@@ -257,7 +257,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     }
 
                     if detect_drag(&start_mouse_position, &current_mouse_position) {
-                        let dx = (current_mouse_position.x - previous_mouse.x);
+                        let dx = current_mouse_position.x - previous_mouse.x;
                         if dx.abs() < config.min_changed {
                             return;
                         }
