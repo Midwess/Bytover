@@ -339,7 +339,7 @@ export class WasmCore {
             return;
         }
 
-        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(isTransferPage)))
+        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(isTransferPage, true)))
     }
 
     public async launchNearby() {
@@ -349,7 +349,7 @@ export class WasmCore {
 
         this.isNearbyEnabled.set(true)
         console.log('Launching nearby')
-        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
+        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true, true)))
     }
 
     public async enableLocation() {

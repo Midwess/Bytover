@@ -155,7 +155,7 @@ impl TransferService {
 
                 let mut session = self.transfer_repository.update_one(session).await?;
 
-                return match next_upload_result {
+                match next_upload_result {
                     Err(e) => {
                         if let Some(next_progress) = session.current_resource_progress_mut() {
                             next_progress.cancel();

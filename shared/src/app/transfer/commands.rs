@@ -275,8 +275,8 @@ impl AppCommand {
             ]);
         } else {
             self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
-            self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await?;
-            DialogOperation::toast("Transfer session canceled".to_string());
+            let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
+            // DialogOperation::toast("Transfer session canceled".to_string());
         }
 
         Ok(())

@@ -3,7 +3,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::entities::transfer_session::TransferSession;
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
-use crate::protocol::rpc::auth_server::AppServer;
+use crate::protocol::rpc::app_server::AppServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;

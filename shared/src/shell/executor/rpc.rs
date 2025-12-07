@@ -1,7 +1,7 @@
 use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
-use crate::protocol::rpc::auth_server::AppServer;
+use crate::protocol::rpc::app_server::AppServer;
 use core_services::utils::maybe::MaybeSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]

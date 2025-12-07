@@ -6,7 +6,7 @@
   "scripts": {
     "web:dev": "concurrently \"pnpm vite\" \"pnpm tailwind --watch\"",
     "web:build": "pnpm tailwind && tsc && vite build",
-    "dev": "tauri dev",
+    "dev": "tauri dev --no-watch",
     "tauri": "tauri",
     "tailwind": "pnpx @tailwindcss/cli -i ./src/input.css -o ./output.css"
   },

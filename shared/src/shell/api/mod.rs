@@ -16,6 +16,9 @@ use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use bytes::Bytes;
+use core_services::local_storage::stream::IOCursor;
+use crate::utils::compression::CompressStats;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -26,13 +29,31 @@ pub enum IOWriterError {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait IOWriter: Send + Sync {
-    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<()>;
+    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<usize>;
     async fn flush(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
     async fn end(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
+pub trait CIOCursor: IOCursor {
+    // Return a compressed chunk
+    // and the raw size of the chunk before compression
+    // bandwidth is in bytes/sec
+    async fn c_next(&mut self, max: Option<u64>) -> anyhow::Result<Option<(&[u8], usize)>>;
+    fn compression_stats_mut(&mut self) -> &mut CompressStats;
+}
+
+#[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
+pub trait DIOWriter: IOWriter {
+    /// Receive a compressed chunk
+    /// return an amount data that written (uncompressed size)
+    async fn d_write(&mut self, data: Bytes) -> anyhow::Result<Option<usize>>;
 }
 
 pub enum CruxRequest {
@@ -130,17 +151,17 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait BufferExt: Send + Sync {
-    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()>;
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize>;
     async fn flush_all_timeout(&self) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl BufferExt for PeerBuffered {
-    async fn flush_timeout(&self, index: usize) -> anyhow::Result<()> {
+    async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize> {
         let buffered = self.buffered_amount(index).await;
         if buffered == 0 {
-            return Ok(());
+            return Ok(0);
         }
 
         // Assume min speed = 10 KB/s = 10,000 bytes/s
@@ -154,14 +175,14 @@ impl BufferExt for PeerBuffered {
         let flushed = self.flush(index).with_cancel(&cancel).await.is_ok();
         if flushed {
             let new_buffered = self.buffered_amount(index).await;
-            return if new_buffered != buffered {
-                Ok(())
+            return if new_buffered < buffered {
+                Ok(buffered - new_buffered)
             } else {
                 Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))
             }
         }
 
-        Ok(())
+        Ok(0)
     }
 
     async fn flush_all_timeout(&self) -> anyhow::Result<()> {

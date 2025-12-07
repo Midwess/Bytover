@@ -1,4 +1,4 @@
-[bindings.kotlin]
+[tbindings.kotlin]
 package_name = "com.devlog.bitbridge.shared"
 cdylib_name = "shared"
 

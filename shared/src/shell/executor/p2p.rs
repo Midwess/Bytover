@@ -1,4 +1,4 @@
-use crate::app::operations::p2p::P2POperation;
+use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
 use crate::protocol::webrtc::webrtc::WebRtc;
@@ -33,8 +33,9 @@ pub trait P2PNativeExecutor: Send + Sync {
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
                 spawn(async move {
-                    if let Err(e) = web_rtc.start(request, peer).await {
+                    if let Err(e) = web_rtc.start(request.clone(), peer).await {
                         log::error!("Failed to start nearby server: {e:?}");
+                        request.response(CoreError::from(e)).await;
                     }
                 });
 

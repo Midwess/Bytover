@@ -19,6 +19,7 @@ use schema::devlog::rpc_signalling::server::{
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 pub enum WebRtcPeerConnectionProcess {
     Connecting(Instant),
@@ -289,6 +290,12 @@ impl WebSignaller {
     }
 }
 
+impl Drop for WebSignaller {
+    fn drop(&mut self) {
+        log::info!("WebSignaller dropped");
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl Signaller for WebSignaller {
@@ -311,7 +318,11 @@ impl Signaller for WebSignaller {
 
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
         loop {
-            let message = self.client.next_message().await.map_err(Into::<SignalingError>::into)?;
+            let Some(message) = self.client.try_next_message().await.map_err(Into::<SignalingError>::into)? else {
+                n0_future::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            };
+
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer(ref peer_id) = peer_event {
