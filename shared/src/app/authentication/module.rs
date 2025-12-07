@@ -8,6 +8,7 @@ use crate::entities::user::User;
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::CoreOperation;
 
@@ -53,8 +54,10 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
-                if !model.environment.auto_launch_nearby {
-                    return Command::render();
+                if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
+                    return Command::new(|it| async move {
+                        it.app().run(P2POperation::stop()).await;
+                    }).then_render();
                 }
 
                 Command::handle_result(|ctx| async move {
@@ -93,6 +96,10 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 })
             }
             AuthenticationEvent::UnAuthorized => {
+                if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
+                    return Command::render();
+                }
+
                 Command::new(|ctx| async move {
                     let app = ctx.app();
                     app.notify_event(NearbyEvent::Launch { auto_launch: true });

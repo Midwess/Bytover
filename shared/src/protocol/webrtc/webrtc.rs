@@ -29,7 +29,7 @@ pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 2;
 
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024;
+pub static MAX_BUFFER_SIZE: usize = 1024 * 100;
 
 pub struct WebRtc {
     addr: String,
@@ -56,6 +56,7 @@ impl WebRtc {
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.remove_all().await;
         sleep(Duration::from_millis(500)).await;
+        log::info!("Stopping WebRTC server");
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -206,7 +207,10 @@ impl WebRtc {
                 }
                 else if state == matchbox_socket::PeerState::Disconnected {
                     log::info!("Peer {peer_id} disconnected");
-                    self.shared_context.remove_peer(&peer_id).await
+                    let context = self.shared_context.clone();
+                    spawn(async move {
+                        context.remove_peer(&peer_id).await;
+                    });
                 }
             }
 
@@ -299,6 +303,7 @@ impl WebRtc {
             }
         };
 
+        log::info!("Stopping WebRTC server, loop stopped");
         socket.close();
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
         if let Err(err) = result {

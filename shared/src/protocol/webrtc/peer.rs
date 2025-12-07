@@ -509,7 +509,10 @@ impl WebRtcPeer {
                 progress_update.update_progress(raw as u64);
                 let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
 
-                if self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await > MAX_BUFFER_SIZE {
+                let tick = Instant::now();
+                let buffer = self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await;
+                if buffer > MAX_BUFFER_SIZE {
+                    log::info!("Flushing buffer");
                     reader.compression_stats_mut().start_over();
                     chunk_size = compress_chunk_size;
                     let (mut tx, mut rx) = mpsc::channel(1);
@@ -551,7 +554,11 @@ impl WebRtcPeer {
                     let bw = flushed?;
                     let send = send?;
                     if !reader.compression_stats_mut().update_network_bandwidth(bw) {
+                        log::info!("Not compress");
                         chunk_size = none_compress_chunk_size;
+                    }
+                    else {
+                        log::info!("Compress");
                     }
                 }
             }

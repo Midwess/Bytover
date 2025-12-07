@@ -11,7 +11,8 @@ use crate::app::transfer::module::TransferEvent;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
     pub device: Option<DeviceInfo>,
-    pub auto_launch_nearby: bool
+    pub auto_launch_nearby: bool,
+    pub allowed_nearby_anonymous: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -22,9 +23,13 @@ pub struct EnvironmentModule;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
     AppLaunched {
-        auto_launch_nearby: bool
+        auto_launch_nearby: bool,
+        allowed_nearby_anonymous: bool
     },
-    UpdateAutoLaunchNearby(bool)
+    UpdateAutoLaunchNearby {
+        auto: bool,
+        anonymous: bool
+    }
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -38,8 +43,9 @@ impl AppModule<BitBridge> for EnvironmentModule {
         _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            EnvironmentEvent::AppLaunched { auto_launch_nearby } => {
+            EnvironmentEvent::AppLaunched { auto_launch_nearby, allowed_nearby_anonymous } => {
                 model.environment.auto_launch_nearby = auto_launch_nearby;
+                model.environment.allowed_nearby_anonymous = allowed_nearby_anonymous;
                 Command::handle_result(|ctx| async move {
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
                     ctx.app().notify_event(ShelfEvent::Launch);
@@ -49,8 +55,9 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     Ok(())
                 })
             },
-            EnvironmentEvent::UpdateAutoLaunchNearby(value) => {
-                model.environment.auto_launch_nearby = value;
+            EnvironmentEvent::UpdateAutoLaunchNearby { auto, anonymous } => {
+                model.environment.auto_launch_nearby = auto;
+                model.environment.allowed_nearby_anonymous = anonymous;
                 Command::done()
             }
         }

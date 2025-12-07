@@ -133,12 +133,16 @@ impl SignallingClient {
         Ok(())
     }
 
-    pub async fn next_message(&self) -> Result<Message, WebRtcErrors> {
-        let Some(msg) = self.receiver.lock().await.next().await else {
-            return Err(WebRtcErrors::SignallingClientError(anyhow!("Channel has been closed")))
+    pub async fn try_next_message(&self) -> Result<Option<Message>, WebRtcErrors> {
+        let Ok(msg) = self.receiver.lock().await.try_next() else {
+            return Ok(None)
         };
 
-        Ok(msg)
+        if let Some(msg) = msg {
+            return Ok(Some(msg))
+        }
+
+        Err(WebRtcErrors::SignallingClientError(anyhow!("Channel has been closed")))
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), WebRtcErrors> {

@@ -356,7 +356,10 @@ pub async fn run() {
                 DiContainer::get_instance()
                     .init(Arc::new(PathResolverImpl::new(workdir_path).await), &*bridge)
                     .await;
-                process_event(EnvironmentEvent::AppLaunched {auto_launch_nearby: true}, handle.clone()).await;
+                process_event(EnvironmentEvent::AppLaunched {
+                    auto_launch_nearby: true,
+                    allowed_nearby_anonymous: false
+                }, handle.clone()).await;
 
                 if let Some(url) = start_urls.first().cloned() {
                     let handle = handle.clone();

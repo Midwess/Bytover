@@ -1,4 +1,4 @@
-use crate::core_api_impl::io::IOWriterImpl;
+use crate::core_api_impl::io::{CIOCursorBoxWrapper, DIOWriterWrapper};
 use crate::repository::id::RedbIdWrapper;
 use core_services::db::redb::id::RedbId;
 use core_services::db::redb::repository::RedbRepository;
@@ -17,7 +17,7 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::repository::errors::PersistenceError;
 use shared::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::repository::path_resolver::PathResolver;
-use shared::shell::api::{IOReader, IOWriter};
+use shared::shell::api::{CIOCursor, DIOWriter, IOReader, IOWriter};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -204,23 +204,32 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize) -> Result<Box<dyn IOReader>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
+        let file_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-            return folder.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")));
+            let cursor = folder.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+            let wrapped = CIOCursorBoxWrapper::new(cursor, &file_name);
+            return Ok(Box::new(wrapped));
         };
 
         let file = FileEntry::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        Ok(file.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?)
+        let cursor = file.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+        let wrapped = CIOCursorBoxWrapper::new(cursor, &file_name);
+        Ok(Box::new(wrapped))
     }
 
-    async fn write(&self, path: LocalResourcePath) -> Result<Box<dyn IOWriter>, PersistenceError> {
+    async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        let cursor = IOWriterImpl::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
-        Ok(Box::new(cursor))
+        let writer = DIOWriterWrapper::from_path(path, compressed).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        Ok(Box::new(writer))
     }
 
     async fn generate_thumbnail_paths(

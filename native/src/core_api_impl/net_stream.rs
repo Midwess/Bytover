@@ -51,7 +51,7 @@ impl NetStream for NetStreamImpl {
 impl NetStreamInner for NetStreamInnerImpl {
     async fn start(&mut self) -> Result<Receiver<NetStreamEvent>> {
         let (tx, rx) = channel(EVENT_QUEUE_SIZE);
-        let cursor = self.repository.read(self.path.clone(), READ_CHUNK_SIZE).await?;
+        let cursor = self.repository.read(self.path.clone(), READ_CHUNK_SIZE, false).await?;
         let upload = self.upload.clone();
 
         let handle = spawn(Self::upload_task(cursor, upload, self.server, tx));
