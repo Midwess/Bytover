@@ -46,8 +46,6 @@ pub trait CIOCursor: IOCursor {
     // bandwidth is in bytes/sec
     async fn c_next(&mut self, max: Option<u64>) -> anyhow::Result<Option<(&[u8], usize)>>;
     fn compression_stats_mut(&mut self) -> &mut CompressStats;
-    fn update_bandwidth(&mut self, network: f64) -> bool;
-    fn update_should_compress(&mut self, should_compress: bool);
 }
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]

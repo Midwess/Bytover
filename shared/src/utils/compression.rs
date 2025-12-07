@@ -95,48 +95,64 @@ pub struct CompressStats {
 
     should_compress: bool,
     failed_bytes: usize,
+    is_compression_support: bool
 }
 
 impl CompressStats {
-    pub fn new() -> Self {
-        Self { chunk_size: 0, compression_time_micro: 0, compressed_size: 0, network_bandwidth_bps: 0.0, read_time_micro: 0, failed_bytes: 0, should_compress: true }
+    pub fn new(file_name: &str) -> Self {
+        let is_compression_support = is_compressible(file_name);
+        Self { chunk_size: 0, compression_time_micro: 0, compressed_size: 0, network_bandwidth_bps: 0.0, read_time_micro: 0, failed_bytes: 0, should_compress: false, is_compression_support }
     }
 
-    pub fn add_chunk_stats(&mut self, raw_size: usize, compression_time_micro: u64, compressed_size: usize, read_time_micro: u64) {
+    pub fn is_compression_support(&self) -> bool {
+        self.is_compression_support
+    }
+
+    pub fn add_chunk_stats(&mut self, raw_size: usize, compression_time_micro: u64, compressed_size: usize, read_time_micro: u64) -> bool {
         self.chunk_size += raw_size;
         self.compression_time_micro += compression_time_micro;
         self.compressed_size += compressed_size;
         self.read_time_micro += read_time_micro;
-        if compressed_size > raw_size {
-            self.failed_bytes += raw_size;
-        }
-        else {
+        let is_success = self.should_compress && compressed_size < raw_size;
+        if is_success {
             self.failed_bytes = 0;
         }
+        else {
+            self.failed_bytes += raw_size;
+        }
 
         self.should_compress = self.cal_should_compress();
+        is_success
     }
 
-    pub fn update_network_bandwidth(&mut self, network_bandwidth_bps: f64) {
+    pub fn update_network_bandwidth(&mut self, network_bandwidth_bps: f64) -> bool {
         self.network_bandwidth_bps = network_bandwidth_bps;
         self.should_compress = self.cal_should_compress();
+        self.should_compress
     }
 
-    pub fn new_round(&mut self) {
-        // We reset everything except network bandwidth,
-        // because it is already bandwidth at specific time.
+    pub fn start_over(&mut self) {
+        self.network_bandwidth_bps = 0.0;
         self.chunk_size = 0;
         self.compression_time_micro = 0;
         self.compressed_size = 0;
         self.read_time_micro = 0;
-        self.failed_bytes = 0;
+        self.should_compress = true;
     }
 
     pub fn should_compress(&self) -> bool {
-        self.should_compress
+        self.should_compress && self.is_compression_support
+    }
+
+    pub fn no_compress(&mut self) {
+        self.should_compress = false;
     }
 
     fn cal_should_compress(&self) -> bool {
+        if self.network_bandwidth_bps <= 1.0 {
+            return self.should_compress;
+        }
+
         if self.failed_bytes > MAX_BUFFER_SIZE {
             return false;
         }
@@ -149,10 +165,9 @@ impl CompressStats {
         let disk_bandwidth_bps = self.chunk_size as f64 / read_time_seconds;
 
         if self.network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0.0 {
-            return true; // fallback: compress if we don't know speed
+            return false;
         }
 
-        // Don't compress if compression ratio is too small
         let ratio = self.compressed_size as f64 / self.chunk_size as f64;
         if ratio > 0.94 {
             return false;
@@ -164,9 +179,11 @@ impl CompressStats {
         let t_send_compressed = self.compressed_size as f64 / effective_bw;
         let t_send_raw = self.chunk_size as f64 / effective_bw;
 
-        // There is no way we are able to calculate correct 100% network speed.
-        // I add this ratio to make sure the compression must have significant impact on network speed.
-        let imo = 0.95;
-        (t_comp + t_send_compressed) < t_send_raw * imo
+        // We are not able to calculate correct network bandwidth at a given time
+        // if the should_compress was calculated wrongs (compress not help but we say it help),
+        // the whole transfer will be slowed down instead of being faster.
+        // it is worse than not compressing.
+        let imo_threshold = 0.92;
+        (t_comp + t_send_compressed) < (t_send_raw * imo_threshold)
     }
 }

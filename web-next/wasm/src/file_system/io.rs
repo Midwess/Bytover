@@ -16,7 +16,7 @@ use n0_future::time::Instant;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
-use shared::utils::compression::{should_compress, CompressStats};
+use shared::utils::compression::CompressStats;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
@@ -94,20 +94,7 @@ pub struct IOReaderOpfsImpl {
     path: PathBuf,
     buffer: BytesMut,
     instance_id: u32,
-
-    // Compression support
-    compress_support: bool,
-
-    compression_time_in_micro: u64,
-    read_time_in_micro: u64,
-    // When compress failed, we stop checking and compressing this files.
-
-    amount_of_failed_bytes: u32,
-    compressed_size: usize,
-    raw_size: usize,
-
-    bandwidth_bps: Option<f64>,
-    should_compress: bool
+    compression_stats: CompressStats,
 }
 
 impl IOReaderOpfsImpl {
@@ -124,8 +111,9 @@ impl IOReaderOpfsImpl {
         match response.message {
             OpfsOperationOutput::Cursor(instance_id) => {
                 let mut buffer = BytesMut::with_capacity(buffer_size + 1);
+                let compression_stats = CompressStats::new(path.clone().to_str().unwrap_or_default());
                 buffer.resize(buffer_size + 1, 0);
-                Ok(Self { path, buffer, instance_id, compressed_size: 0, raw_size: 0, bandwidth_bps: None, should_compress: false, compression_time_in_micro: 0, compress_support: compressed, read_time_in_micro: 0, amount_of_failed_bytes: 0 })
+                Ok(Self { path, buffer, instance_id, compression_stats })
             }
             r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))
         }
@@ -143,51 +131,12 @@ impl IOReaderOpfsImpl {
 
 #[async_trait(?Send)]
 impl CIOCursor for IOReaderOpfsImpl {
-    fn update_should_compress(&mut self, should_compress: bool) {
-        if self.amount_of_failed_bytes > 1024 * 1024 * 1 {
-            self.should_compress = false;
-            return;
-        }
-
-        self.should_compress = should_compress;
-    }
-
     fn compression_stats_mut(&mut self) -> &mut CompressStats {
-        &mut self.stats
-    }
-
-    fn update_bandwidth(&mut self, network: f64) -> bool {
-        if network <= 1f64 {
-            return false;
-        }
-
-        if self.amount_of_failed_bytes > 1024 * 1024 * 1 {
-            self.should_compress = false;
-            return false;
-        }
-
-        self.bandwidth_bps = Some(network);
-        self.should_compress = should_compress(
-            self.raw_size,
-            self.compression_time_in_micro,
-            self.compressed_size,
-            self.bandwidth_bps.unwrap_or(0.0),
-            self.read_time_in_micro,
-        );
-
-        // log::info!("Should compress: {} total_size: {}, total_compressed {}bytes, compressed_time: {}micro, bandwidth: {}, disk speed: {}/{}", self.should_compress, self.raw_size, self.compressed_size, self.compression_time_in_micro, network, self.raw_size, self.read_time_in_micro as f64 / 1000000f64);
-
-        // Reset everything back
-        self.compression_time_in_micro = 0;
-        self.read_time_in_micro = 0;
-        self.compressed_size = 0;
-        self.raw_size = 0;
-
-        self.should_compress
+        &mut self.compression_stats
     }
 
     async fn c_next(&mut self, max: Option<u64>) -> Result<Option<(&[u8], usize)>> {
-        if !self.compress_support {
+        if !self.compression_stats.is_compression_support() {
             return self.next(max).await.map(|it| it.map(|it| (it, it.len())))
         }
 
@@ -196,7 +145,7 @@ impl CIOCursor for IOReaderOpfsImpl {
             operation: FileOperation::CursorNext {
                 instance_id: self.instance_id,
                 max,
-                compressed: self.should_compress
+                compressed: self.compression_stats.should_compress()
             }
         });
 
@@ -207,26 +156,12 @@ impl CIOCursor for IOReaderOpfsImpl {
                     Ok(None)
                 }
                 else {
-                    if self.should_compress {
-                        if is_compressed_failed {
-                            self.amount_of_failed_bytes += data.length();
-                        }
-                        else {
-                            self.amount_of_failed_bytes = 0;
-                        }
-                    }
-
-                    if self.should_compress && !is_compressed_failed {
+                    if self.compression_stats.add_chunk_stats(raw_size, compression_time_in_micros, data.length() as usize, read_time_in_micros) {
                         self.buffer[0] = 1u8;
-                    } else {
-                        self.buffer[1] = 0u8;
                     }
-
-                    self.compressed_size += data.length() as usize;
-                    self.compression_time_in_micro += compression_time_in_micros;
-                    self.read_time_in_micro += read_time_in_micros;
-                    self.raw_size += raw_size;
-                    self.update_bandwidth(self.bandwidth_bps.unwrap_or(0f64));
+                    else {
+                        self.buffer[0] = 0u8;
+                    }
 
                     // This won't happen, but just in case, we don't want it to be panic
                     if self.buffer.len() < data.length() as usize + 1 {
@@ -262,9 +197,7 @@ impl IOReader for IOReaderOpfsImpl {
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
 
         match response.message {
-            OpfsOperationOutput::Binary {data, compression_time_in_micros, read_time_in_micros, ..} => {
-                self.compression_time_in_micro += compression_time_in_micros;
-                self.read_time_in_micro += read_time_in_micros;
+            OpfsOperationOutput::Binary {data, ..} => {
                 if data.length() == 0 {
                     Ok(None)
                 }

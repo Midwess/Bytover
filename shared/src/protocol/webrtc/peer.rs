@@ -510,7 +510,7 @@ impl WebRtcPeer {
                 let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
 
                 if self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await > MAX_BUFFER_SIZE {
-                    reader.update_should_compress(true);
+                    reader.compression_stats_mut().start_over();
                     chunk_size = compress_chunk_size;
                     let (mut tx, mut rx) = mpsc::channel(1);
                     let flushed_fut = async {
@@ -549,12 +549,10 @@ impl WebRtcPeer {
 
                     let (flushed, send) = join!(flushed_fut, send_fut);
                     let bw = flushed?;
-                    if !reader.update_bandwidth(bw) {
+                    let send = send?;
+                    if !reader.compression_stats_mut().update_network_bandwidth(bw) {
                         chunk_size = none_compress_chunk_size;
                     }
-
-                    reader.update_should_compress(false);
-                    let send = send?;
                 }
             }
 
