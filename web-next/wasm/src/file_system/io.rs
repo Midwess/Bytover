@@ -16,7 +16,7 @@ use n0_future::time::Instant;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
-use shared::utils::compression::should_compress;
+use shared::utils::compression::{should_compress, CompressStats};
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
@@ -63,8 +63,7 @@ impl IOReaderBlobImpl {
 #[async_trait(?Send)]
 impl IOCursor for IOReaderBlobImpl {
     async fn next(&mut self, max: Option<u64>) -> Result<Option<&[u8]>> {
-
-       let from = self.current_pos;
+        let from = self.current_pos;
         let to = (from + max.unwrap_or(self.buffer.len() as u64).min(self.buffer.len() as u64)).min(self.entry.size);
         if from >= to {
             return Ok(None)
@@ -100,10 +99,13 @@ pub struct IOReaderOpfsImpl {
     compress_support: bool,
 
     compression_time_in_micro: u64,
+    read_time_in_micro: u64,
+    // When compress failed, we stop checking and compressing this files.
+
+    amount_of_failed_bytes: u32,
     compressed_size: usize,
     raw_size: usize,
 
-    disk_bandwidth_bps: Option<u64>,
     bandwidth_bps: Option<f64>,
     should_compress: bool
 }
@@ -123,7 +125,7 @@ impl IOReaderOpfsImpl {
             OpfsOperationOutput::Cursor(instance_id) => {
                 let mut buffer = BytesMut::with_capacity(buffer_size + 1);
                 buffer.resize(buffer_size + 1, 0);
-                Ok(Self { path, buffer, instance_id, compressed_size: 0, raw_size: 0, bandwidth_bps: None, should_compress: false, compression_time_in_micro: 0, compress_support: compressed, disk_bandwidth_bps: None })
+                Ok(Self { path, buffer, instance_id, compressed_size: 0, raw_size: 0, bandwidth_bps: None, should_compress: false, compression_time_in_micro: 0, compress_support: compressed, read_time_in_micro: 0, amount_of_failed_bytes: 0 })
             }
             r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))
         }
@@ -142,65 +144,90 @@ impl IOReaderOpfsImpl {
 #[async_trait(?Send)]
 impl CIOCursor for IOReaderOpfsImpl {
     fn update_should_compress(&mut self, should_compress: bool) {
-        self.should_compress = should_compress;
-    }
-
-    fn update_bandwidth(&mut self, network: f64) {
-        if network <= 1f64 {
+        if self.amount_of_failed_bytes > 1024 * 1024 * 1 {
+            self.should_compress = false;
             return;
         }
 
-        self.bandwidth_bps = Some(25f64 * 1024f64 * 1024f64);
+        self.should_compress = should_compress;
+    }
+
+    fn compression_stats_mut(&mut self) -> &mut CompressStats {
+        &mut self.stats
+    }
+
+    fn update_bandwidth(&mut self, network: f64) -> bool {
+        if network <= 1f64 {
+            return false;
+        }
+
+        if self.amount_of_failed_bytes > 1024 * 1024 * 1 {
+            self.should_compress = false;
+            return false;
+        }
+
+        self.bandwidth_bps = Some(network);
         self.should_compress = should_compress(
             self.raw_size,
             self.compression_time_in_micro,
             self.compressed_size,
             self.bandwidth_bps.unwrap_or(0.0),
-            self.disk_bandwidth_bps.unwrap_or(0)
+            self.read_time_in_micro,
         );
 
-        log::info!("Should compress: {} total_size: {}, total_compressed{}, compressed_time: {}, bandwidth: {}, diskspeed: {}", self.should_compress, self.raw_size, self.compressed_size, self.compression_time_in_micro, network, self.disk_bandwidth_bps.unwrap_or(0));
+        // log::info!("Should compress: {} total_size: {}, total_compressed {}bytes, compressed_time: {}micro, bandwidth: {}, disk speed: {}/{}", self.should_compress, self.raw_size, self.compressed_size, self.compression_time_in_micro, network, self.raw_size, self.read_time_in_micro as f64 / 1000000f64);
 
         // Reset everything back
-        self.bandwidth_bps = None;
         self.compression_time_in_micro = 0;
+        self.read_time_in_micro = 0;
         self.compressed_size = 0;
         self.raw_size = 0;
+
+        self.should_compress
     }
 
-    async fn c_next(&mut self) -> Result<Option<(&[u8], usize)>> {
-        if self.compress_support {
-            if self.should_compress {
-                self.buffer[0] = 1u8;
-            } else {
-                self.buffer[1] = 0u8;
-            }
-        }
-        else {
-            return self.next(None).await.map(|it| it.map(|it| (it, it.len())))
+    async fn c_next(&mut self, max: Option<u64>) -> Result<Option<(&[u8], usize)>> {
+        if !self.compress_support {
+            return self.next(max).await.map(|it| it.map(|it| (it, it.len())))
         }
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::CursorNext {
                 instance_id: self.instance_id,
-                max: None,
+                max,
                 compressed: self.should_compress
             }
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
         match response.message {
-            OpfsOperationOutput::Binary { data, raw_size, compression_time, disk_speed_bps } => {
-                self.compression_time_in_micro += compression_time;
-                self.disk_bandwidth_bps = Some(self.disk_bandwidth_bps.map(|it| (it + disk_speed_bps) / 2).unwrap_or(disk_speed_bps));
-                self.raw_size += raw_size;
-                self.compressed_size += data.length() as usize;
-                self.update_bandwidth(self.bandwidth_bps.unwrap_or(0.0));
+            OpfsOperationOutput::Binary { data, raw_size, compression_time_in_micros, read_time_in_micros, is_compressed_failed } => {
                 if data.length() == 0 {
                     Ok(None)
                 }
                 else {
+                    if self.should_compress {
+                        if is_compressed_failed {
+                            self.amount_of_failed_bytes += data.length();
+                        }
+                        else {
+                            self.amount_of_failed_bytes = 0;
+                        }
+                    }
+
+                    if self.should_compress && !is_compressed_failed {
+                        self.buffer[0] = 1u8;
+                    } else {
+                        self.buffer[1] = 0u8;
+                    }
+
+                    self.compressed_size += data.length() as usize;
+                    self.compression_time_in_micro += compression_time_in_micros;
+                    self.read_time_in_micro += read_time_in_micros;
+                    self.raw_size += raw_size;
+                    self.update_bandwidth(self.bandwidth_bps.unwrap_or(0f64));
+
                     // This won't happen, but just in case, we don't want it to be panic
                     if self.buffer.len() < data.length() as usize + 1 {
                         log::info!("Buffer size is too small, resizing to {}", data.length() as usize + 1);
@@ -235,9 +262,9 @@ impl IOReader for IOReaderOpfsImpl {
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
 
         match response.message {
-            OpfsOperationOutput::Binary {data, compression_time, disk_speed_bps, ..} => {
-                self.compression_time_in_micro += compression_time;
-                self.disk_bandwidth_bps = Some(self.disk_bandwidth_bps.map(|it| (it + disk_speed_bps) / 2).unwrap_or(disk_speed_bps));
+            OpfsOperationOutput::Binary {data, compression_time_in_micros, read_time_in_micros, ..} => {
+                self.compression_time_in_micro += compression_time_in_micros;
+                self.read_time_in_micro += read_time_in_micros;
                 if data.length() == 0 {
                     Ok(None)
                 }

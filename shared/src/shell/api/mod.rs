@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use bytes::Bytes;
 use core_services::local_storage::stream::IOCursor;
+use crate::utils::compression::CompressStats;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -43,9 +44,9 @@ pub trait CIOCursor: IOCursor {
     // Return a compressed chunk
     // and the raw size of the chunk before compression
     // bandwidth is in bytes/sec
-    async fn c_next(&mut self) -> anyhow::Result<Option<(&[u8], usize)>>;
-
-    fn update_bandwidth(&mut self, network: f64);
+    async fn c_next(&mut self, max: Option<u64>) -> anyhow::Result<Option<(&[u8], usize)>>;
+    fn compression_stats_mut(&mut self) -> &mut CompressStats;
+    fn update_bandwidth(&mut self, network: f64) -> bool;
     fn update_should_compress(&mut self, should_compress: bool);
 }
 
@@ -193,43 +194,4 @@ impl BufferExt for PeerBuffered {
 
         Ok(())
     }
-}
-
-
-/// Decide whether to compress a chunk based on formula
-/// # Arguments
-/// * `chunk_size` - size of the chunk in bytes
-/// * `compression_time_ms` - time it took to compress this chunk in milliseconds
-/// * `compressed_size` - resulting compressed size in bytes
-/// * `network_bandwidth_bps` - estimated network bandwidth in bytes/sec
-///
-/// # Returns
-/// * `bool` - true if compression is worth it
-fn should_compress(
-    chunk_size: usize,
-    compression_time_ms: u64,
-    compressed_size: usize,
-    network_bandwidth_bps: f64,
-    disk_bandwidth_bps: f64, // new parameter
-) -> bool {
-    if network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0.0 {
-        return true; // unknown bandwidth, compress by default
-    }
-
-    // Don't compress if compression ratio is too small
-    let ratio = compressed_size as f64 / chunk_size as f64;
-    if ratio > 0.95 {
-        return false;
-    }
-
-    // Compute effective bottleneck bandwidth
-    let effective_bw = network_bandwidth_bps.min(disk_bandwidth_bps);
-
-    // Convert ms -> seconds
-    let t_comp = compression_time_ms as f64 / 1000.0;
-    let t_send_compressed = compressed_size as f64 / effective_bw;
-    let t_send_raw = chunk_size as f64 / effective_bw;
-
-    // Only compress if it actually saves total time
-    (t_comp + t_send_compressed) < t_send_raw
 }

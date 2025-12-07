@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
         NEXT_PUBLIC_VERSION: process.env.VERSION || '',
         NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA || '',
     },
+    allowedDevOrigins: [
+        'https://premises-bedrooms-democrat-philadelphia.trycloudflare.com',
+    ],
     images: {
         remotePatterns: [
             {

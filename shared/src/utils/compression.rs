@@ -1,6 +1,4 @@
-use std::io::{Read, Write};
-use lz4_flex::frame::{FrameDecoder, FrameEncoder};
-use n0_future::time::Instant;
+use crate::protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
 
 pub static NON_COMPRESSIBLE_EXTENSIONS: &[&str] = &[
     "3gp",
@@ -88,86 +86,87 @@ pub fn is_compressible(file_name: &str) -> bool {
     !NON_COMPRESSIBLE_EXTENSIONS.iter().any(|ext| file_name.ends_with(ext))
 }
 
-pub fn compress(data: &[u8], compressed: bool) -> anyhow::Result<(Vec<u8>, usize, u64)> {
-    let raw_len = data.len();
-    let mut compression_time = Instant::now();
-    let mut buf = Vec::new();
-    if !compressed {
-        buf.push(0u8);
-        buf.extend_from_slice(data);
-    } else {
-        buf.push(1u8);
-        let mut encoder = FrameEncoder::new(vec![]);
-        encoder.write_all(data)?;
-        let compressed = encoder.finish()?;
-        buf.extend_from_slice(&compressed);
-    }
-
-    let len = buf.len() as u32;
-    let mut out = len.to_le_bytes().to_vec();
-    out.extend_from_slice(&buf);
-    let compression_time = compression_time.elapsed();
-    Ok((out, raw_len, compression_time.as_millis() as u64))
-}
-
-pub fn decompress(encoded: &[u8]) -> anyhow::Result<(Vec<u8>, usize)> {
-    if encoded.len() < 4 {
-        anyhow::bail!("stream too short for length header");
-    }
-    let len = u32::from_le_bytes(encoded[0..4].try_into().unwrap_or_default()) as usize;
-    if encoded.len() < 4 + len {
-        anyhow::bail!("stream too short for chunk");
-    }
-    let chunk = &encoded[4..4 + len];
-    let decoded = match chunk[0] {
-        0 => chunk[1..].to_vec(), // raw
-        1 => {
-            let mut decoder = FrameDecoder::new(&chunk[1..]);
-            let mut out = Vec::new();
-            decoder.read_to_end(&mut out)?;
-            out
-        }
-        _ => anyhow::bail!("unknown chunk type"),
-    };
-
-    Ok((decoded, 4 + len))
-}
-
-/// Decide whether to compress a chunk based on formula
-///
-/// # Arguments
-/// * `chunk_size` - size of the chunk in bytes
-/// * `compression_time_ms` - time it took to compress this chunk in milliseconds
-/// * `compressed_size` - resulting compressed size in bytes
-/// * `network_bandwidth_bps` - estimated network bandwidth in bytes/sec
-///
-/// # Returns
-/// * `bool` - true if compression is worth it
-pub fn should_compress(
+pub struct CompressStats {
     chunk_size: usize,
     compression_time_micro: u64,
     compressed_size: usize,
     network_bandwidth_bps: f64,
-    disk_bandwidth_bps: u64
-) -> bool {
-    if network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0 {
-        return false;
+    read_time_micro: u64,
+
+    should_compress: bool,
+    failed_bytes: usize,
+}
+
+impl CompressStats {
+    pub fn new() -> Self {
+        Self { chunk_size: 0, compression_time_micro: 0, compressed_size: 0, network_bandwidth_bps: 0.0, read_time_micro: 0, failed_bytes: 0, should_compress: true }
     }
 
-    // Don't compress if compression ratio is too small
-    let ratio = compressed_size as f64 / chunk_size as f64;
-    if ratio > 0.90 {
-        return false;
+    pub fn add_chunk_stats(&mut self, raw_size: usize, compression_time_micro: u64, compressed_size: usize, read_time_micro: u64) {
+        self.chunk_size += raw_size;
+        self.compression_time_micro += compression_time_micro;
+        self.compressed_size += compressed_size;
+        self.read_time_micro += read_time_micro;
+        if compressed_size > raw_size {
+            self.failed_bytes += raw_size;
+        }
+        else {
+            self.failed_bytes = 0;
+        }
+
+        self.should_compress = self.cal_should_compress();
     }
 
-    // Compute effective bottleneck bandwidth
-    let effective_bw = network_bandwidth_bps.min(disk_bandwidth_bps as f64);
+    pub fn update_network_bandwidth(&mut self, network_bandwidth_bps: f64) {
+        self.network_bandwidth_bps = network_bandwidth_bps;
+        self.should_compress = self.cal_should_compress();
+    }
 
-    // Convert ms -> seconds
-    let t_comp = compression_time_micro as f64 / 1000000.0;
-    let t_send_compressed = compressed_size as f64 / effective_bw;
-    let t_send_raw = chunk_size as f64 / effective_bw;
+    pub fn new_round(&mut self) {
+        // We reset everything except network bandwidth,
+        // because it is already bandwidth at specific time.
+        self.chunk_size = 0;
+        self.compression_time_micro = 0;
+        self.compressed_size = 0;
+        self.read_time_micro = 0;
+        self.failed_bytes = 0;
+    }
 
-    // Only compress if it actually saves total time
-    (t_comp + t_send_compressed) < t_send_raw
+    pub fn should_compress(&self) -> bool {
+        self.should_compress
+    }
+
+    fn cal_should_compress(&self) -> bool {
+        if self.failed_bytes > MAX_BUFFER_SIZE {
+            return false;
+        }
+
+        if self.chunk_size <= self.compressed_size {
+            return false;
+        }
+
+        let read_time_seconds = self.read_time_micro as f64 / 1_000_000.0;
+        let disk_bandwidth_bps = self.chunk_size as f64 / read_time_seconds;
+
+        if self.network_bandwidth_bps <= 0.0 || disk_bandwidth_bps <= 0.0 {
+            return true; // fallback: compress if we don't know speed
+        }
+
+        // Don't compress if compression ratio is too small
+        let ratio = self.compressed_size as f64 / self.chunk_size as f64;
+        if ratio > 0.94 {
+            return false;
+        }
+
+        let effective_bw = self.network_bandwidth_bps.min(disk_bandwidth_bps);
+
+        let t_comp = self.compression_time_micro as f64 / 1_000_000.0;
+        let t_send_compressed = self.compressed_size as f64 / effective_bw;
+        let t_send_raw = self.chunk_size as f64 / effective_bw;
+
+        // There is no way we are able to calculate correct 100% network speed.
+        // I add this ratio to make sure the compression must have significant impact on network speed.
+        let imo = 0.95;
+        (t_comp + t_send_compressed) < t_send_raw * imo
+    }
 }

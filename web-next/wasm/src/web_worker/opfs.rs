@@ -82,6 +82,7 @@ pub enum OpfsOperationOutput {
         #[serde(with = "serde_wasm_bindgen::preserve")]
         data: Uint8Array,
         raw_size: usize,
+        is_compressed_failed: bool,
         compression_time_in_micros: u64,
         read_time_in_micros: u64,
     },
@@ -214,7 +215,7 @@ impl OpfsWorker {
                 self.cursors.lock().await.insert(id, Arc::new(Mutex::new(cursor)));
                 OpfsOperationOutput::Cursor(id)
             }
-            FileOperation::CursorNext { instance_id, max, compressed } => {
+            FileOperation::CursorNext { instance_id, max, mut compressed } => {
                 let disk_tick = Instant::now();
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
                     return OpfsOperationOutput::Error("Cursor not found".into());
@@ -225,6 +226,7 @@ impl OpfsWorker {
                     return OpfsOperationOutput::Binary{
                         data: Uint8Array::new_with_length(0),
                         raw_size: 0,
+                        is_compressed_failed: false,
                         read_time_in_micros: 0,
                         compression_time_in_micros: 0
                     };
@@ -232,30 +234,38 @@ impl OpfsWorker {
 
                 let disk_elapsed = disk_tick.elapsed();
                 if data.len() == 0 {
-                    return OpfsOperationOutput::Binary{
+                    return OpfsOperationOutput::Binary {
                         data: Uint8Array::new_with_length(0),
                         raw_size: 0,
+                        is_compressed_failed: false,
                         read_time_in_micros: 0,
                         compression_time_in_micros: 0
                     };
                 }
 
                 let raw_size = data.len();
-                let (data, elapsed) = match compressed {
+                let (data, elapsed, failed) = match compressed {
                     true => {
                         let instant = Instant::now();
                         let buf = compress_prepend_size(&data);
+                        let is_failed = buf.len() > raw_size;
+                        let out = match is_failed {
+                            true => Uint8Array::new_from_slice(data),
+                            false => Uint8Array::new_from_slice(&buf)
+                        };
+
                         let elapsed = instant.elapsed();
-                        (Uint8Array::new_from_slice(&buf), elapsed.as_micros() as u64)
+                        (out, elapsed.as_micros() as u64, is_failed)
                     },
-                    false => (Uint8Array::new_from_slice(data), 0)
+                    false => (Uint8Array::new_from_slice(data), 0, false)
                 };
 
                 OpfsOperationOutput::Binary {
                     data,
                     raw_size,
                     compression_time_in_micros: elapsed,
-                    read_time_in_micros: disk_elapsed.as_micros() as u64
+                    read_time_in_micros: disk_elapsed.as_micros() as u64,
+                    is_compressed_failed: failed
                 }
             }
             FileOperation::CursorEnd(instance_id) => {

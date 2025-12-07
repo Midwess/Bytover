@@ -432,7 +432,7 @@ impl WebRtcPeer {
                         return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
                     }
 
-                    while let Ok(Ok(Some((bytes, _)))) = reader.c_next().with_cancel(&thumbnail_cancel_signal).await {
+                    while let Ok(Ok(Some(bytes))) = reader.next(None).with_cancel(&thumbnail_cancel_signal).await {
                         let bytes = Packet::from(bytes);
                         if !bytes.is_empty() {
                             let _ = thumbnail_channel.unbounded_send((peer_id, bytes));
@@ -464,10 +464,11 @@ impl WebRtcPeer {
             };
 
             let is_compressed = is_compressible(&name);
-            let chunk_size = is_compressed.then(|| 128 * 1024).unwrap_or(64 * 1024);
+            let compress_chunk_size = 254 * 1024u64;
+            let none_compress_chunk_size = 62 * 1024;
             let mut reader = self
                 .resource_repo
-                .read(resource_path.clone(), chunk_size, is_compressed)
+                .read(resource_path.clone(), compress_chunk_size as usize, is_compressed)
                 .with_cancel(&resource_cancel_signal)
                 .await??;
 
@@ -486,13 +487,12 @@ impl WebRtcPeer {
             }
 
             let (mut queue_tx, mut queue_rx) = mpsc::unbounded();
-            let mut tick = Instant::now();
-            let mut stats = self.buffer.channel_bytes_sent_received(TRANSFER_RESOURCE_CHANNEL_ID).await.map(|it| it.0).unwrap_or(0);
+            let mut chunk_size = none_compress_chunk_size;
             while let Some((bytes, raw)) = match queue_rx.try_next() {
                 Ok(Some(data)) => Some(data),            // got from queue
                 _ => {
                     reader
-                        .c_next()
+                        .c_next(Some(chunk_size))
                         .with_cancel(&resource_cancel_signal)
                         .await?
                         .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
@@ -511,15 +511,16 @@ impl WebRtcPeer {
 
                 if self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await > MAX_BUFFER_SIZE {
                     reader.update_should_compress(true);
+                    chunk_size = compress_chunk_size;
                     let (mut tx, mut rx) = mpsc::channel(1);
                     let flushed_fut = async {
                         let tick = Instant::now();
                         let stats = self.buffer.channel_bytes_sent_received(TRANSFER_RESOURCE_CHANNEL_ID).await.map(|it| it.0).unwrap_or(0);
                         let flushed = self.buffer.flush_timeout(TRANSFER_RESOURCE_CHANNEL_ID).await?;
+                        let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                         let new_stats = self.buffer.channel_bytes_sent_received(TRANSFER_RESOURCE_CHANNEL_ID).await.map(|it| it.0).unwrap_or(0);
-                        let bw = ((new_stats - stats).max(flushed)) as f64 / tick.elapsed().as_secs_f64().max(f64::MIN);
+                        let bw = ((new_stats - stats).max(flushed)) as f64 / time;
                         let _ = tx.send(()).await;
-                        log::info!("Bandwidth for channel {TRANSFER_RESOURCE_CHANNEL_ID}: {stats} -> {new_stats}; {bw} in {}s", tick.elapsed().as_secs_f64());
                         Result::<f64, WebRtcErrors>::Ok(bw)
                     };
 
@@ -537,7 +538,7 @@ impl WebRtcPeer {
                                 _ => {}
                             };
 
-                            let Some((data, raw_size)) = reader.c_next().with_cancel(&cancellation_signal).await?? else {
+                            let Some((data, raw_size)) = reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await?? else {
                                 break Ok(())
                             };
 
@@ -548,7 +549,11 @@ impl WebRtcPeer {
 
                     let (flushed, send) = join!(flushed_fut, send_fut);
                     let bw = flushed?;
-                    reader.update_bandwidth(bw);
+                    if !reader.update_bandwidth(bw) {
+                        chunk_size = none_compress_chunk_size;
+                    }
+
+                    reader.update_should_compress(false);
                     let send = send?;
                 }
             }
