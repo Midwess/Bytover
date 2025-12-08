@@ -488,7 +488,7 @@ impl WebRtcPeer {
             let time_to_drain = Duration::from_secs(5);
             let mut drain_tick = Instant::now();
             while let Some((bytes, raw)) = match queue_rx.try_next() {
-                Ok(Some(data)) => Some(data),            // got from queue
+                Ok(Some(data)) => Some(data),
                 _ => {
                     reader
                         .c_next(Some(chunk_size))
