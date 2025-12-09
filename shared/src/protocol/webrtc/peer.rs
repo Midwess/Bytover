@@ -8,7 +8,7 @@ use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, 
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecSender};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
-use crate::protocol::webrtc::transfer::TransfersContext;
+use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
@@ -57,12 +57,6 @@ pub struct WebRtcPeer {
     pub transfer_feedback_receiver: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
     pub transfer_feedback_sender: mpsc::UnboundedSender<Feedback>,
 
-    pub transfer_begin_receiver: YieldContainer<mpsc::Receiver<BeginTransferResource>>,
-    pub transfer_begin_sender: Arc<Mutex<mpsc::Sender<BeginTransferResource>>>,
-
-    pub transfer_end_receiver: YieldContainer<mpsc::Receiver<EndTransferResource>>,
-    pub transfer_end_sender: Arc<Mutex<mpsc::Sender<EndTransferResource>>>,
-
     pub transfers_context: TransfersContext,
 
     pub inbound_thumbnail_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
@@ -85,8 +79,6 @@ impl WebRtcPeer {
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (begin_transfer_sender, begin_transfer_receiver) = mpsc::channel(10);
-        let (end_transfer_sender, end_transfer_receiver) = mpsc::channel(10);
 
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
@@ -115,10 +107,6 @@ impl WebRtcPeer {
             msg_channel,
             peer,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
-            transfer_begin_sender,
-            transfer_begin_receiver: YieldContainer::new(begin_transfer_receiver),
-            transfer_end_receiver: YieldContainer::new(end_transfer_receiver),
-            transfer_end_sender,
             transfer_feedback_sender,
             reliable_data_channel,
             unreliable_data_channel,
@@ -152,8 +140,6 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (begin_transfer_sender, begin_transfer_receiver) = mpsc::channel(10);
-        let (end_transfer_sender, end_transfer_receiver) = mpsc::channel(10);
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
@@ -173,10 +159,6 @@ impl WebRtcPeer {
 
         Ok(Self {
             fec_sender,
-            transfer_begin_sender,
-            transfer_begin_receiver: YieldContainer::new(begin_transfer_receiver),
-            transfer_end_receiver: YieldContainer::new(end_transfer_receiver),
-            transfer_end_sender,
             msg_channel,
             transfer_feedback_sender,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
@@ -218,16 +200,6 @@ impl WebRtcPeer {
                 if let Some(feedback) = feedback.feedback {
                     let _ = self.transfer_feedback_sender.unbounded_send(feedback);
                 };
-            }
-            Request::BeginTransferResource(begin) => {
-                if let Err(e) = self.transfer_begin_sender.lock().await.try_send(begin) {
-                    log::error!("Failed to send begin transfer resource to peer {}: {e:?}");
-                }
-            }
-            Request::EndTransferResource(end) => {
-                if let Err(e) = self.transfer_end_sender.lock().await.try_send(end) {
-                    log::error!("Failed to send end transfer resource to peer {}: {e:?}");
-                }
             }
             _ => {}
         }
@@ -534,7 +506,7 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
-            log::info!("Waiting for begin signal from receiver...");
+            let delimiter = TransferDelimiterShema::new(session_id, order_id, false, is_compressed).as_bytes()?;
             if let Err(e) = self.reliable_data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);

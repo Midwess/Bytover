@@ -4,6 +4,7 @@ use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, SystemTime};
 use bytemuck::bytes_of;
+use matchbox_socket::Packet;
 use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
@@ -265,8 +266,8 @@ impl FrameBuffer {
 pub struct Frame {
     pub block_id: u32,
     pub frame_idx: u32,
-    pub data_shards: u8,      // NEW: protocol header field
-    pub parity_shards: u8,    // NEW: protocol header field
+    pub data_shards: u8,
+    pub parity_shards: u8,
     pub is_parity: bool,
     pub payload: Box<[u8]>,
 }
@@ -281,7 +282,7 @@ pub enum FecAction {
     Framed(Vec<Frame>),
 
     /// Receiver assembled an original payload
-    Constructed(Vec<Vec<u8>>),
+    Constructed(Packet),
 
     /// Sender should retransmit these frames
     Retransmit(Vec<Frame>),
@@ -330,24 +331,23 @@ impl FecSender {
 
         while offset < packet.len() {
             // Build data shards for one block
-            let mut data_shards: Vec<Vec<u8>> = Vec::with_capacity(self.data_shards);
-            for _ in 0..self.data_shards {
-                if offset >= packet.len() {
-                    data_shards.push(vec![0u8; CHUNK_SIZE]);
-                } else {
-                    let end = std::cmp::min(offset + CHUNK_SIZE, packet.len());
+            let remaining = packet.len() - offset;
+            let shard_count = (remaining + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            let parity_shards = Self::parity_count_from_ratio(self.parity_ratio, shard_count);
+            let mut shards: Vec<Vec<u8>> = Vec::with_capacity(parity_shards + shard_count);
+            for _ in 0..shard_count {
+                if offset < packet.len() {
+                    let end = (offset + CHUNK_SIZE).min(packet.len());
                     let mut chunk = vec![0u8; CHUNK_SIZE];
                     chunk[..end - offset].copy_from_slice(&packet[offset..end]);
-                    data_shards.push(chunk);
+                    shards.push(chunk);
                     offset = end;
                 }
             }
 
-            let parity_shards = Self::parity_count_from_ratio(self.parity_ratio, self.data_shards);
-
-            let mut shards: Vec<Vec<u8>> = Vec::with_capacity(self.data_shards + parity_shards);
-            shards.extend(data_shards.into_iter());
-            for _ in 0..parity_shards {
+            let data_shards_count = shards.len();
+            let parity_shards_count = Self::parity_count_from_ratio(self.parity_ratio, shards.len());
+            for _ in 0..parity_shards_count {
                 shards.push(vec![0u8; CHUNK_SIZE]);
             }
 
@@ -355,7 +355,7 @@ impl FecSender {
                 let mut shards_refs: Vec<&mut [u8]> =
                     shards.iter_mut().map(|v| v.as_mut_slice()).collect();
 
-                let rs = ReedSolomon::new(self.data_shards, parity_shards)
+                let rs = ReedSolomon::new(data_shards_count, parity_shards_count)
                     .map_err(|_| FecError::ReedSolomon)?;
                 rs.encode(&mut shards_refs)
                     .map_err(|_| FecError::ReedSolomon)?;
@@ -366,12 +366,13 @@ impl FecSender {
                 let frame = Frame {
                     block_id: self.block_id,
                     frame_idx: i as u32,
-                    data_shards: self.data_shards as u8,
-                    parity_shards: parity_shards as u8,
+                    data_shards: data_shards_count as u8,
+                    parity_shards: parity_shards_count as u8,
                     is_parity,
                     payload: s.into_boxed_slice(),
                 };
 
+                // Backup for recovery
                 let fe = FrameEntry {
                     block_id: frame.block_id,
                     frame_idx: frame.frame_idx,
@@ -381,8 +382,8 @@ impl FecSender {
                     data: frame.payload.clone(),
                     timestamp: now_micros(),
                 };
-                self.buffer.insert(fe)?;
 
+                self.buffer.insert(fe)?;
                 frames_to_send.push(frame);
             }
 
@@ -475,6 +476,11 @@ impl ReceiverBlock {
     fn is_constructed(&self) -> bool {
         self.constructed_frames.len() > 0
     }
+
+    fn into_packet(self) -> Packet {
+        let mut assembled: Vec<_> = self.constructed_frames.into_iter().flatten().collect();
+        Packet::from(assembled.into_boxed_slice())
+    }
 }
 
 pub struct FecReceiver {
@@ -556,7 +562,8 @@ impl FecReceiver {
                     block.constructed_frames = assembled;
                     if block_id == self.next_block_id {
                         if let Some(block) = self.blocks.remove(&block_id) {
-                            return Ok(FecAction::Constructed(block.constructed_frames.clone()));
+                            let final_frame = block.constructed_frames.clone();
+                            return Ok(FecAction::Constructed(block.into_packet()));
                         }
                     }
 
@@ -665,7 +672,7 @@ mod tests {
         sender.parity_ratio = 0.5;
 
         let packet = vec![0u8; 32 * 1024].into_boxed_slice();
-        let action = sender.send(packet).expect("send failed");
+        let action = sender.send(packet).unwrap();
 
         if let FecAction::Framed(frames) = action {
             assert!(!frames.is_empty());
@@ -784,5 +791,153 @@ mod tests {
 
         let result = receiver.receive(bad_frame);
         assert!(result.is_err(), "Should reject invalid frame size");
+    }
+
+    #[test]
+    fn test_send_receive_small_data() {
+        // Test with very small amount of data (100 bytes)
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 5 * 1024 * 1024);
+        let mut receiver = FecReceiver::new();
+
+        // Create small test data with a recognizable pattern
+        let original_data: Vec<u8> = (0..100).map(|i| (i % 256) as u8).collect();
+        let packet = original_data.clone().into_boxed_slice();
+
+        // Send the data through FEC encoder
+        let action = sender.send(packet).expect("send failed");
+
+        // Extract frames
+        let frames = match action {
+            FecAction::Framed(frames) => frames,
+            _ => panic!("Expected Framed action"),
+        };
+
+        assert!(!frames.is_empty(), "Should have generated frames");
+
+        // Receive all frames
+        let mut received_data: Option<Vec<Vec<u8>>> = None;
+        for frame in frames {
+            let result = receiver.receive(frame).expect("receive failed");
+            match result {
+                FecAction::Constructed(data) => {
+                    received_data = Some(data);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => panic!("Unexpected action during receive"),
+            }
+        }
+
+        // Verify we got data back
+        assert!(received_data.is_some(), "Should have constructed data");
+
+        // Reconstruct the original data from shards
+        let shards = received_data.unwrap();
+        let mut reconstructed = Vec::new();
+        for shard in shards.iter().take(sender.data_shards) {
+            reconstructed.extend_from_slice(shard);
+        }
+
+        // Trim to original size
+        reconstructed.truncate(original_data.len());
+
+        // Verify data matches
+        assert_eq!(
+            reconstructed, original_data,
+            "Reconstructed data should match original data"
+        );
+    }
+
+    #[test]
+    fn test_send_receive_10mb_data() {
+        // Test with 10MB of data
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 20 * 1024 * 1024);
+        let mut receiver = FecReceiver::new();
+
+        // Create 10MB test data with a pattern
+        let data_size = 10 * 1024 * 1024; // 10MB
+        let original_data: Vec<u8> = (0..data_size)
+            .map(|i| ((i / 1024) % 256) as u8) // Pattern changes every 1KB
+            .collect();
+        
+        let packet = original_data.clone().into_boxed_slice();
+
+        println!("Sending 10MB data through FEC encoder...");
+        
+        // Send the data through FEC encoder
+        let action = sender.send(packet).unwrap();
+
+        // Extract frames
+        let frames = match action {
+            FecAction::Framed(frames) => frames,
+            _ => panic!("Expected Framed action"),
+        };
+
+        println!("Generated {} frames", frames.len());
+        assert!(!frames.is_empty(), "Should have generated frames");
+
+        // Receive all frames and collect constructed blocks
+        let mut all_constructed_data: Vec<Vec<Vec<u8>>> = Vec::new();
+        
+        for (idx, frame) in frames.into_iter().enumerate() {
+            let result = receiver.receive(frame).expect(&format!("receive failed at frame {}", idx));
+            match result {
+                FecAction::Constructed(data) => {
+                    println!("Constructed block {} at frame {}", all_constructed_data.len(), idx);
+                    all_constructed_data.push(data);
+                    // Increment next_block_id to allow the next block to be returned
+                    receiver.next_block_id += 1;
+                }
+                FecAction::Noop => continue,
+                FecAction::Terminated => {
+                    panic!("Unexpected termination at frame {}", idx);
+                }
+                _ => {
+                    // Other actions are acceptable during processing
+                    continue;
+                }
+            }
+        }
+
+        println!("Received {} blocks", all_constructed_data.len());
+        assert!(!all_constructed_data.is_empty(), "Should have constructed at least one block");
+
+        // Reconstruct the original data from all blocks
+        let mut reconstructed = Vec::new();
+        for block_shards in all_constructed_data {
+            // Take only data shards (not parity shards)
+            for shard in block_shards.iter().take(sender.data_shards) {
+                reconstructed.extend_from_slice(shard);
+            }
+        }
+
+        // Trim to original size
+        reconstructed.truncate(original_data.len());
+
+        println!("Original size: {}, Reconstructed size: {}", original_data.len(), reconstructed.len());
+
+        // Verify data matches
+        assert_eq!(
+            reconstructed.len(),
+            original_data.len(),
+            "Reconstructed data length should match original"
+        );
+
+        // Compare data in chunks to provide better error messages
+        let chunk_size = 1024 * 1024; // 1MB chunks
+        for (chunk_idx, (orig_chunk, recon_chunk)) in original_data
+            .chunks(chunk_size)
+            .zip(reconstructed.chunks(chunk_size))
+            .enumerate()
+        {
+            assert_eq!(
+                orig_chunk, recon_chunk,
+                "Data mismatch in chunk {} (offset {})",
+                chunk_idx,
+                chunk_idx * chunk_size
+            );
+        }
+
+        println!("10MB data transfer test passed!");
     }
 }
