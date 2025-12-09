@@ -15,7 +15,8 @@ const CHUNK_SIZE: usize = 8 * 1024;
 const DATA_SHARDS_DEFAULT: usize = 32;
 const MIN_PARITY_SHARDS: usize = 1;
 const MAX_PARITY_SHARDS: usize = 64;
-const MIN_BLOCK_TIMEOUT_MS: u64 = 80;
+// TODO: Implement RTT
+const MIN_BLOCK_TIMEOUT_MS: u64 = 1000;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
 
@@ -623,6 +624,7 @@ impl FecReceiver {
                         block.constructed_frames = assembled;
                         if block_id == self.next_block_id {
                             if let Some(block) = self.blocks.remove(&block_id) {
+                                self.next_block_id += 1;
                                 return Ok(FecAction::Constructed(block.into_packet()));
                             }
                         }
@@ -936,7 +938,6 @@ mod tests {
                 FecAction::Constructed(packet) => {
                     all_packets.push(packet);
                     // Increment next_block_id to allow the next block to be returned
-                    receiver.next_block_id += 1;
                 }
                 FecAction::Noop => continue,
                 FecAction::Terminated => {
@@ -1035,7 +1036,6 @@ mod tests {
             match receiver.receive(frame).expect("receive failed") {
                 FecAction::Constructed(packet) => {
                     constructed = Some(packet);
-                    receiver.next_block_id += 1; // Ack the block
                 }
                 _ => {}
             }
@@ -1069,7 +1069,7 @@ mod tests {
 
         // 2. Wait for timeout (80ms default defined in const)
         // We wait 100ms to be safe
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(1500));
 
         // 3. Trigger the timeout check
         // The receiver usually checks timeouts when `receive` is called.
@@ -1126,7 +1126,7 @@ mod tests {
         let x = receiver.receive(frames[0].clone());
 
         // --- STEP 3: Timeout & Feedback ---
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(std::time::Duration::from_millis(1500));
 
         // Trigger timeout check using a dummy frame from "future"
         let trigger_frame = Frame {
@@ -1220,5 +1220,572 @@ mod tests {
         let fb_zero = Feedback::Missing(MissingFrames { block_id: 0, frames: vec![0] });
         let res_zero = sender.feedback(fb_zero).unwrap();
         assert!(matches!(res_zero, FecAction::Retransmit(_)), "Should find block 0");
+    }
+
+    #[test]
+    fn test_ordering_out_of_order_frames_single_block() {
+        // SCENARIO:
+        // Frames arrive completely out of order for a single block.
+        // Receiver should still reconstruct the original packet with correct ordering.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 5 * 1024 * 1024);
+        sender.parity_ratio = 0.5;
+        let mut receiver = FecReceiver::new();
+
+        // Create test data with recognizable pattern
+        let packet_size = CHUNK_SIZE * 8;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| ((i / 256) % 256) as u8)
+            .collect();
+        let packet = original_data.clone().into_boxed_slice();
+
+        // Generate frames
+        let action = sender.send(packet).expect("send failed");
+        let mut frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+
+        // Shuffle frames in reverse order
+        frames.reverse();
+
+        // Take only data shards (enough for reconstruction)
+        let frames_to_deliver: Vec<Frame> = frames
+            .into_iter()
+            .filter(|f| !f.is_parity)
+            .take(data_shards)
+            .collect();
+
+        assert_eq!(frames_to_deliver.len(), data_shards, "Must have exactly N data frames");
+
+        // Receive frames in this reversed/scrambled order
+        let mut reconstructed = None;
+        for frame in frames_to_deliver {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => panic!("Unexpected action"),
+            }
+        }
+
+        // Verify reconstruction succeeded
+        assert!(reconstructed.is_some(), "Should reconstruct despite out-of-order delivery");
+        let result_data = reconstructed.unwrap();
+
+        // Verify data integrity and ordering
+        assert_eq!(result_data.len(), original_data.len(), "Length mismatch");
+        assert_eq!(&result_data[..], &original_data[..], "Data corruption detected");
+    }
+
+    #[test]
+    fn test_ordering_interleaved_blocks_out_of_order() {
+        // SCENARIO:
+        // Multiple blocks' frames are interleaved and delivered out of order.
+        // Each block should reconstruct independently with correct internal ordering.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 50 * 1024 * 1024);
+        sender.parity_ratio = 0.25;
+        let mut receiver = FecReceiver::new();
+
+        // Create two distinct packets
+        let packet1_size = CHUNK_SIZE * 4;
+        let packet2_size = CHUNK_SIZE * 4;
+
+        let packet1_data: Vec<u8> = (0..packet1_size)
+            .map(|i| (i % 100) as u8)
+            .collect();
+
+        let packet2_data: Vec<u8> = (0..packet2_size)
+            .map(|i| ((i + 50) % 200) as u8)
+            .collect();
+
+        // Send both packets
+        let action1 = sender.send(packet1_data.clone().into_boxed_slice()).expect("send1 failed");
+        let action2 = sender.send(packet2_data.clone().into_boxed_slice()).expect("send2 failed");
+
+        let frames1 = match action1 {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let frames2 = match action2 {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames1[0].data_shards as usize;
+
+        // Interleave frames: alternating frame from block0, then block1
+        let mut interleaved = Vec::new();
+        let mut b1_iter = frames1.into_iter().filter(|f| !f.is_parity);
+        let mut b2_iter = frames2.into_iter().filter(|f| !f.is_parity);
+
+        for _ in 0..data_shards {
+            if let Some(f1) = b1_iter.next() {
+                interleaved.push(f1);
+            }
+            if let Some(f2) = b2_iter.next() {
+                interleaved.push(f2);
+            }
+        }
+
+        // Deliver in interleaved order
+        let mut block_results = std::collections::HashMap::new();
+
+        for frame in interleaved {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    block_results.insert(receiver.next_block_id - 1, packet);
+                }
+                FecAction::Noop => continue,
+                _ => panic!("Unexpected action"),
+            }
+        }
+
+        // Verify both blocks reconstructed correctly
+        assert_eq!(block_results.len(), 2, "Should have reconstructed 2 blocks");
+
+        let result1 = &block_results[&0];
+        let result2 = &block_results[&1];
+
+        assert_eq!(&result1[..], &packet1_data[..], "Block 0 data mismatch");
+        assert_eq!(&result2[..], &packet2_data[..], "Block 1 data mismatch");
+    }
+
+    #[test]
+    fn test_ordering_random_delivery_single_block() {
+        // SCENARIO:
+        // Frames are randomly shuffled before delivery.
+        // Receiver must maintain ordering and reconstruct correctly.
+
+        use std::collections::HashSet;
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 10 * 1024 * 1024);
+        sender.parity_ratio = 0.3;
+        let mut receiver = FecReceiver::new();
+
+        let packet_size = CHUNK_SIZE * 6;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| ((i * 7) % 256) as u8)
+            .collect();
+
+        let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+        let frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+
+        // Collect data frames
+        let data_frames: Vec<Frame> = frames
+            .into_iter()
+            .filter(|f| !f.is_parity)
+            .collect();
+
+        // Create a deterministic but non-sequential order
+        let mut shuffled = Vec::new();
+        for i in (0..data_frames.len()).step_by(2) {
+            shuffled.push(data_frames[i].clone());
+        }
+        for i in (1..data_frames.len()).step_by(2) {
+            shuffled.push(data_frames[i].clone());
+        }
+
+        // Verify we're actually delivering out of order
+        let mut indices_set = HashSet::new();
+        let mut prev_idx = None;
+        let mut is_ordered = true;
+        for frame in &shuffled {
+            let idx = frame.frame_idx;
+            if let Some(p) = prev_idx {
+                if p > idx {
+                    is_ordered = false;
+                    break;
+                }
+            }
+            prev_idx = Some(idx);
+            indices_set.insert(idx);
+        }
+        assert!(!is_ordered || indices_set.len() > 1, "Shuffle should create out-of-order delivery");
+
+        // Receive frames in shuffled order
+        let mut reconstructed = None;
+        for frame in shuffled {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert!(reconstructed.is_some(), "Should reconstruct from shuffled delivery");
+        let result = reconstructed.unwrap();
+        assert_eq!(&result[..], &original_data[..], "Data should maintain correct order");
+    }
+
+    #[test]
+    fn test_ordering_with_sparse_delivery_pattern() {
+        // SCENARIO:
+        // Frames arrive with gaps (e.g., gaps in indices).
+        // Should reconstruct once we have enough frames.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 10 * 1024 * 1024);
+        sender.parity_ratio = 0.5;
+        let mut receiver = FecReceiver::new();
+
+        let packet_size = CHUNK_SIZE * 10;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| ((i / 512) as u8).wrapping_mul(13))
+            .collect();
+
+        let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+        let frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+
+        // Deliver frames with gaps:
+        // Take every other frame, skip parity
+        let mut delivery_order = Vec::new();
+        for (idx, frame) in frames.iter().enumerate() {
+            if !frame.is_parity && idx % 2 == 0 {
+                delivery_order.push(frame.clone());
+            }
+        }
+
+        // If we don't have enough, add some parity frames
+        if delivery_order.len() < data_shards {
+            for frame in &frames {
+                if frame.is_parity && delivery_order.len() < data_shards {
+                    delivery_order.push(frame.clone());
+                }
+            }
+        }
+
+        // Shuffle this subset
+        delivery_order.reverse();
+
+        // Receive
+        let mut reconstructed = None;
+        for frame in delivery_order {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert!(reconstructed.is_some(), "Should reconstruct with sparse delivery pattern");
+        let result = reconstructed.unwrap();
+        assert_eq!(&result[..], &original_data[..], "Data ordering must be preserved");
+    }
+
+    #[test]
+    fn test_ordering_burst_delivery_then_trailing() {
+        // SCENARIO:
+        // Frames arrive in two bursts: first N/2 frames, then gap, then remaining frames.
+        // Order must be reconstructed correctly despite time gap.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 10 * 1024 * 1024);
+        sender.parity_ratio = 0.4;
+        let mut receiver = FecReceiver::new();
+
+        let packet_size = CHUNK_SIZE * 8;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| (i as u8).wrapping_add(42))
+            .collect();
+
+        let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+        let frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+
+        // Split into first half and second half
+        let data_frames: Vec<Frame> = frames
+            .into_iter()
+            .filter(|f| !f.is_parity)
+            .collect();
+
+        let mid = data_frames.len() / 2;
+        let first_burst = data_frames[..mid].to_vec();
+        let second_burst = data_frames[mid..].to_vec();
+
+        // Deliver first burst
+        for frame in first_burst {
+            let _ = receiver.receive(frame);
+        }
+
+        // Simulate time gap
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Deliver second burst (some frames may be in different order)
+        let mut second_burst_shuffled = second_burst.clone();
+        second_burst_shuffled.reverse();
+
+        let mut reconstructed = None;
+        for frame in second_burst_shuffled {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert!(reconstructed.is_some(), "Should reconstruct after burst delivery");
+        let result = reconstructed.unwrap();
+        assert_eq!(&result[..], &original_data[..], "Data must maintain correct ordering");
+    }
+
+    #[test]
+    fn test_ordering_multiple_blocks_sequential_delivery_reverse_frame_order() {
+        // SCENARIO:
+        // Multiple blocks arrive sequentially (block 0, block 1, block 2...)
+        // but within each block, frames arrive in reverse order.
+        // Each block must reconstruct with correct internal ordering.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 50 * 1024 * 1024);
+        sender.parity_ratio = 0.25;
+        let mut receiver = FecReceiver::new();
+
+        let block_count = 3;
+        let packet_size = CHUNK_SIZE * 4;
+
+        let mut all_frames = Vec::new();
+        let mut original_data_blocks = Vec::new();
+
+        // Generate multiple blocks
+        for block_num in 0..block_count {
+            let original_data: Vec<u8> = (0..packet_size)
+                .map(|i| (((block_num as u32).wrapping_add(i as u32)) % 256) as u8)
+                .collect();
+
+            let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+            let frames = match action {
+                FecAction::Framed(f) => f,
+                _ => panic!("Expected Framed"),
+            };
+
+            original_data_blocks.push(original_data);
+            all_frames.push(frames);
+        }
+
+        // For each block, reverse frame order
+        let mut delivery_sequence = Vec::new();
+        for frames in all_frames {
+            let data_shards = frames[0].data_shards as usize;
+            let mut block_frames: Vec<Frame> = frames
+                .into_iter()
+                .filter(|f| !f.is_parity)
+                .take(data_shards)
+                .collect();
+            block_frames.reverse();
+            delivery_sequence.extend(block_frames);
+        }
+
+        // Receive in this order
+        let mut reconstructed_blocks = Vec::new();
+        for frame in delivery_sequence {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed_blocks.push(packet);
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert_eq!(reconstructed_blocks.len(), block_count, "Should reconstruct all blocks");
+        for (idx, reconstructed) in reconstructed_blocks.iter().enumerate() {
+            assert_eq!(
+                &reconstructed[..],
+                &original_data_blocks[idx][..],
+                "Block {} data must be correctly ordered",
+                idx
+            );
+        }
+    }
+
+    #[test]
+    fn test_ordering_stress_large_block_random_delivery() {
+        // SCENARIO:
+        // Large block with many frames delivered in random order.
+        // Should reconstruct with correct ordering.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 100 * 1024 * 1024);
+        sender.data_shards = 64;
+        sender.parity_ratio = 0.2;
+        let mut receiver = FecReceiver::new();
+
+        let packet_size = CHUNK_SIZE * 32;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| ((i >> 10) as u8).wrapping_mul(17))
+            .collect();
+
+        println!("Sending {} byte packet", packet_size);
+
+        let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+        let mut frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+        println!("Generated {} total frames, {} data shards", frames.len(), data_shards);
+
+        // Collect only data frames and shuffle randomly
+        let data_frames: Vec<Frame> = frames
+            .into_iter()
+            .filter(|f| !f.is_parity)
+            .take(data_shards)
+            .collect();
+
+        // Deterministic pseudo-random shuffle using a simple algorithm
+        let mut shuffled = data_frames.clone();
+        for i in 0..shuffled.len() {
+            let j = (i * 7 + 13) % shuffled.len();
+            shuffled.swap(i, j);
+        }
+
+        // Verify shuffle is actually different
+        let mut is_same_order = true;
+        for (orig, shuf) in data_frames.iter().zip(shuffled.iter()) {
+            if orig.frame_idx != shuf.frame_idx {
+                is_same_order = false;
+                break;
+            }
+        }
+
+        if is_same_order {
+            // Force reverse if somehow ended up in same order
+            shuffled.reverse();
+        }
+
+        // Receive in shuffled order
+        let mut reconstructed = None;
+        for (count, frame) in shuffled.into_iter().enumerate() {
+            match receiver.receive(frame).expect(&format!("receive failed at frame {}", count)) {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    println!("Reconstruction succeeded at frame {}", count);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert!(reconstructed.is_some(), "Should reconstruct large block from shuffled frames");
+        let result = reconstructed.unwrap();
+        println!("Reconstructed size: {}, Original size: {}", result.len(), original_data.len());
+        assert_eq!(result.len(), original_data.len(), "Size mismatch");
+
+        // Verify in chunks
+        for (chunk_idx, (orig_chunk, result_chunk)) in original_data
+            .chunks(CHUNK_SIZE)
+            .zip(result.chunks(CHUNK_SIZE))
+            .enumerate()
+        {
+            assert_eq!(
+                orig_chunk, result_chunk,
+                "Chunk {} data mismatch",
+                chunk_idx
+            );
+        }
+
+        println!("Large block ordering test passed!");
+    }
+
+    #[test]
+    fn test_ordering_frame_idx_gaps_reconstruction() {
+        // SCENARIO:
+        // Some frame indices are completely missing (network loss).
+        // Parity frames fill the gaps.
+        // Reconstruction must maintain correct frame ordering.
+
+        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 10 * 1024 * 1024);
+        sender.parity_ratio = 0.5;
+        let mut receiver = FecReceiver::new();
+
+        let packet_size = CHUNK_SIZE * 8;
+        let original_data: Vec<u8> = (0..packet_size)
+            .map(|i| ((i ^ 0xAA) as u8))
+            .collect();
+
+        let action = sender.send(original_data.clone().into_boxed_slice()).expect("send failed");
+        let frames = match action {
+            FecAction::Framed(f) => f,
+            _ => panic!("Expected Framed"),
+        };
+
+        let data_shards = frames[0].data_shards as usize;
+        let parity_shards = frames[0].parity_shards as usize;
+
+        // Simulate loss: skip frames at indices 2, 5, 8
+        let skip_indices = vec![2, 5, 8];
+        let mut delivery_frames = Vec::new();
+
+        for (idx, frame) in frames.into_iter().enumerate() {
+            if !skip_indices.contains(&(frame.frame_idx as usize)) {
+                delivery_frames.push(frame);
+            }
+        }
+
+        // Ensure we have enough frames for reconstruction
+        while delivery_frames.len() < data_shards {
+            panic!("Insufficient frames after loss simulation");
+        }
+
+        // Take only what we need
+        delivery_frames.truncate(data_shards);
+
+        // Shuffle delivery order
+        let mut shuffled = delivery_frames.clone();
+        for i in 0..shuffled.len() / 2 {
+            let len = shuffled.len();
+            shuffled.swap(i, len - 1 - i);
+        }
+
+        // Receive
+        let mut reconstructed = None;
+        for frame in shuffled {
+            match receiver.receive(frame).expect("receive failed") {
+                FecAction::Constructed(packet) => {
+                    reconstructed = Some(packet);
+                    break;
+                }
+                FecAction::Noop => continue,
+                _ => {}
+            }
+        }
+
+        // Verify
+        assert!(reconstructed.is_some(), "Should reconstruct despite frame index gaps");
+        let result = reconstructed.unwrap();
+        assert_eq!(&result[..], &original_data[..], "Data ordering preserved through reconstruction");
     }
 }
