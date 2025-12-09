@@ -4,6 +4,8 @@ use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, SystemTime};
 use bytemuck::bytes_of;
+use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
+use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 //
 // CONFIG
@@ -27,7 +29,7 @@ pub enum FecError {
     #[error("invalid frame size: expected {expected}, got {actual}")]
     InvalidFrameSize { expected: usize, actual: usize },
     #[error("invalid frame index {idx} for block with {total_shards} shards")]
-    InvalidFrameIndex { idx: u16, total_shards: usize },
+    InvalidFrameIndex { idx: u32, total_shards: usize },
     #[error("block id mismatch or wraparound detected")]
     BlockIdMismatch,
     #[error("generic error")]
@@ -41,7 +43,7 @@ pub enum FecError {
 #[derive(Clone, Debug)]
 pub struct FrameEntry {
     pub block_id: u32,
-    pub frame_idx: u16,
+    pub frame_idx: u32,
     pub data_shards: u8,
     pub parity_shards: u8,
     pub is_parity: bool,
@@ -53,7 +55,7 @@ impl Frame {
     pub fn serialize(&self) -> Box<[u8]> {
         let header_len =
             size_of::<u32>() + // block_id
-                size_of::<u16>() + // frame_idx
+                size_of::<u32>() + // frame_idx
                 1 +                // data_shards
                 1 +                // parity_shards
                 1;                 // is_parity
@@ -84,7 +86,7 @@ impl Frame {
         }
 
         let block_id: u32 = read!(u32);
-        let frame_idx: u16 = read!(u16);
+        let frame_idx: u32 = read!(u32);
 
         if offset + 3 > buf.len() { return None; }
         let data_shards = buf[offset]; offset += 1;
@@ -108,7 +110,7 @@ impl FrameEntry {
     pub fn serialize(&self) -> Box<[u8]> {
         let header_len =
             size_of::<u32>() + // block_id
-                size_of::<u16>() + // frame_idx
+                size_of::<u32>() + // frame_idx
                 1 +                // data_shards
                 1 +                // parity_shards
                 1 +                // is_parity
@@ -141,7 +143,7 @@ impl FrameEntry {
         }
 
         let block_id: u32 = read!(u32);
-        let frame_idx: u16 = read!(u16);
+        let frame_idx: u32 = read!(u32);
 
         if offset + 3 > buf.len() { return None; }
         let data_shards = buf[offset]; offset += 1;
@@ -233,7 +235,7 @@ impl FrameBuffer {
     }
 
     /// Return a cloned FrameEntry if present
-    pub fn search(&self, block_id: u32, idx: u16) -> Option<FrameEntry> {
+    pub fn search(&self, block_id: u32, idx: u32) -> Option<FrameEntry> {
         self.entries
             .iter()
             .find(|e| e.block_id == block_id && e.frame_idx == idx)
@@ -241,7 +243,7 @@ impl FrameBuffer {
     }
 
     /// Collect frames for retransmit
-    pub fn collect_for_retransmit(&self, block_id: u32, frames: &[u16]) -> Vec<FrameEntry> {
+    pub fn collect_for_retransmit(&self, block_id: u32, frames: &[u32]) -> Vec<FrameEntry> {
         frames
             .iter()
             .filter_map(|&idx| self.search(block_id, idx))
@@ -261,30 +263,11 @@ impl FrameBuffer {
 #[derive(Clone, Debug)]
 pub struct Frame {
     pub block_id: u32,
-    pub frame_idx: u16,
+    pub frame_idx: u32,
     pub data_shards: u8,      // NEW: protocol header field
     pub parity_shards: u8,    // NEW: protocol header field
     pub is_parity: bool,
     pub payload: Box<[u8]>,
-}
-
-/// Feedback messages the receiver sends back to sender
-#[derive(Clone, Debug)]
-pub enum FecFeedback {
-    Missing(MissingFrames),
-    Network(NetworkStats),
-}
-
-#[derive(Clone, Debug)]
-pub struct NetworkStats {
-    pub loss_rate: f32, // 0.0 .. 1.0
-    pub rtt: u16,       // milliseconds
-}
-
-#[derive(Clone, Debug)]
-pub struct MissingFrames {
-    pub block_id: u32,
-    pub frames: Vec<u16>,
 }
 
 // ===============================================
@@ -381,7 +364,7 @@ impl FecSender {
                 let is_parity = i >= self.data_shards;
                 let frame = Frame {
                     block_id: self.block_id,
-                    frame_idx: i as u16,
+                    frame_idx: i as u32,
                     data_shards: self.data_shards as u8,
                     parity_shards: parity_shards as u8,
                     is_parity,
@@ -409,9 +392,9 @@ impl FecSender {
     }
 
     /// Process feedback from receiver with EWMA adaptation
-    pub fn feedback(&mut self, fb: FecFeedback) -> Result<FecAction, FecError> {
+    pub fn feedback(&mut self, fb: Feedback) -> Result<FecAction, FecError> {
         match fb {
-            FecFeedback::Network(net) => {
+            Feedback::Network(net) => {
                 let base = 0.05f32;
                 let factor = 1.5f32;
                 let target = (base + net.loss_rate * factor).clamp(0.05, 1.0);
@@ -425,11 +408,10 @@ impl FecSender {
                 self.parity_ratio = self.parity_ewma;
                 Ok(FecAction::Noop)
             }
-
-            FecFeedback::Missing(m) => {
+            Feedback::Missing(m) => {
                 self.buffer.update_min_required_block(m.block_id);
 
-                let entries = self.buffer.collect_for_retransmit(m.block_id, &m.frames);
+                let entries = self.buffer.collect_for_retransmit(m.block_id, m.frames.as_slice());
                 if entries.is_empty() {
                     Ok(FecAction::Terminated)
                 } else {
@@ -446,7 +428,8 @@ impl FecSender {
                         .collect();
                     Ok(FecAction::Retransmit(frames))
                 }
-            }
+            },
+            _ => Ok(FecAction::Noop),
         }
     }
 
@@ -465,6 +448,8 @@ struct ReceiverBlock {
     parity_shards: usize,
     total_shards: usize,
     shards: Vec<Option<Box<[u8]>>>,
+    // Only defined if block is complete
+    constructed_frames: Vec<Vec<u8>>,
     received: usize,
     first_ts: u128,
     last_frame_ts: u128,
@@ -482,7 +467,12 @@ impl ReceiverBlock {
             received: 0,
             first_ts: now,
             last_frame_ts: now,
+            constructed_frames: Vec::new(),
         }
+    }
+
+    fn is_constructed(&self) -> bool {
+        self.constructed_frames.len() > 0
     }
 }
 
@@ -516,12 +506,12 @@ impl FecReceiver {
 
         self.last_block_id = Some(frame.block_id);
 
-        // Get or create block with metadata from frame header (FIXED #1, #2)
-        let block = self.blocks.entry(frame.block_id).or_insert_with(|| {
+        let block_id = frame.block_id;
+        let should_ready_block_id = *self.blocks.keys().min().unwrap_or(&0).min(&block_id);
+        let block = self.blocks.entry(block_id).or_insert_with(|| {
             ReceiverBlock::new(frame.data_shards as usize, frame.parity_shards as usize)
         });
 
-        // Validate frame index
         let idx = frame.frame_idx as usize;
         if idx >= block.total_shards {
             return Err(FecError::InvalidFrameIndex {
@@ -560,29 +550,41 @@ impl FecReceiver {
                 Ok(()) => {
                     // Success: assemble payload from data shards only
                     let assembled: Vec<_> = work_refs.into_iter().filter_map(|x| x).collect();
-                    self.blocks.remove(&frame.block_id);
-                    return Ok(FecAction::Constructed(assembled));
+                    block.constructed_frames = assembled;
+                    if block_id == should_ready_block_id {
+                        if let Some(block) = self.blocks.remove(&block_id) {
+                            return Ok(FecAction::Constructed(block.constructed_frames.clone()));
+                        }
+                    }
+
+                    // Constructed frames but not in ordered
+                    // we need to wait for the next block to arrive
                 }
                 Err(_) => {
                     // Reconstruction failed despite having enough frames
+                    // return works back
                     // Fall through to timeout/missing handling
                 }
             }
         }
 
-        let now = now_micros();
+        // Too much failed, the buffer cannot maintain
+        // any longer.
+        if self.blocks.len() > 64 {
+            return Ok(FecAction::Terminated);
+        }
 
         let timeout_us = MIN_BLOCK_TIMEOUT_MS * 1000;
 
-        if now.saturating_sub(block.last_frame_ts) > timeout_us {
-            let action = Self::handle_timeout(frame.block_id, block);
+        let block = self.blocks.get_mut(&should_ready_block_id).unwrap();
+        if now_micros().saturating_sub(block.last_frame_ts) > timeout_us {
+            let action = Self::handle_timeout(should_ready_block_id, block);
             return Ok(action)
         }
 
         Ok(FecAction::Noop)
     }
 
-    /// Handle timeout by reporting missing frames intelligently
     fn handle_timeout(block_id: u32, block: &ReceiverBlock) -> FecAction {
         let present_count = block.shards.iter().filter(|s| s.is_some()).count();
         let needed_more = block.data_shards.saturating_sub(present_count);
@@ -599,7 +601,7 @@ impl FecReceiver {
                 break;
             }
             if block.shards[i].is_none() {
-                missing.push(i as u16);
+                missing.push(i as u32);
             }
         }
 
@@ -609,7 +611,7 @@ impl FecReceiver {
                     break;
                 }
                 if block.shards[i].is_none() {
-                    missing.push(i as u16);
+                    missing.push(i as u32);
                 }
             }
         }
@@ -619,7 +621,9 @@ impl FecReceiver {
             frames: missing,
         };
 
-        FecAction::Feedback(FecFeedback::Missing(mf))
+        FecAction::Feedback(FecFeedback {
+          feedback: Some(fec_feedback::Feedback::Missing(mf)),
+        })
     }
 }
 

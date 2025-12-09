@@ -6,9 +6,11 @@ use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
+use crate::protocol::webrtc::fec::{FecAction, FecSender};
+use futures_util::FutureExt;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
+use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
@@ -17,18 +19,21 @@ use anyhow::{anyhow, Context};
 use core_services::utils::cancellation::FutureExtension;
 use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
+use futures::channel::mpsc::unbounded;
 use futures::StreamExt;
-use futures_util::{join, SinkExt};
+use futures_util::lock::Mutex;
+use futures_util::{join, select, select_biased, SinkExt};
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
 use n0_future::task::spawn;
 use n0_future::time::Instant;
 use once_cell::sync::OnceCell;
+use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
-    CancelTransferSessionRequest, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage, TransferRequestMessage,
-    TransferResponseMessage, TransferSessionMessage,
+    CancelTransferSessionRequest, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage, TransferDelimiter,
+    TransferRequestMessage, TransferResponseMessage, TransferSessionMessage,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,11 +45,18 @@ pub struct WebRtcPeer {
     // Channel used to communicate with the peer
     pub msg_channel: DirectMessageChannel,
     // Channel used to transfer the resource
-    pub data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+    pub unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+    pub reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     // This channel is used to transfer the thumbnail
     pub thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     // Webrtc buffer, used to control the amount of data that can be sent to the peer
     pub buffer: PeerBuffered,
+
+    pub fec_sender: Arc<Mutex<FecSender>>,
+    pub transfer_feedback_receiver: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
+    pub transfer_feedback_sender: mpsc::UnboundedSender<Feedback>,
+    pub transfer_delimiter_receiver: YieldContainer<mpsc::UnboundedReceiver<TransferDelimiter>>,
+    pub transfer_delimiter_sender: mpsc::UnboundedSender<TransferDelimiter>,
 
     pub transfers_context: TransfersContext,
 
@@ -61,11 +73,14 @@ impl WebRtcPeer {
     pub async fn new(
         user: PeerEntity,
         msg_channel: DirectMessageChannel,
-        data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
+        let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
+        let (transfer_delimiter_sender, transfer_delimiter_receiver) = unbounded();
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
 
@@ -87,11 +102,17 @@ impl WebRtcPeer {
         log::info!("Received introduce response from other peer {:?}", response.peer.peer_id);
 
         let peer: PeerEntity = response.peer.into();
+        let fec_sender = Arc::new(Mutex::new(FecSender::new(peer.peer_id(), 5 * 1024 * 1024)));
 
         Ok(Self {
             msg_channel,
             peer,
-            data_channel,
+            transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
+            transfer_delimiter_sender,
+            transfer_feedback_sender,
+            transfer_delimiter_receiver: YieldContainer::new(transfer_delimiter_receiver),
+            reliable_data_channel,
+            unreliable_data_channel,
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
@@ -100,6 +121,7 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
+            fec_sender,
             core_request: Default::default(),
         })
     }
@@ -113,12 +135,15 @@ impl WebRtcPeer {
         request_id: String,
         msg: IntroduceRequestMessage,
         msg_channel: DirectMessageChannel,
-        data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
+        let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
+        let (transfer_delimiter_sender, transfer_delimiter_receiver) = unbounded();
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
@@ -134,10 +159,18 @@ impl WebRtcPeer {
         msg_channel.send_response(request_id, introduce_response).await?;
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
+        let fec_sender = Arc::new(Mutex::new(FecSender::new(user.peer_id(), 5 * 1024 * 1024)));
+
         Ok(Self {
+            fec_sender,
             msg_channel,
+            transfer_feedback_sender,
+            transfer_delimiter_sender,
+            transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
+            transfer_delimiter_receiver: YieldContainer::new(transfer_delimiter_receiver),
             peer: msg.mine.into(),
-            data_channel,
+            reliable_data_channel,
+            unreliable_data_channel,
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
@@ -168,6 +201,14 @@ impl WebRtcPeer {
                 if let Some(core_request) = self.core_request() {
                     core_request.response(response).await;
                 }
+            }
+            Request::FecFeedback(feedback) => {
+                if let Some(feedback) = feedback.feedback {
+                    let _ = self.transfer_feedback_sender.unbounded_send(feedback);
+                };
+            }
+            Request::TransferDelimiter(delimiter) => {
+                let _ = self.transfer_delimiter_sender.unbounded_send(delimiter);
             }
             _ => {}
         }
@@ -460,11 +501,10 @@ impl WebRtcPeer {
             };
 
             let is_compressed = is_compressible(&name);
-            let compress_chunk_size = 254 * 1024u64;
-            let none_compress_chunk_size = 62 * 1024;
+            let chunk_size = 254 * 1024u64;
             let mut reader = self
                 .resource_repo
-                .read(resource_path.clone(), compress_chunk_size as usize, is_compressed)
+                .read(resource_path.clone(), chunk_size as usize, is_compressed)
                 .with_cancel(&resource_cancel_signal)
                 .await??;
 
@@ -475,7 +515,7 @@ impl WebRtcPeer {
             };
 
             let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
-            if let Err(e) = self.data_channel.unbounded_send((peer_id, delimiter)) {
+            if let Err(e) = self.reliable_data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
                 let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
@@ -483,45 +523,85 @@ impl WebRtcPeer {
             }
 
             let (queue_tx, mut queue_rx) = mpsc::unbounded();
-            let mut chunk_size = none_compress_chunk_size;
             let mut buff_counter = 0;
             let time_to_drain = Duration::from_secs(5);
             let mut drain_tick = Instant::now();
-            while let Some((bytes, raw)) = match queue_rx.try_next() {
-                Ok(Some(data)) => Some(data),
-                _ => {
-                    reader
-                        .c_next(Some(chunk_size))
-                        .with_cancel(&resource_cancel_signal)
-                        .await?
-                        .map_err(|e| WebRtcErrors::ReadFileError(format!("{e:?}")))?
-                        .map(|it| (Packet::from(it.0), it.1))
-                }
-            }
-            {
-                total_sent_bytes += raw as u64;
-                if !bytes.is_empty() {
-                    buff_counter += bytes.len();
-                    let packet = (peer_id, bytes);
-                    let _ = self.data_channel.unbounded_send(packet);
-                }
 
-                progress_update.update_progress(raw as u64);
-                let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
+            let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
+            loop {
+                let mut queue_fut = queue_rx.next().fuse();
+                let mut reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
+                let mut fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
+                let (bytes, raw_size, feedback) = select_biased! {
+                    q = queue_fut => {
+                        q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
+                    },
+                    r = reader_fut => {
+                        let res = r??;
+                        res.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
+                    },
+                    fb = fb_fut => {
+                        fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
+                    },
+                    complete => (None, None, None),
+                };
+
+                let action = match (bytes, raw_size, feedback) {
+                    (Some(bytes), Some(raw_size), None) => {
+                        let action = self.fec_sender.lock().await.send(bytes)?;
+                        buff_counter += bytes.len();
+                        progress_update.update_progress(raw_size as u64);
+                        let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
+                        action
+                    }
+                    (None, Some(_), Some(fb)) => self.fec_sender.lock().await.feedback(fb)?,
+                    _ => {
+                        break;
+                    }
+                };
+
+                match action {
+                    FecAction::Framed(frames) => {
+                        for frame in frames {
+                            let _ = self.unreliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                        }
+                    }
+                    FecAction::Retransmit(frames) => {
+                        for frame in frames {
+                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                        }
+                    }
+                    FecAction::Terminated => {
+                        log::info!("Fec sender terminated, aborting resource transfer");
+                        break;
+                    }
+                    FecAction::Noop | FecAction::Feedback(_) | FecAction::Constructed(_) => {
+                        // Will not happens, do nothing
+                    }
+                };
 
                 if buff_counter > MAX_BUFFER_SIZE {
-                    buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_CHANNEL_ID).await;
+                    buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await;
                     if buff_counter > MAX_BUFFER_SIZE / 3 || drain_tick.elapsed() > time_to_drain {
                         drain_tick = Instant::now();
                         reader.compression_stats_mut().start_over();
-                        chunk_size = compress_chunk_size;
                         let (mut tx, mut rx) = mpsc::channel(1);
                         let flushed_fut = async {
                             let tick = Instant::now();
-                            let stats = self.buffer.channel_bytes_sent_received(TRANSFER_RESOURCE_CHANNEL_ID).await.map(|it| it.0).unwrap_or(0);
-                            let flushed = self.buffer.flush_timeout(TRANSFER_RESOURCE_CHANNEL_ID).await?;
+                            let stats = self
+                                .buffer
+                                .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
+                                .await
+                                .map(|it| it.0)
+                                .unwrap_or(0);
+                            let flushed = self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
                             let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                            let new_stats = self.buffer.channel_bytes_sent_received(TRANSFER_RESOURCE_CHANNEL_ID).await.map(|it| it.0).unwrap_or(0);
+                            let new_stats = self
+                                .buffer
+                                .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
+                                .await
+                                .map(|it| it.0)
+                                .unwrap_or(0);
                             let bw = ((new_stats - stats).max(flushed)) as f64 / time;
                             let _ = tx.send(()).await;
                             Result::<f64, WebRtcErrors>::Ok(bw)
@@ -531,18 +611,18 @@ impl WebRtcPeer {
                             let mut total_queued = 0;
                             loop {
                                 if total_queued >= MAX_BUFFER_SIZE {
-                                    break Ok(())
+                                    break Ok(());
                                 };
 
                                 match rx.try_next() {
-                                    Ok(Some(_)) => {
-                                        break Result::<(), WebRtcErrors>::Ok(())
-                                    },
+                                    Ok(Some(_)) => break Result::<(), WebRtcErrors>::Ok(()),
                                     _ => {}
                                 };
 
-                                let Some((data, raw_size)) = reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await?? else {
-                                    break Ok(())
+                                let Some((data, raw_size)) =
+                                    reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await??
+                                else {
+                                    break Ok(());
                                 };
 
                                 total_queued += data.len();
@@ -553,25 +633,19 @@ impl WebRtcPeer {
                         let (flushed, send) = join!(flushed_fut, send_fut);
                         let bw = flushed?;
                         send?;
-                        if !reader.compression_stats_mut().update_network_bandwidth(bw) {
-                            log::info!("Not compress");
-                            chunk_size = none_compress_chunk_size;
-                        }
-                        else {
-                            log::info!("Compress");
-                        }
+                        reader.compression_stats_mut().update_network_bandwidth(bw);
                     }
                 }
             }
 
             let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
-            if let Err(e) = self.data_channel.unbounded_send((peer_id, end_delimiter)) {
+            if let Err(e) = self.reliable_data_channel.unbounded_send((peer_id, end_delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
                 let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone()));
                 continue;
             }
-           progress_update.complete();
+            progress_update.complete();
             let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
 
             log::info!(

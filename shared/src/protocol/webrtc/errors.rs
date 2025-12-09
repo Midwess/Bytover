@@ -5,6 +5,7 @@ use core_services::utils::yield_container::YieldError;
 use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use prost::{DecodeError, EncodeError};
+use crate::protocol::webrtc::fec::FecError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
@@ -54,6 +55,9 @@ pub enum WebRtcErrors {
     YieldError(#[from] YieldError),
     #[error("uuid parse error: {0}")]
     Uuid(#[from] uuid::Error),
+
+    #[error("Data corrupted")]
+    FecError(#[from] FecError),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

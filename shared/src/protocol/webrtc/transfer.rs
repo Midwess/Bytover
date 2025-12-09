@@ -15,6 +15,7 @@ pub struct TransferDelimiterShema {
     pub session_id: u64,
     pub resource_id: u64,
     pub is_start: bool,
+    pub total_size: Option<u64>,
     pub compressed: bool
 }
 
@@ -24,7 +25,8 @@ impl TransferDelimiterShema {
             resource_id,
             is_start,
             session_id,
-            compressed
+            compressed,
+            total_size: None
         }
     }
 
