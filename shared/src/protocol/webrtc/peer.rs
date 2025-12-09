@@ -7,9 +7,8 @@ use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecSender};
-use futures_util::FutureExt;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
-use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
+use crate::protocol::webrtc::transfer::TransfersContext;
 use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
@@ -22,6 +21,7 @@ use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
 use futures::StreamExt;
 use futures_util::lock::Mutex;
+use futures_util::FutureExt;
 use futures_util::{join, select, select_biased, SinkExt};
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
@@ -31,11 +31,9 @@ use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{
-    CancelTransferSessionRequest, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage, TransferDelimiter,
-    TransferRequestMessage, TransferResponseMessage, TransferSessionMessage,
-};
+use schema::devlog::bitbridge::{BeginTransferResource, CancelTransferSessionRequest, EndTransferResource, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage, TransferRequestMessage, TransferResponseMessage, TransferSessionMessage};
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 
 pub struct WebRtcPeer {
@@ -52,11 +50,18 @@ pub struct WebRtcPeer {
     // Webrtc buffer, used to control the amount of data that can be sent to the peer
     pub buffer: PeerBuffered,
 
+    // Internal queues for different events
+    // we don't want to use the same queue for all events type
+    // because it will cause (dead)lock.
     pub fec_sender: Arc<Mutex<FecSender>>,
     pub transfer_feedback_receiver: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
     pub transfer_feedback_sender: mpsc::UnboundedSender<Feedback>,
-    pub transfer_delimiter_receiver: YieldContainer<mpsc::UnboundedReceiver<TransferDelimiter>>,
-    pub transfer_delimiter_sender: mpsc::UnboundedSender<TransferDelimiter>,
+
+    pub transfer_begin_receiver: YieldContainer<mpsc::Receiver<BeginTransferResource>>,
+    pub transfer_begin_sender: Arc<Mutex<mpsc::Sender<BeginTransferResource>>>,
+
+    pub transfer_end_receiver: YieldContainer<mpsc::Receiver<EndTransferResource>>,
+    pub transfer_end_sender: Arc<Mutex<mpsc::Sender<EndTransferResource>>>,
 
     pub transfers_context: TransfersContext,
 
@@ -80,7 +85,9 @@ impl WebRtcPeer {
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (transfer_delimiter_sender, transfer_delimiter_receiver) = unbounded();
+        let (begin_transfer_sender, begin_transfer_receiver) = mpsc::channel(10);
+        let (end_transfer_sender, end_transfer_receiver) = mpsc::channel(10);
+
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
 
@@ -108,9 +115,11 @@ impl WebRtcPeer {
             msg_channel,
             peer,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
-            transfer_delimiter_sender,
+            transfer_begin_sender,
+            transfer_begin_receiver: YieldContainer::new(begin_transfer_receiver),
+            transfer_end_receiver: YieldContainer::new(end_transfer_receiver),
+            transfer_end_sender,
             transfer_feedback_sender,
-            transfer_delimiter_receiver: YieldContainer::new(transfer_delimiter_receiver),
             reliable_data_channel,
             unreliable_data_channel,
             thumbnail_channel,
@@ -143,7 +152,8 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (transfer_delimiter_sender, transfer_delimiter_receiver) = unbounded();
+        let (begin_transfer_sender, begin_transfer_receiver) = mpsc::channel(10);
+        let (end_transfer_sender, end_transfer_receiver) = mpsc::channel(10);
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
@@ -163,11 +173,13 @@ impl WebRtcPeer {
 
         Ok(Self {
             fec_sender,
+            transfer_begin_sender,
+            transfer_begin_receiver: YieldContainer::new(begin_transfer_receiver),
+            transfer_end_receiver: YieldContainer::new(end_transfer_receiver),
+            transfer_end_sender,
             msg_channel,
             transfer_feedback_sender,
-            transfer_delimiter_sender,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
-            transfer_delimiter_receiver: YieldContainer::new(transfer_delimiter_receiver),
             peer: msg.mine.into(),
             reliable_data_channel,
             unreliable_data_channel,
@@ -207,8 +219,15 @@ impl WebRtcPeer {
                     let _ = self.transfer_feedback_sender.unbounded_send(feedback);
                 };
             }
-            Request::TransferDelimiter(delimiter) => {
-                let _ = self.transfer_delimiter_sender.unbounded_send(delimiter);
+            Request::BeginTransferResource(begin) => {
+                if let Err(e) = self.transfer_begin_sender.lock().await.try_send(begin) {
+                    log::error!("Failed to send begin transfer resource to peer {}: {e:?}");
+                }
+            }
+            Request::EndTransferResource(end) => {
+                if let Err(e) = self.transfer_end_sender.lock().await.try_send(end) {
+                    log::error!("Failed to send end transfer resource to peer {}: {e:?}");
+                }
             }
             _ => {}
         }
@@ -509,12 +528,13 @@ impl WebRtcPeer {
                 .await??;
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
+
             let mut total_sent_bytes = 0u64;
             let Some(progress_update) = session.resource_mut_progress(order_id) else {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
-            let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
+            log::info!("Waiting for begin signal from receiver...");
             if let Err(e) = self.reliable_data_channel.unbounded_send((peer_id, delimiter)) {
                 let msg = format!("Failed to send delimiter to peer {peer_id:?}: {e:?}");
                 progress_update.fail(msg);
@@ -529,27 +549,34 @@ impl WebRtcPeer {
 
             let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
             loop {
-                let mut queue_fut = queue_rx.next().fuse();
-                let mut reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
-                let mut fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
-                let (bytes, raw_size, feedback) = select_biased! {
-                    q = queue_fut => {
-                        q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
-                    },
-                    r = reader_fut => {
-                        let res = r??;
-                        res.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
-                    },
-                    fb = fb_fut => {
-                        fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
-                    },
-                    complete => (None, None, None),
+                let (bytes, raw_size, feedback) = {
+                    let mut queue_fut = queue_rx.next().fuse();
+                    let mut reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
+                    let mut fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
+                    futures::pin_mut!(queue_fut);
+                    futures::pin_mut!(fb_fut);
+                    futures::pin_mut!(reader_fut);
+                    select_biased! {
+                        q = queue_fut => {
+                            let q: Option<(Packet, usize)> = q;
+                            q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None::<Packet>, None::<usize>, None::<Feedback>))
+                        },
+                        r = reader_fut => {
+                            let res = r??;
+                            res.map(|it| (Some(Packet::from(it.0)), Some(it.1), None)).unwrap_or((None, None, None))
+                        },
+                        fb = fb_fut => {
+                            let fb = fb?;
+                            fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
+                        },
+                        complete => (None, None, None),
+                    }
                 };
 
                 let action = match (bytes, raw_size, feedback) {
                     (Some(bytes), Some(raw_size), None) => {
-                        let action = self.fec_sender.lock().await.send(bytes)?;
                         buff_counter += bytes.len();
+                        let action = self.fec_sender.lock().await.send(bytes)?;
                         progress_update.update_progress(raw_size as u64);
                         let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                         action
@@ -645,6 +672,7 @@ impl WebRtcPeer {
                 let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone()));
                 continue;
             }
+
             progress_update.complete();
             let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
 

@@ -4,6 +4,7 @@ use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, SystemTime};
 use bytemuck::bytes_of;
+use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
@@ -14,7 +15,7 @@ const CHUNK_SIZE: usize = 8 * 1024;
 const DATA_SHARDS_DEFAULT: usize = 32;
 const MIN_PARITY_SHARDS: usize = 1;
 const MAX_PARITY_SHARDS: usize = 64;
-const MIN_BLOCK_TIMEOUT_MS: u128 = 80;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 80;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
 
@@ -48,7 +49,7 @@ pub struct FrameEntry {
     pub parity_shards: u8,
     pub is_parity: bool,
     pub data: Box<[u8]>,
-    pub timestamp: u128,
+    pub timestamp: u64,
 }
 
 impl Frame {
@@ -114,7 +115,7 @@ impl FrameEntry {
                 1 +                // data_shards
                 1 +                // parity_shards
                 1 +                // is_parity
-                size_of::<u128>(); // timestamp
+                size_of::<u64>(); // timestamp
 
         let mut buf = Vec::with_capacity(header_len + self.data.len());
 
@@ -150,7 +151,7 @@ impl FrameEntry {
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
 
-        let timestamp: u128 = read!(u128);
+        let timestamp: u64 = read!(u64);
 
         let data = buf[offset..].to_vec().into_boxed_slice();
 
@@ -451,8 +452,8 @@ struct ReceiverBlock {
     // Only defined if block is complete
     constructed_frames: Vec<Vec<u8>>,
     received: usize,
-    first_ts: u128,
-    last_frame_ts: u128,
+    first_ts: u64,
+    last_frame_ts: u64,
 }
 
 impl ReceiverBlock {
@@ -479,6 +480,7 @@ impl ReceiverBlock {
 pub struct FecReceiver {
     blocks: HashMap<u32, ReceiverBlock>,
     last_block_id: Option<u32>,
+    next_block_id: u32,
 }
 
 impl FecReceiver {
@@ -486,6 +488,7 @@ impl FecReceiver {
         Self {
             blocks: HashMap::new(),
             last_block_id: None,
+            next_block_id: 0,
         }
     }
 
@@ -507,7 +510,7 @@ impl FecReceiver {
         self.last_block_id = Some(frame.block_id);
 
         let block_id = frame.block_id;
-        let should_ready_block_id = *self.blocks.keys().min().unwrap_or(&0).min(&block_id);
+        let min_block_id = self.blocks.keys().min().map(|it| *it).unwrap_or_default().min(block_id);
         let block = self.blocks.entry(block_id).or_insert_with(|| {
             ReceiverBlock::new(frame.data_shards as usize, frame.parity_shards as usize)
         });
@@ -551,7 +554,7 @@ impl FecReceiver {
                     // Success: assemble payload from data shards only
                     let assembled: Vec<_> = work_refs.into_iter().filter_map(|x| x).collect();
                     block.constructed_frames = assembled;
-                    if block_id == should_ready_block_id {
+                    if block_id == self.next_block_id {
                         if let Some(block) = self.blocks.remove(&block_id) {
                             return Ok(FecAction::Constructed(block.constructed_frames.clone()));
                         }
@@ -570,16 +573,20 @@ impl FecReceiver {
 
         // Too much failed, the buffer cannot maintain
         // any longer.
-        if self.blocks.len() > 64 {
+        if self.blocks.len() >= 64 {
             return Ok(FecAction::Terminated);
         }
 
         let timeout_us = MIN_BLOCK_TIMEOUT_MS * 1000;
 
-        let block = self.blocks.get_mut(&should_ready_block_id).unwrap();
-        if now_micros().saturating_sub(block.last_frame_ts) > timeout_us {
-            let action = Self::handle_timeout(should_ready_block_id, block);
-            return Ok(action)
+        // The next_block_id if it is not ready
+        // + It is not coming yet, we wait, until it arrives or exceed max buffer size
+        // + In means time, we resolve the missing frames of min_block_id
+        if let Some(block) = self.blocks.get_mut(&min_block_id) {
+            if now_micros().saturating_sub(block.last_frame_ts) > timeout_us {
+                let action = Self::handle_timeout(min_block_id, block);
+                return Ok(action)
+            }
         }
 
         Ok(FecAction::Noop)
@@ -631,11 +638,8 @@ impl FecReceiver {
 // Utilities
 // ======================================================
 
-fn now_micros() -> u128 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_micros()
+fn now_micros() -> u64 {
+    epoch_micro()
 }
 
 // ======================================================
