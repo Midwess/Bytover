@@ -8,9 +8,6 @@ use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
-//
-// CONFIG
-//
 const CHUNK_SIZE: usize = 8 * 1024;
 const DATA_SHARDS_DEFAULT: usize = 32;
 const MIN_PARITY_SHARDS: usize = 1;
@@ -19,10 +16,6 @@ const MAX_PARITY_SHARDS: usize = 64;
 const MIN_BLOCK_TIMEOUT_MS: u64 = 1000;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
-
-// ======================================================
-// Error Types (Enhanced)
-// ======================================================
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -37,10 +30,6 @@ pub enum FecError {
     #[error("generic error")]
     Generic,
 }
-
-// ======================================================
-// Data Structures
-// ======================================================
 
 #[derive(Clone, Debug)]
 pub struct FrameEntry {
@@ -182,8 +171,8 @@ pub struct FrameBuffer {
     entries: VecDeque<FrameEntry>,
     capacity_bytes: usize,
     used_bytes: usize,
-    min_required_block_id: u32, // NEW: track oldest block still needed
-    max_block_id_seen: u32,     // NEW: detect wraparound
+    min_required_block_id: u32,
+    max_block_id_seen: u32,
 }
 
 impl FrameBuffer {
@@ -718,7 +707,6 @@ mod tests {
 
     #[test]
     fn test_frame_metadata_sync() {
-        // NEW TEST: Verify frame header contains N/K values
         let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 5 * 1024 * 1024);
         sender.data_shards = 16;
         sender.parity_ratio = 0.5;
@@ -742,7 +730,6 @@ mod tests {
 
     #[test]
     fn test_reordering_tolerance() {
-        // NEW TEST: Frames arriving out-of-order shouldn't trigger false timeouts
         let mut receiver = FecReceiver::new();
 
         // Simulate frames arriving out of order
@@ -767,7 +754,6 @@ mod tests {
 
     #[test]
     fn test_buffer_smart_eviction() {
-        // NEW TEST: Buffer should not evict blocks still needed
         let mut buffer = FrameBuffer::new(10 * CHUNK_SIZE);  // Very small buffer
 
         // Insert frames from block 0
@@ -805,7 +791,6 @@ mod tests {
 
     #[test]
     fn test_smart_missing_frame_selection() {
-        // NEW TEST: Missing frame feedback should prioritize data frames
         let mut receiver = FecReceiver::new();
 
         // Create partial block with mostly data frames missing
@@ -825,15 +810,10 @@ mod tests {
         for frame in frames {
             let _ = receiver.receive(frame);
         }
-
-        // Advance time to trigger timeout
-        // (In real test, we'd mock time or add a force_timeout method)
-        // This is a simplified version showing the structure
     }
 
     #[test]
     fn test_frame_validation() {
-        // NEW TEST: Invalid frame sizes should be rejected
         let mut receiver = FecReceiver::new();
 
         let bad_frame = Frame {

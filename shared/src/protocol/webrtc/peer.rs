@@ -6,7 +6,7 @@ use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use crate::protocol::webrtc::fec::{FecAction, FecSender};
+use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
@@ -19,7 +19,6 @@ use core_services::utils::cancellation::FutureExtension;
 use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
-use futures::StreamExt;
 use futures_util::lock::Mutex;
 use futures_util::FutureExt;
 use futures_util::{join, select, select_biased, SinkExt};
@@ -35,6 +34,7 @@ use schema::devlog::bitbridge::{BeginTransferResource, CancelTransferSessionRequ
 use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use n0_future::StreamExt;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -50,10 +50,6 @@ pub struct WebRtcPeer {
     // Webrtc buffer, used to control the amount of data that can be sent to the peer
     pub buffer: PeerBuffered,
 
-    // Internal queues for different events
-    // we don't want to use the same queue for all events type
-    // because it will cause (dead)lock.
-    pub fec_sender: Arc<Mutex<FecSender>>,
     pub transfer_feedback_receiver: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
     pub transfer_feedback_sender: mpsc::UnboundedSender<Feedback>,
 
@@ -118,7 +114,6 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
-            fec_sender,
             core_request: Default::default(),
         })
     }
@@ -158,7 +153,6 @@ impl WebRtcPeer {
         let fec_sender = Arc::new(Mutex::new(FecSender::new(user.peer_id(), 5 * 1024 * 1024)));
 
         Ok(Self {
-            fec_sender,
             msg_channel,
             transfer_feedback_sender,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
@@ -333,6 +327,7 @@ impl WebRtcPeer {
             })
         };
 
+        let mut fec_receiver = FecReceiver::new();
         while !session.is_completed() {
             let start_delimiter = TransferDelimiterShema::forward_to_next_resource(&mut resource_rx, session_id)
                 .with_cancel(&cancellation_signal)
@@ -358,6 +353,29 @@ impl WebRtcPeer {
             let mut total_written_bytes = 0u64;
             log::info!("Begin downloading resource {:?} {}", resource_path, resource_size);
             while let Ok(Some(packet)) = resource_rx.next().with_cancel(&cancellation_signal).await {
+                let Some(frame) = Frame::deserialize(&packet) else {
+                    log::warn!("Failed to deserialize packet {packet:?}");
+                    break;
+                };
+                let action = fec_receiver.receive(frame)?;
+                let packet = match action {
+                    FecAction::Constructed(packet) => {
+                        packet
+                    }
+                    FecAction::Feedback(feedback) => {
+                        self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
+                        continue;
+                    }
+                    FecAction::Terminated => {
+                        log::warn!("Fec tell terminated");
+                        break;
+                    }
+                    _ => {
+                        // Never happens
+                        continue;
+                    }
+                };
+
                 if TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok() {
                     progress_update.success();
                     break;
@@ -483,6 +501,9 @@ impl WebRtcPeer {
         };
 
         let resource_cancel_signal = cancellation_signal.clone();
+        let mut fec_sender = FecSender::new(self.peer.peer_id(), 5 * 1024 * 1024);
+        let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
+        let _ = feedback_receiver.drain();
         while !session.is_completed() {
             let Some((resource_path, order_id, size, name)) = session
                 .get_next_transfer_resource()
@@ -501,7 +522,7 @@ impl WebRtcPeer {
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
 
-            let mut total_sent_bytes = 0u64;
+            let total_sent_bytes = 0u64;
             let Some(progress_update) = session.resource_mut_progress(order_id) else {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
@@ -519,7 +540,6 @@ impl WebRtcPeer {
             let time_to_drain = Duration::from_secs(5);
             let mut drain_tick = Instant::now();
 
-            let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
             loop {
                 let (bytes, raw_size, feedback) = {
                     let mut queue_fut = queue_rx.next().fuse();
@@ -548,12 +568,12 @@ impl WebRtcPeer {
                 let action = match (bytes, raw_size, feedback) {
                     (Some(bytes), Some(raw_size), None) => {
                         buff_counter += bytes.len();
-                        let action = self.fec_sender.lock().await.send(bytes)?;
+                        let action = fec_sender.send(bytes)?;
                         progress_update.update_progress(raw_size as u64);
                         let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                         action
                     }
-                    (None, Some(_), Some(fb)) => self.fec_sender.lock().await.feedback(fb)?,
+                    (None, Some(_), Some(fb)) => fec_sender.feedback(fb)?,
                     _ => {
                         break;
                     }

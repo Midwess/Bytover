@@ -22,6 +22,7 @@ web-leptos/assets/style.css
 **/public/worker
 **/public/core-worker
 **/public/opfs-worker
+**/public/wasm
 **/worker/dist
 **/output.css
 history.txt
