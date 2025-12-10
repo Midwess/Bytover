@@ -2,8 +2,10 @@ use reed_solomon_erasure::galois_8::ReedSolomon;
 use thiserror::Error;
 use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
+use std::fmt;
 use bytemuck::bytes_of;
 use matchbox_socket::Packet;
+use n0_future::time::Instant;
 use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
@@ -13,14 +15,14 @@ const DATA_SHARDS_DEFAULT: usize = 32;
 const MIN_PARITY_SHARDS: usize = 1;
 const MAX_PARITY_SHARDS: usize = 64;
 // TODO: Implement RTT
-const MIN_BLOCK_TIMEOUT_MS: u64 = 1000;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 3000;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
 
 #[derive(Debug, Error)]
 pub enum FecError {
     #[error("reed-solomon encoding/decoding error {0:?}")]
-    ReedSolomon(#[from] reed_solomon_erasure::Error),
+    ReedSolomon(reed_solomon_erasure::Error),
     #[error("invalid frame size: expected {expected}, got {actual}")]
     InvalidFrameSize { expected: usize, actual: usize },
     #[error("invalid frame index {idx} for block with {total_shards} shards")]
@@ -29,6 +31,12 @@ pub enum FecError {
     BlockIdMismatch,
     #[error("generic error")]
     Generic,
+}
+
+impl From<reed_solomon_erasure::Error> for FecError {
+    fn from(e: reed_solomon_erasure::Error) -> Self {
+        Self::ReedSolomon(e)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -260,7 +268,7 @@ impl FrameBuffer {
 // Frames and Feedback
 // ===============================================
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Frame {
     pub block_id: u32,
     pub frame_idx: u32,
@@ -269,6 +277,20 @@ pub struct Frame {
     pub total_size: u32,
     pub is_parity: bool,
     pub payload: Box<[u8]>,
+}
+
+impl fmt::Debug for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Frame")
+            .field("block_id", &self.block_id)
+            .field("frame_idx", &self.frame_idx)
+            .field("data_shards", &self.data_shards)
+            .field("parity_shards", &self.parity_shards)
+            .field("total_size", &self.total_size)
+            .field("is_parity", &self.is_parity)
+            .field("payload_len", &self.payload.len())
+            .finish()
+    }
 }
 
 // ===============================================
@@ -281,7 +303,7 @@ pub enum FecAction {
     Framed(Vec<Frame>),
 
     /// Receiver assembled an original payload
-    Constructed(Packet),
+    Constructed(Vec<Packet>),
 
     /// Sender should retransmit these frames
     Retransmit(Vec<Frame>),
@@ -328,6 +350,7 @@ impl FecSender {
         let mut offset = 0usize;
         let mut frames_to_send: Vec<Frame> = Vec::new();
 
+        let elapsed = Instant::now();
         while offset < packet.len() {
             // Build data shards for one block
             let block_size = (packet.len() - offset).min(CHUNK_SIZE * self.data_shards);
@@ -344,6 +367,8 @@ impl FecSender {
                 }
             }
 
+            log::info!("Encoding block {}: {} shards, complete at {}ms", self.block_id, shards.len(), elapsed.elapsed().as_millis());
+
             for _ in 0..parity_shards {
                 shards.push(vec![0u8; CHUNK_SIZE]);
             }
@@ -353,9 +378,11 @@ impl FecSender {
                     shards.iter_mut().map(|v| v.as_mut_slice()).collect();
 
                 let rs = ReedSolomon::new(shard_count, parity_shards)?;
+                log::info!("mon new at {}ms", elapsed.elapsed().as_millis());
                 rs.encode(&mut shards_refs)?;
             }
 
+            log::info!("mon complete at {}ms", elapsed.elapsed().as_millis());
             for (i, s) in shards.into_iter().enumerate() {
                 let is_parity = i >= shard_count;
                 let frame = Frame {
@@ -391,7 +418,7 @@ impl FecSender {
     }
 
     /// Process feedback from receiver with EWMA adaptation
-    pub fn feedback(&mut self, fb: Feedback) -> Result<FecAction, FecError> {
+    pub fn feedback(&mut self, fb: Feedback) -> FecAction {
         match fb {
             Feedback::Network(net) => {
                 let base = 0.05f32;
@@ -405,14 +432,14 @@ impl FecSender {
                 }
 
                 self.parity_ratio = self.parity_ewma;
-                Ok(FecAction::Noop)
+                FecAction::Noop
             }
             Feedback::Missing(m) => {
                 self.buffer.update_min_required_block(m.block_id);
 
                 let entries = self.buffer.collect_for_retransmit(m.block_id, m.frames.as_slice());
                 if entries.is_empty() {
-                    Ok(FecAction::Terminated)
+                    FecAction::Terminated
                 } else {
                     let frames: Vec<Frame> = entries
                         .into_iter()
@@ -426,10 +453,10 @@ impl FecSender {
                             payload: e.data.clone(),
                         })
                         .collect();
-                    Ok(FecAction::Retransmit(frames))
+                    FecAction::Retransmit(frames)
                 }
             },
-            _ => Ok(FecAction::Noop),
+            _ => FecAction::Noop,
         }
     }
 
@@ -542,15 +569,17 @@ impl FecReceiver {
         }
 
         // Ignore frames for blocks we've already delivered
-        if frame.block_id < self.next_block_id {
-             return Ok(FecAction::Noop);
+        if frame.block_id < self.next_block_id && !frame.is_parity {
+            log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
+            return Ok(FecAction::Noop);
         }
 
         // Check if previous block is created, it must be
         // but in worst network, it can be dropped, we want to create place holder
         // so it can be retransmited
-        for i in (self.next_block_id as i32 - 1i32).max(0)..frame.block_id as i32 {
+        for i in (self.next_block_id as i32)..frame.block_id as i32 {
             if !self.blocks.contains_key(&(i as u32)) {
+                log::info!("Creating placeholder for block {}", i);
                 self.blocks.insert(i as u32, ReceiverBlock::place_holder());
             }
         }
@@ -613,8 +642,26 @@ impl FecReceiver {
                         block.constructed_frames = assembled;
                         if block_id == self.next_block_id {
                             if let Some(block) = self.blocks.remove(&block_id) {
-                                self.next_block_id += 1;
-                                return Ok(FecAction::Constructed(block.into_packet()));
+                                log::info!("Constructed block {}", block_id);
+                                let mut completed_blocks = vec![];
+                                completed_blocks.push(block);
+                                loop {
+                                    self.next_block_id += 1;
+                                    let is_completed = self.blocks.get(&self.next_block_id).map(|it| {
+                                        it.is_constructed()
+                                    }).unwrap_or_default();
+
+                                    if is_completed {
+                                        log::info!("Constructed block {}", self.next_block_id);
+                                        completed_blocks.push(self.blocks.remove(&self.next_block_id).unwrap());
+                                    }
+                                    else {
+                                        break
+                                    }
+                                }
+
+                                let bytes = completed_blocks.into_iter().map(|it| it.into_packet()).collect::<Vec<_>>();
+                                return Ok(FecAction::Constructed(bytes));
                             }
                         }
                     }
@@ -856,8 +903,8 @@ mod tests {
         for frame in frames {
             let result = receiver.receive(frame).expect("receive failed");
             match result {
-                FecAction::Constructed(packet) => {
-                    received_packet = Some(packet);
+                FecAction::Constructed(mut packet) => {
+                    received_packet = Some(packet.remove(0));
                     break;
                 }
                 FecAction::Noop => continue,
@@ -915,8 +962,8 @@ mod tests {
         for (idx, frame) in frames.into_iter().enumerate() {
             let result = receiver.receive(frame).expect(&format!("receive failed at frame {}", idx));
             match result {
-                FecAction::Constructed(packet) => {
-                    all_packets.push(packet);
+                FecAction::Constructed(mut packet) => {
+                    all_packets.push(packet.remove(0));
                     // Increment next_block_id to allow the next block to be returned
                 }
                 FecAction::Noop => continue,
@@ -1023,7 +1070,7 @@ mod tests {
 
         // 5. Verify
         assert!(constructed.is_some(), "Should have reconstructed using parity");
-        let result_data = constructed.unwrap();
+        let result_data = constructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(result_data.len(), original_data.len());
         assert_eq!(&result_data[..], &original_data[..]);
     }
@@ -1157,7 +1204,7 @@ mod tests {
 
         assert!(final_packet.is_some(), "Receiver failed to reconstruct after retransmission");
 
-        let reconstructed = final_packet.unwrap();
+        let reconstructed = final_packet.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(&reconstructed[..], &original_data[..]);
     }
 
@@ -1255,7 +1302,7 @@ mod tests {
 
         // Verify reconstruction succeeded
         assert!(reconstructed.is_some(), "Should reconstruct despite out-of-order delivery");
-        let result_data = reconstructed.unwrap();
+        let result_data = reconstructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
 
         // Verify data integrity and ordering
         assert_eq!(result_data.len(), original_data.len(), "Length mismatch");
@@ -1330,8 +1377,8 @@ mod tests {
         // Verify both blocks reconstructed correctly
         assert_eq!(block_results.len(), 2, "Should have reconstructed 2 blocks");
 
-        let result1 = &block_results[&0];
-        let result2 = &block_results[&1];
+        let result1 = &block_results[&0].into_iter().flatten().collect::<Vec<_>>();
+        let result2 = &block_results[&1].into_iter().flatten().collect::<Vec<_>>();
 
         assert_eq!(&result1[..], &packet1_data[..], "Block 0 data mismatch");
         assert_eq!(&result2[..], &packet2_data[..], "Block 1 data mismatch");
@@ -1409,7 +1456,7 @@ mod tests {
 
         // Verify
         assert!(reconstructed.is_some(), "Should reconstruct from shuffled delivery");
-        let result = reconstructed.unwrap();
+        let result = reconstructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(&result[..], &original_data[..], "Data should maintain correct order");
     }
 
@@ -1472,7 +1519,7 @@ mod tests {
 
         // Verify
         assert!(reconstructed.is_some(), "Should reconstruct with sparse delivery pattern");
-        let result = reconstructed.unwrap();
+        let result = reconstructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(&result[..], &original_data[..], "Data ordering must be preserved");
     }
 
@@ -1535,7 +1582,7 @@ mod tests {
 
         // Verify
         assert!(reconstructed.is_some(), "Should reconstruct after burst delivery");
-        let result = reconstructed.unwrap();
+        let result = reconstructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(&result[..], &original_data[..], "Data must maintain correct ordering");
     }
 
@@ -1599,7 +1646,8 @@ mod tests {
 
         // Verify
         assert_eq!(reconstructed_blocks.len(), block_count, "Should reconstruct all blocks");
-        for (idx, reconstructed) in reconstructed_blocks.iter().enumerate() {
+        for (idx, reconstructed) in reconstructed_blocks.into_iter().enumerate() {
+            let reconstructed = reconstructed.into_iter().flatten().collect::<Vec<_>>();
             assert_eq!(
                 &reconstructed[..],
                 &original_data_blocks[idx][..],
@@ -1669,6 +1717,7 @@ mod tests {
         for (count, frame) in shuffled.into_iter().enumerate() {
             match receiver.receive(frame).expect(&format!("receive failed at frame {}", count)) {
                 FecAction::Constructed(packet) => {
+                    let packet = packet.into_iter().flatten().collect::<Vec<_>>();
                     reconstructed = Some(packet);
                     println!("Reconstruction succeeded at frame {}", count);
                     break;
@@ -1765,7 +1814,7 @@ mod tests {
 
         // Verify
         assert!(reconstructed.is_some(), "Should reconstruct despite frame index gaps");
-        let result = reconstructed.unwrap();
+        let result = reconstructed.unwrap().into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(&result[..], &original_data[..], "Data ordering preserved through reconstruction");
     }
 }

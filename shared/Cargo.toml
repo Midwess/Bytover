@@ -30,6 +30,7 @@ futures-timer = {workspace = true, features = ["wasm-bindgen"]}
 n0-future.workspace = true
 async-stream = {workspace = true, default-features = false}
 bincode.workspace = true
+raptorq.workspace = true
 reqwest = { workspace = true, features = ["json"], default-features = false }
 matchbox_protocol.workspace = true
 matchbox_socket.workspace = true
@@ -42,7 +43,6 @@ url = { workspace = true }
 bytes = { workspace = true }
 derive_more = {  version = "2.0.1", features = ["try_from", "try_into", "try_unwrap"] }
 ambassador = "0.4.2"
-lz4_flex = { version = "0.12.0", default-features = false, features = ["frame"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["js", "v7"] }
