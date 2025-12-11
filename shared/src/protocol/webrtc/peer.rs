@@ -410,6 +410,10 @@ impl WebRtcPeer {
                     return Err(WebRtcErrors::InvalidDelimiter("Failed to deserialize packet".into()));
                 };
 
+                if let Some(rtt) = self.buffer.rtt().await {
+                    fec_receiver.set_rtt(rtt as u64);
+                }
+
                 let action = fec_receiver.receive(frame)?;
                 packets.extend(self.handle_fec_action(action).await?);
 
@@ -587,7 +591,7 @@ impl WebRtcPeer {
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
 
-            let total_sent_bytes = 0u64;
+            let mut total_sent_bytes = 0u64;
             let Some(progress_update) = session.resource_mut_progress(order_id) else {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
@@ -632,16 +636,20 @@ impl WebRtcPeer {
                     }
                 };
 
+                if let Some(rtt) = self.buffer.rtt().await {
+                    fec_sender.set_rtt(rtt as u64);
+                }
+
                 let action = match (bytes, raw_size, feedback) {
-                    (Some(bytes), Some(raw_size), None) => {
-                        let instant = Instant::now();
+                    (Some(bytes), Some(raw_size), _) => {
+                        total_sent_bytes += bytes.len() as u64;
+                        let time = Instant::now();
                         let action = fec_sender.send(bytes)?;
-                        log::info!("Constructed took {:?}ms", instant.elapsed().as_millis());
                         progress_update.update_progress(raw_size as u64);
                         let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                         action
                     }
-                    (None, None, Some(fb)) => fec_sender.feedback(fb),
+                    (_, _, Some(fb)) => fec_sender.feedback(fb),
                     _ => {
                         log::info!("End of resource {resource_path:?}");
                         break;
@@ -672,65 +680,67 @@ impl WebRtcPeer {
                     }
                 };
 
-                // if buff_counter > MAX_BUFFER_SIZE {
-                //     buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await;
-                //     if buff_counter > MAX_BUFFER_SIZE / 3 || drain_tick.elapsed() > time_to_drain {
-                //         drain_tick = Instant::now();
-                //         reader.compression_stats_mut().start_over();
-                //         let (mut tx, mut rx) = mpsc::channel(1);
-                //         let flushed_fut = async {
-                //             let tick = Instant::now();
-                //             let stats = self
-                //                 .buffer
-                //                 .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
-                //                 .await
-                //                 .map(|it| it.0)
-                //                 .unwrap_or(0);
-                //             let flushed = self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
-                //             let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                //             let new_stats = self
-                //                 .buffer
-                //                 .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
-                //                 .await
-                //                 .map(|it| it.0)
-                //                 .unwrap_or(0);
-                //             let bw = ((new_stats - stats).max(flushed)) as f64 / time;
-                //             let _ = tx.send(()).await;
-                //             Result::<f64, WebRtcErrors>::Ok(bw)
-                //         };
-                //
-                //         let send_fut = async {
-                //             let mut total_queued = 0;
-                //             loop {
-                //                 if total_queued >= MAX_BUFFER_SIZE {
-                //                     break Ok(());
-                //                 };
-                //
-                //                 match rx.try_next() {
-                //                     Ok(Some(_)) => break Result::<(), WebRtcErrors>::Ok(()),
-                //                     _ => {}
-                //                 };
-                //
-                //                 let Some((data, raw_size)) =
-                //                     reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await??
-                //                 else {
-                //                     break Ok(());
-                //                 };
-                //
-                //                 total_queued += data.len();
-                //                 let _ = queue_tx.unbounded_send((Packet::from(data), raw_size));
-                //             }
-                //         };
-                //
-                //         let (flushed, send) = join!(flushed_fut, send_fut);
-                //         let bw = flushed?;
-                //         log::info!("Bandwidth for resource {resource_path:?} is {bw} bytes/s");
-                //         send?;
-                //         reader.compression_stats_mut().update_network_bandwidth(bw);
-                //     }
-                // }
+                if buff_counter > MAX_BUFFER_SIZE {
+                    buff_counter = self.buffer.buffered_amount(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await;
+                    if buff_counter > MAX_BUFFER_SIZE / 3 || drain_tick.elapsed() > time_to_drain {
+                        drain_tick = Instant::now();
+                        reader.compression_stats_mut().start_over();
+                        let (mut tx, mut rx) = mpsc::channel(1);
+                        let flushed_fut = async {
+                            let tick = Instant::now();
+                            let stats = self
+                                .buffer
+                                .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
+                                .await
+                                .map(|it| it.0)
+                                .unwrap_or(0);
+                            let flushed = self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
+                            let time = tick.elapsed().as_secs_f64().max(f64::MIN);
+                            let new_stats = self
+                                .buffer
+                                .channel_bytes_sent_received(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID)
+                                .await
+                                .map(|it| it.0)
+                                .unwrap_or(0);
+                            let bw = ((new_stats - stats).max(flushed)) as f64 / time;
+                            let _ = tx.send(()).await;
+                            Result::<f64, WebRtcErrors>::Ok(bw)
+                        };
+
+                        let send_fut = async {
+                            let mut total_queued = 0;
+                            loop {
+                                if total_queued >= MAX_BUFFER_SIZE {
+                                    break Ok(());
+                                };
+
+                                match rx.try_next() {
+                                    Ok(Some(_)) => break Result::<(), WebRtcErrors>::Ok(()),
+                                    _ => {}
+                                };
+
+                                let Some((data, raw_size)) =
+                                    reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await??
+                                else {
+                                    break Ok(());
+                                };
+
+                                total_queued += data.len();
+                                let _ = queue_tx.unbounded_send((Packet::from(data), raw_size));
+                            }
+                        };
+
+                        let (flushed, send) = join!(flushed_fut, send_fut);
+                        let bw = flushed?;
+                        log::info!("Bandwidth for resource {resource_path:?} is {bw} bytes/s");
+                        send?;
+                        reader.compression_stats_mut().update_network_bandwidth(bw);
+                    }
+                }
             }
 
+            self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
+            self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
             let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
             let FecAction::Framed(frames) = fec_sender.send(end_delimiter)? else {
                 return Err(WebRtcErrors::InvalidDelimiter("Failed to send end delimiter".into()));
@@ -745,9 +755,9 @@ impl WebRtcPeer {
             let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
 
             log::info!(
-                "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?}",
+                "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?} compress in {:?}",
                 progress_update.status,
-                total_sent_bytes
+                total_sent_bytes,
             );
         }
 

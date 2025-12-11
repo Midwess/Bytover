@@ -19,8 +19,10 @@ const DATA_SHARDS_DEFAULT: usize = 48;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
-// TODO: Implement RTT
-const MIN_BLOCK_TIMEOUT_MS: u64 = 1000;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 100;
+const MAX_BLOCK_TIMEOUT_MS: u64 = 2000;
+
+const RTT_THRESHOLD_MS: u64 = 250;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
 
@@ -337,11 +339,12 @@ pub struct FecSender {
     last_loss_rate: f32,
 
     pub buffer: FrameBuffer,
+    rtt_ms: u64,
 }
 
 impl FecSender {
     pub fn new(peer_id: PeerId, buffer_capacity_bytes: usize) -> Self {
-        let initial_ratio = 0.03;
+        let initial_ratio = 0.0;
         Self {
             encoders: HashMap::new(),
             peer_id,
@@ -351,6 +354,28 @@ impl FecSender {
             parity_ewma: initial_ratio,
             last_loss_rate: 0.0,
             buffer: FrameBuffer::new(buffer_capacity_bytes),
+            rtt_ms: 0,
+        }
+    }
+
+    /// Set RTT and adjust parity ratio accordingly
+    /// Only use parity when RTT > 250ms
+    pub fn set_rtt(&mut self, rtt_ms: u64) {
+        if self.rtt_ms == rtt_ms {
+            return;
+        }
+
+        self.rtt_ms = rtt_ms;
+        if rtt_ms <= RTT_THRESHOLD_MS {
+            log::info!("RTT good ({}ms) will not use parity", rtt_ms);
+            self.parity_ratio = 0.0;
+            self.parity_ewma = 0.0;
+        } else {
+            log::info!("RTT too high ({}ms) will use parity", rtt_ms);
+            if self.parity_ratio == 0.0 {
+                self.parity_ratio = 0.03;
+                self.parity_ewma = 0.03;
+            }
         }
     }
 
@@ -375,26 +400,29 @@ impl FecSender {
                 }
             }
 
-            for _ in 0..parity_shards {
-                shards.push(vec![0u8; CHUNK_SIZE]);
-            }
+            // Only use Reed-Solomon encoding if parity_shards > 0
+            if parity_shards > 0 {
+                for _ in 0..parity_shards {
+                    shards.push(vec![0u8; CHUNK_SIZE]);
+                }
 
-            {
-                let mut shards_refs: Vec<&mut [u8]> =
-                    shards.iter_mut().map(|v| v.as_mut_slice()).collect();
+                {
+                    let mut shards_refs: Vec<&mut [u8]> =
+                        shards.iter_mut().map(|v| v.as_mut_slice()).collect();
 
-                let rs = match self.encoders.get_mut(&(shard_count, parity_shards)) {
-                    Some(rs) => rs,
-                    None => {
-                        let time = Instant::now();
-                        let rs = ReedSolomon::new(shard_count, parity_shards)?;
-                        log::info!("NewEncoder: {}ms", time.elapsed().as_millis());
-                        self.encoders.insert((shard_count, parity_shards), rs);
-                        self.encoders.get_mut(&(shard_count, parity_shards)).unwrap()
-                    }
-                };
+                    let rs = match self.encoders.get_mut(&(shard_count, parity_shards)) {
+                        Some(rs) => rs,
+                        None => {
+                            let time = Instant::now();
+                            let rs = ReedSolomon::new(shard_count, parity_shards)?;
+                            log::info!("NewEncoder: {}ms", time.elapsed().as_millis());
+                            self.encoders.insert((shard_count, parity_shards), rs);
+                            self.encoders.get_mut(&(shard_count, parity_shards)).unwrap()
+                        }
+                    };
 
-                rs.encode(&mut shards_refs)?;
+                    rs.encode(&mut shards_refs)?;
+                }
             }
 
             for (i, s) in shards.into_iter().enumerate() {
@@ -475,6 +503,10 @@ impl FecSender {
     }
 
     fn parity_count_from_ratio(packet_loss: f32, data_shards: usize) -> usize {
+        if packet_loss == 0.0 {
+            return 0
+        }
+
         const PACKETS_PER_CHUNK: f32 = 2.0;
 
         let q = 1.0 - (1.0 - packet_loss).powf(PACKETS_PER_CHUNK);
@@ -571,6 +603,7 @@ impl ReceiverBlock {
 pub struct FecReceiver {
     blocks: HashMap<u32, ReceiverBlock>,
     next_block_id: u32,
+    rtt_ms: u64,
 }
 
 impl FecReceiver {
@@ -578,7 +611,13 @@ impl FecReceiver {
         Self {
             blocks: HashMap::new(),
             next_block_id: 0,
+            rtt_ms: 0,
         }
+    }
+
+    /// Set RTT for timeout calculation
+    pub fn set_rtt(&mut self, rtt_ms: u64) {
+        self.rtt_ms = rtt_ms;
     }
 
     pub fn receive(&mut self, frame: Frame) -> Result<FecAction, FecError> {
@@ -635,62 +674,66 @@ impl FecReceiver {
         let present_count = block.shards.iter().filter(|s| s.is_some()).count();
 
         if present_count >= block.data_shards {
-            // Attempt reconstruction
-            // Attempt reconstruction
-            // We must prepare a Vec<Option<Vec<u8>>> where missing shards are None.
-            // The library will fill in the None spots.
-            let mut shards: Vec<Option<Vec<u8>>> = block
-                .shards
-                .iter()
-                .map(|opt| opt.as_ref().map(|b| b.to_vec()))
-                .collect();
+            // Attempt to construct the block
+            let assembled = if block.parity_shards == 0 {
+                // No parity, just collect the data shards directly
+                Some(block
+                    .shards
+                    .iter()
+                    .take(block.data_shards)
+                    .filter_map(|opt| opt.as_ref().map(|b| b.to_vec()))
+                    .collect::<Vec<_>>())
+            } else {
+                // Use Reed-Solomon reconstruction when parity_shards > 0
+                let mut shards: Vec<Option<Vec<u8>>> = block
+                    .shards
+                    .iter()
+                    .map(|opt| opt.as_ref().map(|b| b.to_vec()))
+                    .collect();
 
-            let rs = ReedSolomon::new(block.data_shards, block.parity_shards)
-                .and_then(|rs| rs.reconstruct(&mut shards));
+                match ReedSolomon::new(block.data_shards, block.parity_shards)
+                    .and_then(|rs| rs.reconstruct(&mut shards))
+                {
+                    Ok(()) => {
+                        // Success: assemble payload from data shards only
+                        Some(shards
+                            .into_iter()
+                            .take(block.data_shards)
+                            .filter_map(|x| x)
+                            .collect::<Vec<_>>())
+                    }
+                    Err(_) => None, // Reconstruction failed
+                }
+            };
 
-            match rs {
-                Ok(()) => {
-                    // Success: assemble payload from data shards only
-                    // We take only the first data_shards items, as those contain the original data
-                    let assembled: Vec<_> = shards
-                        .into_iter()
-                        .take(block.data_shards)
-                        .filter_map(|x| x)
-                        .collect();
+            // If we successfully assembled the data, handle the constructed block
+            if let Some(assembled) = assembled {
+                if assembled.len() == block.data_shards {
+                    block.constructed_frames = assembled;
+                    if block_id == self.next_block_id {
+                        if let Some(block) = self.blocks.remove(&block_id) {
+                            log::info!("Constructed block {}", block_id);
+                            let mut completed_blocks = vec![block];
 
-                    // If reconstruction succeeded, we must have all data shards now
-                    if assembled.len() == block.data_shards {
-                        block.constructed_frames = assembled;
-                        if block_id == self.next_block_id {
-                            if let Some(block) = self.blocks.remove(&block_id) {
-                                log::info!("Constructed block {}", block_id);
-                                let mut completed_blocks = vec![];
-                                completed_blocks.push(block);
-                                loop {
-                                    self.next_block_id += 1;
-                                    let is_completed = self.blocks.get(&self.next_block_id).map(|it| {
-                                        it.is_constructed()
-                                    }).unwrap_or_default();
+                            // Collect any subsequent blocks that are already constructed
+                            loop {
+                                self.next_block_id += 1;
+                                let is_completed = self.blocks.get(&self.next_block_id)
+                                    .map(|it| it.is_constructed())
+                                    .unwrap_or_default();
 
-                                    if is_completed {
-                                        log::info!("Constructed block {}", self.next_block_id);
-                                        completed_blocks.push(self.blocks.remove(&self.next_block_id).unwrap());
-                                    }
-                                    else {
-                                        break
-                                    }
+                                if is_completed {
+                                    log::info!("Constructed block {}", self.next_block_id);
+                                    completed_blocks.push(self.blocks.remove(&self.next_block_id).unwrap());
+                                } else {
+                                    break;
                                 }
-
-                                let bytes = completed_blocks.into_iter().map(|it| it.into_packet()).collect::<Vec<_>>();
-                                return Ok(FecAction::Constructed(bytes));
                             }
+
+                            let bytes = completed_blocks.into_iter().map(|it| it.into_packet()).collect::<Vec<_>>();
+                            return Ok(FecAction::Constructed(bytes));
                         }
                     }
-                }
-                Err(_) => {
-                    // Reconstruction failed despite having enough frames?
-                    // This can happen if the frames are corrupted or inconsistent.
-                    // Fall through to timeout/missing handling
                 }
             }
         }
@@ -702,7 +745,13 @@ impl FecReceiver {
             return Ok(FecAction::Terminated);
         }
 
-        let timeout_us = MIN_BLOCK_TIMEOUT_MS * 1000;
+        let timeout_ms = if self.rtt_ms > 0 {
+            (self.rtt_ms * 3).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
+        } else {
+            MIN_BLOCK_TIMEOUT_MS
+        };
+
+        let timeout_us = timeout_ms * 1000;
 
         let block = self.blocks.iter_mut().min_by(|i1, i2| i1.1.last_ping_ts.cmp(&i2.1.last_ping_ts));
         if let Some((idx, old_block)) = block {

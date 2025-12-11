@@ -12,7 +12,7 @@ use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
 use matchbox_protocol::PeerId;
-use matchbox_socket::WebRtcSocket;
+use matchbox_socket::{ChannelConfig, WebRtcSocket};
 use n0_future::task::spawn;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
@@ -30,7 +30,7 @@ pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
 
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024;
+pub static MAX_BUFFER_SIZE: usize = 512 * 1024;
 
 pub struct WebRtc {
     addr: String,
