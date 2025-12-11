@@ -3,9 +3,12 @@ use thiserror::Error;
 use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
+use std::sync::{Arc};
 use bytemuck::bytes_of;
+use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::Instant;
+use once_cell::sync::Lazy;
 use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
@@ -13,11 +16,13 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 const CHUNK_SIZE: usize = 8 * 1024;
 const DATA_SHARDS_DEFAULT: usize = 32;
 const MIN_PARITY_SHARDS: usize = 1;
-const MAX_PARITY_SHARDS: usize = 64;
+const MAX_PARITY_SHARDS: usize = 4;
 // TODO: Implement RTT
 const MIN_BLOCK_TIMEOUT_MS: u64 = 3000;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
+
+static RS: Lazy<Arc<Mutex<HashMap<(usize, usize), ReedSolomon>>>> = Lazy::new(|| { Default::default() });
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -321,6 +326,7 @@ pub enum FecAction {
 pub struct FecSender {
     pub peer_id: PeerId,
     pub block_id: u32,
+    pub encoders: HashMap<(usize, usize), ReedSolomon>,
 
     pub data_shards: usize,
     pub parity_ratio: f32,
@@ -333,8 +339,9 @@ pub struct FecSender {
 
 impl FecSender {
     pub fn new(peer_id: PeerId, buffer_capacity_bytes: usize) -> Self {
-        let initial_ratio = 0.25;
+        let initial_ratio = 0.01;
         Self {
+            encoders: HashMap::new(),
             peer_id,
             block_id: 0,
             data_shards: DATA_SHARDS_DEFAULT,
@@ -350,7 +357,6 @@ impl FecSender {
         let mut offset = 0usize;
         let mut frames_to_send: Vec<Frame> = Vec::new();
 
-        let elapsed = Instant::now();
         while offset < packet.len() {
             // Build data shards for one block
             let block_size = (packet.len() - offset).min(CHUNK_SIZE * self.data_shards);
@@ -367,8 +373,6 @@ impl FecSender {
                 }
             }
 
-            log::info!("Encoding block {}: {} shards, complete at {}ms", self.block_id, shards.len(), elapsed.elapsed().as_millis());
-
             for _ in 0..parity_shards {
                 shards.push(vec![0u8; CHUNK_SIZE]);
             }
@@ -377,12 +381,18 @@ impl FecSender {
                 let mut shards_refs: Vec<&mut [u8]> =
                     shards.iter_mut().map(|v| v.as_mut_slice()).collect();
 
-                let rs = ReedSolomon::new(shard_count, parity_shards)?;
-                log::info!("mon new at {}ms", elapsed.elapsed().as_millis());
+                let rs = match self.encoders.get_mut(&(shard_count, parity_shards)) {
+                    Some(rs) => rs,
+                    None => {
+                        let rs = ReedSolomon::new(shard_count, parity_shards)?;
+                        self.encoders.insert((shard_count, parity_shards), rs);
+                        self.encoders.get_mut(&(shard_count, parity_shards)).unwrap()
+                    }
+                };
+
                 rs.encode(&mut shards_refs)?;
             }
 
-            log::info!("mon complete at {}ms", elapsed.elapsed().as_millis());
             for (i, s) in shards.into_iter().enumerate() {
                 let is_parity = i >= shard_count;
                 let frame = Frame {
@@ -744,6 +754,7 @@ fn now_micros() -> u64 {
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
+    use core_services::logger::setup;
     use super::*;
 
     #[test]
@@ -930,6 +941,7 @@ mod tests {
 
     #[test]
     fn test_send_receive_10mb_data() {
+        setup();
         // Test with 10MB of data
         let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 50 * 1024 * 1024);
         let mut receiver = FecReceiver::new();
@@ -944,6 +956,7 @@ mod tests {
 
         println!("Sending 10MB data through FEC encoder...");
 
+        let time = std::time::Instant::now();
         // Send the data through FEC encoder
         let action = sender.send(packet).expect("send failed");
 
@@ -953,7 +966,7 @@ mod tests {
             _ => panic!("Expected Framed action"),
         };
 
-        println!("Generated {} frames", frames.len());
+        println!("Generated {} frames in {}us", frames.len(), time.elapsed().as_micros());
         assert!(!frames.is_empty(), "Should have generated frames");
 
         // Receive all frames and collect constructed packets
@@ -1177,7 +1190,7 @@ mod tests {
         let inner_feedback = feedback_obj.feedback.expect("Empty feedback");
 
         // --- STEP 4: Sender processes Feedback ---
-        let retransmit_action = sender.feedback(inner_feedback).expect("Sender feedback failed");
+        let retransmit_action = sender.feedback(inner_feedback);
 
         let retransmitted_frames = match retransmit_action {
             FecAction::Retransmit(f) => f,
@@ -1240,12 +1253,12 @@ mod tests {
 
         // Request retransmit for u32::MAX
         let fb_max = Feedback::Missing(MissingFrames { block_id: u32::MAX, frames: vec![0] });
-        let res_max = sender.feedback(fb_max).unwrap();
+        let res_max = sender.feedback(fb_max);
         assert!(matches!(res_max, FecAction::Retransmit(_)), "Should find block u32::MAX");
 
         // Request retransmit for 0
         let fb_zero = Feedback::Missing(MissingFrames { block_id: 0, frames: vec![0] });
-        let res_zero = sender.feedback(fb_zero).unwrap();
+        let res_zero = sender.feedback(fb_zero);
         assert!(matches!(res_zero, FecAction::Retransmit(_)), "Should find block 0");
     }
 
@@ -1311,6 +1324,7 @@ mod tests {
 
     #[test]
     fn test_ordering_interleaved_blocks_out_of_order() {
+        setup();
         // SCENARIO:
         // Multiple blocks' frames are interleaved and delivered out of order.
         // Each block should reconstruct independently with correct internal ordering.
@@ -1377,8 +1391,8 @@ mod tests {
         // Verify both blocks reconstructed correctly
         assert_eq!(block_results.len(), 2, "Should have reconstructed 2 blocks");
 
-        let result1 = &block_results[&0].into_iter().flatten().collect::<Vec<_>>();
-        let result2 = &block_results[&1].into_iter().flatten().collect::<Vec<_>>();
+        let result1 = block_results[&0].clone().into_iter().flatten().collect::<Vec<_>>();
+        let result2 = block_results[&1].clone().into_iter().flatten().collect::<Vec<_>>();
 
         assert_eq!(&result1[..], &packet1_data[..], "Block 0 data mismatch");
         assert_eq!(&result2[..], &packet2_data[..], "Block 1 data mismatch");
