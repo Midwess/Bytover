@@ -43,8 +43,12 @@ impl From<PeerMessage> for Peer {
     fn from(value: PeerMessage) -> Self {
         Self {
             id: value.peer_id,
-            name: value.name,
-            avatar_url: value.avatar_url,
+            name: value.name.or_else(|| Some("Unknown".to_string())),
+            avatar_url: if value.avatar_url.is_empty() {
+                Self::random_avatar()
+            } else {
+                value.avatar_url
+            },
             email: value.email,
             device: value.device.into()
         }

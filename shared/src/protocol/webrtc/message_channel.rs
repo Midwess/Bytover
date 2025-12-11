@@ -40,7 +40,7 @@ impl DirectMessageChannel {
         .encode(&mut binary)?;
 
         let packet = Packet::from(binary);
-        let _ = self.outbound_sender.lock().await.send((self.to_peer_id, packet)).await;
+        let _ = self.outbound_sender.lock().await.unbounded_send((self.to_peer_id, packet));
 
         Ok(())
     }
@@ -68,8 +68,7 @@ impl DirectMessageChannel {
         self.outbound_sender
             .lock()
             .await
-            .send((self.to_peer_id, packet))
-            .await
+            .unbounded_send((self.to_peer_id, packet))
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         let (tx, mut rx) = mpsc::channel(1);
@@ -97,8 +96,7 @@ impl DirectMessageChannel {
         self.outbound_sender
             .lock()
             .await
-            .send((self.to_peer_id, packet))
-            .await
+            .unbounded_send((self.to_peer_id, packet))
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         Ok(request_id)

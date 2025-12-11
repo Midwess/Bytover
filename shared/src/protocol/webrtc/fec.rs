@@ -19,7 +19,7 @@ const DATA_SHARDS_DEFAULT: usize = 48;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
-const MIN_BLOCK_TIMEOUT_MS: u64 = 100;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 300;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 2000;
 
 const RTT_THRESHOLD_MS: u64 = 250;
@@ -188,7 +188,6 @@ pub struct FrameBuffer {
     entries: VecDeque<FrameEntry>,
     capacity_bytes: usize,
     used_bytes: usize,
-    min_required_block_id: u32,
     max_block_id_seen: u32,
 }
 
@@ -198,7 +197,6 @@ impl FrameBuffer {
             entries: VecDeque::new(),
             capacity_bytes,
             used_bytes: 0,
-            min_required_block_id: 0,
             max_block_id_seen: 0,
         }
     }
@@ -207,12 +205,6 @@ impl FrameBuffer {
     /// Never evicts blocks <= min_required_block_id (still needed for retransmit)
     pub fn insert(&mut self, entry: FrameEntry) -> Result<(), FecError> {
         let size = entry.data.len();
-        if size != CHUNK_SIZE {
-            return Err(FecError::InvalidFrameSize {
-                expected: CHUNK_SIZE,
-                actual: size,
-            });
-        }
 
         // Track newest block_id (detect wraparound)
         if entry.block_id.wrapping_sub(self.max_block_id_seen) < i32::MAX as u32 {
@@ -223,32 +215,12 @@ impl FrameBuffer {
         self.entries.push_back(entry);
 
         while self.used_bytes > self.capacity_bytes {
-            if let Some(front) = self.entries.front() {
-                // If front block is still required, evict from back instead
-                if front.block_id <= self.min_required_block_id {
-                    if let Some(removed) = self.entries.pop_back() {
-                        self.used_bytes -= removed.data.len();
-                    } else {
-                        break;
-                    }
-                } else {
-                    if let Some(removed) = self.entries.pop_front() {
-                        self.used_bytes -= removed.data.len();
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                break;
+            if let Some(removed) = self.entries.pop_front() {
+                self.used_bytes -= removed.data.len();
             }
         }
 
         Ok(())
-    }
-
-    /// Update the minimum required block id (from receiver feedback)
-    pub fn update_min_required_block(&mut self, block_id: u32) {
-        self.min_required_block_id = self.min_required_block_id.max(block_id);
     }
 
     /// Return a cloned FrameEntry if present
@@ -413,9 +385,7 @@ impl FecSender {
                     let rs = match self.encoders.get_mut(&(shard_count, parity_shards)) {
                         Some(rs) => rs,
                         None => {
-                            let time = Instant::now();
                             let rs = ReedSolomon::new(shard_count, parity_shards)?;
-                            log::info!("NewEncoder: {}ms", time.elapsed().as_millis());
                             self.encoders.insert((shard_count, parity_shards), rs);
                             self.encoders.get_mut(&(shard_count, parity_shards)).unwrap()
                         }
@@ -463,22 +433,23 @@ impl FecSender {
     pub fn feedback(&mut self, fb: Feedback) -> FecAction {
         match fb {
             Feedback::Network(net) => {
-                let base = 0.05f32;
-                let factor = 1.5f32;
-                let target = (base + net.loss_rate * factor).clamp(0.05, 1.0);
+                if self.rtt_ms > RTT_THRESHOLD_MS {
+                    let base = 0.05f32;
+                    let factor = 1.5f32;
+                    let target = (base + net.loss_rate * factor).clamp(0.05, 1.0);
 
-                if (net.loss_rate - self.last_loss_rate).abs() > LOSS_RATE_HYSTERESIS {
-                    self.parity_ewma = (self.parity_ewma * (1.0 - PARITY_ADAPTATION_WEIGHT))
-                        + (target * PARITY_ADAPTATION_WEIGHT);
-                    self.last_loss_rate = net.loss_rate;
+                    if (net.loss_rate - self.last_loss_rate).abs() > LOSS_RATE_HYSTERESIS {
+                        self.parity_ewma = (self.parity_ewma * (1.0 - PARITY_ADAPTATION_WEIGHT))
+                            + (target * PARITY_ADAPTATION_WEIGHT);
+                        self.last_loss_rate = net.loss_rate;
+                    }
+
+                    self.parity_ratio = self.parity_ewma;
                 }
 
-                self.parity_ratio = self.parity_ewma;
                 FecAction::Noop
             }
             Feedback::Missing(m) => {
-                self.buffer.update_min_required_block(m.block_id);
-
                 let entries = self.buffer.collect_for_retransmit(m.block_id, m.frames.as_slice());
                 if entries.is_empty() {
                     FecAction::Terminated
@@ -536,13 +507,14 @@ struct ReceiverBlock {
     first_ts: u64,
     last_frame_ts: u64,
     last_ping_ts: u64,
+    is_requested_retransmit: bool,
     is_place_holder: bool,
 }
 
 impl ReceiverBlock {
     fn place_holder() -> Self {
         let mut this = ReceiverBlock::default();
-        let now = now_micros();
+        let now = now_micros() + MIN_BLOCK_TIMEOUT_MS * 1_000;
         this.is_place_holder = true;
         this.data_shards = DATA_SHARDS_DEFAULT;
         this.shards = vec![None; DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS];
@@ -567,6 +539,7 @@ impl ReceiverBlock {
             shards: vec![None; total],
             received: 0,
             first_ts: now,
+            is_requested_retransmit: false,
             last_frame_ts: now,
             last_ping_ts: now,
             constructed_frames: Vec::new(),
@@ -604,6 +577,8 @@ pub struct FecReceiver {
     blocks: HashMap<u32, ReceiverBlock>,
     next_block_id: u32,
     rtt_ms: u64,
+    total_frames_received: u64,
+    total_lost_frames: u64,
 }
 
 impl FecReceiver {
@@ -612,7 +587,23 @@ impl FecReceiver {
             blocks: HashMap::new(),
             next_block_id: 0,
             rtt_ms: 0,
+            total_frames_received: 0,
+            total_lost_frames: 0,
         }
+    }
+
+    /// Calculate current loss rate based on received vs expected frames
+    pub fn calculate_loss_rate(&self) -> f32 {
+        if self.total_frames_received == 0 {
+            return 0.0;
+        }
+
+        (self.total_lost_frames as f32) / (self.total_frames_received as f32)
+    }
+
+    /// Get current block ID for feedback
+    pub fn current_block_id(&self) -> u32 {
+        self.next_block_id
     }
 
     /// Set RTT for timeout calculation
@@ -664,6 +655,7 @@ impl FecReceiver {
         if block.shards[idx].is_none() {
             block.shards[idx] = Some(frame.payload);
             block.received += 1;
+            self.total_frames_received += 1;
         }
 
         let now = now_micros();
@@ -753,24 +745,29 @@ impl FecReceiver {
 
         let timeout_us = timeout_ms * 1000;
 
-        let block = self.blocks.iter_mut().min_by(|i1, i2| i1.1.last_ping_ts.cmp(&i2.1.last_ping_ts));
-        if let Some((idx, old_block)) = block {
+        let block = self.blocks
+            .iter_mut()
+            .filter(|it| !it.1.is_constructed())
+            .filter(|it| !it.1.is_requested_retransmit)
+            .min_by(|i1, i2| i1.1.last_ping_ts.cmp(&i2.1.last_ping_ts));
+        if let Some((idx, old_block)) = block.map(|it| (*it.0, it.1)) {
             if now_micros().saturating_sub(old_block.last_ping_ts) > timeout_us {
-                let action = Self::handle_timeout(*idx, old_block);
-                return Ok(action)
+                let action = Self::handle_timeout(idx, old_block);
+                self.total_lost_frames += action.0 as u64;
+                return Ok(action.1)
             }
         }
 
         Ok(FecAction::Noop)
     }
 
-    fn handle_timeout(block_id: u32, block: &mut ReceiverBlock) -> FecAction {
+    fn handle_timeout(block_id: u32, block: &mut ReceiverBlock) -> (usize, FecAction) {
         let present_count = block.shards.iter().filter(|s| s.is_some()).count();
         let needed_more = block.data_shards.saturating_sub(present_count);
 
         if needed_more == 0 {
             // Already have enough data frames
-            return FecAction::Noop;
+            return (0, FecAction::Noop);
         }
 
         block.last_ping_ts = now_micros();
@@ -796,14 +793,17 @@ impl FecReceiver {
             }
         }
 
+        let lost_count = missing.len();
+
         let mf = MissingFrames {
             block_id,
             frames: missing,
         };
 
-        FecAction::Feedback(FecFeedback {
+        block.is_requested_retransmit = true;
+        (lost_count, FecAction::Feedback(FecFeedback {
           feedback: Some(Feedback::Missing(mf)),
-        })
+        }))
     }
 }
 
@@ -886,9 +886,6 @@ mod tests {
             timestamp: now_micros(),
         };
         buffer.insert(fe).expect("insert 1 failed");
-
-        // Mark block 0 as still required
-        buffer.update_min_required_block(0);
 
         // Now when we insert more (should evict from back, not drop block 0)
         let fe2 = FrameEntry {

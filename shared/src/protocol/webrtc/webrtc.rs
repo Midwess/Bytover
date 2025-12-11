@@ -30,7 +30,8 @@ pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
 
-pub static MAX_BUFFER_SIZE: usize = 512 * 1024;
+pub static MAX_BUFFER_SIZE: usize = 1024 * 1024;
+pub static MIN_BUFFER_SIZE: usize = MAX_BUFFER_SIZE / 10;
 
 pub struct WebRtc {
     addr: String,
@@ -136,10 +137,10 @@ impl WebRtc {
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
-            .add_reliable_channel() // Msg
-            .add_reliable_channel() // Resource reliable, for retransmissions and delimiter
-            .add_unreliable_channel() // Resource unreliable, for retransmissions
-            .add_reliable_channel() // Thumbnail
+            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Msg
+            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Resource reliable, for retransmissions and delimiter
+            .add_unreliable_channel(None) // Resource unreliable, for retransmissions
+            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
             .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
