@@ -577,7 +577,7 @@ impl WebRtcPeer {
             };
 
             let is_compressed = false;
-            let chunk_size = 250 * 1024;
+            let chunk_size = 100 * 1024;
 
             let mut reader = self
                 .resource_repo

@@ -13,12 +13,14 @@ use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
-const CHUNK_SIZE: usize = 8 * 1024;
-const DATA_SHARDS_DEFAULT: usize = 32;
-const MIN_PARITY_SHARDS: usize = 1;
-const MAX_PARITY_SHARDS: usize = 4;
+// Too big chunk size will cause higher chance of packet loss
+const CHUNK_SIZE: usize = 2 * 1150;
+const DATA_SHARDS_DEFAULT: usize = 48;
+const MIN_PARITY_SHARDS: usize = 2;
+const MAX_PARITY_SHARDS: usize = 10;
+
 // TODO: Implement RTT
-const MIN_BLOCK_TIMEOUT_MS: u64 = 3000;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 1000;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15; // EWMA weight (lower = slower)
 const LOSS_RATE_HYSTERESIS: f32 = 0.02; // Only adapt if change > 2%
 
@@ -339,7 +341,7 @@ pub struct FecSender {
 
 impl FecSender {
     pub fn new(peer_id: PeerId, buffer_capacity_bytes: usize) -> Self {
-        let initial_ratio = 0.01;
+        let initial_ratio = 0.03;
         Self {
             encoders: HashMap::new(),
             peer_id,
@@ -384,7 +386,9 @@ impl FecSender {
                 let rs = match self.encoders.get_mut(&(shard_count, parity_shards)) {
                     Some(rs) => rs,
                     None => {
+                        let time = Instant::now();
                         let rs = ReedSolomon::new(shard_count, parity_shards)?;
+                        log::info!("NewEncoder: {}ms", time.elapsed().as_millis());
                         self.encoders.insert((shard_count, parity_shards), rs);
                         self.encoders.get_mut(&(shard_count, parity_shards)).unwrap()
                     }
@@ -470,13 +474,20 @@ impl FecSender {
         }
     }
 
-    fn parity_count_from_ratio(ratio: f32, data_shards: usize) -> usize {
-        let mut k = ((ratio * data_shards as f32).round() as isize)
-            .max(MIN_PARITY_SHARDS as isize) as usize;
-        if k > MAX_PARITY_SHARDS {
-            k = MAX_PARITY_SHARDS;
+    fn parity_count_from_ratio(packet_loss: f32, data_shards: usize) -> usize {
+        const PACKETS_PER_CHUNK: f32 = 2.0;
+
+        let q = 1.0 - (1.0 - packet_loss).powf(PACKETS_PER_CHUNK);
+
+        let mut p = (q * data_shards as f32).round() as usize;
+
+        if p < MIN_PARITY_SHARDS {
+            p = MIN_PARITY_SHARDS;
         }
-        k
+        if p > MAX_PARITY_SHARDS {
+            p = MAX_PARITY_SHARDS;
+        }
+        p
     }
 }
 
@@ -686,7 +697,7 @@ impl FecReceiver {
 
         // Too much failed, the buffer cannot maintain
         // any longer.
-        if self.blocks.len() > 64 {
+        if self.blocks.len() > 256 {
             println!("FecReceiver buffer full, dropping block {}, block size = {}", block_id, self.blocks.len());
             return Ok(FecAction::Terminated);
         }
