@@ -331,22 +331,79 @@ impl WebRtcPeer {
 
         let mut fec_receiver = FecReceiver::new();
         let mut start_delimiter_tick = Instant::now();
+        let mut next_check_time: Option<Instant> = None;
+
         loop {
             if session.is_completed() {
                 log::warn!("Session {session_id} is completed");
                 break;
             }
 
-            let Some(raw_packet) = resource_rx.next().with_cancel(&cancellation_signal).await? else {
-                break;
+            // Wait for either a new packet or a timeout
+            let frame = {
+                let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
+
+                futures::pin_mut!(packet_fut);
+
+                if let Some(check_time) = next_check_time {
+                    let sleep_fut = sleep(check_time.saturating_duration_since(Instant::now())).fuse();
+                    futures::pin_mut!(sleep_fut);
+
+                    select_biased! {
+                        raw_packet = packet_fut => {
+                            let Some(raw_packet) = raw_packet? else {
+                                break;
+                            };
+
+                            let Some(frame) = Frame::deserialize(&raw_packet) else {
+                                log::warn!("Failed to deserialize packet: {raw_packet:?}");
+                                continue;
+                            };
+
+                            Some(frame)
+                        },
+                        _ = sleep_fut => {
+                            // Timeout expired, ping the FEC receiver
+                            None
+                        },
+                    }
+                } else {
+                    // No timeout set, just wait for packets
+                    let Some(raw_packet) = packet_fut.await? else {
+                        break;
+                    };
+
+                    let Some(frame) = Frame::deserialize(&raw_packet) else {
+                        log::warn!("Failed to deserialize packet: {raw_packet:?}");
+                        continue;
+                    };
+
+                    Some(frame)
+                }
             };
 
-            let Some(frame) = Frame::deserialize(&raw_packet) else {
-                log::warn!("Failed to deserialize packet: {raw_packet:?}");
-                continue;
+            let action = if let Some(frame) = frame {
+                // Process received frame
+                if let Some(rtt) = self.buffer.rtt().await {
+                    fec_receiver.set_rtt(rtt as u64);
+                }
+                fec_receiver.receive(frame)?
+            } else {
+                // Timeout expired, ping for feedback
+                fec_receiver.ping()?
             };
 
-            let action = fec_receiver.receive(frame)?;
+            // Handle the action
+            match action {
+                FecAction::Queued(instant) => {
+                    next_check_time = Some(instant);
+                    continue;
+                },
+                _ => {
+                    next_check_time = None;
+                }
+            }
+
             let mut packets = self.handle_fec_action(action).await?;
             if packets.is_empty() {
                 continue;
@@ -400,23 +457,76 @@ impl WebRtcPeer {
                     break;
                 }
 
-                let raw_packet = resource_rx
-                    .next()
-                    .with_cancel(&cancellation_signal)
-                    .await
-                    .ok()
-                    .flatten()
-                    .ok_or_else(|| WebRtcErrors::InvalidDelimiter("Stream ended before end delimiter".into()))?;
+                // Wait for either a new packet or a timeout
+                let frame = {
+                    let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
 
-                let Some(frame) = Frame::deserialize(&raw_packet) else {
-                    return Err(WebRtcErrors::InvalidDelimiter("Failed to deserialize packet".into()));
+                    futures::pin_mut!(packet_fut);
+
+                    if let Some(check_time) = next_check_time {
+                        let sleep_fut = sleep(check_time.saturating_duration_since(Instant::now())).fuse();
+                        futures::pin_mut!(sleep_fut);
+
+                        select_biased! {
+                            raw_packet = packet_fut => {
+                                let raw_packet = raw_packet
+                                    .ok()
+                                    .flatten()
+                                    .ok_or_else(|| WebRtcErrors::InvalidDelimiter("Stream ended before end delimiter".into()))?;
+
+                                let Some(frame) = Frame::deserialize(&raw_packet) else {
+                                    return Err(WebRtcErrors::InvalidDelimiter("Failed to deserialize packet".into()));
+                                };
+
+                                Some(frame)
+                            },
+                            _ = sleep_fut => {
+                                // Timeout expired, ping the FEC receiver
+                                None
+                            },
+                        }
+                    } else {
+                        // No timeout set, just wait for packets
+                        let raw_packet = packet_fut
+                            .await
+                            .ok()
+                            .flatten()
+                            .ok_or_else(|| WebRtcErrors::InvalidDelimiter("Stream ended before end delimiter".into()))?;
+
+                        let Some(frame) = Frame::deserialize(&raw_packet) else {
+                            return Err(WebRtcErrors::InvalidDelimiter("Failed to deserialize packet".into()));
+                        };
+
+                        Some(frame)
+                    }
                 };
 
-                if let Some(rtt) = self.buffer.rtt().await {
-                    fec_receiver.set_rtt(rtt as u64);
+                let action = if let Some(frame) = frame {
+                    // Process received frame
+                    if let Some(rtt) = self.buffer.rtt().await {
+                        fec_receiver.set_rtt(rtt as u64);
+                    }
+
+                    let time = Instant::now();
+                    let action = fec_receiver.receive(frame)?;
+                    log::info!("Received FEC {}us", time.elapsed().as_micros());
+                    action
+                } else {
+                    // Timeout expired, ping for feedback
+                    fec_receiver.ping()?
+                };
+
+                // Handle the action
+                match &action {
+                    FecAction::Queued(instant) => {
+                        next_check_time = Some(*instant);
+                        continue;
+                    },
+                    _ => {
+                        next_check_time = None;
+                    }
                 }
 
-                let action = fec_receiver.receive(frame)?;
                 packets.extend(self.handle_fec_action(action).await?);
 
                 for packet in packets.drain(..) {
@@ -499,6 +609,7 @@ impl WebRtcPeer {
                 log::warn!("FEC terminated");
                 Err(WebRtcErrors::InvalidDelimiter("FEC terminated".into()))
             }
+            FecAction::Queued(_) | FecAction::Noop => Ok(vec![]), // Ignore queued and noop
             _ => Ok(vec![]), // Ignore others
         }
     }
@@ -641,26 +752,47 @@ impl WebRtcPeer {
             let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    let reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
-                    let queue_fut = queue_rx.next().fuse();
-                    let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
+                    if on_hold {
+                        // When on hold, only wait for feedback with a timeout to prevent hanging
+                        let timeout_fut = sleep(Duration::from_secs(30)).fuse();
+                        let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
-                    futures::pin_mut!(queue_fut);
-                    futures::pin_mut!(fb_fut);
-                    futures::pin_mut!(reader_fut);
-                    select_biased! {
-                        q = queue_fut => {
-                            let q: Option<(Packet, usize)> = q;
-                            q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None::<Packet>, None::<usize>, None::<Feedback>))
-                        },
-                        r = reader_fut => {
-                            let res = r??;
-                            res.map(|it| (Some(Packet::from(it.0)), Some(it.1), None)).unwrap_or((None, None, None))
-                        },
-                        fb = fb_fut => {
-                            let fb = fb?;
-                            fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
-                        },
+                        futures::pin_mut!(timeout_fut);
+                        futures::pin_mut!(fb_fut);
+                        select_biased! {
+                            _ = timeout_fut => {
+                                log::warn!("Timeout waiting for feedback while on hold, resuming transfer");
+                                on_hold = false;
+                                (None, None, None)
+                            },
+                            fb = fb_fut => {
+                                let fb = fb?;
+                                fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
+                            },
+                        }
+                    }
+                    else {
+                        let queue_fut = queue_rx.next().fuse();
+                        let reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
+                        let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
+
+                        futures::pin_mut!(queue_fut);
+                        futures::pin_mut!(fb_fut);
+                        futures::pin_mut!(reader_fut);
+                        select_biased! {
+                            q = queue_fut => {
+                                let q: Option<(Packet, usize)> = q;
+                                q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None::<Packet>, None::<usize>, None::<Feedback>))
+                            },
+                            r = reader_fut => {
+                                let res = r??;
+                                res.map(|it| (Some(Packet::from(it.0)), Some(it.1), None)).unwrap_or((None, None, None))
+                            },
+                            fb = fb_fut => {
+                                let fb = fb?;
+                                fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
+                            },
+                        }
                     }
                 };
 
@@ -703,6 +835,7 @@ impl WebRtcPeer {
                     }
                     FecAction::Retransmit(frames) => {
                         for frame in frames {
+                            log::info!("Retransmitting packet: {:?} frame {:?}", frame.block_id, frame.frame_idx);
                             let packet = frame.serialize();
                             buff_counter += packet.len();
                             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
@@ -712,32 +845,22 @@ impl WebRtcPeer {
                         log::info!("Fec sender terminated, aborting resource transfer");
                         break;
                     }
-                    FecAction::Noop | FecAction::Feedback(_) | FecAction::Constructed(_) => {
+                    FecAction::Noop | FecAction::Feedback(_) | FecAction::Constructed(_) | FecAction::Queued(_) => {
                         // Will not happens, do nothing
                     }
                 };
 
                 if buff_counter > MAX_BUFFER_SIZE  {
                     log::info!("Buffer full at block = {}, marking on_hold=true and sending hold delimiter for session {}", fec_sender.block_id, session_id);
-                    let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
-                    let FecAction::Framed(fec_frames) = fec_sender.send(hold_delimiter)? else {
-                        return Err(anyhow!("Failed to send hold delimiter").into());
-                    };
+                    if !on_hold {
+                        on_hold = true;
+                        let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
+                        let FecAction::Framed(fec_frames) = fec_sender.send(hold_delimiter)? else {
+                            return Err(anyhow!("Failed to send hold delimiter").into());
+                        };
 
-                    for frame in fec_frames {
-                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
-                    }
-
-                    loop {
-                        if let Some(feedback) = feedback_receiver.next().await
-                        {
-                            if let Feedback::Network(ref net) = feedback {
-                                log::info!("Received network feedback, marking on_hold=false: loss_rate={}, rtt={:?}, block_id={:?}",
-                                    net.loss_rate, net.rtt, net.current_block_id);
-                                break;
-                            }
-
-                            let _ = self.transfer_feedback_sender.unbounded_send(feedback);
+                        for frame in fec_frames {
+                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
                         }
                     }
 

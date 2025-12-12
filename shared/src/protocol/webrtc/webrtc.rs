@@ -139,7 +139,7 @@ impl WebRtc {
             .signaller_builder(signaller_builder.clone())
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Msg
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Resource reliable, for retransmissions and delimiter
-            .add_unreliable_channel(None) // Resource unreliable, for retransmissions
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
             .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
             .reconnect_attempts(Some(u16::MAX))

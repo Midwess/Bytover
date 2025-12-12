@@ -4,7 +4,9 @@ use matchbox_protocol::PeerId;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::sync::{Arc};
+use std::time::Duration;
 use bytemuck::bytes_of;
+use bytes::BytesMut;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::Instant;
@@ -14,8 +16,8 @@ use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 // Too big chunk size will cause higher chance of packet loss
-const CHUNK_SIZE: usize = 2 * 1150;
-const DATA_SHARDS_DEFAULT: usize = 48;
+const CHUNK_SIZE: usize = 4 * 1150;
+const DATA_SHARDS_DEFAULT: usize = 24;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
@@ -295,6 +297,9 @@ pub enum FecAction {
     /// Nothing to do
     Noop,
 
+    /// Receiver is waiting for more frames, check again at this time
+    Queued(Instant),
+
     /// Cannot recover data; terminal error for that block
     Terminated,
 }
@@ -500,15 +505,14 @@ struct ReceiverBlock {
     total_size: usize,
     parity_shards: usize,
     total_shards: usize,
-    shards: Vec<Option<Box<[u8]>>>,
-    // Only defined if block is complete
-    constructed_frames: Vec<Vec<u8>>,
+    shards: Vec<Option<Vec<u8>>>,
     received: usize,
     first_ts: u64,
     last_frame_ts: u64,
     last_ping_ts: u64,
     is_requested_retransmit: bool,
     is_place_holder: bool,
+    is_complete: bool,
 }
 
 impl ReceiverBlock {
@@ -524,6 +528,7 @@ impl ReceiverBlock {
         this.first_ts = now;
         this.last_frame_ts = now;
         this.last_ping_ts = now;
+        this.is_complete = false;
         this
     }
 
@@ -542,7 +547,7 @@ impl ReceiverBlock {
             is_requested_retransmit: false,
             last_frame_ts: now,
             last_ping_ts: now,
-            constructed_frames: Vec::new(),
+            is_complete: false,
         }
     }
 
@@ -559,17 +564,100 @@ impl ReceiverBlock {
             self.first_ts = now;
             self.last_frame_ts = now;
             self.last_ping_ts = now;
+            self.is_complete = false;
+        }
+    }
+
+    /// Insert a frame and return true if the block can now be decoded
+    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>) -> Result<bool, FecError> {
+        if idx >= self.total_shards {
+            return Err(FecError::InvalidFrameIndex {
+                idx: idx as u32,
+                total_shards: self.total_shards,
+            });
+        }
+
+        // Insert frame if not already present
+        if self.shards[idx].is_none() {
+            self.shards[idx] = Some(payload.to_vec());
+            self.received += 1;
+        }
+
+        let now = now_micros();
+        self.last_frame_ts = now;
+        self.last_ping_ts = now;
+
+        // Check if we have enough frames to decode
+        Ok(self.received >= self.data_shards)
+    }
+
+    /// Attempt to reconstruct the block using Reed-Solomon if needed
+    /// Returns true if reconstruction succeeded
+    fn try_reconstruct(&mut self) -> Result<bool, FecError> {
+        if self.is_complete {
+            return Ok(true);
+        }
+
+        let present_count = self.shards.iter().filter(|s| s.is_some()).count();
+        if present_count < self.data_shards {
+            return Ok(false);
+        }
+
+        if self.parity_shards == 0 {
+            // No parity, just check if all data shards are present
+            let all_data_present = self.shards
+                .iter()
+                .take(self.data_shards)
+                .all(|s| s.is_some());
+
+            if all_data_present {
+                self.is_complete = true;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        } else {
+            // Use Reed-Solomon reconstruction
+            log::info!("Use reed solomon");
+
+            match ReedSolomon::new(self.data_shards, self.parity_shards)
+                .and_then(|rs| rs.reconstruct(&mut self.shards))
+            {
+                Ok(()) => {
+                    self.is_complete = true;
+                    Ok(true)
+                }
+                Err(e) => {
+                    log::warn!("Reed-Solomon reconstruction failed: {:?}", e);
+                    Ok(false)
+                }
+            }
         }
     }
 
     fn is_constructed(&self) -> bool {
-        self.constructed_frames.len() > 0
+        self.is_complete
     }
 
-    fn into_packet(self) -> Packet {
-        let mut assembled: Vec<_> = self.constructed_frames.into_iter().flatten().collect();
-        assembled.truncate(self.total_size);
-        Packet::from(assembled.into_boxed_slice())
+    fn into_packet(mut self) -> Packet {
+        let mut bytes = Vec::with_capacity(self.total_size);
+        let mut written = 0;
+
+        // Take only the data shards (first data_shards elements)
+        for shard_opt in self.shards.iter_mut().take(self.data_shards) {
+            if let Some(shard) = shard_opt.take() {
+                let remaining = self.total_size - written;
+                if remaining == 0 {
+                    break;
+                }
+
+                let to_write = remaining.min(shard.len());
+                bytes.extend_from_slice(&shard[..to_write]);
+                written += to_write;
+            }
+        }
+
+        Packet::from(bytes.into_boxed_slice())
     }
 }
 
@@ -644,88 +732,38 @@ impl FecReceiver {
         block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
 
         let idx = frame.frame_idx as usize;
-        if idx >= block.total_shards {
-            return Err(FecError::InvalidFrameIndex {
-                idx: frame.frame_idx,
-                total_shards: block.total_shards,
-            });
-        }
+        let can_decode = block.insert_frame(idx, frame.payload)?;
+        self.total_frames_received += 1;
 
-        // Insert frame if not already present
-        if block.shards[idx].is_none() {
-            block.shards[idx] = Some(frame.payload);
-            block.received += 1;
-            self.total_frames_received += 1;
-        }
+        // Try to reconstruct if we have enough frames
+        if can_decode {
+            let reconstructed = block.try_reconstruct()?;
 
-        let now = now_micros();
-        block.last_frame_ts = now;
-        block.last_ping_ts = now;
+            if reconstructed && block_id == self.next_block_id {
+                if let Some(block) = self.blocks.remove(&block_id) {
+                    log::info!("Constructed block {}", block_id);
+                    let mut completed_blocks = vec![block];
 
-        // Check if we have enough frames to decode
-        let present_count = block.shards.iter().filter(|s| s.is_some()).count();
+                    // Collect any subsequent blocks that are already constructed
+                    loop {
+                        self.next_block_id += 1;
+                        let is_completed = self.blocks.get(&self.next_block_id)
+                            .map(|it| it.is_constructed())
+                            .unwrap_or_default();
 
-        if present_count >= block.data_shards {
-            // Attempt to construct the block
-            let assembled = if block.parity_shards == 0 {
-                // No parity, just collect the data shards directly
-                Some(block
-                    .shards
-                    .iter()
-                    .take(block.data_shards)
-                    .filter_map(|opt| opt.as_ref().map(|b| b.to_vec()))
-                    .collect::<Vec<_>>())
-            } else {
-                // Use Reed-Solomon reconstruction when parity_shards > 0
-                let mut shards: Vec<Option<Vec<u8>>> = block
-                    .shards
-                    .iter()
-                    .map(|opt| opt.as_ref().map(|b| b.to_vec()))
-                    .collect();
-
-                match ReedSolomon::new(block.data_shards, block.parity_shards)
-                    .and_then(|rs| rs.reconstruct(&mut shards))
-                {
-                    Ok(()) => {
-                        // Success: assemble payload from data shards only
-                        Some(shards
-                            .into_iter()
-                            .take(block.data_shards)
-                            .filter_map(|x| x)
-                            .collect::<Vec<_>>())
-                    }
-                    Err(_) => None, // Reconstruction failed
-                }
-            };
-
-            // If we successfully assembled the data, handle the constructed block
-            if let Some(assembled) = assembled {
-                if assembled.len() == block.data_shards {
-                    block.constructed_frames = assembled;
-                    if block_id == self.next_block_id {
-                        if let Some(block) = self.blocks.remove(&block_id) {
-                            log::info!("Constructed block {}", block_id);
-                            let mut completed_blocks = vec![block];
-
-                            // Collect any subsequent blocks that are already constructed
-                            loop {
-                                self.next_block_id += 1;
-                                let is_completed = self.blocks.get(&self.next_block_id)
-                                    .map(|it| it.is_constructed())
-                                    .unwrap_or_default();
-
-                                if is_completed {
-                                    log::info!("Constructed block {}", self.next_block_id);
-                                    completed_blocks.push(self.blocks.remove(&self.next_block_id).unwrap());
-                                } else {
-                                    break;
-                                }
-                            }
-
-                            let bytes = completed_blocks.into_iter().map(|it| it.into_packet()).collect::<Vec<_>>();
-                            return Ok(FecAction::Constructed(bytes));
+                        if is_completed {
+                            log::info!("Constructed block {}", self.next_block_id);
+                            completed_blocks.push(self.blocks.remove(&self.next_block_id).unwrap());
+                        } else {
+                            break;
                         }
                     }
+
+                    let time = Instant::now();
+                    let bytes = completed_blocks.into_iter().map(|it| it.into_packet()).collect::<Vec<_>>();
+                    log::info!("Completed in {}us", time.elapsed().as_micros());
+
+                    return Ok(FecAction::Constructed(bytes));
                 }
             }
         }
@@ -737,24 +775,41 @@ impl FecReceiver {
             return Ok(FecAction::Terminated);
         }
 
+        // Check for timeouts and return appropriate action
+        self.ping()
+    }
+
+    /// Check for timed out blocks and return appropriate action
+    /// Should be called when a Queued timeout expires
+    pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let timeout_ms = if self.rtt_ms > 0 {
-            (self.rtt_ms * 3).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
+            (self.rtt_ms * 2).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
         } else {
             MIN_BLOCK_TIMEOUT_MS
         };
 
         let timeout_us = timeout_ms * 1000;
+        let now = now_micros();
 
+        // Find the oldest block that needs checking
         let block = self.blocks
             .iter_mut()
             .filter(|it| !it.1.is_constructed())
             .filter(|it| !it.1.is_requested_retransmit)
             .min_by(|i1, i2| i1.1.last_ping_ts.cmp(&i2.1.last_ping_ts));
+
         if let Some((idx, old_block)) = block.map(|it| (*it.0, it.1)) {
-            if now_micros().saturating_sub(old_block.last_ping_ts) > timeout_us {
+            if now.saturating_sub(old_block.last_ping_ts) > timeout_us {
+                // Block has timed out, request retransmission
                 let action = Self::handle_timeout(idx, old_block);
                 self.total_lost_frames += action.0 as u64;
-                return Ok(action.1)
+                return Ok(action.1);
+            } else {
+                // Block exists but not timed out yet, return next check time
+                let elapsed = now.saturating_sub(old_block.last_ping_ts);
+                let remaining = timeout_us.saturating_sub(elapsed);
+                let next_check = Instant::now() + Duration::from_micros(remaining.max(MIN_BLOCK_TIMEOUT_MS * 1_000).min(MAX_BLOCK_TIMEOUT_MS * 1_000));
+                return Ok(FecAction::Queued(next_check));
             }
         }
 
@@ -865,8 +920,8 @@ mod tests {
         let result = receiver.receive(frame1);
         assert!(result.is_ok());
         match result.unwrap() {
-            FecAction::Noop => (),  // Expected
-            val => panic!("Should be Noop, not ready to decode {val:?}"),
+            FecAction::Queued(_) => (),  // Expected - waiting for more frames
+            val => panic!("Should be Queued, not ready to decode {val:?}"),
         }
     }
 
@@ -975,7 +1030,7 @@ mod tests {
                     received_packet = Some(packet.remove(0));
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => panic!("Unexpected action during receive"),
             }
         }
@@ -1036,7 +1091,7 @@ mod tests {
                     all_packets.push(packet.remove(0));
                     // Increment next_block_id to allow the next block to be returned
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 FecAction::Terminated => {
                     panic!("Unexpected termination at frame {}", idx);
                 }
@@ -1149,7 +1204,7 @@ mod tests {
     fn test_timeout_generation() {
         // SCENARIO:
         // Send insufficient frames. Wait > MIN_BLOCK_TIMEOUT_MS.
-        // Trigger receiver (via a new frame or heartbeat).
+        // Call ping() to check for timeouts.
         // Expect Feedback(MissingFrames).
 
         let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 1024 * 1024);
@@ -1162,25 +1217,20 @@ mod tests {
         };
 
         // 1. Send only 1 frame (insufficient)
-        receiver.receive(frames[0].clone()).unwrap();
+        let action = receiver.receive(frames[0].clone()).unwrap();
 
-        // 2. Wait for timeout (80ms default defined in const)
-        // We wait 100ms to be safe
-        std::thread::sleep(std::time::Duration::from_millis(1500));
+        // Should get Queued response
+        match action {
+            FecAction::Queued(_) => {},
+            other => panic!("Expected Queued, got {:?}", other),
+        }
 
-        // 3. Trigger the timeout check
-        // The receiver usually checks timeouts when `receive` is called.
-        let trigger_frame = Frame {
-            block_id: 62, // Irrelevant future block
-            frame_idx: 0,
-            data_shards: 1,
-            parity_shards: 1,
-            total_size: 100,
-            is_parity: false,
-            payload: vec![0u8; CHUNK_SIZE].into_boxed_slice(),
-        };
+        // 2. Wait for timeout (MIN_BLOCK_TIMEOUT_MS default)
+        // We wait enough to exceed the timeout
+        std::thread::sleep(std::time::Duration::from_millis(350));
 
-        let action = receiver.receive(trigger_frame).unwrap();
+        // 3. Call ping() to trigger the timeout check
+        let action = receiver.ping().unwrap();
 
         // 4. Verify Feedback
         match action {
@@ -1199,7 +1249,7 @@ mod tests {
         // SCENARIO:
         // 1. Sender sends frames.
         // 2. Network drops critical amount.
-        // 3. Receiver Timeouts -> Generates Feedback.
+        // 3. Receiver Timeouts -> Generates Feedback via ping().
         // 4. Sender processes Feedback -> Generates Retransmit frames.
         // 5. Receiver gets Retransmit frames -> Constructs Packet.
 
@@ -1220,23 +1270,19 @@ mod tests {
 
         // --- STEP 2: Network Loss ---
         // Deliver only 1 frame. Impossible to reconstruct.
-        let x = receiver.receive(frames[0].clone());
+        let action = receiver.receive(frames[0].clone()).unwrap();
+
+        // Should get Queued response
+        match action {
+            FecAction::Queued(_) => {},
+            other => panic!("Expected Queued, got {:?}", other),
+        }
 
         // --- STEP 3: Timeout & Feedback ---
-        std::thread::sleep(std::time::Duration::from_millis(1500));
+        std::thread::sleep(std::time::Duration::from_millis(350));
 
-        // Trigger timeout check using a dummy frame from "future"
-        let trigger_frame = Frame {
-            block_id: 10,
-            frame_idx: 0,
-            total_size: 10,
-            data_shards: 1,
-            parity_shards: 0,
-            is_parity: false,
-            payload: vec![0u8; CHUNK_SIZE].into_boxed_slice(),
-        };
-
-        let action = receiver.receive(trigger_frame).unwrap();
+        // Call ping() to trigger timeout check
+        let action = receiver.ping().unwrap();
 
         let feedback_obj = match action {
             FecAction::Feedback(fb) => fb,
@@ -1365,7 +1411,7 @@ mod tests {
                     reconstructed = Some(packet);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => panic!("Unexpected action"),
             }
         }
@@ -1440,7 +1486,7 @@ mod tests {
                 FecAction::Constructed(packet) => {
                     block_results.insert(receiver.next_block_id - 1, packet);
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => panic!("Unexpected action"),
             }
         }
@@ -1520,7 +1566,7 @@ mod tests {
                     reconstructed = Some(packet);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
@@ -1583,7 +1629,7 @@ mod tests {
                     reconstructed = Some(packet);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
@@ -1646,7 +1692,7 @@ mod tests {
                     reconstructed = Some(packet);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
@@ -1710,7 +1756,7 @@ mod tests {
                 FecAction::Constructed(packet) => {
                     reconstructed_blocks.push(packet);
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
@@ -1793,7 +1839,7 @@ mod tests {
                     println!("Reconstruction succeeded at frame {}", count);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
@@ -1878,7 +1924,7 @@ mod tests {
                     reconstructed = Some(packet);
                     break;
                 }
-                FecAction::Noop => continue,
+                FecAction::Queued(_) | FecAction::Noop => continue,
                 _ => {}
             }
         }
