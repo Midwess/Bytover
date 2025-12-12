@@ -443,9 +443,6 @@ impl WebRtcPeer {
                     };
 
                     self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-                    log::info!("Received {} delimiter in last packet, sent network feedback: loss_rate={}, rtt={}, block_id={}",
-                        if is_end_delimiter { "end" } else { "hold" }, loss_rate, rtt, current_block_id);
-
                     continue;
                 }
             }
@@ -681,9 +678,6 @@ impl WebRtcPeer {
                     };
 
                     self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-                    log::info!("Received {} delimiter, sent network feedback: loss_rate={}, rtt={}, block_id={}",
-                        if is_end { "end" } else { "hold" }, loss_rate, rtt, current_block_id);
-
                     if is_end {
                         progress_update.success();
                         break;
