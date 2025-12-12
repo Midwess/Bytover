@@ -333,6 +333,13 @@ impl WebRtcPeer {
         let mut start_delimiter_tick = Instant::now();
         let mut next_check_time: Option<Instant> = None;
 
+        // Metrics tracking for averages
+        let mut total_decode_time_us = 0u64;
+        let mut total_decode_count = 0u64;
+        let mut total_write_time_us = 0u64;
+        let mut total_write_count = 0u64;
+        let mut total_written_bytes_all = 0u64;
+
         loop {
             if session.is_completed() {
                 log::warn!("Session {session_id} is completed");
@@ -543,7 +550,8 @@ impl WebRtcPeer {
 
                     let time = Instant::now();
                     let action = fec_receiver.receive(frame)?;
-                    log::info!("Received FEC {}us", time.elapsed().as_micros());
+                    total_decode_time_us += time.elapsed().as_micros() as u64;
+                    total_decode_count += 1;
                     action
                 } else {
                     // Timeout expired, ping for feedback
@@ -598,9 +606,11 @@ impl WebRtcPeer {
                         .with_cancel(&cancellation_signal)
                         .await?
                         .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
-                    log::info!("Wrote {} merged bytes in {}us", written, time.elapsed().as_micros());
+                    total_write_time_us += time.elapsed().as_micros() as u64;
+                    total_write_count += 1;
 
                     total_written_bytes += written as u64;
+                    total_written_bytes_all += written as u64;
                     progress_update.update_progress(written as u64);
                     core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                 }
@@ -651,6 +661,17 @@ impl WebRtcPeer {
         drop(resource_rx);
         cancellation_signal.cancel_after(Duration::from_secs(10));
         let _ = thumbnail_handle.await;
+
+        // Log average metrics
+        if total_decode_count > 0 {
+            let avg_decode_time = total_decode_time_us / total_decode_count;
+            log::info!("Receiver average decode frame time: {}us (total: {} frames)", avg_decode_time, total_decode_count);
+        }
+        if total_write_count > 0 {
+            let avg_write_time = total_write_time_us / total_write_count;
+            log::info!("Receiver average write chunk time: {}us (total: {} chunks, {} bytes)",
+                avg_write_time, total_write_count, total_written_bytes_all);
+        }
 
         Ok(session.status())
     }
@@ -768,6 +789,13 @@ impl WebRtcPeer {
         let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let _ = feedback_receiver.drain();
+
+        // Metrics tracking for averages
+        let mut total_read_bytes = 0u64;
+        let mut total_read_time_us = 0u64;
+        let mut total_frame_build_time_us = 0u64;
+        let mut total_frame_build_count = 0u64;
+
         while !session.is_completed() {
             let Some((resource_path, order_id, size, name)) = session
                 .get_next_transfer_resource()
@@ -797,13 +825,16 @@ impl WebRtcPeer {
             let reader_cancel_signal = resource_cancel_signal.clone();
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
+                let mut total_time_us = 0u64;
                 loop {
+                    let time = Instant::now();
                     let read_result = reader.c_next(Some(chunk_size))
                         .with_cancel(&reader_cancel_signal)
                         .await;
 
                     match read_result {
                         Ok(Ok(Some((data, raw_size)))) => {
+                            total_time_us += time.elapsed().as_micros() as u64;
                             total_read += data.len() as u64;
                             let packet = Packet::from(data);
 
@@ -830,7 +861,7 @@ impl WebRtcPeer {
                     }
                 }
 
-                Result::<u64, WebRtcErrors>::Ok(total_read)
+                Result::<(u64, u64), WebRtcErrors>::Ok((total_read, total_time_us))
             });
 
             let (queue_tx, mut queue_rx) = mpsc::unbounded();
@@ -902,7 +933,10 @@ impl WebRtcPeer {
                 let action = match (bytes, raw_size, feedback) {
                     (Some(bytes), Some(raw_size), _) => {
                         total_sent_bytes += bytes.len() as u64;
+                        let time = Instant::now();
                         let action = fec_sender.send(bytes)?;
+                        total_frame_build_time_us += time.elapsed().as_micros() as u64;
+                        total_frame_build_count += 1;
                         progress_update.update_progress(raw_size as u64);
                         let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                         action
@@ -1032,8 +1066,7 @@ impl WebRtcPeer {
                     };
 
                     let (flushed, send) = join!(flushed_fut, send_fut);
-                    let bw = flushed?;
-                    log::info!("Bandwidth for resource {resource_path:?} is {bw} bytes/s");
+                    let _bw = flushed?;
                     buff_counter = 0;
                     send?;
                 }
@@ -1047,8 +1080,10 @@ impl WebRtcPeer {
             // read_tx is owned by the reader task, so we only drop read_rx
             drop(read_rx);
             match reader_handle.await {
-                Ok(Ok(total_read)) => {
-                    log::info!("Reader task finished, total read: {} bytes", total_read);
+                Ok(Ok((read_bytes, read_time_us))) => {
+                    total_read_bytes += read_bytes;
+                    total_read_time_us += read_time_us;
+                    log::info!("Reader task finished, total read: {} bytes", read_bytes);
                 }
                 Ok(Err(e)) => {
                     log::warn!("Reader task finished with error: {:?}", e);
@@ -1069,6 +1104,19 @@ impl WebRtcPeer {
         cancellation_signal.cancel_after(Duration::from_secs(10));
         let _ = thumbnail_handle.await;
         self.buffer.flush_all_timeout().await?;
+
+        // Log average metrics
+        if total_read_time_us > 0 && total_read_bytes > 0 {
+            let avg_read_speed = (total_read_bytes as f64 * 1_000_000.0) / total_read_time_us as f64;
+            log::info!("Sender average reading data speed: {:.2} Byte/s (total: {} bytes in {}us)",
+                avg_read_speed, total_read_bytes, total_read_time_us);
+        }
+        if total_frame_build_count > 0 {
+            let avg_build_time = total_frame_build_time_us / total_frame_build_count;
+            log::info!("Sender average build frame time: {}us (total: {} frames)",
+                avg_build_time, total_frame_build_count);
+        }
+
         log::info!("Transfer session {session_id} completed");
 
         Ok(session.status())
