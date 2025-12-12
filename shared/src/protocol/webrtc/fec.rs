@@ -1473,7 +1473,7 @@ mod tests {
         }
 
         // Deliver in interleaved order
-        let mut block_results = std::collections::HashMap::new();
+        let mut block_results = HashMap::new();
 
         for frame in interleaved {
             match receiver.receive(frame).expect("receive failed") {
