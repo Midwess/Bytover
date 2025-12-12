@@ -16,8 +16,8 @@ use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 // Too big chunk size will cause higher chance of packet loss
-const CHUNK_SIZE: usize = 4 * 1150;
-const DATA_SHARDS_DEFAULT: usize = 24;
+const CHUNK_SIZE: usize = 8 * 1150;
+const DATA_SHARDS_DEFAULT: usize = 12;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
@@ -822,7 +822,7 @@ impl FecReceiver {
         // Get or create the block (from pool if available)
         if self.blocks.get(block_id).is_none() {
             // FIX #6: Get block from pool or create new
-            let mut new_block = if let Some(mut pooled) = self.block_pool.pop() {
+            let new_block = if let Some(mut pooled) = self.block_pool.pop() {
                 pooled.place_value(
                     frame.data_shards as usize,
                     frame.parity_shards as usize,

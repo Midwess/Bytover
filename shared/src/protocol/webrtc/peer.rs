@@ -792,6 +792,47 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
+            let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>(20);
+
+            let reader_cancel_signal = resource_cancel_signal.clone();
+            let reader_handle = spawn(async move {
+                let mut total_read = 0u64;
+                loop {
+                    let read_result = reader.c_next(Some(chunk_size))
+                        .with_cancel(&reader_cancel_signal)
+                        .await;
+
+                    match read_result {
+                        Ok(Ok(Some((data, raw_size)))) => {
+                            total_read += data.len() as u64;
+                            let packet = Packet::from(data);
+
+                            // Send to channel, blocking if full
+                            if read_tx.send((packet, raw_size)).await.is_err() {
+                                log::info!("Reader channel closed, stopping reader task");
+                                break;
+                            }
+                        }
+                        Ok(Ok(None)) => {
+                            // End of file
+                            log::info!("Reader task completed, total read: {} bytes", total_read);
+                            break;
+                        }
+                        Ok(Err(e)) => {
+                            log::error!("Reader error: {:?}", e);
+                            break;
+                        }
+                        Err(_) => {
+                            // Cancelled
+                            log::info!("Reader task cancelled");
+                            break;
+                        }
+                    }
+                }
+
+                Result::<u64, WebRtcErrors>::Ok(total_read)
+            });
+
             let (queue_tx, mut queue_rx) = mpsc::unbounded();
             let mut on_hold = false;
             let mut is_end = false;
@@ -831,7 +872,7 @@ impl WebRtcPeer {
                     }
                     else {
                         let queue_fut = queue_rx.next().fuse();
-                        let reader_fut = reader.c_next(Some(chunk_size)).with_cancel(&resource_cancel_signal).fuse();
+                        let reader_fut = read_rx.next().fuse();  // Read from channel instead of direct reader
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
                         futures::pin_mut!(queue_fut);
@@ -843,8 +884,8 @@ impl WebRtcPeer {
                                 q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None::<Packet>, None::<usize>, None::<Feedback>))
                             },
                             r = reader_fut => {
-                                let res = r??;
-                                res.map(|it| (Some(Packet::from(it.0)), Some(it.1), None)).unwrap_or((None, None, None))
+                                // Received from reader task channel
+                                r.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
                             },
                             fb = fb_fut => {
                                 let fb = fb?;
@@ -945,8 +986,6 @@ impl WebRtcPeer {
                         }
                     }
 
-                    reader.compression_stats_mut().start_over();
-
                     let (mut tx, mut rx) = mpsc::channel(1);
                     let flushed_fut = async {
                         let tick = Instant::now();
@@ -964,11 +1003,12 @@ impl WebRtcPeer {
                             .await
                             .map(|it| it.0)
                             .unwrap_or(0);
-                        let bw = (0 - 0) as f64 / time;
+                        let bw = (new_stats.saturating_sub(stats)) as f64 / time;
                         let _ = tx.send(()).await;
                         Result::<f64, WebRtcErrors>::Ok(bw)
                     };
 
+                    // Queue data from reader channel while waiting for buffer to drain
                     let send_fut = async {
                         let mut total_queued = 0;
                         loop {
@@ -981,14 +1021,13 @@ impl WebRtcPeer {
                                 _ => {}
                             };
 
-                            let Some((data, raw_size)) =
-                                reader.c_next(Some(chunk_size)).with_cancel(&cancellation_signal).await??
-                            else {
+                            // Read from the reader channel instead of direct reader access
+                            let Some((packet, raw_size)) = read_rx.next().await else {
                                 break Ok(());
                             };
 
-                            total_queued += data.len();
-                            let _ = queue_tx.unbounded_send((Packet::from(data), raw_size));
+                            total_queued += packet.len();
+                            let _ = queue_tx.unbounded_send((packet, raw_size));
                         }
                     };
 
@@ -997,13 +1036,27 @@ impl WebRtcPeer {
                     log::info!("Bandwidth for resource {resource_path:?} is {bw} bytes/s");
                     buff_counter = 0;
                     send?;
-                    reader.compression_stats_mut().update_network_bandwidth(bw);
                 }
             }
 
             // Loop has ended after receiving network feedback for end delimiter
             progress_update.complete();
             let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
+
+            // Clean up: close reader channel and wait for reader task
+            // read_tx is owned by the reader task, so we only drop read_rx
+            drop(read_rx);
+            match reader_handle.await {
+                Ok(Ok(total_read)) => {
+                    log::info!("Reader task finished, total read: {} bytes", total_read);
+                }
+                Ok(Err(e)) => {
+                    log::warn!("Reader task finished with error: {:?}", e);
+                }
+                Err(e) => {
+                    log::warn!("Reader task join error: {:?}", e);
+                }
+            }
 
             log::info!(
                 "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?}",
