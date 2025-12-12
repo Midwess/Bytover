@@ -527,9 +527,9 @@ impl WebRtcPeer {
                     }
                 }
 
-                packets.extend(self.handle_fec_action(action).await?);
+                let packets = self.handle_fec_action(action).await?;
 
-                for packet in packets.drain(..) {
+                for packet in packets {
                     if let Ok(_hold) = TransferDelimiterShema::from_hold_packet(&packet, session_id) {
                         log::info!("Received hold delimiter, sending network feedback");
 
@@ -564,11 +564,14 @@ impl WebRtcPeer {
                     }
 
                     // Write chunk
+                    let time = Instant::now();
+                    let written = packet.len();
                     let written = writer
                         .write(packet.clone().into())
                         .with_cancel(&cancellation_signal)
                         .await?
                         .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
+                    log::info!("Wrote {} bytes in {}us", written, time.elapsed().as_micros());
 
                     total_written_bytes += written as u64;
                     progress_update.update_progress(written as u64);
