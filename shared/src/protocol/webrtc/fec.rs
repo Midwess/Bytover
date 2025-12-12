@@ -727,6 +727,40 @@ impl FecReceiver {
         self.rtt_ms = rtt_ms;
     }
 
+    fn calculate_next_check_time(&self) -> Instant {
+        let timeout_ms = if self.rtt_ms > 0 {
+            (self.rtt_ms * 2).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
+        } else {
+            MIN_BLOCK_TIMEOUT_MS
+        };
+
+        let timeout_us = timeout_ms * 1000;
+        let now = now_micros();
+
+        // Find the oldest block needing a check
+        let mut oldest_ts = u64::MAX;
+        for (_, block) in self.blocks.iter() {
+            if block.is_constructed() || block.is_requested_retransmit {
+                continue;
+            }
+            if block.last_ping_ts < oldest_ts {
+                oldest_ts = block.last_ping_ts;
+            }
+        }
+
+        if oldest_ts != u64::MAX {
+            let elapsed = now.saturating_sub(oldest_ts);
+            if elapsed < timeout_us {
+                let remaining = timeout_us.saturating_sub(elapsed);
+                return Instant::now() + Duration::from_micros(
+                    remaining.max(MIN_BLOCK_TIMEOUT_MS * 1_000).min(MAX_BLOCK_TIMEOUT_MS * 1_000)
+                );
+            }
+        }
+
+        Instant::now() + Duration::from_millis(timeout_ms)
+    }
+
     pub fn receive(&mut self, frame: Frame) -> Result<FecAction, FecError> {
         if frame.data().len() != CHUNK_SIZE {
             return Err(FecError::InvalidFrameSize {
@@ -795,7 +829,8 @@ impl FecReceiver {
                         .collect::<Vec<_>>();
                     log::info!("Completed in {}us", time.elapsed().as_micros());
 
-                    return Ok(FecAction::Constructed(bytes));
+                    let next_check = self.calculate_next_check_time();
+                    return Ok(FecAction::Constructed(bytes, next_check));
                 }
             }
         }
@@ -830,9 +865,12 @@ impl FecReceiver {
         }
 
         if let Some(block_id) = oldest_id {
+            // Calculate next check time before borrowing the block mutably
+            let next_check = self.calculate_next_check_time();
+
             if let Some(block) = self.blocks.get_mut(block_id) {
                 if now.saturating_sub(block.last_ping_ts) > timeout_us {
-                    let action = Self::handle_timeout(block_id, block);
+                    let action = Self::handle_timeout(block_id, block, next_check);
                     self.total_lost_frames += action.0 as u64;
                     return match action.1 {
                         FecAction::Noop => {
@@ -854,7 +892,7 @@ impl FecReceiver {
         Ok(FecAction::Queued(Instant::now() + Duration::from_millis(timeout_ms)))
     }
 
-    fn handle_timeout(block_id: u32, block: &mut ReceiverBlock) -> (usize, FecAction) {
+    fn handle_timeout(block_id: u32, block: &mut ReceiverBlock, next_check: Instant) -> (usize, FecAction) {
         let present_count = block.shards.iter().filter(|s| s.is_some()).count();
         let needed_more = block.data_shards.saturating_sub(present_count);
 
@@ -894,16 +932,16 @@ impl FecReceiver {
         block.is_requested_retransmit = true;
         (lost_count, FecAction::Feedback(FecFeedback {
             feedback: Some(Feedback::Missing(mf)),
-        }))
+        }, next_check))
     }
 }
 
 #[derive(Debug)]
 pub enum FecAction {
     Framed(Vec<Frame>),
-    Constructed(Vec<Packet>),
+    Constructed(Vec<Packet>, Instant),
     Retransmit(Vec<Frame>),
-    Feedback(FecFeedback),
+    Feedback(FecFeedback, Instant),
     Noop,
     Queued(Instant),
     Terminated,
@@ -1076,7 +1114,7 @@ mod tests {
         for frame in frames {
             let result = receiver.receive(frame).expect("receive failed");
             match result {
-                FecAction::Constructed(mut packet) => {
+                FecAction::Constructed(mut packet, _) => {
                     received_packet = Some(packet.remove(0));
                     break;
                 }
@@ -1137,7 +1175,7 @@ mod tests {
         for (idx, frame) in frames.into_iter().enumerate() {
             let result = receiver.receive(frame).expect(&format!("receive failed at frame {}", idx));
             match result {
-                FecAction::Constructed(mut packet) => {
+                FecAction::Constructed(mut packet, _) => {
                     all_packets.push(packet.remove(0));
                     // Increment next_block_id to allow the next block to be returned
                 }
@@ -1236,7 +1274,7 @@ mod tests {
         let mut constructed = None;
         for frame in frames_to_deliver {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     constructed = Some(packet);
                 }
                 _ => {}
@@ -1284,7 +1322,7 @@ mod tests {
 
         // 4. Verify Feedback
         match action {
-            FecAction::Feedback(FecFeedback { feedback: Some(fec_feedback::Feedback::Missing(missing)) }) => {
+            FecAction::Feedback(FecFeedback { feedback: Some(fec_feedback::Feedback::Missing(missing)) }, _) => {
                 assert_eq!(missing.block_id, 0);
                 assert!(missing.frames.len() > 0);
                 assert!(!missing.frames.contains(&0));
@@ -1335,7 +1373,7 @@ mod tests {
         let action = receiver.ping().unwrap();
 
         let feedback_obj = match action {
-            FecAction::Feedback(fb) => fb,
+            FecAction::Feedback(fb, _) => fb,
             value => panic!("Receiver did not request retransmission {value:?}"),
         };
 
@@ -1360,7 +1398,7 @@ mod tests {
 
         for frame in retransmitted_frames {
             match receiver.receive(frame).unwrap() {
-                FecAction::Constructed(pkt) => {
+                FecAction::Constructed(pkt, _) => {
                     final_packet = Some(pkt);
                     break;
                 },
@@ -1457,7 +1495,7 @@ mod tests {
         let mut reconstructed = None;
         for frame in frames_to_deliver {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed = Some(packet);
                     break;
                 }
@@ -1533,7 +1571,7 @@ mod tests {
 
         for frame in interleaved {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     block_results.insert(receiver.next_block_id - 1, packet);
                 }
                 FecAction::Queued(_) | FecAction::Noop => continue,
@@ -1612,7 +1650,7 @@ mod tests {
         let mut reconstructed = None;
         for frame in shuffled {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed = Some(packet);
                     break;
                 }
@@ -1675,7 +1713,7 @@ mod tests {
         let mut reconstructed = None;
         for frame in delivery_order {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed = Some(packet);
                     break;
                 }
@@ -1738,7 +1776,7 @@ mod tests {
         let mut reconstructed = None;
         for frame in second_burst_shuffled {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed = Some(packet);
                     break;
                 }
@@ -1803,7 +1841,7 @@ mod tests {
         let mut reconstructed_blocks = Vec::new();
         for frame in delivery_sequence {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed_blocks.push(packet);
                 }
                 FecAction::Queued(_) | FecAction::Noop => continue,
@@ -1883,7 +1921,7 @@ mod tests {
         let mut reconstructed = None;
         for (count, frame) in shuffled.into_iter().enumerate() {
             match receiver.receive(frame).expect(&format!("receive failed at frame {}", count)) {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     let packet = packet.into_iter().flatten().collect::<Vec<_>>();
                     reconstructed = Some(packet);
                     println!("Reconstruction succeeded at frame {}", count);
@@ -1970,7 +2008,7 @@ mod tests {
         let mut reconstructed = None;
         for frame in shuffled {
             match receiver.receive(frame).expect("receive failed") {
-                FecAction::Constructed(packet) => {
+                FecAction::Constructed(packet, _) => {
                     reconstructed = Some(packet);
                     break;
                 }

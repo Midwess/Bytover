@@ -400,12 +400,16 @@ impl WebRtcPeer {
                     next_check_time = Some(instant);
                     continue;
                 },
-                _ => {
-                    next_check_time = None;
-                }
+                _ => {}
             }
 
-            let mut packets = self.handle_fec_action(action).await?;
+            let (mut packets, maybe_next_check) = self.handle_fec_action(action).await?;
+            if let Some(instant) = maybe_next_check {
+                next_check_time = Some(instant);
+            } else {
+                next_check_time = None;
+            }
+
             if packets.is_empty() {
                 continue;
             }
@@ -552,12 +556,17 @@ impl WebRtcPeer {
                         next_check_time = Some(*instant);
                         continue;
                     },
-                    _ => {
-                        next_check_time = None;
-                    }
+                    _ => {}
                 }
 
-                packets.extend_from_slice(&self.handle_fec_action(action).await?);
+                let (new_packets, maybe_next_check) = self.handle_fec_action(action).await?;
+                if let Some(instant) = maybe_next_check {
+                    next_check_time = Some(instant);
+                } else {
+                    next_check_time = None;
+                }
+
+                packets.extend_from_slice(&new_packets);
 
                 // Check if the last packet is a delimiter
                 let delimiter = packets.last().and_then(|last_packet| {
@@ -646,20 +655,20 @@ impl WebRtcPeer {
         Ok(session.status())
     }
 
-    async fn handle_fec_action(&self, action: FecAction) -> Result<Vec<Packet>, WebRtcErrors> {
+    async fn handle_fec_action(&self, action: FecAction) -> Result<(Vec<Packet>, Option<Instant>), WebRtcErrors> {
         match action {
-            FecAction::Constructed(packets) => Ok(packets),
-            FecAction::Feedback(fb) => {
+            FecAction::Constructed(packets, next_check) => Ok((packets, Some(next_check))),
+            FecAction::Feedback(fb, next_check) => {
                 log::info!("Sending FEC feedback: {:?}", fb);
                 self.msg_channel.notify(Request::FecFeedback(fb)).await?;
-                Ok(vec![])
+                Ok((vec![], Some(next_check)))
             }
             FecAction::Terminated => {
                 log::warn!("FEC terminated");
                 Err(WebRtcErrors::InvalidDelimiter("FEC terminated".into()))
             }
-            FecAction::Queued(_) | FecAction::Noop => Ok(vec![]), // Ignore queued and noop
-            _ => Ok(vec![]), // Ignore others
+            FecAction::Queued(_) | FecAction::Noop => Ok((vec![], None)), // Ignore queued and noop
+            _ => Ok((vec![], None)), // Ignore others
         }
     }
 
@@ -917,7 +926,7 @@ impl WebRtcPeer {
                         log::info!("Fec sender terminated, aborting resource transfer");
                         break;
                     }
-                    FecAction::Noop | FecAction::Feedback(_) | FecAction::Constructed(_) | FecAction::Queued(_) => {
+                    FecAction::Noop | FecAction::Feedback(_, _) | FecAction::Constructed(_, _) | FecAction::Queued(_) => {
                         // Will not happens, do nothing
                     }
                 };
