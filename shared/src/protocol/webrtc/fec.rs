@@ -1,5 +1,3 @@
-// OPTIMIZED FEC CODE - Performance Fixes Applied
-
 use reed_solomon_erasure::galois_8::ReedSolomon;
 use thiserror::Error;
 use matchbox_protocol::PeerId;
@@ -61,7 +59,6 @@ pub struct FrameEntry {
     pub data_shards: u8,
     pub parity_shards: u8,
     pub is_parity: bool,
-    // FIX #3: Use Arc to avoid double cloning
     pub data: Arc<Box<[u8]>>,
     pub timestamp: u64,
 }
@@ -212,7 +209,10 @@ impl FrameEntry {
         let is_parity = buf[offset] != 0; offset += 1;
 
         let timestamp: u64 = read!(u64);
-        let data = Arc::new(buf[offset..].to_vec().into_boxed_slice());
+        // FIX #1: Optimize allocation - single copy with Arc::from
+        let data: Arc<Box<[u8]>> = Arc::from(
+            buf[offset..].to_vec().into_boxed_slice()
+        );
 
         Some(Self {
             block_id,
@@ -296,7 +296,6 @@ impl<T> RingBuffer<T> {
 pub struct FecSender {
     pub peer_id: PeerId,
     pub block_id: u32,
-    // FIX #1 & #7: Cache RS encoders locally, keyed by (data_shards, parity_shards)
     pub encoders: HashMap<(usize, usize), ReedSolomon>,
 
     pub data_shards: usize,
@@ -307,11 +306,18 @@ pub struct FecSender {
 
     pub buffer: RingBuffer<Vec<FrameEntry>>,
     rtt_ms: u64,
+
+    shard_buffer_pool: Vec<Vec<u8>>,
 }
 
 impl FecSender {
     pub fn new(peer_id: PeerId, window_size: usize) -> Self {
         let initial_ratio = 0.0;
+        let buffer_pool_size = DATA_SHARDS_DEFAULT + MAX_PARITY_SHARDS;
+        let shard_buffer_pool = (0..buffer_pool_size)
+            .map(|_| Vec::with_capacity(CHUNK_SIZE))
+            .collect();
+
         Self {
             encoders: HashMap::new(),
             peer_id,
@@ -322,6 +328,7 @@ impl FecSender {
             last_loss_rate: 0.0,
             buffer: RingBuffer::new(window_size),
             rtt_ms: 0,
+            shard_buffer_pool,
         }
     }
 
@@ -359,22 +366,34 @@ impl FecSender {
                 if parity_shards > 0 { shard_count + parity_shards } else { shard_count }
             );
 
-            // Collect data shards
             for _ in 0..shard_count {
                 if offset < packet.len() {
                     let end = (offset + CHUNK_SIZE).min(packet.len());
-                    let mut chunk = vec![0u8; CHUNK_SIZE];
+
+                    let mut chunk = if let Some(mut buf) = self.shard_buffer_pool.pop() {
+                        buf.clear();
+                        buf.resize(CHUNK_SIZE, 0);
+                        buf
+                    } else {
+                        vec![0u8; CHUNK_SIZE]
+                    };
+
                     chunk[..end - offset].copy_from_slice(&packet[offset..end]);
                     shards.push(chunk);
                     offset = end;
                 }
             }
 
-            // FIX #1: Fast path when parity_shards = 0 (skip RS entirely)
             if parity_shards > 0 {
-                // Add parity shard placeholders
                 for _ in 0..parity_shards {
-                    shards.push(vec![0u8; CHUNK_SIZE]);
+                    let parity_buf = if let Some(mut buf) = self.shard_buffer_pool.pop() {
+                        buf.clear();
+                        buf.resize(CHUNK_SIZE, 0);
+                        buf
+                    } else {
+                        vec![0u8; CHUNK_SIZE]
+                    };
+                    shards.push(parity_buf);
                 }
 
                 // Encode with cached or new RS instance
@@ -395,11 +414,12 @@ impl FecSender {
                 }
             }
 
-            // Create frames (parity and data)
+            // FIX #2: Create frames by copying data (not consuming shards)
             let mut block_frames = Vec::new();
-            for (i, s) in shards.into_iter().enumerate() {
+            for (i, s) in shards.iter().enumerate() {
                 let is_parity = i >= shard_count;
-                let payload: Arc<[u8]> = Arc::from(s.into_boxed_slice());
+                // Copy data from shard buffer to create Arc
+                let payload: Arc<[u8]> = Arc::from(s.as_slice());
 
                 let frame = Frame::new(
                     self.block_id,
@@ -411,7 +431,6 @@ impl FecSender {
                     payload.clone(),
                 );
 
-                // FIX #3: No double-clone, reuse Arc
                 let fe = FrameEntry {
                     total_size: frame.total_size,
                     block_id: frame.block_id,
@@ -425,6 +444,13 @@ impl FecSender {
 
                 block_frames.push(fe);
                 frames_to_send.push(frame);
+            }
+
+            let buffer_pool_capacity = DATA_SHARDS_DEFAULT + MAX_PARITY_SHARDS;
+            for buffer in shards {
+                if self.shard_buffer_pool.len() < buffer_pool_capacity {
+                    self.shard_buffer_pool.push(buffer);
+                }
             }
 
             // Store all frames for this block in the ring buffer
@@ -583,7 +609,7 @@ impl ReceiverBlock {
         }
     }
 
-    fn insert_frame(&mut self, idx: usize, payload: &Box<[u8]>) -> Result<bool, FecError> {
+    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
                 idx: idx as u32,
@@ -592,7 +618,8 @@ impl ReceiverBlock {
         }
 
         if self.shards[idx].is_none() {
-            self.shards[idx] = Some(payload.to_vec());
+            // FIX #3: Convert Box<[u8]> to Vec<u8> without extra copy
+            self.shards[idx] = Some(Vec::from(payload));
             self.received += 1;
         }
 
@@ -603,7 +630,6 @@ impl ReceiverBlock {
         Ok(self.received >= self.data_shards)
     }
 
-    // FIX #7: Avoid creating new RS on every reconstruction
     fn try_reconstruct(&mut self, decoders: &mut HashMap<(usize, usize), ReedSolomon>) -> Result<bool, FecError> {
         if self.is_complete {
             return Ok(true);
@@ -665,23 +691,32 @@ impl ReceiverBlock {
         // SAFETY: We'll write exactly total_size bytes before setting len
         unsafe { bytes.set_len(self.total_size); }
 
-        let dst = bytes.as_mut_slice();
+        let dst: &mut [u8] = bytes.as_mut_slice();
 
+        // FIX #5: Bulk copy with optimized memcpy
         for shard_opt in self.shards.iter_mut().take(self.data_shards) {
-            if written == self.total_size {
+            if written >= self.total_size {
                 break;
             }
+
             if let Some(shard) = shard_opt.take() {
                 let remaining = self.total_size - written;
                 let to_write = remaining.min(shard.len());
 
-                dst[written..written + to_write]
-                    .copy_from_slice(&shard[..to_write]);
-
+                // Single optimized memcpy per shard
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        shard.as_ptr(),
+                        dst.as_mut_ptr().add(written),
+                        to_write,
+                    );
+                }
                 written += to_write;
             }
         }
 
+        // Truncate if final size is less than total_size (shouldn't happen in normal operation)
+        bytes.truncate(written);
         Packet::from(bytes.into_boxed_slice())
     }
 }
@@ -694,6 +729,8 @@ pub struct FecReceiver {
     total_lost_frames: u64,
     // Shared ReedSolomon decoders cache
     decoders: HashMap<(usize, usize), ReedSolomon>,
+    // FIX #6: Reusable block pool
+    block_pool: Vec<ReceiverBlock>,
 }
 
 impl FecReceiver {
@@ -702,6 +739,11 @@ impl FecReceiver {
     }
 
     pub fn with_window_size(window_size: usize) -> Self {
+        // FIX #6: Pre-allocate reusable receiver blocks
+        let block_pool = (0..16)  // Pool of 16 blocks
+            .map(|_| ReceiverBlock::place_holder())
+            .collect();
+
         Self {
             blocks: RingBuffer::new(window_size),
             next_block_id: 0,
@@ -709,6 +751,7 @@ impl FecReceiver {
             total_frames_received: 0,
             total_lost_frames: 0,
             decoders: HashMap::new(),
+            block_pool,
         }
     }
 
@@ -776,12 +819,25 @@ impl FecReceiver {
 
         let block_id = frame.block_id;
 
-        // Get or create the block
+        // Get or create the block (from pool if available)
         if self.blocks.get(block_id).is_none() {
-            self.blocks.insert(
-                block_id,
-                ReceiverBlock::new(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize)
-            );
+            // FIX #6: Get block from pool or create new
+            let mut new_block = if let Some(mut pooled) = self.block_pool.pop() {
+                pooled.place_value(
+                    frame.data_shards as usize,
+                    frame.parity_shards as usize,
+                    frame.total_size as usize
+                );
+                pooled
+            } else {
+                ReceiverBlock::new(
+                    frame.data_shards as usize,
+                    frame.parity_shards as usize,
+                    frame.total_size as usize
+                )
+            };
+
+            self.blocks.insert(block_id, new_block);
         }
 
         let block = self.blocks.get_mut(block_id).unwrap();
@@ -790,7 +846,7 @@ impl FecReceiver {
         let idx = frame.frame_idx as usize;
         // Convert frame data to Box<[u8]> for storage
         let payload_box = Box::from(frame.data());
-        let can_decode = block.insert_frame(idx, &payload_box)?;
+        let can_decode = block.insert_frame(idx, payload_box)?;
         self.total_frames_received += 1;
 
         if can_decode {
@@ -807,7 +863,13 @@ impl FecReceiver {
 
                         // Create placeholder for next block if it doesn't exist
                         if !self.blocks.contains_key(self.next_block_id) {
-                            self.blocks.insert(self.next_block_id, ReceiverBlock::place_holder());
+                            // FIX #6: Use pool for placeholder
+                            let placeholder = if let Some(pooled) = self.block_pool.pop() {
+                                pooled
+                            } else {
+                                ReceiverBlock::place_holder()
+                            };
+                            self.blocks.insert(self.next_block_id, placeholder);
                             break;
                         }
 
