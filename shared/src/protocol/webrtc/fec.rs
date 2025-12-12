@@ -23,7 +23,7 @@ const DATA_SHARDS_DEFAULT: usize = 24;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
-const MIN_BLOCK_TIMEOUT_MS: u64 = 300;
+const MIN_BLOCK_TIMEOUT_MS: u64 = 200;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 2000;
 
 const RTT_THRESHOLD_MS: u64 = 250;
