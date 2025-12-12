@@ -409,7 +409,36 @@ impl WebRtcPeer {
                 continue;
             }
 
-            // Check for hold delimiter first
+            // Check if the last packet is a hold/end delimiter and send network feedback if so
+            if let Some(last_packet) = packets.last() {
+                let is_hold_delimiter = TransferDelimiterShema::from_hold_packet(last_packet, session_id).is_ok();
+                let is_end_delimiter = TransferDelimiterShema::from_end_packet(last_packet, session_id).is_ok();
+
+                if is_hold_delimiter || is_end_delimiter {
+                    use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
+                    use schema::devlog::bitbridge::fec_feedback::Feedback;
+
+                    let loss_rate = fec_receiver.calculate_loss_rate();
+                    let rtt = self.buffer.rtt().await.unwrap_or(0.0);
+                    let current_block_id = fec_receiver.current_block_id();
+
+                    let feedback = FecFeedback {
+                        feedback: Some(Feedback::Network(NetworkStats {
+                            loss_rate,
+                            rtt: Some(rtt as u32),
+                            current_block_id: Some(current_block_id),
+                        })),
+                    };
+
+                    self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
+                    log::info!("Received {} delimiter in last packet, sent network feedback: loss_rate={}, rtt={}, block_id={}",
+                        if is_end_delimiter { "end" } else { "hold" }, loss_rate, rtt, current_block_id);
+
+                    continue;
+                }
+            }
+
+            // Check for start delimiter
             let start_delim = loop {
                 let Some(packet) = packets.pop() else {
                     break Err(WebRtcErrors::InvalidDelimiter("No delimiter found in FEC packets".into()));
@@ -529,55 +558,71 @@ impl WebRtcPeer {
 
                 packets.extend_from_slice(&self.handle_fec_action(action).await?);
 
-                for packet in packets.drain(..) {
-                    if let Ok(_hold) = TransferDelimiterShema::from_hold_packet(&packet, session_id) {
-                        log::info!("Received hold delimiter, sending network feedback");
+                // Check if the last packet is a delimiter
+                let delimiter = packets.last().and_then(|last_packet| {
+                    if TransferDelimiterShema::from_hold_packet(last_packet, session_id).is_ok() {
+                        Some((last_packet.clone(), false)) // (delimiter, is_end)
+                    } else if TransferDelimiterShema::from_end_packet(last_packet, session_id).is_ok() {
+                        Some((last_packet.clone(), true))
+                    } else {
+                        None
+                    }
+                });
 
-                        // Calculate statistics
-                        let loss_rate = fec_receiver.calculate_loss_rate();
-                        let rtt = self.buffer.rtt().await.unwrap_or(0.0);
-                        let current_block_id = fec_receiver.current_block_id();
+                // Merge all data packets (excluding delimiter if present)
+                let data_packets = if delimiter.is_some() {
+                    &packets[..packets.len() - 1]
+                } else {
+                    &packets[..]
+                };
 
-                        // Send Feedback::Network back to sender
-                        use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
-                        use schema::devlog::bitbridge::fec_feedback::Feedback;
-
-                        let feedback = FecFeedback {
-                            feedback: Some(Feedback::Network(NetworkStats {
-                                loss_rate,
-                                rtt: Some(rtt as u32),
-                                current_block_id: Some(current_block_id),
-                            })),
-                        };
-
-                        self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-                        log::info!("Sent network feedback: loss_rate={}, rtt={}, block_id={}",
-                            loss_rate, rtt, current_block_id);
-
-                        continue;
+                if !data_packets.is_empty() {
+                    let mut merged_data = Vec::new();
+                    for packet in data_packets {
+                        merged_data.extend_from_slice(packet);
                     }
 
-                    if TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok() {
-                        log::info!("End delimiter received, finishing download");
-                        progress_update.success();
-                        break;
-                    }
-
-                    // Write chunk
                     let time = Instant::now();
-                    let written = packet.len();
                     let written = writer
-                        .write(packet.clone().into())
+                        .write(merged_data.into())
                         .with_cancel(&cancellation_signal)
                         .await?
                         .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
-                    log::info!("Wrote {} bytes in {}us", written, time.elapsed().as_micros());
+                    log::info!("Wrote {} merged bytes in {}us", written, time.elapsed().as_micros());
 
                     total_written_bytes += written as u64;
                     progress_update.update_progress(written as u64);
-
                     core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
                 }
+
+                // Handle delimiter if present
+                if let Some((_, is_end)) = delimiter {
+                    use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
+                    use schema::devlog::bitbridge::fec_feedback::Feedback;
+
+                    let loss_rate = fec_receiver.calculate_loss_rate();
+                    let rtt = self.buffer.rtt().await.unwrap_or(0.0);
+                    let current_block_id = fec_receiver.current_block_id();
+
+                    let feedback = FecFeedback {
+                        feedback: Some(Feedback::Network(NetworkStats {
+                            loss_rate,
+                            rtt: Some(rtt as u32),
+                            current_block_id: Some(current_block_id),
+                        })),
+                    };
+
+                    self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
+                    log::info!("Received {} delimiter, sent network feedback: loss_rate={}, rtt={}, block_id={}",
+                        if is_end { "end" } else { "hold" }, loss_rate, rtt, current_block_id);
+
+                    if is_end {
+                        progress_update.success();
+                        break;
+                    }
+                }
+
+                packets.clear();
             }
 
             writer.end().await?;
@@ -739,6 +784,7 @@ impl WebRtcPeer {
 
             let (queue_tx, mut queue_rx) = mpsc::unbounded();
             let mut on_hold = false;
+            let mut is_end = false;
 
             let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
             let FecAction::Framed(fec) = fec_sender.send(delimiter)? else {
@@ -750,7 +796,6 @@ impl WebRtcPeer {
                 let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
             }
             let mut buff_counter = 0;
-            let time_to_drain = Duration::from_secs(5);
 
             let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
             loop {
@@ -806,7 +851,6 @@ impl WebRtcPeer {
                 let action = match (bytes, raw_size, feedback) {
                     (Some(bytes), Some(raw_size), _) => {
                         total_sent_bytes += bytes.len() as u64;
-                        let time = Instant::now();
                         let action = fec_sender.send(bytes)?;
                         progress_update.update_progress(raw_size as u64);
                         let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
@@ -815,16 +859,40 @@ impl WebRtcPeer {
                     (_, _, Some(fb)) => {
                         if let Feedback::Network(ref net) = fb {
                             if on_hold {
-                                on_hold = false;
-                                log::info!("Received network feedback, marking on_hold=false: loss_rate={}, rtt={:?}, block_id={:?}",
+                                log::info!("Received network feedback while on hold: loss_rate={}, rtt={:?}, block_id={:?}",
                                     net.loss_rate, net.rtt, net.current_block_id);
+
+                                if is_end {
+                                    log::info!("End delimiter acknowledged, finishing resource transfer");
+                                    break;
+                                }
+
+                                on_hold = false;
                             }
                         }
                         fec_sender.feedback(fb)
                     }
                     _ => {
-                        log::info!("End of resource {resource_path:?}");
-                        break;
+                        // No data left, send end delimiter
+                        if !on_hold {
+                            log::info!("No data left for resource {resource_path:?}, sending end delimiter");
+                            self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
+                            self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
+
+                            let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
+                            let FecAction::Framed(frames) = fec_sender.send(end_delimiter)? else {
+                                return Err(WebRtcErrors::InvalidDelimiter("Failed to send end delimiter".into()));
+                            };
+
+                            for frame in frames {
+                                let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                            }
+
+                            on_hold = true;
+                            is_end = true;
+                        }
+
+                        FecAction::Noop
                     }
                 };
 
@@ -923,18 +991,7 @@ impl WebRtcPeer {
                 }
             }
 
-            self.buffer.flush_timeout(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).await?;
-            self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
-            let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
-            let FecAction::Framed(frames) = fec_sender.send(end_delimiter)? else {
-                return Err(WebRtcErrors::InvalidDelimiter("Failed to send end delimiter".into()));
-            };
-
-            log::info!("Sending end delimiter for resource {resource_path:?} size {size} bytes");
-            for frame in frames {
-                let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
-            }
-
+            // Loop has ended after receiving network feedback for end delimiter
             progress_update.complete();
             let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
 
