@@ -30,7 +30,7 @@ pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
 
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024;
+pub static MAX_BUFFER_SIZE: usize = 2 * 1024 * 1024;
 pub static MIN_BUFFER_SIZE: usize = MAX_BUFFER_SIZE / 10;
 
 pub struct WebRtc {

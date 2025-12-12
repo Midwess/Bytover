@@ -527,7 +527,7 @@ impl WebRtcPeer {
                     }
                 }
 
-                packets.extend_from_slice(self.handle_fec_action(action).await?);
+                packets.extend_from_slice(&self.handle_fec_action(action).await?);
 
                 for packet in packets.drain(..) {
                     if let Ok(_hold) = TransferDelimiterShema::from_hold_packet(&packet, session_id) {
@@ -710,7 +710,7 @@ impl WebRtcPeer {
         };
 
         let resource_cancel_signal = cancellation_signal.clone();
-        let mut fec_sender = FecSender::new(self.peer.peer_id(), 5 * 1024 * 1024);
+        let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let _ = feedback_receiver.drain();
         while !session.is_completed() {
