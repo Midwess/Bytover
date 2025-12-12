@@ -737,7 +737,7 @@ impl FecReceiver {
 
         if frame.block_id < self.next_block_id && !frame.is_parity {
             log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
-            return Ok(FecAction::Noop);
+            return self.ping();
         }
 
         let block_id = frame.block_id;
@@ -834,7 +834,12 @@ impl FecReceiver {
                 if now.saturating_sub(block.last_ping_ts) > timeout_us {
                     let action = Self::handle_timeout(block_id, block);
                     self.total_lost_frames += action.0 as u64;
-                    return Ok(action.1);
+                    return match action.1 {
+                        FecAction::Noop => {
+                            Ok(FecAction::Queued(Instant::now() + Duration::from_millis(timeout_ms)))
+                        }
+                        _ => Ok(action.1),
+                    }
                 } else {
                     let elapsed = now.saturating_sub(block.last_ping_ts);
                     let remaining = timeout_us.saturating_sub(elapsed);
@@ -846,7 +851,7 @@ impl FecReceiver {
             }
         }
 
-        Ok(FecAction::Noop)
+        Ok(FecAction::Queued(Instant::now() + Duration::from_millis(timeout_ms)))
     }
 
     fn handle_timeout(block_id: u32, block: &mut ReceiverBlock) -> (usize, FecAction) {
