@@ -492,6 +492,57 @@ impl WebRtcPeer {
 
             let mut total_written_bytes = 0u64;
 
+            // Create writer channel and spawn writer task
+            let (mut write_tx, mut write_rx) = mpsc::channel::<Vec<u8>>(20);
+            let writer_cancel_signal = cancellation_signal.clone();
+            let writer_core_request = core_request.clone();
+            let mut writer_progress_update = progress_update.clone();
+            let writer_handle = spawn(async move {
+                let mut total_written = 0u64;
+                let mut total_time_us = 0u64;
+                let mut write_count = 0u64;
+                loop {
+                    let write_result = write_rx.next()
+                        .with_cancel(&writer_cancel_signal)
+                        .await;
+
+                    match write_result {
+                        Ok(Some(data)) => {
+                            let data_len = data.len() as u64;
+                            let time = Instant::now();
+                            match writer.write(data.into()).await {
+                                Ok(written) => {
+                                    total_time_us += time.elapsed().as_micros() as u64;
+                                    total_written += written as u64;
+                                    write_count += 1;
+
+                                    // Update progress and send response
+                                    writer_progress_update.update_progress(data_len);
+                                    writer_core_request.response_throttle(TransferResourceProgressUpdate(writer_progress_update.clone())).await;
+                                }
+                                Err(e) => {
+                                    log::error!("Writer error: {:?}", e);
+                                    return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            // Channel closed, finish writing
+                            log::info!("Writer task completed, total written: {} bytes", total_written);
+                            break;
+                        }
+                        Err(_) => {
+                            // Cancelled
+                            log::info!("Writer task cancelled");
+                            break;
+                        }
+                    }
+                }
+
+                writer.end().await?;
+                Result::<(u64, u64, u64, _), WebRtcErrors>::Ok((total_written, total_time_us, write_count, writer_progress_update))
+            });
+
             let mut packets = packets;
             loop {
                 if progress_update.is_completed() {
@@ -600,19 +651,16 @@ impl WebRtcPeer {
                         merged_data.extend_from_slice(packet);
                     }
 
-                    let time = Instant::now();
-                    let written = writer
-                        .write(merged_data.into())
-                        .with_cancel(&cancellation_signal)
-                        .await?
-                        .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
-                    total_write_time_us += time.elapsed().as_micros() as u64;
-                    total_write_count += 1;
+                    let data_len = merged_data.len() as u64;
 
-                    total_written_bytes += written as u64;
-                    total_written_bytes_all += written as u64;
-                    progress_update.update_progress(written as u64);
-                    core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
+                    // Send to writer channel (progress update now happens in writer task)
+                    if write_tx.send(merged_data).await.is_err() {
+                        log::error!("Writer channel closed unexpectedly");
+                        return Err(WebRtcErrors::PersistentError(PersistenceError::IOError("Writer channel closed".into())));
+                    }
+
+                    total_written_bytes += data_len;
+                    total_written_bytes_all += data_len;
                 }
 
                 // Handle delimiter if present
@@ -645,9 +693,29 @@ impl WebRtcPeer {
                 packets.clear();
             }
 
-            writer.end().await?;
-            progress_update.complete();
-            let _ = core_request.response(TransferResourceProgressUpdate(progress_update.clone())).await;
+            // Close writer channel and wait for writer task
+            drop(write_tx);
+            match writer_handle.await {
+                Ok(Ok((written_bytes, write_time_us, write_count, mut writer_progress))) => {
+                    total_write_time_us += write_time_us;
+                    total_write_count += write_count;
+                    log::info!("Writer task finished, total written: {} bytes in {} chunks", written_bytes, write_count);
+
+                    // Update progress from writer task
+                    writer_progress.complete();
+                    let _ = core_request.response(TransferResourceProgressUpdate(writer_progress.clone())).await;
+                    *progress_update = writer_progress;
+                }
+                Ok(Err(e)) => {
+                    log::warn!("Writer task finished with error: {:?}", e);
+                    return Err(e);
+                }
+                Err(e) => {
+                    log::warn!("Writer task join error: {:?}", e);
+                    return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
+                }
+            }
+
             start_delimiter_tick = Instant::now();
 
             log::info!(

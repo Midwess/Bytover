@@ -855,7 +855,6 @@ impl FecReceiver {
 
             if reconstructed && block_id == self.next_block_id {
                 if let Some(block) = self.blocks.remove(block_id) {
-                    log::info!("Constructed block {}", block_id);
                     let mut completed_blocks = vec![block];
 
                     loop {
@@ -878,18 +877,15 @@ impl FecReceiver {
                             .unwrap_or_default();
 
                         if is_completed {
-                            log::info!("Constructed block {}", self.next_block_id);
                             completed_blocks.push(self.blocks.remove(self.next_block_id).unwrap());
                         } else {
                             break;
                         }
                     }
 
-                    let time = Instant::now();
                     let bytes = completed_blocks.into_iter()
                         .map(|it| it.into_packet())
                         .collect::<Vec<_>>();
-                    log::info!("Completed in {}us", time.elapsed().as_micros());
 
                     let next_check = self.calculate_next_check_time();
                     return Ok(FecAction::Constructed(bytes, next_check));
