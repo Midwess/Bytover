@@ -356,7 +356,8 @@ impl WebRtcPeer {
                             };
 
                             let Some(frame) = Frame::deserialize(&raw_packet) else {
-                                log::warn!("Failed to deserialize packet: {raw_packet:?}");
+                                log::warn!("Failed to deserialize packet");
+                                // Will go to flow retrans
                                 continue;
                             };
 

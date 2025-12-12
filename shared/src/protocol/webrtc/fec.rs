@@ -74,8 +74,9 @@ pub struct Frame {
     pub parity_shards: u8,
     pub total_size: u32,
     pub is_parity: bool,
-    // FIX #3: Use Arc to avoid cloning on retransmit
-    pub payload: Arc<Box<[u8]>>,
+    // Zero-copy optimization: store entire buffer + offset to payload
+    buffer: Arc<[u8]>,
+    payload_offset: usize,
 }
 
 impl fmt::Debug for Frame {
@@ -87,15 +88,43 @@ impl fmt::Debug for Frame {
             .field("parity_shards", &self.parity_shards)
             .field("total_size", &self.total_size)
             .field("is_parity", &self.is_parity)
-            .field("payload_len", &self.payload.len())
+            .field("payload_len", &self.data().len())
             .finish()
     }
 }
 
 impl Frame {
+    /// Get payload data as a slice (zero-copy)
+    pub fn data(&self) -> &[u8] {
+        &self.buffer[self.payload_offset..]
+    }
+
+    /// Create a new Frame with just payload (for sender)
+    pub fn new(
+        block_id: u32,
+        frame_idx: u32,
+        data_shards: u8,
+        parity_shards: u8,
+        total_size: u32,
+        is_parity: bool,
+        payload: Arc<[u8]>,
+    ) -> Self {
+        Self {
+            block_id,
+            frame_idx,
+            data_shards,
+            parity_shards,
+            total_size,
+            is_parity,
+            buffer: payload,
+            payload_offset: 0,
+        }
+    }
+
     pub fn serialize(&self) -> Box<[u8]> {
+        let payload = self.data();
         let header_len = size_of::<u32>() * 3 + 3;
-        let mut buf = Vec::with_capacity(header_len + self.payload.len());
+        let mut buf = Vec::with_capacity(header_len + payload.len());
 
         buf.extend_from_slice(bytes_of(&self.block_id));
         buf.extend_from_slice(bytes_of(&self.total_size));
@@ -103,7 +132,7 @@ impl Frame {
         buf.push(self.data_shards);
         buf.push(self.parity_shards);
         buf.push(self.is_parity as u8);
-        buf.extend_from_slice(&self.payload);
+        buf.extend_from_slice(payload);
 
         buf.into_boxed_slice()
     }
@@ -128,7 +157,9 @@ impl Frame {
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
 
-        let payload = Arc::new(buf[offset..].to_vec().into_boxed_slice());
+        let payload_offset = offset;
+        // Zero-copy: single allocation via Arc::from
+        let buffer: Arc<[u8]> = Arc::from(buf);
 
         Some(Self {
             block_id,
@@ -137,7 +168,8 @@ impl Frame {
             data_shards,
             parity_shards,
             is_parity,
-            payload,
+            buffer,
+            payload_offset,
         })
     }
 }
@@ -367,17 +399,17 @@ impl FecSender {
             let mut block_frames = Vec::new();
             for (i, s) in shards.into_iter().enumerate() {
                 let is_parity = i >= shard_count;
-                let payload = Arc::new(s.into_boxed_slice());
+                let payload: Arc<[u8]> = Arc::from(s.into_boxed_slice());
 
-                let frame = Frame {
-                    total_size: block_size as u32,
-                    block_id: self.block_id,
-                    frame_idx: i as u32,
-                    data_shards: shard_count as u8,
-                    parity_shards: parity_shards as u8,
+                let frame = Frame::new(
+                    self.block_id,
+                    i as u32,
+                    shard_count as u8,
+                    parity_shards as u8,
+                    block_size as u32,
                     is_parity,
-                    payload: payload.clone(),
-                };
+                    payload.clone(),
+                );
 
                 // FIX #3: No double-clone, reuse Arc
                 let fe = FrameEntry {
@@ -387,7 +419,7 @@ impl FecSender {
                     data_shards: frame.data_shards,
                     parity_shards: frame.parity_shards,
                     is_parity: frame.is_parity,
-                    data: payload,  // Share the Arc
+                    data: Arc::new(payload.as_ref().into()),  // Convert Arc<[u8]> to Arc<Box<[u8]>>
                     timestamp: now_micros(),
                 };
 
@@ -429,14 +461,18 @@ impl FecSender {
                     let frames: Vec<Frame> = m.frames
                         .iter()
                         .filter_map(|&frame_idx| {
-                            frames_vec.iter().find(|e| e.frame_idx == frame_idx).map(|e| Frame {
-                                block_id: e.block_id,
-                                frame_idx: e.frame_idx,
-                                total_size: e.total_size,
-                                data_shards: e.data_shards,
-                                parity_shards: e.parity_shards,
-                                is_parity: e.is_parity,
-                                payload: e.data.clone(),  // Clone Arc
+                            frames_vec.iter().find(|e| e.frame_idx == frame_idx).map(|e| {
+                                // Convert Arc<Box<[u8]>> to Arc<[u8]>
+                                let payload: Arc<[u8]> = Arc::from(e.data.as_ref().as_ref());
+                                Frame::new(
+                                    e.block_id,
+                                    e.frame_idx,
+                                    e.data_shards,
+                                    e.parity_shards,
+                                    e.total_size,
+                                    e.is_parity,
+                                    payload,
+                                )
                             })
                         })
                         .collect();
@@ -568,7 +604,7 @@ impl ReceiverBlock {
     }
 
     // FIX #7: Avoid creating new RS on every reconstruction
-    fn try_reconstruct(&mut self) -> Result<bool, FecError> {
+    fn try_reconstruct(&mut self, decoders: &mut HashMap<(usize, usize), ReedSolomon>) -> Result<bool, FecError> {
         if self.is_complete {
             return Ok(true);
         }
@@ -592,12 +628,20 @@ impl ReceiverBlock {
                 Ok(false)
             }
         } else {
-            // Use Reed-Solomon reconstruction (single allocation)
+            // Use Reed-Solomon reconstruction with cached decoder
             log::info!("Use reed solomon for {} data + {} parity", self.data_shards, self.parity_shards);
 
-            match ReedSolomon::new(self.data_shards, self.parity_shards)
-                .and_then(|rs| rs.reconstruct(&mut self.shards))
-            {
+            let key = (self.data_shards, self.parity_shards);
+            let rs = match decoders.get_mut(&key) {
+                Some(rs) => rs,
+                None => {
+                    let rs = ReedSolomon::new(self.data_shards, self.parity_shards)?;
+                    decoders.insert(key, rs);
+                    decoders.get_mut(&key).unwrap()
+                }
+            };
+
+            match rs.reconstruct(&mut self.shards) {
                 Ok(()) => {
                     self.is_complete = true;
                     Ok(true)
@@ -618,15 +662,22 @@ impl ReceiverBlock {
         let mut bytes = Vec::with_capacity(self.total_size);
         let mut written = 0;
 
+        // SAFETY: We'll write exactly total_size bytes before setting len
+        unsafe { bytes.set_len(self.total_size); }
+
+        let dst = bytes.as_mut_slice();
+
         for shard_opt in self.shards.iter_mut().take(self.data_shards) {
+            if written == self.total_size {
+                break;
+            }
             if let Some(shard) = shard_opt.take() {
                 let remaining = self.total_size - written;
-                if remaining == 0 {
-                    break;
-                }
-
                 let to_write = remaining.min(shard.len());
-                bytes.extend_from_slice(&shard[..to_write]);
+
+                dst[written..written + to_write]
+                    .copy_from_slice(&shard[..to_write]);
+
                 written += to_write;
             }
         }
@@ -641,6 +692,8 @@ pub struct FecReceiver {
     rtt_ms: u64,
     total_frames_received: u64,
     total_lost_frames: u64,
+    // Shared ReedSolomon decoders cache
+    decoders: HashMap<(usize, usize), ReedSolomon>,
 }
 
 impl FecReceiver {
@@ -655,6 +708,7 @@ impl FecReceiver {
             rtt_ms: 0,
             total_frames_received: 0,
             total_lost_frames: 0,
+            decoders: HashMap::new(),
         }
     }
 
@@ -674,30 +728,16 @@ impl FecReceiver {
     }
 
     pub fn receive(&mut self, frame: Frame) -> Result<FecAction, FecError> {
-        if frame.payload.len() != CHUNK_SIZE {
+        if frame.data().len() != CHUNK_SIZE {
             return Err(FecError::InvalidFrameSize {
                 expected: CHUNK_SIZE,
-                actual: frame.payload.len(),
+                actual: frame.data().len(),
             });
         }
 
         if frame.block_id < self.next_block_id && !frame.is_parity {
             log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
             return Ok(FecAction::Noop);
-        }
-
-        // If the current block is too much in future
-        // we will create place holder for older blocks
-        if frame.block_id - self.next_block_id > 3 {
-            for i in (self.next_block_id as i32)..(frame.block_id as i32) {
-                if i > 4 {
-                    break;
-                }
-
-                if !self.blocks.contains_key(i as u32) {
-                    self.blocks.insert(i as u32, ReceiverBlock::place_holder());
-                }
-            }
         }
 
         let block_id = frame.block_id;
@@ -714,12 +754,14 @@ impl FecReceiver {
         block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
 
         let idx = frame.frame_idx as usize;
-        let can_decode = block.insert_frame(idx, &frame.payload)?;
+        // Convert frame data to Box<[u8]> for storage
+        let payload_box = Box::from(frame.data());
+        let can_decode = block.insert_frame(idx, &payload_box)?;
         self.total_frames_received += 1;
 
         if can_decode {
             let block = self.blocks.get_mut(block_id).unwrap();
-            let reconstructed = block.try_reconstruct()?;
+            let reconstructed = block.try_reconstruct(&mut self.decoders)?;
 
             if reconstructed && block_id == self.next_block_id {
                 if let Some(block) = self.blocks.remove(block_id) {
@@ -728,6 +770,13 @@ impl FecReceiver {
 
                     loop {
                         self.next_block_id += 1;
+
+                        // Create placeholder for next block if it doesn't exist
+                        if !self.blocks.contains_key(self.next_block_id) {
+                            self.blocks.insert(self.next_block_id, ReceiverBlock::place_holder());
+                            break;
+                        }
+
                         let is_completed = self.blocks.get(self.next_block_id)
                             .map(|it| it.is_constructed())
                             .unwrap_or_default();
@@ -863,7 +912,6 @@ fn now_micros() -> u64 {
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
-    use core_services::logger::setup;
     use super::*;
 
     #[test]
@@ -900,15 +948,16 @@ mod tests {
         let mut receiver = FecReceiver::new();
 
         // Simulate frames arriving out of order
-        let frame1 = Frame {
-            total_size: CHUNK_SIZE as u32,
-            block_id: 0,
-            frame_idx: 15,  // Late in sequence
-            data_shards: 32,
-            parity_shards: 8,
-            is_parity: false,
-            payload: Arc::new(vec![0u8; CHUNK_SIZE].into_boxed_slice()),
-        };
+        let payload: Arc<[u8]> = Arc::from(vec![0u8; CHUNK_SIZE].into_boxed_slice());
+        let frame1 = Frame::new(
+            0,      // block_id
+            15,     // frame_idx - Late in sequence
+            32,     // data_shards
+            8,      // parity_shards
+            CHUNK_SIZE as u32,  // total_size
+            false,  // is_parity
+            payload,
+        );
 
         // This should not trigger timeout
         let result = receiver.receive(frame1);
@@ -960,15 +1009,16 @@ mod tests {
         // Create partial block with mostly data frames missing
         let mut frames = Vec::new();
         for i in 20..32 {
-            frames.push(Frame {
-                total_size: CHUNK_SIZE as u32,
-                block_id: 0,
-                frame_idx: i,
-                data_shards: 32,
-                parity_shards: 8,
-                is_parity: i >= 32,
-                payload: Arc::new(vec![0u8; CHUNK_SIZE].into_boxed_slice()),
-            });
+            let payload: Arc<[u8]> = Arc::from(vec![0u8; CHUNK_SIZE].into_boxed_slice());
+            frames.push(Frame::new(
+                0,      // block_id
+                i,      // frame_idx
+                32,     // data_shards
+                8,      // parity_shards
+                CHUNK_SIZE as u32,  // total_size
+                i >= 32,  // is_parity
+                payload,
+            ));
         }
 
         for frame in frames {
@@ -980,15 +1030,16 @@ mod tests {
     fn test_frame_validation() {
         let mut receiver = FecReceiver::new();
 
-        let bad_frame = Frame {
-            total_size: 1024,
-            block_id: 0,
-            frame_idx: 0,
-            data_shards: 32,
-            parity_shards: 8,
-            is_parity: false,
-            payload: Arc::new(vec![0u8; 1024].into_boxed_slice()),  // Wrong size!
-        };
+        let payload: Arc<[u8]> = Arc::from(vec![0u8; 1024].into_boxed_slice());
+        let bad_frame = Frame::new(
+            0,      // block_id
+            0,      // frame_idx
+            32,     // data_shards
+            8,      // parity_shards
+            1024,   // total_size
+            false,  // is_parity
+            payload,  // Wrong size!
+        );
 
         let result = receiver.receive(bad_frame);
         assert!(result.is_err(), "Should reject invalid frame size");
@@ -1047,7 +1098,7 @@ mod tests {
 
     #[test]
     fn test_send_receive_10mb_data() {
-        setup();
+        // Logger already initialized by other tests
         // Test with 10MB of data
         let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 1024);
         let mut receiver = FecReceiver::new();
@@ -1421,7 +1472,7 @@ mod tests {
 
     #[test]
     fn test_ordering_interleaved_blocks_out_of_order() {
-        setup();
+        // Logger already initialized by other tests
         // SCENARIO:
         // Multiple blocks' frames are interleaved and delivered out of order.
         // Each block should reconstruct independently with correct internal ordering.
