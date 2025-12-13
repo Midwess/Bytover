@@ -20,13 +20,9 @@ pub const CHUNK_SIZE: usize = 2 * 1150;
 pub const DATA_SHARDS_DEFAULT: usize = 48;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
-
 const MIN_BLOCK_TIMEOUT_MS: u64 = 200;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 2000;
-
 const RTT_THRESHOLD_MS: u64 = 250;
-const PARITY_ADAPTATION_WEIGHT: f32 = 0.15;
-const LOSS_RATE_HYSTERESIS: f32 = 0.02;
 
 #[derive(Debug, Error)]
 pub enum FecError {
