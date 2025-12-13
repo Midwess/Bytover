@@ -204,7 +204,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize, _compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
+    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
         let file_name = path.file_name()
@@ -215,13 +215,13 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
             let cursor = folder.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
-            let wrapped = CIOCursorBoxWrapper::new(cursor, &file_name);
+            let wrapped = CIOCursorBoxWrapper::new(cursor, compressed);
             return Ok(Box::new(wrapped));
         };
 
         let file = FileEntry::existing(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
         let cursor = file.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
-        let wrapped = CIOCursorBoxWrapper::new(cursor, &file_name);
+        let wrapped = CIOCursorBoxWrapper::new(cursor, compressed);
         Ok(Box::new(wrapped))
     }
 

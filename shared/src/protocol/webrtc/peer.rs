@@ -862,11 +862,11 @@ impl WebRtcPeer {
                 (CHUNK_SIZE * DATA_SHARDS_DEFAULT) as u64
             };
 
-            let mut reader = self
+            let mut reader = Arc::new(Mutex::new(self
                 .resource_repo
                 .read(resource_path.clone(), chunk_size as usize, is_compressed)
                 .with_cancel(&resource_cancel_signal)
-                .await??;
+                .await??));
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes compressed = {is_compressed}");
 
@@ -879,11 +879,13 @@ impl WebRtcPeer {
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>(20);
 
             let reader_cancel_signal = resource_cancel_signal.clone();
+            let reader2 = reader.clone();
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
                 let mut total_time_us = 0u64;
                 loop {
                     let time = Instant::now();
+                    let mut reader = reader2.lock().await;
                     let read_result = reader.c_next(Some(chunk_size))
                         .with_cancel(&reader_cancel_signal)
                         .await;
@@ -893,6 +895,7 @@ impl WebRtcPeer {
                             total_time_us += time.elapsed().as_micros() as u64;
                             total_read += data.len() as u64;
                             let packet = Packet::from(data);
+                            drop(reader);
 
                             // Send to channel, blocking if full
                             if read_tx.send((packet, raw_size)).await.is_err() {
@@ -1078,7 +1081,7 @@ impl WebRtcPeer {
                     let stats_after = dual_ch.bytes_sent().await;
                     let total_sent = stats_after.saturating_sub(stats_before);
                     let bw = total_sent as f64 / time;
-
+                    reader.lock().await.compression_stats_mut().update_network_bandwidth(bw);
                     log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000.0);
                     buff_counter = 0;
                 }
