@@ -31,7 +31,7 @@ pub struct UploadContext {
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
     pub x_content_length: u32,
-    pub chunk_stream_enabled: bool,
+    pub chunk_stream_enabled: bool
 }
 
 impl UploadContext {
@@ -63,11 +63,10 @@ impl UploadContext {
             Some(Source::S3Path(_)) => {
                 if chunk_size < 5 * MB {
                     1
-                }
-                else {
+                } else {
                     resource_size.div_ceil(chunk_size) as usize + 2
                 }
-            },
+            }
             _ => {
                 log::error!("Invalid resource type: {:?}", resource);
                 return Err(CloudStorageErrors::InvalidUploadContext)

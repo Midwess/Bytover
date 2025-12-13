@@ -16,7 +16,6 @@ pub struct S3CloudStorageImpl {
     pub cached_sign: Arc<Mutex<HashMap<StaticResource, (Instant, String)>>>
 }
 
-
 #[async_trait::async_trait]
 impl CloudStorage for S3CloudStorageImpl {
     async fn get_upload_solution(
@@ -144,7 +143,7 @@ impl CloudStorage for S3CloudStorageImpl {
 
     async fn delete_resource(&self, source: &StaticResource) -> Result<bool, CloudStorageErrors> {
         use schema::value::static_resource::static_resource::Source;
-        
+
         let s3_path = match &source.source {
             Some(Source::S3Path(path)) => path.clone(),
             _ => return Ok(false)
@@ -158,17 +157,16 @@ impl CloudStorage for S3CloudStorageImpl {
             Err(core_services::services::errors::Errors::S3NotFound(_)) => Ok(false),
             Err(e) => Err(CloudStorageErrors::S3Errors(e))
         }
-
     }
 
     async fn abort_incomplete_multipart_uploads(&self, source: &StaticResource) {
         use schema::value::static_resource::static_resource::Source;
-        
+
         let s3_path = match &source.source {
             Some(Source::S3Path(path)) => path.clone(),
             _ => return
         };
-        
+
         if let Err(e) = self.s3_client.abort_incomplete_multipart_uploads(s3_path).await {
             log::error!("Failed to abort incomplete multipart uploads: {:?}", e);
         }

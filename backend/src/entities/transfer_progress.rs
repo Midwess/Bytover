@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::transfer_resource::TransferResource;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferProgressErrors {

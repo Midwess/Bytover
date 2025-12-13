@@ -1,5 +1,3 @@
-use futures::join;
-use tokio::time::Instant;
 use crate::app_gateway::app_info::{AppInfoErrors, AppInfoService};
 use crate::app_gateway::markov::{Markov, MarkovErrors};
 use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
@@ -9,6 +7,7 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
+use futures::join;
 use schema::crafter::email_template::Template::{self};
 use schema::crafter::{EmailTemplate, FileResource as MailFileResource, SendFileTemplate};
 use schema::devlog::app_gateway::models::{Application, Device, User};
@@ -16,6 +15,7 @@ use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status as ClientUploadStatus;
 use schema::value::datetime::Datetime;
 use schema::value::static_resource::StaticResource;
+use tokio::time::Instant;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransferErrors {
@@ -123,13 +123,14 @@ impl TransferService {
                 let platform = device.platform();
                 let gen_upload_request = async {
                     if let Some(next_resource) = next_resource {
-                        return self.cloud_storage.get_upload_solution(user, platform, &next_resource).await.map(|it| Some(it))
+                        return self.cloud_storage.get_upload_solution(user, platform, next_resource).await.map(Some)
                     }
 
-                    return Ok(None)
+                    Ok(None)
                 };
 
-                let (next_upload_result, complete_upload_result) = join!(gen_upload_request, self.cloud_storage.complete_upload(user, completion));
+                let (next_upload_result, complete_upload_result) =
+                    join!(gen_upload_request, self.cloud_storage.complete_upload(user, completion));
                 let current_resource_id = session.current_resource().map(|it| it.order_id()).unwrap_or(0);
                 let Some(current_progress) = session.current_resource_progress_mut() else {
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
@@ -163,11 +164,9 @@ impl TransferService {
                         }
                         log::info!("Failed to generate upload solution for next resource: {e}");
                         Err(TransferErrors::CloudStorageError(e))
-                    },
-                    Ok(None) => Ok(None),
-                    Ok(Some(next_upload_request)) => {
-                        Ok(Some((next_resource_id.unwrap_or(0), next_upload_request)))
                     }
+                    Ok(None) => Ok(None),
+                    Ok(Some(next_upload_request)) => Ok(Some((next_resource_id.unwrap_or(0), next_upload_request)))
                 }
             }
             ClientUploadStatus::Failed(error_message) => {
@@ -219,7 +218,7 @@ impl TransferService {
         let mut thumbnails = session.thumbnail_resources();
 
         for thumbnail in thumbnails.iter_mut() {
-            let _ = Upload::SingleUrl(self.cloud_storage.get_upload_url(&mut thumbnail.1).await?);
+            let _ = Upload::SingleUrl(self.cloud_storage.get_upload_url(&thumbnail.1).await?);
         }
 
         let Some(first_resource) = session.resources().iter().find(|it| it.order_id() == first_resource_id).cloned() else {
@@ -255,34 +254,30 @@ impl TransferService {
         }
 
         let instant = Instant::now();
-        let first_resource_future = self
-            .cloud_storage
-            .get_upload_solution(user, platform, &first_resource);
+        let first_resource_future = self.cloud_storage.get_upload_solution(user, platform, &first_resource);
 
         let thumbnail_futures = thumbnails.iter().map(|(order_id, source)| {
             let cloud = &self.cloud_storage;
 
-            async move {
-                (order_id, cloud.get_upload_url(source).await)
-            }
+            async move { (order_id, cloud.get_upload_url(source).await) }
         });
 
-        let (first_resource_upload_request, thumbnail_upload_urls) = tokio::join!(
-            first_resource_future,
-            async {
-                let results = futures::future::join_all(thumbnail_futures).await;
-                let mut collected = Vec::with_capacity(results.len());
-                for (order_id, result) in results {
-                    collected.push((*order_id, result?));
-                }
-
-                Ok::<_, CloudStorageErrors>(collected)
+        let (first_resource_upload_request, thumbnail_upload_urls) = tokio::join!(first_resource_future, async {
+            let results = futures::future::join_all(thumbnail_futures).await;
+            let mut collected = Vec::with_capacity(results.len());
+            for (order_id, result) in results {
+                collected.push((*order_id, result?));
             }
-        );
+
+            Ok::<_, CloudStorageErrors>(collected)
+        });
 
         let first_resource_upload_request = first_resource_upload_request?;
         let thumbnail_upload_urls = thumbnail_upload_urls?;
-        log::info!("Upload solution for first resource is ready in {} ms", instant.elapsed().as_millis());
+        log::info!(
+            "Upload solution for first resource is ready in {} ms",
+            instant.elapsed().as_millis()
+        );
         let response = TransferResourcesResponse {
             session_id: session_order_id,
             first_resource,
