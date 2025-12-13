@@ -16,8 +16,8 @@ use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 // Too big chunk size will cause higher chance of packet loss
-const CHUNK_SIZE: usize = 8 * 1150;
-const DATA_SHARDS_DEFAULT: usize = 12;
+const CHUNK_SIZE: usize = 2 * 1150;
+const DATA_SHARDS_DEFAULT: usize = 48;
 const MIN_PARITY_SHARDS: usize = 2;
 const MAX_PARITY_SHARDS: usize = 10;
 
