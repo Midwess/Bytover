@@ -1045,7 +1045,6 @@ impl WebRtcPeer {
                 };
 
                 if buff_counter > MAX_BUFFER_SIZE {
-                    log::info!("Buffer full");
                     let mut should_send_hold = false;
                     if !on_hold {
                         on_hold = true;
@@ -1080,6 +1079,7 @@ impl WebRtcPeer {
                     let total_sent = stats_after.saturating_sub(stats_before);
                     let bw = total_sent as f64 / time;
 
+                    log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000.0);
                     buff_counter = 0;
                 }
             }
