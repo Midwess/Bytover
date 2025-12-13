@@ -92,8 +92,8 @@ pub struct CIOCursorBoxWrapper {
 }
 
 impl CIOCursorBoxWrapper {
-    pub fn new(inner: Box<dyn IOCursor>, file_name: &str) -> Self {
-        let stats = CompressStats::new(file_name);
+    pub fn new(inner: Box<dyn IOCursor>, is_compressible: bool) -> Self {
+        let stats = CompressStats::new(is_compressible);
         let buffer = BytesMut::with_capacity(inner.buffer_size().unwrap_or(1024) + 1);
         Self {
             inner,

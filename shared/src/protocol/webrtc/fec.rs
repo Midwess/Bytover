@@ -16,10 +16,10 @@ use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 // Too big chunk size will cause higher chance of packet loss
-const CHUNK_SIZE: usize = 2 * 1150;
-const DATA_SHARDS_DEFAULT: usize = 48;
-const MIN_PARITY_SHARDS: usize = 2;
-const MAX_PARITY_SHARDS: usize = 10;
+pub const CHUNK_SIZE: usize = 2 * 1150;
+pub const DATA_SHARDS_DEFAULT: usize = 48;
+pub const MIN_PARITY_SHARDS: usize = 2;
+pub const MAX_PARITY_SHARDS: usize = 10;
 
 const MIN_BLOCK_TIMEOUT_MS: u64 = 200;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 2000;
@@ -352,7 +352,6 @@ impl FecSender {
         }
     }
 
-    /// Optimized send: Skip RS operations entirely when parity_shards = 0
     pub fn send(&mut self, packet: Box<[u8]>) -> Result<FecAction, FecError> {
         let mut offset = 0usize;
         let mut frames_to_send: Vec<Frame> = Vec::new();
@@ -362,10 +361,7 @@ impl FecSender {
             let shard_count = (block_size + CHUNK_SIZE - 1) / CHUNK_SIZE;
             let parity_shards = Self::parity_count_from_ratio(self.parity_ratio, shard_count);
 
-            // FIX #2: Only allocate parity shards if needed
-            let mut shards: Vec<Vec<u8>> = Vec::with_capacity(
-                if parity_shards > 0 { shard_count + parity_shards } else { shard_count }
-            );
+            let mut shards: Vec<Vec<u8>> = Vec::with_capacity(shard_count + parity_shards);
 
             for _ in 0..shard_count {
                 if offset < packet.len() {
@@ -850,6 +846,7 @@ impl FecReceiver {
 
             if reconstructed && block_id == self.next_block_id {
                 if let Some(block) = self.blocks.remove(block_id) {
+                    log::info!("Block {} reconstructed size = {}", block_id, block.total_size);
                     let mut completed_blocks = vec![block];
 
                     loop {
@@ -871,7 +868,9 @@ impl FecReceiver {
                             .unwrap_or_default();
 
                         if is_completed {
-                            completed_blocks.push(self.blocks.remove(self.next_block_id).unwrap());
+                            let block = self.blocks.remove(self.next_block_id).unwrap();
+                            log::info!("Block {} reconstructed size {}", self.next_block_id, block.total_size);
+                            completed_blocks.push(block);
                         } else {
                             break;
                         }
