@@ -438,6 +438,7 @@ impl WebRtcPeer {
         // Metrics tracking for averages
         let mut total_decode_time_us = 0u64;
         let mut total_decode_count = 0u64;
+        let mut total_byte_received = 0u64;
         let mut total_write_time_us = 0u64;
         let mut total_write_count = 0u64;
         let mut total_written_bytes_all = 0u64;
@@ -524,7 +525,7 @@ impl WebRtcPeer {
             let mut total_written_bytes = 0u64;
 
             // Create writer channel and spawn writer task
-            let (mut write_tx, mut write_rx) = mpsc::channel::<Vec<u8>>(20);
+            let (mut write_tx, mut write_rx) = mpsc::channel::<Packet>(20);
             let writer_cancel_signal = cancellation_signal.clone();
             let writer_core_request = core_request.clone();
             let mut writer_progress_update = progress_update.clone();
@@ -548,7 +549,7 @@ impl WebRtcPeer {
                                     write_count += 1;
 
                                     // Update progress and send response
-                                    writer_progress_update.update_progress(data_len);
+                                    writer_progress_update.update_progress(written as u64);
                                     writer_core_request.response_throttle(TransferResourceProgressUpdate(writer_progress_update.clone())).await;
                                 }
                                 Err(e) => {
@@ -574,13 +575,7 @@ impl WebRtcPeer {
                 Result::<(u64, u64, u64, _), WebRtcErrors>::Ok((total_written, total_time_us, write_count, writer_progress_update))
             });
 
-            let mut packets = Vec::new();
             loop {
-                if progress_update.is_completed() {
-                    break;
-                }
-
-                // Wait for either a new packet or a timeout
                 let (raw_packet_opt, frame_opt) = {
                     let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
 
@@ -662,16 +657,14 @@ impl WebRtcPeer {
                         self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
 
                         if is_end {
-                            progress_update.success();
                             break;
                         }
+
                         continue;
                     }
                 }
 
-                // Process FEC frame
                 let action = if let Some(frame) = frame_opt {
-                    // Process received frame
                     if let Some(rtt) = self.buffer.rtt().await {
                         fec_receiver.set_rtt(rtt as u64);
                     }
@@ -702,34 +695,21 @@ impl WebRtcPeer {
                     next_check_time = None;
                 }
 
-                packets.extend_from_slice(&new_packets);
-
-                // All packets are now data packets (delimiters handled separately above)
-                let data_packets = &packets[..];
-
-                if !data_packets.is_empty() {
-                    let mut merged_data = Vec::new();
-                    for packet in data_packets {
-                        merged_data.extend_from_slice(packet);
-                    }
-
-                    let data_len = merged_data.len() as u64;
-
+                for packet in new_packets {
                     // Send to writer channel (progress update now happens in writer task)
-                    if write_tx.send(merged_data).await.is_err() {
+                    let data_len = packet.len() as u64;
+                    total_byte_received += data_len;
+                    total_written_bytes += data_len;
+                    total_written_bytes_all += data_len;
+                    if write_tx.send(packet).await.is_err() {
                         log::error!("Writer channel closed unexpectedly");
                         return Err(WebRtcErrors::PersistentError(PersistenceError::IOError("Writer channel closed".into())));
                     }
-
-                    total_written_bytes += data_len;
-                    total_written_bytes_all += data_len;
                 }
-
-                packets.clear();
             }
 
             // Close writer channel and wait for writer task
-            drop(write_tx);
+            let _ = write_tx.close().await;
             match writer_handle.await {
                 Ok(Ok((written_bytes, write_time_us, write_count, mut writer_progress))) => {
                     total_write_time_us += write_time_us;
@@ -737,8 +717,8 @@ impl WebRtcPeer {
                     log::info!("Writer task finished, total written: {} bytes in {} chunks", written_bytes, write_count);
 
                     // Update progress from writer task
-                    writer_progress.complete();
-                    let _ = core_request.response(TransferResourceProgressUpdate(writer_progress.clone())).await;
+                    writer_progress.success();
+                    let _ = core_request.response_throttle(TransferResourceProgressUpdate(writer_progress.clone())).await;
                     *progress_update = writer_progress;
                 }
                 Ok(Err(e)) => {
@@ -754,8 +734,14 @@ impl WebRtcPeer {
             log::info!(
                 "Complete downloading resource {:?}, total {} bytes",
                 resource_path,
-                total_written_bytes
+                resource_size
             );
+
+            if total_byte_received > 0 {
+                log::info!("Total received bytes is {total_byte_received}")
+            }
+
+            total_byte_received = 0;
         }
 
         // Giving max 10s more for thumbnail to complete
@@ -965,7 +951,6 @@ impl WebRtcPeer {
                 Result::<(u64, u64), WebRtcErrors>::Ok((total_read, total_time_us))
             });
 
-            let (queue_tx, mut queue_rx) = mpsc::unbounded();
             let mut on_hold = true;
             let mut is_end = false;
 
@@ -997,18 +982,12 @@ impl WebRtcPeer {
                         }
                     }
                     else {
-                        let queue_fut = queue_rx.next().fuse();
                         let reader_fut = read_rx.next().fuse();  // Read from channel instead of direct reader
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
-                        futures::pin_mut!(queue_fut);
                         futures::pin_mut!(fb_fut);
                         futures::pin_mut!(reader_fut);
                         select_biased! {
-                            q = queue_fut => {
-                                let q: Option<(Packet, usize)> = q;
-                                q.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None::<Packet>, None::<usize>, None::<Feedback>))
-                            },
                             r = reader_fut => {
                                 // Received from reader task channel
                                 r.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
@@ -1098,62 +1077,30 @@ impl WebRtcPeer {
                     }
                 };
 
-                if buff_counter > MAX_BUFFER_SIZE  {
+                if buff_counter > MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
                     if !on_hold {
                         on_hold = true;
                         should_send_hold = true;
                     }
 
-                    let (mut tx, mut rx) = mpsc::channel(1);
-                    let dual_channel = self.dual_unreliable_channel.clone();
-                    let flushed_fut = async {
-                        let tick = Instant::now();
-                        let dual_ch = dual_channel.lock().await;
-                        let stats_before = dual_ch.bytes_sent().await;
+                    let tick = Instant::now();
+                    let dual_ch = self.dual_unreliable_channel.lock().await;
+                    let stats_before = dual_ch.bytes_sent().await;
 
-                        // Wait for both channels to drain
-                        dual_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1000)).await;
-                        if should_send_hold {
-                            // Send hold delimiter directly without FEC encoding
-                            let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
-                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), hold_delimiter));
-                        };
-
-                        let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                        let stats_after = dual_ch.bytes_sent().await;
-                        let total_sent = stats_after.saturating_sub(stats_before);
-                        let bw = total_sent as f64 / time;
-                        let _ = tx.send(()).await;
-                        Result::<f64, WebRtcErrors>::Ok(bw)
+                    dual_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(350)).await;
+                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(350)).await;
+                    if should_send_hold {
+                        let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
+                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), hold_delimiter));
                     };
 
-                    let send_fut = async {
-                        let mut total_queued = 0;
-                        loop {
-                            if total_queued >= MAX_BUFFER_SIZE {
-                                break Ok(());
-                            };
+                    let time = tick.elapsed().as_secs_f64().max(f64::MIN);
+                    let stats_after = dual_ch.bytes_sent().await;
+                    let total_sent = stats_after.saturating_sub(stats_before);
+                    let bw = total_sent as f64 / time;
 
-                            match rx.try_next() {
-                                Ok(Some(_)) => break Result::<(), WebRtcErrors>::Ok(()),
-                                _ => {}
-                            };
-
-                            // Read from the reader channel instead of direct reader access
-                            let Some((packet, raw_size)) = read_rx.next().await else {
-                                break Ok(());
-                            };
-
-                            total_queued += packet.len();
-                            let _ = queue_tx.unbounded_send((packet, raw_size));
-                        }
-                    };
-
-                    let (flushed, send) = join!(flushed_fut, send_fut);
-                    let _bw = flushed?;
                     buff_counter = 0;
-                    send?;
                 }
             }
 
@@ -1163,6 +1110,7 @@ impl WebRtcPeer {
 
             // Clean up: close reader channel and wait for reader task
             // read_tx is owned by the reader task, so we only drop read_rx
+            read_rx.close();
             drop(read_rx);
             match reader_handle.await {
                 Ok(Ok((read_bytes, read_time_us))) => {

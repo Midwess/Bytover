@@ -243,9 +243,10 @@ impl<T> RingBuffer<T> {
         }
     }
 
-    pub fn insert(&mut self, block_id: u32, data: T) {
+    // Replace and return the old value, if any
+    pub fn insert(&mut self, block_id: u32, data: T) -> Option<(u32, T)> {
         let idx = (block_id as usize) % self.window_size;
-        self.entries[idx] = Some((block_id, data));
+        self.entries[idx].replace((block_id, data))
     }
 
     pub fn get(&self, block_id: u32) -> Option<&T> {
@@ -461,18 +462,8 @@ impl FecSender {
     pub fn feedback(&mut self, fb: Feedback) -> FecAction {
         match fb {
             Feedback::Network(net) => {
-                if self.rtt_ms > RTT_THRESHOLD_MS {
-                    let base = 0.05f32;
-                    let factor = 1.5f32;
-                    let target = (base + net.loss_rate * factor).clamp(0.05, 1.0);
-
-                    if (net.loss_rate - self.last_loss_rate).abs() > LOSS_RATE_HYSTERESIS {
-                        self.parity_ewma = (self.parity_ewma * (1.0 - PARITY_ADAPTATION_WEIGHT))
-                            + (target * PARITY_ADAPTATION_WEIGHT);
-                        self.last_loss_rate = net.loss_rate;
-                    }
-                }
-
+                let rtt = net.rtt.map(|it| it.max(self.rtt_ms as u32)).unwrap_or(self.rtt_ms as u32);
+                self.set_rtt(rtt as u64);
                 if let Some(ack) = net.current_block_id {
                     for i in (0..ack).rev() {
                         self.buffer.remove(i);
@@ -718,8 +709,7 @@ impl ReceiverBlock {
             }
         }
 
-        // Truncate if final size is less than total_size (shouldn't happen in normal operation)
-        bytes.truncate(written);
+        assert_eq!(written, self.total_size);
         Packet::from(bytes.into_boxed_slice())
     }
 }
@@ -839,7 +829,11 @@ impl FecReceiver {
                 )
             };
 
-            self.blocks.insert(block_id, new_block);
+            if let Some(replaced) = self.blocks.insert(block_id, new_block) {
+                // Buffer is too full, not accept data lost
+                log::warn!("Buffer full, block {} and block {}", block_id, replaced.0);
+                return Ok(FecAction::Terminated);
+            }
         }
 
         let block = self.blocks.get_mut(block_id).unwrap();
@@ -867,6 +861,7 @@ impl FecReceiver {
                             } else {
                                 ReceiverBlock::place_holder()
                             };
+
                             self.blocks.insert(self.next_block_id, placeholder);
                             break;
                         }

@@ -160,10 +160,8 @@ impl TransferProgress {
     }
 
     pub fn speed(&self) -> u64 {
-        if self.status.is_completed() {
-            if self.elapsed() >= 1000 {
-                return 0;
-            }
+        if self.elapsed() >= 1000 {
+            return 0;
         }
 
         self.bytes_per_second
