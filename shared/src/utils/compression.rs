@@ -99,8 +99,7 @@ pub struct CompressStats {
 }
 
 impl CompressStats {
-    pub fn new(file_name: &str) -> Self {
-        let is_compression_support = is_compressible(file_name);
+    pub fn new(is_compression_support: bool) -> Self {
         Self { chunk_size: 0, compression_time_micro: 0, compressed_size: 0, network_bandwidth_bps: 0.0, read_time_micro: 0, failed_bytes: 0, should_compress: false, is_compression_support }
     }
 

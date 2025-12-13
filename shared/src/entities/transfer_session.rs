@@ -145,7 +145,6 @@ impl TransferProgress {
         let elapsed = self.elapsed();
 
         self.total_bytes_counter += bytes_count;
-
         self.bytes_sec_counter += bytes_count;
 
         if elapsed >= 1000 {
@@ -157,15 +156,12 @@ impl TransferProgress {
 
         if self.percentage() == 1.0 {
             self.bytes_per_second = self.bytes_sec_counter;
-            self.complete();
         }
     }
 
     pub fn speed(&self) -> u64 {
-        if self.status.is_completed() {
-            if self.elapsed() >= 1000 {
-                return 0;
-            }
+        if self.elapsed() >= 1000 {
+            return 0;
         }
 
         self.bytes_per_second

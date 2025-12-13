@@ -59,10 +59,7 @@ impl TransferResource {
     pub fn source(&self) -> StaticResource {
         if matches!(self.r#type, TransferResourceType::Folder) {
             let name = self.name.trim_end_matches(".tar").trim_end_matches(".zip").trim_end_matches(".rar");
-            return StaticResource::s3_path(S3Path::use_default_bucket(format!(
-                "sessions/{}/{}.zip",
-                self.session_id, name
-            )))
+            return StaticResource::s3_path(S3Path::use_default_bucket(format!("sessions/{}/{}.zip", self.session_id, name)))
         }
 
         StaticResource::s3_path(S3Path::use_default_bucket(format!(

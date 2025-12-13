@@ -97,7 +97,7 @@ pub struct IOReaderOpfsImpl {
 }
 
 impl IOReaderOpfsImpl {
-    pub async fn new(path: PathBuf, buffer_size: usize, _compressed: bool) -> Result<Self> {
+    pub async fn new(path: PathBuf, buffer_size: usize, compressed: bool) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
 
         let msg = WorkerMessage::new(OpfsOperation {
@@ -110,7 +110,7 @@ impl IOReaderOpfsImpl {
         match response.message {
             OpfsOperationOutput::Cursor(instance_id) => {
                 let mut buffer = BytesMut::with_capacity(buffer_size + 1);
-                let compression_stats = CompressStats::new(path.clone().to_str().unwrap_or_default());
+                let compression_stats = CompressStats::new(compressed);
                 buffer.resize(buffer_size + 1, 0);
                 Ok(Self { path, buffer, instance_id, compression_stats })
             }
@@ -139,12 +139,15 @@ impl CIOCursor for IOReaderOpfsImpl {
             return self.next(max).await.map(|it| it.map(|it| (it, it.len())))
         }
 
+        // Capture the compression decision for THIS chunk before sending to worker
+        let should_compress_current = self.compression_stats.should_compress();
+
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::CursorNext {
                 instance_id: self.instance_id,
                 max,
-                compressed: self.compression_stats.should_compress()
+                compressed: should_compress_current
             }
         });
 
@@ -155,7 +158,11 @@ impl CIOCursor for IOReaderOpfsImpl {
                     Ok(None)
                 }
                 else {
-                    if self.compression_stats.add_chunk_stats(raw_size, compression_time_in_micros, data.length() as usize, read_time_in_micros) {
+                    // Update stats for future compression decisions (affects NEXT chunk)
+                    self.compression_stats.add_chunk_stats(raw_size, compression_time_in_micros, data.length() as usize, read_time_in_micros);
+
+                    // Flag reflects what we asked the worker to do for THIS chunk
+                    if should_compress_current {
                         self.buffer[0] = 1u8;
                     }
                     else {
@@ -317,12 +324,16 @@ impl IOWriter for IOWriterOpfsImpl {
 impl DIOWriter for IOWriterOpfsImpl {
     async fn d_write(&mut self, data: Bytes) -> Result<Option<usize>> {
         if self.compression_support {
+            if data.len() < 1 {
+                return Err(anyhow::anyhow!("Data too short for compression flag (expected at least 1 byte, got {})", data.len()));
+            }
+
             let compressed = data[0] == 1;
 
             self.opfs_write(&data[1..], compressed).await.map(|s| Some(s))
         }
         else {
-            self.write(Bytes::from(data)).await.map(|it| Some(it))
+            self.write(data).await.map(|it| Some(it))
         }
     }
 }

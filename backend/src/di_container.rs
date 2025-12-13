@@ -23,8 +23,8 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use tonic::transport::Channel;
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tonic::transport::Channel;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiContainerError {
@@ -47,33 +47,28 @@ impl DiContainer {
     pub async fn new() -> Self {
         let devlog_sdk = DevlogSdk::new();
 
-        let etcd_endpoints = std::env::var("SNOWFLAKE_ETCD_ENDPOINTS")
-            .unwrap_or_else(|_| "http://localhost:2379".to_string());
-        let endpoints: Vec<String> = etcd_endpoints
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        
+        let etcd_endpoints = std::env::var("SNOWFLAKE_ETCD_ENDPOINTS").unwrap_or_else(|_| "http://localhost:2379".to_string());
+        let endpoints: Vec<String> = etcd_endpoints.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+
         let mut etcd_options = EtcdWorkerOptions::new(endpoints);
-        
-        let namespace = std::env::var("SNOWFLAKE_ETCD_NAMESPACE")
-            .unwrap_or_else(|_| "dev".to_string());
+
+        let namespace = std::env::var("SNOWFLAKE_ETCD_NAMESPACE").unwrap_or_else(|_| "dev".to_string());
         if !namespace.trim().is_empty() {
             etcd_options = etcd_options.namespace(namespace);
         }
-        
+
         let ttl_secs = std::env::var("SNOWFLAKE_ETCD_LEASE_TTL_SECS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(30);
         etcd_options = etcd_options.lease_ttl(std::time::Duration::from_secs(ttl_secs.max(1)));
-        
+
         init_id_generator("bytover".to_owned(), etcd_options)
             .await
             .unwrap_or_else(|err| panic!("Failed to initialise distributed id generator: {err}"));
 
-        let database_url = std::env::var("BYTOVER_DB_CONNECTION_STRING").unwrap_or_else(|_| "postgresql://bitbridge:bitbridgepass@localhost:5432/bitbridge".to_string());
+        let database_url = std::env::var("BYTOVER_DB_CONNECTION_STRING")
+            .unwrap_or_else(|_| "postgresql://bitbridge:bitbridgepass@localhost:5432/bitbridge".to_string());
         let pg_pool = PgPoolOptions::new()
             .min_connections(5)
             .max_connections(10)
@@ -171,7 +166,9 @@ impl DiContainer {
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
-        TransferSessionPostgresRepository { db: self.get_db_connection() }
+        TransferSessionPostgresRepository {
+            db: self.get_db_connection()
+        }
     }
 
     pub async fn get_email_service(&'static self, token: Token) -> Result<impl EmailService, DiContainerError> {
@@ -182,7 +179,7 @@ impl DiContainer {
 
     pub async fn start_cron_jobs(&'static self) -> Result<(), DiContainerError> {
         let sched = JobScheduler::new().await.map_err(|e| DiContainerError::CronError(e.to_string()))?;
-        
+
         let job = Job::new_async("0 */5 * * * *", |_uuid, _l| {
             Box::pin(async move {
                 log::info!("Running cleanup cron job...");
@@ -194,7 +191,8 @@ impl DiContainer {
                 }
                 log::info!("Cleanup cron job finished.");
             })
-        }).map_err(|e| DiContainerError::CronError(e.to_string()))?;
+        })
+        .map_err(|e| DiContainerError::CronError(e.to_string()))?;
 
         sched.add(job).await.map_err(|e| DiContainerError::CronError(e.to_string()))?;
         sched.start().await.map_err(|e| DiContainerError::CronError(e.to_string()))?;

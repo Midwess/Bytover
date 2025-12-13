@@ -194,15 +194,6 @@ export class WasmCore {
         }
     }
 
-    public useCoreLoaded() {
-        const [isLoaded, setIsLoaded] = useState(this.isCoreLoaded.get());
-        useEffect(() => {
-            return this.isCoreLoaded.subscribe(setIsLoaded)
-        }, [])
-
-        return isLoaded
-    }
-
     public useCoreReady() {
         const [isReady, setIsReady] = useState(this.isCoreReady.get());
         useEffect(() => {

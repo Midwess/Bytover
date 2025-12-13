@@ -11,29 +11,68 @@ use anyhow::Context;
 use core_services::utils::cancellation::CancellationToken;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TransferDelimiterShema {
-    pub session_id: u64,
-    pub resource_id: u64,
-    pub is_start: bool,
-    pub compressed: bool
+pub enum TransferDelimiterShema {
+    Start {
+        session_id: u64,
+        resource_id: u64,
+        total_size: Option<u64>,
+        compressed: bool,
+    },
+    End {
+        session_id: u64,
+        resource_id: u64,
+    },
+    Hold {
+        session_id: u64,
+        resource_id: u64,
+    },
 }
 
 impl TransferDelimiterShema {
-    pub fn new(session_id: u64, resource_id: u64, is_start: bool, compressed: bool) -> Self {
-        Self {
-            resource_id,
-            is_start,
+    pub fn start(session_id: u64, resource_id: u64, compressed: bool) -> Self {
+        Self::Start {
             session_id,
-            compressed
+            resource_id,
+            total_size: None,
+            compressed,
         }
     }
 
-    pub fn start(session_id: u64, resource_id: u64, compressed: bool) -> Self {
-        Self::new(session_id, resource_id, true, compressed)
+    pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
+        Self::End {
+            session_id,
+            resource_id,
+        }
     }
 
-    pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
-        Self::new(session_id, resource_id, false, compressed)
+    pub fn hold(session_id: u64, resource_id: u64) -> Self {
+        Self::Hold {
+            session_id,
+            resource_id,
+        }
+    }
+
+    pub fn session_id(&self) -> u64 {
+        match self {
+            Self::Start { session_id, .. } => *session_id,
+            Self::End { session_id, .. } => *session_id,
+            Self::Hold { session_id, .. } => *session_id,
+        }
+    }
+
+    pub fn resource_id(&self) -> u64 {
+        match self {
+            Self::Start { resource_id, .. } => *resource_id,
+            Self::End { resource_id, .. } => *resource_id,
+            Self::Hold { resource_id, .. } => *resource_id,
+        }
+    }
+
+    pub fn compressed(&self) -> bool {
+        match self {
+            Self::Start { compressed, .. } => *compressed,
+            _ => false,
+        }
     }
 
     pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {
@@ -62,17 +101,67 @@ impl TransferDelimiterShema {
                 ))
             };
 
-            if let Ok(delimiter) = Self::from_bytes(&packet, session_id, true) {
+            if let Ok(delimiter) = Self::from_start_packet(&packet, session_id) {
                 return Ok(delimiter)
             }
         }
     }
 
-    pub fn from_end_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
-        Self::from_bytes(data, session_id, false)
+    pub fn from_start_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+        let result = Self::from_bytes(data)?;
+
+        if !matches!(result, Self::Start { .. }) {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                format!("Expected Start delimiter but got {:?}", result)
+            ));
+        }
+
+        if result.session_id() != session_id {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Invalid delimiter, session_id does not match".to_owned()
+            ));
+        }
+
+        Ok(result)
     }
 
-    pub fn from_bytes(data: &Packet, session_id: u64, is_start: bool) -> Result<Self, WebRtcErrors> {
+    pub fn from_end_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+        let result = Self::from_bytes(data)?;
+
+        if !matches!(result, Self::End { .. }) {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                format!("Expected End delimiter but got {:?}", result)
+            ));
+        }
+
+        if result.session_id() != session_id {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Invalid delimiter, session_id does not match".to_owned()
+            ));
+        }
+
+        Ok(result)
+    }
+
+    pub fn from_hold_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+        let result = Self::from_bytes(data)?;
+
+        if !matches!(result, Self::Hold { .. }) {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                format!("Expected Hold delimiter but got {:?}", result)
+            ));
+        }
+
+        if result.session_id() != session_id {
+            return Err(WebRtcErrors::InvalidDelimiter(
+                "Invalid delimiter, session_id does not match".to_owned()
+            ));
+        }
+
+        Ok(result)
+    }
+
+    pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {
         if data.len() != 1024 {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Data buffer must be exactly 1024 bytes got {}",
@@ -96,18 +185,6 @@ impl TransferDelimiterShema {
 
         let result: Self = bincode::deserialize(serialized_data)
             .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to deserialize delimiter: {e}")))?;
-
-        if result.is_start != is_start {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, is_start does not match".to_owned()
-            ));
-        }
-
-        if result.session_id != session_id {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, session_id does not match".to_owned()
-            ));
-        }
 
         Ok(result)
     }

@@ -46,10 +46,10 @@ impl TransferResource {
     pub async fn into_resource_msg(&self, cloud_storage: &Arc<dyn CloudStorage>) -> CloudResourceMessage {
         let mut source = self.source();
         let thumbnail_source = self.thumbnail_source();
-        let download_url = cloud_storage.generate_download_url(&mut source).await.unwrap_or_default();
+        let download_url = cloud_storage.generate_download_url(&source).await.unwrap_or_default();
 
         let download_thumbnail_url = match thumbnail_source {
-            Some(mut thumbnail_source) => cloud_storage.generate_download_url(&mut thumbnail_source).await.ok(),
+            Some(mut thumbnail_source) => cloud_storage.generate_download_url(&thumbnail_source).await.ok(),
             None => None
         };
 

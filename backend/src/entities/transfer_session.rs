@@ -72,9 +72,7 @@ impl TransferSession {
     }
 
     pub fn current_resource_progress_mut(&mut self) -> Option<&mut TransferProgress> {
-        let Some(current_resource_id) = self.current_resource().map(|it| it.order_id()) else {
-            return None;
-        };
+        let current_resource_id = self.current_resource().map(|it| it.order_id())?;
 
         self.progress.iter_mut().find(|it| it.resource_id() == current_resource_id)
     }
@@ -92,15 +90,13 @@ impl TransferSession {
     }
 
     pub fn next_resource(&self) -> Option<&TransferResource> {
-        let Some(current_resource_id) = self.current_resource().map(|it| it.order_id()) else {
-            return None
-        };
+        let current_resource_id = self.current_resource().map(|it| it.order_id())?;
 
-        let current_progress_index = self.progress.iter().position(|it|
-            matches!(it.status(), TransferProgressStatus::InProgress(_)) && it.resource_id() == current_resource_id);
-        let Some(next_in_progress_resource) = current_progress_index.and_then(|it| self.progress.get(it + 1)) else {
-            return None
-        };
+        let current_progress_index = self
+            .progress
+            .iter()
+            .position(|it| matches!(it.status(), TransferProgressStatus::InProgress(_)) && it.resource_id() == current_resource_id);
+        let next_in_progress_resource = current_progress_index.and_then(|it| self.progress.get(it + 1))?;
 
         if !matches!(next_in_progress_resource.status(), TransferProgressStatus::InProgress(_)) {
             return None;
@@ -110,18 +106,13 @@ impl TransferSession {
     }
 
     pub fn current_resource_mut(&mut self) -> Option<&mut TransferResource> {
-        let Some(current_id) = self.current_resource().map(|it| it.order_id()) else {
-            return None;
-        };
+        let current_id = self.current_resource().map(|it| it.order_id())?;
 
         self.resources.iter_mut().find(|it| it.order_id() == current_id)
     }
 
     pub fn into_resource(mut self, resource_id: u64) -> Option<TransferResource> {
-        let Some(position) = self.resources.iter().position(|it| it.order_id() == resource_id) else {
-            return None;
-        };
-
+        let position = self.resources.iter().position(|it| it.order_id() == resource_id)?;
         let resource = self.resources.swap_remove(position);
         Some(resource)
     }

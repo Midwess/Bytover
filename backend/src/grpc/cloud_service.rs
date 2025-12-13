@@ -27,10 +27,10 @@ use schema::devlog::bitbridge::{
     UpdateTransferProgressRequest,
     UpdateTransferProgressResponse
 };
-use std::pin::Pin;
-use std::sync::Arc;
 use sqlx::postgres::PgListener;
 use sqlx::PgPool;
+use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
@@ -111,14 +111,13 @@ impl BitBridgeCloudService for CloudGrpcService {
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
         let is_completed = initial_session.is_completed();
 
-        tx
-            .send(Ok(SubscribeSessionInfoResponse {
-                event: Some(Event::SessionUpdated(SessionUpdated {
-                    session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
-                }))
+        tx.send(Ok(SubscribeSessionInfoResponse {
+            event: Some(Event::SessionUpdated(SessionUpdated {
+                session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
             }))
-            .await
-            .map_err(|_| Status::internal("Cannot send initial session"))?;
+        }))
+        .await
+        .map_err(|_| Status::internal("Cannot send initial session"))?;
 
         if is_completed {
             return Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
@@ -175,11 +174,7 @@ impl BitBridgeCloudService for CloudGrpcService {
 
                 let events = current_session.get_change_events(&session, &cloud_storage, &app).await;
                 for event in events {
-                    if tx_updates
-                        .send(Ok(SubscribeSessionInfoResponse { event: Some(event) }))
-                        .await
-                        .is_err()
-                    {
+                    if tx_updates.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await.is_err() {
                         log::info!("Client disconnected from session info stream");
                         return;
                     }

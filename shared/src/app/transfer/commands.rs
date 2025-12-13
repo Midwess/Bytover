@@ -261,7 +261,7 @@ impl AppCommand {
             }
 
             if transfer_session.is_completed() {
-                log::info!(target: "transfer", "Transfer session completed");
+                log::info!(target: "transfer", "Transfer session completed {:?}", transfer_session.status());
                 break;
             }
         }
