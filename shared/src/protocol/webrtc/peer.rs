@@ -661,11 +661,12 @@ impl WebRtcPeer {
                         };
 
                         self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
+                        next_check_time.replace( fec_receiver.hiccup());
                         continue;
                     }
-
-                    if is_end {
+                    else if is_end {
                         end_of_stream = true;
+                        next_check_time.replace( fec_receiver.hiccup());
                         log::info!("End delimiter received, total received bytes is {total_byte_received}");
                         break;
                     }
@@ -855,7 +856,11 @@ impl WebRtcPeer {
             };
 
             let is_compressed = is_compressible(name.as_str());
-            let chunk_size = (CHUNK_SIZE * DATA_SHARDS_DEFAULT - 1150) as u64;
+            let chunk_size = if is_compressed {
+                (CHUNK_SIZE * DATA_SHARDS_DEFAULT - 1150) as u64
+            } else {
+                (CHUNK_SIZE * DATA_SHARDS_DEFAULT) as u64
+            };
 
             let mut reader = self
                 .resource_repo
@@ -1022,7 +1027,7 @@ impl WebRtcPeer {
                     }
                     FecAction::Retransmit(frames) => {
                         if !frames.is_empty() {
-                            log::info!("Retransmitting packet: {:?} frame {:?}", frames[0].block_id);
+                            log::info!("Retransmitting packet: {:?} block", frames[0].block_id);
                             for frame in frames {
                                 let packet = frame.serialize();
                                 buff_counter += packet.len();
@@ -1040,6 +1045,7 @@ impl WebRtcPeer {
                 };
 
                 if buff_counter > MAX_BUFFER_SIZE {
+                    log::info!("Buffer full");
                     let mut should_send_hold = false;
                     if !on_hold {
                         on_hold = true;
@@ -1051,8 +1057,14 @@ impl WebRtcPeer {
                     let stats_before = dual_ch.bytes_sent().await;
 
                     dual_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+
                     self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+
                     if should_send_hold {
+                        // The reliable message, when it sent it could
+                        // make msg from unreliable channel dropped, we wait for all msg in unreliable channel to fully sent
+                        sleep(Duration::from_millis(fec_sender.rtt().max(30).min(100))).await;
+
                         let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
                         let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
                             return Err(anyhow!("Failed to build hold delimiter").into());

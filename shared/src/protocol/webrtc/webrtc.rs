@@ -24,6 +24,7 @@ use anyhow::anyhow;
 use futures::executor::block_on;
 use n0_future::time::sleep;
 use crate::app::operations::CoreOperationOutput;
+use crate::protocol::webrtc::fec::{CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
@@ -31,8 +32,8 @@ pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
 pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 
-pub static MAX_BUFFER_SIZE: usize = 2 * 1024 * 1024;
-pub static MIN_BUFFER_SIZE: usize = 50;
+pub static MAX_BUFFER_SIZE: usize = 10 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
+pub static MIN_BUFFER_SIZE: usize = 1;
 
 pub struct WebRtc {
     addr: String,

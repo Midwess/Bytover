@@ -327,6 +327,10 @@ impl FecSender {
         }
     }
 
+    pub fn rtt(&self) -> u64 {
+        self.rtt_ms
+    }
+
     pub fn set_rtt(&mut self, rtt_ms: u64) {
         if self.rtt_ms == rtt_ms {
             return;
@@ -334,11 +338,9 @@ impl FecSender {
 
         self.rtt_ms = rtt_ms;
         if rtt_ms <= RTT_THRESHOLD_MS {
-            log::info!("RTT good ({}ms) will not use parity", rtt_ms);
             self.parity_ratio = 0.0;
             self.parity_ewma = 0.0;
         } else {
-            log::info!("RTT too high ({}ms) will use parity", rtt_ms);
             if self.parity_ratio == 0.0 {
                 self.parity_ratio = 0.03;
                 self.parity_ewma = 0.03;
@@ -747,7 +749,7 @@ impl FecReceiver {
         self.rtt_ms = rtt_ms;
     }
 
-    fn calculate_next_check_time(&self) -> Instant {
+    fn calculate_next_check_time(&self, mul: Option<f32>) -> Instant {
         let timeout_ms = if self.rtt_ms > 0 {
             (self.rtt_ms * 2).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
         } else {
@@ -778,7 +780,18 @@ impl FecReceiver {
             }
         }
 
-        Instant::now() + Duration::from_millis(timeout_ms)
+        Instant::now() + Duration::from_millis((timeout_ms as f32 * mul.unwrap_or(1f32)) as u64)
+    }
+
+    // In case we know when network getting hiccup
+    // we can use this function to make timeout longer
+    // to prevent retransmit-storm
+    pub fn hiccup(&mut self) -> Instant {
+        self.blocks.entries.iter_mut().filter_map(|it| it.as_mut()).for_each(|it| {
+            it.1.last_ping_ts = now_micros();
+        });
+
+        self.calculate_next_check_time(Some(2.0f32))
     }
 
     pub fn receive(&mut self, frame: Frame) -> Result<FecAction, FecError> {
@@ -866,7 +879,7 @@ impl FecReceiver {
                         .map(|it| it.into_packet())
                         .collect::<Vec<_>>();
 
-                    let next_check = self.calculate_next_check_time();
+                    let next_check = self.calculate_next_check_time(None);
                     return Ok(FecAction::Constructed(bytes, next_check));
                 }
             }
@@ -902,7 +915,7 @@ impl FecReceiver {
         }
 
         if let Some(block_id) = oldest_id {
-            let next_check = self.calculate_next_check_time();
+            let next_check = self.calculate_next_check_time(None);
 
             if let Some(block) = self.blocks.get_mut(block_id) {
                 if now.saturating_sub(block.last_ping_ts) > timeout_us {
