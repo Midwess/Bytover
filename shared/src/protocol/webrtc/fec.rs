@@ -12,7 +12,7 @@ use matchbox_socket::Packet;
 use n0_future::time::Instant;
 use once_cell::sync::Lazy;
 use core_services::utils::time::epoch_micro;
-use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames};
+use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames, MissingBlocks};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 // Too big chunk size will cause higher chance of packet loss
@@ -465,37 +465,40 @@ impl FecSender {
                 self.parity_ratio = self.parity_ewma;
                 FecAction::Noop
             }
-            Feedback::Missing(m) => {
-                // Get the block from the ring buffer
-                let block_frames = self.buffer.get(m.block_id);
+            Feedback::Missing(missing_blocks) => {
+                // Collect frames from ALL missing blocks
+                let mut all_frames = Vec::new();
 
-                if let Some(frames_vec) = block_frames {
-                    let frames: Vec<Frame> = m.frames
-                        .iter()
-                        .filter_map(|&frame_idx| {
-                            frames_vec.iter().find(|e| e.frame_idx == frame_idx).map(|e| {
-                                // Convert Arc<Box<[u8]>> to Arc<[u8]>
-                                let payload: Arc<[u8]> = Arc::from(e.data.as_ref().as_ref());
-                                Frame::new(
-                                    e.block_id,
-                                    e.frame_idx,
-                                    e.data_shards,
-                                    e.parity_shards,
-                                    e.total_size,
-                                    e.is_parity,
-                                    payload,
-                                )
+                for missing_block in missing_blocks.blocks {
+                    // Get the block from the ring buffer
+                    if let Some(frames_vec) = self.buffer.get(missing_block.block_id) {
+                        let frames: Vec<Frame> = missing_block.frames
+                            .iter()
+                            .filter_map(|&frame_idx| {
+                                frames_vec.iter().find(|e| e.frame_idx == frame_idx).map(|e| {
+                                    // Convert Arc<Box<[u8]>> to Arc<[u8]>
+                                    let payload: Arc<[u8]> = Arc::from(e.data.as_ref().as_ref());
+                                    Frame::new(
+                                        e.block_id,
+                                        e.frame_idx,
+                                        e.data_shards,
+                                        e.parity_shards,
+                                        e.total_size,
+                                        e.is_parity,
+                                        payload,
+                                    )
+                                })
                             })
-                        })
-                        .collect();
+                            .collect();
 
-                    if frames.is_empty() {
-                        FecAction::Terminated
-                    } else {
-                        FecAction::Retransmit(frames)
+                        all_frames.extend(frames);
                     }
-                } else {
+                }
+
+                if all_frames.is_empty() {
                     FecAction::Terminated
+                } else {
+                    FecAction::Retransmit(all_frames)
                 }
             }
             _ => FecAction::Noop,
@@ -889,6 +892,7 @@ impl FecReceiver {
     }
 
     /// Optimized timeout checking using RingBuffer
+    /// Collects ALL timed-out blocks and requests retransmission for all of them at once
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let timeout_ms = if self.rtt_ms > 0 {
             (self.rtt_ms * 2).max(MIN_BLOCK_TIMEOUT_MS).min(MAX_BLOCK_TIMEOUT_MS)
@@ -899,90 +903,102 @@ impl FecReceiver {
         let timeout_us = timeout_ms * 1000;
         let now = now_micros();
 
-        // Efficiently find the oldest block needing a check
+        // Collect ALL timed-out blocks
+        let mut timed_out_blocks = Vec::new();
         let mut oldest_ts = u64::MAX;
-        let mut oldest_id = None;
 
         for (block_id, block) in self.blocks.iter() {
             if block.is_constructed() || block.is_requested_retransmit {
                 continue;
             }
 
+            if now.saturating_sub(block.last_ping_ts) > timeout_us {
+                timed_out_blocks.push(block_id);
+            }
+
             if block.last_ping_ts < oldest_ts {
                 oldest_ts = block.last_ping_ts;
-                oldest_id = Some(block_id);
             }
         }
 
-        if let Some(block_id) = oldest_id {
-            let next_check = self.calculate_next_check_time(None);
+        let next_check = self.calculate_next_check_time(None);
 
-            if let Some(block) = self.blocks.get_mut(block_id) {
-                if now.saturating_sub(block.last_ping_ts) > timeout_us {
-                    let action = Self::handle_timeout(block_id, block, next_check);
-                    self.total_lost_frames += action.0 as u64;
-                    return match action.1 {
-                        FecAction::Noop => {
-                            Ok(FecAction::Queued(Instant::now() + Duration::from_millis(timeout_ms)))
-                        }
-                        _ => Ok(action.1),
+        // If we have timed-out blocks, request retransmission for all of them
+        if !timed_out_blocks.is_empty() {
+            let mut all_missing_blocks = Vec::new();
+            let mut total_lost = 0usize;
+
+            for block_id in timed_out_blocks {
+                if let Some(block) = self.blocks.get_mut(block_id) {
+                    let present_count = block.shards.iter().filter(|s| s.is_some()).count();
+                    let needed_more = block.data_shards.saturating_sub(present_count);
+
+                    if needed_more == 0 {
+                        continue;
                     }
-                } else {
-                    let elapsed = now.saturating_sub(block.last_ping_ts);
-                    let remaining = timeout_us.saturating_sub(elapsed);
-                    let next_check = Instant::now() + Duration::from_micros(
-                        remaining.max(MIN_BLOCK_TIMEOUT_MS * 1_000).min(MAX_BLOCK_TIMEOUT_MS * 1_000)
-                    );
-                    return Ok(FecAction::Queued(next_check));
+
+                    block.last_ping_ts = now;
+                    let mut missing = Vec::new();
+
+                    // First collect missing data shards
+                    for i in 0..block.data_shards {
+                        if missing.len() >= needed_more {
+                            break;
+                        }
+                        if block.shards[i].is_none() {
+                            missing.push(i as u32);
+                        }
+                    }
+
+                    // Then collect missing parity shards if needed
+                    if missing.len() < needed_more {
+                        for i in block.data_shards..block.total_shards {
+                            if missing.len() >= needed_more {
+                                break;
+                            }
+                            if block.shards[i].is_none() {
+                                missing.push(i as u32);
+                            }
+                        }
+                    }
+
+                    total_lost += missing.len();
+                    block.is_requested_retransmit = true;
+
+                    all_missing_blocks.push(MissingFrames {
+                        block_id,
+                        frames: missing,
+                    });
                 }
+            }
+
+            self.total_lost_frames += total_lost as u64;
+
+            if !all_missing_blocks.is_empty() {
+                return Ok(FecAction::Feedback(FecFeedback {
+                    feedback: Some(Feedback::Missing(MissingBlocks {
+                        blocks: all_missing_blocks,
+                    })),
+                }, next_check));
+            }
+        }
+
+        // Calculate next check time based on remaining blocks
+        if oldest_ts != u64::MAX {
+            let elapsed = now.saturating_sub(oldest_ts);
+            if elapsed < timeout_us {
+                let remaining = timeout_us.saturating_sub(elapsed);
+                let next_check = Instant::now() + Duration::from_micros(
+                    remaining.max(MIN_BLOCK_TIMEOUT_MS * 1_000).min(MAX_BLOCK_TIMEOUT_MS * 1_000)
+                );
+
+                return Ok(FecAction::Queued(next_check));
             }
         }
 
         Ok(FecAction::Queued(Instant::now() + Duration::from_millis(timeout_ms)))
     }
 
-    fn handle_timeout(block_id: u32, block: &mut ReceiverBlock, next_check: Instant) -> (usize, FecAction) {
-        let present_count = block.shards.iter().filter(|s| s.is_some()).count();
-        let needed_more = block.data_shards.saturating_sub(present_count);
-
-        if needed_more == 0 {
-            return (0, FecAction::Noop);
-        }
-
-        block.last_ping_ts = now_micros();
-        let mut missing = Vec::new();
-
-        for i in 0..block.data_shards {
-            if missing.len() >= needed_more {
-                break;
-            }
-            if block.shards[i].is_none() {
-                missing.push(i as u32);
-            }
-        }
-
-        if missing.len() < needed_more {
-            for i in block.data_shards..block.total_shards {
-                if missing.len() >= needed_more {
-                    break;
-                }
-                if block.shards[i].is_none() {
-                    missing.push(i as u32);
-                }
-            }
-        }
-
-        let lost_count = missing.len();
-        let mf = MissingFrames {
-            block_id,
-            frames: missing,
-        };
-
-        block.is_requested_retransmit = true;
-        (lost_count, FecAction::Feedback(FecFeedback {
-            feedback: Some(Feedback::Missing(mf)),
-        }, next_check))
-    }
 }
 
 #[derive(Debug)]
@@ -1065,6 +1081,7 @@ mod tests {
         let mut buffer: RingBuffer<Vec<FrameEntry>> = RingBuffer::new(10);
 
         // Insert frames from block 0
+        let data = Arc::new([1u8; CHUNK_SIZE]);
         let fe = FrameEntry {
             total_size: CHUNK_SIZE as u32,
             block_id: 0,
@@ -1072,7 +1089,7 @@ mod tests {
             data_shards: 2,
             parity_shards: 1,
             is_parity: false,
-            data: Arc::new([1u8; CHUNK_SIZE]),
+            data: data.clone(),
             timestamp: now_micros(),
         };
         buffer.insert(0, vec![fe]);
@@ -1084,7 +1101,7 @@ mod tests {
             data_shards: 2,
             parity_shards: 1,
             is_parity: false,
-            data: fe.data.clone(),
+            data: data.clone(),
             timestamp: now_micros(),
         };
 
@@ -1371,7 +1388,9 @@ mod tests {
 
         // 4. Verify Feedback
         match action {
-            FecAction::Feedback(FecFeedback { feedback: Some(fec_feedback::Feedback::Missing(missing)) }, _) => {
+            FecAction::Feedback(FecFeedback { feedback: Some(fec_feedback::Feedback::Missing(missing_blocks)) }, _) => {
+                assert_eq!(missing_blocks.blocks.len(), 1);
+                let missing = &missing_blocks.blocks[0];
                 assert_eq!(missing.block_id, 0);
                 assert!(missing.frames.len() > 0);
                 assert!(!missing.frames.contains(&0));
@@ -1492,12 +1511,16 @@ mod tests {
         // but we can try to request retransmit for both to prove they exist.
 
         // Request retransmit for u32::MAX
-        let fb_max = Feedback::Missing(MissingFrames { block_id: u32::MAX, frames: vec![0] });
+        let fb_max = Feedback::Missing(MissingBlocks {
+            blocks: vec![MissingFrames { block_id: u32::MAX, frames: vec![0] }]
+        });
         let res_max = sender.feedback(fb_max);
         assert!(matches!(res_max, FecAction::Retransmit(_)), "Should find block u32::MAX");
 
         // Request retransmit for 0
-        let fb_zero = Feedback::Missing(MissingFrames { block_id: 0, frames: vec![0] });
+        let fb_zero = Feedback::Missing(MissingBlocks {
+            blocks: vec![MissingFrames { block_id: 0, frames: vec![0] }]
+        });
         let res_zero = sender.feedback(fb_zero);
         assert!(matches!(res_zero, FecAction::Retransmit(_)), "Should find block 0");
     }
