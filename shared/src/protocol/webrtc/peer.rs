@@ -1060,13 +1060,9 @@ impl WebRtcPeer {
 
                     dual_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
 
-                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
 
                     if should_send_hold {
-                        // The reliable message, when it sent it could
-                        // make msg from unreliable channel dropped, we wait for all msg in unreliable channel to fully sent
-                        sleep(Duration::from_millis(fec_sender.rtt().max(30).min(100))).await;
-
                         let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
                         let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
                             return Err(anyhow!("Failed to build hold delimiter").into());
