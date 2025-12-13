@@ -4,6 +4,7 @@ use core_services::utils::cancellation::TaskErrors;
 use core_services::utils::yield_container::YieldError;
 use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
+use n0_future::task::JoinError;
 use prost::{DecodeError, EncodeError};
 use crate::protocol::webrtc::fec::FecError;
 
@@ -58,6 +59,9 @@ pub enum WebRtcErrors {
 
     #[error("Data corrupted")]
     FecError(#[from] FecError),
+
+    #[error("Panic")]
+    Panic(#[from] JoinError),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

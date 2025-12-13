@@ -21,7 +21,6 @@ pub enum TransferDelimiterShema {
     End {
         session_id: u64,
         resource_id: u64,
-        compressed: bool,
     },
     Hold {
         session_id: u64,
@@ -43,7 +42,6 @@ impl TransferDelimiterShema {
         Self::End {
             session_id,
             resource_id,
-            compressed,
         }
     }
 
@@ -73,8 +71,7 @@ impl TransferDelimiterShema {
     pub fn compressed(&self) -> bool {
         match self {
             Self::Start { compressed, .. } => *compressed,
-            Self::End { compressed, .. } => *compressed,
-            Self::Hold { .. } => false,
+            _ => false,
         }
     }
 

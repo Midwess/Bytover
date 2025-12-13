@@ -846,7 +846,6 @@ impl FecReceiver {
 
             if reconstructed && block_id == self.next_block_id {
                 if let Some(block) = self.blocks.remove(block_id) {
-                    log::info!("Block {} reconstructed size = {}", block_id, block.total_size);
                     let mut completed_blocks = vec![block];
 
                     loop {
@@ -869,7 +868,6 @@ impl FecReceiver {
 
                         if is_completed {
                             let block = self.blocks.remove(self.next_block_id).unwrap();
-                            log::info!("Block {} reconstructed size {}", self.next_block_id, block.total_size);
                             completed_blocks.push(block);
                         } else {
                             break;

@@ -31,10 +31,7 @@ use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{
-    BeginTransferResource, CancelTransferSessionRequest, EndTransferResource, IntroduceRequestMessage, IntroduceResponseMessage,
-    PeerMessage, TransferRequestMessage, TransferResponseMessage, TransferSessionMessage,
-};
+use schema::devlog::bitbridge::{BeginTransferResource, CancelTransferSessionRequest, EndTransferResource, FecFeedback, IntroduceRequestMessage, IntroduceResponseMessage, NetworkStats, PeerMessage, TransferRequestMessage, TransferResponseMessage, TransferSessionMessage};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
@@ -149,9 +146,6 @@ pub struct WebRtcPeer {
 
     // Connect to the core stream, where all state is stored
     pub core_request: OnceCell<CoreRequest>,
-
-    // Cached network stats (loss_rate, rtt) - persists between resources
-    cached_network_stats: Arc<Mutex<(f32, Option<u32>)>>,
 }
 
 impl WebRtcPeer {
@@ -213,7 +207,6 @@ impl WebRtcPeer {
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
             core_request: Default::default(),
-            cached_network_stats: Arc::new(Mutex::new((0.0, None))),
         })
     }
 
@@ -274,7 +267,6 @@ impl WebRtcPeer {
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             buffer,
             core_request: Default::default(),
-            cached_network_stats: Arc::new(Mutex::new((0.0, None))),
         })
     }
 
@@ -442,6 +434,7 @@ impl WebRtcPeer {
         let mut total_write_time_us = 0u64;
         let mut total_write_count = 0u64;
         let mut total_written_bytes_all = 0u64;
+        let mut network_stats = NetworkStats::default();
 
         loop {
             if session.is_completed() {
@@ -449,8 +442,6 @@ impl WebRtcPeer {
                 break;
             }
 
-            // Wait for raw start delimiter (not FEC processed)
-            let start_delimiter_tick = Instant::now();
             let start_delim = loop {
                 let timeout_fut = sleep(Duration::from_secs(10)).fuse();
                 let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
@@ -478,24 +469,15 @@ impl WebRtcPeer {
                 }
             };
 
-            // Drain the buffer after receiving start delimiter
             let _ = resource_rx.drain();
 
-            // Send initial network stats with cached values and current_block_id = None
             {
-                use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
-                use schema::devlog::bitbridge::fec_feedback::Feedback;
-
-                let (cached_loss_rate, cached_rtt) = *self.cached_network_stats.lock().await;
+                network_stats.current_block_id = None;
                 let feedback = FecFeedback {
-                    feedback: Some(Feedback::Network(NetworkStats {
-                        loss_rate: cached_loss_rate,
-                        rtt: cached_rtt,
-                        current_block_id: None,
-                    })),
+                    feedback: Some(Feedback::Network(network_stats.clone())),
                 };
-                log::info!("Sending initial network stats for resource {}: loss_rate={}, rtt={:?}",
-                    start_delim.resource_id(), cached_loss_rate, cached_rtt);
+
+                log::info!("Sending initial network stats for resource {}", start_delim.resource_id());
                 self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
             }
 
@@ -558,15 +540,9 @@ impl WebRtcPeer {
                                 }
                             }
                         }
-                        Ok(None) => {
-                            // Channel closed, finish writing
-                            log::info!("Writer task completed, total written: {} bytes", total_written);
-                            break;
-                        }
-                        Err(_) => {
-                            // Cancelled
-                            log::info!("Writer task cancelled");
-                            break;
+                        _ => {
+                            writer_progress_update.success();
+                            break
                         }
                     }
                 }
@@ -634,6 +610,10 @@ impl WebRtcPeer {
                         next_check_time = Some(*instant);
                         continue;
                     },
+                    FecAction::Terminated => {
+                        log::warn!("FecReceiver terminated, will cancel transfer");
+                        break;
+                    }
                     _ => {}
                 }
 
@@ -649,36 +629,26 @@ impl WebRtcPeer {
                     let is_hold = TransferDelimiterShema::from_hold_packet(&packet, session_id).is_ok();
                     let is_end = TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok();
 
-                    if is_hold || is_end {
-                        use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
-                        use schema::devlog::bitbridge::fec_feedback::Feedback;
-
+                    if is_hold {
                         let loss_rate = fec_receiver.calculate_loss_rate();
                         let rtt = self.buffer.rtt().await.unwrap_or(0.0);
                         let current_block_id = fec_receiver.current_block_id();
 
-                        // Cache network stats for next resource (without current_block_id)
-                        {
-                            let mut cached = self.cached_network_stats.lock().await;
-                            *cached = (loss_rate, Some(rtt as u32));
-                        }
-
+                        network_stats.current_block_id = Some(current_block_id);
+                        network_stats.loss_rate = loss_rate;
+                        network_stats.rtt = Some(rtt as u32);
                         let feedback = FecFeedback {
-                            feedback: Some(Feedback::Network(NetworkStats {
-                                loss_rate,
-                                rtt: Some(rtt as u32),
-                                current_block_id: Some(current_block_id),
-                            })),
+                            feedback: Some(Feedback::Network(network_stats.clone())),
                         };
 
                         self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-
-                        if is_end {
-                            end_of_stream = true;
-                            break;
-                        }
-
                         continue;
+                    }
+
+                    if is_end {
+                        end_of_stream = true;
+                        log::info!("End delimiter received, total received bytes is {total_byte_received}");
+                        break;
                     }
 
                     // Send to writer channel (progress update now happens in writer task)
@@ -697,35 +667,21 @@ impl WebRtcPeer {
                 }
             }
 
-            // Close writer channel and wait for writer task
             let _ = write_tx.close().await;
-            match writer_handle.await {
-                Ok(Ok((written_bytes, write_time_us, write_count, mut writer_progress))) => {
-                    total_write_time_us += write_time_us;
-                    total_write_count += write_count;
-                    log::info!("Writer task finished, total written: {} bytes in {} chunks", written_bytes, write_count);
+            let (written_bytes, write_time_us, write_count, mut writer_progress) = writer_handle.await??;
+            total_write_time_us += write_time_us;
+            total_write_count += write_count;
+            log::info!("Writer task finished, total written: {} bytes in {} chunks", written_bytes, write_count);
 
-                    // Update progress from writer task
-                    writer_progress.success();
-                    let _ = core_request.response_throttle(TransferResourceProgressUpdate(writer_progress.clone())).await;
-                    *progress_update = writer_progress;
-                }
-                Ok(Err(e)) => {
-                    log::warn!("Writer task finished with error: {:?}", e);
-                    return Err(e);
-                }
-                Err(e) => {
-                    log::warn!("Writer task join error: {:?}", e);
-                    return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
-                }
-            }
+            writer_progress.success();
+            let _ = core_request.response(TransferResourceProgressUpdate(writer_progress.clone())).await;
+            session.update_progress(writer_progress);
 
-            log::info!(
-                "Complete downloading resource {:?}, total {} bytes",
-                resource_path,
-                resource_size
-            );
+            log::info!("Complete downloading resource {:?}, total {} bytes", resource_path, resource_size);
 
+            self.msg_channel.notify(Request::FecFeedback(FecFeedback { feedback: Some(Feedback::Network(network_stats.clone()))})).await?;
+
+            log::info!("Notified stats for end delimiter");
             if total_byte_received > 0 {
                 log::info!("Total received bytes is {total_byte_received}")
             }
@@ -862,7 +818,6 @@ impl WebRtcPeer {
         };
 
         let resource_cancel_signal = cancellation_signal.clone();
-        let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let _ = feedback_receiver.drain();
 
@@ -880,7 +835,7 @@ impl WebRtcPeer {
                 break;
             };
 
-            let is_compressed = false;
+            let is_compressed = is_compressible(name.as_str());
             let chunk_size = (CHUNK_SIZE * DATA_SHARDS_DEFAULT - 1150) as u64;
 
             let mut reader = self
@@ -889,7 +844,7 @@ impl WebRtcPeer {
                 .with_cancel(&resource_cancel_signal)
                 .await??;
 
-            log::info!("Begin transferring resource {resource_path:?} size {size} bytes");
+            log::info!("Begin transferring resource {resource_path:?} size {size} bytes compressed = {is_compressed}");
 
             let mut total_data_sent = 0u64;
             let mut total_sent_bytes = 0u64;
@@ -945,26 +900,25 @@ impl WebRtcPeer {
             let mut is_end = false;
 
             // Send start delimiter directly without FEC encoding
+            let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
             let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), delimiter));
+
             let mut buff_counter = 0;
             let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
 
             let mut received_from_readers = 0;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    if on_hold {
-                        // When on hold, only wait for feedback with a timeout to prevent hanging
-                        let timeout_fut = sleep(Duration::from_secs(30)).fuse();
+                    if on_hold || is_end {
+                        let timeout_fut = sleep(Duration::from_secs(10)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
                         futures::pin_mut!(timeout_fut);
                         futures::pin_mut!(fb_fut);
                         select_biased! {
                             _ = timeout_fut => {
-                                log::warn!("Timeout waiting for feedback while on hold, resuming transfer");
-                                on_hold = false;
-                                (None, None, None)
+                                return Err(anyhow!("Timeout waiting for feedback while on hold, resuming transfer").into());
                             },
                             fb = fb_fut => {
                                 let fb = fb?;
@@ -1023,22 +977,16 @@ impl WebRtcPeer {
                         fec_sender.feedback(fb)
                     }
                     _ => {
-                        // No data left, send end delimiter
-                        if !on_hold {
-                            self.dual_unreliable_channel.lock().await.flush_timeout().await?;
-                            self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
+                        self.dual_unreliable_channel.lock().await.flush_timeout().await?;
+                        self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
 
-                            // Send end delimiter directly without FEC encoding
-                            let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
-                            log::info!("No data left for resource {resource_path:?}, sending end delimiter");
+                        // Send end delimiter directly without FEC encoding
+                        let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
+                        log::info!("No data left for resource {resource_path:?}, sending end delimiter");
 
-                            on_hold = true;
-                            is_end = true;
-                            fec_sender.send(end_delimiter)?
-                        }
-                        else {
-                            FecAction::Noop
-                        }
+                        on_hold = true;
+                        is_end = true;
+                        fec_sender.send(end_delimiter)?
                     }
                 };
 
@@ -1050,8 +998,6 @@ impl WebRtcPeer {
                             total_data_sent += frame.data().len() as u64;
                             total_sent_bytes += packet.len() as u64;
                             buff_counter += packet.len();
-                            // Balance frames between two unreliable channels
-                            log::info!("Sent {}", frame.block_id);
                             let _ = dual_channel.send(self.peer.peer_id(), packet);
                         }
                     }
@@ -1105,12 +1051,9 @@ impl WebRtcPeer {
                 }
             }
 
-            // Loop has ended after receiving network feedback for end delimiter
-            progress_update.complete();
+            progress_update.success();
             let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
 
-            // Clean up: close reader channel and wait for reader task
-            // read_tx is owned by the reader task, so we only drop read_rx
             read_rx.close();
             drop(read_rx);
             match reader_handle.await {
