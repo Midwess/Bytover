@@ -9,7 +9,14 @@ use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID, TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID, TRANSFER_THUMBNAIL_CHANNEL_ID};
+use crate::protocol::webrtc::webrtc::{
+    MAX_BUFFER_SIZE,
+    MIN_BUFFER_SIZE,
+    TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID,
+    TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_THUMBNAIL_CHANNEL_ID
+};
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
@@ -31,7 +38,19 @@ use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{BeginTransferResource, CancelTransferSessionRequest, EndTransferResource, FecFeedback, IntroduceRequestMessage, IntroduceResponseMessage, NetworkStats, PeerMessage, TransferRequestMessage, TransferResponseMessage, TransferSessionMessage};
+use schema::devlog::bitbridge::{
+    BeginTransferResource,
+    CancelTransferSessionRequest,
+    EndTransferResource,
+    FecFeedback,
+    IntroduceRequestMessage,
+    IntroduceResponseMessage,
+    NetworkStats,
+    PeerMessage,
+    TransferRequestMessage,
+    TransferResponseMessage,
+    TransferSessionMessage
+};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1002,12 +1021,14 @@ impl WebRtcPeer {
                         }
                     }
                     FecAction::Retransmit(frames) => {
-                        for frame in frames {
-                            log::info!("Retransmitting packet: {:?} frame {:?}", frame.block_id, frame.frame_idx);
-                            let packet = frame.serialize();
-                            buff_counter += packet.len();
-                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
-                        };
+                        if !frames.is_empty() {
+                            log::info!("Retransmitting packet: {:?} frame {:?}", frames[0].block_id);
+                            for frame in frames {
+                                let packet = frame.serialize();
+                                buff_counter += packet.len();
+                                let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
+                            };
+                        }
                     }
                     FecAction::Terminated => {
                         log::info!("Fec sender terminated, aborting resource transfer");

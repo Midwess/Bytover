@@ -28,9 +28,6 @@ const RTT_THRESHOLD_MS: u64 = 250;
 const PARITY_ADAPTATION_WEIGHT: f32 = 0.15;
 const LOSS_RATE_HYSTERESIS: f32 = 0.02;
 
-// REMOVED: Unused global RS static
-// static RS: Lazy<Arc<Mutex<HashMap<...>>>> = ...
-
 #[derive(Debug, Error)]
 pub enum FecError {
     #[error("reed-solomon encoding/decoding error {0:?}")]
@@ -59,7 +56,7 @@ pub struct FrameEntry {
     pub data_shards: u8,
     pub parity_shards: u8,
     pub is_parity: bool,
-    pub data: Arc<Box<[u8]>>,
+    pub data: Arc<[u8]>,
     pub timestamp: u64,
 }
 
@@ -71,7 +68,7 @@ pub struct Frame {
     pub parity_shards: u8,
     pub total_size: u32,
     pub is_parity: bool,
-    // Zero-copy optimization: store entire buffer + offset to payload
+
     buffer: Arc<[u8]>,
     payload_offset: usize,
 }
@@ -209,10 +206,7 @@ impl FrameEntry {
         let is_parity = buf[offset] != 0; offset += 1;
 
         let timestamp: u64 = read!(u64);
-        // FIX #1: Optimize allocation - single copy with Arc::from
-        let data: Arc<Box<[u8]>> = Arc::from(
-            buf[offset..].to_vec().into_boxed_slice()
-        );
+        let data: Arc<[u8]> = buf[offset..].to_vec().into();
 
         Some(Self {
             block_id,
@@ -432,7 +426,7 @@ impl FecSender {
                     data_shards: frame.data_shards,
                     parity_shards: frame.parity_shards,
                     is_parity: frame.is_parity,
-                    data: Arc::new(payload.as_ref().into()),  // Convert Arc<[u8]> to Arc<Box<[u8]>>
+                    data: payload,
                     timestamp: now_micros(),
                 };
 
@@ -678,12 +672,10 @@ impl ReceiverBlock {
         let mut bytes = Vec::with_capacity(self.total_size);
         let mut written = 0;
 
-        // SAFETY: We'll write exactly total_size bytes before setting len
         unsafe { bytes.set_len(self.total_size); }
 
         let dst: &mut [u8] = bytes.as_mut_slice();
 
-        // FIX #5: Bulk copy with optimized memcpy
         for shard_opt in self.shards.iter_mut().take(self.data_shards) {
             if written >= self.total_size {
                 break;
@@ -693,7 +685,6 @@ impl ReceiverBlock {
                 let remaining = self.total_size - written;
                 let to_write = remaining.min(shard.len());
 
-                // Single optimized memcpy per shard
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         shard.as_ptr(),
@@ -701,11 +692,11 @@ impl ReceiverBlock {
                         to_write,
                     );
                 }
+
                 written += to_write;
             }
         }
 
-        assert_eq!(written, self.total_size);
         Packet::from(bytes.into_boxed_slice())
     }
 }
@@ -716,9 +707,7 @@ pub struct FecReceiver {
     rtt_ms: u64,
     total_frames_received: u64,
     total_lost_frames: u64,
-    // Shared ReedSolomon decoders cache
     decoders: HashMap<(usize, usize), ReedSolomon>,
-    // FIX #6: Reusable block pool
     block_pool: Vec<ReceiverBlock>,
 }
 
@@ -728,7 +717,6 @@ impl FecReceiver {
     }
 
     pub fn with_window_size(window_size: usize) -> Self {
-        // FIX #6: Pre-allocate reusable receiver blocks
         let block_pool = (0..16)  // Pool of 16 blocks
             .map(|_| ReceiverBlock::place_holder())
             .collect();
@@ -1071,23 +1059,23 @@ mod tests {
             data_shards: 2,
             parity_shards: 1,
             is_parity: false,
-            data: Arc::new(vec![1u8; CHUNK_SIZE].into_boxed_slice()),
+            data: Arc::new([1u8; CHUNK_SIZE]),
             timestamp: now_micros(),
         };
         buffer.insert(0, vec![fe]);
 
-        // Now when we insert more
-        let fe2 = FrameEntry {
+        let entry = FrameEntry {
             total_size: CHUNK_SIZE as u32,
             block_id: 1,
             frame_idx: 0,
             data_shards: 2,
             parity_shards: 1,
             is_parity: false,
-            data: Arc::new(vec![2u8; CHUNK_SIZE].into_boxed_slice()),
+            data: fe.data.clone(),
             timestamp: now_micros(),
         };
-        buffer.insert(1, vec![fe2]);
+
+        buffer.insert(1, vec![entry]);
 
         // Block 0 should still be retrievable
         assert!(buffer.get(0).is_some(), "Block 0 should not be evicted");
