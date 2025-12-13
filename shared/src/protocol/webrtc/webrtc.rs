@@ -29,6 +29,7 @@ pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
+pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 
 pub static MAX_BUFFER_SIZE: usize = 2 * 1024 * 1024;
 pub static MIN_BUFFER_SIZE: usize = MAX_BUFFER_SIZE / 10;
@@ -141,6 +142,7 @@ impl WebRtc {
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Resource reliable, for retransmissions and delimiter
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource2 unreliable, for retransmissions
             .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
@@ -155,6 +157,7 @@ impl WebRtc {
         let outbound_reliable_data_sender = socket.channel(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).sender_clone();
         let outbound_unreliable_data_sender = socket.channel(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).sender_clone();
         let outbound_thumbnail_sender = socket.channel(TRANSFER_THUMBNAIL_CHANNEL_ID).sender_clone();
+        let outbound_unreliable2_data_sender = socket.channel(TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID).sender_clone();
 
         let mut handles = vec![];
 
@@ -181,6 +184,7 @@ impl WebRtc {
                         let current_user = current_user.clone();
                         let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
                         let outbound_unreliable_data_sender = outbound_unreliable_data_sender.clone();
+                        let outbound_unreliable2_data_sender = outbound_unreliable2_data_sender.clone();
                         let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                         let local_resource_repository = self.local_resource_repository.clone();
                         let context = self.shared_context.clone();
@@ -192,6 +196,7 @@ impl WebRtc {
                                 direct_message_channel,
                                 outbound_reliable_data_sender,
                                 outbound_unreliable_data_sender,
+                                outbound_unreliable2_data_sender,
                                 outbound_thumbnail_sender,
                                 buffer,
                                 local_resource_repository
@@ -235,6 +240,7 @@ impl WebRtc {
                     let peer_id = peer_id;
                     let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
                     let outbound_unreliable_data_sender = outbound_unreliable_data_sender.clone();
+                    let outbound_unreliable2_data_sender = outbound_unreliable2_data_sender.clone();
                     let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
                     let request_id = msg.request_id.clone();
@@ -249,6 +255,7 @@ impl WebRtc {
                             direct_message_channel,
                             outbound_reliable_data_sender,
                             outbound_unreliable_data_sender,
+                            outbound_unreliable2_data_sender,
                             outbound_thumbnail_sender,
                             buffer,
                             local_resource_repository
@@ -294,6 +301,14 @@ impl WebRtc {
             }
 
             for (peer_id, data) in socket.channel_mut(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).receive() {
+                let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
+                    continue;
+                };
+
+                peer.process_data_packet(data).await;
+            }
+
+            for (peer_id, data) in socket.channel_mut(TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID).receive() {
                 let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
                     continue;
                 };

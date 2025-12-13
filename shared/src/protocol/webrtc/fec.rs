@@ -396,7 +396,6 @@ impl FecSender {
                     shards.push(parity_buf);
                 }
 
-                // Encode with cached or new RS instance
                 {
                     let mut shards_refs: Vec<&mut [u8]> =
                         shards.iter_mut().map(|v| v.as_mut_slice()).collect();
@@ -414,11 +413,9 @@ impl FecSender {
                 }
             }
 
-            // FIX #2: Create frames by copying data (not consuming shards)
             let mut block_frames = Vec::new();
             for (i, s) in shards.iter().enumerate() {
                 let is_parity = i >= shard_count;
-                // Copy data from shard buffer to create Arc
                 let payload: Arc<[u8]> = Arc::from(s.as_slice());
 
                 let frame = Frame::new(
@@ -474,9 +471,15 @@ impl FecSender {
                             + (target * PARITY_ADAPTATION_WEIGHT);
                         self.last_loss_rate = net.loss_rate;
                     }
-
-                    self.parity_ratio = self.parity_ewma;
                 }
+
+                if let Some(ack) = net.current_block_id {
+                    for i in (0..ack).rev() {
+                        self.buffer.remove(i);
+                    }
+                }
+
+                self.parity_ratio = self.parity_ewma;
                 FecAction::Noop
             }
             Feedback::Missing(m) => {
@@ -821,7 +824,6 @@ impl FecReceiver {
 
         // Get or create the block (from pool if available)
         if self.blocks.get(block_id).is_none() {
-            // FIX #6: Get block from pool or create new
             let new_block = if let Some(mut pooled) = self.block_pool.pop() {
                 pooled.place_value(
                     frame.data_shards as usize,
@@ -844,7 +846,6 @@ impl FecReceiver {
         block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
 
         let idx = frame.frame_idx as usize;
-        // Convert frame data to Box<[u8]> for storage
         let payload_box = Box::from(frame.data());
         let can_decode = block.insert_frame(idx, payload_box)?;
         self.total_frames_received += 1;
@@ -860,9 +861,7 @@ impl FecReceiver {
                     loop {
                         self.next_block_id += 1;
 
-                        // Create placeholder for next block if it doesn't exist
                         if !self.blocks.contains_key(self.next_block_id) {
-                            // FIX #6: Use pool for placeholder
                             let placeholder = if let Some(pooled) = self.block_pool.pop() {
                                 pooled
                             } else {
@@ -923,7 +922,6 @@ impl FecReceiver {
         }
 
         if let Some(block_id) = oldest_id {
-            // Calculate next check time before borrowing the block mutably
             let next_check = self.calculate_next_check_time();
 
             if let Some(block) = self.blocks.get_mut(block_id) {
