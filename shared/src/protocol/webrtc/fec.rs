@@ -719,6 +719,7 @@ impl ReceiverBlock {
         let now = now_micros();
         self.last_frame_ts = now;
         self.last_ping_ts = now;
+        self.is_complete = self.received >= self.data_shards;
 
         // Track largest received frame index for gap-based loss detection
         self.largest_received_idx = self.largest_received_idx.max(idx as u32);
@@ -1025,7 +1026,7 @@ impl FecReceiver {
                 }
 
                 let frame_to = now.saturating_sub(block.last_frame_ts);
-                let is_timeout = *block_id <= self.next_block_id + 2 && frame_to > (timeout_us * (4f64 * K_TIME_THRESHOLD) as u64);
+                let is_timeout = self.next_block_id >= *block_id && *block_id <= self.next_block_id + 2 && frame_to > (timeout_us * (4f64 * K_TIME_THRESHOLD) as u64);
                 let is_ordered = frame_to > timeout_us;
                 if is_timeout {
                     block.is_requested_retransmit = true;
