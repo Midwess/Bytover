@@ -20,7 +20,7 @@ pub const CHUNK_SIZE: usize = 2 * 1100;
 pub const DATA_SHARDS_DEFAULT: usize = 48;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
-const MAX_BLOCK_TIMEOUT_MS: u64 = 500;
+const MAX_BLOCK_TIMEOUT_MS: u64 = 800;
 const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 3;
