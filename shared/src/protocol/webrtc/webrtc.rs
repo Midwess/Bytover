@@ -32,8 +32,8 @@ pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
 pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
 pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 
-pub static MAX_BUFFER_SIZE: usize = 10 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
-pub static MIN_BUFFER_SIZE: usize = 1;
+pub static MAX_BUFFER_SIZE: usize = 20 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
+pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
 pub struct WebRtc {
     addr: String,
@@ -144,7 +144,7 @@ impl WebRtc {
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource2 unreliable, for retransmissions
-            .signaling_keep_alive_interval(Some(Duration::from_millis(3500)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(2500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
             .build();
