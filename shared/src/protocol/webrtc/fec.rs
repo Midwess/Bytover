@@ -23,9 +23,9 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 800;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-const PACKET_THRESHOLD: u32 = 3;
+const PACKET_THRESHOLD: u32 = 48 / 5;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 30 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
