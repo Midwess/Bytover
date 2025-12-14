@@ -15,6 +15,8 @@ use crate::protocol::webrtc::webrtc::{
     TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID,
     TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
     TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
     TRANSFER_THUMBNAIL_CHANNEL_ID
 };
 use crate::repository::errors::PersistenceError;
@@ -55,53 +57,68 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Dual-channel wrapper for load balancing between two unreliable data channels
-pub struct DualUnreliableChannel {
+/// Quad-channel wrapper for load balancing between four unreliable data channels
+pub struct QuadUnreliableChannel {
     channel1: mpsc::UnboundedSender<(PeerId, Packet)>,
     channel2: mpsc::UnboundedSender<(PeerId, Packet)>,
+    channel3: mpsc::UnboundedSender<(PeerId, Packet)>,
+    channel4: mpsc::UnboundedSender<(PeerId, Packet)>,
     channel1_id: usize,
     channel2_id: usize,
+    channel3_id: usize,
+    channel4_id: usize,
     buffer: PeerBuffered,
-    use_channel2: bool,
+    current_channel: u8,
 }
 
-impl DualUnreliableChannel {
+impl QuadUnreliableChannel {
     pub fn new(
         channel1: mpsc::UnboundedSender<(PeerId, Packet)>,
         channel2: mpsc::UnboundedSender<(PeerId, Packet)>,
+        channel3: mpsc::UnboundedSender<(PeerId, Packet)>,
+        channel4: mpsc::UnboundedSender<(PeerId, Packet)>,
         channel1_id: usize,
         channel2_id: usize,
+        channel3_id: usize,
+        channel4_id: usize,
         buffer: PeerBuffered,
     ) -> Self {
         Self {
             channel1,
             channel2,
+            channel3,
+            channel4,
             channel1_id,
             channel2_id,
+            channel3_id,
+            channel4_id,
             buffer,
-            use_channel2: false,
+            current_channel: 0,
         }
     }
 
-    /// Send a packet, load balancing between the two channels
+    /// Send a packet, load balancing between the four channels
     pub fn send(&mut self, peer_id: PeerId, packet: Packet) -> Result<(), mpsc::TrySendError<(PeerId, Packet)>> {
-        let result = if self.use_channel2 {
-            self.channel2.unbounded_send((peer_id, packet))
-        } else {
-            self.channel1.unbounded_send((peer_id, packet))
+        let result = match self.current_channel {
+            0 => self.channel1.unbounded_send((peer_id, packet)),
+            1 => self.channel2.unbounded_send((peer_id, packet)),
+            2 => self.channel3.unbounded_send((peer_id, packet)),
+            _ => self.channel4.unbounded_send((peer_id, packet)),
         };
 
-        self.use_channel2 = !self.use_channel2;
+        self.current_channel = (self.current_channel + 1) % 4;
         result
     }
 
-    /// Wait for both channels to have low buffer usage
+    /// Wait for all four channels to have low buffer usage
     pub async fn wait_buffer_low(&self, min_buffer_size: usize, timeout: Duration) {
         self.buffer.wait_buffer_low(self.channel1_id, min_buffer_size, timeout).await;
         self.buffer.wait_buffer_low(self.channel2_id, min_buffer_size, timeout).await;
+        self.buffer.wait_buffer_low(self.channel3_id, min_buffer_size, timeout).await;
+        self.buffer.wait_buffer_low(self.channel4_id, min_buffer_size, timeout).await;
     }
 
-    /// Get combined bytes sent/received stats from both channels
+    /// Get combined bytes sent/received stats from all four channels
     pub async fn bytes_sent_received(&self) -> (usize, usize) {
         let stats1 = self.buffer
             .channel_bytes_sent_received(self.channel1_id)
@@ -111,11 +128,19 @@ impl DualUnreliableChannel {
             .channel_bytes_sent_received(self.channel2_id)
             .await
             .unwrap_or((0, 0));
+        let stats3 = self.buffer
+            .channel_bytes_sent_received(self.channel3_id)
+            .await
+            .unwrap_or((0, 0));
+        let stats4 = self.buffer
+            .channel_bytes_sent_received(self.channel4_id)
+            .await
+            .unwrap_or((0, 0));
 
-        (stats1.0 + stats2.0, stats1.1 + stats2.1)
+        (stats1.0 + stats2.0 + stats3.0 + stats4.0, stats1.1 + stats2.1 + stats3.1 + stats4.1)
     }
 
-    /// Get bytes sent from both channels
+    /// Get bytes sent from all four channels
     pub async fn bytes_sent(&self) -> usize {
         let sent1 = self.buffer
             .channel_bytes_sent_received(self.channel1_id)
@@ -127,14 +152,26 @@ impl DualUnreliableChannel {
             .await
             .map(|it| it.0)
             .unwrap_or(0);
+        let sent3 = self.buffer
+            .channel_bytes_sent_received(self.channel3_id)
+            .await
+            .map(|it| it.0)
+            .unwrap_or(0);
+        let sent4 = self.buffer
+            .channel_bytes_sent_received(self.channel4_id)
+            .await
+            .map(|it| it.0)
+            .unwrap_or(0);
 
-        sent1 + sent2
+        sent1 + sent2 + sent3 + sent4
     }
 
-    /// Flush both channels with timeout
+    /// Flush all four channels with timeout
     pub async fn flush_timeout(&self) -> Result<(), WebRtcErrors> {
         self.buffer.flush_timeout(self.channel1_id).await?;
         self.buffer.flush_timeout(self.channel2_id).await?;
+        self.buffer.flush_timeout(self.channel3_id).await?;
+        self.buffer.flush_timeout(self.channel4_id).await?;
         Ok(())
     }
 }
@@ -145,8 +182,8 @@ pub struct WebRtcPeer {
 
     // Channel used to communicate with the peer
     pub msg_channel: DirectMessageChannel,
-    // Dual unreliable channels for load-balanced data transfer
-    pub dual_unreliable_channel: Arc<Mutex<DualUnreliableChannel>>,
+    // Quad unreliable channels for load-balanced data transfer
+    pub quad_unreliable_channel: Arc<Mutex<QuadUnreliableChannel>>,
     pub reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     // This channel is used to transfer the thumbnail
     pub thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
@@ -174,6 +211,8 @@ impl WebRtcPeer {
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         unreliable2_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable3_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable4_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
@@ -202,11 +241,15 @@ impl WebRtcPeer {
 
         let peer: PeerEntity = response.peer.into();
 
-        let dual_unreliable_channel = Arc::new(Mutex::new(DualUnreliableChannel::new(
+        let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
             unreliable2_data_channel,
+            unreliable3_data_channel,
+            unreliable4_data_channel,
             TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
             TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+            TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+            TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
             buffer.clone(),
         )));
 
@@ -216,7 +259,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             transfer_feedback_sender,
             reliable_data_channel,
-            dual_unreliable_channel,
+            quad_unreliable_channel,
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
@@ -241,6 +284,8 @@ impl WebRtcPeer {
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         unreliable2_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable3_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        unreliable4_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
@@ -262,11 +307,15 @@ impl WebRtcPeer {
         msg_channel.send_response(request_id, introduce_response).await?;
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
-        let dual_unreliable_channel = Arc::new(Mutex::new(DualUnreliableChannel::new(
+        let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
             unreliable2_data_channel,
+            unreliable3_data_channel,
+            unreliable4_data_channel,
             TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
             TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+            TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+            TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
             buffer.clone(),
         )));
 
@@ -276,7 +325,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             peer: msg.mine.into(),
             reliable_data_channel,
-            dual_unreliable_channel,
+            quad_unreliable_channel,
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
@@ -1002,7 +1051,7 @@ impl WebRtcPeer {
                         fec_sender.feedback(fb)
                     }
                     _ => {
-                        self.dual_unreliable_channel.lock().await.flush_timeout().await?;
+                        self.quad_unreliable_channel.lock().await.flush_timeout().await?;
                         self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
 
                         // Send end delimiter directly without FEC encoding
@@ -1017,13 +1066,13 @@ impl WebRtcPeer {
 
                 match action {
                     FecAction::Framed(frames) => {
-                        let mut dual_channel = self.dual_unreliable_channel.lock().await;
+                        let mut quad_channel = self.quad_unreliable_channel.lock().await;
                         for frame in frames {
                             let packet = frame.serialize();
                             total_data_sent += frame.data().len() as u64;
                             total_sent_bytes += packet.len() as u64;
                             buff_counter += packet.len();
-                            let _ = dual_channel.send(self.peer.peer_id(), packet);
+                            let _ = quad_channel.send(self.peer.peer_id(), packet);
                         }
                     }
                     FecAction::Retransmit(frames) => {
@@ -1045,7 +1094,7 @@ impl WebRtcPeer {
                     }
                 };
 
-                if buff_counter > 2 * MAX_BUFFER_SIZE {
+                if buff_counter > 4 * MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
                     if !on_hold {
                         on_hold = true;
@@ -1053,10 +1102,10 @@ impl WebRtcPeer {
                     }
 
                     let tick = Instant::now();
-                    let dual_ch = self.dual_unreliable_channel.lock().await;
-                    let stats_before = dual_ch.bytes_sent().await;
+                    let quad_ch = self.quad_unreliable_channel.lock().await;
+                    let stats_before = quad_ch.bytes_sent().await;
 
-                    dual_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+                    quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
 
                     self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
 
@@ -1072,7 +1121,7 @@ impl WebRtcPeer {
                     };
 
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                    let stats_after = dual_ch.bytes_sent().await;
+                    let stats_after = quad_ch.bytes_sent().await;
                     let total_sent = stats_after.saturating_sub(stats_before);
                     let bw = total_sent as f64 / time;
                     if (bw > 1f64) {
