@@ -149,7 +149,7 @@ impl TransferProgress {
 
         if elapsed >= 1000 {
             let secs = elapsed / 1000;
-            self.bytes_per_second = self.bytes_sec_counter / secs.max(1);
+            self.bytes_per_second = self.bytes_sec_counter / secs;
             self.start_time_utc_ms = Utc::now().timestamp_millis() as u64;
             self.bytes_sec_counter = bytes_count;
         }

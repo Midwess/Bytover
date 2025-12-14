@@ -647,15 +647,13 @@ impl WebRtcPeer {
                 for packet in new_packets {
                     let is_hold = TransferDelimiterShema::from_hold_packet(&packet, session_id).is_ok();
                     let is_end = TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok();
-
+                    let rtt = self.buffer.rtt().await.unwrap_or(0.0);
+                    let current_block_id = fec_receiver.current_block_id();
+                    network_stats.current_block_id = Some(current_block_id);
+                    network_stats.rtt = Some(rtt as u32);
                     if is_hold {
                         let loss_rate = fec_receiver.calculate_loss_rate();
-                        let rtt = self.buffer.rtt().await.unwrap_or(0.0);
-                        let current_block_id = fec_receiver.current_block_id();
-
-                        network_stats.current_block_id = Some(current_block_id);
                         network_stats.loss_rate = loss_rate;
-                        network_stats.rtt = Some(rtt as u32);
                         let feedback = FecFeedback {
                             feedback: Some(Feedback::Network(network_stats.clone())),
                         };
@@ -1077,8 +1075,11 @@ impl WebRtcPeer {
                     let stats_after = dual_ch.bytes_sent().await;
                     let total_sent = stats_after.saturating_sub(stats_before);
                     let bw = total_sent as f64 / time;
-                    reader.lock().await.compression_stats_mut().update_network_bandwidth(bw);
-                    log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000.0);
+                    if (bw > 1f64) {
+                        reader.lock().await.compression_stats_mut().update_network_bandwidth(bw);
+                        log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000.0);
+                    }
+
                     buff_counter = 0;
                 }
             }
