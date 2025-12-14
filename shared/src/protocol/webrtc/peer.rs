@@ -663,13 +663,17 @@ impl WebRtcPeer {
                     }
 
                     let mut frames = vec![first_frame];
-                    frames.extend_from_slice(resource_rx.drain().collect::<Vec<_>>().as_slice());
+                    while let Some(frame) = resource_rx.try_next().ok().flatten().and_then(|it| Frame::deserialize(&it)) {
+                        frames.push(frame);
+                    }
+
                     let time = Instant::now();
                     let action = fec_receiver.receive(frames)?;
                     total_decode_time_us += time.elapsed().as_micros() as u64;
                     total_decode_count += 1;
                     action
                 } else {
+                    // Timeout expired, ping for feedback
                     fec_receiver.ping()?
                 };
 

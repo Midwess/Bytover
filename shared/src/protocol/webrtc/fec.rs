@@ -940,11 +940,6 @@ impl FecReceiver {
                 });
             }
 
-            if frame.block_id < self.next_block_id && !frame.is_parity {
-                log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
-                continue;
-            }
-
             let block_id = frame.block_id;
 
             // Get or create the block (from pool if available)
