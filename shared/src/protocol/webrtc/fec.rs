@@ -1025,7 +1025,7 @@ impl FecReceiver {
                 }
 
                 let frame_to = now.saturating_sub(block.last_frame_ts);
-                let is_timeout = frame_to > timeout_us * (3f64 * K_TIME_THRESHOLD) as u64;
+                let is_timeout = *block_id <= self.next_block_id + 2 && frame_to > (timeout_us * (4f64 * K_TIME_THRESHOLD) as u64);
                 let is_ordered = frame_to > timeout_us;
                 if is_timeout {
                     block.is_requested_retransmit = true;
