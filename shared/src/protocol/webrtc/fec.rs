@@ -1139,7 +1139,7 @@ fn now_micros() -> u64 {
 
 /// Calculate QUIC-style loss delay in microseconds
 /// Based on QUIC's time threshold mechanism
-fn quic_loss_delay_us(rtt_ms: u64) -> u64 {
+pub fn quic_loss_delay_us(rtt_ms: u64) -> u64 {
     let rtt_us = rtt_ms.max(1) * 1000;
     ((rtt_us as f64 * K_TIME_THRESHOLD) as u64).max(MIN_LOSS_DELAY_US).min(MAX_BLOCK_TIMEOUT_MS * 1000)
 }

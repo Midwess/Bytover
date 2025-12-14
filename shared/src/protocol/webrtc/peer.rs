@@ -6,7 +6,7 @@ use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
+use crate::protocol::webrtc::fec::{quic_loss_delay_us, FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{
@@ -1082,12 +1082,16 @@ impl WebRtcPeer {
                     }
                     FecAction::Retransmit(frames) => {
                         if !frames.is_empty() {
-                            log::info!("Retransmitting packet: {:?} block", frames[0].block_id);
+                            let timeout = quic_loss_delay_us(fec_sender.rtt()) / 2;
+                            log::info!("Retransmitting packet for block {:?} {timeout}us", frames[0].block_id);
+                            self.quad_unreliable_channel.lock().await.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_micros(timeout)).await;
                             for frame in frames {
                                 let packet = frame.serialize();
                                 buff_counter += packet.len();
                                 let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
                             };
+
+                            self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_micros(timeout)).await;
                         }
                     }
                     FecAction::Terminated => {
