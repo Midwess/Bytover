@@ -657,18 +657,19 @@ impl WebRtcPeer {
                     }
                 };
 
-                let action = if let Some(frame) = frame_opt {
+                let action = if let Some(first_frame) = frame_opt {
                     if let Some(rtt) = self.buffer.rtt().await {
                         fec_receiver.set_rtt(rtt as u64);
                     }
 
+                    let mut frames = vec![first_frame];
+                    frames.extend_from_slice(resource_rx.drain().collect::<Vec<_>>().as_slice());
                     let time = Instant::now();
-                    let action = fec_receiver.receive(frame)?;
+                    let action = fec_receiver.receive(frames)?;
                     total_decode_time_us += time.elapsed().as_micros() as u64;
                     total_decode_count += 1;
                     action
                 } else {
-                    // Timeout expired, ping for feedback
                     fec_receiver.ping()?
                 };
 

@@ -587,7 +587,18 @@ impl SequenceTracker {
 
         let contig = self.largest_continuous_seq;
 
-        for idx in 0..contig {
+        // Find the largest received frame index
+        let mut largest_received = 0u32;
+        for (idx, frame) in received_frames.iter().enumerate() {
+            if frame.is_some() {
+                largest_received = idx as u32;
+            }
+        }
+
+        // Check for lost frames up to the largest received frame
+        let check_up_to = largest_received.max(contig);
+
+        for idx in 0..check_up_to {
             let idx_usize = idx as usize;
 
             if idx_usize >= received_frames.len() {
@@ -602,7 +613,11 @@ impl SequenceTracker {
                 continue;
             }
 
-            if idx + PACKET_THRESHOLD < contig {
+            // Detect loss if:
+            // 1. Frame is before continuous sequence with threshold, OR
+            // 2. Frame is in a gap between continuous sequence and a later received frame
+            if idx + PACKET_THRESHOLD < contig ||
+               (idx >= contig && idx < largest_received) {
                 lost_frames.push(idx);
             }
         }
@@ -910,94 +925,109 @@ impl FecReceiver {
         self.calculate_next_check_time(Some(2.0f32))
     }
 
-    pub fn receive(&mut self, frame: Frame) -> Result<FecAction, FecError> {
-        if frame.data().len() != CHUNK_SIZE {
-            return Err(FecError::InvalidFrameSize {
-                expected: CHUNK_SIZE,
-                actual: frame.data().len(),
-            });
-        }
-
-        if frame.block_id < self.next_block_id && !frame.is_parity {
-            log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
+    pub fn receive(&mut self, frames: Vec<Frame>) -> Result<FecAction, FecError> {
+        if frames.is_empty() {
             return self.ping();
         }
 
-        let block_id = frame.block_id;
+        let mut blocks_to_reconstruct = Vec::new();
 
-        // Get or create the block (from pool if available)
-        if self.blocks.get(block_id).is_none() {
-            let new_block = if let Some(mut pooled) = self.block_pool.pop() {
-                pooled.place_value(
-                    frame.data_shards as usize,
-                    frame.parity_shards as usize,
-                    frame.total_size as usize
-                );
-                pooled
-            } else {
-                ReceiverBlock::new(
-                    frame.data_shards as usize,
-                    frame.parity_shards as usize,
-                    frame.total_size as usize
-                )
-            };
+        for frame in frames {
+            if frame.data().len() != CHUNK_SIZE {
+                return Err(FecError::InvalidFrameSize {
+                    expected: CHUNK_SIZE,
+                    actual: frame.data().len(),
+                });
+            }
 
-            if let Some(replaced) = self.blocks.insert(block_id, new_block) {
-                // Buffer is too full, not accept data lost
-                log::warn!("Buffer full, block {} and block {}", block_id, replaced.0);
-                return Ok(FecAction::Terminated);
+            if frame.block_id < self.next_block_id && !frame.is_parity {
+                log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
+                continue;
+            }
+
+            let block_id = frame.block_id;
+
+            // Get or create the block (from pool if available)
+            if self.blocks.get(block_id).is_none() {
+                let new_block = if let Some(mut pooled) = self.block_pool.pop() {
+                    pooled.place_value(
+                        frame.data_shards as usize,
+                        frame.parity_shards as usize,
+                        frame.total_size as usize
+                    );
+                    pooled
+                } else {
+                    ReceiverBlock::new(
+                        frame.data_shards as usize,
+                        frame.parity_shards as usize,
+                        frame.total_size as usize
+                    )
+                };
+
+                if let Some(replaced) = self.blocks.insert(block_id, new_block) {
+                    // Buffer is too full, not accept data lost
+                    log::warn!("Buffer full, block {} and block {}", block_id, replaced.0);
+                    return Ok(FecAction::Terminated);
+                }
+            }
+
+            let block = self.blocks.get_mut(block_id).unwrap();
+            block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
+
+            let idx = frame.frame_idx as usize;
+            let payload_box = Box::from(frame.data());
+            let can_decode = block.insert_frame(idx, payload_box)?;
+            self.total_frames_received += 1;
+
+            if can_decode && !blocks_to_reconstruct.contains(&block_id) {
+                blocks_to_reconstruct.push(block_id);
             }
         }
 
-        let block = self.blocks.get_mut(block_id).unwrap();
-        block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
+        // Try to reconstruct all blocks that are ready
+        for block_id in blocks_to_reconstruct {
+            if let Some(block) = self.blocks.get_mut(block_id) {
+                let _ = block.try_reconstruct(&mut self.decoders)?;
+            }
+        }
 
-        let idx = frame.frame_idx as usize;
-        let payload_box = Box::from(frame.data());
-        let can_decode = block.insert_frame(idx, payload_box)?;
-        self.total_frames_received += 1;
+        // Check if we can emit the next sequential block(s)
+        if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
+            if let Some(block) = self.blocks.remove(self.next_block_id) {
+                let mut completed_blocks = vec![block];
 
-        if can_decode {
-            let block = self.blocks.get_mut(block_id).unwrap();
-            let reconstructed = block.try_reconstruct(&mut self.decoders)?;
+                loop {
+                    self.next_block_id += 1;
 
-            if reconstructed && block_id == self.next_block_id {
-                if let Some(block) = self.blocks.remove(block_id) {
-                    let mut completed_blocks = vec![block];
-
-                    loop {
-                        self.next_block_id += 1;
-
-                        if !self.blocks.contains_key(self.next_block_id) {
-                            let placeholder = if let Some(pooled) = self.block_pool.pop() {
-                                pooled
-                            } else {
-                                ReceiverBlock::place_holder()
-                            };
-
-                            self.blocks.insert(self.next_block_id, placeholder);
-                            break;
-                        }
-
-                        let is_completed = self.blocks.get(self.next_block_id)
-                            .map(|it| it.is_constructed())
-                            .unwrap_or_default();
-
-                        if is_completed {
-                            let block = self.blocks.remove(self.next_block_id).unwrap();
-                            completed_blocks.push(block);
+                    if !self.blocks.contains_key(self.next_block_id) {
+                        let placeholder = if let Some(pooled) = self.block_pool.pop() {
+                            pooled
                         } else {
-                            break;
-                        }
+                            ReceiverBlock::place_holder()
+                        };
+
+                        self.blocks.insert(self.next_block_id, placeholder);
+                        break;
                     }
 
-                    let bytes = completed_blocks.into_iter()
-                        .map(|it| it.into_packet())
-                        .collect::<Vec<_>>();
+                    let is_completed = self.blocks.get(self.next_block_id)
+                        .map(|it| it.is_constructed())
+                        .unwrap_or_default();
 
-                    let next_check = self.calculate_next_check_time(None);
-                    return Ok(FecAction::Constructed(bytes, next_check));
+                    if is_completed {
+                        let block = self.blocks.remove(self.next_block_id).unwrap();
+                        completed_blocks.push(block);
+                    } else {
+                        break;
+                    }
                 }
+
+                let bytes = completed_blocks.into_iter()
+                    .map(|it| it.into_packet())
+                    .collect::<Vec<_>>();
+
+                let next_check = self.calculate_next_check_time(None);
+                return Ok(FecAction::Constructed(bytes, next_check));
             }
         }
 
@@ -1164,7 +1194,7 @@ mod tests {
 
         let lost = tracker.detect_lost_frames(&shards);
 
-        // Should detect gap: continuous_seq=3, largest_received=12, gap=9 > PACKET_THRESHOLD(5)
+        // Should detect gap: continuous_seq=3, largest_received=12, gap=9 > PACKET_THRESHOLD(3)
         assert!(!lost.is_empty(), "Should detect lost frames in gap");
 
         // Verify lost frames include the gap region
@@ -1225,7 +1255,7 @@ mod tests {
             payload,
         );
 
-        let result = receiver.receive(frame1);
+        let result = receiver.receive(vec![frame1]);
         assert!(result.is_ok());
         match result.unwrap() {
             FecAction::Queued(_) => (),
@@ -1281,7 +1311,7 @@ mod tests {
             payload,
         );
 
-        let result = receiver.receive(bad_frame);
+        let result = receiver.receive(vec![bad_frame]);
         assert!(result.is_err(), "Should reject invalid frame size");
     }
 
@@ -1302,18 +1332,14 @@ mod tests {
 
         assert!(!frames.is_empty(), "Should have generated frames");
 
-        let mut received_packet: Option<Packet> = None;
-        for frame in frames {
-            let result = receiver.receive(frame).expect("receive failed");
-            match result {
-                FecAction::Constructed(mut packet, _) => {
-                    received_packet = Some(packet.remove(0));
-                    break;
-                }
-                FecAction::Queued(_) | FecAction::Noop => continue,
-                _ => panic!("Unexpected action during receive"),
+        let result = receiver.receive(frames).expect("receive failed");
+        let received_packet = match result {
+            FecAction::Constructed(mut packets, _) => {
+                assert!(!packets.is_empty(), "Should have constructed packets");
+                Some(packets.remove(0))
             }
-        }
+            _ => None,
+        };
 
         assert!(received_packet.is_some(), "Should have constructed data");
     }

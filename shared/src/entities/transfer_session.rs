@@ -156,6 +156,7 @@ impl TransferProgress {
 
         if self.percentage() == 1.0 {
             self.bytes_per_second = self.bytes_sec_counter;
+            self.complete();
         }
     }
 
