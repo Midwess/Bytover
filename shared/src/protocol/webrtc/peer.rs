@@ -978,7 +978,7 @@ impl WebRtcPeer {
                     (Some(bytes), Some(raw_size), _) => {
                         let time = Instant::now();
                         received_from_readers += bytes.len();
-                        progress_update.update_progress(bytes.len() as u64);
+                        progress_update.update_progress(raw_size as u64);
                         let action = fec_sender.send(bytes)?;
                         total_frame_build_time_us += time.elapsed().as_micros() as u64;
                         total_frame_build_count += 1;

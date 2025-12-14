@@ -160,6 +160,10 @@ impl TransferProgress {
     }
 
     pub fn speed(&self) -> u64 {
+        if self.status != TransferStatus::InProgress {
+            return self.bytes_per_second;
+        }
+
         if self.elapsed() >= 1000 {
             return 0;
         }
