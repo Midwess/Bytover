@@ -1,9 +1,9 @@
 [submodule "libs/devlog-sdk"]
 	path = libs/devlog-sdk
-	url = git@github.com-tiendvlp:dev-logs/devlog-sdk.git
+	url = git@github.com:dev-logs/devlog-sdk.git
 [submodule "libs/schema"]
 	path = libs/schema
-	url = git@github.com-tiendvlp:dev-logs/schema.git
+	url = git@github.com:dev-logs/schema.git
 [submodule "libs/core-services"]
 	path = libs/core-services
-	url = git@github.com-tiendvlp:dev-logs/core-services.git
+	url = git@github.com:dev-logs/core-services.git
