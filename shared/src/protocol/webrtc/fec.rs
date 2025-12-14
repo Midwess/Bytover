@@ -25,7 +25,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 3;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 30 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -301,6 +301,7 @@ pub struct FecSender {
     pub buffer: RingBuffer<Vec<FrameEntry>>,
     rtt_ms: u64,
 
+    pub rtt_estimator: RttEstimator,
     shard_buffer_pool: Vec<Vec<u8>>,
 }
 
@@ -313,6 +314,7 @@ impl FecSender {
             .collect();
 
         Self {
+            rtt_estimator: RttEstimator::new(),
             encoders: HashMap::new(),
             peer_id,
             block_id: 0,
@@ -335,6 +337,7 @@ impl FecSender {
             return;
         }
 
+        self.rtt_estimator.update(self.rtt_ms);
         self.rtt_ms = rtt_ms;
         if rtt_ms <= RTT_THRESHOLD_MS {
             self.parity_ratio = 0.0;
@@ -842,6 +845,7 @@ pub struct FecReceiver {
     total_lost_frames: u64,
     decoders: HashMap<(usize, usize), ReedSolomon>,
     block_pool: Vec<ReceiverBlock>,
+    rtt_estimator: RttEstimator
 }
 
 impl FecReceiver {
@@ -856,6 +860,7 @@ impl FecReceiver {
 
         Self {
             blocks: RingBuffer::new(window_size),
+            rtt_estimator: RttEstimator::new(),
             next_block_id: 0,
             rtt_ms: 50,
             total_frames_received: 0,
@@ -878,6 +883,7 @@ impl FecReceiver {
 
     pub fn set_rtt(&mut self, rtt_ms: u64) {
         self.rtt_ms = rtt_ms;
+        self.rtt_estimator.update(rtt_ms * 1000);
     }
 
     fn calculate_next_check_time(&self, mul: Option<f32>) -> Instant {
@@ -1036,7 +1042,7 @@ impl FecReceiver {
 
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
-        let timeout_us = quic_loss_delay_us(self.rtt_ms);
+        let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
 
         let mut all_missing_blocks = Vec::new();
         let mut total_lost = 0usize;
@@ -1115,7 +1121,7 @@ impl FecReceiver {
             }, next_check));
         }
 
-        let remaining_us = quic_loss_delay_us(self.rtt_ms.max(MIN_LOSS_DELAY_US));
+        let remaining_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
         let next_check = Instant::now() + Duration::from_micros(remaining_us);
         Ok(FecAction::Queued(next_check))
     }
@@ -1137,11 +1143,61 @@ fn now_micros() -> u64 {
     epoch_micro()
 }
 
+const ALPHA_NUM: u64 = 1;
+const ALPHA_DEN: u64 = 8;
+const BETA_NUM: u64 = 1;
+const BETA_DEN: u64 = 4;
+
+#[derive(Debug, Clone)]
+pub struct RttEstimator {
+    pub srtt_us: u64,
+    pub rttvar_us: u64,
+    initialized: bool,
+}
+
+impl RttEstimator {
+    pub fn new() -> Self {
+        Self {
+            srtt_us: 0,
+            rttvar_us: 0,
+            initialized: false,
+        }
+    }
+
+    pub fn update(&mut self, latest_rtt_us: u64) {
+        if !self.initialized {
+            self.srtt_us = latest_rtt_us;
+            self.rttvar_us = latest_rtt_us / 2;
+            self.initialized = true;
+            return;
+        }
+
+        let srtt = self.srtt_us as i64;
+        let latest = latest_rtt_us as i64;
+
+        let abs_diff = (srtt - latest).abs() as u64;
+
+        self.rttvar_us =
+            ((self.rttvar_us * (BETA_DEN - BETA_NUM)) +
+                (abs_diff * BETA_NUM)) / BETA_DEN;
+
+        self.srtt_us =
+            ((self.srtt_us * (ALPHA_DEN - ALPHA_NUM)) +
+                (latest_rtt_us * ALPHA_NUM)) / ALPHA_DEN;
+    }
+}
+
 /// Calculate QUIC-style loss delay in microseconds
 /// Based on QUIC's time threshold mechanism
-pub fn quic_loss_delay_us(rtt_ms: u64) -> u64 {
-    let rtt_us = rtt_ms.max(1) * 1000;
-    ((rtt_us as f64 * K_TIME_THRESHOLD) as u64).max(MIN_LOSS_DELAY_US).min(MAX_BLOCK_TIMEOUT_MS * 1000)
+pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64) -> u64 {
+    let base = srtt_us
+        + 4 * rttvar_us; // jitter protection
+
+    let delay = (base as f64 * K_TIME_THRESHOLD) as u64;
+
+    delay
+        .max(MIN_LOSS_DELAY_US)
+        .min(MAX_BLOCK_TIMEOUT_MS * 1000)
 }
 
 #[cfg(test)]
