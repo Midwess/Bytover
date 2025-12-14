@@ -5228,7 +5228,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#65654dfe7097d7e0f0b5f2bcbebfdfdaecdede65"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#830d3c5840a7a42dfb0746518ee447c2de368a8c"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if",
@@ -5240,7 +5240,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#65654dfe7097d7e0f0b5f2bcbebfdfdaecdede65"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#830d3c5840a7a42dfb0746518ee447c2de368a8c"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -11368,7 +11368,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
