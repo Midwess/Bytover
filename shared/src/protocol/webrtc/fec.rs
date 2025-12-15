@@ -24,7 +24,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 3 * 4;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 25 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 10 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -561,6 +561,8 @@ impl QuicLossDetector {
         now: u64,
         time_threshold_us: u64,
     ) -> Vec<u32> {
+        log::info!("QuicLossDetector::detect_lost_frames: since={}, now={}, time_threshold_us={}", since, now, time_threshold_us);
+        let now = now_micros();
         if since <= now.saturating_sub(time_threshold_us) {
             return vec![]
         }
@@ -860,6 +862,7 @@ impl FecReceiver {
     }
 
     pub fn set_rtt(&mut self, rtt_ms: u64) {
+        let rtt_ms = rtt_ms.max(MIN_LOSS_DELAY_US / 1000);
         self.rtt_estimator.update(rtt_ms * 1000);
     }
 
@@ -1126,9 +1129,10 @@ impl RttEstimator {
 /// Calculate QUIC-style loss delay in microseconds
 /// Based on QUIC's time threshold mechanism
 pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<u64>) -> u64 {
+    log::info!("srtt_us = {}, rttvar_us = {}", srtt_us, rttvar_us);
     let mul = 4 + mul.unwrap_or(0);
     let base = srtt_us
-        + mul * rttvar_us; // jitter protection
+        + mul * rttvar_us.max(1); // jitter protection
 
     let delay = (base as f64 * K_TIME_THRESHOLD) as u64;
 
@@ -1136,4 +1140,3 @@ pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<u64>) -> u64 {
         .max(MIN_LOSS_DELAY_US)
         .min(MAX_BLOCK_TIMEOUT_MS * 1000)
 }
-

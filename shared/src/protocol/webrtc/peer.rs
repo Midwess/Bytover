@@ -988,7 +988,7 @@ impl WebRtcPeer {
             loop {
                 let (bytes, raw_size, feedback) = {
                     if on_hold || is_end {
-                        let timeout_fut = sleep(Duration::from_secs(10)).fuse();
+                        let timeout_fut = sleep(Duration::from_secs(20)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
                         futures::pin_mut!(timeout_fut);
