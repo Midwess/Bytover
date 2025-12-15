@@ -12,6 +12,7 @@ use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{FecFeedback, MissingFrames, MissingBlocks};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use std::mem::size_of;
+use std::ops::Add;
 
 // Too big chunk size will cause higher chance of packet loss
 pub const CHUNK_SIZE: usize = 2 * 1100;
@@ -21,9 +22,9 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 800;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-const PACKET_THRESHOLD: u32 = 6;
+const PACKET_THRESHOLD: u32 = 3 * 4;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 10 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 25 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -560,6 +561,10 @@ impl QuicLossDetector {
         now: u64,
         time_threshold_us: u64,
     ) -> Vec<u32> {
+        if since <= now.saturating_sub(time_threshold_us) {
+            return vec![]
+        }
+
         if since <= now.saturating_sub(time_threshold_us * 3) {
            return received_frames.iter().enumerate().filter_map(|it| {
                 if it.1.is_none() {
@@ -592,7 +597,7 @@ impl QuicLossDetector {
                 continue;
             }
 
-            if frame_idx + PACKET_THRESHOLD < largest_seen && since <= now.saturating_sub(time_threshold_us) {
+            if frame_idx + PACKET_THRESHOLD < largest_seen {
                 lost_frames.push(frame_idx);
                 continue;
             }
@@ -694,7 +699,7 @@ impl ReceiverBlock {
         }
     }
 
-    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>) -> Result<bool, FecError> {
+    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>, false_retransmit_counter: &mut u64) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
                 idx: idx as u32,
@@ -703,9 +708,20 @@ impl ReceiverBlock {
         }
 
         if self.shards[idx].is_none() {
+            if let Some(loss_detector) = &mut self.loss_detector {
+                if loss_detector.is_requested(idx as u32) {
+                    if *false_retransmit_counter > 1 {
+                        *false_retransmit_counter -= 1;
+                    }
+                }
+            }
+
             self.shards[idx] = Some(Vec::from(payload));
             self.frame_send_times[idx] = now_micros();  // Record when frame arrived
             self.received += 1;
+        }
+        else {
+            *false_retransmit_counter = false_retransmit_counter.saturating_add(2).min(40);
         }
 
         let now = now_micros();
@@ -801,6 +817,7 @@ impl ReceiverBlock {
 
 pub struct FecReceiver {
     blocks: RingBuffer<ReceiverBlock>,
+    false_retransmit: u64,
     next_block_id: u32,
     total_frames_received: u64,
     total_lost_frames: u64,
@@ -821,6 +838,7 @@ impl FecReceiver {
 
         Self {
             blocks: RingBuffer::new(window_size),
+            false_retransmit: 0,
             rtt_estimator: RttEstimator::new(),
             next_block_id: 0,
             total_frames_received: 0,
@@ -850,6 +868,7 @@ impl FecReceiver {
         let timeout_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
+            Some(self.false_retransmit)
         );
 
         Instant::now() + Duration::from_micros(timeout_us)
@@ -868,6 +887,12 @@ impl FecReceiver {
                     expected: CHUNK_SIZE,
                     actual: frame.data().len(),
                 });
+            }
+
+            if frame.block_id < self.next_block_id {
+                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}", frame.block_id, self.next_block_id, self.false_retransmit);
+                self.false_retransmit = self.false_retransmit.saturating_add(2).min(40);
+                continue;
             }
 
             let block_id = frame.block_id;
@@ -902,15 +927,9 @@ impl FecReceiver {
                 frame.total_size as usize,
             );
 
-            if frame.block_id < self.next_block_id {
-                // This is a bad sign, we don
-                log::info!("Received frame for old block {} (current block is {})", frame.block_id, self.next_block_id);
-                continue;
-            }
-
             let idx = frame.frame_idx as usize;
             let payload_box = Box::from(frame.data());
-            let can_decode = block.insert_frame(idx, payload_box)?;
+            let can_decode = block.insert_frame(idx, payload_box, &mut self.false_retransmit)?;
             self.total_frames_received += 1;
 
             if can_decode && !blocks_to_reconstruct.contains(&block_id) {
@@ -974,6 +993,7 @@ impl FecReceiver {
         let time_threshold_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
+            Some(self.false_retransmit)
         );
 
         let mut all_missing_blocks = Vec::new();
@@ -1105,9 +1125,10 @@ impl RttEstimator {
 
 /// Calculate QUIC-style loss delay in microseconds
 /// Based on QUIC's time threshold mechanism
-pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64) -> u64 {
+pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<u64>) -> u64 {
+    let mul = 4 + mul.unwrap_or(0);
     let base = srtt_us
-        + 4 * rttvar_us; // jitter protection
+        + mul * rttvar_us; // jitter protection
 
     let delay = (base as f64 * K_TIME_THRESHOLD) as u64;
 

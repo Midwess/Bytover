@@ -1080,7 +1080,7 @@ impl WebRtcPeer {
                     }
                     FecAction::Retransmit(frames) => {
                         if !frames.is_empty() {
-                            let timeout = loss_delay_us(fec_sender.rtt_estimator.srtt_us, fec_sender.rtt_estimator.rttvar_us) / 3;
+                            let timeout = loss_delay_us(fec_sender.rtt_estimator.srtt_us, fec_sender.rtt_estimator.rttvar_us, None) / 3;
                             log::info!("Retransmitting packet for block {:?} {timeout}us", frames[0].block_id);
                             for frame in frames {
                                 let packet = frame.serialize();
