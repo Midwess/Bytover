@@ -1082,7 +1082,6 @@ impl WebRtcPeer {
                         if !frames.is_empty() {
                             let timeout = loss_delay_us(fec_sender.rtt_estimator.srtt_us, fec_sender.rtt_estimator.rttvar_us) / 3;
                             log::info!("Retransmitting packet for block {:?} {timeout}us", frames[0].block_id);
-                            self.quad_unreliable_channel.lock().await.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_micros(timeout)).await;
                             for frame in frames {
                                 let packet = frame.serialize();
                                 buff_counter += packet.len();
@@ -1090,7 +1089,7 @@ impl WebRtcPeer {
                             };
 
                             // Decrease the buffer by a half to preventing more data loss
-                            buff_counter += MIN_BUFFER_SIZE * 2;
+                            buff_counter += MAX_BUFFER_SIZE;
                         }
                     }
                     FecAction::Terminated => {

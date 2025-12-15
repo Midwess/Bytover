@@ -23,7 +23,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 6;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 30 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 10 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -553,36 +553,33 @@ impl QuicLossDetector {
             && self.requested_frames[frame_idx as usize]
     }
 
-    /// QUIC-style loss detection (gap-aware)
-    ///
-    /// Uses TWO thresholds:
-    /// 1. PACKET threshold (reordering tolerance)
-    /// 2. TIME threshold (RTT-based)
-    ///
-    /// IMPORTANT:
-    /// - Uses `largest_seen`, NOT contiguous watermark
-    /// - Declares loss if EITHER condition is met
     fn detect_lost_frames(
         &self,
         received_frames: &[Option<Vec<u8>>],
-        frame_send_times: &[u64],
+        since: u64,
         now: u64,
         time_threshold_us: u64,
     ) -> Vec<u32> {
-        let mut lost_frames = Vec::new();
+        if since <= now.saturating_sub(time_threshold_us * 3) {
+           return received_frames.iter().enumerate().filter_map(|it| {
+                if it.1.is_none() {
+                    return Some(it.0 as u32);
+                }
 
-        // Largest frame index EVER seen (gap-aware)
+                return None
+            }).collect()
+        }
+
+        let mut lost_frames = Vec::new();
         let largest_seen = received_frames
             .iter()
             .rposition(|f| f.is_some())
             .map(|i| i as u32)
             .unwrap_or(0);
 
-        // Scan all frames below largest_seen
         for frame_idx in 0..largest_seen {
             let idx = frame_idx as usize;
 
-            // Skip if already received
             if received_frames
                 .get(idx)
                 .and_then(|f| f.as_ref())
@@ -591,24 +588,11 @@ impl QuicLossDetector {
                 continue;
             }
 
-            // Skip if already requested
             if self.is_requested(frame_idx) {
                 continue;
             }
 
-            let Some(send_time) = frame_send_times.get(idx) else {
-                continue;
-            };
-
-            // === LOSS CONDITION 1: PACKET THRESHOLD ===
-            // Frame is far enough behind the largest seen frame
-            if frame_idx + PACKET_THRESHOLD < largest_seen && *send_time <= now.saturating_sub(time_threshold_us) {
-                lost_frames.push(frame_idx);
-                continue;
-            }
-
-            // === LOSS CONDITION 2: TIME THRESHOLD ===
-            if *send_time <= now.saturating_sub(time_threshold_us) * 3 {
+            if frame_idx + PACKET_THRESHOLD < largest_seen && since <= now.saturating_sub(time_threshold_us) {
                 lost_frames.push(frame_idx);
                 continue;
             }
@@ -639,7 +623,7 @@ struct ReceiverBlock {
     parity_shards: usize,
     total_shards: usize,
     shards: Vec<Option<Vec<u8>>>,
-    frame_send_times: Vec<u64>,  // Track when each frame was first received
+    frame_send_times: Vec<u64>,
     received: usize,
     first_ts: u64,
     last_frame_ts: u64,
@@ -647,7 +631,6 @@ struct ReceiverBlock {
     is_complete: bool,
     is_placeholder: bool,
 
-    // NEW: QUIC-style loss detector
     loss_detector: Option<QuicLossDetector>,
 }
 
@@ -869,29 +852,7 @@ impl FecReceiver {
             self.rtt_estimator.rttvar_us,
         );
 
-        let now = now_micros();
-        let mut earliest_next_check = Instant::now() + Duration::from_micros(timeout_us);
-
-        // Find the oldest unreconstructed block
-        for (_, block) in self.blocks.iter() {
-            if block.is_complete {
-                continue;
-            }
-
-            let time_since_last_frame = now.saturating_sub(block.last_frame_ts);
-            if time_since_last_frame >= timeout_us {
-                // This block needs checking now
-                return Instant::now();
-            }
-
-            let remaining = timeout_us.saturating_sub(time_since_last_frame);
-            let next_check = Instant::now() + Duration::from_micros(remaining);
-            if next_check < earliest_next_check {
-                earliest_next_check = next_check;
-            }
-        }
-
-        earliest_next_check
+        Instant::now() + Duration::from_micros(timeout_us)
     }
 
     pub fn receive(&mut self, frames: Vec<Frame>) -> Result<FecAction, FecError> {
@@ -907,10 +868,6 @@ impl FecReceiver {
                     expected: CHUNK_SIZE,
                     actual: frame.data().len(),
                 });
-            }
-
-            if frame.block_id < self.next_block_id {
-                continue;
             }
 
             let block_id = frame.block_id;
@@ -944,6 +901,12 @@ impl FecReceiver {
                 frame.parity_shards as usize,
                 frame.total_size as usize,
             );
+
+            if frame.block_id < self.next_block_id {
+                // This is a bad sign, we don
+                log::info!("Received frame for old block {} (current block is {})", frame.block_id, self.next_block_id);
+                continue;
+            }
 
             let idx = frame.frame_idx as usize;
             let payload_box = Box::from(frame.data());
@@ -1017,6 +980,10 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
+                if *block_id >= self.next_block_id + 2 {
+                    continue;
+                }
+
                 if block.is_complete {
                     continue;
                 }
@@ -1026,17 +993,11 @@ impl FecReceiver {
                     continue;  // Can reconstruct
                 }
 
-                // Check if enough time has passed since last frame
-                let time_since_last_frame = now.saturating_sub(block.last_frame_ts);
-                if time_since_last_frame < time_threshold_us {
-                    continue;  // Not yet time to request retransmission
-                }
-
                 // === QUIC LOSS DETECTION ===
                 if let Some(ref mut detector) = &mut block.loss_detector {
                     let lost_frames = detector.detect_lost_frames(
                         &block.shards,
-                        &block.frame_send_times,
+                        block.last_ping_ts,
                         now,
                         time_threshold_us,
                     );
