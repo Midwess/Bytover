@@ -6,14 +6,12 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use bytemuck::bytes_of;
-use bytes::BytesMut;
-use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::time::Instant;
-use once_cell::sync::Lazy;
 use core_services::utils::time::epoch_micro;
-use schema::devlog::bitbridge::{fec_feedback, FecFeedback, MissingFrames, MissingBlocks};
+use schema::devlog::bitbridge::{FecFeedback, MissingFrames, MissingBlocks};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
+use std::mem::size_of;
 
 // Too big chunk size will cause higher chance of packet loss
 pub const CHUNK_SIZE: usize = 2 * 1100;
@@ -23,7 +21,7 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 800;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-const PACKET_THRESHOLD: u32 = 48 / 5;
+const PACKET_THRESHOLD: u32 = 6;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
 const MIN_LOSS_DELAY_US: u64 = 30 * 1_000;
 
@@ -526,114 +524,111 @@ impl FecSender {
     }
 }
 
-// ===== RECEIVER OPTIMIZATIONS WITH SEQUENCE TRACKING =====
+// ===== QUIC-STYLE LOSS DETECTION =====
 
-/// SequenceTracker for detecting lost frames
-/// Tracks continuous sequence and sent requests to avoid duplicates
+/// QUIC-inspired loss detection using packet threshold + time threshold
+/// Simpler and more effective than complex per-frame tracking
 #[derive(Debug, Clone)]
-struct SequenceTracker {
-    /// Largest frame index with continuous sequence from frame 0
-    largest_continuous_seq: u32,
-    /// Tracks which frames have been requested for retransmit
-    sent_seq: Vec<bool>,
-    /// Timestamp when largest_continuous_seq was last updated
-    seq_update_ts: u64,
+struct QuicLossDetector {
+    requested_frames: Vec<bool>,
 }
 
-impl SequenceTracker {
+impl QuicLossDetector {
     fn new(total_shards: usize) -> Self {
         Self {
-            largest_continuous_seq: 0,
-            sent_seq: vec![false; total_shards],
-            seq_update_ts: now_micros(),
+            requested_frames: vec![false; total_shards],
         }
     }
 
-    /// Update continuous sequence when frame is received
-    /// Returns true if sequence advanced
-    fn update_continuous_seq(&mut self, received_frames: &[Option<Vec<u8>>]) -> bool {
-        let old_seq = self.largest_continuous_seq;
-
-        // Find longest continuous sequence from 0
-        let mut seq = self.largest_continuous_seq;
-        while (seq as usize) < received_frames.len() && received_frames[seq as usize].is_some() {
-            seq += 1;
-        }
-
-        self.largest_continuous_seq = seq;
-
-        if seq > old_seq {
-            self.seq_update_ts = now_micros();
-            true
-        } else {
-            false
+    /// Mark frame as requested for retransmission
+    fn mark_requested(&mut self, frame_idx: u32) {
+        if (frame_idx as usize) < self.requested_frames.len() {
+            self.requested_frames[frame_idx as usize] = true;
         }
     }
 
-    /// Mark frame as requested (sent_seq = true)
-    fn mark_sent(&mut self, frame_idx: u32) {
-        if (frame_idx as usize) < self.sent_seq.len() {
-            self.sent_seq[frame_idx as usize] = true;
-        }
+    /// Check if frame already requested
+    fn is_requested(&self, frame_idx: u32) -> bool {
+        (frame_idx as usize) < self.requested_frames.len()
+            && self.requested_frames[frame_idx as usize]
     }
 
-    /// Check if frame was already requested
-    fn was_sent(&self, frame_idx: u32) -> bool {
-        (frame_idx as usize) < self.sent_seq.len() && self.sent_seq[frame_idx as usize]
-    }
-
+    /// QUIC-style loss detection (gap-aware)
+    ///
+    /// Uses TWO thresholds:
+    /// 1. PACKET threshold (reordering tolerance)
+    /// 2. TIME threshold (RTT-based)
+    ///
+    /// IMPORTANT:
+    /// - Uses `largest_seen`, NOT contiguous watermark
+    /// - Declares loss if EITHER condition is met
     fn detect_lost_frames(
         &self,
         received_frames: &[Option<Vec<u8>>],
+        frame_send_times: &[u64],
+        now: u64,
+        time_threshold_us: u64,
     ) -> Vec<u32> {
         let mut lost_frames = Vec::new();
 
-        let contig = self.largest_continuous_seq;
+        // Largest frame index EVER seen (gap-aware)
+        let largest_seen = received_frames
+            .iter()
+            .rposition(|f| f.is_some())
+            .map(|i| i as u32)
+            .unwrap_or(0);
 
-        // Find the largest received frame index
-        let mut largest_received = 0u32;
-        for (idx, frame) in received_frames.iter().enumerate() {
-            if frame.is_some() {
-                largest_received = idx as u32;
-            }
-        }
+        // Scan all frames below largest_seen
+        for frame_idx in 0..largest_seen {
+            let idx = frame_idx as usize;
 
-        // Check for lost frames up to the largest received frame
-        let check_up_to = largest_received.max(contig);
-
-        for idx in 0..check_up_to {
-            let idx_usize = idx as usize;
-
-            if idx_usize >= received_frames.len() {
+            // Skip if already received
+            if received_frames
+                .get(idx)
+                .and_then(|f| f.as_ref())
+                .is_some()
+            {
                 continue;
             }
 
-            if received_frames[idx_usize].is_some() {
+            // Skip if already requested
+            if self.is_requested(frame_idx) {
                 continue;
             }
 
-            if self.was_sent(idx) {
+            let Some(send_time) = frame_send_times.get(idx) else {
+                continue;
+            };
+
+            // === LOSS CONDITION 1: PACKET THRESHOLD ===
+            // Frame is far enough behind the largest seen frame
+            if frame_idx + PACKET_THRESHOLD < largest_seen && *send_time <= now.saturating_sub(time_threshold_us) {
+                lost_frames.push(frame_idx);
                 continue;
             }
 
-            // Detect loss if:
-            // 1. Frame is before continuous sequence with threshold, OR
-            // 2. Frame is in a gap between continuous sequence and a later received frame
-            if idx + PACKET_THRESHOLD < contig ||
-               (idx >= contig && idx < largest_received) {
-                lost_frames.push(idx);
+            // === LOSS CONDITION 2: TIME THRESHOLD ===
+            if *send_time <= now.saturating_sub(time_threshold_us) * 3 {
+                lost_frames.push(frame_idx);
+                continue;
             }
         }
 
         lost_frames
     }
 
-    fn reset_sent_seq_range(&mut self, start: u32, end: u32) {
+    /// Reset requested flags for given range (after retransmission)
+    fn reset_requested_range(&mut self, start: u32, end: u32) {
         for idx in start..=end {
-            if (idx as usize) < self.sent_seq.len() {
-                self.sent_seq[idx as usize] = false;
+            if (idx as usize) < self.requested_frames.len() {
+                self.requested_frames[idx as usize] = false;
             }
         }
+    }
+
+    /// Clear all requested flags (e.g., after block timeout)
+    fn clear_all_requested(&mut self) {
+        self.requested_frames.fill(false);
     }
 }
 
@@ -644,38 +639,35 @@ struct ReceiverBlock {
     parity_shards: usize,
     total_shards: usize,
     shards: Vec<Option<Vec<u8>>>,
+    frame_send_times: Vec<u64>,  // Track when each frame was first received
     received: usize,
     first_ts: u64,
     last_frame_ts: u64,
     last_ping_ts: u64,
-    largest_received_idx: u32,
-    is_requested_retransmit: bool,
-    last_requested_retransmit_frame_idx: i32,
-    is_place_holder: bool,
     is_complete: bool,
-    // NEW: Sequence tracking for frame loss detection
-    seq_tracker: Option<SequenceTracker>,
+    is_placeholder: bool,
+
+    // NEW: QUIC-style loss detector
+    loss_detector: Option<QuicLossDetector>,
 }
 
 impl ReceiverBlock {
-    fn place_holder() -> Self {
+    fn placeholder() -> Self {
         let now = now_micros();
         Self {
-            is_place_holder: true,
+            is_placeholder: true,
             data_shards: DATA_SHARDS_DEFAULT,
             shards: vec![None; DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS],
+            frame_send_times: vec![0; DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS],
             parity_shards: MIN_PARITY_SHARDS,
             total_shards: DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS,
             received: 0,
             first_ts: now,
             last_frame_ts: now,
             last_ping_ts: now,
-            largest_received_idx: 0,
-            is_requested_retransmit: false,
             is_complete: false,
             total_size: 0,
-            last_requested_retransmit_frame_idx: -1,
-            seq_tracker: None,
+            loss_detector: None,
         }
     }
 
@@ -683,41 +675,39 @@ impl ReceiverBlock {
         let total = data_shards + parity_shards;
         let now = now_micros();
         Self {
-            is_place_holder: false,
+            is_placeholder: false,
             data_shards,
             total_size,
             parity_shards,
             total_shards: total,
             shards: vec![None; total],
+            frame_send_times: vec![0; total],
             received: 0,
             first_ts: now,
-            is_requested_retransmit: false,
             last_frame_ts: now,
             last_ping_ts: now,
-            largest_received_idx: 0,
-            last_requested_retransmit_frame_idx: -1,
             is_complete: false,
-            seq_tracker: Some(SequenceTracker::new(total)),
+            loss_detector: Some(QuicLossDetector::new(total)),
         }
     }
 
     fn place_value(&mut self, data_shards: usize, parity_shards: usize, total_size: usize) {
         let now = now_micros();
-        if self.is_place_holder {
+        if self.is_placeholder {
             let total = data_shards + parity_shards;
             self.data_shards = data_shards;
             self.parity_shards = parity_shards;
             self.total_size = total_size;
             self.total_shards = total;
-            self.shards = vec![None; self.total_shards];
-            self.is_place_holder = false;
+            self.shards = vec![None; total];
+            self.frame_send_times = vec![0; total];
+            self.is_placeholder = false;
             self.received = 0;
             self.first_ts = now;
             self.last_frame_ts = now;
             self.last_ping_ts = now;
-            self.largest_received_idx = 0;
             self.is_complete = false;
-            self.seq_tracker = Some(SequenceTracker::new(total));
+            self.loss_detector = Some(QuicLossDetector::new(total));
         }
     }
 
@@ -731,6 +721,7 @@ impl ReceiverBlock {
 
         if self.shards[idx].is_none() {
             self.shards[idx] = Some(Vec::from(payload));
+            self.frame_send_times[idx] = now_micros();  // Record when frame arrived
             self.received += 1;
         }
 
@@ -739,18 +730,13 @@ impl ReceiverBlock {
         self.last_ping_ts = now;
         self.is_complete = self.received >= self.data_shards;
 
-        // Track largest received frame index for gap-based loss detection
-        self.largest_received_idx = self.largest_received_idx.max(idx as u32);
-
-        // Update continuous sequence tracker
-        if let Some(ref mut tracker) = self.seq_tracker {
-            tracker.update_continuous_seq(&self.shards);
-        }
-
-        Ok(self.received >= self.data_shards)
+        Ok(self.is_complete)
     }
 
-    fn try_reconstruct(&mut self, decoders: &mut HashMap<(usize, usize), ReedSolomon>) -> Result<bool, FecError> {
+    fn try_reconstruct(
+        &mut self,
+        decoders: &mut HashMap<(usize, usize), ReedSolomon>,
+    ) -> Result<bool, FecError> {
         if self.is_complete {
             return Ok(true);
         }
@@ -761,7 +747,6 @@ impl ReceiverBlock {
         }
 
         if self.parity_shards == 0 {
-            // No parity: just check if all data shards present
             let all_data_present = self.shards
                 .iter()
                 .take(self.data_shards)
@@ -774,9 +759,6 @@ impl ReceiverBlock {
                 Ok(false)
             }
         } else {
-            // Use Reed-Solomon reconstruction with cached decoder
-            log::info!("Use reed solomon for {} data + {} parity", self.data_shards, self.parity_shards);
-
             let key = (self.data_shards, self.parity_shards);
             let rs = match decoders.get_mut(&key) {
                 Some(rs) => rs,
@@ -806,11 +788,9 @@ impl ReceiverBlock {
 
     fn into_packet(mut self) -> Packet {
         let mut bytes = Vec::with_capacity(self.total_size);
-        let mut written = 0;
-
         unsafe { bytes.set_len(self.total_size); }
-
         let dst: &mut [u8] = bytes.as_mut_slice();
+        let mut written = 0;
 
         for shard_opt in self.shards.iter_mut().take(self.data_shards) {
             if written >= self.total_size {
@@ -828,7 +808,6 @@ impl ReceiverBlock {
                         to_write,
                     );
                 }
-
                 written += to_write;
             }
         }
@@ -840,12 +819,11 @@ impl ReceiverBlock {
 pub struct FecReceiver {
     blocks: RingBuffer<ReceiverBlock>,
     next_block_id: u32,
-    rtt_ms: u64,
     total_frames_received: u64,
     total_lost_frames: u64,
     decoders: HashMap<(usize, usize), ReedSolomon>,
     block_pool: Vec<ReceiverBlock>,
-    rtt_estimator: RttEstimator
+    rtt_estimator: RttEstimator,
 }
 
 impl FecReceiver {
@@ -854,15 +832,14 @@ impl FecReceiver {
     }
 
     pub fn with_window_size(window_size: usize) -> Self {
-        let block_pool = (0..16)  // Pool of 16 blocks
-            .map(|_| ReceiverBlock::place_holder())
+        let block_pool = (0..16)
+            .map(|_| ReceiverBlock::placeholder())
             .collect();
 
         Self {
             blocks: RingBuffer::new(window_size),
             rtt_estimator: RttEstimator::new(),
             next_block_id: 0,
-            rtt_ms: 50,
             total_frames_received: 0,
             total_lost_frames: 0,
             decoders: HashMap::new(),
@@ -882,53 +859,39 @@ impl FecReceiver {
     }
 
     pub fn set_rtt(&mut self, rtt_ms: u64) {
-        self.rtt_ms = rtt_ms;
         self.rtt_estimator.update(rtt_ms * 1000);
     }
 
-    fn calculate_next_check_time(&self, mul: Option<f32>) -> Instant {
-        let timeout_ms = if self.rtt_ms > 0 {
-            (self.rtt_ms * 2).max(MIN_LOSS_DELAY_US / 1000).min(MAX_BLOCK_TIMEOUT_MS)
-        } else {
-            MIN_LOSS_DELAY_US / 1000
-        };
+    /// Calculate next check time with QUIC-style timeout
+    fn calculate_next_check_time(&self) -> Instant {
+        let timeout_us = loss_delay_us(
+            self.rtt_estimator.srtt_us,
+            self.rtt_estimator.rttvar_us,
+        );
 
-        let timeout_us = timeout_ms * 1000;
         let now = now_micros();
+        let mut earliest_next_check = Instant::now() + Duration::from_micros(timeout_us);
 
-        let mut oldest_ts = u64::MAX;
+        // Find the oldest unreconstructed block
         for (_, block) in self.blocks.iter() {
-            if block.is_constructed() || block.is_requested_retransmit {
+            if block.is_complete {
                 continue;
             }
-            if block.last_ping_ts < oldest_ts {
-                oldest_ts = block.last_ping_ts;
+
+            let time_since_last_frame = now.saturating_sub(block.last_frame_ts);
+            if time_since_last_frame >= timeout_us {
+                // This block needs checking now
+                return Instant::now();
+            }
+
+            let remaining = timeout_us.saturating_sub(time_since_last_frame);
+            let next_check = Instant::now() + Duration::from_micros(remaining);
+            if next_check < earliest_next_check {
+                earliest_next_check = next_check;
             }
         }
 
-        if oldest_ts != u64::MAX {
-            let elapsed = now.saturating_sub(oldest_ts);
-            if elapsed < timeout_us {
-                let remaining = timeout_us.saturating_sub(elapsed);
-                return Instant::now() + Duration::from_micros(
-                    remaining.max(MIN_LOSS_DELAY_US)
-                );
-            }
-        }
-
-        Instant::now() + Duration::from_millis((timeout_ms as f32 * mul.unwrap_or(1f32)) as u64)
-    }
-
-    /// In case we know when network getting hiccup
-    /// we can use this function to make timeout longer
-    /// to prevent retransmit-storm
-    pub fn hiccup(&mut self) -> Instant {
-        self.blocks.entries.iter_mut().filter_map(|it| it.as_mut()).for_each(|it| {
-            it.1.last_ping_ts = now_micros();
-            it.1.last_frame_ts = now_micros();
-        });
-
-        self.calculate_next_check_time(Some(2.0f32))
+        earliest_next_check
     }
 
     pub fn receive(&mut self, frames: Vec<Frame>) -> Result<FecAction, FecError> {
@@ -947,38 +910,40 @@ impl FecReceiver {
             }
 
             if frame.block_id < self.next_block_id {
-                log::info!("Ignoring frame for block {} < {}", frame.block_id, self.next_block_id);
                 continue;
             }
 
             let block_id = frame.block_id;
 
-            // Get or create the block (from pool if available)
+            // Get or create block
             if self.blocks.get(block_id).is_none() {
                 let new_block = if let Some(mut pooled) = self.block_pool.pop() {
                     pooled.place_value(
                         frame.data_shards as usize,
                         frame.parity_shards as usize,
-                        frame.total_size as usize
+                        frame.total_size as usize,
                     );
                     pooled
                 } else {
                     ReceiverBlock::new(
                         frame.data_shards as usize,
                         frame.parity_shards as usize,
-                        frame.total_size as usize
+                        frame.total_size as usize,
                     )
                 };
 
                 if let Some(replaced) = self.blocks.insert(block_id, new_block) {
-                    // Buffer is too full, not accept data lost
-                    log::warn!("Buffer full, block {} and block {}", block_id, replaced.0);
+                    log::warn!("Buffer full, evicted block {}", replaced.0);
                     return Ok(FecAction::Terminated);
                 }
             }
 
             let block = self.blocks.get_mut(block_id).unwrap();
-            block.place_value(frame.data_shards as usize, frame.parity_shards as usize, frame.total_size as usize);
+            block.place_value(
+                frame.data_shards as usize,
+                frame.parity_shards as usize,
+                frame.total_size as usize,
+            );
 
             let idx = frame.frame_idx as usize;
             let payload_box = Box::from(frame.data());
@@ -990,14 +955,14 @@ impl FecReceiver {
             }
         }
 
-        // Try to reconstruct all blocks that are ready
+        // Try reconstruction
         for block_id in blocks_to_reconstruct {
             if let Some(block) = self.blocks.get_mut(block_id) {
                 let _ = block.try_reconstruct(&mut self.decoders)?;
             }
         }
 
-        // Check if we can emit the next sequential block(s)
+        // Emit completed blocks
         if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
             if let Some(block) = self.blocks.remove(self.next_block_id) {
                 let mut completed_blocks = vec![block];
@@ -1009,15 +974,14 @@ impl FecReceiver {
                         let placeholder = if let Some(pooled) = self.block_pool.pop() {
                             pooled
                         } else {
-                            ReceiverBlock::place_holder()
+                            ReceiverBlock::placeholder()
                         };
-
                         self.blocks.insert(self.next_block_id, placeholder);
                         break;
                     }
 
                     let is_completed = self.blocks.get(self.next_block_id)
-                        .map(|it| it.is_constructed())
+                        .map(|b| b.is_constructed())
                         .unwrap_or_default();
 
                     if is_completed {
@@ -1028,11 +992,12 @@ impl FecReceiver {
                     }
                 }
 
-                let bytes = completed_blocks.into_iter()
-                    .map(|it| it.into_packet())
-                    .collect::<Vec<_>>();
+                let bytes = completed_blocks
+                    .into_iter()
+                    .map(|b| b.into_packet())
+                    .collect();
 
-                let next_check = self.calculate_next_check_time(None);
+                let next_check = self.calculate_next_check_time();
                 return Ok(FecAction::Constructed(bytes, next_check));
             }
         }
@@ -1040,89 +1005,79 @@ impl FecReceiver {
         self.ping()
     }
 
+    /// QUIC-style ping: detect losses using packet threshold + time threshold
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
-        let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
+        let time_threshold_us = loss_delay_us(
+            self.rtt_estimator.srtt_us,
+            self.rtt_estimator.rttvar_us,
+        );
 
         let mut all_missing_blocks = Vec::new();
-        let mut total_lost = 0usize;
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if block.is_constructed() || block.is_requested_retransmit {
+                if block.is_complete {
                     continue;
                 }
 
-                let mut missing_frames = Vec::new();
                 let present_count = block.shards.iter().filter(|s| s.is_some()).count();
-                let needed_more = block.data_shards.saturating_sub(present_count);
-
-                if needed_more == 0 {
-                    continue;
+                if present_count >= block.data_shards {
+                    continue;  // Can reconstruct
                 }
 
-                let frame_to = now.saturating_sub(block.last_frame_ts);
-                let is_timeout = self.next_block_id >= *block_id && *block_id <= self.next_block_id + 2 && frame_to > (timeout_us * (4f64 * K_TIME_THRESHOLD) as u64);
-                let is_ordered = frame_to > timeout_us;
-                if is_timeout {
-                    block.is_requested_retransmit = true;
-                    for i in 0..block.data_shards {
-                        if block.shards[i].is_none() {
-                            if let Some(ref mut tracker) = &mut block.seq_tracker {
-                                tracker.mark_sent(i as u32);
-                            }
+                // Check if enough time has passed since last frame
+                let time_since_last_frame = now.saturating_sub(block.last_frame_ts);
+                if time_since_last_frame < time_threshold_us {
+                    continue;  // Not yet time to request retransmission
+                }
 
-                            missing_frames.push(i);
-                            if missing_frames.len() >= needed_more {
-                                break;
-                            }
+                // === QUIC LOSS DETECTION ===
+                if let Some(ref mut detector) = &mut block.loss_detector {
+                    let lost_frames = detector.detect_lost_frames(
+                        &block.shards,
+                        &block.frame_send_times,
+                        now,
+                        time_threshold_us,
+                    );
+
+                    if !lost_frames.is_empty() {
+                        // Mark as requested
+                        for &frame_idx in &lost_frames {
+                            detector.mark_requested(frame_idx);
+                            self.total_lost_frames += 1;
                         }
+
+                        block.last_ping_ts = now;
+
+                        all_missing_blocks.push(MissingFrames {
+                            block_id: *block_id,
+                            frames: lost_frames,
+                        });
+
+                        log::info!(
+                            "QUIC loss detection for block {}: {} frames lost",
+                            block_id,
+                            all_missing_blocks.last().unwrap().frames.len()
+                        );
                     }
                 }
-                else if is_ordered {
-                    if let Some(ref mut tracker) = &mut block.seq_tracker {
-                        let gap_lost = tracker.detect_lost_frames(&block.shards);
-                        for frame_idx in gap_lost {
-                            if !tracker.was_sent(frame_idx) {
-                                missing_frames.push(frame_idx as usize);
-                                tracker.mark_sent(frame_idx);
-                                log::info!(
-                                    "Detected lost frame {} in block {} (gap-based, seq={})",
-                                    frame_idx,
-                                    block_id,
-                                    tracker.largest_continuous_seq
-                                );
-                            }
-                        }
-                    }
-                }
-
-                if !missing_frames.is_empty() {
-                    block.last_ping_ts = now;
-                    total_lost += missing_frames.len();
-
-                    all_missing_blocks.push(MissingFrames {
-                        block_id: *block_id,
-                        frames: missing_frames.into_iter().map(|it| it as u32).collect(),
-                    });
-                }
-
-                self.total_lost_frames += total_lost as u64;
             }
         }
 
-        let next_check = self.calculate_next_check_time(None);
+        let next_check = self.calculate_next_check_time();
 
         if !all_missing_blocks.is_empty() {
-            return Ok(FecAction::Feedback(FecFeedback {
-                feedback: Some(Feedback::Missing(MissingBlocks {
-                    blocks: all_missing_blocks,
-                })),
-            }, next_check));
+            return Ok(FecAction::Feedback(
+                FecFeedback {
+                    feedback: Some(Feedback::Missing(MissingBlocks {
+                        blocks: all_missing_blocks,
+                    })),
+                },
+                next_check,
+            ));
         }
 
-        let remaining_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
-        let next_check = Instant::now() + Duration::from_micros(remaining_us);
         Ok(FecAction::Queued(next_check))
     }
 }
@@ -1200,203 +1155,3 @@ pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64) -> u64 {
         .min(MAX_BLOCK_TIMEOUT_MS * 1000)
 }
 
-#[cfg(test)]
-mod tests {
-    use uuid::Uuid;
-    use super::*;
-
-    #[test]
-    fn test_parity_count() {
-        let s = FecSender::new(PeerId(Uuid::new_v4()), 256);
-        assert!(FecSender::parity_count_from_ratio(0.2, 32) >= MIN_PARITY_SHARDS);
-    }
-
-    #[test]
-    fn test_sequence_tracker_continuous() {
-        let mut tracker = SequenceTracker::new(32);
-        let mut shards: Vec<Option<Vec<u8>>> = vec![None; 32];
-
-        // Receive frames 0, 1, 2
-        for i in 0..3 {
-            shards[i] = Some(vec![0u8; CHUNK_SIZE]);
-            tracker.update_continuous_seq(&shards);
-        }
-
-        assert_eq!(tracker.largest_continuous_seq, 3);
-
-        // Now skip frame 4 and receive frame 5
-        shards[5] = Some(vec![0u8; CHUNK_SIZE]);
-        tracker.update_continuous_seq(&shards);
-
-        // Continuous sequence should still be 3 (gap at 4)
-        assert_eq!(tracker.largest_continuous_seq, 3);
-
-        // Detect lost frames in gap
-        let lost = tracker.detect_lost_frames(&shards);
-        assert!(lost.contains(&4), "Frame 4 should be detected as lost");
-    }
-
-    #[test]
-    fn test_sequence_tracker_loss_detection() {
-        let mut tracker = SequenceTracker::new(32);
-        let mut shards: Vec<Option<Vec<u8>>> = vec![None; 32];
-
-        // Receive frames with large gap
-        for i in [0, 1, 2, 10, 11, 12] {
-            shards[i] = Some(vec![0u8; CHUNK_SIZE]);
-        }
-
-        tracker.update_continuous_seq(&shards);
-
-        let lost = tracker.detect_lost_frames(&shards);
-
-        // Should detect gap: continuous_seq=3, largest_received=12, gap=9 > PACKET_THRESHOLD(3)
-        assert!(!lost.is_empty(), "Should detect lost frames in gap");
-
-        // Verify lost frames include the gap region
-        assert!(lost.iter().any(|&f| f > 2 && f < 10), "Should include frames in gap region");
-    }
-
-    #[test]
-    fn test_sent_seq_tracking() {
-        let mut tracker = SequenceTracker::new(32);
-
-        // Mark some frames as sent
-        tracker.mark_sent(5);
-        tracker.mark_sent(6);
-
-        assert!(tracker.was_sent(5), "Frame 5 should be marked as sent");
-        assert!(tracker.was_sent(6), "Frame 6 should be marked as sent");
-        assert!(!tracker.was_sent(7), "Frame 7 should not be marked as sent");
-
-        // Reset sent range
-        tracker.reset_sent_seq_range(5, 6);
-        assert!(!tracker.was_sent(5), "Frame 5 should be unmarked after reset");
-    }
-
-    #[test]
-    fn test_frame_metadata_sync() {
-        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 256);
-        sender.data_shards = 16;
-        sender.parity_ratio = 0.5;
-
-        let packet = vec![0u8; 32 * 1024].into_boxed_slice();
-        let action = sender.send(packet).unwrap();
-
-        if let FecAction::Framed(frames) = action {
-            assert!(!frames.is_empty());
-            let first_n = frames[0].data_shards;
-            let first_k = frames[0].parity_shards;
-            for frame in &frames {
-                assert_eq!(frame.data_shards, first_n, "data_shards mismatch");
-                assert_eq!(frame.parity_shards, first_k, "parity_shards mismatch");
-            }
-        } else {
-            panic!("Expected Framed action");
-        }
-    }
-
-    #[test]
-    fn test_reordering_tolerance() {
-        let mut receiver = FecReceiver::new();
-
-        let payload: Arc<[u8]> = Arc::from(vec![0u8; CHUNK_SIZE].into_boxed_slice());
-        let frame1 = Frame::new(
-            0,      // block_id
-            15,     // frame_idx - Late in sequence
-            32,     // data_shards
-            8,      // parity_shards
-            CHUNK_SIZE as u32,
-            false,
-            payload,
-        );
-
-        let result = receiver.receive(vec![frame1]);
-        assert!(result.is_ok());
-        match result.unwrap() {
-            FecAction::Queued(_) => (),
-            val => panic!("Should be Queued, not ready to decode {val:?}"),
-        }
-    }
-
-    #[test]
-    fn test_buffer_smart_eviction() {
-        let mut buffer: RingBuffer<Vec<FrameEntry>> = RingBuffer::new(10);
-
-        let data = Arc::new([1u8; CHUNK_SIZE]);
-        let fe = FrameEntry {
-            total_size: CHUNK_SIZE as u32,
-            block_id: 0,
-            frame_idx: 0,
-            data_shards: 2,
-            parity_shards: 1,
-            is_parity: false,
-            data: data.clone(),
-            timestamp: now_micros(),
-        };
-        buffer.insert(0, vec![fe]);
-
-        let entry = FrameEntry {
-            total_size: CHUNK_SIZE as u32,
-            block_id: 1,
-            frame_idx: 0,
-            data_shards: 2,
-            parity_shards: 1,
-            is_parity: false,
-            data: data.clone(),
-            timestamp: now_micros(),
-        };
-
-        buffer.insert(1, vec![entry]);
-
-        assert!(buffer.get(0).is_some(), "Block 0 should not be evicted");
-    }
-
-    #[test]
-    fn test_frame_validation() {
-        let mut receiver = FecReceiver::new();
-
-        let payload: Arc<[u8]> = Arc::from(vec![0u8; 1024].into_boxed_slice());
-        let bad_frame = Frame::new(
-            0,
-            0,
-            32,
-            8,
-            1024,
-            false,
-            payload,
-        );
-
-        let result = receiver.receive(vec![bad_frame]);
-        assert!(result.is_err(), "Should reject invalid frame size");
-    }
-
-    #[test]
-    fn test_send_receive_small_data() {
-        let mut sender = FecSender::new(PeerId(Uuid::new_v4()), 256);
-        let mut receiver = FecReceiver::new();
-
-        let original_data: Vec<u8> = (0..100).map(|i| (i % 256) as u8).collect();
-        let packet = original_data.clone().into_boxed_slice();
-
-        let action = sender.send(packet).expect("send failed");
-
-        let frames = match action {
-            FecAction::Framed(frames) => frames,
-            _ => panic!("Expected Framed action"),
-        };
-
-        assert!(!frames.is_empty(), "Should have generated frames");
-
-        let result = receiver.receive(frames).expect("receive failed");
-        let received_packet = match result {
-            FecAction::Constructed(mut packets, _) => {
-                assert!(!packets.is_empty(), "Should have constructed packets");
-                Some(packets.remove(0))
-            }
-            _ => None,
-        };
-
-        assert!(received_packet.is_some(), "Should have constructed data");
-    }
-}

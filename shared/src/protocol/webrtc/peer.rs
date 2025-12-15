@@ -713,12 +713,10 @@ impl WebRtcPeer {
                         };
 
                         self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-                        next_check_time.replace( fec_receiver.hiccup());
                         continue;
                     }
                     else if is_end {
                         end_of_stream = true;
-                        next_check_time.replace( fec_receiver.hiccup());
                         log::info!("End delimiter received, total received bytes is {total_byte_received}");
                         break;
                     }
@@ -1091,7 +1089,8 @@ impl WebRtcPeer {
                                 let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
                             };
 
-                            self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_micros(timeout)).await;
+                            // Decrease the buffer by a half to preventing more data loss
+                            buff_counter += MIN_BUFFER_SIZE * 2;
                         }
                     }
                     FecAction::Terminated => {
