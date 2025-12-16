@@ -896,6 +896,7 @@ impl WebRtcPeer {
         let mut total_read_time_us = 0u64;
         let mut total_frame_build_time_us = 0u64;
         let mut total_frame_build_count = 0u64;
+        let mut hold_counter = 0;
 
         while !session.is_completed() {
             let Some((resource_path, order_id, size, name)) = session
@@ -982,7 +983,6 @@ impl WebRtcPeer {
             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), delimiter));
 
             let mut buff_counter = 0;
-            let mut hold_counter = 1;
             let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
 
             let mut received_from_readers = 0;
