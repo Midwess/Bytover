@@ -12,7 +12,6 @@ use core_services::utils::time::epoch_micro;
 use schema::devlog::bitbridge::{FecFeedback, MissingFrames, MissingBlocks};
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use std::mem::size_of;
-use std::ops::Add;
 
 // Too big chunk size will cause higher chance of packet loss
 pub const CHUNK_SIZE: usize = 2 * 1100;
@@ -24,7 +23,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 3 * 4;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 10 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -561,14 +560,12 @@ impl QuicLossDetector {
         now: u64,
         time_threshold_us: u64,
     ) -> Vec<u32> {
-        log::info!("QuicLossDetector::detect_lost_frames: since={}, now={}, time_threshold_us={}", since, now, time_threshold_us);
-        let now = now_micros();
         if since <= now.saturating_sub(time_threshold_us) {
-            return vec![]
-        }
-
-        if since <= now.saturating_sub(time_threshold_us * 3) {
            return received_frames.iter().enumerate().filter_map(|it| {
+                if self.is_requested(it.0 as u32) {
+                   return None
+                }
+
                 if it.1.is_none() {
                     return Some(it.0 as u32);
                 }
@@ -577,49 +574,7 @@ impl QuicLossDetector {
             }).collect()
         }
 
-        let mut lost_frames = Vec::new();
-        let largest_seen = received_frames
-            .iter()
-            .rposition(|f| f.is_some())
-            .map(|i| i as u32)
-            .unwrap_or(0);
-
-        for frame_idx in 0..largest_seen {
-            let idx = frame_idx as usize;
-
-            if received_frames
-                .get(idx)
-                .and_then(|f| f.as_ref())
-                .is_some()
-            {
-                continue;
-            }
-
-            if self.is_requested(frame_idx) {
-                continue;
-            }
-
-            if frame_idx + PACKET_THRESHOLD < largest_seen {
-                lost_frames.push(frame_idx);
-                continue;
-            }
-        }
-
-        lost_frames
-    }
-
-    /// Reset requested flags for given range (after retransmission)
-    fn reset_requested_range(&mut self, start: u32, end: u32) {
-        for idx in start..=end {
-            if (idx as usize) < self.requested_frames.len() {
-                self.requested_frames[idx as usize] = false;
-            }
-        }
-    }
-
-    /// Clear all requested flags (e.g., after block timeout)
-    fn clear_all_requested(&mut self) {
-        self.requested_frames.fill(false);
+        vec![]
     }
 }
 
@@ -701,7 +656,12 @@ impl ReceiverBlock {
         }
     }
 
-    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>, false_retransmit_counter: &mut u64) -> Result<bool, FecError> {
+    fn insert_frame(
+        &mut self,
+        idx: usize,
+        payload: Box<[u8]>,
+        false_retransmit_counter: &mut u64,
+    ) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
                 idx: idx as u32,
@@ -710,20 +670,12 @@ impl ReceiverBlock {
         }
 
         if self.shards[idx].is_none() {
-            if let Some(loss_detector) = &mut self.loss_detector {
-                if loss_detector.is_requested(idx as u32) {
-                    if *false_retransmit_counter > 1 {
-                        *false_retransmit_counter -= 1;
-                    }
-                }
-            }
-
             self.shards[idx] = Some(Vec::from(payload));
             self.frame_send_times[idx] = now_micros();  // Record when frame arrived
             self.received += 1;
         }
         else {
-            *false_retransmit_counter = false_retransmit_counter.saturating_add(2).min(40);
+            *false_retransmit_counter = false_retransmit_counter.saturating_add(1);
         }
 
         let now = now_micros();
@@ -820,6 +772,7 @@ impl ReceiverBlock {
 pub struct FecReceiver {
     blocks: RingBuffer<ReceiverBlock>,
     false_retransmit: u64,
+    retransmit_count: u64,
     next_block_id: u32,
     total_frames_received: u64,
     total_lost_frames: u64,
@@ -841,6 +794,7 @@ impl FecReceiver {
         Self {
             blocks: RingBuffer::new(window_size),
             false_retransmit: 0,
+            retransmit_count: 0,
             rtt_estimator: RttEstimator::new(),
             next_block_id: 0,
             total_frames_received: 0,
@@ -868,10 +822,11 @@ impl FecReceiver {
 
     /// Calculate next check time with QUIC-style timeout
     fn calculate_next_check_time(&self) -> Instant {
+        let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
         let timeout_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
-            Some(self.false_retransmit)
+            Some(ratio)
         );
 
         Instant::now() + Duration::from_micros(timeout_us)
@@ -894,7 +849,7 @@ impl FecReceiver {
 
             if frame.block_id < self.next_block_id {
                 log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}", frame.block_id, self.next_block_id, self.false_retransmit);
-                self.false_retransmit = self.false_retransmit.saturating_add(2).min(40);
+                self.false_retransmit = self.false_retransmit.saturating_add(2);
                 continue;
             }
 
@@ -993,10 +948,11 @@ impl FecReceiver {
     /// QUIC-style ping: detect losses using packet threshold + time threshold
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
+        let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
         let time_threshold_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
-            Some(self.false_retransmit)
+            Some(ratio)
         );
 
         let mut all_missing_blocks = Vec::new();
@@ -1025,6 +981,7 @@ impl FecReceiver {
                         time_threshold_us,
                     );
 
+                    self.retransmit_count += lost_frames.len() as u64;
                     if !lost_frames.is_empty() {
                         // Mark as requested
                         for &frame_idx in &lost_frames {
@@ -1126,16 +1083,13 @@ impl RttEstimator {
     }
 }
 
-/// Calculate QUIC-style loss delay in microseconds
-/// Based on QUIC's time threshold mechanism
-pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<u64>) -> u64 {
-    log::info!("srtt_us = {}, rttvar_us = {}", srtt_us, rttvar_us);
-    let mul = 4 + mul.unwrap_or(0);
-    let base = srtt_us
-        + mul * rttvar_us.max(1); // jitter protection
+pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<f64>) -> u64 {
+    let base = srtt_us.max(1)
+        * 4 * rttvar_us.max(1);
 
-    let delay = (base as f64 * K_TIME_THRESHOLD) as u64;
+    let mut delay = (base as f64 * K_TIME_THRESHOLD) as u64;
 
+    delay = ((delay as f64) * mul.unwrap_or(1f64)) as u64;
     delay
         .max(MIN_LOSS_DELAY_US)
         .min(MAX_BLOCK_TIMEOUT_MS * 1000)
