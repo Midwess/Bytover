@@ -1105,8 +1105,8 @@ impl WebRtcPeer {
                 if buff_counter > MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
                     hold_counter += 1;
-                    if !on_hold {
-                        should_send_hold = hold_counter > 10;
+                    if !on_hold && hold_counter > 10 {
+                        should_send_hold = true;
                         hold_counter = 0;
                         on_hold = true;
                     }
