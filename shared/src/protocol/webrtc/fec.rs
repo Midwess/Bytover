@@ -21,7 +21,6 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-const PACKET_THRESHOLD: u32 = 3 * 4;
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
 const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
 
@@ -848,7 +847,7 @@ impl FecReceiver {
             }
 
             if frame.block_id < self.next_block_id {
-                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count);
+                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count, self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
                 self.false_retransmit = self.false_retransmit.saturating_add(2);
                 continue;
             }
@@ -959,7 +958,7 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if *block_id >= self.next_block_id + 2 {
+                if *block_id >= self.next_block_id + 1 {
                     continue;
                 }
 
