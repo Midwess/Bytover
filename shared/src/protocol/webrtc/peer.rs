@@ -1089,7 +1089,7 @@ impl WebRtcPeer {
                             };
 
                             // Decrease the buffer by a half to preventing more data loss
-                            buff_counter += MAX_BUFFER_SIZE;
+                            buff_counter += MAX_BUFFER_SIZE / 2;
                         }
                     }
                     FecAction::Terminated => {
