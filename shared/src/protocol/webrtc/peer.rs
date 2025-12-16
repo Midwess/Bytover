@@ -55,6 +55,7 @@ use schema::devlog::bitbridge::{
 };
 use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Quad-channel wrapper for load balancing between four unreliable data channels
@@ -898,6 +899,7 @@ impl WebRtcPeer {
         let mut total_frame_build_count = 0u64;
         let mut hold_counter = 0;
 
+        let bandwidth = Arc::new(AtomicU64::new(0));
         while !session.is_completed() {
             let Some((resource_path, order_id, size, name)) = session
                 .get_next_transfer_resource()
@@ -908,16 +910,16 @@ impl WebRtcPeer {
 
             let is_compressed = is_compressible(name.as_str());
             let chunk_size = if is_compressed {
-                (CHUNK_SIZE * DATA_SHARDS_DEFAULT - 1150) as u64
+                (CHUNK_SIZE * DATA_SHARDS_DEFAULT - CHUNK_SIZE) as u64
             } else {
                 (CHUNK_SIZE * DATA_SHARDS_DEFAULT) as u64
             };
 
-            let mut reader = Arc::new(Mutex::new(self
+            let mut reader = self
                 .resource_repo
                 .read(resource_path.clone(), chunk_size as usize, is_compressed)
                 .with_cancel(&resource_cancel_signal)
-                .await??));
+                .await??;
 
             log::info!("Begin transferring resource {resource_path:?} size {size} bytes compressed = {is_compressed}");
 
@@ -930,13 +932,13 @@ impl WebRtcPeer {
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
 
             let reader_cancel_signal = resource_cancel_signal.clone();
-            let reader2 = reader.clone();
+            let band_width2 = bandwidth.clone();
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
                 let mut total_time_us = 0u64;
                 loop {
                     let time = Instant::now();
-                    let mut reader = reader2.lock().await;
+                    reader.compression_stats_mut().update_network_bandwidth(band_width2.load(Ordering::Relaxed) as f64);
                     let read_result = reader.c_next(Some(chunk_size))
                         .with_cancel(&reader_cancel_signal)
                         .await;
@@ -946,9 +948,7 @@ impl WebRtcPeer {
                             total_time_us += time.elapsed().as_micros() as u64;
                             total_read += data.len() as u64;
                             let packet = Packet::from(data);
-                            drop(reader);
 
-                            // Send to channel, blocking if full
                             if read_tx.send((packet, raw_size)).await.is_err() {
                                 log::info!("Reader channel closed, stopping reader task");
                                 break;
@@ -1105,7 +1105,7 @@ impl WebRtcPeer {
                 if buff_counter > MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
                     hold_counter += 1;
-                    if !on_hold && hold_counter > 10 {
+                    if !on_hold && hold_counter > 3 {
                         should_send_hold = true;
                         hold_counter = 0;
                         on_hold = true;
@@ -1116,7 +1116,6 @@ impl WebRtcPeer {
                     let stats_before = quad_ch.bytes_sent().await;
 
                     quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
-
                     self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
 
                     if should_send_hold {
@@ -1133,10 +1132,10 @@ impl WebRtcPeer {
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                     let stats_after = quad_ch.bytes_sent().await;
                     let total_sent = stats_after.saturating_sub(stats_before);
-                    let bw = total_sent as f64 / time;
-                    if (bw > 1f64) {
-                        reader.lock().await.compression_stats_mut().update_network_bandwidth(bw);
-                        log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000.0);
+                    let bw = (total_sent as f64 / time) as u64;
+                    if bw > 1 {
+                        bandwidth.fetch_add(bw, Ordering::Relaxed);
+                        log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000);
                     }
 
                     buff_counter = 0;
@@ -1148,19 +1147,10 @@ impl WebRtcPeer {
 
             read_rx.close();
             drop(read_rx);
-            match reader_handle.await {
-                Ok(Ok((read_bytes, read_time_us))) => {
-                    total_read_bytes += read_bytes;
-                    total_read_time_us += read_time_us;
-                    log::info!("Reader task finished, total read: {} bytes", read_bytes);
-                }
-                Ok(Err(e)) => {
-                    log::warn!("Reader task finished with error: {:?}", e);
-                }
-                Err(e) => {
-                    log::warn!("Reader task join error: {:?}", e);
-                }
-            }
+            let (read_bytes, read_time_us) = reader_handle.await??;
+            total_read_bytes += read_bytes;
+            total_read_time_us += read_time_us;
+            log::info!("Reader task finished, total read: {} bytes", read_bytes);
 
             log::info!(
                 "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?} total_data {:?}, reader {}",
@@ -1175,8 +1165,7 @@ impl WebRtcPeer {
             total_data_sent = 0;
         }
 
-        // Giving max 10s more for thumbnail to complete
-        cancellation_signal.cancel_after(Duration::from_secs(10));
+        cancellation_signal.cancel_after(Duration::from_secs(8));
         let _ = thumbnail_handle.await;
         self.buffer.flush_all_timeout().await?;
 

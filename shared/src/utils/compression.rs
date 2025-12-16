@@ -125,6 +125,10 @@ impl CompressStats {
     }
 
     pub fn update_network_bandwidth(&mut self, network_bandwidth_bps: f64) -> bool {
+        if network_bandwidth_bps == self.network_bandwidth_bps {
+            return self.should_compress;
+        }
+        
         self.network_bandwidth_bps = network_bandwidth_bps;
         self.should_compress = self.cal_should_compress();
         self.should_compress

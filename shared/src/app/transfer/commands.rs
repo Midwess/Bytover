@@ -33,16 +33,14 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn delete_session(&self, transfer_session: TransferSession) -> Result<(), CoreError> {
-        if !transfer_session.is_completed() {
-            log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
+    pub async fn delete_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
+        log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-            let _ = self.run(TransferOperation::cancel_session(
-                transfer_session.peer_id(),
-                transfer_session.order_id
-            ))
+        let _ = self.run(TransferOperation::cancel_session(
+            transfer_session.peer_id(),
+            transfer_session.order_id
+        ))
             .await;
-        };
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
@@ -252,6 +250,7 @@ impl AppCommand {
                 },
                 CoreOperationOutput::Error(error) => {
                     transfer_session.force_complete(format!("Connection error: {error:?}"));
+                    self.delete_session(&transfer_session).await?;
                     log::error!(target: "transfer", "Connection error: {error:?}");
                     break;
                 }

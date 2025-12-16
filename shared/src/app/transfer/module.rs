@@ -150,7 +150,7 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
 
-                    it.app().delete_session(session).await
+                    it.app().delete_session(&session).await
                 })
             }
             TransferEvent::DeleteSession { session_id } => {
@@ -168,7 +168,7 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 }
 
-                Command::handle_result(|it| async move { it.app().delete_session(session).await })
+                Command::handle_result(|it| async move { it.app().delete_session(&session).await })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let id = TransferSessionId {
@@ -182,7 +182,7 @@ impl AppModule<BitBridge> for TransferModule {
                 session.cancel();
 
                 let session = session.clone();
-                Command::handle_result(|it| async move { it.app().delete_session(session).await })
+                Command::handle_result(|it| async move { it.app().delete_session(&session).await })
             }
             TransferEvent::StartPublicTransfer { password, to_emails } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
