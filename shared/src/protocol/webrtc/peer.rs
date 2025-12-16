@@ -982,6 +982,7 @@ impl WebRtcPeer {
             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), delimiter));
 
             let mut buff_counter = 0;
+            let mut hold_counter = 1;
             let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
 
             let mut received_from_readers = 0;
@@ -1103,9 +1104,11 @@ impl WebRtcPeer {
 
                 if buff_counter > MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
+                    hold_counter += 1;
                     if !on_hold {
+                        should_send_hold = hold_counter > 10;
+                        hold_counter = 0;
                         on_hold = true;
-                        should_send_hold = true;
                     }
 
                     let tick = Instant::now();
