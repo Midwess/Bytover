@@ -926,7 +926,7 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
-            let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>(20);
+            let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
 
             let reader_cancel_signal = resource_cancel_signal.clone();
             let reader2 = reader.clone();
