@@ -18,7 +18,7 @@ pub const CHUNK_SIZE: usize = 2 * 1100;
 pub const DATA_SHARDS_DEFAULT: usize = 48;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
-const MAX_BLOCK_TIMEOUT_MS: u64 = 800;
+const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
 const RTT_THRESHOLD_MS: u64 = 250;
 
 const PACKET_THRESHOLD: u32 = 3 * 4;
@@ -848,7 +848,7 @@ impl FecReceiver {
             }
 
             if frame.block_id < self.next_block_id {
-                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}", frame.block_id, self.next_block_id, self.false_retransmit);
+                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count);
                 self.false_retransmit = self.false_retransmit.saturating_add(2);
                 continue;
             }
