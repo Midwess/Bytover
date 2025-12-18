@@ -273,12 +273,6 @@ impl<T> RingBuffer<T> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (u32, &T)> {
-        self.entries.iter().filter_map(|entry| {
-            entry.as_ref().map(|(id, data)| (*id, data))
-        })
-    }
-
     pub fn len(&self) -> usize {
         self.entries.iter().filter(|e| e.is_some()).count()
     }
@@ -523,30 +517,24 @@ impl FecSender {
     }
 }
 
-// ===== QUIC-STYLE LOSS DETECTION =====
-
-/// QUIC-inspired loss detection using packet threshold + time threshold
-/// Simpler and more effective than complex per-frame tracking
 #[derive(Debug, Clone)]
-struct QuicLossDetector {
+struct LossDetector {
     requested_frames: Vec<bool>,
 }
 
-impl QuicLossDetector {
+impl LossDetector {
     fn new(total_shards: usize) -> Self {
         Self {
             requested_frames: vec![false; total_shards],
         }
     }
 
-    /// Mark frame as requested for retransmission
     fn mark_requested(&mut self, frame_idx: u32) {
         if (frame_idx as usize) < self.requested_frames.len() {
             self.requested_frames[frame_idx as usize] = true;
         }
     }
 
-    /// Check if frame already requested
     fn is_requested(&self, frame_idx: u32) -> bool {
         (frame_idx as usize) < self.requested_frames.len()
             && self.requested_frames[frame_idx as usize]
@@ -592,7 +580,7 @@ struct ReceiverBlock {
     is_complete: bool,
     is_placeholder: bool,
 
-    loss_detector: Option<QuicLossDetector>,
+    loss_detector: Option<LossDetector>,
 }
 
 impl ReceiverBlock {
@@ -631,7 +619,7 @@ impl ReceiverBlock {
             last_frame_ts: now,
             last_ping_ts: now,
             is_complete: false,
-            loss_detector: Some(QuicLossDetector::new(total)),
+            loss_detector: Some(LossDetector::new(total)),
         }
     }
 
@@ -651,7 +639,7 @@ impl ReceiverBlock {
             self.last_frame_ts = now;
             self.last_ping_ts = now;
             self.is_complete = false;
-            self.loss_detector = Some(QuicLossDetector::new(total));
+            self.loss_detector = Some(LossDetector::new(total));
         }
     }
 
@@ -819,7 +807,6 @@ impl FecReceiver {
         self.rtt_estimator.update(rtt_ms * 1000);
     }
 
-    /// Calculate next check time with QUIC-style timeout
     fn calculate_next_check_time(&self) -> Instant {
         let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
         let timeout_us = loss_delay_us(
@@ -944,7 +931,6 @@ impl FecReceiver {
         self.ping()
     }
 
-    /// QUIC-style ping: detect losses using packet threshold + time threshold
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
         let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
@@ -971,7 +957,6 @@ impl FecReceiver {
                     continue;  // Can reconstruct
                 }
 
-                // === QUIC LOSS DETECTION ===
                 if let Some(ref mut detector) = &mut block.loss_detector {
                     let lost_frames = detector.detect_lost_frames(
                         &block.shards,
@@ -982,7 +967,6 @@ impl FecReceiver {
 
                     self.retransmit_count += lost_frames.len() as u64;
                     if !lost_frames.is_empty() {
-                        // Mark as requested
                         for &frame_idx in &lost_frames {
                             detector.mark_requested(frame_idx);
                             self.total_lost_frames += 1;
@@ -996,7 +980,7 @@ impl FecReceiver {
                         });
 
                         log::info!(
-                            "QUIC loss detection for block {}: {} frames lost",
+                            "Loss detection for block {}: {} frames lost",
                             block_id,
                             all_missing_blocks.last().unwrap().frames.len()
                         );

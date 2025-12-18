@@ -60,14 +60,8 @@ use std::time::Duration;
 
 /// Quad-channel wrapper for load balancing between four unreliable data channels
 pub struct QuadUnreliableChannel {
-    channel1: mpsc::UnboundedSender<(PeerId, Packet)>,
-    channel2: mpsc::UnboundedSender<(PeerId, Packet)>,
-    channel3: mpsc::UnboundedSender<(PeerId, Packet)>,
-    channel4: mpsc::UnboundedSender<(PeerId, Packet)>,
-    channel1_id: usize,
-    channel2_id: usize,
-    channel3_id: usize,
-    channel4_id: usize,
+    channels: [mpsc::UnboundedSender<(PeerId, Packet)>; 4],
+    channel_ids: [usize; 4],
     buffer: PeerBuffered,
     current_channel: u8,
 }
@@ -85,14 +79,8 @@ impl QuadUnreliableChannel {
         buffer: PeerBuffered,
     ) -> Self {
         Self {
-            channel1,
-            channel2,
-            channel3,
-            channel4,
-            channel1_id,
-            channel2_id,
-            channel3_id,
-            channel4_id,
+            channels: [channel1, channel2, channel3, channel4],
+            channel_ids: [channel1_id, channel2_id, channel3_id, channel4_id],
             buffer,
             current_channel: 0,
         }
@@ -100,79 +88,57 @@ impl QuadUnreliableChannel {
 
     /// Send a packet, load balancing between the four channels
     pub fn send(&mut self, peer_id: PeerId, packet: Packet) -> Result<(), mpsc::TrySendError<(PeerId, Packet)>> {
-        let result = match self.current_channel {
-            0 => self.channel1.unbounded_send((peer_id, packet)),
-            1 => self.channel2.unbounded_send((peer_id, packet)),
-            2 => self.channel3.unbounded_send((peer_id, packet)),
-            _ => self.channel4.unbounded_send((peer_id, packet)),
-        };
-
+        let channel_index = self.current_channel as usize;
+        let result = self.channels[channel_index].unbounded_send((peer_id, packet));
         self.current_channel = (self.current_channel + 1) % 4;
         result
     }
 
     /// Wait for all four channels to have low buffer usage
     pub async fn wait_buffer_low(&self, min_buffer_size: usize, timeout: Duration) {
-        self.buffer.wait_buffer_low(self.channel1_id, min_buffer_size, timeout).await;
-        self.buffer.wait_buffer_low(self.channel2_id, min_buffer_size, timeout).await;
-        self.buffer.wait_buffer_low(self.channel3_id, min_buffer_size, timeout).await;
-        self.buffer.wait_buffer_low(self.channel4_id, min_buffer_size, timeout).await;
+        for &channel_id in &self.channel_ids {
+            self.buffer.wait_buffer_low(channel_id, min_buffer_size, timeout).await;
+        }
     }
 
     /// Get combined bytes sent/received stats from all four channels
     pub async fn bytes_sent_received(&self) -> (usize, usize) {
-        let stats1 = self.buffer
-            .channel_bytes_sent_received(self.channel1_id)
-            .await
-            .unwrap_or((0, 0));
-        let stats2 = self.buffer
-            .channel_bytes_sent_received(self.channel2_id)
-            .await
-            .unwrap_or((0, 0));
-        let stats3 = self.buffer
-            .channel_bytes_sent_received(self.channel3_id)
-            .await
-            .unwrap_or((0, 0));
-        let stats4 = self.buffer
-            .channel_bytes_sent_received(self.channel4_id)
-            .await
-            .unwrap_or((0, 0));
+        let mut total_sent = 0;
+        let mut total_received = 0;
 
-        (stats1.0 + stats2.0 + stats3.0 + stats4.0, stats1.1 + stats2.1 + stats3.1 + stats4.1)
+        for &channel_id in &self.channel_ids {
+            let (sent, received) = self.buffer
+                .channel_bytes_sent_received(channel_id)
+                .await
+                .unwrap_or((0, 0));
+            total_sent += sent;
+            total_received += received;
+        }
+
+        (total_sent, total_received)
     }
 
     /// Get bytes sent from all four channels
     pub async fn bytes_sent(&self) -> usize {
-        let sent1 = self.buffer
-            .channel_bytes_sent_received(self.channel1_id)
-            .await
-            .map(|it| it.0)
-            .unwrap_or(0);
-        let sent2 = self.buffer
-            .channel_bytes_sent_received(self.channel2_id)
-            .await
-            .map(|it| it.0)
-            .unwrap_or(0);
-        let sent3 = self.buffer
-            .channel_bytes_sent_received(self.channel3_id)
-            .await
-            .map(|it| it.0)
-            .unwrap_or(0);
-        let sent4 = self.buffer
-            .channel_bytes_sent_received(self.channel4_id)
-            .await
-            .map(|it| it.0)
-            .unwrap_or(0);
+        let mut total_sent = 0;
 
-        sent1 + sent2 + sent3 + sent4
+        for &channel_id in &self.channel_ids {
+            let sent = self.buffer
+                .channel_bytes_sent_received(channel_id)
+                .await
+                .map(|it| it.0)
+                .unwrap_or(0);
+            total_sent += sent;
+        }
+
+        total_sent
     }
 
     /// Flush all four channels with timeout
     pub async fn flush_timeout(&self) -> Result<(), WebRtcErrors> {
-        self.buffer.flush_timeout(self.channel1_id).await?;
-        self.buffer.flush_timeout(self.channel2_id).await?;
-        self.buffer.flush_timeout(self.channel3_id).await?;
-        self.buffer.flush_timeout(self.channel4_id).await?;
+        for &channel_id in &self.channel_ids {
+            self.buffer.flush_timeout(channel_id).await?;
+        }
         Ok(())
     }
 }
@@ -1105,7 +1071,7 @@ impl WebRtcPeer {
                 if buff_counter > MAX_BUFFER_SIZE {
                     let mut should_send_hold = false;
                     hold_counter += 1;
-                    if !on_hold && hold_counter > 3 {
+                    if !on_hold && hold_counter > 4 {
                         should_send_hold = true;
                         hold_counter = 0;
                         on_hold = true;
