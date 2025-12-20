@@ -808,11 +808,10 @@ impl FecReceiver {
     }
 
     fn calculate_next_check_time(&self) -> Instant {
-        let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
         let timeout_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
-            Some(ratio)
+            None
         );
 
         Instant::now() + Duration::from_micros(timeout_us)
@@ -835,7 +834,7 @@ impl FecReceiver {
 
             if frame.block_id < self.next_block_id {
                 log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count, self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
-                self.false_retransmit = self.false_retransmit.saturating_add(2);
+                self.false_retransmit = self.false_retransmit.saturating_add(1);
                 continue;
             }
 
@@ -849,6 +848,7 @@ impl FecReceiver {
                         frame.parity_shards as usize,
                         frame.total_size as usize,
                     );
+                    
                     pooled
                 } else {
                     ReceiverBlock::new(
@@ -859,7 +859,7 @@ impl FecReceiver {
                 };
 
                 if let Some(replaced) = self.blocks.insert(block_id, new_block) {
-                    log::warn!("Buffer full, evicted block {}", replaced.0);
+                    log::warn!("Buffer full, evicted block {} by {}", replaced.0, block_id);
                     return Ok(FecAction::Terminated);
                 }
             }
@@ -933,7 +933,7 @@ impl FecReceiver {
 
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
-        let ratio = (self.retransmit_count as f64 + self.false_retransmit as f64) / self.retransmit_count as f64;
+        let ratio = (self.retransmit_count as f64 + (self.false_retransmit as f64 * 2f64)) / self.retransmit_count as f64;
         let time_threshold_us = loss_delay_us(
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
