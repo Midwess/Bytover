@@ -4,18 +4,11 @@ use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling_client::SignallingClient;
 use futures_util::lock::Mutex;
-use matchbox_protocol::PeerId;
+use matchbox_protocol::{PeerId, RtcIceServerConfig};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::rpc_signalling::server::{
-    AnswerMessage,
-    IceCandidate,
-    IceCandidateUpdateMessage,
-    JoinMessage,
-    Message,
-    OfferMessage
-};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, Message, OfferMessage};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
@@ -96,7 +89,10 @@ impl SharedContext {
             let _ = signaller
                 .send(Message {
                     from_id: id.to_string(),
-                    join: Some(JoinMessage { id: id.to_string() }),
+                    join: Some(JoinMessage {
+                        id: id.to_string(),
+                        ..Default::default()
+                    }),
                     scopes,
                     ..Default::default()
                 })
@@ -198,8 +194,8 @@ impl TryFrom<SignallingPeerRequest> for Message {
                         let ice_msg = IceCandidate::from(ice);
                         msg.ice_candidate_update = Some(IceCandidateUpdateMessage { ice_candidates: ice_msg });
                     }
-                    PeerSignal::Offer(sdp) => {
-                        msg.offer = Some(OfferMessage { sdp });
+                    PeerSignal::Offer { offer, .. } => {
+                        msg.offer = Some(OfferMessage { sdp: offer, ..Default::default() });
                     }
                     PeerSignal::Answer(sdp) => msg.answer = Some(AnswerMessage { sdp })
                 };
@@ -211,7 +207,7 @@ impl TryFrom<SignallingPeerRequest> for Message {
                 // the room about our present
                 Ok(Message {
                     from_id: my_id.to_string(),
-                    join: Some(JoinMessage { id: my_id.to_string() }),
+                    join: Some(JoinMessage { id: my_id.to_string(), ..Default::default() }),
                     ..Default::default()
                 })
             }
@@ -227,7 +223,7 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
         let sender_id: PeerId = PeerId(value.from_id.parse()?);
         if let Some(join_msg) = value.join {
             let peer_id = PeerId(join_msg.id.parse()?);
-            return Ok(Self::NewPeer(peer_id))
+            return Ok(Self::NewPeer {id: peer_id, ice_config: join_msg.ice_config.map(create_matchbox_ice_config)})
         } else if let Some(ice_msg) = value.ice_candidate_update {
             let ice = ice_msg.ice_candidates.as_string();
             let signal = PeerSignal::IceCandidate(ice);
@@ -237,7 +233,7 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
             })
         } else if let Some(offer_msg) = value.offer {
             let offer = offer_msg.sdp;
-            let signal = PeerSignal::Offer(offer);
+            let signal = PeerSignal::Offer { offer, config: offer_msg.ice_config.map(create_matchbox_ice_config) };
             return Ok(Self::Signal {
                 sender: sender_id,
                 data: signal
@@ -277,7 +273,8 @@ impl WebSignaller {
         let first_msg = Message {
             from_id: self.peer_id.to_string(),
             join: Some(JoinMessage {
-                id: self.peer_id.to_string()
+                id: self.peer_id.to_string(),
+                ..Default::default()
             }),
             scopes: self.shared_context.get_finding_scopes().await.iter().map(|it| it.as_string()).collect::<Vec<_>>(),
             ..Default::default()
@@ -325,14 +322,14 @@ impl Signaller for WebSignaller {
 
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
-            if let PeerEvent::NewPeer(ref peer_id) = peer_event {
-                if peer_id.0 <= self.peer_id.0 {
+            if let PeerEvent::NewPeer { ref id, .. } = peer_event {
+                if id.0 <= self.peer_id.0 {
                     continue;
                 }
 
-                if !self.shared_context.is_peer_connected_or_connecting(peer_id).await {
-                    self.shared_context.add_peer_place_holder(*peer_id).await;
-                    log::info!("New peer found: {peer_id:?}, connecting...");
+                if !self.shared_context.is_peer_connected_or_connecting(id).await {
+                    self.shared_context.add_peer_place_holder(*id).await;
+                    log::info!("New peer found: {id:?}, connecting...");
                     return Ok(peer_event);
                 }
             } else {
@@ -373,3 +370,11 @@ impl SignallerBuilder for WebSignallerBuilder {
 }
 
 unsafe impl Send for WebSignallerBuilder {}
+
+fn create_matchbox_ice_config(config: IceConfig) -> RtcIceServerConfig {
+    RtcIceServerConfig {
+        urls: config.urls,
+        username: config.username,
+        credential: config.credential
+    }
+}

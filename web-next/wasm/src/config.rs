@@ -7,6 +7,8 @@ pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST"
 pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
 pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
 pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
+pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
+pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
 
 pub struct HostInfo {
     pub host: String,
@@ -18,7 +20,7 @@ pub fn get_locator_url() -> String {
     LOCATOR_URL.unwrap_or("https://bytover.com/locator").to_string()
 }
 
-pub fn get_host_info() -> Result<HostInfo, JsValue> {
+pub fn get_host_info(http1: bool) -> Result<HostInfo, JsValue> {
     let window = window().ok_or_else(|| JsValue::from_str("No window found"))?;
     let href = window.location().href().map_err(|_| JsValue::from_str("Failed to get href"))?;
 
@@ -27,10 +29,24 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
         false => "http"
     };
 
+    let port = if http1 {
+        GATEWAY_HTTP1_PORT
+    }
+    else {
+        GATEWAY_PORT
+    };
+
+    let host = if http1 {
+        GATEWAY_HTTP1_HOST
+    }
+    else {
+        GATEWAY_HOST
+    };
+
     let env_url = Url::parse(&format!(
-        "{env_scheme}://{}:{}",
-        GATEWAY_HOST.unwrap_or_default(),
-        GATEWAY_PORT.unwrap_or_default()
+        "{env_scheme}://{}{}",
+        host.unwrap_or_default(),
+        port.map(|it| format!(":{it}")).unwrap_or_default(),
     ))
     .ok();
     let url = env_url.unwrap_or(Url::parse(&href).map_err(|e| JsValue::from_str(&format!("Failed to parse URL: {}", e)))?);
@@ -50,7 +66,7 @@ pub fn get_host_info() -> Result<HostInfo, JsValue> {
 }
 
 pub fn get_gateway_grpc_url() -> String {
-    let host_info = get_host_info().unwrap();
+    let host_info = get_host_info(false).unwrap();
     if host_info.is_with_ssl {
         format!("https://{}:{}", host_info.host, host_info.port)
     } else {
@@ -59,7 +75,7 @@ pub fn get_gateway_grpc_url() -> String {
 }
 
 pub fn get_signalling_server_ws_url() -> String {
-    let host_info = get_host_info().unwrap();
+    let host_info = get_host_info(true).unwrap();
     if host_info.is_with_ssl {
         format!("wss://{}:{}/rpc-signalling", host_info.host, host_info.port)
     } else {
