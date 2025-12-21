@@ -1069,6 +1069,7 @@ impl WebRtcPeer {
                 };
 
                 if buff_counter > MAX_BUFFER_SIZE {
+                    buff_counter = 0;
                     let mut should_send_hold = false;
                     hold_counter += 1;
                     if !on_hold && hold_counter > 3 {
@@ -1103,8 +1104,6 @@ impl WebRtcPeer {
                         bandwidth.fetch_add(bw, Ordering::Relaxed);
                         log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000);
                     }
-
-                    buff_counter = 0;
                 }
             }
 
