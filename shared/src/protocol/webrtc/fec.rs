@@ -859,7 +859,20 @@ impl FecReceiver {
                 };
 
                 if let Some(replaced) = self.blocks.insert(block_id, new_block) {
-                    log::warn!("Buffer full, evicted block {} by {}", replaced.0, block_id);
+                    let (evicted_id, evicted_block) = replaced;
+
+                    if evicted_block.is_constructed() {
+                        log::error!(
+                            "CRITICAL: Evicted COMPLETED block {} (was waiting to be emitted). Current block_id={}, next_block_id={}",
+                            evicted_id, block_id, self.next_block_id
+                        );
+                    } else {
+                        log::warn!(
+                            "Buffer full, evicted IN-PROGRESS block {} by {}. Received={}/{} shards, next_block_id={}",
+                            evicted_id, block_id, evicted_block.received, evicted_block.data_shards, self.next_block_id
+                        );
+                    }
+
                     return Ok(FecAction::Terminated);
                 }
             }
@@ -902,7 +915,17 @@ impl FecReceiver {
                         } else {
                             ReceiverBlock::placeholder()
                         };
-                        self.blocks.insert(self.next_block_id, placeholder);
+
+                        // CHECK FOR EVICTION when inserting placeholder
+                        if let Some(evicted) = self.blocks.insert(self.next_block_id, placeholder) {
+                            let (evicted_id, evicted_block) = evicted;
+                            log::error!(
+                                "CRITICAL: Placeholder insertion evicted block {} (next_block_id={}, evicted_block_id={}, was_complete={}, received={}/{})",
+                                evicted_id, self.next_block_id, evicted_id, evicted_block.is_constructed(), evicted_block.received, evicted_block.data_shards
+                            );
+                            // Don't return Terminated here - we're inserting a placeholder for the NEXT expected block
+                            // But this indicates the window is too small or blocks are too out of order
+                        }
                         break;
                     }
 
