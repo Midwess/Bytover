@@ -848,7 +848,7 @@ impl FecReceiver {
                         frame.parity_shards as usize,
                         frame.total_size as usize,
                     );
-                    
+
                     pooled
                 } else {
                     ReceiverBlock::new(
