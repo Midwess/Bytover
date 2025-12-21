@@ -1082,6 +1082,9 @@ impl WebRtcPeer {
                     let quad_ch = self.quad_unreliable_channel.lock().await;
                     let stats_before = quad_ch.bytes_sent().await;
 
+                    quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
+
                     if should_send_hold {
                         let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
                         let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
@@ -1092,9 +1095,6 @@ impl WebRtcPeer {
                             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
                         }
                     };
-
-                    quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
-                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
 
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                     let stats_after = quad_ch.bytes_sent().await;
