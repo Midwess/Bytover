@@ -28,10 +28,9 @@ impl FindingScope {
     }
 
     pub fn as_string(&self) -> String {
-        let gmt_offset = Self::get_gmt_offset();
         match self {
             FindingScope::Global(content) => format!("public:{content}"),
-            FindingScope::Local(content) => format!("local:{content}-gmt{gmt_offset}")
+            FindingScope::Local(content) => format!("local:{content}")
         }
     }
 
