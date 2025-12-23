@@ -14,7 +14,7 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use std::mem::size_of;
 
 // Too big chunk size will cause higher chance of packet loss
-pub const CHUNK_SIZE: usize = 2 * 1155;
+pub const CHUNK_SIZE: usize = 2 * 1140;
 pub const DATA_SHARDS_DEFAULT: usize = 48;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
