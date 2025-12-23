@@ -19,6 +19,7 @@ use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::SeqCst;
 use std::time::Duration;
 use anyhow::anyhow;
 use futures::executor::block_on;
@@ -59,6 +60,11 @@ impl WebRtc {
     }
 
     pub async fn stop(&self) {
+        let is_running = self.is_running.load(SeqCst);
+        if !is_running {
+            return;
+        }
+
         self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.remove_all().await;
         sleep(Duration::from_millis(500)).await;
