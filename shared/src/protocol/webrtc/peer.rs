@@ -921,40 +921,35 @@ impl WebRtcPeer {
                         sleep_ms_opt = sleep_fut => {
                             if let Some(sleep_ms) = sleep_ms_opt {
                                 if sleep_ms == 0 {
-                                    // No sleep - continue reading immediately
                                     log::info!("Sleep cancelled or disabled (received 0)");
                                 } else {
                                     log::info!("Reader rate limiting: sleeping for {}ms", sleep_ms);
 
-                                    // Sleep with cancellation support
                                     let mut remaining_ms = sleep_ms;
-                                    loop {
-                                        let sleep_duration = Duration::from_millis(remaining_ms);
-                                        let sleep_fut2 = sleep(sleep_duration).fuse();
-                                        let cancel_fut = sleep_control_rx.next().fuse();
+                                    let sleep_duration = Duration::from_millis(remaining_ms);
+                                    let sleep_fut2 = sleep(sleep_duration).fuse();
+                                    let cancel_fut = sleep_control_rx.next().fuse();
 
-                                        futures::pin_mut!(sleep_fut2);
-                                        futures::pin_mut!(cancel_fut);
+                                    futures::pin_mut!(sleep_fut2);
+                                    futures::pin_mut!(cancel_fut);
 
-                                        select_biased! {
-                                            new_ms_opt = cancel_fut => {
-                                                match new_ms_opt {
-                                                    Some(0) => {
-                                                        log::info!("Sleep cancelled (received 0)");
-                                                        break;
-                                                    }
-                                                    Some(ms) if ms > 0 => {
-                                                        log::info!("Sleep updated to {}ms", ms);
-                                                        remaining_ms = ms;
-                                                        continue;
-                                                    }
-                                                    _ => break,
+                                    select_biased! {
+                                        new_ms_opt = cancel_fut => {
+                                            match new_ms_opt {
+                                                Some(0) => {
+                                                    log::info!("Sleep cancelled (received 0)");
+                                                    break;
                                                 }
+                                                Some(ms) if ms > 0 => {
+                                                    log::info!("Sleep updated to {}ms", ms);
+                                                    remaining_ms = ms;
+                                                }
+                                                _ => continue,
                                             }
-                                            _ = sleep_fut2 => {
-                                                log::info!("Sleep completed: {}ms", sleep_ms);
-                                                break;
-                                            }
+                                        }
+                                        _ = sleep_fut2 => {
+                                            log::info!("Sleep completed: {}ms", sleep_ms);
+                                            break;
                                         }
                                     }
                                 }
@@ -962,6 +957,7 @@ impl WebRtcPeer {
                             // Continue to next iteration after handling sleep message
                             continue;
                         }
+
                         read_result = read_fut => {
                             match read_result {
                                 Ok(Ok(Some((data, raw_size)))) => {
