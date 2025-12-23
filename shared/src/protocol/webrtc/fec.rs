@@ -619,7 +619,7 @@ impl LossDetector {
             return time_lost
         }
 
-        if since < now.saturating_sub(time_threshold_us / 3) {
+        if since < now.saturating_sub(time_threshold_us / 5) {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
@@ -874,7 +874,7 @@ impl FecReceiver {
             self.rtt_estimator.srtt_us,
             self.rtt_estimator.rttvar_us,
             None
-        );
+        ).min(100_000);
 
         Instant::now() + Duration::from_micros(timeout_us)
     }
