@@ -55,7 +55,7 @@ use schema::devlog::bitbridge::{
 };
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Quad-channel wrapper for load balancing between four unreliable data channels
@@ -863,7 +863,6 @@ impl WebRtcPeer {
         let mut total_read_time_us = 0u64;
         let mut total_frame_build_time_us = 0u64;
         let mut total_frame_build_count = 0u64;
-        let mut hold_counter = 0;
 
         let bandwidth = Arc::new(AtomicU64::new(0));
         while !session.is_completed() {
@@ -895,10 +894,14 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
+            let on_hold_stop_threshold = 6;
+            let on_hold_slow_threshold: u32 = 3;
+            let hold_counter = Arc::new(AtomicU32::new(0));
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
 
             let reader_cancel_signal = resource_cancel_signal.clone();
             let band_width2 = bandwidth.clone();
+            let reader_hold_counter = hold_counter.clone();
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
                 let mut total_time_us = 0u64;
@@ -914,6 +917,12 @@ impl WebRtcPeer {
                             total_time_us += time.elapsed().as_micros() as u64;
                             total_read += data.len() as u64;
                             let packet = Packet::from(data);
+
+                            if reader_hold_counter.load(Ordering::Relaxed) >= on_hold_slow_threshold {
+                                let current_hold_counter = reader_hold_counter.load(Ordering::Relaxed);
+                                log::info!("Reader rate limiting: hold_counter={}, sleeping 100ms", current_hold_counter);
+                                sleep(Duration::from_millis(100)).await;
+                            }
 
                             if read_tx.send((packet, raw_size)).await.is_err() {
                                 log::info!("Reader channel closed, stopping reader task");
@@ -941,9 +950,7 @@ impl WebRtcPeer {
             });
 
             let mut is_end = false;
-            let on_hold_threshold = 3;
 
-            // Send start delimiter directly without FEC encoding
             let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
             let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), delimiter));
@@ -954,15 +961,15 @@ impl WebRtcPeer {
             let mut received_from_readers = 0;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    if hold_counter >= on_hold_threshold || is_end {
-                        let timeout_fut = sleep(Duration::from_secs(20)).fuse();
+                    if is_end || hold_counter.load(Ordering::Relaxed) >= on_hold_stop_threshold {
+                        let timeout_fut = sleep(Duration::from_secs(60)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
                         futures::pin_mut!(timeout_fut);
                         futures::pin_mut!(fb_fut);
                         select_biased! {
                             _ = timeout_fut => {
-                                return Err(anyhow!("Timeout waiting for feedback (hold_counter={}, threshold={})", hold_counter, on_hold_threshold).into());
+                                return Err(anyhow!("Timeout waiting for end acknowledgment").into());
                             },
                             fb = fb_fut => {
                                 let fb = fb?;
@@ -978,7 +985,6 @@ impl WebRtcPeer {
                         futures::pin_mut!(reader_fut);
                         select_biased! {
                             r = reader_fut => {
-                                // Received from reader task channel
                                 r.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
                             },
                             fb = fb_fut => {
@@ -1006,18 +1012,18 @@ impl WebRtcPeer {
                     }
                     (_, _, Some(fb)) => {
                         if let Feedback::Network(ref net) = fb {
+                            let current_hold = hold_counter.load(Ordering::Relaxed);
                             log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
-                                net.loss_rate, net.rtt, net.current_block_id, hold_counter);
+                                net.loss_rate, net.rtt, net.current_block_id, current_hold);
 
                             if is_end {
                                 log::info!("End delimiter acknowledged, finishing resource transfer");
                                 break;
                             }
 
-                            // Decrease hold_counter but not below 0
-                            if hold_counter > 0 {
-                                hold_counter -= 1;
-                                log::info!("Decreased hold_counter to {}", hold_counter);
+                            if current_hold > 0 {
+                                hold_counter.fetch_sub(1, Ordering::Relaxed);
+                                log::info!("Decreased hold_counter to {}", hold_counter.load(Ordering::Relaxed));
                             }
                         }
                         fec_sender.feedback(fb)
@@ -1090,8 +1096,8 @@ impl WebRtcPeer {
                     }
 
                     // Increment hold_counter each time we send hold delimiter
-                    hold_counter += 1;
-                    log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);
+                    let new_hold_counter = hold_counter.fetch_add(1, Ordering::Relaxed) + 1;
+                    log::info!("Sent hold delimiter, hold_counter increased to {}", new_hold_counter);
 
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                     let stats_after = quad_ch.bytes_sent().await;
