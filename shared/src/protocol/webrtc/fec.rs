@@ -23,6 +23,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
 const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
+const QUICK_LOSS_THRESHOLD: usize = 3;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -541,28 +542,88 @@ impl LossDetector {
             && self.requested_frames[frame_idx as usize]
     }
 
+    fn detect_quick_loss(&self, received_frames: &[Option<Vec<u8>>], threshold: usize) -> Vec<u8> {
+        let mut lost = Vec::new();
+        let mut i = 0;
+
+        while i < received_frames.len() {
+            // Skip received frames
+            while i < received_frames.len() && received_frames[i].is_some() {
+                i += 1;
+            }
+
+            if i >= received_frames.len() {
+                break;
+            }
+
+            // Found a gap, count its size
+            let gap_start = i;
+            while i < received_frames.len() && received_frames[i].is_none() && !self.is_requested(i as u8) {
+                i += 1;
+            }
+
+            // Skip already requested frames in the gap
+            while i < received_frames.len() && (received_frames[i].is_none() && self.is_requested(i as u8)) {
+                i += 1;
+            }
+
+            if gap_start == i {
+                continue; // No gap, all were already requested
+            }
+
+            let gap_end = i - 1;
+            let gap_size = gap_end - gap_start + 1;
+
+            // Count continuous frames after the gap
+            let continuous_start = i;
+            while i < received_frames.len() && received_frames[i].is_some() {
+                i += 1;
+            }
+            let continuous_count = i - continuous_start;
+
+            // Check if we have enough continuous frames to mark the gap as lost
+            if continuous_count >= threshold + gap_size {
+                for idx in gap_start..=gap_end {
+                    if !self.is_requested(idx as u8) {
+                        lost.push(idx as u8);
+                    }
+                }
+            }
+        }
+
+        lost
+    }
+
     fn detect_lost_frames(
         &self,
         received_frames: &[Option<Vec<u8>>],
         since: u64,
         now: u64,
         time_threshold_us: u64,
+        quick_loss_threshold: usize,
     ) -> Vec<u8> {
-        if since <= now.saturating_sub(time_threshold_us) {
-           return received_frames.iter().enumerate().filter_map(|it| {
-                if self.is_requested(it.0 as u8) {
-                   return None
+        if since < now.saturating_sub(time_threshold_us) {
+            let time_lost: Vec<u8> = received_frames.iter().enumerate().filter_map(|(idx, frame)| {
+                if self.is_requested(idx as u8) {
+                    return None;
                 }
 
-                if it.1.is_none() {
-                    return Some(it.0 as u8);
+                if frame.is_none() {
+                    return Some(idx as u8);
                 }
 
-                return None
-            }).collect()
+                None
+            }).collect();
+
+
+            return time_lost
         }
 
-        vec![]
+        if since < now.saturating_sub(time_threshold_us / 3) {
+            return self.detect_quick_loss(received_frames, quick_loss_threshold);
+        }
+
+        Vec::new()
     }
 }
 
@@ -987,6 +1048,7 @@ impl FecReceiver {
                         block.last_ping_ts,
                         now,
                         time_threshold_us,
+                        (ratio * QUICK_LOSS_THRESHOLD as f64) as usize,
                     );
 
                     self.retransmit_count += lost_frames.len() as u64;
