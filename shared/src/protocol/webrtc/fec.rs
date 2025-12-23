@@ -14,7 +14,7 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use std::mem::size_of;
 
 // Too big chunk size will cause higher chance of packet loss
-pub const CHUNK_SIZE: usize = 2 * 1100;
+pub const CHUNK_SIZE: usize = 2 * 1155;
 pub const DATA_SHARDS_DEFAULT: usize = 48;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
@@ -31,7 +31,7 @@ pub enum FecError {
     #[error("invalid frame size: expected {expected}, got {actual}")]
     InvalidFrameSize { expected: usize, actual: usize },
     #[error("invalid frame index {idx} for block with {total_shards} shards")]
-    InvalidFrameIndex { idx: u32, total_shards: usize },
+    InvalidFrameIndex { idx: u8, total_shards: usize },
     #[error("block id mismatch or wraparound detected")]
     BlockIdMismatch,
     #[error("generic error")]
@@ -48,7 +48,7 @@ impl From<reed_solomon_erasure::Error> for FecError {
 pub struct FrameEntry {
     pub block_id: u32,
     pub total_size: u32,
-    pub frame_idx: u32,
+    pub frame_idx: u8,
     pub data_shards: u8,
     pub parity_shards: u8,
     pub is_parity: bool,
@@ -59,7 +59,7 @@ pub struct FrameEntry {
 #[derive(Clone)]
 pub struct Frame {
     pub block_id: u32,
-    pub frame_idx: u32,
+    pub frame_idx: u8,
     pub data_shards: u8,
     pub parity_shards: u8,
     pub total_size: u32,
@@ -92,7 +92,7 @@ impl Frame {
     /// Create a new Frame with just payload (for sender)
     pub fn new(
         block_id: u32,
-        frame_idx: u32,
+        frame_idx: u8,
         data_shards: u8,
         parity_shards: u8,
         total_size: u32,
@@ -113,12 +113,12 @@ impl Frame {
 
     pub fn serialize(&self) -> Box<[u8]> {
         let payload = self.data();
-        let header_len = size_of::<u32>() * 3 + 3;
+        let header_len = size_of::<u32>() * 2 + 4;
         let mut buf = Vec::with_capacity(header_len + payload.len());
 
         buf.extend_from_slice(bytes_of(&self.block_id));
         buf.extend_from_slice(bytes_of(&self.total_size));
-        buf.extend_from_slice(bytes_of(&self.frame_idx));
+        buf.push(self.frame_idx);
         buf.push(self.data_shards);
         buf.push(self.parity_shards);
         buf.push(self.is_parity as u8);
@@ -140,9 +140,9 @@ impl Frame {
 
         let block_id: u32 = read!(u32);
         let total_size: u32 = read!(u32);
-        let frame_idx: u32 = read!(u32);
 
-        if offset + 3 > buf.len() { return None; }
+        if offset + 4 > buf.len() { return None; }
+        let frame_idx = buf[offset]; offset += 1;
         let data_shards = buf[offset]; offset += 1;
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
@@ -166,12 +166,12 @@ impl Frame {
 
 impl FrameEntry {
     pub fn serialize(&self) -> Box<[u8]> {
-        let header_len = size_of::<u32>() * 3 + size_of::<u64>() + 3;
+        let header_len = size_of::<u32>() * 2 + size_of::<u64>() + 4;
         let mut buf = Vec::with_capacity(header_len + self.data.len());
 
         buf.extend_from_slice(bytes_of(&self.block_id));
         buf.extend_from_slice(bytes_of(&self.total_size));
-        buf.extend_from_slice(bytes_of(&self.frame_idx));
+        buf.push(self.frame_idx);
         buf.push(self.data_shards);
         buf.push(self.parity_shards);
         buf.push(self.is_parity as u8);
@@ -194,9 +194,9 @@ impl FrameEntry {
 
         let block_id: u32 = read!(u32);
         let total_size: u32 = read!(u32);
-        let frame_idx: u32 = read!(u32);
 
-        if offset + 3 > buf.len() { return None; }
+        if offset + 4 > buf.len() { return None; }
+        let frame_idx = buf[offset]; offset += 1;
         let data_shards = buf[offset]; offset += 1;
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
@@ -406,7 +406,7 @@ impl FecSender {
 
                 let frame = Frame::new(
                     self.block_id,
-                    i as u32,
+                    i as u8,
                     shard_count as u8,
                     parity_shards as u8,
                     block_size as u32,
@@ -468,7 +468,8 @@ impl FecSender {
                         let frames: Vec<Frame> = missing_block.frames
                             .iter()
                             .filter_map(|&frame_idx| {
-                                frames_vec.iter().find(|e| e.frame_idx == frame_idx).map(|e| {
+                                let frame_idx_u8 = frame_idx as u8;
+                                frames_vec.iter().find(|e| e.frame_idx == frame_idx_u8).map(|e| {
                                     // Convert Arc<box<[u8]>> to Arc<[u8]>
                                     let payload: Arc<[u8]> = Arc::from(e.data.as_ref().as_ref());
                                     Frame::new(
@@ -529,13 +530,13 @@ impl LossDetector {
         }
     }
 
-    fn mark_requested(&mut self, frame_idx: u32) {
+    fn mark_requested(&mut self, frame_idx: u8) {
         if (frame_idx as usize) < self.requested_frames.len() {
             self.requested_frames[frame_idx as usize] = true;
         }
     }
 
-    fn is_requested(&self, frame_idx: u32) -> bool {
+    fn is_requested(&self, frame_idx: u8) -> bool {
         (frame_idx as usize) < self.requested_frames.len()
             && self.requested_frames[frame_idx as usize]
     }
@@ -546,15 +547,15 @@ impl LossDetector {
         since: u64,
         now: u64,
         time_threshold_us: u64,
-    ) -> Vec<u32> {
+    ) -> Vec<u8> {
         if since <= now.saturating_sub(time_threshold_us) {
            return received_frames.iter().enumerate().filter_map(|it| {
-                if self.is_requested(it.0 as u32) {
+                if self.is_requested(it.0 as u8) {
                    return None
                 }
 
                 if it.1.is_none() {
-                    return Some(it.0 as u32);
+                    return Some(it.0 as u8);
                 }
 
                 return None
@@ -651,7 +652,7 @@ impl ReceiverBlock {
     ) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
-                idx: idx as u32,
+                idx: idx as u8,
                 total_shards: self.total_shards,
             });
         }
@@ -999,7 +1000,7 @@ impl FecReceiver {
 
                         all_missing_blocks.push(MissingFrames {
                             block_id: *block_id,
-                            frames: lost_frames,
+                            frames: lost_frames.iter().map(|&f| f as u32).collect(),
                         });
 
                         log::info!(
