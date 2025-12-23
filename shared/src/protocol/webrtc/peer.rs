@@ -940,8 +940,8 @@ impl WebRtcPeer {
                 Result::<(u64, u64), WebRtcErrors>::Ok((total_read, total_time_us))
             });
 
-            let mut on_hold = true;
             let mut is_end = false;
+            let on_hold_threshold = 3;
 
             // Send start delimiter directly without FEC encoding
             let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
@@ -954,7 +954,7 @@ impl WebRtcPeer {
             let mut received_from_readers = 0;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    if on_hold || is_end {
+                    if hold_counter >= on_hold_threshold || is_end {
                         let timeout_fut = sleep(Duration::from_secs(20)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
@@ -962,7 +962,7 @@ impl WebRtcPeer {
                         futures::pin_mut!(fb_fut);
                         select_biased! {
                             _ = timeout_fut => {
-                                return Err(anyhow!("Timeout waiting for feedback while on hold, resuming transfer").into());
+                                return Err(anyhow!("Timeout waiting for feedback (hold_counter={}, threshold={})", hold_counter, on_hold_threshold).into());
                             },
                             fb = fb_fut => {
                                 let fb = fb?;
@@ -1006,16 +1006,18 @@ impl WebRtcPeer {
                     }
                     (_, _, Some(fb)) => {
                         if let Feedback::Network(ref net) = fb {
-                            if on_hold {
-                                log::info!("Received network feedback while on hold: loss_rate={}, rtt={:?}, block_id={:?}",
-                                    net.loss_rate, net.rtt, net.current_block_id);
+                            log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
+                                net.loss_rate, net.rtt, net.current_block_id, hold_counter);
 
-                                if is_end {
-                                    log::info!("End delimiter acknowledged, finishing resource transfer");
-                                    break;
-                                }
+                            if is_end {
+                                log::info!("End delimiter acknowledged, finishing resource transfer");
+                                break;
+                            }
 
-                                on_hold = false;
+                            // Decrease hold_counter but not below 0
+                            if hold_counter > 0 {
+                                hold_counter -= 1;
+                                log::info!("Decreased hold_counter to {}", hold_counter);
                             }
                         }
                         fec_sender.feedback(fb)
@@ -1028,7 +1030,6 @@ impl WebRtcPeer {
                         let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
                         log::info!("No data left for resource {resource_path:?}, sending end delimiter");
 
-                        on_hold = true;
                         is_end = true;
                         fec_sender.send(end_delimiter)?
                     }
@@ -1056,7 +1057,7 @@ impl WebRtcPeer {
                             };
 
                             // Decrease the buffer by a half to preventing more data loss
-                            buff_counter += MAX_BUFFER_SIZE / 2;
+                            buff_counter = buff_counter.max(MAX_BUFFER_SIZE / 2);
                         }
                     }
                     FecAction::Terminated => {
@@ -1070,13 +1071,6 @@ impl WebRtcPeer {
 
                 if buff_counter > MAX_BUFFER_SIZE {
                     buff_counter = 0;
-                    let mut should_send_hold = false;
-                    hold_counter += 1;
-                    if !on_hold && hold_counter > 3 {
-                        should_send_hold = true;
-                        hold_counter = 0;
-                        on_hold = true;
-                    }
 
                     let tick = Instant::now();
                     let quad_ch = self.quad_unreliable_channel.lock().await;
@@ -1085,16 +1079,19 @@ impl WebRtcPeer {
                     quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
                     self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
 
-                    if should_send_hold {
-                        let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
-                        let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
-                            return Err(anyhow!("Failed to build hold delimiter").into());
-                        };
-
-                        for frame in frames {
-                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
-                        }
+                    // Always send hold delimiter when buffer is full
+                    let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
+                    let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
+                        return Err(anyhow!("Failed to build hold delimiter").into());
                     };
+
+                    for frame in frames {
+                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                    }
+
+                    // Increment hold_counter each time we send hold delimiter
+                    hold_counter += 1;
+                    log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);
 
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                     let stats_after = quad_ch.bytes_sent().await;
