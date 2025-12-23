@@ -905,85 +905,67 @@ impl WebRtcPeer {
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
                 let mut total_time_us = 0u64;
+                let mut sleep_duration_ms = 0u64; // Current sleep duration
+
                 loop {
                     let time = Instant::now();
                     reader.compression_stats_mut().update_network_bandwidth(band_width2.load(Ordering::Relaxed) as f64);
 
-                    let read_fut = reader.c_next(Some(chunk_size))
+                    // Perform the read operation
+                    let read_result = reader.c_next(Some(chunk_size))
                         .with_cancel(&reader_cancel_signal)
-                        .fuse();
-                    let sleep_fut = sleep_control_rx.next().fuse();
+                        .await;
 
-                    futures::pin_mut!(read_fut);
-                    futures::pin_mut!(sleep_fut);
+                    match read_result {
+                        Ok(Ok(Some((data, raw_size)))) => {
+                            total_time_us += time.elapsed().as_micros() as u64;
+                            total_read += data.len() as u64;
+                            let packet = Packet::from(data);
 
-                    select_biased! {
-                        sleep_ms_opt = sleep_fut => {
-                            if let Some(sleep_ms) = sleep_ms_opt {
-                                if sleep_ms == 0 {
-                                    log::info!("Sleep cancelled or disabled (received 0)");
-                                } else {
-                                    log::info!("Reader rate limiting: sleeping for {}ms", sleep_ms);
+                            if read_tx.send((packet, raw_size)).await.is_err() {
+                                log::info!("Reader channel closed, stopping reader task");
+                                break;
+                            }
+                        }
+                        Ok(Ok(None)) => {
+                            // End of file
+                            log::info!("Reader task completed, total read: {} bytes", total_read);
+                            break;
+                        }
+                        Ok(Err(e)) => {
+                            log::error!("Reader error: {:?}", e);
+                            break;
+                        }
+                        Err(_) => {
+                            // Cancelled
+                            log::info!("Reader task cancelled");
+                            break;
+                        }
+                    }
 
-                                    let mut remaining_ms = sleep_ms;
-                                    let sleep_duration = Duration::from_millis(remaining_ms);
-                                    let sleep_fut2 = sleep(sleep_duration).fuse();
-                                    let cancel_fut = sleep_control_rx.next().fuse();
+                    // Check for sleep control updates
+                    while let Ok(Some(new_sleep_ms)) = sleep_control_rx.try_next() {
+                        sleep_duration_ms = new_sleep_ms;
+                        log::info!("Sleep duration updated to {}ms", sleep_duration_ms);
+                    }
 
-                                    futures::pin_mut!(sleep_fut2);
-                                    futures::pin_mut!(cancel_fut);
+                    // Sleep after read if duration > 0
+                    if sleep_duration_ms > 0 {
+                        let sleep_fut = sleep(Duration::from_millis(sleep_duration_ms)).fuse();
+                        let update_fut = sleep_control_rx.next().fuse();
 
-                                    select_biased! {
-                                        new_ms_opt = cancel_fut => {
-                                            match new_ms_opt {
-                                                Some(0) => {
-                                                    log::info!("Sleep cancelled (received 0)");
-                                                    break;
-                                                }
-                                                Some(ms) if ms > 0 => {
-                                                    log::info!("Sleep updated to {}ms", ms);
-                                                    remaining_ms = ms;
-                                                }
-                                                _ => continue,
-                                            }
-                                        }
-                                        _ = sleep_fut2 => {
-                                            log::info!("Sleep completed: {}ms", sleep_ms);
-                                            break;
-                                        }
-                                    }
+                        futures::pin_mut!(sleep_fut);
+                        futures::pin_mut!(update_fut);
+
+                        select_biased! {
+                            new_ms_opt = update_fut => {
+                                if let Some(new_ms) = new_ms_opt {
+                                    sleep_duration_ms = new_ms;
+                                    log::info!("Sleep interrupted, duration updated to {}ms", sleep_duration_ms);
                                 }
                             }
-                            // Continue to next iteration after handling sleep message
-                            continue;
-                        }
-
-                        read_result = read_fut => {
-                            match read_result {
-                                Ok(Ok(Some((data, raw_size)))) => {
-                                    total_time_us += time.elapsed().as_micros() as u64;
-                                    total_read += data.len() as u64;
-                                    let packet = Packet::from(data);
-
-                                    if read_tx.send((packet, raw_size)).await.is_err() {
-                                        log::info!("Reader channel closed, stopping reader task");
-                                        break;
-                                    }
-                                }
-                                Ok(Ok(None)) => {
-                                    // End of file
-                                    log::info!("Reader task completed, total read: {} bytes", total_read);
-                                    break;
-                                }
-                                Ok(Err(e)) => {
-                                    log::error!("Reader error: {:?}", e);
-                                    break;
-                                }
-                                Err(_) => {
-                                    // Cancelled
-                                    log::info!("Reader task cancelled");
-                                    break;
-                                }
+                            _ = sleep_fut => {
+                                // Sleep completed normally
                             }
                         }
                     }
