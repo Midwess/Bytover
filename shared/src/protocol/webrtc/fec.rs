@@ -14,8 +14,8 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use std::mem::size_of;
 
 // Too big chunk size will cause higher chance of packet loss
-pub const CHUNK_SIZE: usize = 2 * 1140;
-pub const DATA_SHARDS_DEFAULT: usize = 48;
+pub const CHUNK_SIZE: usize = 1 * 1095;
+pub const DATA_SHARDS_DEFAULT: usize = 100;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
@@ -619,7 +619,7 @@ impl LossDetector {
             return time_lost
         }
 
-        if since < now.saturating_sub(time_threshold_us / 5) {
+        if since < now.saturating_sub(time_threshold_us / 4) {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
