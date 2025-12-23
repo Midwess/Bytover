@@ -896,52 +896,99 @@ impl WebRtcPeer {
 
             let on_hold_stop_threshold = 6;
             let on_hold_slow_threshold: u32 = 3;
-            let hold_counter = Arc::new(AtomicU32::new(0));
+            let mut hold_counter = 0u32;
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
+            let (mut sleep_control_tx, mut sleep_control_rx) = mpsc::channel::<u64>(10);
 
             let reader_cancel_signal = resource_cancel_signal.clone();
             let band_width2 = bandwidth.clone();
-            let reader_hold_counter = hold_counter.clone();
             let reader_handle = spawn(async move {
                 let mut total_read = 0u64;
                 let mut total_time_us = 0u64;
                 loop {
                     let time = Instant::now();
                     reader.compression_stats_mut().update_network_bandwidth(band_width2.load(Ordering::Relaxed) as f64);
-                    let read_result = reader.c_next(Some(chunk_size))
+
+                    let read_fut = reader.c_next(Some(chunk_size))
                         .with_cancel(&reader_cancel_signal)
-                        .await;
+                        .fuse();
+                    let sleep_fut = sleep_control_rx.next().fuse();
 
-                    match read_result {
-                        Ok(Ok(Some((data, raw_size)))) => {
-                            total_time_us += time.elapsed().as_micros() as u64;
-                            total_read += data.len() as u64;
-                            let packet = Packet::from(data);
+                    futures::pin_mut!(read_fut);
+                    futures::pin_mut!(sleep_fut);
 
-                            if reader_hold_counter.load(Ordering::Relaxed) >= on_hold_slow_threshold {
-                                let current_hold_counter = reader_hold_counter.load(Ordering::Relaxed);
-                                log::info!("Reader rate limiting: hold_counter={}, sleeping 100ms", current_hold_counter);
-                                sleep(Duration::from_millis(100)).await;
+                    select_biased! {
+                        sleep_ms_opt = sleep_fut => {
+                            if let Some(sleep_ms) = sleep_ms_opt {
+                                if sleep_ms == 0 {
+                                    // No sleep - continue reading immediately
+                                    log::info!("Sleep cancelled or disabled (received 0)");
+                                } else {
+                                    log::info!("Reader rate limiting: sleeping for {}ms", sleep_ms);
+
+                                    // Sleep with cancellation support
+                                    let mut remaining_ms = sleep_ms;
+                                    loop {
+                                        let sleep_duration = Duration::from_millis(remaining_ms);
+                                        let sleep_fut2 = sleep(sleep_duration).fuse();
+                                        let cancel_fut = sleep_control_rx.next().fuse();
+
+                                        futures::pin_mut!(sleep_fut2);
+                                        futures::pin_mut!(cancel_fut);
+
+                                        select_biased! {
+                                            new_ms_opt = cancel_fut => {
+                                                match new_ms_opt {
+                                                    Some(0) => {
+                                                        log::info!("Sleep cancelled (received 0)");
+                                                        break;
+                                                    }
+                                                    Some(ms) if ms > 0 => {
+                                                        log::info!("Sleep updated to {}ms", ms);
+                                                        remaining_ms = ms;
+                                                        continue;
+                                                    }
+                                                    _ => break,
+                                                }
+                                            }
+                                            _ = sleep_fut2 => {
+                                                log::info!("Sleep completed: {}ms", sleep_ms);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                            // Continue to next iteration after handling sleep message
+                            continue;
+                        }
+                        read_result = read_fut => {
+                            match read_result {
+                                Ok(Ok(Some((data, raw_size)))) => {
+                                    total_time_us += time.elapsed().as_micros() as u64;
+                                    total_read += data.len() as u64;
+                                    let packet = Packet::from(data);
 
-                            if read_tx.send((packet, raw_size)).await.is_err() {
-                                log::info!("Reader channel closed, stopping reader task");
-                                break;
+                                    if read_tx.send((packet, raw_size)).await.is_err() {
+                                        log::info!("Reader channel closed, stopping reader task");
+                                        break;
+                                    }
+                                }
+                                Ok(Ok(None)) => {
+                                    // End of file
+                                    log::info!("Reader task completed, total read: {} bytes", total_read);
+                                    break;
+                                }
+                                Ok(Err(e)) => {
+                                    log::error!("Reader error: {:?}", e);
+                                    break;
+                                }
+                                Err(_) => {
+                                    // Cancelled
+                                    log::info!("Reader task cancelled");
+                                    break;
+                                }
                             }
-                        }
-                        Ok(Ok(None)) => {
-                            // End of file
-                            log::info!("Reader task completed, total read: {} bytes", total_read);
-                            break;
-                        }
-                        Ok(Err(e)) => {
-                            log::error!("Reader error: {:?}", e);
-                            break;
-                        }
-                        Err(_) => {
-                            // Cancelled
-                            log::info!("Reader task cancelled");
-                            break;
                         }
                     }
                 }
@@ -961,7 +1008,7 @@ impl WebRtcPeer {
             let mut received_from_readers = 0;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    if is_end || hold_counter.load(Ordering::Relaxed) >= on_hold_stop_threshold {
+                    if is_end || hold_counter >= on_hold_stop_threshold {
                         let timeout_fut = sleep(Duration::from_secs(60)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
@@ -1012,18 +1059,21 @@ impl WebRtcPeer {
                     }
                     (_, _, Some(fb)) => {
                         if let Feedback::Network(ref net) = fb {
-                            let current_hold = hold_counter.load(Ordering::Relaxed);
                             log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
-                                net.loss_rate, net.rtt, net.current_block_id, current_hold);
+                                net.loss_rate, net.rtt, net.current_block_id, hold_counter);
 
                             if is_end {
                                 log::info!("End delimiter acknowledged, finishing resource transfer");
                                 break;
                             }
 
-                            if current_hold > 0 {
-                                hold_counter.fetch_sub(1, Ordering::Relaxed);
-                                log::info!("Decreased hold_counter to {}", hold_counter.load(Ordering::Relaxed));
+                            if hold_counter > 0 {
+                                hold_counter -= 1;
+                                if hold_counter < on_hold_slow_threshold {
+                                    let _ = sleep_control_tx.send(0).await;
+                                }
+
+                                log::info!("Decreased hold_counter to {}", hold_counter);
                             }
                         }
                         fec_sender.feedback(fb)
@@ -1096,8 +1146,12 @@ impl WebRtcPeer {
                     }
 
                     // Increment hold_counter each time we send hold delimiter
-                    let new_hold_counter = hold_counter.fetch_add(1, Ordering::Relaxed) + 1;
-                    log::info!("Sent hold delimiter, hold_counter increased to {}", new_hold_counter);
+                    hold_counter += 1;
+                    if hold_counter >= on_hold_slow_threshold {
+                        let _ = sleep_control_tx.try_send(10 * (hold_counter.min(10) as u64));
+                    }
+
+                    log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);
 
                     let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                     let stats_after = quad_ch.bytes_sent().await;
