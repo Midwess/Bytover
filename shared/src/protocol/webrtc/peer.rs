@@ -896,7 +896,10 @@ impl WebRtcPeer {
 
             let on_hold_stop_threshold = 8;
             let on_hold_slow_threshold: u32 = 3;
-            let mut hold_counter = 0u32;
+            // This will help both side know that, from which moment
+            // all data is belong to the current resources
+            let mut is_start = true;
+            let mut hold_counter = 0;
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
             let (mut sleep_control_tx, mut sleep_control_rx) = mpsc::channel::<u64>(10);
 
@@ -986,7 +989,7 @@ impl WebRtcPeer {
             let mut received_from_readers = 0;
             loop {
                 let (bytes, raw_size, feedback) = {
-                    if is_end || hold_counter >= on_hold_stop_threshold {
+                    if is_start || is_end || hold_counter >= on_hold_stop_threshold {
                         let timeout_fut = sleep(Duration::from_secs(60)).fuse();
                         let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
 
@@ -1039,6 +1042,11 @@ impl WebRtcPeer {
                         if let Feedback::Network(ref net) = fb {
                             log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
                                 net.loss_rate, net.rtt, net.current_block_id, hold_counter);
+
+                            if is_start {
+                                is_start = false;
+                                continue;
+                            };
 
                             if is_end && net.current_block_id.eq(&Some(fec_sender.block_id)) {
                                 log::info!("End delimiter acknowledged, finishing resource transfer");
