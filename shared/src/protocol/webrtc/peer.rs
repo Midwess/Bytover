@@ -894,7 +894,7 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
-            let on_hold_stop_threshold = 6;
+            let on_hold_stop_threshold = 8;
             let on_hold_slow_threshold: u32 = 3;
             let mut hold_counter = 0u32;
             let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
@@ -1060,12 +1060,19 @@ impl WebRtcPeer {
                         self.quad_unreliable_channel.lock().await.flush_timeout().await?;
                         self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
 
-                        // Send end delimiter directly without FEC encoding
                         let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
+                        let FecAction::Framed(frames) = fec_sender.send(end_delimiter) else {
+                            return Err(anyhow!("Failed to send end delimiter").into());
+                        };
+
+                        for frame in frames {
+                            let _ = self.reliable_data_channel.unbounded_send((peer_id.clone(), frame.serialize()));
+                        }
+
                         log::info!("No data left for resource {resource_path:?}, sending end delimiter");
 
                         is_end = true;
-                        fec_sender.send(end_delimiter)?
+                        FecAction::Noop
                     }
                 };
 
@@ -1098,9 +1105,7 @@ impl WebRtcPeer {
                         log::info!("Fec sender terminated, aborting resource transfer");
                         break;
                     }
-                    FecAction::Noop | FecAction::Feedback(_, _) | FecAction::Constructed(_, _) | FecAction::Queued(_) => {
-                        // Will not happens, do nothing
-                    }
+                    FecAction::Noop | FecAction::Feedback(_, _) | FecAction::Constructed(_, _) | FecAction::Queued(_) => {}
                 };
 
                 if buff_counter > MAX_BUFFER_SIZE {
