@@ -1061,7 +1061,7 @@ impl WebRtcPeer {
                         self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
 
                         let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
-                        let FecAction::Framed(frames) = fec_sender.send(end_delimiter) else {
+                        let FecAction::Framed(frames) = fec_sender.send(end_delimiter)? else {
                             return Err(anyhow!("Failed to send end delimiter").into());
                         };
 
