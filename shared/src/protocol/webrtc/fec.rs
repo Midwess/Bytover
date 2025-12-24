@@ -1029,7 +1029,7 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if *block_id >= self.next_block_id + 1 {
+                if *block_id >= self.next_block_id + 2 {
                     continue;
                 }
 

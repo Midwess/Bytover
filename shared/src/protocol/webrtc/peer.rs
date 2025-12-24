@@ -936,9 +936,9 @@ impl WebRtcPeer {
                             log::error!("Reader error: {:?}", e);
                             break;
                         }
-                        Err(_) => {
+                        Err(e) => {
                             // Cancelled
-                            log::info!("Reader task cancelled");
+                            log::info!("Reader task cancelled {e:?}");
                             break;
                         }
                     }
@@ -1040,7 +1040,7 @@ impl WebRtcPeer {
                             log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
                                 net.loss_rate, net.rtt, net.current_block_id, hold_counter);
 
-                            if is_end {
+                            if is_end && net.current_block_id.eq(&Some(fec_sender.block_id)) {
                                 log::info!("End delimiter acknowledged, finishing resource transfer");
                                 break;
                             }
