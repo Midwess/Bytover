@@ -150,11 +150,6 @@ impl WebRtc {
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Msg
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Resource reliable, for retransmissions and delimiter
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
-            .ice_server(RtcIceServerConfig {
-                urls: vec![],
-                username: None,
-                credential: None
-            })
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource2 unreliable, for retransmissions
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource3 unreliable, for retransmissions

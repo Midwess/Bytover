@@ -1123,10 +1123,11 @@ impl WebRtcPeer {
                         let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
                     }
 
-                    // Increment hold_counter each time we send hold delimiter
+                    // Decrease the transfer speed
                     hold_counter += 1;
+                    hold_counter = hold_counter.min(on_hold_stop_threshold);
                     if hold_counter >= on_hold_slow_threshold {
-                        let _ = sleep_control_tx.try_send(10 * (hold_counter.min(10) as u64));
+                        let _ = sleep_control_tx.try_send(30 * (hold_counter as u64));
                     }
 
                     log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);
