@@ -894,8 +894,8 @@ impl WebRtcPeer {
                 return Err(anyhow!("Missing progress for resource {}", order_id).into());
             };
 
-            let on_hold_stop_threshold = 8;
-            let on_hold_slow_threshold: u32 = 3;
+            let on_hold_stop_threshold = 6;
+            let on_hold_slow_threshold: u32 = 2;
             // This will help both side know that, from which moment
             // all data is belong to the current resources
             let mut is_start = true;
@@ -1140,7 +1140,7 @@ impl WebRtcPeer {
                     hold_counter += 1;
                     hold_counter = hold_counter.min(on_hold_stop_threshold);
                     if hold_counter >= on_hold_slow_threshold {
-                        let _ = sleep_control_tx.try_send(fec_sender.rtt().min(55).max(15) * (hold_counter as u64));
+                        let _ = sleep_control_tx.try_send(fec_sender.rtt().max(20) * (hold_counter as u64));
                     }
 
                     log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);

@@ -460,18 +460,15 @@ impl FecSender {
                 FecAction::Noop
             }
             Feedback::Missing(missing_blocks) => {
-                // Collect frames from ALL missing blocks
                 let mut all_frames = Vec::new();
 
                 for missing_block in missing_blocks.blocks {
-                    // Get the block from the ring buffer
                     if let Some(frames_vec) = self.buffer.get(missing_block.block_id) {
                         let frames: Vec<Frame> = missing_block.frames
                             .iter()
                             .filter_map(|&frame_idx| {
                                 let frame_idx_u8 = frame_idx as u8;
                                 frames_vec.iter().find(|e| e.frame_idx == frame_idx_u8).map(|e| {
-                                    // Convert Arc<box<[u8]>> to Arc<[u8]>
                                     let payload: Arc<[u8]> = Arc::from(e.data.as_ref().as_ref());
                                     Frame::new(
                                         e.block_id,
@@ -492,7 +489,8 @@ impl FecSender {
 
                 if all_frames.is_empty() {
                     FecAction::Terminated
-                } else {
+                }
+                else {
                     FecAction::Retransmit(all_frames)
                 }
             }
