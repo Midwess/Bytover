@@ -5,7 +5,6 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::view_models::avatar::AvatarViewModel;
 use crate::app::view_models::cloud_session::CloudSession;
-use crate::app::view_models::peer::PeerViewModel;
 use crate::app::view_models::receive_session::{
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel,
@@ -16,7 +15,6 @@ use crate::app::view_models::receive_session::{
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::ResourceType;
-use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
@@ -25,7 +23,6 @@ use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
-use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
@@ -34,14 +31,12 @@ use crate::app::operations::persistent::TransferSessionPersistentOperation;
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
     sessions: Vec<TransferSession>,
-    targets: Vec<TransferTarget>,
     keywords: String
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     transfer_method: TransferMethodSelection,
-    nearby_peers: Vec<PeerViewModel>,
     received_sessions: Vec<ReceiveSessionViewModel>,
     received_cloud_sessions: Vec<ReceiveCloudSessionViewModel>,
     cloud_session: Option<CloudSession>
@@ -72,14 +67,6 @@ pub enum TransferEvent {
     TransferCanceled {
         session_id: u64
     },
-    TransferRequest {
-        remote_session: TransferSessionMessage,
-        peer: Peer
-    },
-    UpdateTransferTargets {
-        added: Vec<TransferTarget>,
-        removed: Vec<TransferTarget>
-    },
     OpenResource {
         session_id: u64,
         resource_id: u64
@@ -93,6 +80,42 @@ pub enum TransferEvent {
         transfer_type: TransferType
     },
     Clear,
+
+    NotifyPeerSessions {
+        peer_id: String
+    },
+    ReceivedSessionsOverview {
+        peer_id: String,
+        sessions: Vec<crate::app::operations::p2p::P2PSessionOverview>
+    },
+    ReceivedViewSessionRequest {
+        peer_id: String,
+        request_id: String,
+        order_id: u64,
+        password: Option<String>
+    },
+    RequestSessionDetail {
+        peer_id: String,
+        order_id: u64,
+        password: Option<String>
+    },
+    SessionDetailReceived {
+        session: TransferSession
+    },
+    SessionDetailFailed {
+        order_id: u64,
+        error: String
+    },
+    ReceivedDownloadRequest {
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64
+    },
+    RequestDownloadResource {
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64
+    },
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -233,11 +256,6 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::render()
             }
-            TransferEvent::UpdateTransferTargets { added: new, removed } => {
-                model.transfer.targets.extend(new);
-                model.transfer.targets.retain(|it| !removed.iter().any(|removed| removed.id() == it.id()));
-                Command::done()
-            }
             TransferEvent::OpenResource { session_id, resource_id } => {
                 let Some(session) = model.transfer.sessions.iter().find(|it| it.order_id == session_id) else {
                     return Command::done();
@@ -310,7 +328,75 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(|it| async move { it.app().view_public_session(session, password).await })
             }
-            TransferEvent::TransferRequest { .. } => {}
+            TransferEvent::NotifyPeerSessions { peer_id } => {
+                let sessions: Vec<TransferSession> = model
+                    .transfer
+                    .sessions
+                    .iter()
+                    .filter(|s| s.transfer_type == TransferType::Send)
+                    .filter(|s| s.target.is_peer())
+                    .cloned()
+                    .collect();
+
+                Command::handle_result(|it| async move {
+                    it.app().notify_peer_sessions(peer_id, sessions).await
+                })
+            }
+            TransferEvent::ReceivedSessionsOverview { peer_id, sessions } => {
+                let peer = model.nearby.peers.iter().find(|p| p.id == peer_id).cloned();
+
+                Command::handle_result(|it| async move {
+                    it.app().handle_sessions_overview(peer, sessions).await
+                })
+            }
+            TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password } => {
+                let session_id = TransferSessionId {
+                    order_id: Some(order_id.to_string()),
+                    transfer_type: Some(TransferType::Send)
+                };
+                let session = model.transfer.sessions.lookup(&session_id).cloned();
+
+                Command::handle_result(move |it| async move {
+                    it.app().handle_view_session_request(peer_id, request_id, order_id, password, session).await
+                })
+            }
+            TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
+                Command::handle_result(move |it| async move {
+                    it.app().request_session_detail(peer_id, order_id, password).await
+                })
+            }
+            TransferEvent::SessionDetailReceived { session } => {
+                Command::handle_result(|it| async move {
+                    it.app().handle_session_detail_received(session).await
+                })
+            }
+            TransferEvent::SessionDetailFailed { order_id, error } => {
+                Command::new(|it| async move {
+                    DialogOperation::toast(format!("Failed to load session {}: {}", order_id, error))
+                        .into_future(it.clone())
+                        .await;
+                })
+            }
+            TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id } => {
+                let session_id = TransferSessionId {
+                    order_id: Some(session_order_id.to_string()),
+                    transfer_type: Some(TransferType::Send)
+                };
+                let resource = model
+                    .transfer
+                    .sessions
+                    .lookup(&session_id)
+                    .and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned());
+
+                Command::handle_result(|it| async move {
+                    it.app().handle_download_request(peer_id, resource).await
+                })
+            }
+            TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id } => {
+                Command::handle_result(move |it| async move {
+                    it.app().request_download_resource(peer_id, session_order_id, resource_order_id).await
+                })
+            }
         }
     }
 
@@ -452,6 +538,14 @@ impl AppModule<BitBridge> for TransferModule {
                         return None;
                     };
 
+                    let password_required = match &it.target {
+                        TransferTarget::P2P { is_required_password, .. } => *is_required_password,
+                        _ => false
+                    };
+
+                    let has_details = !it.resources.is_empty();
+                    let is_authenticated = has_details;
+
                     let image_resources = it
                         .resources
                         .iter()
@@ -517,6 +611,9 @@ impl AppModule<BitBridge> for TransferModule {
                         peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                         peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                         peer_description: "Nearby".to_owned(),
+                        password_required,
+                        is_authenticated,
+                        has_details,
                         is_completed: it.is_completed(),
                         is_in_progress: !it.is_completed() && !it.is_canceled(),
                         display_download_speed: it.status().to_string(),
@@ -556,34 +653,6 @@ impl AppModule<BitBridge> for TransferModule {
                         access_url
                     })
                 }),
-            nearby_peers: model
-                .transfer
-                .targets
-                .iter()
-                .filter_map(|it| match it {
-                    TransferTarget::P2P { from_peer: peer, .. } => {
-                        let send_session = model
-                            .transfer
-                            .sessions
-                            .iter()
-                            .filter(|it| it.target.is_peer() && it.transfer_type == TransferType::Send)
-                            .find(|it| {
-                                it.peer().iter().any(|it| it.id == peer.id)
-                            });
-
-                        Some(PeerViewModel {
-                            id: peer.id.clone(),
-                            display_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
-                            avatar: AvatarViewModel::new(peer.avatar_url.clone()),
-                            device: peer.device.clone(),
-                            transfer_progress: send_session.map(|it| it.total_progress()).unwrap_or(0.0),
-                            display_upload_speed: send_session.map(|it| it.status().to_string()),
-                            display_download_speed: None // The download speed is displayed in the received screen
-                        })
-                    }
-                    _ => None
-                })
-                .collect()
         }
     }
 }

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferTargetId {
     Internet,
-    Nearby
+    P2P
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -24,7 +24,7 @@ impl From<&TransferTarget> for TransferTargetId {
     fn from(value: &TransferTarget) -> Self {
         match value {
             TransferTarget::Internet { .. } => TransferTargetId::Internet,
-            TransferTarget::Nearby(_) => TransferTargetId::Nearby
+            TransferTarget::P2P { .. } => TransferTargetId::P2P
         }
     }
 }

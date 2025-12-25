@@ -1,8 +1,8 @@
-use crate::app::operations::p2p::P2POperationOutput;
+use crate::app::operations::p2p::{P2POperationOutput, P2PSessionOverview};
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput::TransferResourceProgressUpdate;
 use crate::app::operations::CoreOperationOutput;
-use crate::entities::local_resource::{LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
@@ -36,8 +36,7 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
-    CancelTransferSessionRequest, FecFeedback, IntroduceRequestMessage, IntroduceResponseMessage, NetworkStats, PeerMessage,
-    TransferRequestMessage, TransferResponseMessage, TransferSessionMessage,
+    CancelTransferSessionRequest, FecFeedback, IntroduceRequestMessage, IntroduceResponseMessage, PeerMessage,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -317,21 +316,47 @@ impl WebRtcPeer {
             Request::CancelRequest(request) => {
                 self.transfers_context.cancel_transfer(request.session_id as u64).await;
             }
-            Request::TransferRequest(request) => {
-                self.transfers_context.start_transfer(request.session.order_id, request_id).await;
-                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
-                    remote_session: request.session,
-                });
-
-                if let Some(core_request) = self.core_request() {
-                    core_request.response(response).await;
-                }
-            }
             Request::FecFeedback(feedback) => {
                 if let Some(feedback) = feedback.feedback {
                     log::info!("Received FEC feedback: {:?}", feedback);
                     let _ = self.transfer_feedback_sender.unbounded_send(feedback);
                 };
+            }
+            Request::SessionsNotification(notification) => {
+                let sessions: Vec<P2PSessionOverview> = notification.sessions.iter().map(|s| {
+                    P2PSessionOverview {
+                        order_id: s.order_id,
+                        password_protected: s.password_protected,
+                    }
+                }).collect();
+                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview {
+                    peer_id: self.peer.id().to_string(),
+                    sessions,
+                });
+                if let Some(core_request) = self.core_request() {
+                    core_request.response(response).await;
+                }
+            }
+            Request::ViewSessionRequest(req) => {
+                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
+                    peer_id: self.peer.id().to_string(),
+                    request_id,
+                    order_id: req.order_id,
+                    password: req.password,
+                });
+                if let Some(core_request) = self.core_request() {
+                    core_request.response(response).await;
+                }
+            }
+            Request::DownloadResourceRequest(req) => {
+                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
+                    peer_id: self.peer.id().to_string(),
+                    session_order_id: req.session_order_id,
+                    resource_order_id: req.resource_order_id,
+                });
+                if let Some(core_request) = self.core_request() {
+                    core_request.response(response).await;
+                }
             }
             _ => {}
         }
@@ -496,6 +521,45 @@ impl WebRtcPeer {
         }
 
         Ok(())
+    }
+
+    pub async fn send_sessions_notification(
+        &self,
+        sessions: Vec<TransferSession>,
+    ) -> Result<(), WebRtcErrors> {
+        todo!("Send SessionsNotificationMessage to peer")
+    }
+
+    pub async fn request_session_detail(
+        &self,
+        order_id: u64,
+        password: Option<String>,
+    ) -> Result<(), WebRtcErrors> {
+        todo!("Send ViewSessionDetailRequest to peer")
+    }
+
+    pub async fn send_session_detail_response(
+        &self,
+        request_id: String,
+        session: Option<&TransferSession>,
+        error: Option<String>,
+    ) -> Result<(), WebRtcErrors> {
+        todo!("Send ViewSessionDetailResponse to peer")
+    }
+
+    pub async fn request_resource_download(
+        &self,
+        session_order_id: u64,
+        resource_order_id: u64,
+    ) -> Result<(), WebRtcErrors> {
+        todo!("Send DownloadResourceRequest to peer")
+    }
+
+    pub async fn stream_resource(
+        &self,
+        resource: LocalResource,
+    ) -> Result<(), WebRtcErrors> {
+        todo!("Stream resource data to peer using existing transfer protocol")
     }
 
     pub async fn receiving_loop(&self) -> Result<(), WebRtcErrors> {

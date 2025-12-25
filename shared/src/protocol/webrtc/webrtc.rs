@@ -1,5 +1,6 @@
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::finding_scope::FindingScope;
+use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
@@ -96,6 +97,88 @@ impl WebRtc {
         }
 
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn send_sessions_notification(
+        &self,
+        peer_id: String,
+        sessions: Vec<TransferSession>,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.send_sessions_notification(sessions).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
+    pub async fn view_session_detail(
+        &self,
+        peer_id: String,
+        order_id: u64,
+        password: Option<String>,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.request_session_detail(order_id, password).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
+    pub async fn send_session_detail(
+        &self,
+        peer_id: String,
+        request_id: String,
+        session: TransferSession,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.send_session_detail_response(request_id, Some(&session), None).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
+    pub async fn send_session_detail_error(
+        &self,
+        peer_id: String,
+        request_id: String,
+        error: String,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.send_session_detail_response(request_id, None, Some(error)).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
+    pub async fn download_resource(
+        &self,
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.request_resource_download(session_order_id, resource_order_id).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
+    pub async fn stream_resource_to_peer(
+        &self,
+        peer_id: String,
+        resource: LocalResource,
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.stream_resource(resource).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
     }
 
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {

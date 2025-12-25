@@ -267,14 +267,14 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::Nearby(peer) => Some(peer.id().to_string()),
+            TransferTarget::P2P { from_peer, .. } => Some(from_peer.id().to_string()),
             _ => None
         }
     }
 
     pub fn peer(&self) -> Option<&Peer> {
         match &self.target {
-            TransferTarget::Nearby(peer) => Some(peer),
+            TransferTarget::P2P { from_peer, .. } => Some(from_peer),
             _ => None
         }
     }

@@ -38,21 +38,8 @@ where
                 Ok(CoreOperationOutput::TransferSession(session))
             }
             TransferOperation::SendSession(session) => {
-                if session.target.is_public() {
-                    let status = self.cloud_service().send_session(session, request).await?;
-                    return Ok(TransferOperationOutput::TransferCompleted(status).into());
-                }
-
-                let status = self.web_rtc().send_session(request, session).await?;
+                let status = self.cloud_service().send_session(session, request).await?;
                 Ok(TransferOperationOutput::TransferCompleted(status).into())
-            }
-            TransferOperation::AnswerSessionRequest {
-                peer_id,
-                session,
-                session_id
-            } => {
-                let result = self.web_rtc().answer_session(request, peer_id, session, session_id).await?;
-                Ok(TransferOperationOutput::TransferCompleted(result).into())
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
                 log::info!(target: "executor", "Cancelling session: {session_id:?}");

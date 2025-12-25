@@ -1,23 +1,19 @@
-use std::collections::HashMap;
-
 use core_services::db::repository::abstraction::table::Table;
-use devlog_sdk::distributed_id::gen_id_sync;
 use futures_util::StreamExt;
 use core_services::utils::string::StringExt;
-use schema::devlog::bitbridge::{ResourceTypeMessage, TransferSessionMessage};
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
+use crate::app::operations::p2p::{P2POperation, P2PSessionOverview};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
-use crate::entities::local_resource::{LocalResource, ResourceType};
-use crate::entities::peer::Peer;
+use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
+use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferType};
 use crate::entities::user::User;
 use crate::errors::CoreError;
 
@@ -59,31 +55,27 @@ impl AppCommand {
             return Ok(());
         }
 
-        let transfer_target_id = transfer_target.id();
-        let mut transfer_session = match transfer_target {
-            TransferTarget::Internet { password, to_emails, .. } => {
-                for email in to_emails.iter() {
-                   if !email.is_email() {
-                        self.run(DialogOperation::toast("Invalid email format".to_string())).await;
-                        return Ok(());
-                    }
-                }
-
-                let session = TransferSession::public(user, password, selected_resources, to_emails);
-                let result = match self.run(TransferOperation::create_cloud_session(session)).await {
-                    Err(err) => {
-                        self.run(DialogOperation::toast(format!("{err} please try again"))).await;
-                        return Ok(());
-                    }
-                    Ok(session) => session
-                };
-
-                result
-            }
-            TransferTarget::P2P => {
-                panic!("P2P transfer is no longer supported")
-            }
+        let TransferTarget::Internet { password, to_emails, .. } = transfer_target.clone() else {
+            return Ok(());
         };
+
+        for email in to_emails.iter() {
+            if !email.is_email() {
+                self.run(DialogOperation::toast("Invalid email format".to_string())).await;
+                return Ok(());
+            }
+        }
+
+        let session = TransferSession::public(user, password, selected_resources, to_emails);
+        let mut transfer_session = match self.run(TransferOperation::create_cloud_session(session)).await {
+            Err(err) => {
+                self.run(DialogOperation::toast(format!("{err} please try again"))).await;
+                return Ok(());
+            }
+            Ok(session) => session
+        };
+
+        let transfer_target_id = transfer_target.id();
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
@@ -240,6 +232,146 @@ impl AppCommand {
             };
         }
 
+        Ok(())
+    }
+
+    pub async fn notify_peer_sessions(
+        &self,
+        peer_id: String,
+        sessions: Vec<TransferSession>
+    ) -> Result<(), CoreError> {
+        self.run(P2POperation::send_sessions_notification(peer_id, sessions)).await?;
+        Ok(())
+    }
+
+    pub async fn handle_sessions_overview(
+        &self,
+        peer: Option<crate::entities::peer::Peer>,
+        sessions: Vec<P2PSessionOverview>
+    ) -> Result<(), CoreError> {
+        let Some(peer) = peer else {
+            log::warn!("Peer not found for sessions overview");
+            return Ok(());
+        };
+
+        for overview in sessions {
+            let stub_session = TransferSession {
+                order_id: overview.order_id,
+                resources: vec![],
+                progress: vec![],
+                transfer_type: TransferType::Receive,
+                target: TransferTarget::P2P {
+                    from_peer: peer.clone(),
+                    password: None,
+                    is_required_password: overview.password_protected
+                },
+                cancellation_token: core_services::utils::cancellation::CancellationToken::new()
+            };
+
+            self.update_model(TransferSessionModelEvent::Add(stub_session.clone()));
+
+            if let Err(e) = self.run(TransferSessionPersistentOperation::save(stub_session)).await {
+                log::error!("Failed to save stub session: {e:?}");
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_view_session_request(
+        &self,
+        peer_id: String,
+        request_id: String,
+        order_id: u64,
+        password: Option<String>,
+        session: Option<TransferSession>
+    ) -> Result<(), CoreError> {
+        let Some(session) = session else {
+            self.run(P2POperation::send_session_detail_error(
+                peer_id,
+                request_id,
+                "Session not found".to_string()
+            )).await?;
+            return Ok(());
+        };
+
+        let is_password_valid = match &session.target {
+            TransferTarget::P2P { password: session_password, is_required_password, .. } => {
+                if *is_required_password {
+                    match (session_password, &password) {
+                        (Some(expected), Some(provided)) => expected == provided,
+                        (Some(_), None) => false,
+                        (None, _) => true
+                    }
+                } else {
+                    true
+                }
+            }
+            _ => false
+        };
+
+        if !is_password_valid {
+            self.run(P2POperation::send_session_detail_error(
+                peer_id,
+                request_id,
+                "Invalid password".to_string()
+            )).await?;
+            return Ok(());
+        }
+
+        self.run(P2POperation::send_session_detail(
+            peer_id,
+            request_id,
+            session
+        )).await?;
+
+        Ok(())
+    }
+
+    pub async fn request_session_detail(
+        &self,
+        peer_id: String,
+        order_id: u64,
+        password: Option<String>
+    ) -> Result<(), CoreError> {
+        self.run(P2POperation::view_session_detail(peer_id, order_id, password)).await?;
+        Ok(())
+    }
+
+    pub async fn handle_session_detail_received(
+        &self,
+        session: TransferSession
+    ) -> Result<(), CoreError> {
+        self.update_model(TransferSessionModelEvent::Add(session.clone()));
+
+        if let Err(e) = self.run(TransferSessionPersistentOperation::save(session)).await {
+            log::error!("Failed to save session: {e:?}");
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_download_request(
+        &self,
+        peer_id: String,
+        resource: Option<LocalResource>
+    ) -> Result<(), CoreError> {
+        let Some(resource) = resource else {
+            log::error!("Resource not found for download request");
+            return Ok(());
+        };
+
+        self.run(P2POperation::stream_resource_to_peer(peer_id, resource)).await?;
+        Ok(())
+    }
+
+    pub async fn request_download_resource(
+        &self,
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64
+    ) -> Result<(), CoreError> {
+        self.run(P2POperation::download_resource(peer_id, session_order_id, resource_order_id)).await?;
         Ok(())
     }
 }

@@ -7,7 +7,8 @@ use crate::entities::user::User;
 pub enum TransferTarget {
     P2P {
         from_peer: Peer,
-        url: String
+        password: Option<String>,
+        is_required_password: bool
     },
     Internet {
         password: Option<String>,
@@ -24,7 +25,7 @@ impl TransferTarget {
     }
 
     pub fn is_peer(&self) -> bool {
-        matches!(self, Self::P2P)
+        matches!(self, Self::P2P { .. })
     }
 
     pub fn is_keyword_match(&self, keywords: &str) -> bool {

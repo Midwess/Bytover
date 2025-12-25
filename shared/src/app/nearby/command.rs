@@ -10,7 +10,6 @@ use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::peer::Peer;
-use crate::entities::target::TransferTarget;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
@@ -80,9 +79,8 @@ impl AppCommand {
                         removed: vec![]
                     });
 
-                    self.notify_event(TransferEvent::UpdateTransferTargets {
-                        added: vec![TransferTarget::Nearby(peer.clone())],
-                        removed: vec![]
+                    self.notify_event(TransferEvent::NotifyPeerSessions {
+                        peer_id: peer.id.clone()
                     });
 
                     self.spawn(|it| async move {
@@ -142,16 +140,22 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
-                    let request = TransferEvent::TransferCanceled { session_id };
-
-                    self.notify_event(request);
+                    self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest { remote_session }) => {
-                    let request = TransferEvent::TransferRequest {
-                        remote_session,
-                        peer: peer.clone()
-                    };
-                    self.notify_event(request);
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview { peer_id, sessions }) => {
+                    self.notify_event(TransferEvent::ReceivedSessionsOverview { peer_id, sessions });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
+                    self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::SessionDetailReceived { session }) => {
+                    self.notify_event(TransferEvent::SessionDetailReceived { session });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::SessionDetailFailed { order_id, error }) => {
+                    self.notify_event(TransferEvent::SessionDetailFailed { order_id, error });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id }) => {
+                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");
@@ -165,7 +169,7 @@ impl AppCommand {
                     continue;
                 }
                 _ => {
-                    panic!("Unexpected output from nearby server, output: {output:?}");
+                    log::warn!("Unexpected output from nearby server, output: {output:?}");
                 }
             }
         }
@@ -173,11 +177,6 @@ impl AppCommand {
         self.notify_event(NearbyEvent::UpdateNearbyPeers {
             new_peer: vec![],
             removed: vec![peer.clone()]
-        });
-
-        self.notify_event(TransferEvent::UpdateTransferTargets {
-            added: vec![],
-            removed: vec![TransferTarget::Nearby(peer.clone())]
         });
     }
 }

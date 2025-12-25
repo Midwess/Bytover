@@ -9,16 +9,10 @@ use crate::entities::local_resource::LocalResource;
 use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferProgress, TransferSession, TransferSessionStatus};
 use crate::errors::CoreError;
 
-/// This operation is used to access the local storage of device.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
-    AnswerSessionRequest {
-        peer_id: String,
-        session: Option<TransferSession>,
-        session_id: u64
-    },
     CancelSession(Option<String>, u64),
     FindPublicSession {
         alias: String

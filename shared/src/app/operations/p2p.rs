@@ -2,12 +2,13 @@ use std::future::Future;
 
 use crux_core::capability::Operation;
 use crux_core::Command;
-use schema::devlog::bitbridge::TransferSessionMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;
 use crate::entities::finding_scope::FindingScope;
+use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer;
+use crate::entities::transfer_session::TransferSession;
 use crate::errors::CoreError;
 
 use super::CoreOperation;
@@ -18,19 +19,72 @@ pub enum P2POperation {
     StopNearbyServer,
     UpdateFindingScopes(Vec<FindingScope>),
     PeerEvents(String),
-    IsRunning
+    IsRunning,
+    SendSessionsNotification {
+        peer_id: String,
+        sessions: Vec<TransferSession>
+    },
+    ViewSessionDetail {
+        peer_id: String,
+        order_id: u64,
+        password: Option<String>
+    },
+    SendSessionDetail {
+        peer_id: String,
+        request_id: String,
+        session: TransferSession
+    },
+    SendSessionDetailError {
+        peer_id: String,
+        request_id: String,
+        error: String
+    },
+    DownloadResource {
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64
+    },
+    StreamResourceToPeer {
+        peer_id: String,
+        resource: LocalResource
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperationOutput {
     PeerConnected(Peer),
     PeerDisconnected(),
-    ReceivedSessionRequest { remote_session: TransferSessionMessage },
     CancelSessionRequest { session_id: u64 },
-    // Happily stopped
-    // if error happened, it will be OperationOutput::Error(CoreError)
     NearbyServerStopped,
-    AlreadyRunning
+    AlreadyRunning,
+    ReceivedSessionsOverview {
+        peer_id: String,
+        sessions: Vec<P2PSessionOverview>
+    },
+    ReceivedViewSessionRequest {
+        peer_id: String,
+        request_id: String,
+        order_id: u64,
+        password: Option<String>
+    },
+    SessionDetailReceived {
+        session: TransferSession
+    },
+    SessionDetailFailed {
+        order_id: u64,
+        error: String
+    },
+    ReceivedDownloadRequest {
+        peer_id: String,
+        session_order_id: u64,
+        resource_order_id: u64
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct P2PSessionOverview {
+    pub order_id: u64,
+    pub password_protected: bool
 }
 
 impl Operation for P2POperation {
@@ -52,5 +106,29 @@ impl P2POperation {
 
     pub fn is_running() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::IsRunning)).map(|it| it.result())
+    }
+
+    pub fn send_sessions_notification(peer_id: String, sessions: Vec<TransferSession>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionsNotification { peer_id, sessions })).map(|it| it.result())
+    }
+
+    pub fn view_session_detail(peer_id: String, order_id: u64, password: Option<String>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::ViewSessionDetail { peer_id, order_id, password })).map(|it| it.result())
+    }
+
+    pub fn send_session_detail(peer_id: String, request_id: String, session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session })).map(|it| it.result())
+    }
+
+    pub fn send_session_detail_error(peer_id: String, request_id: String, error: String) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetailError { peer_id, request_id, error })).map(|it| it.result())
+    }
+
+    pub fn download_resource(peer_id: String, session_order_id: u64, resource_order_id: u64) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id })).map(|it| it.result())
+    }
+
+    pub fn stream_resource_to_peer(peer_id: String, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer { peer_id, resource })).map(|it| it.result())
     }
 }
