@@ -48,7 +48,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn transfer(
+    pub async fn upload(
         &self,
         user: User,
         selected_resources: Vec<LocalResource>,
@@ -80,11 +80,8 @@ impl AppCommand {
 
                 result
             }
-            TransferTarget::Nearby(_) => {
-                let order_id = gen_id_sync();
-                let result = TransferSession::send(order_id, selected_resources, transfer_target).await;
-
-                result
+            TransferTarget::P2P => {
+                panic!("P2P transfer is no longer supported")
             }
         };
 
@@ -155,128 +152,6 @@ impl AppCommand {
         }
 
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
-
-        Ok(())
-    }
-
-    pub async fn accept_session(&self, remote_session: TransferSessionMessage, peer: Peer) -> Result<(), CoreError> {
-        let peer_id = peer.id();
-        let generate_file_paths_request = {
-            let mut result = HashMap::new();
-            for resource in remote_session.resources.iter() {
-                result.insert(resource.order_id, resource.name.clone());
-            }
-
-            result
-        };
-
-        let mut generated_thumbnails_paths = self
-            .run(TransferSessionPersistentOperation::generate_thumbnail_paths(
-                Some(remote_session.order_id),
-                generate_file_paths_request.keys().copied().collect()
-            ))
-            .await?;
-
-        let mut generated_saved_paths = self
-            .run(TransferSessionPersistentOperation::generate_resource_paths(
-                remote_session.order_id,
-                generate_file_paths_request
-            ))
-            .await?;
-
-        let mut resources = vec![];
-        for resource_request in remote_session.resources {
-            let order_id = resource_request.order_id;
-            let Some(saved_path) = generated_saved_paths.remove(&order_id) else {
-                continue;
-            };
-
-            let generated_thumbnail_path = match resource_request.is_thumbnail_included {
-                true => generated_thumbnails_paths.remove(&order_id),
-                false => None
-            };
-
-            resources.push(LocalResource {
-                path: saved_path,
-                thumbnail_path: generated_thumbnail_path,
-                r#type: ResourceType::from(
-                    ResourceTypeMessage::try_from(resource_request.r#type).unwrap_or(ResourceTypeMessage::File)
-                ),
-                name: resource_request.name.clone(),
-                size: resource_request.size as u64,
-                order_id: resource_request.order_id
-            });
-        }
-
-        let mut transfer_session = TransferSession::answer(remote_session.order_id, resources, TransferTarget::Nearby(peer));
-
-        // The thumbnail path at this point is not valid, since we are not received any thumbnail yet.
-        let mut rendered_session = transfer_session.clone();
-        rendered_session.resources.iter_mut().for_each(|r| r.thumbnail_path = None);
-        self.update_model(TransferSessionModelEvent::Add(rendered_session.clone()));
-
-        let response = CoreOperation::Transfer(TransferOperation::AnswerSessionRequest {
-            peer_id: peer_id.to_string(),
-            session: Some(transfer_session.clone()),
-            session_id: transfer_session.order_id
-        });
-
-        let mut stream = self.stream_from_shell(response);
-        while let Some(transfer_output) = stream.next().await {
-            match transfer_output {
-                CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
-                    TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
-                        transfer_session.update_progress(progress.clone());
-                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
-                    }
-                    TransferOperationOutput::TransferCompleted(status) => {
-                        if matches!(
-                            status,
-                            TransferSessionStatus::InProgress { .. } | TransferSessionStatus::Initializing
-                        ) {
-                            transfer_session.cancel();
-                        }
-
-                        log::info!(target: "transfer", "Transfer session completed with status {:?}", transfer_session.status());
-                        break;
-                    }
-                    TransferOperationOutput::ThumbnailUpdated(event) => {
-                        event.clone().update(&mut transfer_session);
-                        self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), event.into()));
-                    }
-                    _ => {
-                        continue;
-                    }
-                },
-                CoreOperationOutput::Error(error) => {
-                    transfer_session.force_complete(format!("Connection error: {error:?}"));
-                    self.delete_session(&transfer_session).await?;
-                    log::error!(target: "transfer", "Connection error: {error:?}");
-                    break;
-                }
-                _ => {
-                    continue;
-                }
-            }
-
-            if transfer_session.is_completed() {
-                log::info!(target: "transfer", "Transfer session completed {:?}", transfer_session.status());
-                break;
-            }
-        }
-
-        // Remove the session and add the new session
-        if matches!(transfer_session.status(), TransferSessionStatus::Success) {
-            self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await?;
-            self.update_model_series(vec![
-                TransferSessionModelEvent::Remove(transfer_session.id()),
-                TransferSessionModelEvent::Add(transfer_session),
-            ]);
-        } else {
-            self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
-            let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
-            // DialogOperation::toast("Transfer session canceled".to_string());
-        }
 
         Ok(())
     }

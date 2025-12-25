@@ -5,7 +5,10 @@ use crate::entities::user::User;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TransferTarget {
-    Nearby(Peer),
+    P2P {
+        from_peer: Peer,
+        url: String
+    },
     Internet {
         password: Option<String>,
         access_url: Option<String>,
@@ -21,7 +24,7 @@ impl TransferTarget {
     }
 
     pub fn is_peer(&self) -> bool {
-        matches!(self, Self::Nearby(_))
+        matches!(self, Self::P2P)
     }
 
     pub fn is_keyword_match(&self, keywords: &str) -> bool {
@@ -55,7 +58,7 @@ impl TransferTarget {
 impl TransferTarget {
     pub fn id(&self) -> String {
         match self {
-            TransferTarget::Nearby(peer) => peer.id().to_string(),
+            TransferTarget::P2P { from_peer, .. } => from_peer.id().to_string(),
             TransferTarget::Internet { .. } => "public".to_string()
         }
     }

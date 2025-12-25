@@ -62,8 +62,8 @@ pub enum TransferEvent {
         password: Option<String>,
         to_emails: Vec<String>
     },
-    StartTransfer {
-        target_id: String
+    StartP2PTransfer {
+        nearby_available: bool
     },
     CancelTransfer {
         session_id: u64,
@@ -87,7 +87,7 @@ pub enum TransferEvent {
     FindPublicSession {
         keywords: String
     },
-    ViewPublicSession {
+    ViewSession {
         password: Option<String>,
         session_id: u64,
         transfer_type: TransferType
@@ -202,45 +202,13 @@ impl AppModule<BitBridge> for TransferModule {
                     to_emails
                 };
 
-                Command::handle_result(|it| async move { it.app().transfer(user, selected_resources, target).await })
+                Command::handle_result(|it| async move { it.app().upload(user, selected_resources, target).await })
             }
-            TransferEvent::StartTransfer { target_id } => {
+            TransferEvent::StartP2PTransfer { nearby_available } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
-                let transfer_targets = model.transfer.targets.clone();
-                let Some(target) = transfer_targets.iter().find(|it| it.id() == target_id).cloned() else {
-                    return Command::done();
-                };
-
-                let duplicated_session = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|it| it.transfer_type == TransferType::Send)
-                    .find(|it| it.peer_id().map(|id| id.to_string()) == Some(target.id()))
-                    .cloned();
-
-                let Some(user) = model.authentication.user.clone() else {
-                    log::info!("User is not login, open login page");
-                    return Command::handle_result(|it| async move {
-                        it.app().authenticate().await;
-                        Ok(())
-                    });
-                };
-
-                Command::handle_result(|it| async move {
-                    if let Some(duplicated_session) = duplicated_session {
-                        it.notify_event(TransferEvent::CancelTransfer {
-                            session_id: duplicated_session.order_id,
-                            transfer_type: duplicated_session.transfer_type
-                        });
-                        return Ok(());
-                    }
-
-                    it.app().transfer(user, selected_resources, target).await
-                })
-            }
-            TransferEvent::TransferRequest { remote_session, peer } => {
-                Command::handle_result(|it| async move { it.app().accept_session(remote_session, peer).await })
+                // Todo send the session overview to all peers
+                // and generated an access url
+                Command::done()
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
@@ -330,7 +298,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await }).then_render()
             }
-            TransferEvent::ViewPublicSession { password, session_id, .. } => {
+            TransferEvent::ViewSession { password, session_id, .. } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
@@ -342,6 +310,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(|it| async move { it.app().view_public_session(session, password).await })
             }
+            TransferEvent::TransferRequest { .. } => {}
         }
     }
 
@@ -592,7 +561,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .targets
                 .iter()
                 .filter_map(|it| match it {
-                    TransferTarget::Nearby(peer) => {
+                    TransferTarget::P2P { from_peer: peer, .. } => {
                         let send_session = model
                             .transfer
                             .sessions
