@@ -10,27 +10,22 @@ use crate::protocol::webrtc::fec::{loss_delay_us, FecAction, FecReceiver, FecSen
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{
-    MAX_BUFFER_SIZE,
-    MIN_BUFFER_SIZE,
-    TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID,
-    TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
-    TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
-    TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
-    TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
-    TRANSFER_THUMBNAIL_CHANNEL_ID
+    MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID, TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
+    TRANSFER_THUMBNAIL_CHANNEL_ID,
 };
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
 use crate::utils::compression::is_compressible;
 use anyhow::{anyhow, Context};
-use core_services::utils::cancellation::FutureExtension;
+use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
 use futures_util::lock::Mutex;
 use futures_util::FutureExt;
-use futures_util::{join, select, select_biased, SinkExt};
+use futures_util::{select_biased, SinkExt};
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
 use n0_future::task::spawn;
@@ -41,21 +36,12 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
-    BeginTransferResource,
-    CancelTransferSessionRequest,
-    EndTransferResource,
-    FecFeedback,
-    IntroduceRequestMessage,
-    IntroduceResponseMessage,
-    NetworkStats,
-    PeerMessage,
-    TransferRequestMessage,
-    TransferResponseMessage,
-    TransferSessionMessage
+    CancelTransferSessionRequest, FecFeedback, IntroduceRequestMessage, IntroduceResponseMessage, NetworkStats, PeerMessage,
+    TransferRequestMessage, TransferResponseMessage, TransferSessionMessage,
 };
-use std::sync::mpsc::channel;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Quad-channel wrapper for load balancing between four unreliable data channels
@@ -79,8 +65,15 @@ impl QuadUnreliableChannel {
         buffer: PeerBuffered,
     ) -> Self {
         Self {
-            channels: [channel1, channel2, channel3, channel4],
-            channel_ids: [channel1_id, channel2_id, channel3_id, channel4_id],
+            channels: [
+                channel1, channel2, channel3, channel4,
+            ],
+            channel_ids: [
+                channel1_id,
+                channel2_id,
+                channel3_id,
+                channel4_id,
+            ],
             buffer,
             current_channel: 0,
         }
@@ -107,10 +100,7 @@ impl QuadUnreliableChannel {
         let mut total_received = 0;
 
         for &channel_id in &self.channel_ids {
-            let (sent, received) = self.buffer
-                .channel_bytes_sent_received(channel_id)
-                .await
-                .unwrap_or((0, 0));
+            let (sent, received) = self.buffer.channel_bytes_sent_received(channel_id).await.unwrap_or((0, 0));
             total_sent += sent;
             total_received += received;
         }
@@ -123,11 +113,7 @@ impl QuadUnreliableChannel {
         let mut total_sent = 0;
 
         for &channel_id in &self.channel_ids {
-            let sent = self.buffer
-                .channel_bytes_sent_received(channel_id)
-                .await
-                .map(|it| it.0)
-                .unwrap_or(0);
+            let sent = self.buffer.channel_bytes_sent_received(channel_id).await.map(|it| it.0).unwrap_or(0);
             total_sent += sent;
         }
 
@@ -167,6 +153,13 @@ pub struct WebRtcPeer {
     pub inbound_data_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
     pub inbound_data_stream_sender: mpsc::Sender<Packet>,
 
+    pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u8, Packet)>>,
+    pub outbound_packet_sender: mpsc::Sender<(u8, Packet)>,
+
+    pub prefix_channels: Arc<Mutex<HashMap<u8, mpsc::Sender<Packet>>>>,
+
+    pub bandwidth: Arc<AtomicU64>,
+
     // Connect to the core stream, where all state is stored
     pub core_request: OnceCell<CoreRequest>,
 }
@@ -188,6 +181,7 @@ impl WebRtcPeer {
 
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
+        let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
 
         let introduce_request = IntroduceRequestMessage {
             mine: PeerMessage {
@@ -234,6 +228,10 @@ impl WebRtcPeer {
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
+            outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
+            outbound_packet_sender: outbound_packet_tx,
+            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default(),
         })
@@ -261,6 +259,7 @@ impl WebRtcPeer {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
         let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
+        let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
             peer: PeerMessage {
                 peer_id: user.id().to_string(),
@@ -300,6 +299,10 @@ impl WebRtcPeer {
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
+            outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
+            outbound_packet_sender: outbound_packet_tx,
+            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default(),
         })
@@ -363,391 +366,12 @@ impl WebRtcPeer {
         let _ = self.msg_channel.notify(request).await;
     }
 
-    pub async fn answer_transfer(
-        &self,
-        core_request: CoreRequest,
-        session_id: u64,
-        session: Option<TransferSession>,
-    ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let Some(mut session) = session else {
-            // Denied
-            if let Some(rtc_request_id) = self.transfers_context.rtc_request_id(session_id).await {
-                let response = TransferResponseMessage {};
-                self.msg_channel.send_response(rtc_request_id, Response::TransferResponse(response)).await?;
-            };
-
-            return Ok(TransferSessionStatus::Canceled);
-        };
-
-        let mut resource_rx = self.inbound_data_stream_receiver.retrieve_timed(Duration::from_secs(11)).await?;
-        let _ = resource_rx.drain();
-
-        let cancellation_signal = session.token().clone();
-        self.transfers_context.add_token(session_id, cancellation_signal.clone()).await;
-        let _drop_guard = cancellation_signal.drop_guard();
-
-        log::info!(
-            "Thumbnails info {:?}",
-            session.resources.iter().map(|r| r.thumbnail_path.clone()).collect::<Vec<_>>()
-        );
-
-        let mut thumbnail_rx = self.inbound_thumbnail_stream_receiver.retrieve_timed(Duration::from_secs(11)).await?;
-
-        let msg_channel = self.msg_channel.clone();
-        let peer_id = session.peer().map(|it| it.peer_id()).context("This is not a peer session")?;
-        let context = self.transfers_context.clone();
-        let response = TransferResponseMessage {};
-        if let Some(rtc_request_id) = context.rtc_request_id(session_id).await {
-            if let Err(e) = msg_channel.send_response(rtc_request_id, Response::TransferResponse(response)).await {
-                log::error!("Failed to send response to peer {peer_id}: {e:?}");
-                cancellation_signal.cancel();
-            }
-        }
-
-        let thumbnail_handle = {
-            let mut thumbnail_paths = session
-                .resources
-                .iter()
-                .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
-                .collect::<Vec<(u64, LocalResourcePath)>>();
-            let repo = self.resource_repo.clone();
-            let core_request = core_request.clone();
-            let thumbnail_cancel_signal = cancellation_signal.child_token();
-            spawn(async move {
-                while !thumbnail_cancel_signal.is_cancelled() {
-                    if thumbnail_paths.is_empty() {
-                        return Ok(thumbnail_paths);
-                    }
-
-                    log::info!("Begin receiving thumbnail for session {session_id}");
-                    let start_delimiter = TransferDelimiterShema::forward_to_next_resource(&mut thumbnail_rx, session_id)
-                        .with_cancel(&thumbnail_cancel_signal)
-                        .await??;
-
-                    let Some(resource_index) = thumbnail_paths.iter().position(|it| it.0 == start_delimiter.resource_id()) else {
-                        return Err(WebRtcErrors::InvalidDelimiter(format!(
-                            "The first delimiter is not match with any resource {start_delimiter:?}"
-                        )));
-                    };
-
-                    let resource_path = thumbnail_paths.swap_remove(resource_index).1;
-
-                    let mut writer = repo
-                        .write(resource_path.clone(), start_delimiter.compressed())
-                        .with_cancel(&thumbnail_cancel_signal)
-                        .await??;
-
-                    while let Ok(Some(bytes)) = thumbnail_rx.next().with_cancel(&thumbnail_cancel_signal).await {
-                        writer
-                            .d_write(bytes.to_vec().into())
-                            .await
-                            .map_err(|it| WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{it:?}"))))?;
-
-                        if TransferDelimiterShema::from_end_packet(&bytes, session_id).is_ok() {
-                            break;
-                        }
-                    }
-
-                    writer.end().with_cancel(&thumbnail_cancel_signal).await??;
-
-                    let event = ThumbnailUpdatedEvent {
-                        resource_id: start_delimiter.resource_id(),
-                        path: resource_path,
-                    };
-
-                    let _ = core_request.response(TransferOperationOutput::ThumbnailUpdated(event)).await;
-                }
-
-                Ok(thumbnail_paths)
-            })
-        };
-
-        // Metrics tracking for averages
-        let mut total_decode_time_us = 0u64;
-        let mut total_decode_count = 0u64;
-        let mut total_byte_received = 0u64;
-        let mut total_write_time_us = 0u64;
-        let mut total_write_count = 0u64;
-        let mut total_written_bytes_all = 0u64;
-        let mut network_stats = NetworkStats::default();
-
-        loop {
-            if session.is_completed() {
-                log::warn!("Session {session_id} is completed");
-                break;
-            }
-
-            let start_delim = loop {
-                let timeout_fut = sleep(Duration::from_secs(10)).fuse();
-                let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
-
-                futures::pin_mut!(timeout_fut);
-                futures::pin_mut!(packet_fut);
-
-                select_biased! {
-                    raw_packet = packet_fut => {
-                        let Some(raw_packet) = raw_packet? else {
-                            return Err(WebRtcErrors::InvalidDelimiter("Stream ended before start delimiter".into()));
-                        };
-
-                        // Try to parse as start delimiter
-                        if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&raw_packet, session_id) {
-                            log::info!("Received start delimiter for resource {}", delimiter.resource_id());
-                            break delimiter;
-                        }
-                        // Ignore other packets while waiting for start delimiter
-                        continue;
-                    },
-                    _ = timeout_fut => {
-                        return Err(WebRtcErrors::InvalidDelimiter("Timeout waiting for start delimiter".into()));
-                    },
-                }
-            };
-
-            let _ = resource_rx.drain();
-
-            {
-                network_stats.current_block_id = None;
-                let feedback = FecFeedback {
-                    feedback: Some(Feedback::Network(network_stats.clone())),
-                };
-
-                log::info!("Sending initial network stats for resource {}", start_delim.resource_id());
-                self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-            }
-
-            // Create new FecReceiver for this resource
-            let mut fec_receiver = FecReceiver::new();
-            let mut next_check_time: Option<Instant> = None;
-
-            let Some((resource_path, resource_size)) = session
-                .resources
-                .iter()
-                .find(|it| it.order_id == start_delim.resource_id())
-                .map(|it| (it.path.clone(), it.size))
-            else {
-                return Err(WebRtcErrors::InvalidDelimiter(format!(
-                    "Start delimiter not matching any resource: {start_delim:?}"
-                )));
-            };
-
-            log::info!("Begin downloading resource {:?} size={}", resource_path, resource_size);
-
-            let mut writer = self.resource_repo.write(resource_path.clone(), start_delim.compressed()).await?;
-
-            let Some(progress_update) = session.resource_mut_progress(start_delim.resource_id()) else {
-                return Err(anyhow!("Missing progress for resource {}", start_delim.resource_id()).into());
-            };
-
-            let mut total_written_bytes = 0u64;
-
-            // Create writer channel and spawn writer task
-            let (mut write_tx, mut write_rx) = mpsc::channel::<Packet>(20);
-            let writer_cancel_signal = cancellation_signal.clone();
-            let writer_core_request = core_request.clone();
-            let mut writer_progress_update = progress_update.clone();
-            let writer_handle = spawn(async move {
-                let mut total_written = 0u64;
-                let mut total_time_us = 0u64;
-                let mut write_count = 0u64;
-                loop {
-                    let write_result = write_rx.next()
-                        .with_cancel(&writer_cancel_signal)
-                        .await;
-
-                    match write_result {
-                        Ok(Some(data)) => {
-                            let data_len = data.len() as u64;
-                            let time = Instant::now();
-                            match writer.write(data.into()).await {
-                                Ok(written) => {
-                                    total_time_us += time.elapsed().as_micros() as u64;
-                                    total_written += written as u64;
-                                    write_count += 1;
-
-                                    // Update progress and send response
-                                    writer_progress_update.update_progress(written as u64);
-                                    writer_core_request.response_throttle(TransferResourceProgressUpdate(writer_progress_update.clone())).await;
-                                }
-                                Err(e) => {
-                                    log::error!("Writer error: {:?}", e);
-                                    return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
-                                }
-                            }
-                        }
-                        _ => {
-                            writer_progress_update.success();
-                            break
-                        }
-                    }
-                }
-
-                writer.end().await?;
-                Result::<(u64, u64, u64, _), WebRtcErrors>::Ok((total_written, total_time_us, write_count, writer_progress_update))
-            });
-
-            loop {
-                let frame_opt = {
-                    let packet_fut = resource_rx.next().with_cancel(&cancellation_signal).fuse();
-
-                    futures::pin_mut!(packet_fut);
-
-                    if let Some(check_time) = next_check_time {
-                        let sleep_fut = sleep(check_time.saturating_duration_since(Instant::now())).fuse();
-                        futures::pin_mut!(sleep_fut);
-
-                        select_biased! {
-                            raw_packet = packet_fut => {
-                                let raw_packet = raw_packet
-                                    .ok()
-                                    .flatten()
-                                    .ok_or_else(|| WebRtcErrors::InvalidDelimiter("Stream ended before end delimiter".into()))?;
-
-                                    let frame = Frame::deserialize(&raw_packet);
-                                    frame
-                            },
-                            _ = sleep_fut => {
-                                // Timeout expired, ping the FEC receiver
-                                None
-                            },
-                        }
-                    } else {
-                        // No timeout set, just wait for packets
-                        let raw_packet = packet_fut
-                            .await
-                            .ok()
-                            .flatten()
-                            .ok_or_else(|| WebRtcErrors::InvalidDelimiter("Stream ended before end delimiter".into()))?;
-
-                        let frame = Frame::deserialize(&raw_packet);
-                        frame
-                    }
-                };
-
-                let action = if let Some(first_frame) = frame_opt {
-                    if let Some(rtt) = self.buffer.rtt().await {
-                        fec_receiver.set_rtt(rtt as u64);
-                    }
-
-                    let mut frames = vec![first_frame];
-                    while let Some(frame) = resource_rx.try_next().ok().flatten().and_then(|it| Frame::deserialize(&it)) {
-                        frames.push(frame);
-                    }
-
-                    let time = Instant::now();
-                    let action = fec_receiver.receive(frames)?;
-                    total_decode_time_us += time.elapsed().as_micros() as u64;
-                    total_decode_count += 1;
-                    action
-                } else {
-                    // Timeout expired, ping for feedback
-                    fec_receiver.ping()?
-                };
-
-                // Handle the action
-                match &action {
-                    FecAction::Queued(instant) => {
-                        next_check_time = Some(*instant);
-                        continue;
-                    },
-                    FecAction::Terminated => {
-                        log::warn!("FecReceiver terminated, will cancel transfer");
-                        break;
-                    }
-                    _ => {}
-                }
-
-                let (new_packets, maybe_next_check) = self.handle_fec_action(action).await?;
-                if let Some(instant) = maybe_next_check {
-                    next_check_time = Some(instant);
-                } else {
-                    next_check_time = None;
-                }
-
-                let mut end_of_stream = false;
-                for packet in new_packets {
-                    let is_hold = TransferDelimiterShema::from_hold_packet(&packet, session_id).is_ok();
-                    let is_end = TransferDelimiterShema::from_end_packet(&packet, session_id).is_ok();
-                    let rtt = self.buffer.rtt().await.unwrap_or(0.0);
-                    let current_block_id = fec_receiver.current_block_id();
-                    network_stats.current_block_id = Some(current_block_id);
-                    network_stats.rtt = Some(rtt as u32);
-                    if is_hold {
-                        let loss_rate = fec_receiver.calculate_loss_rate();
-                        network_stats.loss_rate = loss_rate;
-                        let feedback = FecFeedback {
-                            feedback: Some(Feedback::Network(network_stats.clone())),
-                        };
-
-                        self.msg_channel.notify(Request::FecFeedback(feedback)).await?;
-                        continue;
-                    }
-                    else if is_end {
-                        end_of_stream = true;
-                        log::info!("End delimiter received, total received bytes is {total_byte_received}");
-                        break;
-                    }
-
-                    // Send to writer channel (progress update now happens in writer task)
-                    let data_len = packet.len() as u64;
-                    total_byte_received += data_len;
-                    total_written_bytes += data_len;
-                    total_written_bytes_all += data_len;
-                    if write_tx.send(packet).await.is_err() {
-                        log::error!("Writer channel closed unexpectedly");
-                        return Err(WebRtcErrors::PersistentError(PersistenceError::IOError("Writer channel closed".into())));
-                    }
-                }
-
-                if end_of_stream {
-                    break
-                }
-            }
-
-            let _ = write_tx.close().await;
-            let (written_bytes, write_time_us, write_count, mut writer_progress) = writer_handle.await??;
-            total_write_time_us += write_time_us;
-            total_write_count += write_count;
-            log::info!("Writer task finished, total written: {} bytes in {} chunks", written_bytes, write_count);
-
-            writer_progress.success();
-            let _ = core_request.response(TransferResourceProgressUpdate(writer_progress.clone())).await;
-            session.update_progress(writer_progress);
-
-            log::info!("Complete downloading resource {:?}, total {} bytes", resource_path, resource_size);
-
-            self.msg_channel.notify(Request::FecFeedback(FecFeedback { feedback: Some(Feedback::Network(network_stats.clone()))})).await?;
-
-            log::info!("Notified stats for end delimiter");
-            if total_byte_received > 0 {
-                log::info!("Total received bytes is {total_byte_received}")
-            }
-
-            total_byte_received = 0;
-        }
-
-        // Giving max 10s more for thumbnail to complete
-        drop(resource_rx);
-        cancellation_signal.cancel_after(Duration::from_secs(10));
-        let _ = thumbnail_handle.await;
-
-        // Log average metrics
-        if total_decode_count > 0 {
-            let avg_decode_time = total_decode_time_us / total_decode_count;
-            log::info!("Receiver average decode frame time: {}us (total: {} frames)", avg_decode_time, total_decode_count);
-        }
-        if total_write_count > 0 {
-            let avg_write_time = total_write_time_us / total_write_count;
-            log::info!("Receiver average write chunk time: {}us (total: {} chunks, {} bytes)",
-                avg_write_time, total_write_count, total_written_bytes_all);
-        }
-
-        Ok(session.status())
-    }
-
     async fn handle_fec_action(&self, action: FecAction) -> Result<(Vec<Packet>, Option<Instant>), WebRtcErrors> {
         match action {
-            FecAction::Constructed(packets, next_check) => Ok((packets, Some(next_check))),
+            FecAction::Constructed(packets_with_prefix, next_check) => {
+                let packets = packets_with_prefix.into_iter().map(|(_, packet)| packet).collect();
+                Ok((packets, Some(next_check)))
+            },
             FecAction::Feedback(fb, next_check) => {
                 log::info!("Sending FEC feedback: {:?}", fb);
                 self.msg_channel.notify(Request::FecFeedback(fb)).await?;
@@ -757,447 +381,10 @@ impl WebRtcPeer {
                 log::warn!("FEC terminated");
                 Err(WebRtcErrors::InvalidDelimiter("FEC terminated".into()))
             }
-            FecAction::Queued(_) | FecAction::Noop => Ok((vec![], None)), // Ignore queued and noop
-            _ => Ok((vec![], None)), // Ignore others
+            FecAction::Queued(time) => Ok((vec![], Some(time))),
+            FecAction::Noop => Ok((vec![], None)),
+            _ => Ok((vec![], None)),
         }
-    }
-
-    pub async fn transfer_session(
-        &self,
-        core_request: CoreRequest,
-        mut session: TransferSession,
-    ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let request_id = uuid::Uuid::now_v7();
-        let cancellation_signal = session.token().clone();
-        self.transfers_context.start_transfer(session.order_id, request_id.to_string()).await;
-        self.transfers_context.add_token(session.order_id, cancellation_signal.clone()).await;
-
-        let _drop_guard = cancellation_signal.drop_guard();
-
-        let session_id = session.order_id;
-        log::info!(
-            "Requesting peer to transfer session {session_id}, thumbnails{:?}",
-            session.resources.iter().map(|r| r.thumbnail_path.clone()).collect::<Vec<_>>()
-        );
-
-        for resource in session.resources.iter_mut() {
-            if matches!(resource.r#type, ResourceType::Folder) {
-                resource.name = format!("{}.zip", resource.name);
-            }
-        }
-
-        let transfer_session_message = TransferSessionMessage {
-            order_id: session.order_id,
-            resources: session.resources.iter().map(|r| r.to_proto()).collect(),
-        };
-
-        let peer_id = session.peer().map(|it| it.peer_id()).context("This is not a peer session")?;
-        let request = Request::TransferRequest(TransferRequestMessage {
-            session: transfer_session_message,
-        });
-
-        let response = self.msg_channel.send(request, Some(request_id)).await?;
-        log::info!("Received response for session {session_id} {response:?}");
-
-        let buffer = self.buffer.clone();
-        let repo = self.resource_repo.clone();
-
-        let thumbnail_handle = {
-            let mut session_thumbnail_paths = session
-                .resources
-                .iter()
-                .filter_map(|r| r.thumbnail_path.clone().map(|it| (r.order_id, it)))
-                .rev()
-                .collect::<Vec<_>>();
-            let thumbnail_channel = self.thumbnail_channel.clone();
-
-            let thumbnail_cancel_signal = cancellation_signal.clone();
-            log::info!(
-                "Begin sending {} thumbnails for session {session_id}",
-                session_thumbnail_paths.len()
-            );
-            spawn(async move {
-                while let Some((id, thumbnail_path)) = session_thumbnail_paths.pop() {
-                    let Ok(Ok(mut reader)) =
-                        repo.read(thumbnail_path.clone(), 63 * 1024, false).with_cancel(&thumbnail_cancel_signal).await
-                    else {
-                        log::warn!("Found thumbnail path {thumbnail_path:?} for resource {id} but it does not exist, skipping");
-                        continue;
-                    };
-
-                    log::info!("Begin sending thumbnail for resource {id} {thumbnail_path:?}");
-
-                    let begin_delimiter = TransferDelimiterShema::start(session_id, id, false).as_bytes()?;
-
-                    if let Err(e) = thumbnail_channel.unbounded_send((peer_id, begin_delimiter)) {
-                        log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
-                        return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
-                    }
-
-                    while let Ok(Ok(Some(bytes))) = reader.next(None).with_cancel(&thumbnail_cancel_signal).await {
-                        let bytes = Packet::from(bytes);
-                        if !bytes.is_empty() {
-                            let _ = thumbnail_channel.unbounded_send((peer_id, bytes));
-                        }
-
-                        buffer.wait_buffer_low(TRANSFER_THUMBNAIL_CHANNEL_ID, MIN_BUFFER_SIZE / 2, Duration::from_millis(300)).await;
-                    }
-
-                    let end_delimiter = TransferDelimiterShema::end(session_id, id, false).as_bytes()?;
-                    if let Err(e) = thumbnail_channel.unbounded_send((peer_id, end_delimiter)) {
-                        log::error!("Failed to send delimiter to peer for thumbnail {peer_id:?}: {e:?}");
-                        return Err(WebRtcErrors::PersistentError(PersistenceError::IOError(format!("{e:?}"))));
-                    }
-                }
-
-                Ok(session_thumbnail_paths)
-            })
-        };
-
-        let resource_cancel_signal = cancellation_signal.clone();
-        let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
-        let _ = feedback_receiver.drain();
-
-        // Metrics tracking for averages
-        let mut total_read_bytes = 0u64;
-        let mut total_read_time_us = 0u64;
-        let mut total_frame_build_time_us = 0u64;
-        let mut total_frame_build_count = 0u64;
-
-        let bandwidth = Arc::new(AtomicU64::new(0));
-        while !session.is_completed() {
-            let Some((resource_path, order_id, size, name)) = session
-                .get_next_transfer_resource()
-                .map(|it| (it.path.clone(), it.order_id, it.size, it.name.clone()))
-            else {
-                break;
-            };
-
-            let is_compressed = is_compressible(name.as_str());
-            let chunk_size = if is_compressed {
-                (CHUNK_SIZE * DATA_SHARDS_DEFAULT - CHUNK_SIZE) as u64
-            } else {
-                (CHUNK_SIZE * DATA_SHARDS_DEFAULT) as u64
-            };
-
-            let mut reader = self
-                .resource_repo
-                .read(resource_path.clone(), chunk_size as usize, is_compressed)
-                .with_cancel(&resource_cancel_signal)
-                .await??;
-
-            log::info!("Begin transferring resource {resource_path:?} size {size} bytes compressed = {is_compressed}");
-
-            let mut total_data_sent = 0u64;
-            let mut total_sent_bytes = 0u64;
-            let Some(progress_update) = session.resource_mut_progress(order_id) else {
-                return Err(anyhow!("Missing progress for resource {}", order_id).into());
-            };
-
-            let on_hold_stop_threshold = 6;
-            let on_hold_slow_threshold: u32 = 2;
-            // This will help both side know that, from which moment
-            // all data is belong to the current resources
-            let mut is_start = true;
-            let mut hold_counter = 0;
-            let (mut read_tx, mut read_rx) = mpsc::channel::<(Packet, usize)>((MAX_BUFFER_SIZE * 2) / CHUNK_SIZE);
-            let (mut sleep_control_tx, mut sleep_control_rx) = mpsc::channel::<u64>(10);
-
-            let reader_cancel_signal = resource_cancel_signal.clone();
-            let band_width2 = bandwidth.clone();
-            let reader_handle = spawn(async move {
-                let mut total_read = 0u64;
-                let mut total_time_us = 0u64;
-                let mut sleep_duration_ms = 0u64; // Current sleep duration
-
-                loop {
-                    let time = Instant::now();
-                    reader.compression_stats_mut().update_network_bandwidth(band_width2.load(Ordering::Relaxed) as f64);
-
-                    // Perform the read operation
-                    let read_result = reader.c_next(Some(chunk_size))
-                        .with_cancel(&reader_cancel_signal)
-                        .await;
-
-                    match read_result {
-                        Ok(Ok(Some((data, raw_size)))) => {
-                            total_time_us += time.elapsed().as_micros() as u64;
-                            total_read += data.len() as u64;
-                            let packet = Packet::from(data);
-
-                            if read_tx.send((packet, raw_size)).await.is_err() {
-                                log::info!("Reader channel closed, stopping reader task");
-                                break;
-                            }
-                        }
-                        Ok(Ok(None)) => {
-                            // End of file
-                            log::info!("Reader task completed, total read: {} bytes", total_read);
-                            break;
-                        }
-                        Ok(Err(e)) => {
-                            log::error!("Reader error: {:?}", e);
-                            break;
-                        }
-                        Err(e) => {
-                            // Cancelled
-                            log::info!("Reader task cancelled {e:?}");
-                            break;
-                        }
-                    }
-
-                    // Check for sleep control updates
-                    while let Ok(Some(new_sleep_ms)) = sleep_control_rx.try_next() {
-                        sleep_duration_ms = new_sleep_ms;
-                        log::info!("Sleep duration updated to {}ms", sleep_duration_ms);
-                    }
-
-                    // Sleep after read if duration > 0
-                    if sleep_duration_ms > 0 {
-                        let sleep_fut = sleep(Duration::from_millis(sleep_duration_ms)).fuse();
-                        let update_fut = sleep_control_rx.next().fuse();
-
-                        futures::pin_mut!(sleep_fut);
-                        futures::pin_mut!(update_fut);
-
-                        select_biased! {
-                            new_ms_opt = update_fut => {
-                                if let Some(new_ms) = new_ms_opt {
-                                    sleep_duration_ms = new_ms;
-                                    log::info!("Sleep interrupted, duration updated to {}ms", sleep_duration_ms);
-                                }
-                            }
-                            _ = sleep_fut => {
-                                // Sleep completed normally
-                            }
-                        }
-                    }
-                }
-
-                Result::<(u64, u64), WebRtcErrors>::Ok((total_read, total_time_us))
-            });
-
-            let mut is_end = false;
-
-            let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
-            let delimiter = TransferDelimiterShema::start(session_id, order_id, is_compressed).as_bytes()?;
-            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), delimiter));
-
-            let mut buff_counter = 0;
-            let _ = self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await;
-
-            let mut received_from_readers = 0;
-            loop {
-                let (bytes, raw_size, feedback) = {
-                    if is_start || is_end || hold_counter >= on_hold_stop_threshold {
-                        let timeout_fut = sleep(Duration::from_secs(60)).fuse();
-                        let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
-
-                        futures::pin_mut!(timeout_fut);
-                        futures::pin_mut!(fb_fut);
-                        select_biased! {
-                            _ = timeout_fut => {
-                                return Err(anyhow!("Timeout waiting for end acknowledgment").into());
-                            },
-                            fb = fb_fut => {
-                                let fb = fb?;
-                                fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
-                            },
-                        }
-                    }
-                    else {
-                        let reader_fut = read_rx.next().fuse();  // Read from channel instead of direct reader
-                        let fb_fut = feedback_receiver.next().with_cancel(&resource_cancel_signal).fuse();
-
-                        futures::pin_mut!(fb_fut);
-                        futures::pin_mut!(reader_fut);
-                        select_biased! {
-                            r = reader_fut => {
-                                r.map(|it| (Some(it.0), Some(it.1), None)).unwrap_or((None, None, None))
-                            },
-                            fb = fb_fut => {
-                                let fb = fb?;
-                                fb.map(|f| (None, None, Some(f))).unwrap_or((None, None, None))
-                            },
-                        }
-                    }
-                };
-
-                if let Some(rtt) = self.buffer.rtt().await {
-                    fec_sender.set_rtt(rtt as u64);
-                }
-
-                let action = match (bytes, raw_size, feedback) {
-                    (Some(bytes), Some(raw_size), _) => {
-                        let time = Instant::now();
-                        received_from_readers += bytes.len();
-                        progress_update.update_progress(raw_size as u64);
-                        let action = fec_sender.send(bytes)?;
-                        total_frame_build_time_us += time.elapsed().as_micros() as u64;
-                        total_frame_build_count += 1;
-                        let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
-                        action
-                    }
-                    (_, _, Some(fb)) => {
-                        if let Feedback::Network(ref net) = fb {
-                            log::info!("Received network feedback: loss_rate={}, rtt={:?}, block_id={:?}, hold_counter={}",
-                                net.loss_rate, net.rtt, net.current_block_id, hold_counter);
-
-                            if is_start {
-                                is_start = false;
-                                continue;
-                            };
-
-                            if is_end && net.current_block_id.eq(&Some(fec_sender.block_id)) {
-                                log::info!("End delimiter acknowledged, finishing resource transfer");
-                                break;
-                            }
-
-                            if hold_counter > 0 {
-                                hold_counter -= 1;
-                                if hold_counter < on_hold_slow_threshold {
-                                    let _ = sleep_control_tx.send(0).await;
-                                }
-
-                                log::info!("Decreased hold_counter to {}", hold_counter);
-                            }
-                        }
-                        fec_sender.feedback(fb)
-                    }
-                    _ => {
-                        self.quad_unreliable_channel.lock().await.flush_timeout().await?;
-                        self.buffer.flush_timeout(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).await?;
-
-                        let end_delimiter = TransferDelimiterShema::end(session_id, order_id, is_compressed).as_bytes()?;
-                        let FecAction::Framed(frames) = fec_sender.send(end_delimiter)? else {
-                            return Err(anyhow!("Failed to send end delimiter").into());
-                        };
-
-                        for frame in frames {
-                            let _ = self.reliable_data_channel.unbounded_send((peer_id.clone(), frame.serialize()));
-                        }
-
-                        log::info!("No data left for resource {resource_path:?}, sending end delimiter");
-
-                        is_end = true;
-                        FecAction::Noop
-                    }
-                };
-
-                match action {
-                    FecAction::Framed(frames) => {
-                        let mut quad_channel = self.quad_unreliable_channel.lock().await;
-                        for frame in frames {
-                            let packet = frame.serialize();
-                            total_data_sent += frame.data().len() as u64;
-                            total_sent_bytes += packet.len() as u64;
-                            buff_counter += packet.len();
-                            let _ = quad_channel.send(self.peer.peer_id(), packet);
-                        }
-                    }
-                    FecAction::Retransmit(frames) => {
-                        if !frames.is_empty() {
-                            let timeout = loss_delay_us(fec_sender.rtt_estimator.srtt_us, fec_sender.rtt_estimator.rttvar_us, None) / 3;
-                            log::info!("Retransmitting packet for block {:?} {timeout}us", frames[0].block_id);
-                            for frame in frames {
-                                let packet = frame.serialize();
-                                buff_counter += packet.len();
-                                let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
-                            };
-
-                            // Decrease the buffer by a half to preventing more data loss
-                            buff_counter = buff_counter.max(MAX_BUFFER_SIZE / 2);
-                        }
-                    }
-                    FecAction::Terminated => {
-                        log::info!("Fec sender terminated, aborting resource transfer");
-                        break;
-                    }
-                    FecAction::Noop | FecAction::Feedback(_, _) | FecAction::Constructed(_, _) | FecAction::Queued(_) => {}
-                };
-
-                if buff_counter > MAX_BUFFER_SIZE {
-                    buff_counter = 0;
-
-                    let tick = Instant::now();
-                    let quad_ch = self.quad_unreliable_channel.lock().await;
-                    let stats_before = quad_ch.bytes_sent().await;
-
-                    quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
-                    self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64))).await;
-
-                    // Always send hold delimiter when buffer is full
-                    let hold_delimiter = TransferDelimiterShema::hold(session_id, order_id).as_bytes()?;
-                    let FecAction::Framed(frames) = fec_sender.send(hold_delimiter)? else {
-                        return Err(anyhow!("Failed to build hold delimiter").into());
-                    };
-
-                    for frame in frames {
-                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
-                    }
-
-                    // Decrease the transfer speed
-                    hold_counter += 1;
-                    hold_counter = hold_counter.min(on_hold_stop_threshold);
-                    if hold_counter >= on_hold_slow_threshold {
-                        let _ = sleep_control_tx.try_send(fec_sender.rtt().max(20) * (hold_counter as u64));
-                    }
-
-                    log::info!("Sent hold delimiter, hold_counter increased to {}", hold_counter);
-
-                    let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                    let stats_after = quad_ch.bytes_sent().await;
-                    let total_sent = stats_after.saturating_sub(stats_before);
-                    let bw = (total_sent as f64 / time) as u64;
-                    if bw > 1 {
-                        bandwidth.fetch_add(bw, Ordering::Relaxed);
-                        log::info!("Buffer low, sent {} bytes in {} seconds, bandwidth: {:.2} kbps", total_sent, time, bw / 1000);
-                    }
-                }
-            }
-
-            progress_update.success();
-            let _ = core_request.response_throttle(TransferResourceProgressUpdate(progress_update.clone())).await;
-
-            read_rx.close();
-            drop(read_rx);
-            let (read_bytes, read_time_us) = reader_handle.await??;
-            total_read_bytes += read_bytes;
-            total_read_time_us += read_time_us;
-            log::info!("Reader task finished, total read: {} bytes", read_bytes);
-
-            log::info!(
-                "Complete transferring resource {resource_path:?} with status {:?} total_sent {:?} total_data {:?}, reader {}",
-                progress_update.status,
-                total_sent_bytes,
-                total_data_sent,
-                received_from_readers
-            );
-
-            received_from_readers = 0;
-            total_sent_bytes = 0;
-            total_data_sent = 0;
-        }
-
-        cancellation_signal.cancel_after(Duration::from_secs(8));
-        let _ = thumbnail_handle.await;
-        self.buffer.flush_all_timeout().await?;
-
-        // Log average metrics
-        if total_read_time_us > 0 && total_read_bytes > 0 {
-            let avg_read_speed = (total_read_bytes as f64 * 1_000_000.0) / total_read_time_us as f64;
-            log::info!("Sender average reading data speed: {:.2} Byte/s (total: {} bytes in {}us)",
-                avg_read_speed, total_read_bytes, total_read_time_us);
-        }
-        if total_frame_build_count > 0 {
-            let avg_build_time = total_frame_build_time_us / total_frame_build_count;
-            log::info!("Sender average build frame time: {}us (total: {} frames)",
-                avg_build_time, total_frame_build_count);
-        }
-
-        log::info!("Transfer session {session_id} completed");
-
-        Ok(session.status())
     }
 
     pub async fn cancel_transfer_session(&self, session_id: u64) -> Result<(), WebRtcErrors> {
@@ -1207,6 +394,166 @@ impl WebRtcPeer {
                 session_id: session_id as i64,
             }))
             .await?;
+        Ok(())
+    }
+
+    pub async fn sending_loop(&self) -> Result<(), WebRtcErrors> {
+        let mut fec_sender = FecSender::new(self.peer.peer_id(), 512);
+        let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
+        let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
+        let mut buff_counter = 0;
+
+        loop {
+            if let Some(rtt) = self.buffer.rtt().await {
+                fec_sender.set_rtt(rtt as u64);
+            }
+
+            let packet_fut = packet_rx.next().fuse();
+            let fb_fut = feedback_receiver.next().fuse();
+
+            futures::pin_mut!(packet_fut);
+            futures::pin_mut!(fb_fut);
+
+            let action = select_biased! {
+                pkt = packet_fut => {
+                    match pkt {
+                        Some((prefix, packet)) => fec_sender.send(prefix, packet)?,
+                        None => break,
+                    }
+                },
+                fb = fb_fut => {
+                    match fb {
+                        Some(fb) => fec_sender.feedback(fb),
+                        _ => FecAction::Noop,
+                    }
+                },
+            };
+
+            match action {
+                FecAction::Framed(frames) => {
+                    let mut quad_channel = self.quad_unreliable_channel.lock().await;
+                    for frame in frames {
+                        let packet = frame.serialize();
+                        buff_counter += packet.len();
+                        let _ = quad_channel.send(self.peer.peer_id(), packet);
+                    }
+                },
+                FecAction::Retransmit(frames) => {
+                    for frame in frames {
+                        let packet = frame.serialize();
+                        buff_counter += packet.len();
+                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
+                    }
+                },
+                FecAction::Terminated => {
+                    log::info!("FEC sender terminated in sending_loop");
+                    break;
+                },
+                _ => {}
+            }
+
+            if buff_counter > MAX_BUFFER_SIZE {
+                buff_counter = 0;
+
+                let tick = Instant::now();
+                let quad_ch = self.quad_unreliable_channel.lock().await;
+                let stats_before = quad_ch.bytes_sent().await;
+
+                quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, Duration::from_millis(1500)).await;
+                self.buffer
+                    .wait_buffer_low(
+                        TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID,
+                        MIN_BUFFER_SIZE,
+                        Duration::from_millis(4 * fec_sender.rtt().max(MIN_BUFFER_SIZE as u64)),
+                    )
+                    .await;
+
+                let hold_delimiter = TransferDelimiterShema::hold().as_bytes()?;
+                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter)? else {
+                    return Err(anyhow!("Failed to build hold delimiter").into());
+                };
+
+                for frame in frames {
+                    let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                }
+
+                let time = tick.elapsed().as_secs_f64().max(f64::MIN);
+                let stats_after = quad_ch.bytes_sent().await;
+                let total_sent = stats_after.saturating_sub(stats_before);
+                let bw = (total_sent as f64 / time) as u64;
+                let bw_kbps = bw / 1000;
+
+                if bw_kbps > 0 {
+                    self.bandwidth.store(bw_kbps, Ordering::Relaxed);
+                    log::info!(
+                        "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
+                        total_sent,
+                        time,
+                        bw_kbps
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn receiving_loop(&self) -> Result<(), WebRtcErrors> {
+        let mut fec_receiver = FecReceiver::new();
+        let mut data_rx = self.inbound_data_stream_receiver.retrieve().await?;
+
+        loop {
+            let frames = {
+                let mut frames = Vec::new();
+
+                if let Some(packet) = data_rx.next().await {
+                    if let Some(frame) = Frame::deserialize(&packet) {
+                        frames.push(frame);
+                    }
+                }
+
+                while let Some(packet) = data_rx.try_next().ok().flatten() {
+                    if let Some(frame) = Frame::deserialize(&packet) {
+                        frames.push(frame);
+                    }
+                }
+
+                frames
+            };
+
+            if let Some(rtt) = self.buffer.rtt().await {
+                fec_receiver.set_rtt(rtt as u64);
+            }
+
+            let action = fec_receiver.receive(frames)?;
+
+            match action {
+                FecAction::Constructed(packets_with_prefix, _next_check) => {
+                    let channels = self.prefix_channels.lock().await;
+
+                    for (prefix, packet) in packets_with_prefix {
+                        if let Some(sender) = channels.get(&prefix) {
+                            let mut sender_clone = sender.clone();
+                            if let Err(e) = sender_clone.try_send(packet) {
+                                log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
+                            }
+                        } else {
+                            log::warn!("No channel registered for prefix {}", prefix);
+                        }
+                    }
+                },
+                FecAction::Feedback(fb, _next_check) => {
+                    log::info!("Sending FEC feedback from receiver: {:?}", fb);
+                    let _ = self.msg_channel.notify(Request::FecFeedback(fb)).await;
+                },
+                FecAction::Terminated => {
+                    log::warn!("FEC receiver terminated");
+                    break;
+                },
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 }

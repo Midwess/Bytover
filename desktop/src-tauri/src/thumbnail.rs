@@ -5,7 +5,7 @@ use image::{DynamicImage, ImageFormat, RgbaImage};
 use tauri::async_runtime::spawn_blocking;
 use tokio::process::Command;
 use thiserror::Error;
-use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension, TaskErrors};
+use core_services::utils::cancellation::{CancellationToken, FutureExtension, TaskErrors};
 use shared::entities::local_resource::ResourceType;
 
 #[derive(Error, Debug)]

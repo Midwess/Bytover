@@ -4,7 +4,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
-use core_services::utils::cancellation::{CancellationToken, CancellationTokenExt, FutureExtension};
+use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use crux_core::RequestHandle;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};

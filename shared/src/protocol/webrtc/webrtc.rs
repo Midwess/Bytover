@@ -86,42 +86,6 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn answer_session(
-        &self,
-        core_request: CoreRequest,
-        peer_id: String,
-        session: Option<TransferSession>,
-        session_id: u64
-    ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.answer_transfer(core_request, session_id, session).await;
-
-            return result;
-        };
-
-        Err(WebRtcErrors::ConnectionNotFound(peer_id))
-    }
-
-    pub async fn send_session(
-        &self,
-        core_request: CoreRequest,
-        session: TransferSession
-    ) -> Result<TransferSessionStatus, WebRtcErrors> {
-        let Some(peer_id) = session.peer().map(|it| it.peer_id()) else {
-            return Err(anyhow!("This session is not a peer session").into())
-        };
-
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
-            let result = peer.transfer_session(core_request, session).await;
-
-            return result;
-        };
-
-        Err(WebRtcErrors::ConnectionNotFound(peer_id))
-    }
-
     pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
@@ -148,7 +112,11 @@ impl WebRtc {
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Msg
-            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Resource reliable, for retransmissions and delimiter
+            .add_channel(ChannelConfig { // resource reliable channel for retransmissions
+                buffer_low_threshold: Some(MIN_BUFFER_SIZE),
+                ordered: false,
+                max_retransmits: None
+            }) // Resource reliable, for retransmissions and delimiter
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
             .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource2 unreliable, for retransmissions

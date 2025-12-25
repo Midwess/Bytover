@@ -22,10 +22,7 @@ pub enum TransferDelimiterShema {
         session_id: u64,
         resource_id: u64,
     },
-    Hold {
-        session_id: u64,
-        resource_id: u64,
-    },
+    Hold,
 }
 
 impl TransferDelimiterShema {
@@ -45,26 +42,23 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn hold(session_id: u64, resource_id: u64) -> Self {
-        Self::Hold {
-            session_id,
-            resource_id,
+    pub fn hold() -> Self {
+        Self::Hold
+    }
+
+    pub fn session_id(&self) -> Option<u64> {
+        match self {
+            Self::Start { session_id, .. } => Some(*session_id),
+            Self::End { session_id, .. } => Some(*session_id),
+            Self::Hold => None,
         }
     }
 
-    pub fn session_id(&self) -> u64 {
+    pub fn resource_id(&self) -> Option<u64> {
         match self {
-            Self::Start { session_id, .. } => *session_id,
-            Self::End { session_id, .. } => *session_id,
-            Self::Hold { session_id, .. } => *session_id,
-        }
-    }
-
-    pub fn resource_id(&self) -> u64 {
-        match self {
-            Self::Start { resource_id, .. } => *resource_id,
-            Self::End { resource_id, .. } => *resource_id,
-            Self::Hold { resource_id, .. } => *resource_id,
+            Self::Start { resource_id, .. } => Some(*resource_id),
+            Self::End { resource_id, .. } => Some(*resource_id),
+            Self::Hold => None,
         }
     }
 
@@ -116,7 +110,7 @@ impl TransferDelimiterShema {
             ));
         }
 
-        if result.session_id() != session_id {
+        if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
                 "Invalid delimiter, session_id does not match".to_owned()
             ));
@@ -134,7 +128,7 @@ impl TransferDelimiterShema {
             ));
         }
 
-        if result.session_id() != session_id {
+        if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
                 "Invalid delimiter, session_id does not match".to_owned()
             ));
@@ -143,18 +137,12 @@ impl TransferDelimiterShema {
         Ok(result)
     }
 
-    pub fn from_hold_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+    pub fn from_hold_packet(data: &Packet) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
-        if !matches!(result, Self::Hold { .. }) {
+        if !matches!(result, Self::Hold) {
             return Err(WebRtcErrors::InvalidDelimiter(
                 format!("Expected Hold delimiter but got {:?}", result)
-            ));
-        }
-
-        if result.session_id() != session_id {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, session_id does not match".to_owned()
             ));
         }
 
