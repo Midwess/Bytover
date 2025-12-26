@@ -6,7 +6,7 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::p2p::{P2POperation, P2PSessionOverview};
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};

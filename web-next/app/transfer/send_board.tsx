@@ -23,14 +23,13 @@ import {
 import {
     AppEventVariantTransfer,
     LocalResourcePathVariantAbsolutePath,
-    PeerViewModel,
     ResourceTypeVariantFile,
     ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartTransfer,
+    TransferEventVariantStartP2PTransfer,
     ResourceTypeVariantFolder,
     ShelfEventVariantAddResources,
     AppEventVariantShelf,
@@ -797,21 +796,38 @@ function UrlInputWithCopy({ url }: { url: string }) {
 }
 
 function NearbySend() {
-    const nearbyState = window.core.useNearbyState()
-    const nearbyPeers = nearbyState?.peers || []
+    const [password, setPassword] = useState('')
+    const nearbyState = window.core.useNearbyState?.() || { peers: [] }
+    const nearbyAvailable = nearbyState.peers.length > 0
+
+    const handleStartTransfer = () => {
+        const pwd = password || null
+        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(nearbyAvailable, pwd)))
+        setPassword('')
+    }
 
     return <>
         <div className="flex flex-col w-full gap-3">
             <p className="text-start w-full text-primaryText/70 text-sm pb-1">
                 Share with nearby friends and devices
             </p>
-            {/* Current User Info */}
             <MyPeerInfo />
             <div className="flex flex-col w-full gap-3">
-                {nearbyPeers.length > 0 && <span className="text-start w-full text-muted-foreground text-sm font-medium pb-1">Peers:</span>}
-                {nearbyPeers.map((peer) => (
-                    <NearbyPeer key={peer.id} peer={peer} />
-                ))}
+                <Label htmlFor="password">Password (optional)</Label>
+                <Input
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type="password"
+                    maxLength={20}
+                    placeholder="pwd@123"
+                />
+                <Button
+                    className="w-fit h-[35px] bg-bluePrimary text-primary"
+                    onClick={handleStartTransfer}
+                >
+                    Start Transfer
+                </Button>
             </div>
         </div>
     </>
@@ -892,39 +908,4 @@ function MyPeerInfo() {
             </div>
         </div>
     )
-}
-
-function NearbyPeer(props: { peer: PeerViewModel }) {
-    const peer = core.usePeerState(props.peer?.id) || props.peer
-    const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
-
-    return <>
-        <div
-            className={"flex flex-row bg-muted hover:bg-muted-foreground/30 rounded-2xl items-center px-2 py-2 h-fit w-full border-1 border-primaryText/5 justify-between"}
-            onClick={() => {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantStartTransfer(peer.id)))
-            }}>
-            <div className={"flex flex-row items-center gap-3"}>
-                <div
-                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
-                    <Avatar className={"p-1 rounded-xl"} style={{ backgroundColor: color }}>
-                        <AvatarImage src={peer.avatar.url} />
-                    </Avatar>
-                </div>
-                <div className={"flex flex-col gap-1 items-start"}>
-                    <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
-                    {
-                        peer.display_upload_speed
-                            ? <p className={"text-muted-foreground text-xs"}>{peer.display_upload_speed}</p>
-                            : peer?.device?.name !== peer.display_name && <p className="text-muted-foreground text-xs">{peer.device?.name}</p>
-                    }
-                </div>
-            </div>
-            {
-                <div className={"w-[40px] h-[40px] flex justify-center items-center"}>
-                    <CircleProgress isCompleted={!Number(peer.transfer_progress)} isInProgress={!!peer.transfer_progress && peer.transfer_progress < 1} progress={peer.transfer_progress} size={35} strokeWidth={4} />
-                </div>
-            }
-        </div>
-    </>
 }

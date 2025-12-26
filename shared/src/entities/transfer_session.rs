@@ -191,6 +191,7 @@ impl TransferStatus {
 impl TransferSession {
     pub fn p2p(mut resources: Vec<LocalResource>, current_peer: Peer, password: Option<String>) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
+        let is_required_password = password.is_some();
         Self {
             order_id: gen_id_sync(),
             progress: resources
@@ -202,7 +203,7 @@ impl TransferSession {
             target: TransferTarget::P2P {
                 from_peer: current_peer,
                 password,
-                is_required_password: false
+                is_required_password
             },
             cancellation_token: CancellationToken::new()
         }

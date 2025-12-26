@@ -10,7 +10,7 @@ import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel, TransferEventVariantCancelTransfer,
     TransferEventVariantFindPublicSession,
-    TransferEventVariantViewPublicSession,
+    TransferEventVariantViewSession,
     TransferTypeVariantReceive,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -149,7 +149,7 @@ function ContentBoard() {
             return
         }
 
-        core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
+        core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
             enteredPassword ? enteredPassword : null, BigInt(selectedSession!.id), new TransferTypeVariantReceive()
         )))
     }
@@ -158,7 +158,7 @@ function ContentBoard() {
         if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
             const cloud = selectedSession as ReceiveCloudSessionViewModel
             if (!cloud.is_required_password && isLoading) {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
+                core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
                     null,
                     BigInt(cloud.id),
                     new TransferTypeVariantReceive(),

@@ -222,14 +222,39 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::StartP2PTransfer { nearby_available, password } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
+                if selected_resources.is_empty() {
+                    return Command::new(|it| async move {
+                        let _ = DialogOperation::toast("No resources selected".to_string()).into_future(it.clone()).await;
+                    });
+                }
+
                 let Some(me) = model.nearby.me.clone() else {
                     log::info!("User is not login, open login page");
                     return Command::done()
                 };
 
                 let session = TransferSession::p2p(selected_resources, me, password);
-                model.transfer.sessions.push(session);
-                Command::render()
+                model.transfer.sessions.push(session.clone());
+
+                let peers = model.nearby.peers.clone();
+                let p2p_sessions: Vec<TransferSession> = model.transfer.sessions
+                    .iter()
+                    .filter(|s| matches!(s.transfer_type, TransferType::Send) && s.target.is_peer())
+                    .cloned()
+                    .collect();
+
+                Command::all(vec![
+                    Command::render(),
+                    Command::new(move |it| {
+                        let peers = peers.clone();
+                        let p2p_sessions = p2p_sessions.clone();
+                        async move {
+                            for peer in peers {
+                                let _ = it.app().notify_peer_sessions(peer.id().to_string(), p2p_sessions.clone()).await;
+                            }
+                        }
+                    })
+                ])
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
