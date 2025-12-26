@@ -316,7 +316,7 @@ impl AppCommand {
                     let mut generated_saved_paths = self
                         .run(TransferSessionPersistentOperation::generate_resource_paths(
                             session_id.order_id.as_ref().and_then(|it| it.parse().ok()).unwrap_or_default(),
-                            requests
+                            requests.clone()
                         ))
                         .await?;
 

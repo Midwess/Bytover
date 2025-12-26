@@ -550,6 +550,7 @@ impl WebRtcPeer {
         order_id: u64,
         password: Option<String>,
     ) -> Result<(), WebRtcErrors> {
+        log::info!("Requesting session detail for order_id {}", order_id);
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
         let request = ViewSessionDetailRequest {
             order_id,
@@ -652,18 +653,14 @@ impl WebRtcPeer {
         for resource in &session.resources {
             let mut resource_proto = resource.to_proto();
             if let Some(thumbnail_path) = resource.thumbnail_path.as_ref() {
-                let Ok(mut thumbnail_cursor) = self.resource_repo.read(thumbnail_path.clone(), 64 * 1024, false).await else {
-                    continue;
+                if let Ok(mut thumbnail_cursor) = self.resource_repo.read(thumbnail_path.clone(), 64 * 1024, false).await {
+                    if let Ok(bytes) = thumbnail_cursor.read_all().await {
+                        resource_proto.thumbnail_png = Some(bytes.to_vec());
+                    };
                 };
-
-                let Ok(bytes) = thumbnail_cursor.read_all().await else {
-                    continue;
-                };
-
-                resource_proto.thumbnail_png = Some(bytes.to_vec());
-
-                self.msg_channel.send_response(request_id.clone(), Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::ResourceUpdated(resource_proto)) })).await?;
             }
+
+            self.msg_channel.send_response(request_id.clone(), Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::ResourceUpdated(resource_proto)) })).await?;
         }
 
         Ok(())
