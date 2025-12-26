@@ -23,9 +23,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::time::Duration;
 use anyhow::anyhow;
+use crux_core::Core;
 use futures::executor::block_on;
+use log::error;
 use n0_future::time::sleep;
 use crate::app::operations::CoreOperationOutput;
+use crate::errors::CoreError;
 use crate::protocol::webrtc::fec::{CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 
 pub static MSG_CHANNEL_ID: usize = 0;
@@ -133,11 +136,12 @@ impl WebRtc {
         &self,
         peer_id: String,
         request_id: String,
-        session: TransferSession,
+        session: Option<TransferSession>,
+        error: Option<CoreError>,
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_session_detail_response(request_id, Some(&session), None).await
+            peer.send_session_detail_response(request_id, session, error).await
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }

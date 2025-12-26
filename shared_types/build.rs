@@ -6,9 +6,11 @@ use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 #[cfg(any(feature = "swift", feature = "java"))]
 use native::repository::path_resolver::{PathResolverMessage, PathResolverResponseMessage};
 use schema::devlog::bitbridge::peer_message_body::Response;
+use schema::devlog::bitbridge::PeerErrorsMessage;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
+use schema::devlog::bitbridge::view_session_detail_response::Result as ViewSessionDetailResponseResult;
 use shared::app::authentication::module::{AuthenticationEvent, AuthenticationModel};
 use shared::app::environment::module::{EnvironmentEvent, EnvironmentModel};
 use shared::app::nearby::module::NearbyEvent;
@@ -114,6 +116,8 @@ fn main() {
     gen.register_type::<TransferSessionId>().unwrap();
     gen.register_type::<ShelfEvent>().unwrap();
     gen.register_type::<ShelfViewModel>().unwrap();
+    gen.register_type::<ViewSessionDetailResponseResult>().unwrap();
+    gen.register_type::<PeerErrorsMessage>().unwrap();
 
     gen.register_app::<BitBridge>().unwrap();
 

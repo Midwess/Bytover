@@ -1,6 +1,7 @@
 use crate::protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::protocol::rpc::errors::RpcErrors;
 use serde::{Deserialize, Serialize};
+use schema::devlog::bitbridge::PeerErrorsMessage;
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
@@ -26,7 +27,10 @@ pub enum CoreError {
     ParsingError(String),
 
     #[error("")]
-    NotImplemented(String)
+    NotImplemented(String),
+
+    #[error("")]
+    PeerRequestError(PeerErrorsMessage),
 }
 
 impl From<CloudTransferErrors> for CoreError {

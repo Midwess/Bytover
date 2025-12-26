@@ -32,12 +32,8 @@ pub enum P2POperation {
     SendSessionDetail {
         peer_id: String,
         request_id: String,
-        session: TransferSession
-    },
-    SendSessionDetailError {
-        peer_id: String,
-        request_id: String,
-        error: String
+        session: Option<TransferSession>,
+        error: Option<CoreError>
     },
     DownloadResource {
         peer_id: String,
@@ -121,7 +117,11 @@ impl P2POperation {
     }
 
     pub fn send_session_detail(peer_id: String, request_id: String, session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session })).map(|it| it.result())
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session: Some(session), error: None })).map(|it| it.result())
+    }
+
+    pub fn send_session_detail_error(peer_id: String, request_id: String, error: CoreError) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session: None, error: Some(error) })).map(|it| it.result())
     }
 
     pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {

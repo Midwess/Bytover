@@ -37,6 +37,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use core_services::utils::cancellation::CancellationToken;
 use crate::app::operations::transfer::TransferOperationOutput;
+use crate::errors::CoreError;
 
 // Global atomic counter for generating unique transfer IDs
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
@@ -615,21 +616,22 @@ impl WebRtcPeer {
     pub async fn send_session_detail_response(
         &self,
         request_id: String,
-        session: Option<&TransferSession>,
-        error: Option<String>,
+        session: Option<TransferSession>,
+        error: Option<CoreError>,
     ) -> Result<(), WebRtcErrors> {
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
 
         if let Some(error_msg) = error {
-            let error_type = if error_msg.contains("password") {
-                PeerErrorsMessage::InvalidPassword
-            } else if error_msg.contains("not found") {
-                PeerErrorsMessage::SessionNotFound
-            } else {
-                PeerErrorsMessage::InvalidRequest
-            };
+            match error_msg {
+                CoreError::PeerRequestError(e) => {
+                    self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(e.into())) })).await?;
+                }
+                e => {
+                    log::error!("Failed to send session detail response: {:?}", e);
+                    self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(PeerErrorsMessage::InvalidRequest.into())) })).await?;
+                }
+            }
 
-            self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(error_type.into())) })).await?;
             return Ok(())
         }
 
