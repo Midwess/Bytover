@@ -25,6 +25,7 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use core_services::utils::cancellation::CancellationToken;
 use crate::app::operations::p2p::P2PSessionOverview;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 
@@ -330,11 +331,9 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
-                // Collect order_ids from new overview
                 let new_session_ids: std::collections::HashSet<u64> =
                     sessions.iter().map(|s| s.order_id).collect();
 
-                // Remove sessions from this peer that are not in the new list
                 model.transfer.sessions.retain(|session| {
                     if let TransferTarget::P2P { from_peer, .. } = &session.target {
                         if from_peer.id == peer_id {
@@ -342,20 +341,17 @@ impl AppModule<BitBridge> for TransferModule {
                             return new_session_ids.contains(&session.order_id);
                         }
                     }
-                    // Keep all other sessions
+
                     true
                 });
 
-                // Add or update sessions from new overview
                 for overview in sessions {
                     let session_id = TransferSessionId {
                         order_id: Some(overview.order_id.to_string()),
                         transfer_type: Some(TransferType::Receive),
                     };
 
-                    // Check if session already exists
                     if model.transfer.sessions.lookup(&session_id).is_none() {
-                        // Create new stub session
                         let stub_session = TransferSession {
                             order_id: overview.order_id,
                             resources: vec![],
@@ -366,7 +362,7 @@ impl AppModule<BitBridge> for TransferModule {
                                 password: None,
                                 is_required_password: overview.password_protected
                             },
-                            cancellation_token: core_services::utils::cancellation::CancellationToken::new()
+                            cancellation_token: CancellationToken::new()
                         };
 
                         model.transfer.sessions.push(stub_session);

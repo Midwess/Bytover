@@ -41,92 +41,90 @@ use shared::errors::CoreError;
 use shared::repository::local_resource::LocalResourceId;
 use shared::repository::transfer_session::{TransferSessionId, TransferTargetId};
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     println!("cargo:rerun-if-changed=../shared");
 
     let mut gen = TypeGen::new();
 
     // Register module types
-    gen.register_type::<EnvironmentEvent>()?;
-    gen.register_type::<EnvironmentModel>()?;
-    gen.register_type::<AuthenticationEvent>()?;
-    gen.register_type::<AuthenticationModel>()?;
-    gen.register_type::<TransferEvent>()?;
-    gen.register_type::<TransferSessionId>()?;
-    gen.register_type::<TransferTargetId>()?;
-    gen.register_type::<TransferTarget>()?;
-    gen.register_type::<TransferModel>()?;
-    gen.register_type::<TransferMethodSelection>()?;
-    gen.register_type::<DeviceType>()?;
-    gen.register_type::<TransferStatus>()?;
-    gen.register_type::<TransferType>()?;
-    gen.register_type::<Response>()?;
-    gen.register_type::<TransferSessionStatus>()?;
+    gen.register_type::<EnvironmentEvent>().unwrap();
+    gen.register_type::<EnvironmentModel>().unwrap();
+    gen.register_type::<AuthenticationEvent>().unwrap();
+    gen.register_type::<AuthenticationModel>().unwrap();
+    gen.register_type::<TransferEvent>().unwrap();
+    gen.register_type::<TransferSessionId>().unwrap();
+    gen.register_type::<TransferTargetId>().unwrap();
+    gen.register_type::<TransferTarget>().unwrap();
+    gen.register_type::<TransferModel>().unwrap();
+    gen.register_type::<TransferMethodSelection>().unwrap();
+    gen.register_type::<DeviceType>().unwrap();
+    gen.register_type::<TransferStatus>().unwrap();
+    gen.register_type::<TransferType>().unwrap();
+    gen.register_type::<Response>().unwrap();
+    gen.register_type::<TransferSessionStatus>().unwrap();
 
     // Register base types
-    gen.register_type::<Token>()?;
-    gen.register_type::<CoreError>()?;
-    gen.register_type::<Session>()?;
-    gen.register_type::<SessionType>()?;
-    gen.register_type::<User>()?;
-    gen.register_type::<Platform>()?;
-    gen.register_type::<ResourceType>()?;
-    gen.register_type::<LocalResource>()?;
-    gen.register_type::<LocalResourcePath>()?;
-    gen.register_type::<ResourceSelection>()?;
-    gen.register_type::<FindingScope>()?;
-    gen.register_type::<GeoLocation>()?;
-    gen.register_type::<AlertDialog>()?;
-    gen.register_type::<MessageReason>()?;
-    gen.register_type::<ReceiveCloudSessionViewModel>()?;
+    gen.register_type::<Token>().unwrap();
+    gen.register_type::<CoreError>().unwrap();
+    gen.register_type::<Session>().unwrap();
+    gen.register_type::<SessionType>().unwrap();
+    gen.register_type::<User>().unwrap();
+    gen.register_type::<Platform>().unwrap();
+    gen.register_type::<ResourceType>().unwrap();
+    gen.register_type::<LocalResource>().unwrap();
+    gen.register_type::<LocalResourcePath>().unwrap();
+    gen.register_type::<ResourceSelection>().unwrap();
+    gen.register_type::<FindingScope>().unwrap();
+    gen.register_type::<GeoLocation>().unwrap();
+    gen.register_type::<AlertDialog>().unwrap();
+    gen.register_type::<MessageReason>().unwrap();
+    gen.register_type::<ReceiveCloudSessionViewModel>().unwrap();
 
     // Register operation enums
-    gen.register_type::<DialogOperation>()?;
-    gen.register_type::<PersistentOperation>()?;
-    gen.register_type::<RpcOperation>()?;
-    gen.register_type::<RpcOperationOutput>()?;
-    gen.register_type::<SessionPersistentOperation>()?;
-    gen.register_type::<TransferOperation>()?;
-    gen.register_type::<TransferOperationOutput>()?;
-    gen.register_type::<LocalResourcePersistentOperation>()?;
-    gen.register_type::<TransferSessionPersistentOperation>()?;
-    gen.register_type::<TransferSession>()?;
-    gen.register_type::<InternetOperation>()?;
-    gen.register_type::<DeviceOperation>()?;
-    gen.register_type::<P2POperation>()?;
-    gen.register_type::<P2POperationOutput>()?;
-    gen.register_type::<NearbyEvent>()?;
+    gen.register_type::<DialogOperation>().unwrap();
+    gen.register_type::<PersistentOperation>().unwrap();
+    gen.register_type::<RpcOperation>().unwrap();
+    gen.register_type::<RpcOperationOutput>().unwrap();
+    gen.register_type::<SessionPersistentOperation>().unwrap();
+    gen.register_type::<TransferOperation>().unwrap();
+    gen.register_type::<TransferOperationOutput>().unwrap();
+    gen.register_type::<LocalResourcePersistentOperation>().unwrap();
+    gen.register_type::<TransferSessionPersistentOperation>().unwrap();
+    gen.register_type::<TransferSession>().unwrap();
+    gen.register_type::<InternetOperation>().unwrap();
+    gen.register_type::<DeviceOperation>().unwrap();
+    gen.register_type::<P2POperation>().unwrap();
+    gen.register_type::<P2POperationOutput>().unwrap();
+    gen.register_type::<NearbyEvent>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]
-    gen.register_type::<PathResolverMessage>()?;
+    gen.register_type::<PathResolverMessage>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]
-    gen.register_type::<PathResolverResponseMessage>()?;
+    gen.register_type::<PathResolverResponseMessage>().unwrap();
 
-    gen.register_type::<CoreOperationOutput>()?;
+    gen.register_type::<CoreOperationOutput>().unwrap();
 
-    gen.register_type::<Source>()?;
+    gen.register_type::<Source>().unwrap();
 
     // Register executor msg
     #[cfg(any(feature = "swift", feature = "java"))]
-    gen.register_type::<MessageToShellResponse>()?;
+    gen.register_type::<MessageToShellResponse>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]
-    gen.register_type::<MessageToShell>()?;
-    gen.register_type::<LocalResourceId>()?;
-    gen.register_type::<TransferSessionId>()?;
-    gen.register_type::<ShelfEvent>()?;
-    gen.register_type::<ShelfViewModel>()?;
+    gen.register_type::<MessageToShell>().unwrap();
+    gen.register_type::<LocalResourceId>().unwrap();
+    gen.register_type::<TransferSessionId>().unwrap();
+    gen.register_type::<ShelfEvent>().unwrap();
+    gen.register_type::<ShelfViewModel>().unwrap();
 
-    gen.register_app::<BitBridge>()?;
+    gen.register_app::<BitBridge>().unwrap();
 
     let output_root = PathBuf::from("./generated");
 
     #[cfg(feature = "swift")]
-    gen.swift("SharedTypes", output_root.join("swift"))?;
+    gen.swift("SharedTypes", output_root.join("swift")).unwrap();
 
     #[cfg(feature = "java")]
-    gen.java("com.devlog.bitbridge.shared_types", output_root.join("java"))?;
+    gen.java("com.devlog.bitbridge.shared_types", output_root.join("java")).unwrap();
 
     #[cfg(feature = "typescript")]
-    gen.typescript("shared_types", output_root.join("typescript"))?;
-
-    Ok(())
+    gen.typescript("shared_types", output_root.join("typescript")).unwrap();
 }
