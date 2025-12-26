@@ -10,6 +10,7 @@ use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
 use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
+use devlog_sdk::distributed_id::gen_id_sync;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -188,17 +189,21 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn answer(id: u64, mut out_resources: Vec<LocalResource>, target: TransferTarget) -> Self {
-        out_resources.sort_by(|a, b| a.size.cmp(&b.size));
+    pub fn p2p(mut resources: Vec<LocalResource>, current_peer: Peer, password: Option<String>) -> Self {
+        resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
-            order_id: id,
-            progress: out_resources
+            order_id: gen_id_sync(),
+            progress: resources
                 .iter()
-                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
+                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
                 .collect(),
-            resources: out_resources,
-            transfer_type: TransferType::Receive,
-            target,
+            resources,
+            transfer_type: TransferType::Send,
+            target: TransferTarget::P2P {
+                from_peer: current_peer,
+                password,
+                is_required_password: false
+            },
             cancellation_token: CancellationToken::new()
         }
     }

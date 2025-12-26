@@ -25,6 +25,7 @@ use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use crate::app::operations::p2p::P2PSessionOverview;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -58,7 +59,8 @@ pub enum TransferEvent {
         to_emails: Vec<String>
     },
     StartP2PTransfer {
-        nearby_available: bool
+        nearby_available: bool,
+        password: Option<String>
     },
     CancelTransfer {
         session_id: u64,
@@ -80,13 +82,9 @@ pub enum TransferEvent {
         transfer_type: TransferType
     },
     Clear,
-
-    NotifyPeerSessions {
-        peer_id: String
-    },
     ReceivedSessionsOverview {
         peer_id: String,
-        sessions: Vec<crate::app::operations::p2p::P2PSessionOverview>
+        sessions: Vec<P2PSessionOverview>
     },
     ReceivedViewSessionRequest {
         peer_id: String,
@@ -99,17 +97,11 @@ pub enum TransferEvent {
         order_id: u64,
         password: Option<String>
     },
-    SessionDetailReceived {
-        session: TransferSession
-    },
-    SessionDetailFailed {
-        order_id: u64,
-        error: String
-    },
     ReceivedDownloadRequest {
         peer_id: String,
         session_order_id: u64,
-        resource_order_id: u64
+        resource_order_id: u64,
+        transfer_id: u16
     },
     RequestDownloadResource {
         peer_id: String,
@@ -227,11 +219,16 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(|it| async move { it.app().upload(user, selected_resources, target).await })
             }
-            TransferEvent::StartP2PTransfer { nearby_available } => {
+            TransferEvent::StartP2PTransfer { nearby_available, password } => {
                 let selected_resources = model.shelf.shelf.resources.clone();
-                // Todo send the session overview to all peers
-                // and generated an access url
-                Command::done()
+                let Some(me) = model.nearby.me.clone() else {
+                    log::info!("User is not login, open login page");
+                    return Command::done()
+                };
+
+                let session = TransferSession::p2p(selected_resources, me, password);
+                model.transfer.sessions.push(session);
+                Command::render()
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
@@ -328,26 +325,55 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(|it| async move { it.app().view_public_session(session, password).await })
             }
-            TransferEvent::NotifyPeerSessions { peer_id } => {
-                let sessions: Vec<TransferSession> = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|s| s.transfer_type == TransferType::Send)
-                    .filter(|s| s.target.is_peer())
-                    .cloned()
-                    .collect();
-
-                Command::handle_result(|it| async move {
-                    it.app().notify_peer_sessions(peer_id, sessions).await
-                })
-            }
             TransferEvent::ReceivedSessionsOverview { peer_id, sessions } => {
-                let peer = model.nearby.peers.iter().find(|p| p.id == peer_id).cloned();
+                let Some(peer) = model.nearby.peers.iter().find(|p| p.id == peer_id).cloned() else {
+                    return Command::done();
+                };
 
-                Command::handle_result(|it| async move {
-                    it.app().handle_sessions_overview(peer, sessions).await
-                })
+                // Collect order_ids from new overview
+                let new_session_ids: std::collections::HashSet<u64> =
+                    sessions.iter().map(|s| s.order_id).collect();
+
+                // Remove sessions from this peer that are not in the new list
+                model.transfer.sessions.retain(|session| {
+                    if let TransferTarget::P2P { from_peer, .. } = &session.target {
+                        if from_peer.id == peer_id {
+                            // Keep only if in new list
+                            return new_session_ids.contains(&session.order_id);
+                        }
+                    }
+                    // Keep all other sessions
+                    true
+                });
+
+                // Add or update sessions from new overview
+                for overview in sessions {
+                    let session_id = TransferSessionId {
+                        order_id: Some(overview.order_id.to_string()),
+                        transfer_type: Some(TransferType::Receive),
+                    };
+
+                    // Check if session already exists
+                    if model.transfer.sessions.lookup(&session_id).is_none() {
+                        // Create new stub session
+                        let stub_session = TransferSession {
+                            order_id: overview.order_id,
+                            resources: vec![],
+                            progress: vec![],
+                            transfer_type: TransferType::Receive,
+                            target: TransferTarget::P2P {
+                                from_peer: peer.clone(),
+                                password: None,
+                                is_required_password: overview.password_protected
+                            },
+                            cancellation_token: core_services::utils::cancellation::CancellationToken::new()
+                        };
+
+                        model.transfer.sessions.push(stub_session);
+                    }
+                }
+
+                Command::render()
             }
             TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password } => {
                 let session_id = TransferSessionId {
@@ -357,7 +383,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let session = model.transfer.sessions.lookup(&session_id).cloned();
 
                 Command::handle_result(move |it| async move {
-                    it.app().handle_view_session_request(peer_id, request_id, order_id, password, session).await
+                    it.app().handle_view_session_request(peer_id, request_id, password, session).await
                 })
             }
             TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
@@ -365,31 +391,20 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().request_session_detail(peer_id, order_id, password).await
                 })
             }
-            TransferEvent::SessionDetailReceived { session } => {
-                Command::handle_result(|it| async move {
-                    it.app().handle_session_detail_received(session).await
-                })
-            }
-            TransferEvent::SessionDetailFailed { order_id, error } => {
-                Command::new(|it| async move {
-                    DialogOperation::toast(format!("Failed to load session {}: {}", order_id, error))
-                        .into_future(it.clone())
-                        .await;
-                })
-            }
-            TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id } => {
+            TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
                     transfer_type: Some(TransferType::Send)
                 };
+
                 let resource = model
                     .transfer
                     .sessions
                     .lookup(&session_id)
                     .and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned());
 
-                Command::handle_result(|it| async move {
-                    it.app().handle_download_request(peer_id, resource).await
+                Command::handle_result(move |it| async move {
+                    it.app().handle_download_request(peer_id, session_order_id, transfer_id, resource).await
                 })
             }
             TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id } => {

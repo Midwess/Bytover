@@ -46,6 +46,8 @@ pub enum P2POperation {
     },
     StreamResourceToPeer {
         peer_id: String,
+        session_id: u64,
+        transfer_id: u16,
         resource: LocalResource
     }
 }
@@ -77,7 +79,8 @@ pub enum P2POperationOutput {
     ReceivedDownloadRequest {
         peer_id: String,
         session_order_id: u64,
-        resource_order_id: u64
+        resource_order_id: u64,
+        transfer_id: u16
     }
 }
 
@@ -128,7 +131,7 @@ impl P2POperation {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id })).map(|it| it.result())
     }
 
-    pub fn stream_resource_to_peer(peer_id: String, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer { peer_id, resource })).map(|it| it.result())
+    pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer { peer_id, session_id, transfer_id, resource })).map(|it| it.result())
     }
 }

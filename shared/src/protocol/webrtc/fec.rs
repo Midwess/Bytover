@@ -65,7 +65,7 @@ pub struct Frame {
     pub parity_shards: u8,
     pub total_size: u32,
     pub is_parity: bool,
-    pub prefix: u8,
+    pub prefix: u16,
 
     buffer: Arc<[u8]>,
     payload_offset: usize,
@@ -100,7 +100,7 @@ impl Frame {
         parity_shards: u8,
         total_size: u32,
         is_parity: bool,
-        prefix: u8,
+        prefix: u16,
         payload: Arc<[u8]>,
     ) -> Self {
         Self {
@@ -118,7 +118,7 @@ impl Frame {
 
     pub fn serialize(&self) -> Box<[u8]> {
         let payload = self.data();
-        let header_len = size_of::<u32>() * 2 + 5;
+        let header_len = size_of::<u32>() * 2 + 6; // u32 + u32 + u8*4 + u16
         let mut buf = Vec::with_capacity(header_len + payload.len());
 
         buf.extend_from_slice(bytes_of(&self.block_id));
@@ -127,7 +127,7 @@ impl Frame {
         buf.push(self.data_shards);
         buf.push(self.parity_shards);
         buf.push(self.is_parity as u8);
-        buf.push(self.prefix);
+        buf.extend_from_slice(bytes_of(&self.prefix)); // u16 = 2 bytes
         buf.extend_from_slice(payload);
 
         buf.into_boxed_slice()
@@ -147,12 +147,12 @@ impl Frame {
         let block_id: u32 = read!(u32);
         let total_size: u32 = read!(u32);
 
-        if offset + 5 > buf.len() { return None; }
+        if offset + 6 > buf.len() { return None; } // u8*4 + u16 = 6 bytes
         let frame_idx = buf[offset]; offset += 1;
         let data_shards = buf[offset]; offset += 1;
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
-        let prefix = buf[offset]; offset += 1;
+        let prefix: u16 = read!(u16);
 
         let payload_offset = offset;
         // Zero-copy: single allocation via Arc::from
@@ -349,7 +349,7 @@ impl FecSender {
         }
     }
 
-    pub fn send(&mut self, prefix: u8, packet: Box<[u8]>) -> Result<FecAction, FecError> {
+    pub fn send(&mut self, prefix: u16, packet: Box<[u8]>) -> Result<FecAction, FecError> {
         let mut offset = 0usize;
         let mut frames_to_send: Vec<Frame> = Vec::new();
 
@@ -648,7 +648,7 @@ struct ReceiverBlock {
     last_ping_ts: u64,
     is_complete: bool,
     is_placeholder: bool,
-    prefix: u8,
+    prefix: u16,
 
     loss_detector: Option<LossDetector>,
 }
@@ -718,7 +718,7 @@ impl ReceiverBlock {
     fn insert_frame(
         &mut self,
         idx: usize,
-        prefix: u8,
+        prefix: u16,
         payload: Box<[u8]>,
         false_retransmit_counter: &mut u64,
     ) -> Result<bool, FecError> {
@@ -800,7 +800,7 @@ impl ReceiverBlock {
         self.is_complete
     }
 
-    fn into_packet(mut self) -> (u8, Packet) {
+    fn into_packet(mut self) -> (u16, Packet) {
         let mut bytes = Vec::with_capacity(self.total_size);
         unsafe { bytes.set_len(self.total_size); }
         let dst: &mut [u8] = bytes.as_mut_slice();
@@ -1108,7 +1108,7 @@ impl FecReceiver {
 #[derive(Debug)]
 pub enum FecAction {
     Framed(Vec<Frame>),
-    Constructed(Vec<(u8, Packet)>, Instant),
+    Constructed(Vec<(u16, Packet)>, Instant),
     Retransmit(Vec<Frame>),
     Feedback(FecFeedback, Instant),
     Noop,

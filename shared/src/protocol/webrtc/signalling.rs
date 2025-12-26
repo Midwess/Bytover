@@ -16,7 +16,7 @@ use std::time::Duration;
 
 pub enum WebRtcPeerConnectionProcess {
     Connecting(Instant),
-    Connected(Arc<WebRtcPeer>)
+    Connected(Weak<WebRtcPeer>)
 }
 
 impl WebRtcPeerConnectionProcess {
@@ -24,14 +24,14 @@ impl WebRtcPeerConnectionProcess {
         Self::Connecting(Instant::now())
     }
 
-    pub fn connected(peer: Arc<WebRtcPeer>) -> Self {
+    pub fn connected(peer: Weak<WebRtcPeer>) -> Self {
         Self::Connected(peer)
     }
 
-    pub fn get(&self) -> Option<Arc<WebRtcPeer>> {
+    pub fn get(&self) -> Option<&Weak<WebRtcPeer>> {
         match self {
             Self::Connecting(_) => None,
-            Self::Connected(peer) => Some(peer.clone())
+            Self::Connected(peer) => Some(peer)
         }
     }
 }
@@ -119,7 +119,7 @@ impl SharedContext {
     pub async fn get_peer(&self, peer_id: &PeerId) -> Option<Weak<WebRtcPeer>> {
         let peers = self.peers.lock().await;
         if let Some(peer) = peers.get(peer_id).and_then(|it| it.get()) {
-            return Some(Arc::downgrade(&peer));
+            return Some(peer.clone());
         }
 
         None
@@ -134,9 +134,11 @@ impl SharedContext {
         let peers = self.peers.lock().await.drain().collect::<Vec<_>>();
         let mut removed_peers = Vec::new();
         for (id, peer) in peers {
-            if let Some(peer) = peer.get() {
-                removed_peers.push(id);
-                peer.peer_disconnected().await;
+            if let Some(peer_weak) = peer.get() {
+                if let Some(peer) = peer_weak.upgrade() {
+                    removed_peers.push(id);
+                    peer.peer_disconnected().await;
+                }
             }
         }
 
@@ -144,19 +146,23 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        let peer = self.peers.lock().await.remove(peer_id).and_then(|it| it.get());
-        if let Some(peer) = peer {
-            peer.peer_disconnected().await;
+        let peer_weak = self.peers.lock().await.remove(peer_id).and_then(|it| it.get().cloned());
+        if let Some(peer_weak) = peer_weak {
+            if let Some(peer) = peer_weak.upgrade() {
+                peer.peer_disconnected().await;
+            }
         }
         else {
             log::warn!("Peer not found: {peer_id:?}");
         }
     }
 
-    pub async fn add_peer(&self, peer: WebRtcPeer) {
-        let peer_id = peer.peer.peer_id();
-        let mut peers = self.peers.lock().await;
-        peers.insert(peer_id, WebRtcPeerConnectionProcess::connected(Arc::new(peer)));
+    pub async fn add_peer(&self, peer: Weak<WebRtcPeer>) {
+        if let Some(peer) = peer.upgrade() {
+            let peer_id = peer.peer.peer_id();
+            let mut peers = self.peers.lock().await;
+            peers.insert(peer_id, WebRtcPeerConnectionProcess::connected(Arc::downgrade(&peer)));
+        }
     }
 
     // Return true when peer is not connected

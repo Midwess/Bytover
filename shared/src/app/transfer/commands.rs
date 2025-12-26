@@ -1,5 +1,5 @@
 use core_services::db::repository::abstraction::table::Table;
-use futures_util::StreamExt;
+use n0_future::StreamExt;
 use core_services::utils::string::StringExt;
 
 use crate::app::core::command::AppCommand;
@@ -244,45 +244,10 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn handle_sessions_overview(
-        &self,
-        peer: Option<crate::entities::peer::Peer>,
-        sessions: Vec<P2PSessionOverview>
-    ) -> Result<(), CoreError> {
-        let Some(peer) = peer else {
-            log::warn!("Peer not found for sessions overview");
-            return Ok(());
-        };
-
-        for overview in sessions {
-            let stub_session = TransferSession {
-                order_id: overview.order_id,
-                resources: vec![],
-                progress: vec![],
-                transfer_type: TransferType::Receive,
-                target: TransferTarget::P2P {
-                    from_peer: peer.clone(),
-                    password: None,
-                    is_required_password: overview.password_protected
-                },
-                cancellation_token: core_services::utils::cancellation::CancellationToken::new()
-            };
-
-            self.update_model(TransferSessionModelEvent::Add(stub_session.clone()));
-
-            if let Err(e) = self.run(TransferSessionPersistentOperation::save(stub_session)).await {
-                log::error!("Failed to save stub session: {e:?}");
-            }
-        }
-
-        Ok(())
-    }
-
     pub async fn handle_view_session_request(
         &self,
         peer_id: String,
         request_id: String,
-        order_id: u64,
         password: Option<String>,
         session: Option<TransferSession>
     ) -> Result<(), CoreError> {
@@ -334,18 +299,31 @@ impl AppCommand {
         order_id: u64,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        self.run(P2POperation::view_session_detail(peer_id, order_id, password)).await?;
-        Ok(())
-    }
+        let mut stream= self.stream_from_shell(P2POperation::ViewSessionDetail {
+            peer_id,
+            order_id,
+            password
+        }.into());
 
-    pub async fn handle_session_detail_received(
-        &self,
-        session: TransferSession
-    ) -> Result<(), CoreError> {
-        self.update_model(TransferSessionModelEvent::Add(session.clone()));
-
-        if let Err(e) = self.run(TransferSessionPersistentOperation::save(session)).await {
-            log::error!("Failed to save session: {e:?}");
+        let mut session_id = None;
+        while let Some(output) = stream.next().await {
+            match output {
+                CoreOperationOutput::TransferSession(session) => {
+                    session_id.replace(session.id());
+                    self.update_model(TransferSessionModelEvent::Remove(session.id()));
+                    self.update_model(TransferSessionModelEvent::Add(session));
+                }
+                CoreOperationOutput::LocalResource(resource) => {
+                    if let Some(session_id) = session_id.clone() {
+                        self.update_model(TransferSessionModelEvent::Update(session_id, resource.into()));
+                    }
+                }
+                CoreOperationOutput::Error(err) => {
+                    log::error!("Failed to load session detail: {err:?}");
+                    break;
+                }
+                _ => continue
+            }
         }
 
         Ok(())
@@ -354,6 +332,8 @@ impl AppCommand {
     pub async fn handle_download_request(
         &self,
         peer_id: String,
+        session_id: u64,
+        transfer_id: u16,
         resource: Option<LocalResource>
     ) -> Result<(), CoreError> {
         let Some(resource) = resource else {
@@ -361,7 +341,7 @@ impl AppCommand {
             return Ok(());
         };
 
-        self.run(P2POperation::stream_resource_to_peer(peer_id, resource)).await?;
+        self.run(P2POperation::stream_resource_to_peer(peer_id, session_id, transfer_id, resource)).await?;
         Ok(())
     }
 
@@ -371,7 +351,13 @@ impl AppCommand {
         session_order_id: u64,
         resource_order_id: u64
     ) -> Result<(), CoreError> {
-        self.run(P2POperation::download_resource(peer_id, session_order_id, resource_order_id)).await?;
+        let mut stream = self.stream_from_shell(P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id}.into());
+        while let Some(output) = stream.next().await {
+            match output {
+                _ => continue
+            }
+        }
+
         Ok(())
     }
 }

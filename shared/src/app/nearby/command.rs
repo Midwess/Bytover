@@ -79,9 +79,7 @@ impl AppCommand {
                         removed: vec![]
                     });
 
-                    self.notify_event(TransferEvent::NotifyPeerSessions {
-                        peer_id: peer.id.clone()
-                    });
+                    // TODO: Notify connected peer about current transfer P2P sessions
 
                     self.spawn(|it| async move {
                         it.app().handle_peer_connection(peer).await;
@@ -148,14 +146,8 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
                     self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::SessionDetailReceived { session }) => {
-                    self.notify_event(TransferEvent::SessionDetailReceived { session });
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::SessionDetailFailed { order_id, error }) => {
-                    self.notify_event(TransferEvent::SessionDetailFailed { order_id, error });
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id }) => {
-                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id });
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id }) => {
+                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");

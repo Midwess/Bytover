@@ -50,7 +50,7 @@ impl LocalResource {
             name: self.name.clone(),
             size: self.size as i64,
             r#type: proto_type as i32,
-            is_thumbnail_included: self.thumbnail_path.is_some()
+            thumbnail_png: None
         }
     }
 }

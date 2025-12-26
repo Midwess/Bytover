@@ -1,1140 +1,721 @@
-# New P2P Architecture Plan
+# Streaming Architecture Implementation Plan
 
-## Current Approach (To Remove)
-- Direct P2P transfer via `TransferRequestMessage`
-- Sender initiates full session transfer to receiver
-- Receiver accepts entire session at once
+## Overview
+Refactor session detail and resource download flows to use streaming architecture with **existing Transfer events** (`TransferResourceProgressUpdate`, `ThumbnailUpdated`, `TransferCompleted`, `Error`), following the same pattern as the `upload` function in commands.rs.
 
-## New Approach
-
-### Overview
-1. **Session Discovery**: When peers connect, sender broadcasts lightweight session overviews
-2. **Authentication**: Receiver sees sessions, authenticates with password if needed
-3. **Selective Download**: Receiver requests individual resources, not entire session
-
-### Flow
-
-```
-Sender                          Receiver
-  │                                │
-  │  1. Peer Connected             │
-  ├───────────────────────────────>│
-  │   IntroduceRequest/Response    │
-  │   (peer info only)             │
-  │                                │
-  │  2. Sessions Notification      │
-  ├───────────────────────────────>│
-  │   P2PSessionOverview[] (list)  │
-  │                                │
-  │                        3. Display sessions in UI
-  │                        4. User clicks session
-  │                                │
-  │  5. ViewSessionDetailRequest   │
-  │<───────────────────────────────┤
-  │     (with password if needed)  │
-  │                                │
-  │  6. Validate password          │
-  │     Send full session or error │
-  ├───────────────────────────────>│
-  │   ViewSessionDetailResponse    │
-  │                                │
-  │                        7. Display resources
-  │                        8. User clicks download
-  │                        9. Prepare IOWriter
-  │                                │
-  │  10. DownloadResourceRequest   │
-  │<───────────────────────────────┤
-  │                                │
-  │  11. Stream resource data      │
-  │      immediately (no response) │
-  ├═══════════════════════════════>│
-  │   (existing transfer protocol) │
-  │                                │
-  │                        12. Write to IOWriter
-```
+**Key Change:** Remove `SessionDetailReceived` and `SessionDetailFailed` events entirely. Use pure streaming with `TransferResourceProgressUpdate` for resources and progress.
 
 ---
 
-## Changes Required
+## Phase 1: Session Detail Streaming
 
-### 1. Proto Schema (`libs/schema/proto/devlog/bitbridge/`)
-
-#### `session.proto`
-```protobuf
-message P2PSessionOverviewMessage {
-  required uint64 order_id = 1;
-  required bool password_protected = 2;
-}
-
-message P2PTransferSessionMessage {
-  required uint64 order_id = 1;
-  repeated ResourceMessage resources = 2;
-}
+### Current Flow
+```
+Core (commands.rs)
+  → P2POperation::view_session_detail()
+    → webrtc.rs::view_session_detail()
+      → peer.rs::request_session_detail()
+        → Returns complete TransferSession
+        → Emits P2POperationOutput::SessionDetailReceived event
+  → nearby/command.rs converts to TransferEvent::SessionDetailReceived
+  → commands.rs::handle_session_detail_received() handles the event
 ```
 
-#### `request.proto`
-**Add:**
-```protobuf
-message SessionsNotificationMessage {
-  repeated P2PSessionOverviewMessage sessions = 1;
-}
-
-message ViewSessionDetailRequest {
-  required uint64 order_id = 1;
-  optional string password = 2;
-}
-
-message ViewSessionDetailResponse {
-  oneof result {
-    P2PTransferSessionMessage session = 1;
-    PeerErrorsMessage error = 2;
-  }
-}
-
-message DownloadResourceRequest {
-  required uint64 session_order_id = 1;
-  required uint64 resource_order_id = 2;
-}
+### New Flow (pure streaming - NO SessionDetailReceived)
+```
+Core (commands.rs)
+  → Start stream: P2POperation::ViewSessionDetail
+    → executor passes CoreRequest to webrtc.rs::view_session_detail()
+      → webrtc.rs starts core stream on peer
+      → peer.rs::request_session_detail() streams via CoreRequest
+        → For each resource: TransferOperationOutput::TransferResourceProgressUpdate
+        → For each thumbnail: TransferOperationOutput::ThumbnailUpdated
+        → At end: TransferOperationOutput::TransferCompleted
+  → commands.rs::request_session_detail() builds session from streamed resources
 ```
 
-**Update PeerMessageBody:**
-```protobuf
-oneof request {
-  IntroduceRequestMessage introduce_request = 2;
-  CancelTransferSessionRequest cancel_request = 4;
-  KeepAliveRequestMessage keep_alive = 5;
-  ResourceThumbnailMessage resource_thumbnail_fullfill = 6;
-  FecFeedback fec_feedback = 7;
-  SessionsNotificationMessage sessions_notification = 8;
-  ViewSessionDetailRequest view_session_request = 9;
-  DownloadResourceRequest download_resource_request = 10;
-}
+### Implementation Steps
 
-oneof response {
-  IntroduceResponseMessage introduce_response = 30;
-  VoidResponseMessage void_response = 32;
-  PeerErrorsMessage errors = 33;
-  ViewSessionDetailResponse view_session_response = 34;
-}
-```
+#### 1.1 Update peer.rs::request_session_detail()
+**Location:** `shared/src/protocol/webrtc/peer.rs:549-628`
 
-**IntroduceResponseMessage unchanged:**
-```protobuf
-message IntroduceResponseMessage {
-  required PeerMessage peer = 1;
-}
-```
+**Changes:**
+- Keep the streaming response loop (already implemented)
+- **REMOVE** the SessionDetailReceived emission at lines 619-625
+- Change from building complete session to streaming individual resource events
+- Return `Result<(), WebRtcErrors>` instead of `Result<TransferSession, WebRtcErrors>`
+- Emit `TransferResourceProgressUpdate` for each resource (with the resource embedded)
+- Emit `ThumbnailUpdated` when thumbnail is saved
+- Emit `TransferCompleted` at the end
 
-**Remove:**
-- `TransferRequestMessage`
-- `TransferResponseMessage`
-
-**Extend errors:**
-```protobuf
-enum PeerErrorsMessage {
-  InvalidRequest = 1;
-  NoResponse = 2;
-  InvalidPassword = 3;
-  SessionNotFound = 4;
-  SessionExpired = 5;
-  PermissionDenied = 6;
-  ResourceNotFound = 7;
-  TransferInitFailed = 8;
-}
-```
-
----
-
-### 2. Rust Entities (`shared/src/entities/`)
-
-#### Update `target.rs` - Add password fields to P2P:
+**Implementation:**
 ```rust
-pub enum TransferTarget {
-    P2P {
-        from_peer: Peer,
-        password: Option<String>,
-        is_required_password: bool,
-    },
-    Internet {
-        password: Option<String>,
-        access_url: Option<String>,
-        from_user: User,
-        to_emails: Vec<String>,
-        is_required_password: bool
-    }
-}
-```
-
-#### Fix references in other files (Nearby → P2P):
-Files that need updating:
-- `entities/transfer_session.rs`: `Nearby(peer)` → `P2P { from_peer: peer, .. }`
-- `app/nearby/command.rs`: `Nearby(peer)` → `P2P { from_peer: peer, .. }`
-- `repository/transfer_session.rs`: `Nearby(_)` → `P2P { .. }`
-
-#### TransferSession mapping:
-- `P2PSessionOverviewMessage` → minimal `TransferSession` (order_id only, empty resources)
-- `P2PTransferSessionMessage` → full `TransferSession` (with resources populated)
-
----
-
-### 3. Operations (`shared/src/app/operations/`)
-
-#### 3.1 `p2p.rs` - Current state:
-```rust
-pub enum P2POperation {
-    StartNearbyServer(Peer),      // KEEP
-    StopNearbyServer,             // KEEP
-    UpdateFindingScopes(Vec<FindingScope>), // KEEP
-    PeerEvents(String),           // KEEP
-    IsRunning                     // KEEP
-}
-
-pub enum P2POperationOutput {
-    PeerConnected(Peer),          // KEEP
-    PeerDisconnected(),           // KEEP
-    ReceivedSessionRequest { remote_session: TransferSessionMessage }, // DELETE
-    CancelSessionRequest { session_id: u64 }, // KEEP
-    NearbyServerStopped,          // KEEP
-    AlreadyRunning                // KEEP
-}
-```
-
-#### 3.2 `p2p.rs` - Add to `P2POperation`:
-```rust
-SendSessionsNotification {
-    peer_id: String,
-    sessions: Vec<TransferSession>,
-}
-
-ViewSessionDetail {
-    peer_id: String,
+pub async fn request_session_detail(
+    &self,
     order_id: u64,
     password: Option<String>,
-}
+) -> Result<(), WebRtcErrors> {
+    use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
+    let request = ViewSessionDetailRequest { order_id, password };
 
-SendSessionDetail {
-    peer_id: String,
-    session: TransferSession,
-}
+    let mut response = Box::pin(self.msg_channel.stream(Request::ViewSessionRequest(request)).await?);
 
-SendSessionDetailError {
-    peer_id: String,
-    order_id: u64,
-    error: String,
-}
+    while let Some(Response::ViewSessionResponse(resp)) = response.next().await {
+        match resp.result {
+            Some(ResponseResult::Session(_proto_session)) => {
+                // Session metadata received - we don't emit anything here
+                // Just continue to wait for resources
+            }
+            Some(ResponseResult::ResourceUpdated(resource_proto)) => {
+                let mut resource = LocalResource {
+                    order_id: resource_proto.order_id,
+                    name: resource_proto.name,
+                    size: resource_proto.size as u64,
+                    path: LocalResourcePath::RelativePath {
+                        path: format!("received/session_{}/resource_{}", order_id, resource_proto.order_id),
+                        is_private: false,
+                    },
+                    thumbnail_path: None,
+                    r#type: resource_proto.r#type.into(),
+                };
 
-DownloadResource {
-    peer_id: String,
-    session_order_id: u64,
-    resource_order_id: u64,
-}
+                // Save thumbnail if present
+                if let Some(thumbnail_bytes) = resource_proto.thumbnail_png {
+                    match self.resource_repo.save_thumbnail(thumbnail_bytes, resource.order_id).await {
+                        Ok(thumbnail_path) => {
+                            resource.thumbnail_path = Some(thumbnail_path.clone());
 
-StreamResourceToPeer {
-    peer_id: String,
-    resource: LocalResource,
-}
+                            // Emit thumbnail update
+                            if let Some(core_request) = self.core_request() {
+                                core_request.response(CoreOperationOutput::Transfer(
+                                    TransferOperationOutput::ThumbnailUpdated(ThumbnailUpdatedEvent {
+                                        resource_id: resource.order_id,
+                                        path: thumbnail_path,
+                                    })
+                                )).await;
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to save thumbnail for resource {}: {:?}", resource.order_id, e);
+                        }
+                    }
+                }
 
-PrepareReceiveResource {
-    peer_id: String,
-    session_order_id: u64,
-    resource_order_id: u64,
-    save_path: String,
-}
-```
+                // Create a TransferProgress for this resource
+                let progress = TransferProgress::new(
+                    resource.order_id,
+                    resource.size,
+                    crate::entities::transfer_session::TransferType::Receive
+                );
 
-#### 3.3 `p2p.rs` - Add to `P2POperationOutput`:
-```rust
-ReceivedSessionOverview {
-    peer_id: String,
-    order_id: u64,
-    password_protected: bool,
-}
-
-ReceivedViewSessionRequest {
-    peer_id: String,
-    order_id: u64,
-    password: Option<String>,
-}
-
-SessionDetailReceived {
-    session: TransferSession,
-}
-
-SessionDetailFailed {
-    order_id: u64,
-    error: String,
-}
-
-ReceivedDownloadRequest {
-    peer_id: String,
-    session_order_id: u64,
-    resource_order_id: u64,
-}
-```
-
-#### 3.4 `p2p.rs` - Delete from `P2POperationOutput`:
-```rust
-ReceivedSessionRequest { remote_session: TransferSessionMessage } // DELETE
-```
-
-#### 3.5 `transfer.rs` - Current state:
-```rust
-pub enum TransferOperation {
-    CreateCloudSession(TransferSession),  // KEEP (public transfer)
-    SendSession(TransferSession),         // KEEP (public transfer)
-    AnswerSessionRequest {                // DELETE (old P2P flow)
-        peer_id: String,
-        session: Option<TransferSession>,
-        session_id: u64
-    },
-    CancelSession(Option<String>, u64),   // KEEP
-    FindPublicSession { alias: String },  // KEEP
-    SubscribeToPublicSessionTransferProgress { // KEEP
-        session_owner_user_id: u64,
-        session_order_id: u64,
-        password: Option<String>
-    }
-}
-```
-
-#### 3.6 `transfer.rs` - Delete:
-```rust
-AnswerSessionRequest { peer_id, session, session_id } // DELETE
-```
-
----
-
-### 4. Protocol Handlers
-
-#### 4.1 `webrtc.rs` - Add methods to `WebRtc` struct:
-```rust
-impl WebRtc {
-    pub async fn send_sessions_notification(
-        &self,
-        peer_id: String,
-        sessions: Vec<TransferSession>,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_sessions_notification(sessions).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
-    pub async fn view_session_detail(
-        &self,
-        peer_id: String,
-        order_id: u64,
-        password: Option<String>,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.request_session_detail(order_id, password).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
-    pub async fn send_session_detail(
-        &self,
-        peer_id: String,
-        request_id: String,
-        session: TransferSession,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_session_detail_response(request_id, Some(&session), None).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
-    pub async fn send_session_detail_error(
-        &self,
-        peer_id: String,
-        request_id: String,
-        error: String,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_session_detail_response(request_id, None, Some(error.into())).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
-    pub async fn download_resource(
-        &self,
-        peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.request_resource_download(session_order_id, resource_order_id).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
-    pub async fn stream_resource_to_peer(
-        &self,
-        peer_id: String,
-        resource: LocalResource,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.stream_resource(resource).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-}
-```
-
-#### 4.2 `peer.rs` - Update `process_message_packet`:
-```rust
-pub async fn process_message_packet(&self, request_id: String, msg: Request) {
-    match msg {
-        Request::CancelRequest(request) => {
-            self.transfers_context.cancel_transfer(request.session_id as u64).await;
-        }
-
-        // DELETE: Request::TransferRequest handling
-
-        // ADD:
-        Request::SessionsNotification(notification) => {
-            for overview in notification.sessions {
-                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionOverview {
-                    peer_id: self.peer.id().to_string(),
-                    order_id: overview.order_id,
-                    password_protected: overview.password_protected,
-                });
+                // Emit resource via progress update
+                // Note: We need to extend TransferProgress to include resource or use a wrapper
+                // For now, emit as a special event that includes the resource
                 if let Some(core_request) = self.core_request() {
-                    core_request.response(response).await;
+                    // TODO: This needs architecture discussion - how to pass resource?
+                    // Option 1: Extend UpdateAction to handle resource addition
+                    // Option 2: Create ResourceReceived event
+                    // Option 3: Use model events directly
+                    core_request.response(CoreOperationOutput::Transfer(
+                        TransferOperationOutput::TransferResourceProgressUpdate(progress)
+                    )).await;
                 }
             }
-        }
+            Some(ResponseResult::Error(error_type)) => {
+                let error_msg = PeerErrorsMessage::try_from(error_type)
+                    .unwrap_or(PeerErrorsMessage::InvalidRequest);
 
-        Request::ViewSessionRequest(req) => {
-            let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
-                peer_id: self.peer.id().to_string(),
-                order_id: req.order_id,
-                password: req.password,
-            });
-            // Store request_id for response
-            if let Some(core_request) = self.core_request() {
-                core_request.response(response).await;
+                if let Some(core_request) = self.core_request() {
+                    core_request.response(CoreOperationOutput::Error(
+                        CoreError::WebRtc(error_msg.to_string())
+                    )).await;
+                }
+
+                return Err(WebRtcErrors::PeerError(error_msg.to_string()));
             }
+            None => break,
         }
-
-        Request::DownloadResourceRequest(req) => {
-            let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
-                peer_id: self.peer.id().to_string(),
-                session_order_id: req.session_order_id,
-                resource_order_id: req.resource_order_id,
-            });
-            if let Some(core_request) = self.core_request() {
-                core_request.response(response).await;
-            }
-        }
-
-        Request::FecFeedback(feedback) => {
-            if let Some(feedback) = feedback.feedback {
-                log::info!("Received FEC feedback: {:?}", feedback);
-                let _ = self.transfer_feedback_sender.unbounded_send(feedback);
-            };
-        }
-        _ => {}
-    }
-}
-```
-
-#### 4.3 `peer.rs` - Add new methods to `WebRtcPeer`:
-```rust
-impl WebRtcPeer {
-    pub async fn send_sessions_notification(
-        &self,
-        sessions: Vec<TransferSession>,
-    ) -> Result<(), WebRtcErrors> {
-        todo!("Send SessionsNotificationMessage to peer")
     }
 
-    pub async fn request_session_detail(
-        &self,
-        order_id: u64,
-        password: Option<String>,
-    ) -> Result<(), WebRtcErrors> {
-        todo!("Send ViewSessionDetailRequest to peer")
-    }
-
-    pub async fn send_session_detail_response(
-        &self,
-        request_id: String,
-        session: Option<&TransferSession>,
-        error: Option<PeerErrorsMessage>,
-    ) -> Result<(), WebRtcErrors> {
-        todo!("Send ViewSessionDetailResponse to peer")
-    }
-
-    pub async fn request_resource_download(
-        &self,
-        session_order_id: u64,
-        resource_order_id: u64,
-    ) -> Result<(), WebRtcErrors> {
-        todo!("Send DownloadResourceRequest to peer")
-    }
-
-    pub async fn stream_resource(
-        &self,
-        resource: LocalResource,
-    ) -> Result<(), WebRtcErrors> {
-        todo!("Stream resource data to peer using existing transfer protocol")
-    }
-}
-```
-
-#### 4.4 `peer.rs` - Delete from `process_message_packet`:
-```rust
-// DELETE this block:
-Request::TransferRequest(request) => {
-    self.transfers_context.start_transfer(request.session.order_id, request_id).await;
-    let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionRequest {
-        remote_session: request.session,
-    });
+    // Emit completion
     if let Some(core_request) = self.core_request() {
-        core_request.response(response).await;
+        core_request.response(CoreOperationOutput::Transfer(
+            TransferOperationOutput::TransferCompleted(TransferSessionStatus::Success)
+        )).await;
+    }
+
+    Ok(())
+}
+```
+
+**BLOCKER:** The existing `TransferProgress` struct doesn't contain the `LocalResource`. We need to decide how to pass the resource information:
+- **Option A:** Add a `resource: Option<LocalResource>` field to `TransferProgress`
+- **Option B:** Create a new event type `ResourceReceived { resource: LocalResource }`
+- **Option C:** Emit model events directly instead of going through TransferOperationOutput
+
+#### 1.2 Update webrtc.rs::view_session_detail()
+**Location:** `shared/src/protocol/webrtc/webrtc.rs:115-129`
+
+**Changes:**
+- Accept `core_request: CoreRequest` parameter
+- Call `peer.start_core_stream(core_request)` before calling request_session_detail
+- Change return to `Result<(), WebRtcErrors>`
+
+**Implementation:**
+```rust
+pub async fn view_session_detail(
+    &self,
+    peer_id: String,
+    order_id: u64,
+    password: Option<String>,
+    core_request: CoreRequest,
+) -> Result<(), WebRtcErrors> {
+    let peer_id = PeerId(peer_id.parse()?);
+    if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+        peer.start_core_stream(core_request);
+        peer.request_session_detail(order_id, password).await
+    } else {
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 }
 ```
 
----
+#### 1.3 Update executor/p2p.rs
+**Location:** `shared/src/shell/executor/p2p.rs:48-50`
 
-### 5. Shell Handler (`shared/src/shell/`)
+**Changes:**
+- Pass `request` (CoreRequest) to `view_session_detail`
 
-The Shell needs to handle the new P2POperations and route them to the WebRTC peer.
-
-#### Update Shell executor to handle:
+**Implementation:**
 ```rust
-P2POperation::SendSessionsNotification { peer_id, sessions } => {
-    let peer = find_peer(&peer_id);
-    let overviews: Vec<P2PSessionOverviewMessage> = sessions
-        .iter()
-        .map(|s| P2PSessionOverviewMessage {
-            order_id: s.order_id,
-            password_protected: s.target.is_required_password(),
-        })
-        .collect();
-    peer.send_sessions_notification(overviews).await
-}
-
 P2POperation::ViewSessionDetail { peer_id, order_id, password } => {
-    let peer = find_peer(&peer_id);
-    peer.request_session_detail(order_id, password).await
-}
-
-P2POperation::SendSessionDetail { peer_id, session } => {
-    let peer = find_peer(&peer_id);
-    let proto_session: P2PTransferSessionMessage = session.into();
-    peer.send_session_detail_response(request_id, Some(proto_session), None).await
-}
-
-P2POperation::SendSessionDetailError { peer_id, order_id, error } => {
-    let peer = find_peer(&peer_id);
-    peer.send_session_detail_response(request_id, None, Some(error.into())).await
-}
-
-P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id } => {
-    let peer = find_peer(&peer_id);
-    peer.request_resource_download(session_order_id, resource_order_id).await
-}
-
-P2POperation::StreamResourceToPeer { peer_id, resource } => {
-    let peer = find_peer(&peer_id);
-    // Use existing transfer protocol to stream resource data
-    peer.stream_resource(resource).await
-}
-
-P2POperation::PrepareReceiveResource { peer_id, session_order_id, resource_order_id, save_path } => {
-    // Create IOWriter at save_path
-    // Register to receive data for this resource
-    // Data will flow through existing transfer protocol
-    let writer = IOWriter::create(save_path)?;
-    register_resource_receiver(peer_id, resource_order_id, writer).await
+    self.web_rtc().view_session_detail(peer_id, order_id, password, request).await?;
+    Ok(CoreOperationOutput::None)
 }
 ```
 
-#### Proto ↔ Rust Conversions:
+#### 1.4 Update commands.rs::request_session_detail()
+**Location:** `shared/src/app/transfer/commands.rs:296-304`
+
+**Changes:**
+- Convert to streaming operation (like `upload()`)
+- Build TransferSession from streamed resources
+- Remove dependency on SessionDetailReceived event
+
+**Implementation:**
 ```rust
-impl From<&TransferSession> for P2PSessionOverviewMessage {
-    fn from(session: &TransferSession) -> Self {
-        let is_required_password = match &session.target {
-            TransferTarget::P2P { is_required_password, .. } => *is_required_password,
-            _ => false,
-        };
-        Self {
-            order_id: session.order_id,
-            password_protected: is_required_password,
-        }
-    }
-}
+pub async fn request_session_detail(
+    &self,
+    peer_id: String,
+    order_id: u64,
+    password: Option<String>
+) -> Result<(), CoreError> {
+    // Create initial empty session
+    let mut transfer_session = TransferSession {
+        order_id,
+        resources: vec![],
+        progress: vec![],
+        transfer_type: TransferType::Receive,
+        target: TransferTarget::P2P {
+            from_peer: Peer::default(), // TODO: Get actual peer info
+            password: password.clone(),
+            is_required_password: password.is_some(),
+        },
+        cancellation_token: CancellationToken::new(),
+    };
 
-impl From<&TransferSession> for P2PTransferSessionMessage {
-    fn from(session: &TransferSession) -> Self {
-        Self {
-            order_id: session.order_id,
-            resources: session.resources.iter().map(Into::into).collect(),
-        }
-    }
-}
+    // Add session to model immediately so resources can update it
+    self.update_model(TransferSessionModelEvent::Add(transfer_session.clone()));
 
-impl TransferSession {
-    pub fn from_p2p_message(msg: P2PTransferSessionMessage, peer: Peer) -> Self {
-        Self {
-            order_id: msg.order_id,
-            resources: msg.resources.into_iter().map(Into::into).collect(),
-            progress: vec![],
-            transfer_type: TransferType::Receive,
-            target: TransferTarget::P2P {
-                from_peer: peer,
-                password: None,
-                is_required_password: false,
-            },
-            cancellation_token: CancellationToken::new(),
-        }
-    }
-}
-```
-
----
-
-## Key Implementation Details
-
-### Password Validation
-- ALWAYS validate on sender side (Core)
-- Use constant-time comparison
-- Rate limit attempts per peer
-
-### Session States (Receiver)
-Store session state separately in Core or use TransferSession.status:
-- Overview received: Create TransferSession with empty resources
-- Password required: Wait for user input
-- Authenticated: Populate resources in TransferSession
-- Failed: Update TransferSession.status
-
-### Resource Transfer
-- Each download creates independent `TransferSession`
-- Uses existing transfer protocol (FEC, chunking)
-- Multiple resources can download in parallel
-
-### On Peer Connection (Sender)
-1. Complete peer introduction handshake
-2. After connection established, get all active transfer sessions (TransferSession with target = P2P)
-3. Create P2PSessionOverviewMessage list from TransferSession (order_id + check if password_protected)
-4. Send SessionsNotificationMessage with list of sessions
-
-### On Session View Request (Sender)
-1. Receive ViewSessionDetailRequest
-2. Find TransferSession by order_id
-3. If password protected, validate password
-4. If valid: send P2PTransferSessionMessage with TransferSession resources
-5. If invalid: send PeerErrorsMessage::InvalidPassword
-
-### On Download Request (Sender)
-1. Receive DownloadResourceRequest (session_order_id, resource_order_id)
-2. Find session and resource
-3. Core asks Shell to immediately stream resource data to peer
-4. Shell uses existing transfer protocol (FEC, chunking)
-
-### On Download Request (Receiver)
-1. User clicks download on resource
-2. Send DownloadResourceRequest
-3. Immediately prepare IOWriter cursor at save_path
-4. Wait for incoming data stream
-5. Receive data and write to IOWriter
-
----
-
-## Benefits
-
-✅ **Bandwidth Efficient**: Send lightweight overviews, full details only when needed
-✅ **Better UX**: See all sessions immediately, authenticate later
-✅ **Selective Downloads**: Download individual files, not entire session
-✅ **Security**: Password validated server-side before revealing resources
-✅ **Scalable**: Add metadata to overviews without protocol changes
-✅ **Resumable**: Each resource is independent transfer
-
----
-
-## 6. App Events & Commands Updates
-
-### 6.1 TransferEvent (in `app/transfer/module.rs`)
-
-**Add new events:**
-```rust
-pub enum TransferEvent {
-    NotifyPeerSessions {
-        peer_id: String,
-    },
-
-    ReceivedSessionOverview {
-        peer_id: String,
-        order_id: u64,
-        password_protected: bool,
-    },
-
-    ReceivedViewSessionRequest {
-        peer_id: String,
-        order_id: u64,
-        password: Option<String>,
-    },
-
-    RequestSessionDetail {
-        peer_id: String,
-        order_id: u64,
-        password: Option<String>,
-    },
-
-    SessionDetailReceived {
-        session: TransferSession,
-    },
-
-    SessionDetailFailed {
-        order_id: u64,
-        error: String,
-    },
-
-    ReceivedDownloadRequest {
-        peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64,
-    },
-
-    RequestDownloadResource {
-        peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64,
-        save_path: String,
-    },
-}
-```
-
-**Update existing:**
-```rust
-TransferRequest { ... }  // DEPRECATE - keep for migration, remove later
-```
-
-### 6.2 nearby/command.rs - `handle_peer_connection`
-
-**Update to forward P2P events to Transfer module:**
-```rust
-pub async fn handle_peer_connection(&self, peer: Peer) {
-    let request = P2POperation::PeerEvents(peer.id.clone());
-    let mut stream = self.stream_from_shell(request.into());
+    let mut stream = self.stream_from_shell(
+        P2POperation::ViewSessionDetail { peer_id, order_id, password }.into()
+    );
 
     while let Some(output) = stream.next().await {
         match output {
-            CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionOverview {
-                peer_id,
-                order_id,
-                password_protected
-            }) => {
-                self.notify_event(TransferEvent::ReceivedSessionOverview {
-                    peer_id,
-                    order_id,
-                    password_protected,
-                });
-            }
-
-            CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
-                peer_id,
-                order_id,
-                password
-            }) => {
-                self.notify_event(TransferEvent::ReceivedViewSessionRequest {
-                    peer_id,
-                    order_id,
-                    password,
-                });
-            }
-
-            CoreOperationOutput::P2P(P2POperationOutput::SessionDetailReceived { session }) => {
-                self.notify_event(TransferEvent::SessionDetailReceived { session });
-            }
-
-            CoreOperationOutput::P2P(P2POperationOutput::SessionDetailFailed { order_id, error }) => {
-                self.notify_event(TransferEvent::SessionDetailFailed { order_id, error });
-            }
-
-            CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
-                peer_id,
-                session_order_id,
-                resource_order_id,
-            }) => {
-                self.notify_event(TransferEvent::ReceivedDownloadRequest {
-                    peer_id,
-                    session_order_id,
-                    resource_order_id,
-                });
-            }
-
-            CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
-                log::info!("Peer disconnected: {}", peer.id);
-                break;
-            }
-
-            _ => {}
-        }
-    }
-}
-```
-
-**Call notify after peer connected in `start_nearby_server`:**
-```rust
-CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
-    log::info!(target: "nearby", "New peer connected: {}", peer.id);
-
-    self.notify_event(NearbyEvent::UpdateNearbyPeers {
-        new_peer: vec![peer.clone()],
-        removed: vec![]
-    });
-
-    self.notify_event(TransferEvent::UpdateTransferTargets {
-        added: vec![TransferTarget::P2P { from_peer: peer.clone(), .. }],
-        removed: vec![]
-    });
-
-    // NEW: Notify peer about our sessions
-    self.notify_event(TransferEvent::NotifyPeerSessions {
-        peer_id: peer.id.clone()
-    });
-
-    self.spawn(|it| async move {
-        it.app().handle_peer_connection(peer).await;
-    });
-}
-```
-
-### 6.3 transfer/module.rs - Event Handlers
-
-**Add handlers in `TransferModule::update()`:**
-```rust
-match event {
-    TransferEvent::NotifyPeerSessions { peer_id } => {
-        Command::handle_result(|it| async move {
-            it.app().notify_peer_sessions(peer_id).await
-        })
-    }
-
-    TransferEvent::ReceivedSessionOverview { peer_id, order_id, password_protected } => {
-        Command::handle_result(|it| async move {
-            it.app().handle_session_overview(peer_id, order_id, password_protected).await
-        })
-    }
-
-    TransferEvent::ReceivedViewSessionRequest { peer_id, order_id, password } => {
-        Command::handle_result(|it| async move {
-            it.app().handle_view_session_request(peer_id, order_id, password).await
-        })
-    }
-
-    TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
-        Command::handle_result(|it| async move {
-            it.app().request_session_detail(peer_id, order_id, password).await
-        })
-    }
-
-    TransferEvent::SessionDetailReceived { session } => {
-        Command::handle_result(|it| async move {
-            it.app().handle_session_detail_received(session).await
-        })
-    }
-
-    TransferEvent::SessionDetailFailed { order_id, error } => {
-        Command::new(|it| async move {
-            DialogOperation::toast(format!("Failed to load session: {}", error))
-                .into_future(it.clone()).await;
-        })
-    }
-
-    TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id } => {
-        Command::handle_result(|it| async move {
-            it.app().handle_download_request(peer_id, session_order_id, resource_order_id).await
-        })
-    }
-
-    TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id, save_path } => {
-        Command::handle_result(|it| async move {
-            it.app().request_download_resource(peer_id, session_order_id, resource_order_id, save_path).await
-        })
-    }
-}
-```
-
-### 6.4 transfer/commands.rs - New Commands
-
-**Add (with access to model via TransferEvent):**
-```rust
-impl AppCommand {
-    pub async fn notify_peer_sessions(&self, peer_id: String) -> Result<(), CoreError> {
-        // Get all active P2P send sessions from model
-        let sessions: Vec<TransferSession> = /* access model.transfer.sessions */
-            .iter()
-            .filter(|it| it.transfer_type == TransferType::Send)
-            .filter(|it| matches!(it.target, TransferTarget::P2P { .. }))
-            .cloned()
-            .collect();
-
-        // Send sessions notification via P2P
-        self.run(P2POperation::SendSessionsNotification {
-            peer_id,
-            sessions,
-        }).await
-    }
-
-    pub async fn handle_session_overview(
-        &self,
-        peer_id: String,
-        order_id: u64,
-        password_protected: bool,
-    ) -> Result<(), CoreError> {
-        // Find peer from model
-        let peer = /* get peer from model.nearby.peers by peer_id */;
-
-        // Create stub TransferSession with no resources
-        let stub_session = TransferSession {
-            order_id,
-            resources: vec![],
-            progress: vec![],
-            transfer_type: TransferType::Receive,
-            target: TransferTarget::P2P {
-                from_peer: peer,
-                url: String::new(),
+            CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
+                TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
+                    // Resource received - add to session
+                    // BLOCKER: Need resource data from progress event
+                    // This depends on solution to Option A/B/C above
+                    transfer_session.progress.push(progress.clone());
+                    self.update_model(TransferSessionModelEvent::Update(
+                        transfer_session.id(),
+                        progress.into()
+                    ));
+                }
+                TransferOperationOutput::ThumbnailUpdated(thumbnail) => {
+                    // Thumbnail saved - update model
+                    self.update_model(TransferSessionModelEvent::Update(
+                        transfer_session.id(),
+                        thumbnail.into()
+                    ));
+                }
+                TransferOperationOutput::TransferCompleted(_status) => {
+                    // Session detail complete - save to persistence
+                    if let Err(e) = self.run(TransferSessionPersistentOperation::save(transfer_session.clone())).await {
+                        log::error!("Failed to save session: {e:?}");
+                    }
+                    break;
+                }
+                other => {
+                    log::warn!("Unexpected transfer output: {other:?}");
+                }
             },
-            cancellation_token: CancellationToken::new(),
-        };
-
-        // Add to model
-        self.update_model(TransferSessionModelEvent::Add(stub_session.clone()));
-
-        // Save to persistence
-        let _ = self.run(TransferSessionPersistentOperation::save(stub_session)).await;
-
-        Ok(())
+            CoreOperationOutput::Error(error) => {
+                log::error!("Error loading session: {error:?}");
+                self.run(DialogOperation::message(
+                    format!("{error}"),
+                    MessageReason::FailedToLoadSession(order_id)
+                )).await;
+                return Err(error);
+            }
+            _ => continue,
+        }
     }
 
-    pub async fn handle_view_session_request(
-        &self,
-        peer_id: String,
-        order_id: u64,
-        password: Option<String>,
-    ) -> Result<(), CoreError> {
-        // Sender side: find session from model
-        let session = /* find in model.transfer.sessions by order_id */;
+    Ok(())
+}
+```
 
-        // Validate password if needed
-        let is_password_valid = match &session.target {
-            TransferTarget::P2P { .. } => {
-                // Check if session has password
-                // Validate password
-                true
+**REMOVE:**
+- `handle_session_detail_received()` function (lines 306-317)
+
+#### 1.5 Clean up event types
+**Location:** Multiple files
+
+**Changes:**
+- Remove `SessionDetailReceived` from `P2POperationOutput` (p2p.rs:72-74)
+- Remove `SessionDetailFailed` from `P2POperationOutput` (p2p.rs:75-78)
+- Remove `SessionDetailReceived` from `TransferEvent` (module.rs:104-106)
+- Remove `SessionDetailFailed` from `TransferEvent` (module.rs:107-110)
+- Remove handlers in nearby/command.rs (lines 151-156)
+- Remove handlers in module.rs (lines 419-430)
+- Remove `SessionDetailReceived` from `TransferOperationOutput` (transfer.rs:34-36) **after** confirming new approach works
+
+---
+
+## Phase 2: Download Resource Streaming
+
+### Current Flow
+```
+Core (commands.rs)
+  → P2POperation::download_resource()
+    → webrtc.rs::download_resource()
+      → peer.rs::request_resource_download()
+        → Downloads entire resource
+        → Returns Ok(()) when complete
+  → No progress updates during download
+```
+
+### New Flow (following upload pattern)
+```
+Core (commands.rs)
+  → Start stream: P2POperation::DownloadResource
+    → executor passes CoreRequest to webrtc.rs::download_resource()
+      → webrtc.rs starts core stream on peer
+      → peer.rs::request_resource_download() - streams via CoreRequest
+        → Emits: TransferOperationOutput::TransferResourceProgressUpdate (periodic progress)
+        → Emits: TransferOperationOutput::TransferCompleted (done) or Error
+  → commands.rs::request_download_resource() streams like upload()
+```
+
+### Implementation Steps
+
+#### 2.1 Update peer.rs::request_resource_download()
+**Location:** `shared/src/protocol/webrtc/peer.rs:685-767`
+
+**Changes:**
+- Keep existing structure (prefix channel, delimiter handling)
+- Add progress tracking with existing `TransferProgress::new()` and `update_progress()`
+- Emit `TransferResourceProgressUpdate` events periodically
+- Emit `TransferCompleted` on success or error
+
+**Implementation:**
+```rust
+pub async fn request_resource_download(
+    &self,
+    session_order_id: u64,
+    resource: LocalResource,
+) -> Result<(), WebRtcErrors> {
+    let resource_order_id = resource.order_id;
+    let resource_size = resource.size;
+    let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    let request = DownloadResourceRequest {
+        session_order_id,
+        resource_order_id,
+        transfer_id: transfer_id as u32,
+    };
+
+    self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
+
+    let prefix = transfer_id;
+    let (tx, mut rx) = mpsc::channel::<Packet>(1024);
+
+    {
+        let mut channels = self.prefix_channels.lock().await;
+        channels.insert(prefix, tx);
+    }
+
+    let resource_repo = self.resource_repo.clone();
+    let prefix_channels = self.prefix_channels.clone();
+
+    // Wait for start delimiter
+    let start_delimiter = loop {
+        if let Some(packet) = rx.next().await {
+            if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
+                break delimiter;
             }
-            _ => false,
+        } else {
+            log::warn!("Channel closed before receiving start delimiter");
+            if let Some(core_request) = self.core_request() {
+                core_request.response(CoreOperationOutput::Error(
+                    CoreError::WebRtc("Channel closed before start delimiter".to_string())
+                )).await;
+            }
+            return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
+        }
+    };
+
+    let Some(resource_id) = start_delimiter.resource_id() else {
+        log::error!("Start delimiter missing resource_id");
+        if let Some(core_request) = self.core_request() {
+            core_request.response(CoreOperationOutput::Error(
+                CoreError::WebRtc("Start delimiter missing resource_id".to_string())
+            )).await;
+        }
+        return Err(WebRtcErrors::InvalidDelimiter("Start delimiter missing resource_id".into()));
+    };
+
+    let compressed = start_delimiter.compressed();
+
+    // Create progress tracker
+    let mut progress = TransferProgress::new(
+        resource_id,
+        resource_size,
+        crate::entities::transfer_session::TransferType::Receive
+    );
+
+    // Emit initial progress (0%)
+    if let Some(core_request) = self.core_request() {
+        core_request.response(CoreOperationOutput::Transfer(
+            TransferOperationOutput::TransferResourceProgressUpdate(progress.clone())
+        )).await;
+    }
+
+    let mut writer = match resource_repo.write(resource.path.clone(), compressed).await {
+        Ok(w) => w,
+        Err(e) => {
+            log::error!("Failed to create writer: {:?}", e);
+            progress.fail(format!("Failed to create writer: {:?}", e));
+            if let Some(core_request) = self.core_request() {
+                core_request.response(CoreOperationOutput::Transfer(
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress)
+                )).await;
+                core_request.response(CoreOperationOutput::Error(
+                    CoreError::WebRtc(format!("Failed to create writer: {:?}", e))
+                )).await;
+            }
+            return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to create writer: {:?}", e)));
+        }
+    };
+
+    loop {
+        let Some(packet) = rx.next().await else {
+            log::warn!("Channel closed before receiving end delimiter");
+            progress.fail("Channel closed during transfer".to_string());
+            if let Some(core_request) = self.core_request() {
+                core_request.response(CoreOperationOutput::Transfer(
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress)
+                )).await;
+                core_request.response(CoreOperationOutput::Error(
+                    CoreError::WebRtc("Channel closed during transfer".to_string())
+                )).await;
+            }
+            break;
         };
 
-        if !is_password_valid {
-            // Send error response
-            self.run(P2POperation::SendSessionDetailError {
-                peer_id,
-                order_id,
-                error: "Invalid password".to_string(),
-            }).await?;
-            return Ok(());
+        if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
+            log::info!("Received end delimiter for resource {}", resource_id);
+
+            // Mark as complete and emit
+            progress.complete();
+            if let Some(core_request) = self.core_request() {
+                core_request.response(CoreOperationOutput::Transfer(
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress)
+                )).await;
+
+                core_request.response(CoreOperationOutput::Transfer(
+                    TransferOperationOutput::TransferCompleted(TransferSessionStatus::Success)
+                )).await;
+            }
+            break;
         }
 
-        // Send full session via P2P
-        self.run(P2POperation::SendSessionDetail {
-            peer_id,
-            session,
-        }).await
+        if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
+            continue;
+        }
+
+        // Write data
+        let bytes = Bytes::from(packet.to_vec());
+        let packet_size = bytes.len() as u64;
+
+        if let Err(e) = writer.write(bytes).await {
+            log::error!("Failed to write data: {:?}", e);
+            progress.fail(format!("Write failed: {:?}", e));
+            if let Some(core_request) = self.core_request() {
+                core_request.response(CoreOperationOutput::Transfer(
+                    TransferOperationOutput::TransferResourceProgressUpdate(progress)
+                )).await;
+                core_request.response(CoreOperationOutput::Error(
+                    CoreError::WebRtc(format!("Write failed: {:?}", e))
+                )).await;
+            }
+            break;
+        }
+
+        // Update progress
+        progress.update_progress(packet_size);
+
+        // Emit progress update (throttled by core_request's throttling mechanism)
+        if let Some(core_request) = self.core_request() {
+            core_request.response_throttle(CoreOperationOutput::Transfer(
+                TransferOperationOutput::TransferResourceProgressUpdate(progress.clone())
+            )).await;
+        }
     }
 
-    pub async fn request_session_detail(
-        &self,
-        peer_id: String,
-        order_id: u64,
-        password: Option<String>,
-    ) -> Result<(), CoreError> {
-        // Receiver side: send request via P2P
-        self.run(P2POperation::ViewSessionDetail {
-            peer_id,
-            order_id,
-            password,
-        }).await
-    }
+    prefix_channels.lock().await.remove(&prefix);
+    log::info!("Completed download for resource {}", resource_id);
 
-    pub async fn handle_session_detail_received(
-        &self,
-        session: TransferSession,
-    ) -> Result<(), CoreError> {
-        // Update existing stub session with full details
-        self.update_model(TransferSessionModelEvent::Update(
-            session.id(),
-            session.clone().into(),
-        ));
-
-        // Save to persistence
-        let _ = self.run(TransferSessionPersistentOperation::save(session)).await;
-
-        Ok(())
-    }
-
-    pub async fn handle_download_request(
-        &self,
-        peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64,
-    ) -> Result<(), CoreError> {
-        // Sender side: find session and resource from model
-        let session = /* find in model.transfer.sessions by session_order_id */;
-        let resource = /* find in session.resources by resource_order_id */;
-
-        // Immediately ask Shell to stream resource data to peer
-        // No response needed - data starts flowing immediately
-        self.run(P2POperation::StreamResourceToPeer {
-            peer_id,
-            resource: resource.clone(),
-        }).await
-    }
-
-    pub async fn request_download_resource(
-        &self,
-        peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64,
-        save_path: String,
-    ) -> Result<(), CoreError> {
-        // Receiver side:
-        // 1. Send download request via P2P
-        self.run(P2POperation::DownloadResource {
-            peer_id: peer_id.clone(),
-            session_order_id,
-            resource_order_id,
-        }).await?;
-
-        // 2. Immediately prepare IOWriter and wait for data stream
-        // 3. Data will flow through existing transfer protocol
-        self.run(P2POperation::PrepareReceiveResource {
-            peer_id,
-            session_order_id,
-            resource_order_id,
-            save_path,
-        }).await
-    }
+    Ok(())
 }
 ```
 
-### 6.5 View Models Updates
+#### 2.2 Update webrtc.rs::download_resource()
+**Location:** `shared/src/protocol/webrtc/webrtc.rs:159-183`
 
-**ReceiveSessionViewModel - Add fields:**
+**Changes:**
+- Accept `core_request: CoreRequest` parameter
+- Call `peer.start_core_stream(core_request)` before downloading
+
+**Implementation:**
 ```rust
-pub struct ReceiveSessionViewModel {
-    pub id: String,
-    pub peer_avatar: AvatarViewModel,
-    pub peer_name: String,
-    pub peer_description: String,
+pub async fn download_resource(
+    &self,
+    peer_id: String,
+    session_order_id: u64,
+    resource_order_id: u64,
+    core_request: CoreRequest,
+) -> Result<(), WebRtcErrors> {
+    let peer_id = PeerId(peer_id.parse()?);
+    if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+        peer.start_core_stream(core_request);
 
-    pub password_required: bool,
-    pub is_authenticated: bool,
-    pub has_details: bool,
-
-    pub image_resources: Vec<ImageReceiveResourceViewModel>,
-    pub video_resources: Vec<VideoReceiveResourceViewModel>,
-    pub file_resources: Vec<FileReceiveResourceViewModel>,
-    pub is_completed: bool,
-    pub is_in_progress: bool,
-    pub display_download_speed: String,
-    pub progress: f64,
-    pub display_datetime: String,
-}
-```
-
-**Update TransferModule::view():**
-```rust
-received_sessions: model
-    .transfer
-    .sessions
-    .iter()
-    .filter(|it| it.transfer_type == TransferType::Receive)
-    .filter_map(|it| {
-        let Some(peer) = it.peer() else {
-            return None;
+        // Create a minimal LocalResource for download
+        let resource = LocalResource {
+            order_id: resource_order_id,
+            name: String::new(),
+            size: 0,
+            path: LocalResourcePath::RelativePath {
+                path: format!("received/session_{}/resource_{}", session_order_id, resource_order_id),
+                is_private: false,
+            },
+            thumbnail_path: None,
+            r#type: crate::entities::local_resource::ResourceType::File,
         };
 
-        let has_details = !it.resources.is_empty();
-        let password_required = /* check if password protected */;
-        let is_authenticated = has_details;
+        peer.request_resource_download(session_order_id, resource).await
+    } else {
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+}
+```
 
-        Some(ReceiveSessionViewModel {
-            id: it.order_id.to_string(),
-            peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
-            peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
-            peer_description: "Nearby".to_owned(),
+#### 2.3 Update executor/p2p.rs
+**Location:** `shared/src/shell/executor/p2p.rs:60-62`
 
-            password_required,
-            is_authenticated,
-            has_details,
+**Changes:**
+- Pass `request` (CoreRequest) to `download_resource`
 
-            // ... rest of fields
-        })
-    })
-    .collect()
+**Implementation:**
+```rust
+P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id } => {
+    self.web_rtc().download_resource(peer_id, session_order_id, resource_order_id, request).await?;
+    Ok(CoreOperationOutput::None)
+}
+```
+
+#### 2.4 Update commands.rs::request_download_resource()
+**Location:** `shared/src/app/transfer/commands.rs:335-342`
+
+**Changes:**
+- Convert to streaming operation following upload pattern
+- Handle `TransferResourceProgressUpdate` and `TransferCompleted` events
+- Update model with progress
+
+**Implementation:**
+```rust
+pub async fn request_download_resource(
+    &self,
+    peer_id: String,
+    session_order_id: u64,
+    resource_order_id: u64
+) -> Result<(), CoreError> {
+    let session_id = TransferSessionId {
+        order_id: Some(session_order_id.to_string()),
+        transfer_type: Some(TransferType::Receive)
+    };
+
+    let mut stream = self.stream_from_shell(
+        P2POperation::DownloadResource {
+            peer_id,
+            session_order_id,
+            resource_order_id
+        }.into()
+    );
+
+    while let Some(output) = stream.next().await {
+        match output {
+            CoreOperationOutput::Transfer(transfer_output) => match transfer_output {
+                TransferOperationOutput::TransferResourceProgressUpdate(progress) => {
+                    if progress.is_completed() {
+                        log::info!("Download completed: resource {} with status {:?}",
+                            progress.resource_order_id, progress.status);
+                    }
+
+                    // Update model with progress
+                    self.update_model(TransferSessionModelEvent::Update(
+                        session_id.clone(),
+                        progress.into()
+                    ));
+                }
+                TransferOperationOutput::TransferCompleted(status) => {
+                    log::info!("Download stream completed with status: {:?}", status);
+                    break;
+                }
+                other => {
+                    log::warn!("Unexpected transfer output during download: {other:?}");
+                }
+            },
+            CoreOperationOutput::Error(error) => {
+                log::error!("Download error: {error:?}");
+                self.run(DialogOperation::toast(format!("Download failed: {error}"))).await;
+                return Err(error);
+            }
+            _ => continue,
+        }
+    }
+
+    Ok(())
+}
 ```
 
 ---
 
-## Migration Steps
+## Summary of Changes
 
-### Phase 1: Proto & Bindings
-1. Update proto schemas (session.proto, request.proto)
-2. Generate Rust proto bindings
+### Files Modified
 
-### Phase 2: Entities
-3. Update `TransferTarget::P2P` to add password fields
-4. Fix `Nearby` → `P2P` references in:
-   - `entities/transfer_session.rs`
-   - `app/nearby/command.rs`
-   - `repository/transfer_session.rs`
+#### Phase 1: Session Detail Streaming
+1. **peer.rs**
+   - `request_session_detail()`: Return `Result<(), WebRtcErrors>`, stream events via CoreRequest
+   - Remove `SessionDetailReceived` emission at lines 619-625
 
-### Phase 3: Operations
-5. Add new `P2POperation` variants
-6. Add new `P2POperationOutput` variants
-7. Remove `ReceivedSessionRequest`
+2. **webrtc.rs**
+   - `view_session_detail()`: Accept `CoreRequest`, call `peer.start_core_stream()`
 
-### Phase 4: Protocol & Shell
-8. Update `protocol/webrtc/peer.rs` - add new message handlers
-9. Update Shell executor to handle new P2POperations
-10. Add proto ↔ Rust conversion functions
+3. **executor/p2p.rs**
+   - `ViewSessionDetail` case: Pass `request` to `view_session_detail()`
 
-### Phase 5: App Layer
-11. Add new `TransferEvent` variants
-12. Update `nearby/command.rs`:
-    - Add `NotifyPeerSessions` call in `start_nearby_server`
-    - Update `handle_peer_connection` to forward new events
-13. Add event handlers in `transfer/module.rs`
-14. Add command functions in `transfer/commands.rs`
+4. **commands.rs**
+   - `request_session_detail()`: Convert to streaming, build session from events
+   - **REMOVE** `handle_session_detail_received()` function
 
-### Phase 6: View
-15. Update `ReceiveSessionViewModel` with auth state fields
-16. Update `TransferModule::view()` to populate new fields
+5. **Event cleanup** (multiple files)
+   - Remove `P2POperationOutput::SessionDetailReceived`
+   - Remove `P2POperationOutput::SessionDetailFailed`
+   - Remove `TransferEvent::SessionDetailReceived`
+   - Remove `TransferEvent::SessionDetailFailed`
+   - Remove handlers in nearby/command.rs and module.rs
 
-### Phase 7: Cleanup
-17. Remove old `TransferRequest` handling
-18. Remove `TransferRequestMessage` / `TransferResponseMessage` from proto
+#### Phase 2: Download Resource Streaming
+1. **peer.rs**
+   - `request_resource_download()`: Create `TransferProgress`, emit progress updates via CoreRequest
 
-### Phase 8: Testing
-19. Test session discovery (overviews sent on connect)
-20. Test password authentication flow
-21. Test selective resource downloads
-22. Test peer disconnect cleanup
+2. **webrtc.rs**
+   - `download_resource()`: Accept `CoreRequest`, call `peer.start_core_stream()`
+
+3. **executor/p2p.rs**
+   - `DownloadResource` case: Pass `request` to `download_resource()`
+
+4. **commands.rs**
+   - `request_download_resource()`: Convert to streaming, handle progress events
+
+### Events Used (Existing)
+- `TransferOperationOutput::TransferResourceProgressUpdate` - progress updates (existing `TransferProgress` struct)
+- `TransferOperationOutput::ThumbnailUpdated` - thumbnails
+- `TransferOperationOutput::TransferCompleted` - completion signal
+- `CoreOperationOutput::Error` - errors
+
+### Events Removed
+- `P2POperationOutput::SessionDetailReceived` - replaced with streaming
+- `P2POperationOutput::SessionDetailFailed` - replaced with streaming errors
+- `TransferEvent::SessionDetailReceived` - no longer needed
+- `TransferEvent::SessionDetailFailed` - no longer needed
+- `TransferOperationOutput::SessionDetailReceived` - **possibly keep temporarily** for backward compatibility
+
+### No New Enum Variants Needed
+All events already exist in `TransferOperationOutput` - we just use them in a streaming pattern!
+
+---
+
+## Architecture Decision Required
+
+### BLOCKER: How to pass `LocalResource` in Phase 1?
+
+**Problem:** In `request_session_detail()`, we need to emit each received resource so that `commands.rs` can build the `TransferSession.resources` vector. However, `TransferProgress` (used in `TransferResourceProgressUpdate`) doesn't contain a `LocalResource` field.
+
+**Current `TransferProgress` structure:**
+```rust
+pub struct TransferProgress {
+    pub resource_order_id: u64,
+    pub file_size: u64,
+    total_bytes_counter: u64,
+    bytes_per_second: u64,
+    start_time_utc_ms: u64,
+    bytes_sec_counter: u64,
+    last_update_time_ms: u64,
+    pub transfer_type: TransferType,
+    pub status: TransferStatus,
+}
+```
+
+**Options:**
+
+**Option A: Extend TransferProgress (RECOMMENDED)**
+- Add `resource: Option<LocalResource>` field to `TransferProgress`
+- When receiving session detail: include resource in first progress update
+- When updating progress during download: set resource to `None`
+- **Pros:** Minimal changes, reuses existing event, clear semantics
+- **Cons:** Adds optional field that's only used in one scenario
+
+**Option B: Create new ResourceReceived event**
+- Add `TransferOperationOutput::ResourceReceived { resource: LocalResource }` variant
+- Emit separate event for resource metadata vs. progress
+- **Pros:** Clean separation of concerns
+- **Cons:** Adds new event type, more complex flow
+
+**Option C: Keep SessionDetailReceived temporarily**
+- Keep `SessionDetailReceived` event for Phase 1, only refactor Phase 2
+- Defer session detail streaming to future iteration
+- **Pros:** Smaller initial change, lower risk
+- **Cons:** Inconsistent patterns, delayed benefit
+
+**Option D: Use model events directly**
+- Bypass `TransferOperationOutput` and emit `TransferSessionModelEvent` directly from peer
+- **Pros:** Most direct path
+- **Cons:** Violates layering, couples protocol layer to UI model
+
+**DECISION NEEDED:** Please choose an option before proceeding with implementation.

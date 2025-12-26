@@ -1,6 +1,6 @@
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::finding_scope::FindingScope;
-use crate::entities::local_resource::LocalResource;
+use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
@@ -120,7 +120,9 @@ impl WebRtc {
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.request_session_detail(order_id, password).await
+            let _session = peer.request_session_detail(order_id, password).await?;
+            // Session is emitted via core_request in the peer method
+            Ok(())
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }
@@ -162,7 +164,19 @@ impl WebRtc {
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.request_resource_download(session_order_id, resource_order_id).await
+            // Create a minimal LocalResource for download
+            let resource = LocalResource {
+                order_id: resource_order_id,
+                name: String::new(),
+                size: 0,
+                path: LocalResourcePath::RelativePath {
+                    path: format!("received/session_{}/resource_{}", session_order_id, resource_order_id),
+                    is_private: false,
+                },
+                thumbnail_path: None,
+                r#type: crate::entities::local_resource::ResourceType::File,
+            };
+            peer.request_resource_download(session_order_id, resource).await
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }
@@ -171,11 +185,13 @@ impl WebRtc {
     pub async fn stream_resource_to_peer(
         &self,
         peer_id: String,
+        session_id: u64,
+        transfer_id: u16,
         resource: LocalResource,
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.stream_resource(resource).await
+            peer.stream_resource(session_id, transfer_id, resource).await
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }
@@ -278,9 +294,13 @@ impl WebRtc {
                                 }
                             };
 
+                            let peer = Arc::new(peer);
+
                             let peer_entity = peer.peer.clone();
-                            context.add_peer(peer).await;
+                            context.add_peer(Arc::downgrade(&peer)).await;
                             let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
+                            let result = peer.run_loop().await;
+                            log::info!("Peer {peer_id} loop finished with result {result:?}");
                         }));
                     }
                 }
@@ -341,9 +361,12 @@ impl WebRtc {
                             }
                         };
 
+                        let peer = Arc::new(peer);
                         let peer_entity = peer.peer.clone();
-                        context.add_peer(peer).await;
+                        context.add_peer(Arc::downgrade(&peer)).await;
                         let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
+                        let result = peer.run_loop().await;
+                        log::info!("Peer {peer_id} loop finished with result {result:?}");
                     }));
 
                     continue;

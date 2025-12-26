@@ -62,6 +62,9 @@ pub enum WebRtcErrors {
 
     #[error("Panic")]
     Panic(#[from] JoinError),
+
+    #[error("Peer error: {0}")]
+    PeerError(String),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

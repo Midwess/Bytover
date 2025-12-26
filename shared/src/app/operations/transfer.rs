@@ -30,7 +30,10 @@ pub enum TransferOperationOutput {
     TransferCompleted(TransferSessionStatus),
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
     SubscribeSessionEnded,
-    ThumbnailUpdated(ThumbnailUpdatedEvent)
+    ThumbnailUpdated(ThumbnailUpdatedEvent),
+    SessionDetailReceived {
+        session: TransferSession
+    }
 }
 
 impl Operation for TransferOperation {
