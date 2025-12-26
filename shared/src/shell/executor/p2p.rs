@@ -46,7 +46,7 @@ pub trait P2PNativeExecutor: Send + Sync {
                 Ok(CoreOperationOutput::None)
             }
             P2POperation::ViewSessionDetail { peer_id, order_id, password } => {
-                self.web_rtc().view_session_detail(peer_id, order_id, password).await?;
+                self.web_rtc().view_session_detail(peer_id, request, order_id, password).await?;
                 Ok(CoreOperationOutput::None)
             }
             P2POperation::SendSessionDetail { peer_id, request_id, session } => {
@@ -57,8 +57,8 @@ pub trait P2PNativeExecutor: Send + Sync {
                 self.web_rtc().send_session_detail_error(peer_id, request_id, error).await?;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id } => {
-                self.web_rtc().download_resource(peer_id, session_order_id, resource_order_id).await?;
+            P2POperation::DownloadResource { peer_id, session_id, resource, progress } => {
+                self.web_rtc().download_resource(peer_id, request, session_id, resource, progress).await?;
                 Ok(CoreOperationOutput::None)
             }
             P2POperation::StreamResourceToPeer { peer_id, session_id, transfer_id, resource } => {

@@ -8,7 +8,7 @@ use crate::app::AppRequestBuilder;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer;
-use crate::entities::transfer_session::TransferSession;
+use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::errors::CoreError;
 
 use super::CoreOperation;
@@ -41,8 +41,9 @@ pub enum P2POperation {
     },
     DownloadResource {
         peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64
+        session_id: u64,
+        resource: LocalResource,
+        progress: TransferProgress
     },
     StreamResourceToPeer {
         peer_id: String,
@@ -125,10 +126,6 @@ impl P2POperation {
 
     pub fn send_session_detail_error(peer_id: String, request_id: String, error: String) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetailError { peer_id, request_id, error })).map(|it| it.result())
-    }
-
-    pub fn download_resource(peer_id: String, session_order_id: u64, resource_order_id: u64) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id })).map(|it| it.result())
     }
 
     pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {

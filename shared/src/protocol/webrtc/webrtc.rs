@@ -2,7 +2,7 @@ use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer as PeerEntity;
-use crate::entities::transfer_session::{TransferSession, TransferSessionStatus};
+use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
@@ -115,12 +115,13 @@ impl WebRtc {
     pub async fn view_session_detail(
         &self,
         peer_id: String,
+        request: CoreRequest,
         order_id: u64,
         password: Option<String>,
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            let _session = peer.request_session_detail(order_id, password).await?;
+            let _session = peer.request_session_detail(request, order_id, password).await?;
             // Session is emitted via core_request in the peer method
             Ok(())
         } else {
@@ -159,24 +160,14 @@ impl WebRtc {
     pub async fn download_resource(
         &self,
         peer_id: String,
+        request: CoreRequest,
         session_order_id: u64,
-        resource_order_id: u64,
+        resource: LocalResource,
+        progress: TransferProgress
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            // Create a minimal LocalResource for download
-            let resource = LocalResource {
-                order_id: resource_order_id,
-                name: String::new(),
-                size: 0,
-                path: LocalResourcePath::RelativePath {
-                    path: format!("received/session_{}/resource_{}", session_order_id, resource_order_id),
-                    is_private: false,
-                },
-                thumbnail_path: None,
-                r#type: crate::entities::local_resource::ResourceType::File,
-            };
-            peer.request_resource_download(session_order_id, resource).await
+            peer.request_resource_download(request, session_order_id, resource, progress).await
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }

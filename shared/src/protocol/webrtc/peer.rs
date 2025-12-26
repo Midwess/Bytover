@@ -2,7 +2,7 @@ use crate::app::operations::p2p::{P2POperationOutput, P2PSessionOverview};
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
-use crate::entities::transfer_session::TransferSession;
+use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
@@ -36,6 +36,7 @@ use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use core_services::utils::cancellation::CancellationToken;
+use crate::app::operations::transfer::TransferOperationOutput;
 
 // Global atomic counter for generating unique transfer IDs
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
@@ -152,7 +153,7 @@ pub struct WebRtcPeer {
     pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet)>>,
     pub outbound_packet_sender: mpsc::Sender<(u16, Packet)>,
 
-    pub prefix_channels: Arc<Mutex<HashMap<u16, mpsc::Sender<Packet>>>>,
+    pub prefix_channels: Arc<Mutex<HashMap<u16, mpsc::UnboundedSender<Packet>>>>,
 
     pub bandwidth: Arc<AtomicU64>,
 
@@ -544,23 +545,21 @@ impl WebRtcPeer {
 
     pub async fn request_session_detail(
         &self,
+        core_request: CoreRequest,
         order_id: u64,
         password: Option<String>,
-    ) -> Result<TransferSession, WebRtcErrors> {
+    ) -> Result<(), WebRtcErrors> {
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
         let request = ViewSessionDetailRequest {
             order_id,
             password,
         };
 
-        let mut session: Option<TransferSession> = None;
-        let mut resources: Vec<LocalResource> = Vec::new();
-
         let mut response = Box::pin(self.msg_channel.stream(Request::ViewSessionRequest(request)).await?);
         while let Some(Response::ViewSessionResponse(resp)) = response.next().await {
             match resp.result {
                 Some(ResponseResult::Session(proto_session)) => {
-                    session = Some(TransferSession {
+                    let session = TransferSession {
                         order_id: proto_session.order_id,
                         resources: vec![],
                         progress: vec![],
@@ -571,7 +570,9 @@ impl WebRtcPeer {
                             is_required_password: false,
                         },
                         cancellation_token: CancellationToken::new(),
-                    });
+                    };
+
+                    core_request.response(session).await;
                 }
                 Some(ResponseResult::ResourceUpdated(resource_proto)) => {
                     let mut resource = LocalResource {
@@ -597,7 +598,7 @@ impl WebRtcPeer {
                         }
                     }
 
-                    resources.push(resource);
+                    core_request.response(resource).await;
                 }
                 Some(ResponseResult::Error(error_type)) => {
                     let error_msg = PeerErrorsMessage::try_from(error_type)
@@ -608,19 +609,7 @@ impl WebRtcPeer {
             }
         }
 
-        let mut session = session.ok_or_else(|| WebRtcErrors::InvalidDelimiter("Session not received".into()))?;
-        session.resources = resources;
-
-        // Notify core that session detail is received
-        if let Some(core_request) = self.core_request() {
-            core_request.response(CoreOperationOutput::Transfer(
-                crate::app::operations::transfer::TransferOperationOutput::SessionDetailReceived {
-                    session: session.clone(),
-                }
-            )).await;
-        }
-
-        Ok(session)
+        Ok(())
     }
 
     pub async fn send_session_detail_response(
@@ -680,8 +669,10 @@ impl WebRtcPeer {
 
     pub async fn request_resource_download(
         &self,
+        core_request: CoreRequest,
         session_order_id: u64,
         resource: LocalResource,
+        mut progress: TransferProgress,
     ) -> Result<(), WebRtcErrors> {
         let resource_order_id = resource.order_id;
 
@@ -693,17 +684,15 @@ impl WebRtcPeer {
             transfer_id: transfer_id as u32,
         };
 
-        self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
+        let (tx, mut rx) = mpsc::unbounded::<Packet>();
 
         let prefix = transfer_id;
-
-        let (tx, mut rx) = mpsc::channel::<Packet>(1024);
-
         {
             let mut channels = self.prefix_channels.lock().await;
             channels.insert(prefix, tx);
         }
 
+        self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
         let prefix_channels = self.prefix_channels.clone();
 
@@ -741,6 +730,8 @@ impl WebRtcPeer {
 
             if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
                 log::info!("Received end delimiter for resource {}", resource_id);
+                progress.success();
+                core_request.response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone())).await;
                 break;
             }
 
@@ -749,10 +740,9 @@ impl WebRtcPeer {
             }
 
             let bytes = Bytes::from(packet.to_vec());
-            if let Err(e) = writer.write(bytes).await {
-                log::error!("Failed to write data: {:?}", e);
-                break;
-            }
+            let written = writer.write(bytes).await?;
+            progress.update_progress(written as u64);
+            core_request.response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone())).await;
         }
 
         prefix_channels.lock().await.remove(&prefix);
@@ -771,16 +761,23 @@ impl WebRtcPeer {
         let resource_id = resource.order_id;
         let prefix = transfer_id;
 
-        let compressed = is_compressible(&resource.name);
+        let resource_name = match resource.r#type {
+            ResourceType::Folder => format!("{}.zip", &resource.name),
+            _ => resource.name.clone(),
+        };
+
+        let compressed = is_compressible(&resource_name);
 
         let start_delimiter = TransferDelimiterShema::start(session_id, resource_id, compressed);
         let start_packet = start_delimiter.as_bytes()?;
-        self.outbound_packet_sender.clone().send((prefix, start_packet)).await
+        let mut outbound_packet_sender = self.outbound_packet_sender.clone();
+        outbound_packet_sender.send((prefix, start_packet)).await
             .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to send start delimiter: {:?}", e)))?;
 
         let mut cursor = self.resource_repo.read(resource.path.clone(), CHUNK_SIZE, compressed).await?;
 
         loop {
+            cursor.compression_stats_mut().update_network_bandwidth(self.bandwidth.load(Ordering::Relaxed) as f64 * 1024f64);
             match cursor.c_next(Some(CHUNK_SIZE as u64)).await {
                 Ok(Some((data, _raw_size))) => {
                     if data.is_empty() {
@@ -803,7 +800,7 @@ impl WebRtcPeer {
 
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
-        self.outbound_packet_sender.clone().send((prefix, end_packet)).await
+        outbound_packet_sender.send((prefix, end_packet)).await
             .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to send end delimiter: {:?}", e)))?;
 
         log::info!("Completed streaming resource {} for session {}", resource_id, session_id);
@@ -841,12 +838,11 @@ impl WebRtcPeer {
 
             match action {
                 FecAction::Constructed(packets_with_prefix, _next_check) => {
-                    let channels = self.prefix_channels.lock().await;
-
                     for (prefix, packet) in packets_with_prefix {
+                        let channels = self.prefix_channels.lock().await;
                         if let Some(sender) = channels.get(&prefix) {
                             let mut sender_clone = sender.clone();
-                            if let Err(e) = sender_clone.try_send(packet) {
+                            if let Err(e) = sender_clone.send(packet).await {
                                 log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
                             }
                         } else {

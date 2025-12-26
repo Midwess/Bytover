@@ -13,9 +13,10 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferType};
+use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus, TransferType};
 use crate::entities::user::User;
 use crate::errors::CoreError;
+use crate::repository::transfer_session::TransferSessionId;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
@@ -348,12 +349,34 @@ impl AppCommand {
     pub async fn request_download_resource(
         &self,
         peer_id: String,
-        session_order_id: u64,
-        resource_order_id: u64
+        session_id: TransferSessionId,
+        resource: LocalResource,
     ) -> Result<(), CoreError> {
-        let mut stream = self.stream_from_shell(P2POperation::DownloadResource { peer_id, session_order_id, resource_order_id}.into());
+        let mut progress = TransferProgress::new(
+            resource.order_id,
+            resource.size,
+            TransferType::Receive
+        );
+
+        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), progress.clone().into()));
+
+        let mut stream = self.stream_from_shell(P2POperation::DownloadResource { peer_id, session_id: session_id.order_id.clone().unwrap_or_default().parse().unwrap_or_default(), resource, progress: progress.clone() }.into());
         while let Some(output) = stream.next().await {
             match output {
+                CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(new_progress)) => {
+                    progress = progress;
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), progress.clone().into()));
+                    if progress.is_completed() {
+                        log::info!("Resource download completed with progress {progress:?}");
+                        break;
+                    }
+                }
+                CoreOperationOutput::Error(e) => {
+                    log::info!("Download resource error: {e:?}");
+                    progress.fail(e.to_string());
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), progress.clone().into()));
+                    break;
+                }
                 _ => continue
             }
         }

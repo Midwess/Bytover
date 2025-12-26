@@ -408,8 +408,18 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id } => {
+                let id = TransferSessionId {
+                    order_id: Some(session_order_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
+                };
+
+                let Some(resource) = model.transfer.sessions.lookup(&id).and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned()) else {
+                    log::warn!("Resource not found in session: {}", resource_order_id);
+                    return Command::done();
+                };
+
                 Command::handle_result(move |it| async move {
-                    it.app().request_download_resource(peer_id, session_order_id, resource_order_id).await
+                    it.app().request_download_resource(peer_id, id, resource).await
                 })
             }
         }
