@@ -253,12 +253,7 @@ impl AppCommand {
         session: Option<TransferSession>
     ) -> Result<(), CoreError> {
         let Some(session) = session else {
-            self.run(P2POperation::send_session_detail_error(
-                peer_id,
-                request_id,
-                "Session not found".to_string()
-            )).await?;
-            return Ok(());
+           return Ok(());
         };
 
         let is_password_valid = match &session.target {
@@ -277,11 +272,6 @@ impl AppCommand {
         };
 
         if !is_password_valid {
-            self.run(P2POperation::send_session_detail_error(
-                peer_id,
-                request_id,
-                "Invalid password".to_string()
-            )).await?;
             return Ok(());
         }
 

@@ -143,20 +143,6 @@ impl WebRtc {
         }
     }
 
-    pub async fn send_session_detail_error(
-        &self,
-        peer_id: String,
-        request_id: String,
-        error: String,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_session_detail_response(request_id, None, Some(error)).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
     pub async fn download_resource(
         &self,
         peer_id: String,

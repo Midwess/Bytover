@@ -124,10 +124,6 @@ impl P2POperation {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session })).map(|it| it.result())
     }
 
-    pub fn send_session_detail_error(peer_id: String, request_id: String, error: String) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetailError { peer_id, request_id, error })).map(|it| it.result())
-    }
-
     pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer { peer_id, session_id, transfer_id, resource })).map(|it| it.result())
     }
