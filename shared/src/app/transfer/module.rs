@@ -654,6 +654,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                     Some(ReceiveSessionViewModel {
                         id: it.order_id.to_string(),
+                        peer_id: peer.id().to_string(),
                         peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
                         peer_name: peer.name.clone().unwrap_or(peer.device.name.clone()),
                         peer_description: "Nearby".to_owned(),

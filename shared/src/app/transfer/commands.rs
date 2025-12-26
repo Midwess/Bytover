@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use core_services::db::repository::abstraction::table::Table;
 use n0_future::StreamExt;
 use core_services::utils::string::StringExt;
@@ -297,6 +298,7 @@ impl AppCommand {
         }.into());
 
         let mut session_id = None;
+        let mut requests = HashMap::new();
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::TransferSession(session) => {
@@ -304,10 +306,27 @@ impl AppCommand {
                     self.update_model(TransferSessionModelEvent::Remove(session.id()));
                     self.update_model(TransferSessionModelEvent::Add(session));
                 }
-                CoreOperationOutput::LocalResource(resource) => {
-                    if let Some(session_id) = session_id.clone() {
-                        self.update_model(TransferSessionModelEvent::Update(session_id, resource.into()));
-                    }
+                CoreOperationOutput::LocalResource(mut resource) => {
+                    let Some(session_id) = session_id.clone() else {
+                        log::warn!("Failed to load session detail: session id not found");
+                        continue;
+                    };
+
+                    requests.insert(resource.order_id, resource.name.clone());
+                    let mut generated_saved_paths = self
+                        .run(TransferSessionPersistentOperation::generate_resource_paths(
+                            session_id.order_id.as_ref().and_then(|it| it.parse().ok()).unwrap_or_default(),
+                            requests
+                        ))
+                        .await?;
+
+                    let Some(path) = generated_saved_paths.remove(&resource.order_id) else {
+                        log::warn!("Failed to generate resource path");
+                        continue;
+                    };
+
+                    resource.path = path;
+                    self.update_model(TransferSessionModelEvent::Update(session_id, resource.into()));
                 }
                 CoreOperationOutput::Error(err) => {
                     log::error!("Failed to load session detail: {err:?}");

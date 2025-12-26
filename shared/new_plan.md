@@ -1,264 +1,538 @@
-# Implementation Plan: P2P Transfer Session with Password Protection
+# Implementation Plan: Password-Protected Nearby Sessions on Receive Board
 
 ## Overview
-Add UI controls to the People tab in the send board to allow users to start a password-protected P2P transfer session with nearby peers.
+Add password input UI and authentication flow for nearby (P2P) sessions on the receive board, similar to how cloud sessions currently work.
 
-## Architecture Review
+## Current State Analysis
 
-### Current Flow
-- **Frontend**: React (web-next) uses WASM core bindings to communicate with Rust core
-- **Core**: Rust shared library handles business logic, compiles to WASM
-- **Events**: Transfer events defined in `shared/src/app/transfer/module.rs`
-- **Commands**: Transfer commands in `shared/src/app/transfer/commands.rs`
-- **P2P**: Nearby peer operations in `shared/src/app/nearby/command.rs` and `shared/src/app/operations/p2p.rs`
+### What Already Exists ✅
 
-### Key Files
-- `web-next/app/transfer/send_board.tsx` - SendBoard UI (lines 797-884: NearbySend component)
-- `shared/src/app/transfer/module.rs` - Transfer events and module logic (line 62-65: StartP2PTransfer event already exists!)
-- `shared/src/app/transfer/commands.rs` - Transfer command handlers
-- `shared/src/app/nearby/command.rs` - Nearby peer session handling (lines 82-86: TODO comment about notifying peers)
-- `shared/src/entities/transfer_session.rs` - Session entity (lines 192-209: p2p session constructor)
-- `shared/src/app/operations/p2p.rs` - P2P operations (lines 23-26: SendSessionsNotification)
+1. **View Model Fields** (`shared/src/app/view_models/receive_session.rs`):
+   - `password_required: bool` (line 33) - indicates if session needs password
+   - `is_authenticated: bool` (line 34) - indicates if user has entered correct password
+   - `has_details: bool` (line 35) - indicates if session details (resources) are loaded
 
-## Implementation Steps
+2. **View Model Population** (`shared/src/app/transfer/module.rs:587-593`):
+   - `password_required` is set from `TransferTarget::P2P { is_required_password, .. }`
+   - `is_authenticated = has_details` (authenticated when resources are loaded)
 
-### 1. **UI Updates - People Tab (web-next/app/transfer/send_board.tsx)**
-   **File**: `web-next/app/transfer/send_board.tsx:797-884` (NearbySend function)
+3. **Cloud Session Password UI** (`web-next/app/transfer/receive_board.tsx:182-208`):
+   - Working password input component for cloud sessions
+   - Can be used as a template for nearby sessions
 
-   **Changes needed**:
-   - Add state for password input: `const [password, setPassword] = useState('')`
-   - Add state for "require password" toggle: `const [requirePassword, setRequirePassword] = useState(false)`
-   - Add password input field (similar to PublicSend component at line 686-688)
-   - Add "Start Transfer" button
-   - Button should trigger `TransferEventVariantStartP2PTransfer` with password
-   - Disable controls when transfer is in progress
-   - Show session status/progress after starting
+4. **Backend Events**:
+   - `RequestSessionDetail` event exists (module.rs:96-100)
+   - Handler in `commands.rs:287-321` that calls `P2POperation::ViewSessionDetail`
+   - Password validation in sender's `handle_view_session_request` (commands.rs:248-285)
 
-   **UI Components to add**:
-   ```tsx
-   - Label for password section
-   - Switch/Checkbox for "Require Password"
-   - Input field (type="password") - only show if requirePassword is true
-   - Button "Start Transfer" - triggers the transfer
-   - Progress indicator when session is active
-   - Cancel button when session is in progress
-   ```
+### What's Missing ⚠️
 
-### 2. **Event Handling - Check if Already Implemented**
-   **File**: `shared/src/app/transfer/module.rs:223-232`
+1. **No password UI for nearby sessions** - currently only cloud sessions show password input
+2. **No automatic session detail request** - nearby sessions don't auto-load like cloud sessions do
+3. **Session click doesn't handle nearby sessions properly** - fires wrong event type
+4. **No differentiation between cloud and nearby** in ContentBoard component
 
-   **Current Implementation** (StartP2PTransfer event):
-   - ✅ Event already exists at line 62-65
-   - ✅ Handler implemented at lines 223-232
-   - ✅ Creates P2P session with `TransferSession::p2p()`
-   - ✅ Adds session to model
-   - ⚠️  **MISSING**: No authentication check (unlike StartPublicTransfer which checks user login at line 205-211)
-   - ⚠️  **MISSING**: No session broadcasting to nearby peers
-   - ⚠️  **MISSING**: No validation for selected resources
+## Implementation Plan
 
-   **Changes needed**:
-   - Add resource validation (check if `selected_resources.is_empty()`)
-   - Add authentication check if password is set (optional, depends on requirements)
-   - Trigger session broadcast after creating session
-   - Add error handling and user feedback
+### Phase 1: Backend - Ensure View Model Correctness
 
-### 3. **Session Broadcasting**
-   **File**: `shared/src/app/nearby/command.rs:82-86`
+**File**: `shared/src/app/transfer/module.rs:587-593`
 
-   **Current State**:
-   - There's a TODO comment at lines 82-86: `// TODO: Notify connected peer about current transfer P2P sessions`
-   - Function `notify_peer_sessions` exists in `transfer/commands.rs:239-246`
+**Current code:**
+```rust
+let password_required = match &it.target {
+    TransferTarget::P2P { is_required_password, .. } => *is_required_password,
+    _ => false
+};
 
-   **Changes needed**:
-   - Implement the TODO: After peer connects, notify them of active P2P send sessions
-   - After creating new P2P session, broadcast to all connected peers
-   - Use `P2POperation::send_sessions_notification` (from `app/operations/p2p.rs:23-26`)
-
-   **Implementation approach**:
-   ```rust
-   // In transfer/module.rs StartP2PTransfer handler, after creating session:
-   // 1. Get all connected peers from model.nearby.peers
-   // 2. For each peer, call notify_peer_sessions with the new session
-   // 3. Or create a new command that broadcasts to all peers
-   ```
-
-### 4. **Authentication Flow**
-   **File**: `shared/src/app/authentication/command.rs:19-34`
-
-   **Consideration**:
-   - Public transfers require authentication (transfer/module.rs:205-211)
-   - Should P2P transfers also require authentication when password protected?
-   - Current implementation doesn't check authentication for P2P
-
-   **Decision needed** (ask user or document):
-   - If password is required, should user be authenticated?
-   - Or is P2P transfer available to anyone nearby without account?
-
-   **Suggested approach**:
-   - P2P transfers work without authentication (current behavior)
-   - Password is just for securing the specific transfer session
-   - Keep it simple - no auth check for P2P
-
-### 5. **Session State Management**
-   **File**: `shared/src/app/transfer/module.rs:223-232`
-
-   **Changes needed**:
-   - Update `TransferSession::p2p()` to properly set `is_required_password` flag
-   - Currently sets `is_required_password: false` hardcoded (line 205)
-   - Should be: `is_required_password: password.is_some()`
-
-   **File**: `shared/src/entities/transfer_session.rs:192-209`
-   ```rust
-   // Line 205 needs to change from:
-   is_required_password: false
-   // To:
-   is_required_password: password.is_some()
-   ```
-
-### 6. **UI State Display - Show Active Session**
-   **File**: `web-next/app/transfer/send_board.tsx:797-884`
-
-   **Changes needed**:
-   - Use `core.useTransferState()` to get nearby sessions (similar to cloud_session at line 649)
-   - Filter for TransferType.Send sessions with target P2P
-   - Display session info when active:
-     - Session ID
-     - Connected peers count
-     - Transfer progress
-     - Cancel button
-   - Hide password input and start button when session is active
-   - Show session list when there are active nearby send sessions
-
-### 7. **Type Generation & Validation**
-   **Commands to run**:
-   ```bash
-   # In shared directory:
-   cargo check -p shared
-
-   # Generate TypeScript types (if there's a build script):
-   cargo build -p shared --target wasm32-unknown-unknown
-   wasm-bindgen ... # (check existing build process)
-
-   # In web-next directory:
-   pnpm run type-check
-   ```
-
-## Detailed Implementation Checklist
-
-### Phase 1: Rust Core Updates
-- [ ] Fix `TransferSession::p2p()` to properly set `is_required_password` flag based on password presence
-- [ ] Update `StartP2PTransfer` event handler in `transfer/module.rs`:
-  - [ ] Add validation: check if `selected_resources.is_empty()`
-  - [ ] Show toast message if no resources selected
-  - [ ] Keep nearby_available check (line 223)
-  - [ ] After adding session to model, trigger broadcast to nearby peers
-- [ ] Implement peer notification in `nearby/command.rs`:
-  - [ ] Complete TODO at line 82-86
-  - [ ] Create helper function to broadcast session overview to all connected peers
-- [ ] Add new command/event for broadcasting sessions to all peers (if needed)
-
-### Phase 2: UI Updates (NearbySend Component)
-- [ ] Add state variables:
-  - [ ] `password` state
-  - [ ] `requirePassword` state
-  - [ ] Get nearby send sessions from `core.useTransferState()`
-- [ ] Add UI controls:
-  - [ ] "Require Password" switch/checkbox
-  - [ ] Password input field (conditional - only if requirePassword is true)
-  - [ ] "Start Transfer" button
-  - [ ] Disable controls when session is active
-- [ ] Add session display:
-  - [ ] Show active session info if exists
-  - [ ] Display transfer progress
-  - [ ] Show connected peers
-  - [ ] Add cancel button
-- [ ] Wire up event:
-  - [ ] On "Start Transfer" click, call `core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(...)))`
-  - [ ] Pass `nearby_available: true` (from checking if nearby server is running)
-  - [ ] Pass password (or null if not required)
-
-### Phase 3: Testing & Validation
-- [ ] Run `cargo check -p shared` - ensure no errors
-- [ ] Build shared to WASM and generate TypeScript types
-- [ ] Run `pnpm run type-check` in web-next - ensure types are correct
-- [ ] Manual testing:
-  - [ ] Test starting session without password
-  - [ ] Test starting session with password
-  - [ ] Test that nearby peers see the session
-  - [ ] Test password validation on receiver side
-  - [ ] Test canceling session
-  - [ ] Test with no resources selected (should show error)
-
-### Phase 4: Edge Cases & Polish
-- [ ] Handle case where nearby server is not running
-- [ ] Handle case where no peers are connected (show appropriate message)
-- [ ] Add loading states
-- [ ] Add error handling for failed broadcasts
-- [ ] Test on mobile view (the component already has mobile support)
-- [ ] Ensure password field uses secure input (type="password")
-- [ ] Add fake password input field to prevent autofill issues (see PublicSend line 192)
-
-## Files to Modify
-
-### Rust (shared/)
-1. `src/entities/transfer_session.rs` - Fix is_required_password flag (line 205)
-2. `src/app/transfer/module.rs` - Update StartP2PTransfer handler (lines 223-232)
-3. `src/app/nearby/command.rs` - Implement peer notification TODO (lines 82-86)
-4. `src/app/transfer/commands.rs` - May need to add broadcast helper function
-
-### TypeScript (web-next/)
-1. `app/transfer/send_board.tsx` - Update NearbySend component (lines 797-884)
-
-## API/Event Flow
-
-```
-User clicks "Start Transfer" in People tab
-  ↓
-Frontend: TransferEventVariantStartP2PTransfer { nearby_available, password }
-  ↓
-Core: transfer/module.rs - StartP2PTransfer handler
-  ↓ (validate resources exist)
-  ↓ (create session with TransferSession::p2p())
-  ↓ (add session to model)
-  ↓
-Core: Broadcast session overview to all connected peers
-  ↓ (for each peer in model.nearby.peers)
-  ↓ (P2POperation::send_sessions_notification)
-  ↓
-Peer receives session notification
-  ↓
-Peer UI updates to show new available session
-  ↓
-Session is ready for peer to view and download
+let has_details = !it.resources.is_empty();
+let is_authenticated = has_details;
 ```
 
-## Questions to Resolve
+**Analysis:**
+- ✅ `password_required` correctly reads from `is_required_password` flag
+- ✅ `is_authenticated` correctly checks if details are loaded
+- ⚠️  Need to verify this works with password validation on sender side
 
-1. **Authentication**: Should P2P transfers with password require user authentication?
-   - **Recommendation**: No - keep P2P simple and local-only
+**Action**: No changes needed, but verify during testing
 
-2. **Multiple sessions**: Can user have multiple active P2P send sessions?
-   - **Current**: Looks like only one cloud session is shown, but model supports multiple
-   - **Recommendation**: Support multiple P2P sessions, show list
+---
 
-3. **Session persistence**: Should P2P send sessions be persisted to DB?
-   - **Current**: Only receive sessions are persisted (transfer/commands.rs:165)
-   - **Recommendation**: No persistence for send sessions (temporary, local only)
+### Phase 2: Frontend - Update ContentBoard Component
 
-4. **Broadcast timing**: When to broadcast sessions?
-   - On peer connect (TODO at nearby/command.rs:82-86)
-   - On new session creation
-   - Both?
-   - **Recommendation**: Both - ensure peers always see current sessions
+**File**: `web-next/app/transfer/receive_board.tsx:117-228`
+
+#### Step 2.1: Add State for Nearby Session Password
+
+**Location**: Inside `ContentBoard` function (after line 127)
+
+**Add:**
+```typescript
+const [nearbyPassword, setNearbyPassword] = useState<string>('')
+```
+
+**Reasoning**: Separate state from `enteredPassword` (which is for cloud sessions) to avoid conflicts
+
+---
+
+#### Step 2.2: Add Auto-Load Logic for Nearby Sessions
+
+**Location**: After the cloud session useEffect (after line 168)
+
+**Add:**
+```typescript
+useEffect(() => {
+    if (selectedSession && selectedSession instanceof ReceiveSessionViewModel) {
+        const nearby = selectedSession as ReceiveSessionViewModel
+
+        // Auto-load if no password required
+        if (!nearby.password_required && !nearby.is_authenticated) {
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantRequestSessionDetail(
+                    nearby.peer_id,  // Need to add peer_id to ReceiveSessionViewModel
+                    BigInt(nearby.id),
+                    null  // no password
+                )
+            ))
+        }
+    }
+}, [selectedSession?.id])
+```
+
+**Issue Identified**: ⚠️ `ReceiveSessionViewModel` doesn't have `peer_id` field!
+
+**Fix Required**: Add `peer_id` to `ReceiveSessionViewModel` in Rust
+
+---
+
+#### Step 2.3: Add Password Input UI for Nearby Sessions
+
+**Location**: After cloud session password check (after line 209), before the `if (!selectedSession)` check
+
+**Add:**
+```typescript
+// Handle nearby session password requirement
+if (selectedSession instanceof ReceiveSessionViewModel) {
+    const nearby = selectedSession as ReceiveSessionViewModel
+
+    if (nearby.password_required && !nearby.is_authenticated) {
+        return (
+            <div className="text-foreground w-full h-full flex flex-col justify-center items-center gap-2">
+                <div className="w-[50%] flex flex-col gap-4">
+                    <p className="text-muted-foreground flex flex-row items-center">
+                        <Image
+                            alt="lock"
+                            width={10}
+                            height={10}
+                            className="w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"
+                            src="/lock.svg"
+                            color="white"
+                        />
+                        This session is password protected
+                    </p>
+                    <input type="password" name="fake-password" style={{ display: 'none' }} />
+                    <Input
+                        className="h-10"
+                        placeholder="Enter password"
+                        value={nearbyPassword}
+                        onChange={(e) => setNearbyPassword(e.target.value)}
+                        type="password"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                requestNearbySessionDetail()
+                            }
+                        }}
+                    />
+                    <Button
+                        onClick={requestNearbySessionDetail}
+                        className="w-fit bg-foreground"
+                    >
+                        Continue
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+}
+
+// Helper function to request session detail
+const requestNearbySessionDetail = () => {
+    if (!(selectedSession instanceof ReceiveSessionViewModel)) return
+
+    const nearby = selectedSession as ReceiveSessionViewModel
+    core.update(new AppEventVariantTransfer(
+        new TransferEventVariantRequestSessionDetail(
+            nearby.peer_id,  // Need peer_id in view model
+            BigInt(nearby.id),
+            nearbyPassword || null
+        )
+    ))
+}
+```
+
+---
+
+### Phase 3: Backend - Add peer_id to ReceiveSessionViewModel
+
+**File**: `shared/src/app/view_models/receive_session.rs:28-44`
+
+**Current:**
+```rust
+pub struct ReceiveSessionViewModel {
+    pub id: String,
+    pub peer_avatar: AvatarViewModel,
+    pub peer_name: String,
+    pub peer_description: String,
+    pub password_required: bool,
+    pub is_authenticated: bool,
+    pub has_details: bool,
+    // ... other fields
+}
+```
+
+**Add field:**
+```rust
+pub peer_id: String,  // Add this after line 29
+```
+
+**Then update the view model builder** (`shared/src/app/transfer/module.rs:655-675`):
+
+**Add:**
+```rust
+Some(ReceiveSessionViewModel {
+    id: it.order_id.to_string(),
+    peer_id: peer.id.clone(),  // Add this line
+    peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
+    // ... rest of fields
+})
+```
+
+---
+
+### Phase 4: Frontend - Update Session Click Handler
+
+**File**: `web-next/app/transfer/receive_board.tsx:392-419`
+
+**Current code (line 403-409):**
+```typescript
+<TransferSession
+    onPress={() => {
+        core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession()))
+        core.updateSelectedSession(item)
+        if (isMobile) {
+            setOpenMobile(false)
+        }
+    }}
+    id={item.id}
+    key={item.id}
+/>
+```
+
+**Issue**: ⚠️ Fires empty `ViewSession` event which is wrong for both session types
+
+**Fix:**
+```typescript
+<TransferSession
+    onPress={() => {
+        core.updateSelectedSession(item)
+        if (isMobile) {
+            setOpenMobile(false)
+        }
+
+        // Session detail loading is now handled by useEffect in ContentBoard
+        // based on session type and password requirements
+    }}
+    id={item.id}
+    key={item.id}
+/>
+```
+
+**Reasoning**: Remove the event firing from here - let the ContentBoard component handle it based on session type
+
+---
+
+### Phase 5: Backend - Verify Password Validation
+
+**File**: `shared/src/app/transfer/commands.rs:248-285`
+
+**Current handler** (`handle_view_session_request`):
+```rust
+pub async fn handle_view_session_request(
+    &self,
+    peer_id: String,
+    request_id: String,
+    password: Option<String>,
+    session: Option<TransferSession>
+) -> Result<(), CoreError> {
+    let Some(session) = session else {
+       return Ok(());
+    };
+
+    let is_password_valid = match &session.target {
+        TransferTarget::P2P { password: session_password, is_required_password, .. } => {
+            if *is_required_password {
+                match (session_password, &password) {
+                    (Some(expected), Some(provided)) => expected == provided,
+                    (Some(_), None) => false,
+                    (None, _) => true
+                }
+            } else {
+                true
+            }
+        }
+        _ => false
+    };
+
+    if !is_password_valid {
+        return Ok(());
+    }
+
+    self.run(P2POperation::send_session_detail(
+        peer_id,
+        request_id,
+        session
+    )).await?;
+
+    Ok(())
+}
+```
+
+**Analysis:**
+- ✅ Correctly validates password for P2P sessions
+- ✅ Handles all cases: required with match, required without, not required
+- ⚠️  Returns `Ok(())` silently on invalid password - receiver won't get error feedback
+
+**Enhancement (Optional)**:
+Consider sending error response to peer on invalid password:
+```rust
+if !is_password_valid {
+    self.run(P2POperation::SendSessionDetail {
+        peer_id,
+        request_id,
+        session: None,
+        error: Some(CoreError::Unauthorized("Invalid password".to_string()))
+    }).await?;
+    return Ok(());
+}
+```
+
+---
+
+## Complete Implementation Checklist
+
+### Phase 1: Rust Core Updates ✅
+- [x] **Verify** view model population logic (module.rs:587-593) - No changes needed
+- [ ] **Add** `peer_id: String` field to `ReceiveSessionViewModel` (view_models/receive_session.rs:29)
+- [ ] **Update** view model builder to populate `peer_id` (module.rs:655+)
+- [ ] **Optional**: Add error response for invalid password (commands.rs:275)
+
+### Phase 2: TypeScript Type Generation
+- [ ] Run `cargo check -p shared` - ensure compilation
+- [ ] Build to WASM and generate TypeScript types
+- [ ] Verify `ReceiveSessionViewModel` has `peer_id` field in generated types
+
+### Phase 3: Frontend Updates
+- [ ] **Add** `nearbyPassword` state variable in ContentBoard
+- [ ] **Add** `requestNearbySessionDetail` helper function
+- [ ] **Add** useEffect for auto-loading nearby sessions without password (after line 168)
+- [ ] **Add** password UI for nearby sessions (after line 209)
+- [ ] **Update** session click handler to remove event firing (line 403-409)
+- [ ] **Verify** imports include `TransferEventVariantRequestSessionDetail`
+
+### Phase 4: Testing
+- [ ] **Test**: Click nearby session without password - should auto-load
+- [ ] **Test**: Click nearby session with password - should show password input
+- [ ] **Test**: Enter correct password - should load session details
+- [ ] **Test**: Enter wrong password - should show error or stay on password screen
+- [ ] **Test**: Cloud sessions still work correctly (regression test)
+- [ ] **Test**: Mobile view works correctly
+- [ ] **Test**: Session switching between nearby and cloud sessions
+- [ ] **Test**: Multiple nearby sessions with different password states
+
+---
+
+## File Modification Summary
+
+### Rust Files (shared/)
+1. **src/app/view_models/receive_session.rs**
+   - Add `peer_id: String` field (after line 29)
+
+2. **src/app/transfer/module.rs**
+   - Add `peer_id: peer.id.clone()` to view model builder (around line 656)
+
+3. **src/app/transfer/commands.rs** (Optional)
+   - Add error response for invalid password (line 275)
+
+### TypeScript Files (web-next/)
+1. **app/transfer/receive_board.tsx**
+   - Add `nearbyPassword` state (line 127+)
+   - Add auto-load useEffect for nearby sessions (line 168+)
+   - Add password UI for nearby sessions (line 209+)
+   - Add `requestNearbySessionDetail` helper function
+   - Update session click handler (line 403-409)
+
+---
+
+## Event Flow Diagrams
+
+### Flow 1: Nearby Session WITHOUT Password
+```
+User clicks nearby session in list
+  ↓
+SessionItemsList.onPress → updateSelectedSession(item)
+  ↓
+ContentBoard useEffect detects: ReceiveSessionViewModel + !password_required
+  ↓
+Auto-fire: TransferEventVariantRequestSessionDetail(peer_id, session_id, null)
+  ↓
+Core: RequestSessionDetail handler (module.rs:410-419)
+  ↓
+Core: request_session_detail command (commands.rs:287-321)
+  ↓
+P2P: Send ViewSessionDetail request to peer
+  ↓
+Peer: handle_view_session_request validates (no password needed)
+  ↓
+Peer: Sends session details back
+  ↓
+Receiver: Session details populate (resources, progress)
+  ↓
+View model: is_authenticated = true, has_details = true
+  ↓
+UI: Shows session resources (images, videos, files)
+```
+
+### Flow 2: Nearby Session WITH Password
+```
+User clicks nearby session in list
+  ↓
+SessionItemsList.onPress → updateSelectedSession(item)
+  ↓
+ContentBoard detects: ReceiveSessionViewModel + password_required + !is_authenticated
+  ↓
+UI: Shows password input screen
+  ↓
+User enters password and clicks Continue
+  ↓
+requestNearbySessionDetail() → Fire TransferEventVariantRequestSessionDetail(peer_id, session_id, password)
+  ↓
+Core: RequestSessionDetail handler
+  ↓
+Core: request_session_detail command with password
+  ↓
+P2P: Send ViewSessionDetail request to peer with password
+  ↓
+Peer: handle_view_session_request validates password
+  ↓ (if valid)
+Peer: Sends session details back
+  ↓
+Receiver: Session details populate
+  ↓
+View model: is_authenticated = true, has_details = true
+  ↓
+UI: Shows session resources
+  ↓ (if invalid)
+Peer: Returns nothing (or error response if enhanced)
+  ↓
+Receiver: Session stays in password_required state
+  ↓
+UI: Stays on password input (no change, could add error message)
+```
+
+---
+
+## Key Differences from Cloud Sessions
+
+| Aspect | Cloud Sessions | Nearby Sessions |
+|--------|---------------|----------------|
+| Event Type | `ViewSession` | `RequestSessionDetail` |
+| Password State | `password: Option<String>` in view model | Only `password_required: bool` |
+| Auto-load | Lines 157-168 | Need to add (Phase 2.2) |
+| Validation | Server-side | Peer-to-peer sender validates |
+| Error Handling | Server returns error response | Currently silent failure |
+| Session ID Type | String (from URL query) | String (order_id) |
+
+---
+
+## Edge Cases to Handle
+
+1. **Peer goes offline during password entry**
+   - Session should show "Peer unavailable" message
+   - Need to detect peer disconnection
+
+2. **Multiple password attempts**
+   - Currently no rate limiting or attempt tracking
+   - Consider adding attempt counter
+
+3. **Session details change while viewing**
+   - Resources could be added/removed by sender
+   - Need to handle updates to existing session
+
+4. **Wrong password entered**
+   - Currently silent failure
+   - Should show error message to user
+   - Recommendation: Add error state and message
+
+5. **Session already authenticated but password changed**
+   - Edge case: sender changes password after receiver loaded session
+   - Current behavior: receiver keeps access (until session refresh)
+   - Acceptable behavior for P2P
+
+---
+
+## Recommended Enhancements (Post-MVP)
+
+### 1. Add Error Feedback for Wrong Password
+**Location**: ContentBoard component
+
+**Add state:**
+```typescript
+const [passwordError, setPasswordError] = useState<string>('')
+```
+
+**Show error:**
+```typescript
+{passwordError && (
+    <p className="text-destructive text-sm">{passwordError}</p>
+)}
+```
+
+**Set error on failed attempt** (would need backend support)
+
+### 2. Add Loading State During Authentication
+```typescript
+const [isAuthenticating, setIsAuthenticating] = useState(false)
+```
+
+Show spinner while waiting for session details response
+
+### 3. Add "Forgot Password" or "Request Access" Feature
+Allow receiver to send message to sender requesting password
+
+### 4. Add Session Refresh Button
+Allow user to manually request session details again
+
+---
 
 ## Success Criteria
 
-- [ ] User can see password input and "Start Transfer" button in People tab
-- [ ] Clicking button creates a P2P session with selected resources
-- [ ] Session is broadcast to all connected nearby peers
-- [ ] Peers can see the session in their receive board
-- [ ] Password protection works (if set)
-- [ ] User can cancel the session
-- [ ] No TypeScript or Rust compilation errors
-- [ ] `cargo check -p shared` passes
-- [ ] TypeScript types are generated correctly
+- [ ] Nearby sessions display password lock icon when `password_required = true`
+- [ ] Clicking password-protected nearby session shows password input
+- [ ] Entering correct password loads session details (resources visible)
+- [ ] Entering wrong password keeps user on password screen (no crash)
+- [ ] Nearby sessions without password auto-load on click
+- [ ] Cloud sessions continue to work (no regression)
+- [ ] Mobile view works correctly for both session types
+- [ ] TypeScript compilation passes
+- [ ] Rust `cargo check -p shared` passes
+- [ ] All tests pass (if tests exist)
+
+---
+
+## Notes
+
+- View model already has all necessary fields (`password_required`, `is_authenticated`, `has_details`)
+- Backend password validation logic already exists and works correctly
+- Main work is UI wiring and auto-load logic
+- Similar pattern to cloud sessions makes implementation straightforward
+- Only missing piece is `peer_id` in view model for firing the request

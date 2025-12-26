@@ -11,6 +11,7 @@ import {
     SelectedResourceViewModel, TransferEventVariantCancelTransfer,
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewSession,
+    TransferEventVariantRequestSessionDetail,
     TransferTypeVariantReceive,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -125,6 +126,7 @@ function ContentBoard() {
         : false
     const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
     const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
+    const [nearbyPassword, setNearbyPassword] = useState<string>('')
     const isMobile = useIsMobile();
     const { setOpenMobile } = useSidebar();
 
@@ -167,6 +169,33 @@ function ContentBoard() {
         }
     }, [selectedSession?.id]);
 
+    useEffect(() => {
+        if (selectedSession && selectedSession instanceof ReceiveSessionViewModel) {
+            const nearby = selectedSession as ReceiveSessionViewModel
+            if (!nearby.password_required && !nearby.is_authenticated) {
+                core.update(new AppEventVariantTransfer(
+                    new TransferEventVariantRequestSessionDetail(
+                        nearby.peer_id,
+                        BigInt(nearby.id),
+                        null
+                    )
+                ))
+            }
+        }
+    }, [selectedSession?.id]);
+
+    const requestNearbySessionDetail = () => {
+        if (!(selectedSession instanceof ReceiveSessionViewModel)) return
+        const nearby = selectedSession as ReceiveSessionViewModel
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantRequestSessionDetail(
+                nearby.peer_id,
+                BigInt(nearby.id),
+                nearbyPassword || null
+            )
+        ))
+    }
+
     if (!selectedSession) {
         return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
             <p className="text-lg font-medium text-muted-foreground/50">No session selected</p>
@@ -203,6 +232,35 @@ function ContentBoard() {
                         }}
                     />
                     <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
+                </div>
+            </div>
+        }
+    }
+
+    if (selectedSession instanceof ReceiveSessionViewModel) {
+        const nearby = selectedSession as ReceiveSessionViewModel
+        if (nearby.password_required && !nearby.is_authenticated) {
+            return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
+                <div className={"w-[50%] flex flex-col gap-4"}>
+                    <p className={"text-muted-foreground flex flex-row items-center"}>
+                        <Image alt={"lock"} width={10} height={10}
+                            className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                            color={'white'} />
+                        This session is password protected</p>
+                    <input type="password" name="fake-password" style={{ display: 'none' }} />
+                    <Input
+                        className="h-10"
+                        placeholder="Enter password"
+                        value={nearbyPassword}
+                        onChange={(e) => setNearbyPassword(e.target.value)}
+                        type="password"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                requestNearbySessionDetail()
+                            }
+                        }}
+                    />
+                    <Button onClick={requestNearbySessionDetail} className={"w-fit bg-foreground"}>Continue</Button>
                 </div>
             </div>
         }

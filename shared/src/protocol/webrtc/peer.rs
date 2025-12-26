@@ -580,7 +580,7 @@ impl WebRtcPeer {
                         order_id: resource_proto.order_id,
                         name: resource_proto.name,
                         size: resource_proto.size as u64,
-                        path: LocalResourcePath::RelativePath {
+                        path: LocalResourcePath::RelativePath { // Dummy path, will be override
                             path: format!("received/session_{}/resource_{}", order_id, resource_proto.order_id),
                             is_private: false,
                         },

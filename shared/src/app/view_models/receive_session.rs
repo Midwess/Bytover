@@ -27,6 +27,7 @@ pub struct FileReceiveResourceViewModel {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveSessionViewModel {
     pub id: String,
+    pub peer_id: String,
     pub peer_avatar: AvatarViewModel,
     pub peer_name: String,
     pub peer_description: String,
