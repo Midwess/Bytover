@@ -189,7 +189,7 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn p2p(mut resources: Vec<LocalResource>, current_peer: Peer, password: Option<String>) -> Self {
+    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
         Self {
@@ -201,7 +201,7 @@ impl TransferSession {
             resources,
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
-                from_peer: current_peer,
+                from_peer: None,
                 password,
                 is_required_password
             },
@@ -266,6 +266,10 @@ impl TransferSession {
     }
 
     pub fn replace_resource(&mut self, resource: LocalResource) {
+        if self.resource_progress(resource.order_id).is_none() {
+            self.progress.push(TransferProgress::new(resource.order_id, resource.size, self.transfer_type.clone()));
+        }
+
         self.resources.retain(|it| it.order_id != resource.order_id);
         self.resources.push(resource);
         self.resources.sort_by(|a, b| a.size.cmp(&b.size));

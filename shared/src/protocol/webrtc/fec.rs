@@ -554,7 +554,6 @@ impl LossDetector {
         let mut i = 0;
 
         while i < received_frames.len() {
-            // Skip received frames
             while i < received_frames.len() && received_frames[i].is_some() {
                 i += 1;
             }
@@ -563,32 +562,28 @@ impl LossDetector {
                 break;
             }
 
-            // Found a gap, count its size
             let gap_start = i;
             while i < received_frames.len() && received_frames[i].is_none() && !self.is_requested(i as u8) {
                 i += 1;
             }
 
-            // Skip already requested frames in the gap
             while i < received_frames.len() && (received_frames[i].is_none() && self.is_requested(i as u8)) {
                 i += 1;
             }
 
             if gap_start == i {
-                continue; // No gap, all were already requested
+                continue;
             }
 
             let gap_end = i - 1;
             let gap_size = gap_end - gap_start + 1;
 
-            // Count continuous frames after the gap
             let continuous_start = i;
             while i < received_frames.len() && received_frames[i].is_some() {
                 i += 1;
             }
             let continuous_count = i - continuous_start;
 
-            // Check if we have enough continuous frames to mark the gap as lost
             if continuous_count >= threshold + gap_size {
                 for idx in gap_start..=gap_end {
                     if !self.is_requested(idx as u8) {
@@ -907,7 +902,7 @@ impl FecReceiver {
             }
 
             if frame.block_id < self.next_block_id {
-                log::info!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count, self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
+                log::warn!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count, self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
                 self.false_retransmit = self.false_retransmit.saturating_add(1);
                 continue;
             }

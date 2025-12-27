@@ -237,15 +237,6 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn notify_peer_sessions(
-        &self,
-        peer_id: String,
-        sessions: Vec<TransferSession>
-    ) -> Result<(), CoreError> {
-        self.run(P2POperation::send_sessions_notification(peer_id, sessions)).await?;
-        Ok(())
-    }
-
     pub async fn handle_view_session_request(
         &self,
         peer_id: String,

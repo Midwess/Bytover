@@ -6,9 +6,11 @@ use crate::entities::user::User;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TransferTarget {
     P2P {
-        from_peer: Peer,
+        from_peer: Option<Peer>,
         password: Option<String>,
-        is_required_password: bool
+        is_required_password: bool,
+        signalling_key: String,
+        scope: String
     },
     Internet {
         password: Option<String>,

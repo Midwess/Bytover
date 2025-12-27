@@ -79,7 +79,6 @@ impl AppCommand {
                         removed: vec![]
                     });
 
-                    let peer_id = peer.id().to_string();
                     self.spawn(|it| async move {
                         it.app().handle_peer_connection(peer).await;
                     });

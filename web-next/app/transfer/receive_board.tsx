@@ -130,6 +130,7 @@ function ContentBoard() {
     const isMobile = useIsMobile();
     const { setOpenMobile } = useSidebar();
 
+    console.log(selectedSession)
     useEffect(() => {
         if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
             if (selectedSession.alias) {

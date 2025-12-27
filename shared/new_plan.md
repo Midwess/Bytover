@@ -1,538 +1,556 @@
-# Implementation Plan: Password-Protected Nearby Sessions on Receive Board
+# P2P Session Implementation Plan
 
 ## Overview
-Add password input UI and authentication flow for nearby (P2P) sessions on the receive board, similar to how cloud sessions currently work.
+Implement P2P session creation and discovery via backend RPC, enabling direct peer-to-peer transfers with signaling scope coordination.
 
-## Current State Analysis
+## Architecture
+- **Backend**: Create/Find P2P sessions, generate signaling keys, manage session lifecycle
+- **Sender**: Create session on backend, add scope to WebRTC, display session info
+- **Receiver**: Find session by alias, extract scope, connect via WebRTC, view/download resources
 
-### What Already Exists ✅
+## Connection Flow Sequence
 
-1. **View Model Fields** (`shared/src/app/view_models/receive_session.rs`):
-   - `password_required: bool` (line 33) - indicates if session needs password
-   - `is_authenticated: bool` (line 34) - indicates if user has entered correct password
-   - `has_details: bool` (line 35) - indicates if session details (resources) are loaded
+```
+SENDER SIDE:
+1. User selects resources + clicks "Start P2P Transfer"
+2. Call backend RPC: create_device_session(password_protected)
+3. Backend returns: P2PSession { alias, owner_signalling_key, scope, ... }
+4. Create local TransferSession { target: P2P { from_peer: None, scope, signalling_key: owner_key, ... } }
+5. Emit event to Nearby module: AddFindingScope(FindingScope::Local(scope))
+6. Nearby module adds scope to model.nearby.finding_scopes
+7. Nearby module calls P2POperation::update_finding_scopes() → WebRTC RPC
+8. Display session with alias/URL (same UI as public session, with "Stop Transfer" button)
+9. When receiver connects, they request session details via P2P protocol (sender doesn't track who)
+10. When "Stop Transfer" pressed → Emit RemoveFindingScope → Nearby removes scope → Updates WebRTC
 
-2. **View Model Population** (`shared/src/app/transfer/module.rs:587-593`):
-   - `password_required` is set from `TransferTarget::P2P { is_required_password, .. }`
-   - `is_authenticated = has_details` (authenticated when resources are loaded)
+RECEIVER SIDE:
+1. User enters alias/keywords (e.g., "brave-dolphin-42")
+2. Trigger existing FindPublicSession event (same event for both P2P and public)
+3. RPC searches BOTH P2P (by alias) AND public (by keywords) sessions
+4. If P2P found: Create TransferSession { target: P2P { from_peer: None, scope, signalling_key: member_key, ... } }
+   - Emit AddFindingScope to Nearby module → WebRTC scopes updated
+5. If public found: Create TransferSession { target: Internet { ... } } (existing flow)
+6. Display found session (UI shows "Connecting..." for P2P with no peer)
+7. FOR P2P: WebRTC event: PeerConnected(peer) → Update from_peer field
+8. User clicks to view session details
+9. Route based on target type:
+   - P2P with peer: Call request_session_detail(peer_id, order_id, password)
+   - Public: Call view_public_session(session, password) (existing)
+10. Display resources → User can download
 
-3. **Cloud Session Password UI** (`web-next/app/transfer/receive_board.tsx:182-208`):
-   - Working password input component for cloud sessions
-   - Can be used as a template for nearby sessions
+KEY INSIGHTS:
+- Sender doesn't track individual receivers - just broadcasts availability via scope
+- Nearby module owns scope management and WebRTC coordination
+- Transfer module emits events to Nearby module to add/remove scopes
+- Receiver uses SAME FindPublicSession event for both P2P and public sessions
+- RPC layer searches both P2P (by alias) and public (by keywords) simultaneously
+- Only "view session details" routing differs between P2P and public
+```
 
-4. **Backend Events**:
-   - `RequestSessionDetail` event exists (module.rs:96-100)
-   - Handler in `commands.rs:287-321` that calls `P2POperation::ViewSessionDetail`
-   - Password validation in sender's `handle_view_session_request` (commands.rs:248-285)
+---
 
-### What's Missing ⚠️
+## Implementation Steps
 
-1. **No password UI for nearby sessions** - currently only cloud sessions show password input
-2. **No automatic session detail request** - nearby sessions don't auto-load like cloud sessions do
-3. **Session click doesn't handle nearby sessions properly** - fires wrong event type
-4. **No differentiation between cloud and nearby** in ContentBoard component
+### 0. Nearby Module - Add Scope Management Events
+**Files**: `shared/src/app/nearby/module.rs`
 
-## Implementation Plan
+**Tasks**:
+1. **Add new events to `NearbyEvent`**:
+   ```rust
+   pub enum NearbyEvent {
+       Launch { auto_launch: bool },
+       UpdateMe { new_peer: Peer },
+       UpdateNearbyPeers { new_peer: Vec<Peer>, removed: Vec<Peer> },
+       ClearNearbyPeers,
 
-### Phase 1: Backend - Ensure View Model Correctness
+       // NEW: Scope management
+       AddFindingScope(FindingScope),
+       RemoveFindingScope(FindingScope),
+   }
+   ```
 
-**File**: `shared/src/app/transfer/module.rs:587-593`
+2. **Handle AddFindingScope event**:
+   ```rust
+   NearbyEvent::AddFindingScope(scope) => {
+       if !model.nearby.finding_scopes.contains(&scope) {
+           model.nearby.finding_scopes.push(scope);
 
-**Current code:**
+           // Update WebRTC
+           let scopes = model.nearby.finding_scopes.clone();
+           return Command::handle_result(|it| async move {
+               it.run(P2POperation::update_finding_scopes(scopes)).await
+           });
+       }
+       Command::none()
+   }
+   ```
+
+3. **Handle RemoveFindingScope event**:
+   ```rust
+   NearbyEvent::RemoveFindingScope(scope) => {
+       model.nearby.finding_scopes.retain(|s| s != &scope);
+
+       // Update WebRTC
+       let scopes = model.nearby.finding_scopes.clone();
+       return Command::handle_result(|it| async move {
+           it.run(P2POperation::update_finding_scopes(scopes)).await
+       });
+   }
+   ```
+
+**Design Note**: Nearby module owns all WebRTC scope coordination. Transfer module just emits add/remove events.
+
+---
+
+### 1. Backend Integration - RPC Client Setup
+**Files**: `shared/src/protocol/rpc/app_server.rs` or equivalent RPC client module
+
+**Tasks**:
+1. **Add `P2pOrchestrationServiceClient`** to RPC client structure
+
+2. **Implement sender method**:
+   - `create_device_session(password_protected: bool) -> Result<P2PSession, CoreError>`
+   - Use authenticated channel (User + Device extensions)
+
+3. **Update existing `find_transfer_session` method** to search BOTH:
+   ```rust
+   pub async fn find_transfer_session(keywords: String) -> Result<Option<TransferSession>, CoreError> {
+       // Try P2P first
+       if let Ok(Some(p2p_session)) = self.find_p2p_session_by_alias(keywords.clone()).await {
+           // Convert P2PSession proto to local TransferSession with P2P target
+           return Ok(Some(create_p2p_transfer_session(p2p_session)));
+       }
+
+       // Fallback to existing public session search
+       self.find_public_session_by_keywords(keywords).await
+   }
+   ```
+
+4. **Add helper method**:
+   - `find_p2p_session_by_alias(alias: String) -> Result<Option<P2PSession>, CoreError>`
+   - Calls backend `find_session` RPC
+   - Returns proto `P2PSession` object
+
+**Details**:
+- P2PSession proto contains: session_id, signalling_room_id, owner_user_id, password_protected, access_url, alias, signalling_scope
+- Unified search means receiver doesn't need to know if it's P2P or public
+
+---
+
+### 2. Sender Flow - Create P2P Session
+**Files**:
+- `shared/src/app/transfer/module.rs` (StartP2PTransfer event handler)
+- `shared/src/app/transfer/commands.rs` (add new command function)
+- `shared/src/entities/transfer_session.rs` (update `p2p()` constructor)
+
+**Current State**:
 ```rust
-let password_required = match &it.target {
-    TransferTarget::P2P { is_required_password, .. } => *is_required_password,
-    _ => false
-};
-
-let has_details = !it.resources.is_empty();
-let is_authenticated = has_details;
-```
-
-**Analysis:**
-- ✅ `password_required` correctly reads from `is_required_password` flag
-- ✅ `is_authenticated` correctly checks if details are loaded
-- ⚠️  Need to verify this works with password validation on sender side
-
-**Action**: No changes needed, but verify during testing
-
----
-
-### Phase 2: Frontend - Update ContentBoard Component
-
-**File**: `web-next/app/transfer/receive_board.tsx:117-228`
-
-#### Step 2.1: Add State for Nearby Session Password
-
-**Location**: Inside `ContentBoard` function (after line 127)
-
-**Add:**
-```typescript
-const [nearbyPassword, setNearbyPassword] = useState<string>('')
-```
-
-**Reasoning**: Separate state from `enteredPassword` (which is for cloud sessions) to avoid conflicts
-
----
-
-#### Step 2.2: Add Auto-Load Logic for Nearby Sessions
-
-**Location**: After the cloud session useEffect (after line 168)
-
-**Add:**
-```typescript
-useEffect(() => {
-    if (selectedSession && selectedSession instanceof ReceiveSessionViewModel) {
-        const nearby = selectedSession as ReceiveSessionViewModel
-
-        // Auto-load if no password required
-        if (!nearby.password_required && !nearby.is_authenticated) {
-            core.update(new AppEventVariantTransfer(
-                new TransferEventVariantRequestSessionDetail(
-                    nearby.peer_id,  // Need to add peer_id to ReceiveSessionViewModel
-                    BigInt(nearby.id),
-                    null  // no password
-                )
-            ))
-        }
-    }
-}, [selectedSession?.id])
-```
-
-**Issue Identified**: ⚠️ `ReceiveSessionViewModel` doesn't have `peer_id` field!
-
-**Fix Required**: Add `peer_id` to `ReceiveSessionViewModel` in Rust
-
----
-
-#### Step 2.3: Add Password Input UI for Nearby Sessions
-
-**Location**: After cloud session password check (after line 209), before the `if (!selectedSession)` check
-
-**Add:**
-```typescript
-// Handle nearby session password requirement
-if (selectedSession instanceof ReceiveSessionViewModel) {
-    const nearby = selectedSession as ReceiveSessionViewModel
-
-    if (nearby.password_required && !nearby.is_authenticated) {
-        return (
-            <div className="text-foreground w-full h-full flex flex-col justify-center items-center gap-2">
-                <div className="w-[50%] flex flex-col gap-4">
-                    <p className="text-muted-foreground flex flex-row items-center">
-                        <Image
-                            alt="lock"
-                            width={10}
-                            height={10}
-                            className="w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"
-                            src="/lock.svg"
-                            color="white"
-                        />
-                        This session is password protected
-                    </p>
-                    <input type="password" name="fake-password" style={{ display: 'none' }} />
-                    <Input
-                        className="h-10"
-                        placeholder="Enter password"
-                        value={nearbyPassword}
-                        onChange={(e) => setNearbyPassword(e.target.value)}
-                        type="password"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                requestNearbySessionDetail()
-                            }
-                        }}
-                    />
-                    <Button
-                        onClick={requestNearbySessionDetail}
-                        className="w-fit bg-foreground"
-                    >
-                        Continue
-                    </Button>
-                </div>
-            </div>
-        )
-    }
+// transfer/module.rs:236
+TransferEvent::StartP2PTransfer { nearby_available, password } => {
+    let session = TransferSession::p2p(selected_resources, me, password);
+    // Currently creates local TransferSession only
+    // Doesn't call backend to create P2P session
 }
 
-// Helper function to request session detail
-const requestNearbySessionDetail = () => {
-    if (!(selectedSession instanceof ReceiveSessionViewModel)) return
-
-    const nearby = selectedSession as ReceiveSessionViewModel
-    core.update(new AppEventVariantTransfer(
-        new TransferEventVariantRequestSessionDetail(
-            nearby.peer_id,  // Need peer_id in view model
-            BigInt(nearby.id),
-            nearbyPassword || null
-        )
-    ))
+// transfer_session.rs:192
+pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>) -> Self {
+    // Currently creates session WITHOUT signalling_key and scope
 }
 ```
 
+**Changes**:
+1. **Before creating local session**, call backend RPC:
+   ```rust
+   let p2p_session = app_server.create_device_session(password.is_some()).await?;
+   ```
+
+2. **Extract session info**:
+   - `session_id`: Backend-generated unique ID
+   - `alias`: Human-readable identifier (e.g., "brave-dolphin-42")
+   - `signalling_scope`: Scope string for WebRTC (e.g., "brave-dolphin-42")
+   - `owner_signalling_key`: RTC signaling room ID for sender (e.g., "direct:brave-dolphin-42:12345;owner")
+   - `access_url`: Share URL (e.g., "https://bitbridge.com/p2p?session=brave-dolphin-42")
+
+3. **Update `TransferSession::p2p()` constructor**:
+   - Current signature: `pub fn p2p(resources, password) -> Self`
+   - New signature: `pub fn p2p(resources, password, signalling_key, scope) -> Self`
+   - Create session with:
+     ```rust
+     TransferTarget::P2P {
+         from_peer: None,  // No peer yet, they will connect to us
+         password,
+         is_required_password: password.is_some(),
+         signalling_key,  // Owner key for sender
+         scope,
+     }
+     ```
+
+   - Call it with backend data:
+     ```rust
+     let session = TransferSession::p2p(
+         selected_resources,
+         password,
+         p2p_session.owner_signalling_key,  // from backend
+         p2p_session.signalling_scope,      // from backend
+     );
+     ```
+
+4. **Emit event to Nearby module to add scope**:
+   ```rust
+   let scope = FindingScope::Local(p2p_session.signalling_scope.clone());
+   // Emit to Nearby module (not direct RPC call)
+   self.update_model(NearbyEvent::AddFindingScope(scope));
+   ```
+   - Nearby module receives this event
+   - Adds scope to `model.nearby.finding_scopes`
+   - Calls `P2POperation::update_finding_scopes(model.nearby.finding_scopes.clone())`
+   - WebRTC now listens on this scope for any receiver connections
+
+5. **Store alias and access_url for UI display**:
+   - Option A: Add new fields to `TransferSession` struct:
+     ```rust
+     pub struct TransferSession {
+         // ... existing fields
+         pub alias: Option<String>,        // For P2P sessions
+         pub access_url: Option<String>,   // For both P2P and Internet sessions
+     }
+     ```
+   - Option B: Extract from `TransferTarget::P2P` fields when needed in view layer
+   - Recommendation: Use Option A for cleaner view layer code
+
+6. **Display session info with Stop button**:
+   - Show `alias` and `access_url` to user (for sharing)
+   - Display "Stop Transfer" button (similar to how cloud sessions work)
+   - Sender doesn't track individual receivers - just broadcasts on scope
+   - ANY receiver with the alias can connect and request details
+
 ---
 
-### Phase 3: Backend - Add peer_id to ReceiveSessionViewModel
+### 3. Sender Flow - Handle Stop Transfer
+**Files**:
+- `shared/src/app/transfer/module.rs` (CancelTransfer event)
+- `shared/src/app/nearby/module.rs` (add RemoveFindingScope event)
 
-**File**: `shared/src/app/view_models/receive_session.rs:28-44`
+**Tasks**:
+1. **When user clicks "Stop Transfer"**:
+   - Already handled by existing `CancelTransfer` event
+   - Need to add scope cleanup logic
 
-**Current:**
+2. **Remove scope from Nearby module**:
+   ```rust
+   // In CancelTransfer event handler
+   if let TransferTarget::P2P { scope, .. } = &session.target {
+       let finding_scope = FindingScope::Local(scope.clone());
+       self.update_model(NearbyEvent::RemoveFindingScope(finding_scope));
+   }
+   ```
+
+3. **Nearby module handles RemoveFindingScope**:
+   - Remove scope from `model.nearby.finding_scopes`
+   - Call `P2POperation::update_finding_scopes(model.nearby.finding_scopes.clone())`
+   - WebRTC stops listening on that scope
+
+---
+
+### 4. Receiver Flow - Find Session (Unified P2P + Public)
+**Files**:
+- `shared/src/protocol/rpc/app_server.rs` (update `find_transfer_session`)
+- `shared/src/app/transfer/commands.rs` (update `find_transfer_session`)
+- `shared/src/app/transfer/module.rs` (FindPublicSession event - NO CHANGES)
+
+**Current Flow**:
 ```rust
-pub struct ReceiveSessionViewModel {
-    pub id: String,
-    pub peer_avatar: AvatarViewModel,
-    pub peer_name: String,
-    pub peer_description: String,
-    pub password_required: bool,
-    pub is_authenticated: bool,
-    pub has_details: bool,
-    // ... other fields
+// transfer/module.rs:324
+TransferEvent::FindPublicSession { mut keywords } => {
+    // Parse URL if needed
+    // Call find_transfer_session(keywords)
+    // Add session to model
 }
 ```
 
-**Add field:**
-```rust
-pub peer_id: String,  // Add this after line 29
-```
+**Changes**:
+1. **Update RPC `find_transfer_session`** (see Step 1 above):
+   - Try P2P search by alias first
+   - If not found, try public session search
+   - Return unified `TransferSession` regardless of type
 
-**Then update the view model builder** (`shared/src/app/transfer/module.rs:655-675`):
+2. **Handle P2P session result** in `find_transfer_session` command:
+   ```rust
+   // In commands.rs
+   pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
+       let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
 
-**Add:**
-```rust
-Some(ReceiveSessionViewModel {
-    id: it.order_id.to_string(),
-    peer_id: peer.id.clone(),  // Add this line
-    peer_avatar: AvatarViewModel::new(peer.avatar_url.clone()),
-    // ... rest of fields
-})
-```
+       let Some(session) = session_overview else {
+           // Show "not found" message
+           return Ok(());
+       };
 
----
+       // If P2P session, add scope to Nearby module
+       if let TransferTarget::P2P { ref scope, .. } = session.target {
+           let finding_scope = FindingScope::Local(scope.clone());
+           self.update_model(NearbyEvent::AddFindingScope(finding_scope));
+       }
 
-### Phase 4: Frontend - Update Session Click Handler
+       // Save and add to model (existing logic)
+       self.run(TransferSessionPersistentOperation::save(session.clone())).await?;
+       self.update_model(TransferSessionModelEvent::Add(session));
+       Ok(())
+   }
+   ```
 
-**File**: `web-next/app/transfer/receive_board.tsx:392-419`
+3. **No changes to FindPublicSession event handler** - it already calls `find_transfer_session`
 
-**Current code (line 403-409):**
-```typescript
-<TransferSession
-    onPress={() => {
-        core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession()))
-        core.updateSelectedSession(item)
-        if (isMobile) {
-            setOpenMobile(false)
-        }
-    }}
-    id={item.id}
-    key={item.id}
-/>
-```
-
-**Issue**: ⚠️ Fires empty `ViewSession` event which is wrong for both session types
-
-**Fix:**
-```typescript
-<TransferSession
-    onPress={() => {
-        core.updateSelectedSession(item)
-        if (isMobile) {
-            setOpenMobile(false)
-        }
-
-        // Session detail loading is now handled by useEffect in ContentBoard
-        // based on session type and password requirements
-    }}
-    id={item.id}
-    key={item.id}
-/>
-```
-
-**Reasoning**: Remove the event firing from here - let the ContentBoard component handle it based on session type
+**Important State for P2P**: Session created with `from_peer: None`, so:
+- UI shows "Connecting..." or session card with limited info
+- When `PeerConnected` event fires, `from_peer` gets populated
+- Then user can view session details
 
 ---
 
-### Phase 5: Backend - Verify Password Validation
+### 5. Receiver Flow - Peer Connection and Session Details
+**Files**:
+- `shared/src/app/transfer/module.rs` (handle P2POperationOutput::PeerConnected)
+- `shared/src/app/transfer/commands.rs`
 
-**File**: `shared/src/app/transfer/commands.rs:248-285`
+**Phase A: Handle Peer Connection**
 
-**Current handler** (`handle_view_session_request`):
-```rust
-pub async fn handle_view_session_request(
-    &self,
-    peer_id: String,
-    request_id: String,
-    password: Option<String>,
-    session: Option<TransferSession>
-) -> Result<(), CoreError> {
-    let Some(session) = session else {
-       return Ok(());
-    };
+When WebRTC establishes connection, `PeerConnected(peer)` event fires:
 
-    let is_password_valid = match &session.target {
-        TransferTarget::P2P { password: session_password, is_required_password, .. } => {
-            if *is_required_password {
-                match (session_password, &password) {
-                    (Some(expected), Some(provided)) => expected == provided,
-                    (Some(_), None) => false,
-                    (None, _) => true
-                }
-            } else {
-                true
-            }
-        }
-        _ => false
-    };
+1. **Update session with peer info** (in Transfer or Nearby module):
+   ```rust
+   // When handling P2POperationOutput::PeerConnected(peer)
+   // Find receiver-side session waiting for this peer
+   if let Some(session) = model.transfer.sessions.iter_mut().find(|s| {
+       matches!(s.target, TransferTarget::P2P {
+           from_peer: None,
+           ref scope,
+           ..
+       } if scope == &peer.scope)  // Match by scope
+   }) {
+       // Update from_peer field
+       session.target = TransferTarget::P2P {
+           from_peer: Some(peer.clone()),
+           // ... keep other fields (scope, signalling_key, password, is_required_password)
+       };
+   }
+   ```
 
-    if !is_password_valid {
-        return Ok(());
-    }
+2. **Now session has peer_id**:
+   - `peer_id()` returns `Some(peer_id)`
+   - Can proceed to request session details
 
-    self.run(P2POperation::send_session_detail(
-        peer_id,
-        request_id,
-        session
-    )).await?;
+**Note**: Sender-side sessions don't update `from_peer` - they respond to any peer that requests details
 
-    Ok(())
-}
-```
+**Phase B: Request Session Details**
 
-**Analysis:**
-- ✅ Correctly validates password for P2P sessions
-- ✅ Handles all cases: required with match, required without, not required
-- ⚠️  Returns `Ok(())` silently on invalid password - receiver won't get error feedback
+**Current State**:
+- `view_public_session` handles public (cloud) sessions
+- `request_session_detail` handles P2P session detail requests (lines 279-331)
 
-**Enhancement (Optional)**:
-Consider sending error response to peer on invalid password:
-```rust
-if !is_password_valid {
-    self.run(P2POperation::SendSessionDetail {
-        peer_id,
-        request_id,
-        session: None,
-        error: Some(CoreError::Unauthorized("Invalid password".to_string()))
-    }).await?;
-    return Ok(());
-}
-```
+**Tasks**:
+1. **Auto-request details after peer connects** (optional):
+   - After updating `from_peer`, automatically call `request_session_detail`
+   - OR wait for user to explicitly "view" the session
 
----
+2. **Reuse existing `request_session_detail`**:
+   - Already streams session details from peer
+   - Already handles resources and progress updates
+   - Requires `peer_id` (now available after connection)
 
-## Complete Implementation Checklist
+3. **Update `ViewSession` event handler** in module.rs (line 342):
+   ```rust
+   TransferEvent::ViewSession { password, session_id, transfer_type } => {
+       let session_id = TransferSessionId {
+           order_id: Some(session_id.to_string()),
+           transfer_type: Some(TransferType::Receive)
+       };
 
-### Phase 1: Rust Core Updates ✅
-- [x] **Verify** view model population logic (module.rs:587-593) - No changes needed
-- [ ] **Add** `peer_id: String` field to `ReceiveSessionViewModel` (view_models/receive_session.rs:29)
-- [ ] **Update** view model builder to populate `peer_id` (module.rs:655+)
-- [ ] **Optional**: Add error response for invalid password (commands.rs:275)
+       let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+           return Command::done();
+       };
 
-### Phase 2: TypeScript Type Generation
-- [ ] Run `cargo check -p shared` - ensure compilation
-- [ ] Build to WASM and generate TypeScript types
-- [ ] Verify `ReceiveSessionViewModel` has `peer_id` field in generated types
+       // Route based on target type
+       match &session.target {
+           TransferTarget::P2P { from_peer, .. } => {
+               // Check if peer is connected
+               let Some(peer_id) = session.peer_id() else {
+                   return Command::new(|it| async move {
+                       DialogOperation::toast("Waiting for connection...".to_string())
+                           .into_future(it.clone()).await;
+                   });
+               };
 
-### Phase 3: Frontend Updates
-- [ ] **Add** `nearbyPassword` state variable in ContentBoard
-- [ ] **Add** `requestNearbySessionDetail` helper function
-- [ ] **Add** useEffect for auto-loading nearby sessions without password (after line 168)
-- [ ] **Add** password UI for nearby sessions (after line 209)
-- [ ] **Update** session click handler to remove event firing (line 403-409)
-- [ ] **Verify** imports include `TransferEventVariantRequestSessionDetail`
+               // Request details from peer
+               Command::handle_result(move |it| async move {
+                   it.app().request_session_detail(peer_id, session.order_id, password).await
+               })
+           }
+           TransferTarget::Internet { .. } => {
+               // Existing public session flow
+               Command::handle_result(|it| async move {
+                   it.app().view_public_session(session, password).await
+               })
+           }
+       }
+   }
+   ```
 
-### Phase 4: Testing
-- [ ] **Test**: Click nearby session without password - should auto-load
-- [ ] **Test**: Click nearby session with password - should show password input
-- [ ] **Test**: Enter correct password - should load session details
-- [ ] **Test**: Enter wrong password - should show error or stay on password screen
-- [ ] **Test**: Cloud sessions still work correctly (regression test)
-- [ ] **Test**: Mobile view works correctly
-- [ ] **Test**: Session switching between nearby and cloud sessions
-- [ ] **Test**: Multiple nearby sessions with different password states
+4. **Handle password protection**:
+   - P2P sessions may require password
+   - Validate on sender side via `handle_view_session_request` (already implemented, lines 240-277)
 
 ---
 
-## File Modification Summary
+### 6. Resource Download Flow
+**Files**: Already implemented in commands.rs
 
-### Rust Files (shared/)
-1. **src/app/view_models/receive_session.rs**
-   - Add `peer_id: String` field (after line 29)
+**Current Implementation**:
+- `request_download_resource` (lines 349-385): Receiver requests resource from peer
+- `handle_download_request` (lines 333-347): Sender handles download request
+- Both functions already work with P2P sessions
 
-2. **src/app/transfer/module.rs**
-   - Add `peer_id: peer.id.clone()` to view model builder (around line 656)
-
-3. **src/app/transfer/commands.rs** (Optional)
-   - Add error response for invalid password (line 275)
-
-### TypeScript Files (web-next/)
-1. **app/transfer/receive_board.tsx**
-   - Add `nearbyPassword` state (line 127+)
-   - Add auto-load useEffect for nearby sessions (line 168+)
-   - Add password UI for nearby sessions (line 209+)
-   - Add `requestNearbySessionDetail` helper function
-   - Update session click handler (line 403-409)
+**No Changes Needed**:
+- Existing P2P download flow is complete
+- Uses peer_id and session_id for coordination
+- Streams resource data via WebRTC
 
 ---
 
-## Event Flow Diagrams
+### 7. WebRTC Signaling Integration
+**Files**:
+- `shared/src/protocol/webrtc/webrtc.rs`
+- WebRTC peer connection setup
 
-### Flow 1: Nearby Session WITHOUT Password
-```
-User clicks nearby session in list
-  ↓
-SessionItemsList.onPress → updateSelectedSession(item)
-  ↓
-ContentBoard useEffect detects: ReceiveSessionViewModel + !password_required
-  ↓
-Auto-fire: TransferEventVariantRequestSessionDetail(peer_id, session_id, null)
-  ↓
-Core: RequestSessionDetail handler (module.rs:410-419)
-  ↓
-Core: request_session_detail command (commands.rs:287-321)
-  ↓
-P2P: Send ViewSessionDetail request to peer
-  ↓
-Peer: handle_view_session_request validates (no password needed)
-  ↓
-Peer: Sends session details back
-  ↓
-Receiver: Session details populate (resources, progress)
-  ↓
-View model: is_authenticated = true, has_details = true
-  ↓
-UI: Shows session resources (images, videos, files)
-```
+**Tasks**:
+1. **Verify scope handling**:
+   - Sender adds `owner_signalling_key` scope to WebRTC
+   - Receiver adds `member_signalling_key` scope to WebRTC
+   - Scopes must match pattern: `direct:{alias}:{session_id};{role}`
 
-### Flow 2: Nearby Session WITH Password
-```
-User clicks nearby session in list
-  ↓
-SessionItemsList.onPress → updateSelectedSession(item)
-  ↓
-ContentBoard detects: ReceiveSessionViewModel + password_required + !is_authenticated
-  ↓
-UI: Shows password input screen
-  ↓
-User enters password and clicks Continue
-  ↓
-requestNearbySessionDetail() → Fire TransferEventVariantRequestSessionDetail(peer_id, session_id, password)
-  ↓
-Core: RequestSessionDetail handler
-  ↓
-Core: request_session_detail command with password
-  ↓
-P2P: Send ViewSessionDetail request to peer with password
-  ↓
-Peer: handle_view_session_request validates password
-  ↓ (if valid)
-Peer: Sends session details back
-  ↓
-Receiver: Session details populate
-  ↓
-View model: is_authenticated = true, has_details = true
-  ↓
-UI: Shows session resources
-  ↓ (if invalid)
-Peer: Returns nothing (or error response if enhanced)
-  ↓
-Receiver: Session stays in password_required state
-  ↓
-UI: Stays on password input (no change, could add error message)
-```
+2. **Signaling coordination**:
+   - Both peers listen on their respective signaling rooms
+   - Backend RPC service doesn't participate in signaling (P2P direct)
+   - Scopes enable WebRTC peer discovery without global broadcast
+
+**Validation**:
+- Test that sender and receiver can discover each other via scopes
+- Verify signaling keys don't collide with other sessions
 
 ---
 
-## Key Differences from Cloud Sessions
+### 8. UI/UX Updates
+**Files**:
+- `web-next/app/transfer/receive_board.tsx` (already modified)
+- Frontend components for P2P session display
 
-| Aspect | Cloud Sessions | Nearby Sessions |
-|--------|---------------|----------------|
-| Event Type | `ViewSession` | `RequestSessionDetail` |
-| Password State | `password: Option<String>` in view model | Only `password_required: bool` |
-| Auto-load | Lines 157-168 | Need to add (Phase 2.2) |
-| Validation | Server-side | Peer-to-peer sender validates |
-| Error Handling | Server returns error response | Currently silent failure |
-| Session ID Type | String (from URL query) | String (order_id) |
+**Tasks**:
+1. **Sender UI**:
+   - Display P2P session similar to public session
+   - Show: alias, access_url, QR code (optional)
+   - Allow cancellation
 
----
-
-## Edge Cases to Handle
-
-1. **Peer goes offline during password entry**
-   - Session should show "Peer unavailable" message
-   - Need to detect peer disconnection
-
-2. **Multiple password attempts**
-   - Currently no rate limiting or attempt tracking
-   - Consider adding attempt counter
-
-3. **Session details change while viewing**
-   - Resources could be added/removed by sender
-   - Need to handle updates to existing session
-
-4. **Wrong password entered**
-   - Currently silent failure
-   - Should show error message to user
-   - Recommendation: Add error state and message
-
-5. **Session already authenticated but password changed**
-   - Edge case: sender changes password after receiver loaded session
-   - Current behavior: receiver keeps access (until session refresh)
-   - Acceptable behavior for P2P
+2. **Receiver UI**:
+   - Use existing input field (same UI for P2P and public sessions)
+   - Existing URL parsing logic works: `/p2p?session=brave-dolphin-42` → `brave-dolphin-42`
+   - **Session card states** (for P2P sessions):
+     - Show session with limited info when `from_peer: None`
+     - Can display "Connecting..." indicator
+     - After `PeerConnected`, enable "View Details" button
+   - Clicking "View Details" triggers ViewSession event
+   - If peer not connected yet, show "Waiting for connection..." toast
+   - Show password prompt if required (before requesting details)
 
 ---
 
-## Recommended Enhancements (Post-MVP)
+### 9. Error Handling & Edge Cases
 
-### 1. Add Error Feedback for Wrong Password
-**Location**: ContentBoard component
+**Scenarios**:
+1. **Session not found**: Show friendly error, don't crash
+2. **Incorrect password**: Sender rejects request, receiver gets error message
+3. **Sender offline**: Receiver sees session but can't connect (timeout)
+4. **Session expiry**: Backend could implement TTL, but not in initial scope
+5. **Multiple receivers**: Each receiver gets unique signaling connection
+6. **Network errors**: Retry logic in RPC client, fallback messaging
 
-**Add state:**
-```typescript
-const [passwordError, setPasswordError] = useState<string>('')
-```
-
-**Show error:**
-```typescript
-{passwordError && (
-    <p className="text-destructive text-sm">{passwordError}</p>
-)}
-```
-
-**Set error on failed attempt** (would need backend support)
-
-### 2. Add Loading State During Authentication
-```typescript
-const [isAuthenticating, setIsAuthenticating] = useState(false)
-```
-
-Show spinner while waiting for session details response
-
-### 3. Add "Forgot Password" or "Request Access" Feature
-Allow receiver to send message to sender requesting password
-
-### 4. Add Session Refresh Button
-Allow user to manually request session details again
+**Implementation**:
+- Add proper error types to `CoreError`
+- Display user-friendly messages via `DialogOperation`
+- Log detailed errors for debugging
 
 ---
 
-## Success Criteria
+### 10. Testing Checklist
 
-- [ ] Nearby sessions display password lock icon when `password_required = true`
-- [ ] Clicking password-protected nearby session shows password input
-- [ ] Entering correct password loads session details (resources visible)
-- [ ] Entering wrong password keeps user on password screen (no crash)
-- [ ] Nearby sessions without password auto-load on click
-- [ ] Cloud sessions continue to work (no regression)
-- [ ] Mobile view works correctly for both session types
-- [ ] TypeScript compilation passes
-- [ ] Rust `cargo check -p shared` passes
-- [ ] All tests pass (if tests exist)
+**Backend**:
+- [ ] Create P2P session via gRPC (authenticated)
+- [ ] Find P2P session by alias
+- [ ] Update session password protection
+- [ ] Handle duplicate device sessions (should update, not create)
+
+**Sender Flow**:
+- [ ] Create P2P session via backend RPC
+- [ ] Emit AddFindingScope event to Nearby module
+- [ ] Verify Nearby module adds scope and calls P2POperation::update_finding_scopes
+- [ ] Display session alias and URL with "Stop Transfer" button
+- [ ] Respond to session detail requests from any receiver (don't track who)
+- [ ] Stream resources on download request
+- [ ] Stop transfer removes scope via RemoveFindingScope event
+
+**Receiver Flow**:
+- [ ] Enter alias in existing FindPublicSession UI (same event for P2P and public)
+- [ ] RPC searches BOTH P2P (by alias) and public (by keywords)
+- [ ] If P2P found, session created with from_peer: None
+- [ ] Verify AddFindingScope event emitted to Nearby module
+- [ ] Verify WebRTC scopes updated
+- [ ] Handle PeerConnected event → update session's from_peer field
+- [ ] Verify peer_id() now returns Some(peer_id)
+- [ ] ViewSession event routes based on target type:
+  - [ ] P2P with peer → request_session_detail
+  - [ ] P2P without peer → show "Waiting for connection"
+  - [ ] Public → view_public_session (existing)
+- [ ] Download resources successfully
+
+**Error Cases**:
+- [ ] Session not found (invalid alias)
+- [ ] Wrong password provided
+- [ ] Sender disconnects mid-transfer
+- [ ] Network interruption handling
 
 ---
 
-## Notes
+## Key Design Decisions
 
-- View model already has all necessary fields (`password_required`, `is_authenticated`, `has_details`)
-- Backend password validation logic already exists and works correctly
-- Main work is UI wiring and auto-load logic
-- Similar pattern to cloud sessions makes implementation straightforward
-- Only missing piece is `peer_id` in view model for firing the request
+1. **Signaling Architecture**: Direct P2P via scopes, backend only stores session metadata
+2. **Session Lifecycle**: Created on sender, discovered by receiver, no explicit deletion (stateless after creation)
+3. **Backward Compatibility**: Fallback to public sessions ensures existing flows work
+4. **Password Protection**: Optional, validated on sender when receiver requests details
+5. **Resource Management**: Local on sender, streamed on-demand to receiver
+
+---
+
+## Files Summary
+
+### Backend (Already Complete)
+- ✅ `backend/src/entities/p2p_session.rs`
+- ✅ `backend/src/grpc/p2p_service.rs`
+- ✅ `backend/src/repositories/p2p_session.rs`
+- ✅ `backend/src/infrastructure/postgres/p2p_session.rs`
+- ✅ `backend/src/transfer/p2p_transfer_service.rs`
+- ✅ `backend/migration/src/m20251227_000004_create_p2p_session_table.rs`
+
+### Shared/Core (Needs Implementation)
+- 🔧 `shared/src/app/nearby/module.rs` - **CRITICAL**: Add AddFindingScope and RemoveFindingScope events
+- 🔧 `shared/src/protocol/rpc/app_server.rs` - Add P2P RPC client methods (create_device_session, find_p2p_session_by_alias)
+- 🔧 `shared/src/protocol/rpc/app_server.rs` - Update `find_transfer_session` to search BOTH P2P and public
+- 🔧 `shared/src/app/transfer/module.rs` - Update StartP2PTransfer to emit AddFindingScope event
+- 🔧 `shared/src/app/transfer/module.rs` - Update CancelTransfer to emit RemoveFindingScope event
+- 🔧 `shared/src/app/transfer/module.rs` - Update ViewSession to route based on target type (lines 342-353)
+- 🔧 `shared/src/app/transfer/commands.rs` - Update `find_transfer_session` to emit AddFindingScope for P2P
+- ✅ `shared/src/app/transfer/commands.rs` - NO changes to FindPublicSession event handler
+- 🔧 `shared/src/entities/transfer_session.rs` - Update `p2p()` constructor to accept signalling_key and scope
+- ✅ `shared/src/entities/target.rs` - Already has signalling_key and scope fields
+- 📝 `shared/src/protocol/webrtc/webrtc.rs` - Verify scope handling
+- 🔧 Handle `PeerConnected` event to update `from_peer` field (receiver-side sessions only)
+
+### Frontend (Partial)
+- 🔧 `web-next/app/transfer/receive_board.tsx` - Update receiver UI
