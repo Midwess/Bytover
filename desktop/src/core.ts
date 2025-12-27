@@ -4,7 +4,6 @@ import {
     DialogOperationVariantMessage,
     EnvironmentViewModel, FileReceiveResourceViewModel, ImageReceiveResourceViewModel,
     NearbyViewModel, PeerViewModel,
-    ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel, SelectedResourceViewModel,
     ShelfViewModel,
     TransferViewModel, VideoReceiveResourceViewModel

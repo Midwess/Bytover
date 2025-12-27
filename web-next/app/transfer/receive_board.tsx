@@ -5,7 +5,6 @@ import {
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel, MessageReasonVariantFailedToFindPublicSession,
     MessageReasonVariantFailedToLoadSession,
-    ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel, TransferEventVariantCancelTransfer,
@@ -118,21 +117,18 @@ function SidebarContentWrapper() {
 function ContentBoard() {
     const selectedSessionId = core.useSelectedSession()?.id
     const selectedSession = core.useSession(selectedSessionId ?? '');
-    const isCloud = selectedSession instanceof ReceiveCloudSessionViewModel
+    const isCloud = selectedSession?.is_cloud || false
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
-    const isLoading = selectedSession instanceof ReceiveCloudSessionViewModel
-        ? (selectedSession as ReceiveCloudSessionViewModel)?.is_loading
-        : false
+    const isLoading = selectedSession?.is_loading
     const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
-    const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
-    const [nearbyPassword, setNearbyPassword] = useState<string>('')
+    const [enteredPassword, setEnteredPassword] = useState<string>(selectedSession?.password ?? '')
     const isMobile = useIsMobile();
-    const { setOpenMobile } = useSidebar();
+    const {setOpenMobile} = useSidebar();
 
     console.log(selectedSession)
     useEffect(() => {
-        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
+        if (selectedSession?.is_cloud) {
             if (selectedSession.alias) {
                 setUrl({
                     session: selectedSession.alias ?? ''
@@ -158,44 +154,14 @@ function ContentBoard() {
     }
 
     useEffect(() => {
-        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
-            const cloud = selectedSession as ReceiveCloudSessionViewModel
-            if (!cloud.is_required_password && isLoading) {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
-                    null,
-                    BigInt(cloud.id),
-                    new TransferTypeVariantReceive(),
-                )))
-            }
+        if (!selectedSession?.password_required && selectedSession?.is_loading) {
+            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                null,
+                BigInt(selectedSession.id),
+                new TransferTypeVariantReceive(),
+            )))
         }
     }, [selectedSession?.id]);
-
-    useEffect(() => {
-        if (selectedSession && selectedSession instanceof ReceiveSessionViewModel) {
-            const nearby = selectedSession as ReceiveSessionViewModel
-            if (!nearby.password_required && !nearby.is_authenticated) {
-                core.update(new AppEventVariantTransfer(
-                    new TransferEventVariantRequestSessionDetail(
-                        nearby.peer_id,
-                        BigInt(nearby.id),
-                        null
-                    )
-                ))
-            }
-        }
-    }, [selectedSession?.id]);
-
-    const requestNearbySessionDetail = () => {
-        if (!(selectedSession instanceof ReceiveSessionViewModel)) return
-        const nearby = selectedSession as ReceiveSessionViewModel
-        core.update(new AppEventVariantTransfer(
-            new TransferEventVariantRequestSessionDetail(
-                nearby.peer_id,
-                BigInt(nearby.id),
-                nearbyPassword || null
-            )
-        ))
-    }
 
     if (!selectedSession) {
         return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
@@ -209,62 +175,30 @@ function ContentBoard() {
         </div>
     }
 
-    if (selectedSession instanceof ReceiveCloudSessionViewModel) {
-        const cloud = selectedSession as ReceiveCloudSessionViewModel
-        if (cloud.is_required_password && !cloud.password && isLoading) {
-            return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
-                <div className={"w-[50%] flex flex-col gap-4"}>
-                    <p className={"text-muted-foreground flex flex-row items-center"}>
-                        <Image alt={"lock"} width={10} height={10}
-                            className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
-                            color={'white'} />
-                        This session is password protected</p>
-                    <input type="password" name="fake-password" style={{ display: 'none' }} />
-                    <Input
-                        className="h-10"
-                        placeholder="Enter password"
-                        value={enteredPassword}
-                        onChange={(e) => setEnteredPassword(e.target.value)}
-                        type="password"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                onSelected()
-                            }
-                        }}
-                    />
-                    <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
-                </div>
+    if (selectedSession.password_required && !selectedSession.password && isLoading) {
+        return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
+            <div className={"w-[50%] flex flex-col gap-4"}>
+                <p className={"text-muted-foreground flex flex-row items-center"}>
+                    <Image alt={"lock"} width={10} height={10}
+                           className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                           color={'white'}/>
+                    This session is password protected</p>
+                <input type="password" name="fake-password" style={{display: 'none'}}/>
+                <Input
+                    className="h-10"
+                    placeholder="Enter password"
+                    value={enteredPassword}
+                    onChange={(e) => setEnteredPassword(e.target.value)}
+                    type="password"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            onSelected()
+                        }
+                    }}
+                />
+                <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
             </div>
-        }
-    }
-
-    if (selectedSession instanceof ReceiveSessionViewModel) {
-        const nearby = selectedSession as ReceiveSessionViewModel
-        if (nearby.password_required && !nearby.is_authenticated) {
-            return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
-                <div className={"w-[50%] flex flex-col gap-4"}>
-                    <p className={"text-muted-foreground flex flex-row items-center"}>
-                        <Image alt={"lock"} width={10} height={10}
-                            className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
-                            color={'white'} />
-                        This session is password protected</p>
-                    <input type="password" name="fake-password" style={{ display: 'none' }} />
-                    <Input
-                        className="h-10"
-                        placeholder="Enter password"
-                        value={nearbyPassword}
-                        onChange={(e) => setNearbyPassword(e.target.value)}
-                        type="password"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                requestNearbySessionDetail()
-                            }
-                        }}
-                    />
-                    <Button onClick={requestNearbySessionDetail} className={"w-fit bg-foreground"}>Continue</Button>
-                </div>
-            </div>
-        }
+        </div>
     }
 
     if (!selectedSession) {
@@ -279,7 +213,7 @@ function ContentBoard() {
                 loadMessage.message
                     ? <p>{loadMessage.message}</p>
                     : <>
-                        <LoaderCircle className={"animate-spin"} />
+                        <LoaderCircle className={"animate-spin"}/>
                         <p>Loading...</p>
                     </>
             }
@@ -291,14 +225,14 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={image.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={image.model.order_id} isCloud={selectedSession.is_cloud}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -309,14 +243,14 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={video.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={video.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={video.model.order_id} isCloud={isCloud}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -327,7 +261,7 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"h-full"}>
                     <div
                         className="flex flex-col gap-4 h-fit min-h-[400px]">
@@ -335,7 +269,7 @@ function ContentBoard() {
                             selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={file.model.order_id} index={index}>
                                     <div className={"h-fit"}>
-                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} />
+                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -448,7 +382,7 @@ const SessionListWrapper = ({ title, children }: { title: string, children: Reac
     )
 }
 
-const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewModel | ReceiveSessionViewModel)[] }) => {
+const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] }) => {
     const { isMobile, setOpenMobile } = useSidebar();
 
     return (
@@ -528,18 +462,12 @@ function TransferSession(props: {
         return null;
     }
 
-    const is_public = session instanceof ReceiveCloudSessionViewModel;
+    const is_public = session.is_cloud;
 
-    const name = is_public
-        ? (session as ReceiveCloudSessionViewModel).sender_name
-        : (session as ReceiveSessionViewModel).peer_name;
+    const name = session.sender_name
     const display_datetime = session.display_datetime;
-    const avatar_url = is_public
-        ? (session as ReceiveCloudSessionViewModel).avatar_url
-        : (session as ReceiveSessionViewModel).peer_avatar?.url;
-    const is_required_password = is_public
-        ? (session as ReceiveCloudSessionViewModel).is_required_password
-        : false;
+    const avatar_url = session.sender_avatar
+    const is_required_password = session.password_required;
 
     const progress = is_public
         ? 0

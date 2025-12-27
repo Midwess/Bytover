@@ -50,7 +50,7 @@ impl AppModule<BitBridge> for NearbyModule {
                 model.environment.auto_launch_nearby = auto_launch;
                 Command::new(|it| async move {
                     it.app().start_nearby_server(auto_launch).await;
-                })
+                }).then_render()
             }
             NearbyEvent::UpdateNearbyPeers { new_peer, removed } => {
                 model.nearby.peers.retain(|it| !removed.contains(it));

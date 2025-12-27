@@ -40,7 +40,6 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     ReceiveSessionViewModel,
-    ReceiveCloudSessionViewModel,
     PeerViewModel,
     LocalResourcePath,
     SelectedResourceViewModel,
@@ -95,12 +94,12 @@ export class WasmCore {
 
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
-    selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
+    selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
 
     constructor() { }
 
     public useSelectedSession() {
-        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
+        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel>()
 
         useEffect(() => {
             return this.selectedSession.subscribe((value) => {
@@ -126,12 +125,11 @@ export class WasmCore {
     }
 
     public useSession(id: String) {
-        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(undefined)
+        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>(undefined)
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
-                    transferState?.received_cloud_sessions?.find(it => it.id === id)
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id)
 
                 if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
@@ -170,7 +168,7 @@ export class WasmCore {
         return resource
     }
 
-    public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
+    public updateSelectedSession(session: ReceiveSessionViewModel) {
         this.selectedSession.set(session)
     }
 
@@ -275,24 +273,6 @@ export class WasmCore {
         return state
     }
 
-    usePeerState(peerId: string | undefined) {
-        const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
-
-        useEffect(() => {
-            return this.transferState.subscribe((value) => {
-                let peer = value?.nearby_peers?.find((it: any) => {
-                    return it.id === peerId
-                })
-
-                if (!isEqual(peer, currentPeer)) {
-                    setPeer(peer)
-                }
-            })
-        }, [currentPeer, peerId])
-
-        return currentPeer
-    }
-
     public useIsCoreCompatible() {
         const [isCompatible, setIsCompatible] = useState(this.isCoreCompatible.get());
         useEffect(() => {
@@ -392,11 +372,6 @@ export class WasmCore {
         this.isLocationEnabled.set(false);
         this.isLocationLoading.set(false);
         console.log("Location tracking disabled");
-    }
-
-    async updateGeoLocation() {
-        await delay(2000)
-        await this.enableLocation();
     }
 
     public async update(event: AppEvent) {
