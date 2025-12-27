@@ -86,7 +86,7 @@ where
             _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
         };
 
-        let user = session.from_user.ok_or(CloudTransferErrors::InvalidSessionTarget)?;
+        let user = &session.from_user;
 
         let response = self.server.create_public_transfer_session(session.password.clone(), to_emails).await?;
 
@@ -95,7 +95,7 @@ where
             access_url: Some(response.access_url),
             to_emails: response.to_emails
         };
-        session.from_user = Some(user);
+        session.from_user = user.clone();
         session.password = response.password.clone();
         session.is_required_password = response.password.is_some();
 

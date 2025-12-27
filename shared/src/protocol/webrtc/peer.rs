@@ -3,6 +3,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
+use crate::entities::user::User;
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
@@ -550,7 +551,7 @@ impl WebRtcPeer {
                             signalling_key: String::new(),  // Local P2P doesn't use backend signalling
                             scope: String::new(),  // Local P2P doesn't use scopes
                         },
-                        from_user: None,  // Will be fetched in view model using user_id
+                        from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },  // Will be fetched in view model using user_id
                         password: None,
                         is_required_password: false,
                         cancellation_token: CancellationToken::new(),
@@ -624,7 +625,7 @@ impl WebRtcPeer {
 
         // Extract user_id and alias from session target if available
         let (user_id, alias) = if let crate::entities::target::TransferTarget::P2P { alias, .. } = &session.target {
-            (session.from_user.as_ref().map(|u| u.id), alias.clone())
+            (Some(session.from_user.id), alias.clone())
         } else {
             (None, None)
         };

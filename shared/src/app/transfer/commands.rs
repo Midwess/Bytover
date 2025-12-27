@@ -187,8 +187,7 @@ impl AppCommand {
                     transfer_session.password = Some(entered_password);
                 };
 
-                let from_user = transfer_session.from_user.as_ref().ok_or_else(|| CoreError::BadRequest("Missing user info".to_string()))?;
-                from_user.id
+                transfer_session.from_user.id
             }
             _ => {
                 return Ok(());

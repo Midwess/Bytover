@@ -2,6 +2,7 @@ use crate::app::operations::transfer::{TransferOperation, TransferOperationOutpu
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferType};
+use crate::entities::user::User;
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::app_server::AppServer;
@@ -72,7 +73,7 @@ where
                             signalling_key: p2p_session.signalling_room_id,
                             scope: p2p_session.signalling_scope,
                         },
-                        from_user: None,
+                        from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
                         password: None,
                         is_required_password: p2p_session.password_protected,
                         cancellation_token: CancellationToken::new(),

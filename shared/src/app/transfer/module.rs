@@ -249,7 +249,7 @@ impl AppModule<BitBridge> for TransferModule {
                     );
 
                     // Store user info and alias in session
-                    session.from_user = user;
+                    session.from_user = user.unwrap();
                     if let TransferTarget::P2P { alias, .. } = &mut session.target {
                         *alias = Some(p2p_session.alias.clone());
                     }
@@ -409,19 +409,10 @@ impl AppModule<BitBridge> for TransferModule {
                     order_id: Some(order_id.to_string()),
                     transfer_type: Some(TransferType::Send)
                 };
-                let session = model.transfer.sessions.lookup(&session_id).cloned();
-                let current_user = model.authentication.user.clone();
 
+                let session = model.transfer.sessions.lookup(&session_id).cloned();
                 Command::handle_result(move |it| async move {
-                    if let Some(mut session) = session {
-                        // If session doesn't have user info but we're authenticated, add it
-                        if session.from_user.is_none() && current_user.is_some() {
-                            session.from_user = current_user;
-                        }
-                        it.app().handle_view_session_request(peer_id, request_id, password, Some(session)).await
-                    } else {
-                        it.app().handle_view_session_request(peer_id, request_id, password, None).await
-                    }
+                    it.app().handle_view_session_request(peer_id, request_id, password, session).await
                 })
             }
             TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
@@ -470,20 +461,15 @@ impl AppModule<BitBridge> for TransferModule {
             .iter()
             .filter(|it| it.transfer_type == TransferType::Receive)
             .filter_map(|it| {
+                let from_user = &it.from_user;
                 let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading) = match &it.target {
                     TransferTarget::P2P { from_peer, alias, .. } => {
-                        let peer = from_peer.as_ref()?;
-                        let (avatar, name, description) = if let Some(user) = &it.from_user {
-                            (user.avatar.clone(), user.name.clone(), "Nearby".to_string())
-                        } else {
-                            (peer.avatar_url.clone(), peer.name.clone().unwrap_or(peer.device.name.clone()), "Nearby".to_string())
-                        };
+                        let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
                         let has_details = !it.resources.is_empty();
-                        (peer.id().to_string(), avatar, name, description, alias.clone(), None, None, it.is_required_password, !has_details)
+                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), "Nearby".to_string(), alias.clone(), None, None, it.is_required_password, !has_details)
                     }
                     TransferTarget::Internet { access_url, .. } => {
                         let access_url_ref = access_url.as_ref()?;
-                        let from_user = it.from_user.as_ref()?;
                         let alias = Url::parse(access_url_ref).ok()
                             .and_then(|url| url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string()));
                         let name = match &alias {

@@ -53,7 +53,7 @@ pub struct TransferSession {
     pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
-    pub from_user: Option<User>,
+    pub from_user: User,
     pub password: Option<String>,
     pub is_required_password: bool,
     #[serde(skip)]
@@ -209,7 +209,7 @@ impl TransferSession {
                 signalling_key,
                 scope
             },
-            from_user: None,
+            from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
             password,
             is_required_password,
             cancellation_token: CancellationToken::new()
@@ -228,7 +228,7 @@ impl TransferSession {
                 access_url: None,
                 to_emails
             },
-            from_user: Some(current_user),
+            from_user: current_user,
             password,
             is_required_password,
         }
@@ -245,7 +245,7 @@ impl TransferSession {
                 access_url: Some(access_url),
                 to_emails: vec![],
             },
-            from_user: Some(from_user),
+            from_user: from_user,
             password: None,
             is_required_password,
         }
@@ -261,7 +261,7 @@ impl TransferSession {
             resources,
             transfer_type: TransferType::Send,
             target,
-            from_user,
+            from_user: from_user.unwrap_or_else(|| User { id: 0, email: String::new(), name: String::new(), avatar: String::new() }),
             password,
             is_required_password,
         }
@@ -313,9 +313,7 @@ impl TransferSession {
             return false
         };
 
-        let Some(from_user) = &self.from_user else {
-            return false
-        };
+        let from_user = &self.from_user;
 
         let mut name: String = "".to_string();
         if let Ok(url) = url::Url::parse(access_url) {
