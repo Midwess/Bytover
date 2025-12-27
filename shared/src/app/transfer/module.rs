@@ -109,6 +109,9 @@ pub enum TransferEvent {
     PeerUpdated {
         peer: Peer
     },
+    PeerDisconnected {
+        peer_id: String
+    },
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -263,6 +266,9 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::PeerUpdated { peer } => {
+                let mut peer_just_connected = false;
+                let mut session_order_id = 0;
+
                 for session in model.transfer.sessions.iter_mut() {
                     if session.transfer_type != TransferType::Receive {
                         continue;
@@ -283,10 +289,61 @@ impl AppModule<BitBridge> for TransferModule {
                             );
 
                             *from_peer = Some(peer.clone());
+                            peer_just_connected = true;
+                            session_order_id = session.order_id;
 
                             break;
                         }
                     }
+                }
+
+                if peer_just_connected {
+                    log::info!("Sending detail request for session {} to peer {}", session_order_id, peer.id);
+                    return Command::event(crate::app::AppEvent::Transfer(TransferEvent::RequestSessionDetail {
+                        peer_id: peer.id,
+                        order_id: session_order_id,
+                        password: None
+                    })).then(Command::render());
+                }
+
+                Command::render()
+            }
+            TransferEvent::PeerDisconnected { peer_id } => {
+                log::info!("Handling peer disconnect for peer: {}", peer_id);
+
+                let mut scope_to_remove: Option<FindingScope> = None;
+
+                for session in model.transfer.sessions.iter_mut() {
+                    if session.transfer_type != TransferType::Receive {
+                        continue;
+                    }
+
+                    if let TransferTarget::P2P {
+                        ref mut from_peer,
+                        ref signalling_key,
+                        ..
+                    } = session.target
+                    {
+                        if let Some(ref peer) = from_peer {
+                            if peer.id == peer_id {
+                                log::info!("Cleaning up session {} after peer disconnect", session.order_id);
+
+                                *from_peer = None;
+
+                                session.resources.clear();
+                                session.progress.clear();
+
+                                scope_to_remove = Some(FindingScope::Global(signalling_key.clone()));
+
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(scope) = scope_to_remove {
+                    log::info!("Removing scope {:?} after peer disconnect", scope);
+                    return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::RemoveFindingScope(scope))).then(Command::render());
                 }
 
                 Command::render()
@@ -385,7 +442,15 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 match &session.target {
-                    TransferTarget::P2P { .. } => {
+                    TransferTarget::P2P { signalling_key, from_peer, .. } => {
+                        if from_peer.is_none() {
+                            let scope = FindingScope::Global(signalling_key.clone());
+                            if !model.nearby.finding_scopes.contains(&scope) {
+                                log::info!("Adding scope {} for session {} - peer not connected", signalling_key, session.order_id);
+                                return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));
+                            }
+                        }
+
                         let Some(peer_id) = session.peer_id() else {
                             return Command::new(|it| async move {
                                 DialogOperation::toast("Waiting for connection...".to_string())
@@ -393,9 +458,13 @@ impl AppModule<BitBridge> for TransferModule {
                             });
                         };
 
-                        Command::handle_result(move |it| async move {
-                            it.app().request_session_detail(peer_id, session.order_id, password).await
-                        })
+                        if session.resources.is_empty() {
+                            Command::handle_result(move |it| async move {
+                                it.app().request_session_detail(peer_id, session.order_id, password).await
+                            })
+                        } else {
+                            Command::done()
+                        }
                     }
                     TransferTarget::Internet { .. } => {
                         Command::handle_result(|it| async move {

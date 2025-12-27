@@ -18,7 +18,7 @@ import {
     ArrowDown,
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
+    Globe, ImageUpIcon, LoaderCircle, Play, Square, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -498,12 +498,29 @@ function TransferSession(props: {
                     <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
                 </div>
             </div>
-            <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3}
-                onClick={() => {
-                    if (!is_public) {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
-                    }
-                }} />
+            <div className="flex items-center gap-2">
+                <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3} />
+                {(session as ReceiveSessionViewModel).is_in_progress && !is_public && (
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const confirmed = confirm("Are you sure you want to stop this transfer?");
+                            if (confirmed) {
+                                core.update(new AppEventVariantTransfer(
+                                    new TransferEventVariantCancelTransfer(
+                                        BigInt(id),
+                                        new TransferTypeVariantReceive()
+                                    )
+                                ));
+                            }
+                        }}
+                        className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                        title="Stop transfer"
+                    >
+                        <Square className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                    </button>
+                )}
+            </div>
             {is_required_password &&
                 <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
                     src={"/lock.svg"} color={'white'} />}

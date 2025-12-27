@@ -141,6 +141,7 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
+                    self.notify_event(TransferEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {

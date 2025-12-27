@@ -6,7 +6,7 @@ import {
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
+    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus, Square,
 } from 'lucide-react'
 import { Button } from "@/components/ui/button";
 import { ChevronsUpDown } from "lucide-react";
@@ -635,7 +635,7 @@ function SidebarContentWrapper({ activeMethod }: { activeMethod: typeof activeMe
 function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] }) {
     const content = activeMethod.type === TransferType.Public
         ? <PublicSend />
-        : <NearbySend />
+        : <P2PSend />
 
     return (
         <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit"}>
@@ -795,7 +795,7 @@ function UrlInputWithCopy({ url }: { url: string }) {
     )
 }
 
-function NearbySend() {
+function P2PSend() {
     const [password, setPassword] = useState('')
     const nearbyState = window.core.useNearbyState?.() || { peers: [] }
     const nearbyAvailable = nearbyState.peers.length > 0
