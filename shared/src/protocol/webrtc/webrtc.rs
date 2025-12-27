@@ -101,19 +101,6 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
-    pub async fn send_sessions_notification(
-        &self,
-        peer_id: String,
-        sessions: Vec<TransferSession>,
-    ) -> Result<(), WebRtcErrors> {
-        let peer_id = PeerId(peer_id.parse()?);
-        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_sessions_notification(sessions).await
-        } else {
-            Err(WebRtcErrors::ConnectionNotFound(peer_id))
-        }
-    }
-
     pub async fn view_session_detail(
         &self,
         peer_id: String,
@@ -263,7 +250,8 @@ impl WebRtc {
                                 outbound_unreliable4_data_sender,
                                 outbound_thumbnail_sender,
                                 buffer,
-                                local_resource_repository
+                                local_resource_repository,
+                                &context
                             )
                             .await
                             {
@@ -330,7 +318,8 @@ impl WebRtc {
                             outbound_unreliable4_data_sender,
                             outbound_thumbnail_sender,
                             buffer,
-                            local_resource_repository
+                            local_resource_repository,
+                            &context
                         )
                         .await
                         {

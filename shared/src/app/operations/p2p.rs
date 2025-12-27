@@ -20,10 +20,6 @@ pub enum P2POperation {
     UpdateFindingScopes(Vec<FindingScope>),
     PeerEvents(String),
     IsRunning,
-    SendSessionsNotification {
-        peer_id: String,
-        sessions: Vec<TransferSession>
-    },
     ViewSessionDetail {
         peer_id: String,
         order_id: u64,
@@ -56,10 +52,6 @@ pub enum P2POperationOutput {
     CancelSessionRequest { session_id: u64 },
     NearbyServerStopped,
     AlreadyRunning,
-    ReceivedSessionsOverview {
-        peer_id: String,
-        sessions: Vec<P2PSessionOverview>
-    },
     ReceivedViewSessionRequest {
         peer_id: String,
         request_id: String,
@@ -81,12 +73,6 @@ pub enum P2POperationOutput {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct P2PSessionOverview {
-    pub order_id: u64,
-    pub password_protected: bool
-}
-
 impl Operation for P2POperation {
     type Output = P2POperationOutput;
 }
@@ -106,10 +92,6 @@ impl P2POperation {
 
     pub fn is_running() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::IsRunning)).map(|it| it.result())
-    }
-
-    pub fn send_sessions_notification(peer_id: String, sessions: Vec<TransferSession>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionsNotification { peer_id, sessions })).map(|it| it.result())
     }
 
     pub fn view_session_detail(peer_id: String, order_id: u64, password: Option<String>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {

@@ -1,4 +1,5 @@
 use crate::entities::device::DeviceInfo;
+use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
 use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
@@ -8,6 +9,8 @@ use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, GenerateRandomAvatarRequest, MeRequest};
+use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
+use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
@@ -108,6 +111,11 @@ where
         Ok(Some(user))
     }
 
+    pub async fn get_user_by_id(&self, user_id: u64) -> Result<User, RpcErrors> {
+        self.find_user(user_id).await?
+            .ok_or_else(|| RpcErrors::BadRequest(format!("User {} not found", user_id)))
+    }
+
     pub async fn random_avatar(&self) -> Result<String, RpcErrors> {
         let req = GenerateRandomAvatarRequest {
             app_name: Some("BitBridge".to_owned())
@@ -135,5 +143,30 @@ where
         let mut client = FeedbackServiceClient::new(channel);
         client.feedback_app(request).await?;
         Ok(())
+    }
+
+    pub async fn create_device_session(&self, password_protected: bool) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let req = CreateDeviceSessionRequest { password_protected };
+        let mut request = Request::new(req);
+
+        // Add auth (User + Device extensions)
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.create_device_session(request).await?;
+        Ok(response.into_inner().session)
+    }
+
+    pub async fn find_p2p_session_by_alias(&self, alias: String) -> Result<Option<schema::devlog::bitbridge::P2pSession>, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let req = FindP2pSessionRequest {
+            key: Some(schema::devlog::bitbridge::find_p2p_session_request::Key::Alias(alias))
+        };
+        let request = Request::new(req);
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.find_session(request).await?;
+        Ok(response.into_inner().session)
     }
 }

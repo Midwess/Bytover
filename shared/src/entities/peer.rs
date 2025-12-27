@@ -13,7 +13,8 @@ pub struct Peer {
     pub name: Option<String>,
     pub avatar_url: String,
     pub email: Option<String>,
-    pub device: DeviceInfo
+    pub device: DeviceInfo,
+    pub scopes: Vec<String>
 }
 
 impl Peer {
@@ -50,7 +51,8 @@ impl From<PeerMessage> for Peer {
                 value.avatar_url
             },
             email: value.email,
-            device: value.device.into()
+            device: value.device.into(),
+            scopes: vec![]
         }
     }
 }

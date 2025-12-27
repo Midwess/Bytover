@@ -53,6 +53,9 @@ pub struct TransferSession {
     pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
+    pub from_user: Option<User>,
+    pub password: Option<String>,
+    pub is_required_password: bool,
     #[serde(skip)]
     pub cancellation_token: CancellationToken
 }
@@ -189,7 +192,7 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>) -> Self {
+    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
         Self {
@@ -202,14 +205,19 @@ impl TransferSession {
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
                 from_peer: None,
-                password,
-                is_required_password
+                alias: None,
+                signalling_key,
+                scope
             },
+            from_user: None,
+            password,
+            is_required_password,
             cancellation_token: CancellationToken::new()
         }
     }
 
     pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>) -> Self {
+        let is_required_password = password.is_some();
         Self {
             order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
@@ -217,12 +225,12 @@ impl TransferSession {
             resources,
             transfer_type: TransferType::Send,
             target: TransferTarget::Internet {
-                is_required_password: password.is_some(),
-                password,
                 access_url: None,
-                from_user: current_user,
                 to_emails
-            }
+            },
+            from_user: Some(current_user),
+            password,
+            is_required_password,
         }
     }
 
@@ -234,16 +242,16 @@ impl TransferSession {
             transfer_type: TransferType::Receive,
             cancellation_token: CancellationToken::new(),
             target: TransferTarget::Internet {
-                is_required_password,
-                password: None,
                 access_url: Some(access_url),
-                from_user,
                 to_emails: vec![],
-            }
+            },
+            from_user: Some(from_user),
+            password: None,
+            is_required_password,
         }
     }
 
-    pub async fn send(order_id: u64, resources: Vec<LocalResource>, target: TransferTarget) -> Self {
+    pub async fn send(order_id: u64, resources: Vec<LocalResource>, target: TransferTarget, from_user: Option<User>, password: Option<String>, is_required_password: bool) -> Self {
         let mut resources = resources;
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         Self {
@@ -252,7 +260,10 @@ impl TransferSession {
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             transfer_type: TransferType::Send,
-            target
+            target,
+            from_user,
+            password,
+            is_required_password,
         }
     }
 
@@ -277,16 +288,46 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::P2P { from_peer, .. } => Some(from_peer.id().to_string()),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id().to_string()),
             _ => None
         }
     }
 
     pub fn peer(&self) -> Option<&Peer> {
         match &self.target {
-            TransferTarget::P2P { from_peer, .. } => Some(from_peer),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref(),
             _ => None
         }
+    }
+
+    pub fn is_keyword_match(&self, keywords: &str) -> bool {
+        if keywords.is_empty() {
+            return true;
+        }
+
+        let TransferTarget::Internet {
+            access_url: Some(access_url),
+            ..
+        } = &self.target
+        else {
+            return false
+        };
+
+        let Some(from_user) = &self.from_user else {
+            return false
+        };
+
+        let mut name: String = "".to_string();
+        if let Ok(url) = url::Url::parse(access_url) {
+            let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
+                return false
+            };
+
+            log::info!("Found query key session: {}", query);
+            name = query;
+        }
+
+        from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
     }
 
     pub fn is_initializing(&self) -> bool {

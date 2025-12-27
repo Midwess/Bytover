@@ -28,6 +28,10 @@ where
                 let response = self.app_server().get_me().await?;
                 Ok(RpcOperationOutput::GetMe(response).into())
             }
+            RpcOperation::GetUserById(user_id) => {
+                let response = self.app_server().get_user_by_id(user_id).await?;
+                Ok(RpcOperationOutput::GetUserById(response).into())
+            }
             RpcOperation::Feedback { email, message } => {
                 self.app_server().feedback(email, message).await?;
                 Ok(CoreOperationOutput::None)
@@ -35,6 +39,10 @@ where
             RpcOperation::RandomAvatar => {
                 let avatar = self.app_server().random_avatar().await?;
                 Ok(CoreOperationOutput::String(avatar))
+            }
+            RpcOperation::CreateP2PSession { password_protected } => {
+                let p2p_session = self.app_server().create_device_session(password_protected).await?;
+                Ok(CoreOperationOutput::P2PSession(p2p_session))
             }
         }
     }

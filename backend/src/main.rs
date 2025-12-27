@@ -4,6 +4,7 @@ use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
 use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
 use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudServiceServer;
+use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationServiceServer;
 use tonic::transport::Server;
 use tonic_middleware::InterceptorFor;
 
@@ -49,6 +50,10 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
     Server::builder()
         .add_service(InterceptorFor::new(
             BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
+            di.get_auth_middleware()
+        ))
+        .add_service(InterceptorFor::new(
+            P2pOrchestrationServiceServer::new(di.get_grpc_p2p_service().await),
             di.get_auth_middleware()
         ))
         .serve_with_incoming(connection.listener)

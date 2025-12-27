@@ -1,556 +1,728 @@
-# P2P Session Implementation Plan
+# Implementation Plan: Display Nearby Session with User Information
 
 ## Overview
-Implement P2P session creation and discovery via backend RPC, enabling direct peer-to-peer transfers with signaling scope coordination.
+Simplify P2P session discovery by removing SessionsNotification. Instead, sessions will be discovered through direct peer communication and ViewSessionDetail requests, similar to how Public sessions work.
 
-## Architecture
-- **Backend**: Create/Find P2P sessions, generate signaling keys, manage session lifecycle
-- **Sender**: Create session on backend, add scope to WebRTC, display session info
-- **Receiver**: Find session by alias, extract scope, connect via WebRTC, view/download resources
+## Current Architecture Analysis
 
-## Connection Flow Sequence
+**Current P2P Session Flow (TO BE REMOVED):**
+1. Sender creates a P2P session with `TransferSession::p2p()`
+2. When a peer connects, sender calls `send_sessions_notification()` which sends `P2PSessionOverviewMessage`
+3. Receiver gets `ReceivedSessionsOverview` event and creates stub sessions
+4. UI displays sessions with peer info
 
-```
-SENDER SIDE:
-1. User selects resources + clicks "Start P2P Transfer"
-2. Call backend RPC: create_device_session(password_protected)
-3. Backend returns: P2PSession { alias, owner_signalling_key, scope, ... }
-4. Create local TransferSession { target: P2P { from_peer: None, scope, signalling_key: owner_key, ... } }
-5. Emit event to Nearby module: AddFindingScope(FindingScope::Local(scope))
-6. Nearby module adds scope to model.nearby.finding_scopes
-7. Nearby module calls P2POperation::update_finding_scopes() → WebRTC RPC
-8. Display session with alias/URL (same UI as public session, with "Stop Transfer" button)
-9. When receiver connects, they request session details via P2P protocol (sender doesn't track who)
-10. When "Stop Transfer" pressed → Emit RemoveFindingScope → Nearby removes scope → Updates WebRTC
+**New Simplified P2P Flow:**
+1. Sender creates a P2P session with user information
+2. Peer connects via WebRTC
+3. Receiver can request session details directly (ViewSessionDetail already exists)
+4. Session information includes user details from backend
 
-RECEIVER SIDE:
-1. User enters alias/keywords (e.g., "brave-dolphin-42")
-2. Trigger existing FindPublicSession event (same event for both P2P and public)
-3. RPC searches BOTH P2P (by alias) AND public (by keywords) sessions
-4. If P2P found: Create TransferSession { target: P2P { from_peer: None, scope, signalling_key: member_key, ... } }
-   - Emit AddFindingScope to Nearby module → WebRTC scopes updated
-5. If public found: Create TransferSession { target: Internet { ... } } (existing flow)
-6. Display found session (UI shows "Connecting..." for P2P with no peer)
-7. FOR P2P: WebRTC event: PeerConnected(peer) → Update from_peer field
-8. User clicks to view session details
-9. Route based on target type:
-   - P2P with peer: Call request_session_detail(peer_id, order_id, password)
-   - Public: Call view_public_session(session, password) (existing)
-10. Display resources → User can download
+**Public Session Flow (UNCHANGED):**
+1. Sender creates session with `TransferSession::public()` which includes `from_user` in `TransferTarget::Internet`
+2. Receiver finds session by alias using `FindPublicSession { alias }`
+3. Backend fetches full session with user information
+4. UI displays rich sender info (name, avatar, alias)
 
-KEY INSIGHTS:
-- Sender doesn't track individual receivers - just broadcasts availability via scope
-- Nearby module owns scope management and WebRTC coordination
-- Transfer module emits events to Nearby module to add/remove scopes
-- Receiver uses SAME FindPublicSession event for both P2P and public sessions
-- RPC layer searches both P2P (by alias) and public (by keywords) simultaneously
-- Only "view session details" routing differs between P2P and public
-```
+**View Models:**
+- `ReceiveSessionViewModel` - for P2P sessions (uses peer info)
+- `ReceiveCloudSessionViewModel` - for Internet sessions (uses from_user info)
+- **Goal:** Merge into single unified `ReceiveSessionViewModel`
 
 ---
 
 ## Implementation Steps
 
-### 0. Nearby Module - Add Scope Management Events
-**Files**: `shared/src/app/nearby/module.rs`
+### **Step 1: Remove SessionsNotification from Protobuf**
+**File:** `libs/schema/proto/devlog/bitbridge/request.proto:54-56`
 
-**Tasks**:
-1. **Add new events to `NearbyEvent`**:
-   ```rust
-   pub enum NearbyEvent {
-       Launch { auto_launch: bool },
-       UpdateMe { new_peer: Peer },
-       UpdateNearbyPeers { new_peer: Vec<Peer>, removed: Vec<Peer> },
-       ClearNearbyPeers,
-
-       // NEW: Scope management
-       AddFindingScope(FindingScope),
-       RemoveFindingScope(FindingScope),
-   }
-   ```
-
-2. **Handle AddFindingScope event**:
-   ```rust
-   NearbyEvent::AddFindingScope(scope) => {
-       if !model.nearby.finding_scopes.contains(&scope) {
-           model.nearby.finding_scopes.push(scope);
-
-           // Update WebRTC
-           let scopes = model.nearby.finding_scopes.clone();
-           return Command::handle_result(|it| async move {
-               it.run(P2POperation::update_finding_scopes(scopes)).await
-           });
-       }
-       Command::none()
-   }
-   ```
-
-3. **Handle RemoveFindingScope event**:
-   ```rust
-   NearbyEvent::RemoveFindingScope(scope) => {
-       model.nearby.finding_scopes.retain(|s| s != &scope);
-
-       // Update WebRTC
-       let scopes = model.nearby.finding_scopes.clone();
-       return Command::handle_result(|it| async move {
-           it.run(P2POperation::update_finding_scopes(scopes)).await
-       });
-   }
-   ```
-
-**Design Note**: Nearby module owns all WebRTC scope coordination. Transfer module just emits add/remove events.
-
----
-
-### 1. Backend Integration - RPC Client Setup
-**Files**: `shared/src/protocol/rpc/app_server.rs` or equivalent RPC client module
-
-**Tasks**:
-1. **Add `P2pOrchestrationServiceClient`** to RPC client structure
-
-2. **Implement sender method**:
-   - `create_device_session(password_protected: bool) -> Result<P2PSession, CoreError>`
-   - Use authenticated channel (User + Device extensions)
-
-3. **Update existing `find_transfer_session` method** to search BOTH:
-   ```rust
-   pub async fn find_transfer_session(keywords: String) -> Result<Option<TransferSession>, CoreError> {
-       // Try P2P first
-       if let Ok(Some(p2p_session)) = self.find_p2p_session_by_alias(keywords.clone()).await {
-           // Convert P2PSession proto to local TransferSession with P2P target
-           return Ok(Some(create_p2p_transfer_session(p2p_session)));
-       }
-
-       // Fallback to existing public session search
-       self.find_public_session_by_keywords(keywords).await
-   }
-   ```
-
-4. **Add helper method**:
-   - `find_p2p_session_by_alias(alias: String) -> Result<Option<P2PSession>, CoreError>`
-   - Calls backend `find_session` RPC
-   - Returns proto `P2PSession` object
-
-**Details**:
-- P2PSession proto contains: session_id, signalling_room_id, owner_user_id, password_protected, access_url, alias, signalling_scope
-- Unified search means receiver doesn't need to know if it's P2P or public
-
----
-
-### 2. Sender Flow - Create P2P Session
-**Files**:
-- `shared/src/app/transfer/module.rs` (StartP2PTransfer event handler)
-- `shared/src/app/transfer/commands.rs` (add new command function)
-- `shared/src/entities/transfer_session.rs` (update `p2p()` constructor)
-
-**Current State**:
-```rust
-// transfer/module.rs:236
-TransferEvent::StartP2PTransfer { nearby_available, password } => {
-    let session = TransferSession::p2p(selected_resources, me, password);
-    // Currently creates local TransferSession only
-    // Doesn't call backend to create P2P session
-}
-
-// transfer_session.rs:192
-pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>) -> Self {
-    // Currently creates session WITHOUT signalling_key and scope
+Remove:
+```protobuf
+message SessionsNotificationMessage {
+    repeated P2PSessionOverviewMessage sessions = 1;
 }
 ```
 
-**Changes**:
-1. **Before creating local session**, call backend RPC:
-   ```rust
-   let p2p_session = app_server.create_device_session(password.is_some()).await?;
-   ```
+**File:** `libs/schema/proto/devlog/bitbridge/request.proto:25`
 
-2. **Extract session info**:
-   - `session_id`: Backend-generated unique ID
-   - `alias`: Human-readable identifier (e.g., "brave-dolphin-42")
-   - `signalling_scope`: Scope string for WebRTC (e.g., "brave-dolphin-42")
-   - `owner_signalling_key`: RTC signaling room ID for sender (e.g., "direct:brave-dolphin-42:12345;owner")
-   - `access_url`: Share URL (e.g., "https://bitbridge.com/p2p?session=brave-dolphin-42")
+Remove from PeerMessageBody:
+```protobuf
+SessionsNotificationMessage sessions_notification = 8;
+```
 
-3. **Update `TransferSession::p2p()` constructor**:
-   - Current signature: `pub fn p2p(resources, password) -> Self`
-   - New signature: `pub fn p2p(resources, password, signalling_key, scope) -> Self`
-   - Create session with:
-     ```rust
-     TransferTarget::P2P {
-         from_peer: None,  // No peer yet, they will connect to us
-         password,
-         is_required_password: password.is_some(),
-         signalling_key,  // Owner key for sender
-         scope,
-     }
-     ```
+**File:** `libs/schema/proto/devlog/bitbridge/session.proto:8-11`
 
-   - Call it with backend data:
-     ```rust
-     let session = TransferSession::p2p(
-         selected_resources,
-         password,
-         p2p_session.owner_signalling_key,  // from backend
-         p2p_session.signalling_scope,      // from backend
-     );
-     ```
-
-4. **Emit event to Nearby module to add scope**:
-   ```rust
-   let scope = FindingScope::Local(p2p_session.signalling_scope.clone());
-   // Emit to Nearby module (not direct RPC call)
-   self.update_model(NearbyEvent::AddFindingScope(scope));
-   ```
-   - Nearby module receives this event
-   - Adds scope to `model.nearby.finding_scopes`
-   - Calls `P2POperation::update_finding_scopes(model.nearby.finding_scopes.clone())`
-   - WebRTC now listens on this scope for any receiver connections
-
-5. **Store alias and access_url for UI display**:
-   - Option A: Add new fields to `TransferSession` struct:
-     ```rust
-     pub struct TransferSession {
-         // ... existing fields
-         pub alias: Option<String>,        // For P2P sessions
-         pub access_url: Option<String>,   // For both P2P and Internet sessions
-     }
-     ```
-   - Option B: Extract from `TransferTarget::P2P` fields when needed in view layer
-   - Recommendation: Use Option A for cleaner view layer code
-
-6. **Display session info with Stop button**:
-   - Show `alias` and `access_url` to user (for sharing)
-   - Display "Stop Transfer" button (similar to how cloud sessions work)
-   - Sender doesn't track individual receivers - just broadcasts on scope
-   - ANY receiver with the alias can connect and request details
-
----
-
-### 3. Sender Flow - Handle Stop Transfer
-**Files**:
-- `shared/src/app/transfer/module.rs` (CancelTransfer event)
-- `shared/src/app/nearby/module.rs` (add RemoveFindingScope event)
-
-**Tasks**:
-1. **When user clicks "Stop Transfer"**:
-   - Already handled by existing `CancelTransfer` event
-   - Need to add scope cleanup logic
-
-2. **Remove scope from Nearby module**:
-   ```rust
-   // In CancelTransfer event handler
-   if let TransferTarget::P2P { scope, .. } = &session.target {
-       let finding_scope = FindingScope::Local(scope.clone());
-       self.update_model(NearbyEvent::RemoveFindingScope(finding_scope));
-   }
-   ```
-
-3. **Nearby module handles RemoveFindingScope**:
-   - Remove scope from `model.nearby.finding_scopes`
-   - Call `P2POperation::update_finding_scopes(model.nearby.finding_scopes.clone())`
-   - WebRTC stops listening on that scope
-
----
-
-### 4. Receiver Flow - Find Session (Unified P2P + Public)
-**Files**:
-- `shared/src/protocol/rpc/app_server.rs` (update `find_transfer_session`)
-- `shared/src/app/transfer/commands.rs` (update `find_transfer_session`)
-- `shared/src/app/transfer/module.rs` (FindPublicSession event - NO CHANGES)
-
-**Current Flow**:
-```rust
-// transfer/module.rs:324
-TransferEvent::FindPublicSession { mut keywords } => {
-    // Parse URL if needed
-    // Call find_transfer_session(keywords)
-    // Add session to model
+Remove entire `P2PSessionOverviewMessage`:
+```protobuf
+message P2PSessionOverviewMessage {
+  required uint64 order_id = 1;
+  required bool password_protected = 2;
 }
 ```
 
-**Changes**:
-1. **Update RPC `find_transfer_session`** (see Step 1 above):
-   - Try P2P search by alias first
-   - If not found, try public session search
-   - Return unified `TransferSession` regardless of type
-
-2. **Handle P2P session result** in `find_transfer_session` command:
-   ```rust
-   // In commands.rs
-   pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
-       let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
-
-       let Some(session) = session_overview else {
-           // Show "not found" message
-           return Ok(());
-       };
-
-       // If P2P session, add scope to Nearby module
-       if let TransferTarget::P2P { ref scope, .. } = session.target {
-           let finding_scope = FindingScope::Local(scope.clone());
-           self.update_model(NearbyEvent::AddFindingScope(finding_scope));
-       }
-
-       // Save and add to model (existing logic)
-       self.run(TransferSessionPersistentOperation::save(session.clone())).await?;
-       self.update_model(TransferSessionModelEvent::Add(session));
-       Ok(())
-   }
-   ```
-
-3. **No changes to FindPublicSession event handler** - it already calls `find_transfer_session`
-
-**Important State for P2P**: Session created with `from_peer: None`, so:
-- UI shows "Connecting..." or session card with limited info
-- When `PeerConnected` event fires, `from_peer` gets populated
-- Then user can view session details
+**Rebuild schema:**
+```bash
+cd libs/schema && cargo build
+```
 
 ---
 
-### 5. Receiver Flow - Peer Connection and Session Details
-**Files**:
-- `shared/src/app/transfer/module.rs` (handle P2POperationOutput::PeerConnected)
-- `shared/src/app/transfer/commands.rs`
+### **Step 2: Remove P2PSessionOverview from Operations**
+**File:** `shared/src/app/operations/p2p.rs:84-88`
 
-**Phase A: Handle Peer Connection**
+Remove entire struct:
+```rust
+pub struct P2PSessionOverview {
+    pub order_id: u64,
+    pub password_protected: bool
+}
+```
 
-When WebRTC establishes connection, `PeerConnected(peer)` event fires:
+**File:** `shared/src/app/operations/p2p.rs:23-26`
 
-1. **Update session with peer info** (in Transfer or Nearby module):
-   ```rust
-   // When handling P2POperationOutput::PeerConnected(peer)
-   // Find receiver-side session waiting for this peer
-   if let Some(session) = model.transfer.sessions.iter_mut().find(|s| {
-       matches!(s.target, TransferTarget::P2P {
-           from_peer: None,
-           ref scope,
-           ..
-       } if scope == &peer.scope)  // Match by scope
-   }) {
-       // Update from_peer field
-       session.target = TransferTarget::P2P {
-           from_peer: Some(peer.clone()),
-           // ... keep other fields (scope, signalling_key, password, is_required_password)
-       };
-   }
-   ```
+Remove from P2POperation enum:
+```rust
+SendSessionsNotification {
+    peer_id: String,
+    sessions: Vec<TransferSession>
+},
+```
 
-2. **Now session has peer_id**:
-   - `peer_id()` returns `Some(peer_id)`
-   - Can proceed to request session details
+**File:** `shared/src/app/operations/p2p.rs:59-62`
 
-**Note**: Sender-side sessions don't update `from_peer` - they respond to any peer that requests details
+Remove from P2POperationOutput enum:
+```rust
+ReceivedSessionsOverview {
+    peer_id: String,
+    sessions: Vec<P2PSessionOverview>
+},
+```
 
-**Phase B: Request Session Details**
+**File:** `shared/src/app/operations/p2p.rs:111-113`
 
-**Current State**:
-- `view_public_session` handles public (cloud) sessions
-- `request_session_detail` handles P2P session detail requests (lines 279-331)
-
-**Tasks**:
-1. **Auto-request details after peer connects** (optional):
-   - After updating `from_peer`, automatically call `request_session_detail`
-   - OR wait for user to explicitly "view" the session
-
-2. **Reuse existing `request_session_detail`**:
-   - Already streams session details from peer
-   - Already handles resources and progress updates
-   - Requires `peer_id` (now available after connection)
-
-3. **Update `ViewSession` event handler** in module.rs (line 342):
-   ```rust
-   TransferEvent::ViewSession { password, session_id, transfer_type } => {
-       let session_id = TransferSessionId {
-           order_id: Some(session_id.to_string()),
-           transfer_type: Some(TransferType::Receive)
-       };
-
-       let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
-           return Command::done();
-       };
-
-       // Route based on target type
-       match &session.target {
-           TransferTarget::P2P { from_peer, .. } => {
-               // Check if peer is connected
-               let Some(peer_id) = session.peer_id() else {
-                   return Command::new(|it| async move {
-                       DialogOperation::toast("Waiting for connection...".to_string())
-                           .into_future(it.clone()).await;
-                   });
-               };
-
-               // Request details from peer
-               Command::handle_result(move |it| async move {
-                   it.app().request_session_detail(peer_id, session.order_id, password).await
-               })
-           }
-           TransferTarget::Internet { .. } => {
-               // Existing public session flow
-               Command::handle_result(|it| async move {
-                   it.app().view_public_session(session, password).await
-               })
-           }
-       }
-   }
-   ```
-
-4. **Handle password protection**:
-   - P2P sessions may require password
-   - Validate on sender side via `handle_view_session_request` (already implemented, lines 240-277)
+Remove helper method:
+```rust
+pub fn send_sessions_notification(peer_id: String, sessions: Vec<TransferSession>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+    Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionsNotification { peer_id, sessions })).map(|it| it.result())
+}
+```
 
 ---
 
-### 6. Resource Download Flow
-**Files**: Already implemented in commands.rs
+### **Step 3: Remove SessionsNotification Handler from Peer**
+**File:** `shared/src/protocol/webrtc/peer.rs:338-352`
 
-**Current Implementation**:
-- `request_download_resource` (lines 349-385): Receiver requests resource from peer
-- `handle_download_request` (lines 333-347): Sender handles download request
-- Both functions already work with P2P sessions
+Remove from `process_message_packet`:
+```rust
+Request::SessionsNotification(notification) => {
+    let sessions: Vec<P2PSessionOverview> = notification.sessions.iter().map(|s| {
+        P2PSessionOverview {
+            order_id: s.order_id,
+            password_protected: s.password_protected,
+        }
+    }).collect();
+    let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview {
+        peer_id: self.peer.id().to_string(),
+        sessions,
+    });
+    if let Some(core_request) = self.core_request() {
+        core_request.response(response).await;
+    }
+}
+```
 
-**No Changes Needed**:
-- Existing P2P download flow is complete
-- Uses peer_id and session_id for coordination
-- Streams resource data via WebRTC
+**File:** `shared/src/protocol/webrtc/peer.rs:540-559`
 
----
-
-### 7. WebRTC Signaling Integration
-**Files**:
-- `shared/src/protocol/webrtc/webrtc.rs`
-- WebRTC peer connection setup
-
-**Tasks**:
-1. **Verify scope handling**:
-   - Sender adds `owner_signalling_key` scope to WebRTC
-   - Receiver adds `member_signalling_key` scope to WebRTC
-   - Scopes must match pattern: `direct:{alias}:{session_id};{role}`
-
-2. **Signaling coordination**:
-   - Both peers listen on their respective signaling rooms
-   - Backend RPC service doesn't participate in signaling (P2P direct)
-   - Scopes enable WebRTC peer discovery without global broadcast
-
-**Validation**:
-- Test that sender and receiver can discover each other via scopes
-- Verify signaling keys don't collide with other sessions
-
----
-
-### 8. UI/UX Updates
-**Files**:
-- `web-next/app/transfer/receive_board.tsx` (already modified)
-- Frontend components for P2P session display
-
-**Tasks**:
-1. **Sender UI**:
-   - Display P2P session similar to public session
-   - Show: alias, access_url, QR code (optional)
-   - Allow cancellation
-
-2. **Receiver UI**:
-   - Use existing input field (same UI for P2P and public sessions)
-   - Existing URL parsing logic works: `/p2p?session=brave-dolphin-42` → `brave-dolphin-42`
-   - **Session card states** (for P2P sessions):
-     - Show session with limited info when `from_peer: None`
-     - Can display "Connecting..." indicator
-     - After `PeerConnected`, enable "View Details" button
-   - Clicking "View Details" triggers ViewSession event
-   - If peer not connected yet, show "Waiting for connection..." toast
-   - Show password prompt if required (before requesting details)
+Remove entire `send_sessions_notification` method:
+```rust
+pub async fn send_sessions_notification(
+    &self,
+    sessions: Vec<TransferSession>,
+) -> Result<(), WebRtcErrors> {
+    // ... entire method
+}
+```
 
 ---
 
-### 9. Error Handling & Edge Cases
+### **Step 4: Remove SessionsNotification from WebRTC**
+**File:** `shared/src/protocol/webrtc/webrtc.rs:104-115`
 
-**Scenarios**:
-1. **Session not found**: Show friendly error, don't crash
-2. **Incorrect password**: Sender rejects request, receiver gets error message
-3. **Sender offline**: Receiver sees session but can't connect (timeout)
-4. **Session expiry**: Backend could implement TTL, but not in initial scope
-5. **Multiple receivers**: Each receiver gets unique signaling connection
-6. **Network errors**: Retry logic in RPC client, fallback messaging
-
-**Implementation**:
-- Add proper error types to `CoreError`
-- Display user-friendly messages via `DialogOperation`
-- Log detailed errors for debugging
-
----
-
-### 10. Testing Checklist
-
-**Backend**:
-- [ ] Create P2P session via gRPC (authenticated)
-- [ ] Find P2P session by alias
-- [ ] Update session password protection
-- [ ] Handle duplicate device sessions (should update, not create)
-
-**Sender Flow**:
-- [ ] Create P2P session via backend RPC
-- [ ] Emit AddFindingScope event to Nearby module
-- [ ] Verify Nearby module adds scope and calls P2POperation::update_finding_scopes
-- [ ] Display session alias and URL with "Stop Transfer" button
-- [ ] Respond to session detail requests from any receiver (don't track who)
-- [ ] Stream resources on download request
-- [ ] Stop transfer removes scope via RemoveFindingScope event
-
-**Receiver Flow**:
-- [ ] Enter alias in existing FindPublicSession UI (same event for P2P and public)
-- [ ] RPC searches BOTH P2P (by alias) and public (by keywords)
-- [ ] If P2P found, session created with from_peer: None
-- [ ] Verify AddFindingScope event emitted to Nearby module
-- [ ] Verify WebRTC scopes updated
-- [ ] Handle PeerConnected event → update session's from_peer field
-- [ ] Verify peer_id() now returns Some(peer_id)
-- [ ] ViewSession event routes based on target type:
-  - [ ] P2P with peer → request_session_detail
-  - [ ] P2P without peer → show "Waiting for connection"
-  - [ ] Public → view_public_session (existing)
-- [ ] Download resources successfully
-
-**Error Cases**:
-- [ ] Session not found (invalid alias)
-- [ ] Wrong password provided
-- [ ] Sender disconnects mid-transfer
-- [ ] Network interruption handling
+Remove entire `send_sessions_notification` method:
+```rust
+pub async fn send_sessions_notification(
+    &self,
+    peer_id: String,
+    sessions: Vec<TransferSession>,
+) -> Result<(), WebRtcErrors> {
+    // ... entire method
+}
+```
 
 ---
 
-## Key Design Decisions
+### **Step 5: Remove from Executor**
+**File:** `shared/src/shell/executor/p2p.rs:44-46`
 
-1. **Signaling Architecture**: Direct P2P via scopes, backend only stores session metadata
-2. **Session Lifecycle**: Created on sender, discovered by receiver, no explicit deletion (stateless after creation)
-3. **Backward Compatibility**: Fallback to public sessions ensures existing flows work
-4. **Password Protection**: Optional, validated on sender when receiver requests details
-5. **Resource Management**: Local on sender, streamed on-demand to receiver
+Remove case:
+```rust
+P2POperation::SendSessionsNotification { peer_id, sessions } => {
+    self.web_rtc().send_sessions_notification(peer_id, sessions).await?;
+    Ok(CoreOperationOutput::None)
+}
+```
 
 ---
 
-## Files Summary
+### **Step 6: Remove ReceivedSessionsOverview Event**
+**File:** `shared/src/app/transfer/module.rs:90-93`
 
-### Backend (Already Complete)
-- ✅ `backend/src/entities/p2p_session.rs`
-- ✅ `backend/src/grpc/p2p_service.rs`
-- ✅ `backend/src/repositories/p2p_session.rs`
-- ✅ `backend/src/infrastructure/postgres/p2p_session.rs`
-- ✅ `backend/src/transfer/p2p_transfer_service.rs`
-- ✅ `backend/migration/src/m20251227_000004_create_p2p_session_table.rs`
+Remove from TransferEvent enum:
+```rust
+ReceivedSessionsOverview {
+    peer_id: String,
+    sessions: Vec<P2PSessionOverview>
+},
+```
 
-### Shared/Core (Needs Implementation)
-- 🔧 `shared/src/app/nearby/module.rs` - **CRITICAL**: Add AddFindingScope and RemoveFindingScope events
-- 🔧 `shared/src/protocol/rpc/app_server.rs` - Add P2P RPC client methods (create_device_session, find_p2p_session_by_alias)
-- 🔧 `shared/src/protocol/rpc/app_server.rs` - Update `find_transfer_session` to search BOTH P2P and public
-- 🔧 `shared/src/app/transfer/module.rs` - Update StartP2PTransfer to emit AddFindingScope event
-- 🔧 `shared/src/app/transfer/module.rs` - Update CancelTransfer to emit RemoveFindingScope event
-- 🔧 `shared/src/app/transfer/module.rs` - Update ViewSession to route based on target type (lines 342-353)
-- 🔧 `shared/src/app/transfer/commands.rs` - Update `find_transfer_session` to emit AddFindingScope for P2P
-- ✅ `shared/src/app/transfer/commands.rs` - NO changes to FindPublicSession event handler
-- 🔧 `shared/src/entities/transfer_session.rs` - Update `p2p()` constructor to accept signalling_key and scope
-- ✅ `shared/src/entities/target.rs` - Already has signalling_key and scope fields
-- 📝 `shared/src/protocol/webrtc/webrtc.rs` - Verify scope handling
-- 🔧 Handle `PeerConnected` event to update `from_peer` field (receiver-side sessions only)
+**File:** `shared/src/app/transfer/module.rs:405-452`
 
-### Frontend (Partial)
-- 🔧 `web-next/app/transfer/receive_board.tsx` - Update receiver UI
+Remove entire event handler:
+```rust
+TransferEvent::ReceivedSessionsOverview { peer_id, sessions } => {
+    // ... entire handler
+}
+```
+
+---
+
+### **Step 7: Remove from Nearby Command Handler**
+**File:** `shared/src/app/nearby/command.rs:149-151`
+
+Remove case:
+```rust
+CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview { peer_id, sessions }) => {
+    self.notify_event(TransferEvent::ReceivedSessionsOverview { peer_id, sessions });
+}
+```
+
+---
+
+### **Step 8: Add RPC Operation to Get User by ID**
+**File:** `shared/src/app/operations/rpc.rs:14-24`
+
+Add new operation to fetch user by ID:
+```rust
+pub enum RpcOperation {
+    GetAuthenticateUrl(DeviceInfo),
+    GetMe(),
+    GetUserById(u64),  // Add this
+    Feedback {
+        email: String,
+        message: String,
+    },
+    RandomAvatar,
+    CreateP2PSession { password_protected: bool },
+}
+```
+
+Update output enum:
+```rust
+pub enum RpcOperationOutput {
+    GetMe(User),
+    GetUserById(User),  // Add this
+}
+```
+
+Add helper method:
+```rust
+impl RpcOperation {
+    pub fn get_user_by_id(user_id: u64) -> AppRequestBuilder<impl Future<Output = Result<User, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetUserById(user_id))).map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::GetUserById(user)) => Ok(user),
+            CoreOperationOutput::Error(error) => Err(error),
+            e => panic!("Invalid output for RpcOperation::GetUserById got {e:?}")
+        })
+    }
+}
+```
+
+---
+
+### **Step 9: Update TransferTarget to Add User Fields**
+**File:** `shared/src/entities/target.rs:6-22`
+
+Change `TransferTarget::P2P` from:
+```rust
+P2P {
+    from_peer: Option<Peer>,
+    password: Option<String>,
+    is_required_password: bool,
+    signalling_key: String,
+    scope: String
+}
+```
+
+To:
+```rust
+P2P {
+    from_peer: Option<Peer>,
+    from_user: Option<User>,
+    alias: Option<String>,
+    password: Option<String>,
+    is_required_password: bool,
+    signalling_key: String,
+    scope: String
+}
+```
+
+**Impact:** Update all pattern matches on `TransferTarget::P2P` to include the new fields:
+- `shared/src/entities/transfer_session.rs:203-209` - `TransferSession::p2p()` constructor
+- `shared/src/entities/transfer_session.rs:280-284` - `peer_id()` method
+- `shared/src/entities/transfer_session.rs:287-291` - `peer()` method
+- `shared/src/app/transfer/module.rs:267-287` - `PeerUpdated` handler
+- `shared/src/app/transfer/module.rs:637-645` - view function for P2P sessions
+
+---
+
+### **Step 10: Store User Info When Creating P2P Sessions**
+**File:** `shared/src/app/transfer/module.rs:230-259`
+
+Update `StartP2PTransfer` handler to check authentication and store user info:
+
+```rust
+TransferEvent::StartP2PTransfer { password, .. } => {
+    let selected_resources = model.shelf.shelf.resources.clone();
+    if selected_resources.is_empty() {
+        return Command::new(|it| async move {
+            let _ = DialogOperation::toast("No resources selected".to_string()).into_future(it.clone()).await;
+        });
+    }
+
+    // Check if user is authenticated - if not, trigger sign-in flow
+    let user = model.authentication.user.clone();
+    if user.is_none() {
+        log::info!("User is not logged in, opening login page");
+        return Command::handle_result(|it| async move {
+            it.app().authenticate().await;
+            Ok(())
+        });
+    }
+
+    let Some(_me) = model.nearby.me.clone() else {
+        log::info!("Nearby service not available");
+        return Command::done()
+    };
+
+    Command::handle_result(move |it| async move {
+        let p2p_session = it.app().run(RpcOperation::create_p2p_session(password.is_some())).await?;
+
+        let mut session = TransferSession::p2p(
+            selected_resources,
+            password,
+            p2p_session.signalling_room_id.clone(),
+            p2p_session.signalling_scope.clone(),
+        );
+
+        // Store user info and alias in session
+        if let TransferTarget::P2P { from_user, alias, .. } = &mut session.target {
+            *from_user = user;
+            *alias = Some(p2p_session.alias.clone());
+        }
+
+        it.update_model(TransferSessionModelEvent::Add(session.clone()));
+
+        let scope = FindingScope::Global(p2p_session.signalling_room_id);
+        it.update_model(NearbyEvent::AddFindingScope(scope));
+
+        Ok(())
+    })
+}
+```
+
+---
+
+### **Step 11: Enhance ViewSessionDetail to Include User Info**
+**File:** `shared/src/app/transfer/module.rs` (ReceivedViewSessionRequest handler)
+
+When handling ViewSessionRequest on the sender side, include user information in the response. The existing `P2PTransferSessionMessage` should include user details.
+
+Update the handler to include user info from authentication model:
+```rust
+TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password } => {
+    let session_id = TransferSessionId {
+        order_id: Some(order_id.to_string()),
+        transfer_type: Some(TransferType::Send)
+    };
+    let session = model.transfer.sessions.lookup(&session_id).cloned();
+    let current_user = model.authentication.user.clone();
+
+    Command::handle_result(move |it| async move {
+        if let Some(mut session) = session {
+            // If session doesn't have user info but we're authenticated, add it
+            if let TransferTarget::P2P { from_user, .. } = &mut session.target {
+                if from_user.is_none() && current_user.is_some() {
+                    *from_user = current_user;
+                }
+            }
+            it.app().handle_view_session_request(peer_id, request_id, password, Some(session)).await
+        } else {
+            it.app().handle_view_session_request(peer_id, request_id, password, None).await
+        }
+    })
+}
+```
+
+---
+
+### **Step 12: Update P2PTransferSessionMessage to Include User Info**
+**File:** `libs/schema/proto/devlog/bitbridge/session.proto:13-16`
+
+Update to include user information:
+```protobuf
+message P2PTransferSessionMessage {
+  required uint64 order_id = 1;
+  repeated ResourceMessage resources = 2;
+  optional uint64 user_id = 3;
+  optional string alias = 4;
+}
+```
+
+**Rebuild schema:**
+```bash
+cd libs/schema && cargo build
+```
+
+---
+
+### **Step 13: Update Session Detail Sending/Receiving**
+**File:** Wherever P2PTransferSessionMessage is built (likely in peer.rs or transfer commands)
+
+When building P2PTransferSessionMessage, include user_id and alias:
+```rust
+P2PTransferSessionMessage {
+    order_id: session.order_id,
+    resources: session.resources.iter().map(|r| to_resource_message(r)).collect(),
+    user_id: match &session.target {
+        TransferTarget::P2P { from_user, .. } => from_user.as_ref().map(|u| u.id),
+        _ => None
+    },
+    alias: match &session.target {
+        TransferTarget::P2P { alias, .. } => alias.clone(),
+        _ => None
+    },
+}
+```
+
+When receiving P2PTransferSessionMessage, fetch user if user_id is present:
+```rust
+if let Some(user_id) = message.user_id {
+    if let Ok(user) = it.app().run(RpcOperation::get_user_by_id(user_id)).await {
+        if let TransferTarget::P2P { from_user, .. } = &mut session.target {
+            *from_user = Some(user);
+        }
+    }
+}
+
+if let Some(alias) = message.alias {
+    if let TransferTarget::P2P { alias: session_alias, .. } = &mut session.target {
+        *session_alias = Some(alias);
+    }
+}
+```
+
+---
+
+### **Step 14: Merge View Models**
+**File:** `shared/src/app/view_models/receive_session.rs:28-61`
+
+Remove `ReceiveCloudSessionViewModel` and update `ReceiveSessionViewModel` to support both P2P and Internet sessions:
+
+```rust
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ReceiveSessionViewModel {
+    pub id: String,
+    pub sender_id: String,
+    pub sender_avatar: String,
+    pub sender_name: String,
+    pub sender_description: String,
+    pub alias: Option<String>,
+    pub access_url: Option<String>,
+    pub password: Option<String>,
+    pub password_required: bool,
+    pub is_authenticated: bool,
+    pub has_details: bool,
+    pub is_loading: bool,
+    pub image_resources: Vec<ImageReceiveResourceViewModel>,
+    pub video_resources: Vec<VideoReceiveResourceViewModel>,
+    pub file_resources: Vec<FileReceiveResourceViewModel>,
+    pub is_completed: bool,
+    pub is_in_progress: bool,
+    pub display_download_speed: String,
+    pub progress: f64,
+    pub display_datetime: String
+}
+```
+
+---
+
+### **Step 15: Update Transfer Module View Function**
+**File:** `shared/src/app/transfer/module.rs:504-759`
+
+Merge the two separate view builders into one unified function:
+
+```rust
+fn view(&self, model: &AppModel) -> Self::ViewModel {
+    Self::ViewModel {
+        transfer_method: model.transfer.selected_method.clone(),
+        received_sessions: model
+            .transfer
+            .sessions
+            .iter()
+            .filter(|it| it.transfer_type == TransferType::Receive)
+            .filter_map(|it| {
+                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading) = match &it.target {
+                    TransferTarget::P2P { from_peer, from_user, alias, is_required_password, .. } => {
+                        let peer = from_peer.as_ref()?;
+                        let (avatar, name, description) = if let Some(user) = from_user {
+                            (user.avatar.clone(), user.name.clone(), "Nearby".to_string())
+                        } else {
+                            (peer.avatar_url.clone(), peer.name.clone().unwrap_or(peer.device.name.clone()), "Nearby".to_string())
+                        };
+                        let has_details = !it.resources.is_empty();
+                        (peer.id().to_string(), avatar, name, description, alias.clone(), None, None, *is_required_password, !has_details)
+                    }
+                    TransferTarget::Internet { password, from_user, access_url, is_required_password, .. } => {
+                        let access_url = access_url.as_ref()?;
+                        let alias = Url::parse(access_url).ok()
+                            .and_then(|url| url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string()));
+                        let name = match &alias {
+                            Some(a) => format!("{} ({})", from_user.name, a),
+                            None => from_user.name.to_string()
+                        };
+                        let is_loading = it.resources.is_empty();
+                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, Some(access_url.clone()), password.clone(), *is_required_password, is_loading)
+                    }
+                };
+
+                let image_resources = it.resources.iter().filter_map(|resource| {
+                    if resource.r#type != ResourceType::Image { return None; }
+                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                    Some(ImageReceiveResourceViewModel {
+                        model: SelectedResourceViewModel::from(resource),
+                        completion: progress.percentage() as f32,
+                        is_completed: progress.status.is_completed()
+                    })
+                }).collect();
+
+                let video_resources = it.resources.iter().filter_map(|resource| {
+                    if resource.r#type != ResourceType::Video { return None; }
+                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                    Some(VideoReceiveResourceViewModel {
+                        model: SelectedResourceViewModel::from(resource),
+                        completion: progress.percentage() as f32,
+                        is_completed: progress.status.is_completed()
+                    })
+                }).collect();
+
+                let file_resources = it.resources.iter().filter_map(|resource| {
+                    if !matches!(resource.r#type, ResourceType::File | ResourceType::Folder) { return None; }
+                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                    Some(FileReceiveResourceViewModel {
+                        model: SelectedResourceViewModel::from(resource),
+                        completion: progress.percentage() as f32,
+                        is_completed: progress.status.is_completed()
+                    })
+                }).collect();
+
+                Some(ReceiveSessionViewModel {
+                    id: it.order_id.to_string(),
+                    sender_id,
+                    sender_avatar,
+                    sender_name,
+                    sender_description,
+                    alias,
+                    access_url,
+                    password,
+                    password_required: is_required_password,
+                    is_authenticated: !it.resources.is_empty(),
+                    has_details: !it.resources.is_empty(),
+                    is_loading,
+                    is_completed: it.is_completed(),
+                    is_in_progress: !it.is_completed() && !it.is_canceled(),
+                    display_download_speed: it.status().to_string(),
+                    progress: it.total_progress(),
+                    image_resources,
+                    video_resources,
+                    file_resources,
+                    display_datetime: id_to_datetime(it.order_id)
+                        .with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                })
+            })
+            .collect(),
+        cloud_session: model.transfer.sessions.iter()
+            .filter(|it| matches!(it.transfer_type, TransferType::Send))
+            .filter(|it| it.target.is_public())
+            .find_map(|it| {
+                let (access_url, password) = match &it.target {
+                    TransferTarget::Internet { access_url, password, .. } => (access_url.clone(), password.clone()),
+                    _ => return None
+                };
+                Some(CloudSession {
+                    display_download_speed: match access_url.is_none() {
+                        true => "Initializing...".to_owned(),
+                        false => it.status().to_string()
+                    },
+                    password,
+                    session_id: it.order_id.to_string(),
+                    is_completed: it.is_completed(),
+                    is_in_progress: !it.is_completed() && !it.is_canceled(),
+                    progress: it.total_progress(),
+                    access_url
+                })
+            }),
+    }
+}
+```
+
+Update `TransferViewModel`:
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct TransferViewModel {
+    transfer_method: TransferMethodSelection,
+    received_sessions: Vec<ReceiveSessionViewModel>,
+    cloud_session: Option<CloudSession>
+}
+```
+
+Remove `received_cloud_sessions` field.
+
+---
+
+### **Step 16: Implement Backend RPC Handler**
+**File:** Backend RPC service implementation
+
+Add handler for `GetUserById`:
+```rust
+async fn get_user_by_id(&self, user_id: u64) -> Result<User, Status> {
+    let user = self.user_repository.find_by_id(user_id).await?
+        .ok_or_else(|| Status::not_found("User not found"))?;
+
+    Ok(User {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatar: user.avatar,
+    })
+}
+```
+
+---
+
+### **Step 17: Build TypeScript Types**
+**Command:**
+```bash
+cd /Users/tiendang/Projects/bitbridge
+cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
+```
+
+This will regenerate TypeScript types with the updated `ReceiveSessionViewModel`.
+
+---
+
+### **Step 18: Update Web UI**
+**Files to update:**
+- `web-next/wasm/wasm_core.ts:98` - Update type from union to single type
+- Any React components using `ReceiveCloudSessionViewModel`
+
+Change:
+```typescript
+selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
+```
+
+To:
+```typescript
+selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
+```
+
+Update components to use unified model fields:
+- Use `sender_avatar` instead of `peer_avatar` or `avatar_url`
+- Use `sender_name` instead of `peer_name` or `sender_name`
+- Use `sender_description` for "Nearby" vs "Public"
+- Use `alias` for session alias (available for both types)
+- Use `access_url` to determine if it's a public session
+
+---
+
+## Summary of Changes
+
+| Step | File | Change Type | Description |
+|------|------|-------------|-------------|
+| 1 | `libs/schema/proto/devlog/bitbridge/request.proto` | Remove | Remove SessionsNotificationMessage |
+| 1 | `libs/schema/proto/devlog/bitbridge/session.proto` | Remove | Remove P2PSessionOverviewMessage |
+| 2 | `shared/src/app/operations/p2p.rs` | Remove | Remove P2PSessionOverview struct and operations |
+| 3 | `shared/src/protocol/webrtc/peer.rs` | Remove | Remove SessionsNotification handler and sender |
+| 4 | `shared/src/protocol/webrtc/webrtc.rs` | Remove | Remove send_sessions_notification |
+| 5 | `shared/src/shell/executor/p2p.rs` | Remove | Remove SendSessionsNotification executor |
+| 6 | `shared/src/app/transfer/module.rs` | Remove | Remove ReceivedSessionsOverview event |
+| 7 | `shared/src/app/nearby/command.rs` | Remove | Remove ReceivedSessionsOverview handler |
+| 8 | `shared/src/app/operations/rpc.rs` | Add | Add GetUserById RPC operation |
+| 9 | `shared/src/entities/target.rs` | Modify | Add from_user and alias to TransferTarget::P2P |
+| 10 | `shared/src/app/transfer/module.rs` | Modify | Store user info in StartP2PTransfer |
+| 11 | `shared/src/app/transfer/module.rs` | Modify | Include user in ViewSessionRequest handler |
+| 12 | `libs/schema/proto/devlog/bitbridge/session.proto` | Modify | Add user_id and alias to P2PTransferSessionMessage |
+| 13 | Session detail handlers | Modify | Send/receive user_id in session details |
+| 14 | `shared/src/app/view_models/receive_session.rs` | Modify | Remove ReceiveCloudSessionViewModel |
+| 15 | `shared/src/app/transfer/module.rs` | Modify | Merge view builders |
+| 16 | `backend/src/grpc/rpc_service.rs` | Add | Implement GetUserById handler |
+| 17 | Build | Execute | Rebuild TypeScript types |
+| 18 | `web-next/**/*.tsx` | Modify | Update UI to use unified view model |
+
+## Benefits of This Simplified Approach
+
+1. **Less Complexity**: No session overview notifications to maintain
+2. **On-Demand**: Session details fetched only when needed (via ViewSessionDetail)
+3. **Consistent**: Both P2P and Public sessions use same pattern (request details when needed)
+4. **Less Network Traffic**: No automatic broadcasting of session lists
+5. **Better Privacy**: Sessions not automatically visible, must be requested explicitly
+6. **Cleaner Code**: Remove ~200 lines of notification handling code
+
+## New Flow
+
+**Sender:**
+1. Create P2P session with user info stored locally
+2. Peer connects
+3. Wait for ViewSessionDetail request
+4. Send session details including user_id
+5. Receiver fetches user info and displays
+
+**Receiver:**
+1. See peer in nearby list
+2. Request session details (existing ViewSessionDetail)
+3. Receive session with user_id
+4. Fetch user info via GetUserById
+5. Display session with user info
+
+## Testing Plan
+
+1. **P2P Session Creation:**
+   - Verify user info is stored when creating P2P session
+   - Verify alias is stored correctly
+
+2. **P2P Session Details:**
+   - Request session details from peer
+   - Verify user_id is included in response
+   - Verify user info is fetched and displayed
+
+3. **Public Session:**
+   - Verify public sessions still work unchanged
+   - Same UI appearance as P2P sessions
+
+4. **View Model Unification:**
+   - Both nearby and public sessions use same ReceiveSessionViewModel
+   - UI renders both identically
+
+5. **Backward Compatibility:**
+   - Handle sessions without user_id gracefully
+   - Fall back to peer info if user not found

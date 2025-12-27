@@ -1,12 +1,14 @@
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::CoreOperationOutput;
-use crate::entities::transfer_session::TransferSession;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::{TransferSession, TransferType};
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::app_server::AppServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;
+use core_services::utils::cancellation::CancellationToken;
 use core_services::utils::maybe::MaybeSend;
 use std::sync::Arc;
 
@@ -56,6 +58,30 @@ where
                 Ok(CoreOperationOutput::None)
             }
             TransferOperation::FindPublicSession { alias } => {
+                // Try P2P session first
+                if let Ok(Some(p2p_session)) = self.app_server().find_p2p_session_by_alias(alias.clone()).await {
+                    // Create P2P transfer session
+                    let transfer_session = TransferSession {
+                        order_id: p2p_session.session_id,
+                        resources: vec![],
+                        progress: vec![],
+                        transfer_type: TransferType::Receive,
+                        target: TransferTarget::P2P {
+                            from_peer: None,
+                            alias: Some(alias.clone()),
+                            signalling_key: p2p_session.signalling_room_id,
+                            scope: p2p_session.signalling_scope,
+                        },
+                        from_user: None,
+                        password: None,
+                        is_required_password: p2p_session.password_protected,
+                        cancellation_token: CancellationToken::new(),
+                    };
+
+                    return Ok(Some(transfer_session).into());
+                }
+
+                // Fallback to public session search
                 let response = self.cloud_server().find_public_session(alias).await?;
                 let is_required_password = response.is_required_password;
                 let access_url = response.access_url;

@@ -11,7 +11,7 @@ pub struct P2PSessionId {
 
 impl Table<P2PSessionId> for P2PSession {
     fn get_table() -> &'static str {
-        "p2pSession"
+        "p2p_session"
     }
 
     fn id(&self) -> P2PSessionId {

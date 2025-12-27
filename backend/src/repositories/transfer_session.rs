@@ -13,7 +13,7 @@ pub struct TransferSessionId {
 
 impl Table<TransferSessionId> for TransferSession {
     fn get_table() -> &'static str {
-        "transferSession"
+        "transfer_session"
     }
 
     fn id(&self) -> TransferSessionId {

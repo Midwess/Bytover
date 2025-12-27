@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
+use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
@@ -10,6 +11,8 @@ use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::peer::Peer;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::TransferType;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
@@ -35,14 +38,16 @@ impl AppCommand {
                 name: Some(user.name),
                 avatar_url: user.avatar,
                 email: Some(user.email),
-                device
+                device,
+                scopes: vec![]
             },
             None => Peer {
                 id: peer_id.clone(),
                 name: Some(device.name.clone()),
                 avatar_url: self.run(RpcOperation::random_avatar()).await.unwrap_or_default(),
                 email: None,
-                device
+                device,
+                scopes: vec![]
             }
         }
     }
@@ -78,6 +83,9 @@ impl AppCommand {
                         new_peer: vec![peer.clone()],
                         removed: vec![]
                     });
+
+                    // Update P2P receiver sessions that are waiting for a peer
+                    self.update_p2p_sessions_with_peer(peer.clone());
 
                     self.spawn(|it| async move {
                         it.app().handle_peer_connection(peer).await;
@@ -138,9 +146,6 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview { peer_id, sessions }) => {
-                    self.notify_event(TransferEvent::ReceivedSessionsOverview { peer_id, sessions });
-                }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
                     self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
                 }
@@ -168,5 +173,11 @@ impl AppCommand {
             new_peer: vec![],
             removed: vec![peer.clone()]
         });
+    }
+
+    fn update_p2p_sessions_with_peer(&self, peer: Peer) {
+        // Create an event to update the session
+        // This will be handled by the transfer module
+        self.notify_event(TransferEvent::PeerUpdated { peer });
     }
 }

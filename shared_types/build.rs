@@ -29,7 +29,6 @@ use shared::app::operations::transfer::{TransferOperation, TransferOperationOutp
 use shared::app::operations::CoreOperationOutput;
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfViewModel};
 use shared::app::transfer::module::{TransferEvent, TransferModel};
-use shared::app::view_models::receive_session::ReceiveCloudSessionViewModel;
 use shared::app::BitBridge;
 use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
@@ -80,7 +79,6 @@ fn main() {
     gen.register_type::<GeoLocation>().unwrap();
     gen.register_type::<AlertDialog>().unwrap();
     gen.register_type::<MessageReason>().unwrap();
-    gen.register_type::<ReceiveCloudSessionViewModel>().unwrap();
 
     // Register operation enums
     gen.register_type::<DialogOperation>().unwrap();

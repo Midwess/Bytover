@@ -1,4 +1,4 @@
-use crate::app::operations::p2p::{P2POperationOutput, P2PSessionOverview};
+use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
@@ -30,7 +30,7 @@ use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{CancelTransferSessionRequest, DownloadResourceRequest, IntroduceRequestMessage, IntroduceResponseMessage, P2pSessionOverviewMessage, P2pTransferSessionMessage, PeerErrorsMessage, PeerMessage, ResourceTypeMessage, SessionsNotificationMessage, ViewSessionDetailRequest, ViewSessionDetailResponse};
+use schema::devlog::bitbridge::{CancelTransferSessionRequest, DownloadResourceRequest, IntroduceRequestMessage, IntroduceResponseMessage, P2pTransferSessionMessage, PeerErrorsMessage, PeerMessage, ResourceTypeMessage, ViewSessionDetailRequest, ViewSessionDetailResponse};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -38,6 +38,7 @@ use std::time::Duration;
 use core_services::utils::cancellation::CancellationToken;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::errors::CoreError;
+use crate::protocol::webrtc::signalling::SharedContext;
 
 // Global atomic counter for generating unique transfer IDs
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
@@ -174,6 +175,7 @@ impl WebRtcPeer {
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
+        shared_context: &SharedContext,
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
 
@@ -198,7 +200,12 @@ impl WebRtcPeer {
 
         log::info!("Received introduce response from other peer {:?}", response.peer.peer_id);
 
-        let peer: PeerEntity = response.peer.into();
+        let mut peer: PeerEntity = response.peer.into();
+
+        // Look up scopes for this peer from SharedContext
+        let peer_id = peer.peer_id();
+        let scopes = shared_context.get_peer_scopes(&peer_id).await;
+        peer.scopes = scopes;
 
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
@@ -252,6 +259,7 @@ impl WebRtcPeer {
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
+        shared_context: &SharedContext,
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
@@ -271,6 +279,12 @@ impl WebRtcPeer {
         msg_channel.send_response(request_id, introduce_response).await?;
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
+        // Create peer and look up scopes
+        let mut peer: PeerEntity = msg.mine.into();
+        let peer_id = peer.peer_id();
+        let scopes = shared_context.get_peer_scopes(&peer_id).await;
+        peer.scopes = scopes;
+
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
             unreliable2_data_channel,
@@ -287,7 +301,7 @@ impl WebRtcPeer {
             msg_channel,
             transfer_feedback_sender,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
-            peer: msg.mine.into(),
+            peer,
             reliable_data_channel,
             quad_unreliable_channel,
             thumbnail_channel,
@@ -320,21 +334,6 @@ impl WebRtcPeer {
                     log::info!("Received FEC feedback: {:?}", feedback);
                     let _ = self.transfer_feedback_sender.unbounded_send(feedback);
                 };
-            }
-            Request::SessionsNotification(notification) => {
-                let sessions: Vec<P2PSessionOverview> = notification.sessions.iter().map(|s| {
-                    P2PSessionOverview {
-                        order_id: s.order_id,
-                        password_protected: s.password_protected,
-                    }
-                }).collect();
-                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedSessionsOverview {
-                    peer_id: self.peer.id().to_string(),
-                    sessions,
-                });
-                if let Some(core_request) = self.core_request() {
-                    core_request.response(response).await;
-                }
             }
             Request::ViewSessionRequest(req) => {
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
@@ -523,27 +522,6 @@ impl WebRtcPeer {
         Ok(())
     }
 
-    pub async fn send_sessions_notification(
-        &self,
-        sessions: Vec<TransferSession>,
-    ) -> Result<(), WebRtcErrors> {
-        let overviews: Vec<P2pSessionOverviewMessage> = sessions
-            .iter()
-            .map(|session| {
-                let password_protected = matches!(&session.target, crate::entities::target::TransferTarget::P2P { password: Some(_), .. });
-                P2pSessionOverviewMessage {
-                    order_id: session.order_id,
-                    password_protected,
-                }
-            })
-            .collect();
-
-        let notification = SessionsNotificationMessage { sessions: overviews };
-        let request = Request::SessionsNotification(notification);
-        self.msg_channel.notify(request).await?;
-        Ok(())
-    }
-
     pub async fn request_session_detail(
         &self,
         core_request: CoreRequest,
@@ -567,10 +545,14 @@ impl WebRtcPeer {
                         progress: vec![],
                         transfer_type: crate::entities::transfer_session::TransferType::Receive,
                         target: crate::entities::target::TransferTarget::P2P {
-                            from_peer: self.peer.clone(),
-                            password: None,
-                            is_required_password: false,
+                            from_peer: Some(self.peer.clone()),
+                            alias: proto_session.alias.clone(),
+                            signalling_key: String::new(),  // Local P2P doesn't use backend signalling
+                            scope: String::new(),  // Local P2P doesn't use scopes
                         },
+                        from_user: None,  // Will be fetched in view model using user_id
+                        password: None,
+                        is_required_password: false,
                         cancellation_token: CancellationToken::new(),
                     };
 
@@ -640,9 +622,18 @@ impl WebRtcPeer {
             return Ok(())
         };
 
+        // Extract user_id and alias from session target if available
+        let (user_id, alias) = if let crate::entities::target::TransferTarget::P2P { alias, .. } = &session.target {
+            (session.from_user.as_ref().map(|u| u.id), alias.clone())
+        } else {
+            (None, None)
+        };
+
         let proto_session = P2pTransferSessionMessage {
             order_id: session.order_id,
             resources: vec![],
+            user_id,
+            alias,
         };
 
         let response = ViewSessionDetailResponse {

@@ -65,6 +65,7 @@ pub enum CoreOperationOutput {
     Peer(Peer),
     AuthSession(Session),
     TransferSession(TransferSession),
+    P2PSession(schema::devlog::bitbridge::P2pSession),
     GeoLocation(GeoLocation),
     DeviceInfo(DeviceInfo),
     ThumbnailPng(Vec<u8>),

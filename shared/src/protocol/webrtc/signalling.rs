@@ -42,7 +42,8 @@ pub struct SharedContext {
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: Arc<Mutex<PeerId>>,
-    signaller: Arc<Mutex<Weak<SignallingClient>>>
+    signaller: Arc<Mutex<Weak<SignallingClient>>>,
+    peer_scopes: Arc<Mutex<HashMap<PeerId, Vec<String>>>>
 }
 
 impl Default for SharedContext {
@@ -58,7 +59,8 @@ impl SharedContext {
             finding_scopes: Default::default(),
             peers: Default::default(),
             peer_msg_channels: Default::default(),
-            signaller: Default::default()
+            signaller: Default::default(),
+            peer_scopes: Default::default()
         }
     }
 
@@ -173,6 +175,15 @@ impl SharedContext {
 
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
+    }
+
+    pub async fn update_peer_scopes(&self, peer_id: &PeerId, scopes: Vec<String>) {
+        let mut peer_scopes = self.peer_scopes.lock().await;
+        peer_scopes.insert(*peer_id, scopes);
+    }
+
+    pub async fn get_peer_scopes(&self, peer_id: &PeerId) -> Vec<String> {
+        self.peer_scopes.lock().await.get(peer_id).cloned().unwrap_or_default()
     }
 }
 
@@ -326,9 +337,15 @@ impl Signaller for WebSignaller {
                 continue;
             };
 
+            // Extract scopes before converting to PeerEvent
+            let scopes = message.scopes.clone();
+
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
+                // Store scopes for this peer
+                self.shared_context.update_peer_scopes(id, scopes).await;
+
                 if id.0 <= self.peer_id.0 {
                     continue;
                 }

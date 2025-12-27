@@ -3,12 +3,7 @@ use crate::di_container::DiContainer;
 use crate::repositories::p2p_session::P2PSessionRepository;
 use schema::devlog::app_gateway::models::{Device, User};
 use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationService;
-use schema::devlog::bitbridge::{
-    CreateDeviceSessionRequest,
-    CreateDeviceSessionResponse,
-    FindP2pSessionRequest,
-    FindP2pSessionResponse,
-};
+use schema::devlog::bitbridge::{find_p2p_session_request, CreateDeviceSessionRequest, CreateDeviceSessionResponse, FindP2pSessionRequest, FindP2pSessionResponse, P2pSession};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -23,6 +18,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         &self,
         request: Request<CreateDeviceSessionRequest>,
     ) -> Result<Response<CreateDeviceSessionResponse>, Status> {
+        log::info!("Creating session for user: {:?}", request.extensions());
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
@@ -33,6 +29,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         let request_body = request.get_ref();
 
+        log::info!("Creating session for user: {:?} and device: {:?}", user, device);
         let p2p_transfer_service = DiContainer::instance().await.get_p2p_transfer_service().await;
 
         let session = p2p_transfer_service
@@ -42,7 +39,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
 
         let response = CreateDeviceSessionResponse {
-            session: schema::devlog::bitbridge::P2pSession {
+            session: P2pSession {
                 session_id: session.session_id(),
                 signalling_room_id: session.owner_signalling_key(),
                 owner_user_id: session.user_id(),
@@ -63,7 +60,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         let request_body = request.into_inner();
 
         let alias = match request_body.key {
-            Some(schema::devlog::bitbridge::find_p2p_session_request::Key::Alias(alias)) => alias,
+            Some(find_p2p_session_request::Key::Alias(alias)) => alias,
             None => return Err(Status::invalid_argument("Alias must be defined")),
         };
 
@@ -74,7 +71,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
 
         let response = FindP2pSessionResponse {
-            session: Some(schema::devlog::bitbridge::P2pSession {
+            session: Some(P2pSession {
                 session_id: session.session_id(),
                 signalling_room_id: session.member_signalling_key(),
                 owner_user_id: session.user_id(),

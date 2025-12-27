@@ -6,12 +6,14 @@ use core_services::utils::string::StringExt;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
+use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus, TransferType};
@@ -40,6 +42,12 @@ impl AppCommand {
         ))
             .await;
 
+        // If P2P session, remove scope from Nearby module
+        if let TransferTarget::P2P { ref signalling_key, .. } = transfer_session.target {
+            let finding_scope = FindingScope::Global(signalling_key.clone());
+            self.update_model(NearbyEvent::RemoveFindingScope(finding_scope));
+        }
+
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
 
@@ -48,16 +56,14 @@ impl AppCommand {
 
     pub async fn upload(
         &self,
-        user: User,
-        selected_resources: Vec<LocalResource>,
-        transfer_target: TransferTarget
+        session: TransferSession
     ) -> Result<(), CoreError> {
-        if selected_resources.is_empty() {
+        if session.resources.is_empty() {
             self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
             return Ok(());
         }
 
-        let TransferTarget::Internet { password, to_emails, .. } = transfer_target.clone() else {
+        let TransferTarget::Internet { to_emails, .. } = &session.target else {
             return Ok(());
         };
 
@@ -68,8 +74,7 @@ impl AppCommand {
             }
         }
 
-        let session = TransferSession::public(user, password, selected_resources, to_emails);
-        let mut transfer_session = match self.run(TransferOperation::create_cloud_session(session)).await {
+        let mut transfer_session = match self.run(TransferOperation::create_cloud_session(session.clone())).await {
             Err(err) => {
                 self.run(DialogOperation::toast(format!("{err} please try again"))).await;
                 return Ok(());
@@ -77,7 +82,7 @@ impl AppCommand {
             Ok(session) => session
         };
 
-        let transfer_target_id = transfer_target.id();
+        let transfer_target_id = transfer_session.target.id();
 
         transfer_session.resources.sort_by(|a, b| a.size.cmp(&b.size));
 
@@ -176,18 +181,21 @@ impl AppCommand {
         mut transfer_session: TransferSession,
         entered_password: Option<String>
     ) -> Result<(), CoreError> {
-        let (password, user_id) = match &mut transfer_session.target {
-            TransferTarget::Internet { password, from_user, .. } => {
+        let user_id = match &transfer_session.target {
+            TransferTarget::Internet { .. } => {
                 if let Some(entered_password) = entered_password {
-                    password.replace(entered_password);
+                    transfer_session.password = Some(entered_password);
                 };
 
-                (password.clone(), from_user.id)
+                let from_user = transfer_session.from_user.as_ref().ok_or_else(|| CoreError::BadRequest("Missing user info".to_string()))?;
+                from_user.id
             }
             _ => {
                 return Ok(());
             }
         };
+
+        let password = transfer_session.password.clone();
 
         let session_order_id = transfer_session.order_id;
         let request = CoreOperation::Transfer(TransferOperation::SubscribeToPublicSessionTransferProgress {
@@ -248,19 +256,14 @@ impl AppCommand {
            return Ok(());
         };
 
-        let is_password_valid = match &session.target {
-            TransferTarget::P2P { password: session_password, is_required_password, .. } => {
-                if *is_required_password {
-                    match (session_password, &password) {
-                        (Some(expected), Some(provided)) => expected == provided,
-                        (Some(_), None) => false,
-                        (None, _) => true
-                    }
-                } else {
-                    true
-                }
+        let is_password_valid = if session.is_required_password {
+            match (&session.password, &password) {
+                (Some(expected), Some(provided)) => expected == provided,
+                (Some(_), None) => false,
+                (None, _) => true
             }
-            _ => false
+        } else {
+            true
         };
 
         if !is_password_valid {
