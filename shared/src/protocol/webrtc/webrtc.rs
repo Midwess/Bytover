@@ -6,6 +6,7 @@ use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
+use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::CoreRequest;
@@ -231,28 +232,31 @@ impl WebRtc {
                         let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
                         let current_user = current_user.clone();
                         let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
-                        let outbound_unreliable_data_sender = outbound_unreliable_data_sender.clone();
-                        let outbound_unreliable2_data_sender = outbound_unreliable2_data_sender.clone();
-                        let outbound_unreliable3_data_sender = outbound_unreliable3_data_sender.clone();
-                        let outbound_unreliable4_data_sender = outbound_unreliable4_data_sender.clone();
                         let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                         let local_resource_repository = self.local_resource_repository.clone();
                         let context = self.shared_context.clone();
                         let core_request = core_request.clone();
+                        let quad_channel = QuadUnreliableChannel::new(
+                            outbound_unreliable_data_sender.clone(),
+                            outbound_unreliable2_data_sender.clone(),
+                            outbound_unreliable3_data_sender.clone(),
+                            outbound_unreliable4_data_sender.clone(),
+                            TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
+                            TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+                            TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+                            TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
+                            buffer.clone(),
+                        );
                         self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                         handles.push(spawn(async move {
                             let peer = match WebRtcPeer::new(
                                 current_user.clone(),
                                 direct_message_channel,
                                 outbound_reliable_data_sender,
-                                outbound_unreliable_data_sender,
-                                outbound_unreliable2_data_sender,
-                                outbound_unreliable3_data_sender,
-                                outbound_unreliable4_data_sender,
+                                quad_channel,
                                 outbound_thumbnail_sender,
                                 buffer,
                                 local_resource_repository,
-                                &context
                             )
                             .await
                             {
@@ -296,15 +300,22 @@ impl WebRtc {
                     let current_user = current_user.clone();
                     let peer_id = peer_id;
                     let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
-                    let outbound_unreliable_data_sender = outbound_unreliable_data_sender.clone();
-                    let outbound_unreliable2_data_sender = outbound_unreliable2_data_sender.clone();
-                    let outbound_unreliable3_data_sender = outbound_unreliable3_data_sender.clone();
-                    let outbound_unreliable4_data_sender = outbound_unreliable4_data_sender.clone();
                     let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
                     let request_id = msg.request_id.clone();
                     let core_request = core_request.clone();
                     let context = self.shared_context.clone();
+                    let quad_channel = QuadUnreliableChannel::new(
+                        outbound_unreliable_data_sender.clone(),
+                        outbound_unreliable2_data_sender.clone(),
+                        outbound_unreliable3_data_sender.clone(),
+                        outbound_unreliable4_data_sender.clone(),
+                        TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
+                        TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
+                        TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
+                        TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
+                        buffer.clone(),
+                    );
                     context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                     handles.push(spawn(async move {
                         let peer = match WebRtcPeer::from_introduce_request(
@@ -313,14 +324,10 @@ impl WebRtc {
                             request,
                             direct_message_channel,
                             outbound_reliable_data_sender,
-                            outbound_unreliable_data_sender,
-                            outbound_unreliable2_data_sender,
-                            outbound_unreliable3_data_sender,
-                            outbound_unreliable4_data_sender,
+                            quad_channel,
                             outbound_thumbnail_sender,
                             buffer,
                             local_resource_repository,
-                            &context
                         )
                         .await
                         {

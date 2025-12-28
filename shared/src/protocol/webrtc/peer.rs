@@ -8,10 +8,10 @@ use crate::entities::user::User;
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
+use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{
-    MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID, TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
-    TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
+    MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID,
 };
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{BufferExt, CoreRequest};
@@ -43,93 +43,7 @@ use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::errors::CoreError;
 use crate::protocol::webrtc::signalling::SharedContext;
 
-// Global atomic counter for generating unique transfer IDs
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
-
-/// Quad-channel wrapper for load balancing between four unreliable data channels
-pub struct QuadUnreliableChannel {
-    channels: [mpsc::UnboundedSender<(PeerId, Packet)>; 4],
-    channel_ids: [usize; 4],
-    buffer: PeerBuffered,
-    current_channel: u8,
-}
-
-impl QuadUnreliableChannel {
-    pub fn new(
-        channel1: mpsc::UnboundedSender<(PeerId, Packet)>,
-        channel2: mpsc::UnboundedSender<(PeerId, Packet)>,
-        channel3: mpsc::UnboundedSender<(PeerId, Packet)>,
-        channel4: mpsc::UnboundedSender<(PeerId, Packet)>,
-        channel1_id: usize,
-        channel2_id: usize,
-        channel3_id: usize,
-        channel4_id: usize,
-        buffer: PeerBuffered,
-    ) -> Self {
-        Self {
-            channels: [
-                channel1, channel2, channel3, channel4,
-            ],
-            channel_ids: [
-                channel1_id,
-                channel2_id,
-                channel3_id,
-                channel4_id,
-            ],
-            buffer,
-            current_channel: 0,
-        }
-    }
-
-    /// Send a packet, load balancing between the four channels
-    pub fn send(&mut self, peer_id: PeerId, packet: Packet) -> Result<(), mpsc::TrySendError<(PeerId, Packet)>> {
-        let channel_index = self.current_channel as usize;
-        let result = self.channels[channel_index].unbounded_send((peer_id, packet));
-        self.current_channel = (self.current_channel + 1) % 4;
-        result
-    }
-
-    /// Wait for all four channels to have low buffer usage
-    pub async fn wait_buffer_low(&self, min_buffer_size: usize, timeout: Duration) {
-        for &channel_id in &self.channel_ids {
-            self.buffer.wait_buffer_low(channel_id, min_buffer_size, timeout).await;
-        }
-    }
-
-    /// Get combined bytes sent/received stats from all four channels
-    pub async fn bytes_sent_received(&self) -> (usize, usize) {
-        let mut total_sent = 0;
-        let mut total_received = 0;
-
-        for &channel_id in &self.channel_ids {
-            let (sent, received) = self.buffer.channel_bytes_sent_received(channel_id).await.unwrap_or((0, 0));
-            total_sent += sent;
-            total_received += received;
-        }
-
-        (total_sent, total_received)
-    }
-
-    /// Get bytes sent from all four channels
-    pub async fn bytes_sent(&self) -> usize {
-        let mut total_sent = 0;
-
-        for &channel_id in &self.channel_ids {
-            let sent = self.buffer.channel_bytes_sent_received(channel_id).await.map(|it| it.0).unwrap_or(0);
-            total_sent += sent;
-        }
-
-        total_sent
-    }
-
-    /// Flush all four channels with timeout
-    pub async fn flush_timeout(&self) -> Result<(), WebRtcErrors> {
-        for &channel_id in &self.channel_ids {
-            self.buffer.flush_timeout(channel_id).await?;
-        }
-        Ok(())
-    }
-}
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -171,14 +85,10 @@ impl WebRtcPeer {
         user: PeerEntity,
         msg_channel: DirectMessageChannel,
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable2_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable3_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable4_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        quad_unreliable_channel: QuadUnreliableChannel,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
-        shared_context: &SharedContext,
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
 
@@ -205,25 +115,13 @@ impl WebRtcPeer {
 
         let mut peer: PeerEntity = response.peer.into();
 
-        let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
-            unreliable_data_channel,
-            unreliable2_data_channel,
-            unreliable3_data_channel,
-            unreliable4_data_channel,
-            TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
-            buffer.clone(),
-        )));
-
         Ok(Self {
             msg_channel,
             peer,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             transfer_feedback_sender,
             reliable_data_channel,
-            quad_unreliable_channel,
+            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
@@ -250,14 +148,10 @@ impl WebRtcPeer {
         msg: IntroduceRequestMessage,
         msg_channel: DirectMessageChannel,
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable2_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable3_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-        unreliable4_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
+        quad_unreliable_channel: QuadUnreliableChannel,
         thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
-        shared_context: &SharedContext,
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
@@ -278,17 +172,6 @@ impl WebRtcPeer {
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
         let mut peer: PeerEntity = msg.mine.into();
-        let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
-            unreliable_data_channel,
-            unreliable2_data_channel,
-            unreliable3_data_channel,
-            unreliable4_data_channel,
-            TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
-            TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
-            buffer.clone(),
-        )));
 
         Ok(Self {
             msg_channel,
@@ -296,7 +179,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             peer,
             reliable_data_channel,
-            quad_unreliable_channel,
+            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
