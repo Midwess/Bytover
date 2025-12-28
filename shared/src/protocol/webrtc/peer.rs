@@ -531,70 +531,68 @@ impl WebRtcPeer {
         order_id: u64,
         password: Option<String>,
     ) -> Result<(), WebRtcErrors> {
-        log::info!("Requesting session detail for order_id {}", order_id);
+        use core_services::utils::cancellation::FutureExtension;
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
+
+        log::info!("Requesting session detail for order_id {}", order_id);
+
         let request = ViewSessionDetailRequest {
             order_id,
             password,
         };
 
-        let mut response = Box::pin(self.msg_channel.stream(Request::ViewSessionRequest(request)).await?);
-        while let Some(Response::ViewSessionResponse(resp)) = response.next().await {
-            match resp.result {
-                Some(ResponseResult::Session(proto_session)) => {
-                    let session = TransferSession {
-                        order_id: proto_session.order_id,
-                        resources: vec![],
-                        progress: vec![],
-                        transfer_type: crate::entities::transfer_session::TransferType::Receive,
-                        target: crate::entities::target::TransferTarget::P2P {
-                            from_peer: Some(self.peer.clone()),
-                            signalling_key: String::new(),  // Local P2P doesn't use backend signalling
-                            scope: String::new(),  // Local P2P doesn't use scopes
-                            connection_state: crate::entities::target::P2PConnectionState::Connected,
-                        },
-                        access_url: String::new(),
-                        alias: proto_session.alias.clone().unwrap_or_default(),
-                        from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },  // Will be fetched in view model using user_id
-                        password: None,
-                        is_required_password: false,
-                        cancellation_token: CancellationToken::new(),
-                    };
+        let timeout_token = CancellationToken::timeout(Duration::from_secs(6));
 
-                    core_request.response(session).await;
-                }
-                Some(ResponseResult::ResourceUpdated(resource_proto)) => {
-                    let mut resource = LocalResource {
-                        order_id: resource_proto.order_id,
-                        name: resource_proto.name,
-                        size: resource_proto.size as u64,
-                        path: LocalResourcePath::RelativePath { // Dummy path, will be override
-                            path: format!("received/session_{}/resource_{}", order_id, resource_proto.order_id),
-                            is_private: false,
-                        },
-                        thumbnail_path: None,
-                        r#type: (ResourceTypeMessage::try_from(resource_proto.r#type).unwrap_or_default()).try_into().unwrap_or(ResourceType::File),
-                    };
+        let response_result = self.msg_channel.send(Request::ViewSessionRequest(request), None)
+            .with_cancel(&timeout_token)
+            .await
+            .map_err(|_| {
+                log::error!("Timeout waiting for session detail response");
+                WebRtcErrors::Timeout
+            })?;
 
-                    if let Some(thumbnail_bytes) = resource_proto.thumbnail_png {
-                        match self.resource_repo.save_thumbnail(thumbnail_bytes, resource.order_id).await {
-                            Ok(thumbnail_path) => {
-                                resource.thumbnail_path = Some(thumbnail_path);
-                            }
-                            Err(e) => {
-                                log::warn!("Failed to save thumbnail for resource {}: {:?}", resource.order_id, e);
-                            }
-                        }
+        let response = response_result?;
+
+        match response {
+            Response::ViewSessionResponse(resp) => {
+                match resp.result {
+                    Some(ResponseResult::Session(proto_session)) => {
+                        let session = TransferSession {
+                            order_id: proto_session.order_id,
+                            resources: vec![],
+                            progress: vec![],
+                            transfer_type: crate::entities::transfer_session::TransferType::Receive,
+                            target: crate::entities::target::TransferTarget::P2P {
+                                from_peer: Some(self.peer.clone()),
+                                signalling_key: String::new(),
+                                scope: String::new(),
+                                connection_state: crate::entities::target::P2PConnectionState::Connected,
+                            },
+                            access_url: String::new(),
+                            alias: proto_session.alias.clone().unwrap_or_default(),
+                            from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
+                            password: None,
+                            is_required_password: false,
+                            cancellation_token: CancellationToken::new(),
+                        };
+
+                        core_request.response(session).await;
                     }
-
-                    core_request.response(resource).await;
+                    Some(ResponseResult::Error(error_type)) => {
+                        let error_msg = PeerErrorsMessage::try_from(error_type)
+                            .unwrap_or(PeerErrorsMessage::InvalidRequest);
+                        core_request.response(CoreOperationOutput::Error(
+                            CoreError::PeerRequestError(error_msg)
+                        )).await;
+                        return Err(WebRtcErrors::PeerError(error_msg.to_string()));
+                    }
+                    _ => {
+                        return Err(WebRtcErrors::InvalidResponse("Unexpected response".to_string()));
+                    }
                 }
-                Some(ResponseResult::Error(error_type)) => {
-                    let error_msg = PeerErrorsMessage::try_from(error_type)
-                        .unwrap_or(PeerErrorsMessage::InvalidRequest);
-                    return Err(WebRtcErrors::PeerError(error_msg.to_string()));
-                }
-                None => break,
+            }
+            _ => {
+                return Err(WebRtcErrors::InvalidResponse("Expected ViewSessionResponse".to_string()));
             }
         }
 
@@ -649,19 +647,7 @@ impl WebRtcPeer {
             result: Some(ResponseResult::Session(proto_session))
         };
 
-        self.msg_channel.send_response(request_id.clone(), Response::ViewSessionResponse(response)).await?;
-        for resource in &session.resources {
-            let mut resource_proto = resource.to_proto();
-            if let Some(thumbnail_path) = resource.thumbnail_path.as_ref() {
-                if let Ok(mut thumbnail_cursor) = self.resource_repo.read(thumbnail_path.clone(), 64 * 1024, false).await {
-                    if let Ok(bytes) = thumbnail_cursor.read_all().await {
-                        resource_proto.thumbnail_png = Some(bytes.to_vec());
-                    };
-                };
-            }
-
-            self.msg_channel.send_response(request_id.clone(), Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::ResourceUpdated(resource_proto)) })).await?;
-        }
+        self.msg_channel.send_response(request_id, Response::ViewSessionResponse(response)).await?;
 
         Ok(())
     }

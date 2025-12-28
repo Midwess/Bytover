@@ -31,6 +31,9 @@ pub enum CoreError {
 
     #[error("")]
     PeerRequestError(PeerErrorsMessage),
+
+    #[error("Timeout: {0}")]
+    Timeout(String),
 }
 
 impl From<CloudTransferErrors> for CoreError {

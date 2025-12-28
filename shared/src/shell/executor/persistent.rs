@@ -109,7 +109,11 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().get_resource_type(path).await?;
                 Ok(CoreOperationOutput::ResourceType(result))
             }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
+                if let crate::entities::target::TransferTarget::P2P { connection_state, from_peer, .. } = &mut session.target {
+                    *connection_state = crate::entities::target::P2PConnectionState::NotConnected;
+                    *from_peer = None;
+                }
                 let session = self.transfer_session_repository().create(session).await?;
                 Ok(session.into())
             }

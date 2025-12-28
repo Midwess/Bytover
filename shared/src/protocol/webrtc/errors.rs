@@ -65,6 +65,12 @@ pub enum WebRtcErrors {
 
     #[error("Peer error: {0}")]
     PeerError(String),
+
+    #[error("Timeout waiting for response")]
+    Timeout,
+
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String),
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {
