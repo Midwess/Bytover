@@ -53,6 +53,8 @@ pub struct TransferSession {
     pub progress: Vec<TransferProgress>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
+    pub access_url: String,
+    pub alias: String,
     pub from_user: User,
     pub password: Option<String>,
     pub is_required_password: bool,
@@ -192,11 +194,13 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String, id: u64) -> Self {
+    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String, alias: String, access_url: String, id: u64) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
         Self {
             order_id: id,
+            access_url,
+            alias,
             progress: resources
                 .iter()
                 .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
@@ -205,7 +209,6 @@ impl TransferSession {
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
                 from_peer: None,
-                alias: None,
                 signalling_key,
                 scope
             },
@@ -219,13 +222,14 @@ impl TransferSession {
     pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>) -> Self {
         let is_required_password = password.is_some();
         Self {
+            alias: "".to_owned(),
+            access_url: "".to_owned(),
             order_id: 0, // It is decided by the backend
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             cancellation_token: CancellationToken::new(),
             resources,
             transfer_type: TransferType::Send,
             target: TransferTarget::Internet {
-                access_url: None,
                 to_emails
             },
             from_user: current_user,
@@ -246,35 +250,20 @@ impl TransferSession {
         }
     }
 
-    pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, is_required_password: bool) -> Self {
+    pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, alias: String, is_required_password: bool) -> Self {
         Self {
             order_id,
             progress: vec![],
             resources: vec![],
+            access_url,
+            alias,
             transfer_type: TransferType::Receive,
             cancellation_token: CancellationToken::new(),
             target: TransferTarget::Internet {
-                access_url: Some(access_url),
                 to_emails: vec![],
             },
             from_user: from_user,
             password: None,
-            is_required_password,
-        }
-    }
-
-    pub async fn send(order_id: u64, resources: Vec<LocalResource>, target: TransferTarget, from_user: Option<User>, password: Option<String>, is_required_password: bool) -> Self {
-        let mut resources = resources;
-        resources.sort_by(|a, b| a.size.cmp(&b.size));
-        Self {
-            cancellation_token: CancellationToken::new(),
-            order_id,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
-            resources,
-            transfer_type: TransferType::Send,
-            target,
-            from_user: from_user.unwrap_or_else(|| User { id: 0, email: String::new(), name: String::new(), avatar: String::new() }),
-            password,
             is_required_password,
         }
     }
@@ -317,18 +306,10 @@ impl TransferSession {
             return true;
         }
 
-        let TransferTarget::Internet {
-            access_url: Some(access_url),
-            ..
-        } = &self.target
-        else {
-            return false
-        };
-
         let from_user = &self.from_user;
 
         let mut name: String = "".to_string();
-        if let Ok(url) = url::Url::parse(access_url) {
+        if let Ok(url) = url::Url::parse(&self.access_url) {
             let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
                 return false
             };

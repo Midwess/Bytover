@@ -69,10 +69,11 @@ where
                         transfer_type: TransferType::Receive,
                         target: TransferTarget::P2P {
                             from_peer: None,
-                            alias: Some(alias.clone()),
                             signalling_key: p2p_session.signalling_room_id,
                             scope: p2p_session.signalling_scope,
                         },
+                        access_url: String::new(),
+                        alias: alias.clone(),
                         from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
                         password: None,
                         is_required_password: p2p_session.password_protected,
@@ -95,7 +96,7 @@ where
                 };
 
                 let transfer_session =
-                    TransferSession::from_public_overview(session_key.order_id, user, access_url, is_required_password);
+                    TransferSession::from_public_overview(session_key.order_id, user, access_url.clone(), access_url, is_required_password);
 
                 Ok(Some(transfer_session).into())
             }

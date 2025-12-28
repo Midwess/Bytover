@@ -6,12 +6,10 @@ use crate::entities::peer::Peer;
 pub enum TransferTarget {
     P2P {
         from_peer: Option<Peer>,
-        alias: Option<String>,
         signalling_key: String,
         scope: String
     },
     Internet {
-        access_url: Option<String>,
         to_emails: Vec<String>
     }
 }

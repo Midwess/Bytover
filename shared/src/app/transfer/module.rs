@@ -250,14 +250,13 @@ impl AppModule<BitBridge> for TransferModule {
                         password,
                         p2p_session.signalling_room_id.clone(),
                         p2p_session.signalling_scope.clone(),
+                        p2p_session.alias.clone(),
+                        String::new(),
                         p2p_session.session_id,
                     );
 
-                    // Store user info and alias in session
+                    // Store user info in session
                     session.from_user = user.unwrap();
-                    if let TransferTarget::P2P { alias, .. } = &mut session.target {
-                        *alias = Some(p2p_session.alias.clone());
-                    }
 
                     it.update_model(TransferSessionModelEvent::Add(session.clone()));
 
@@ -533,21 +532,21 @@ impl AppModule<BitBridge> for TransferModule {
             .filter_map(|it| {
                 let from_user = &it.from_user;
                 let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading) = match &it.target {
-                    TransferTarget::P2P { from_peer, alias, .. } => {
+                    TransferTarget::P2P { from_peer, .. } => {
                         let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
                         let has_details = !it.resources.is_empty();
-                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), "Nearby".to_string(), alias.clone(), None, None, it.is_required_password, !has_details)
+                        let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
+                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), "Nearby".to_string(), alias, None, None, it.is_required_password, !has_details)
                     }
-                    TransferTarget::Internet { access_url, .. } => {
-                        let access_url_ref = access_url.as_ref()?;
-                        let alias = Url::parse(access_url_ref).ok()
-                            .and_then(|url| url.query_pairs().find(|it| it.0 == "session").map(|it| it.1.to_string()));
+                    TransferTarget::Internet { .. } => {
+                        let access_url_ref = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
+                        let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
                         let name = match &alias {
                             Some(a) => format!("{} ({})", from_user.name, a),
                             None => from_user.name.to_string()
                         };
                         let is_loading = it.resources.is_empty();
-                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, Some(access_url_ref.clone()), it.password.clone(), it.is_required_password, is_loading)
+                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, access_url_ref, it.password.clone(), it.is_required_password, is_loading)
                     }
                 };
 
@@ -623,22 +622,24 @@ impl AppModule<BitBridge> for TransferModule {
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_public())
                 .find_map(|it| {
-                    let access_url = match &it.target {
-                        TransferTarget::Internet { access_url, .. } => access_url.clone(),
-                        _ => return None
-                    };
-                    Some(CloudSession {
-                        display_download_speed: match access_url.is_none() {
-                            true => "Initializing...".to_owned(),
-                            false => it.status().to_string()
+                    match &it.target {
+                        TransferTarget::Internet { .. } => {
+                            let access_url = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
+                            Some(CloudSession {
+                                display_download_speed: match access_url.is_none() {
+                                    true => "Initializing...".to_owned(),
+                                    false => it.status().to_string()
+                                },
+                                password: it.password.clone(),
+                                session_id: it.order_id.to_string(),
+                                is_completed: it.is_completed(),
+                                is_in_progress: !it.is_completed() && !it.is_canceled(),
+                                progress: it.total_progress(),
+                                access_url
+                            })
                         },
-                        password: it.password.clone(),
-                        session_id: it.order_id.to_string(),
-                        is_completed: it.is_completed(),
-                        is_in_progress: !it.is_completed() && !it.is_canceled(),
-                        progress: it.total_progress(),
-                        access_url
-                    })
+                        _ => None
+                    }
                 }),
             p2p_sessions: model.transfer.sessions.iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))

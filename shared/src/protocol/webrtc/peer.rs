@@ -549,10 +549,11 @@ impl WebRtcPeer {
                         transfer_type: crate::entities::transfer_session::TransferType::Receive,
                         target: crate::entities::target::TransferTarget::P2P {
                             from_peer: Some(self.peer.clone()),
-                            alias: proto_session.alias.clone(),
                             signalling_key: String::new(),  // Local P2P doesn't use backend signalling
                             scope: String::new(),  // Local P2P doesn't use scopes
                         },
+                        access_url: String::new(),
+                        alias: proto_session.alias.clone().unwrap_or_default(),
                         from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },  // Will be fetched in view model using user_id
                         password: None,
                         is_required_password: false,
@@ -628,11 +629,12 @@ impl WebRtcPeer {
             return Ok(())
         };
 
-        // Extract user_id and alias from session target if available
-        let (user_id, alias) = if let crate::entities::target::TransferTarget::P2P { alias, .. } = &session.target {
-            (Some(session.from_user.id), alias.clone())
+        // Extract user_id and alias from session
+        let user_id = Some(session.from_user.id);
+        let alias = if !session.alias.is_empty() {
+            Some(session.alias.clone())
         } else {
-            (None, None)
+            None
         };
 
         let proto_session = P2pTransferSessionMessage {
