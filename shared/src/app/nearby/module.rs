@@ -6,6 +6,9 @@ use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::TransferType;
+use crate::app::transfer::module::TransferEvent;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +36,7 @@ pub enum NearbyEvent {
     ClearNearbyPeers,
     AddFindingScope(FindingScope),
     RemoveFindingScope(FindingScope),
+    PeerUpdated { peer: Peer },
 }
 
 impl AppModule<BitBridge> for NearbyModule {
@@ -83,6 +87,66 @@ impl AppModule<BitBridge> for NearbyModule {
                 Command::handle_result(|it| async move {
                     it.app().run(P2POperation::update_finding_scopes(scopes)).await
                 })
+            }
+            NearbyEvent::PeerUpdated { peer } => {
+                if let Some(existing_peer) = model.nearby.peers.iter_mut().find(|p| p.id == peer.id) {
+                    *existing_peer = peer.clone();
+                } else {
+                    model.nearby.peers.push(peer.clone());
+                }
+
+                let mut peer_just_connected = false;
+                let mut session_order_id = 0;
+                let mut peer_lost_ownership = false;
+
+                let owned_scopes = peer.owned_scopes();
+                for session in model.transfer.sessions.iter_mut() {
+                    if session.transfer_type != TransferType::Receive {
+                        continue;
+                    }
+
+                    if let TransferTarget::P2P {
+                        ref mut from_peer,
+                        ref scope,
+                        ..
+                    } = session.target
+                    {
+                        let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope);
+
+                        if from_peer.is_none() && is_peer_owned {
+                            *from_peer = Some(peer.clone());
+                            peer_just_connected = true;
+                            session_order_id = session.order_id;
+
+                            break;
+                        }
+                        else if let Some(ref connected_peer) = from_peer {
+                            if connected_peer.id == peer.id && !is_peer_owned {
+                                *from_peer = None;
+                                session.resources.clear();
+                                session.progress.clear();
+                                peer_lost_ownership = true;
+
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if peer_just_connected {
+                    log::info!("Sending detail request for session {} to peer {}", session_order_id, peer.id);
+                    return Command::event(crate::app::AppEvent::Transfer(TransferEvent::RequestSessionDetail {
+                        peer_id: peer.id,
+                        order_id: session_order_id,
+                        password: None
+                    })).then(Command::render());
+                }
+
+                if peer_lost_ownership {
+                    return Command::render();
+                }
+
+                Command::render()
             }
         }
     }

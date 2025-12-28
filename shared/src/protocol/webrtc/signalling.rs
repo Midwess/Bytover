@@ -326,7 +326,6 @@ impl Signaller for WebSignaller {
                 continue;
             };
 
-            // Extract scopes before converting to PeerEvent
             let scopes = message.scopes.clone();
 
             let response = SignallingPeerResponse(message);
@@ -334,7 +333,6 @@ impl Signaller for WebSignaller {
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
                 if let Some(peer_weak) = self.shared_context.get_peer(id).await {
                     if let Some(peer_arc) = peer_weak.upgrade() {
-                        log::info!("Updating scopes for existing peer {id:?}: {scopes:?}");
                         peer_arc.update_scopes(scopes).await;
                     }
                 }

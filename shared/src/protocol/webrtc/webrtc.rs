@@ -59,7 +59,7 @@ impl WebRtc {
     }
 
     pub fn is_running(&self) -> bool {
-        self.is_running.load(std::sync::atomic::Ordering::SeqCst)
+        self.is_running.load(SeqCst)
     }
 
     pub async fn stop(&self) {
@@ -68,13 +68,14 @@ impl WebRtc {
             return;
         }
 
-        self.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.is_running.store(false, SeqCst);
         self.shared_context.remove_all().await;
         sleep(Duration::from_millis(500)).await;
         log::info!("Stopping WebRTC server");
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
+        log::info!("Updating finding scopes: {:?}", scopes);
         self.shared_context.update_finding_scopes(scopes).await;
     }
 

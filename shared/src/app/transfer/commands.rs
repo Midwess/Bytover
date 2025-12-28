@@ -286,32 +286,7 @@ impl AppCommand {
         order_id: u64,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        let mut stream = self.stream_from_shell(P2POperation::ViewSessionDetail {
-            peer_id,
-            order_id,
-            password
-        }.into());
-
-        let session_id = TransferSessionId {
-            order_id: Some(order_id.to_string()),
-            transfer_type: Some(TransferType::Receive)
-        };
-
-        while let Some(output) = stream.next().await {
-            match output {
-                CoreOperationOutput::TransferSession(session) => {
-                    // Save session to persistent storage
-                    let _ = self.run(TransferSessionPersistentOperation::save(session)).await;
-                    break;
-                }
-                CoreOperationOutput::Error(err) => {
-                    log::error!("Failed to load session detail: {err:?}");
-                    break;
-                }
-                _ => continue
-            }
-        }
-
+        let _ = self.run(P2POperation::view_session_detail(peer_id, order_id, password)).await?;
         Ok(())
     }
 

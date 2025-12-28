@@ -26,7 +26,7 @@ impl FindingScope {
             }
         };
 
-        let is_direct = protocol.contains("direct") || protocol.contains("local");
+        let is_direct = protocol.contains("direct");
         let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
         let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
 
@@ -61,7 +61,7 @@ impl FindingScope {
             if self.is_owner {
                 format!("{};owner", base)
             } else {
-                format!("direct:{};member", base)
+                format!("{};member", base)
             }
         }
         else {

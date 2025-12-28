@@ -71,6 +71,11 @@ pub enum P2POperationOutput {
         session_order_id: u64,
         resource_order_id: u64,
         transfer_id: u16
+    },
+    ReceivedResourceNotification {
+        session_order_id: u64,
+        resource: LocalResource,
+        peer_id: String,
     }
 }
 

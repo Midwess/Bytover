@@ -73,11 +73,11 @@ impl TransferSession {
         }
 
         let msg = PublicTransferSessionMessage {
-            alias: self.alias.clone(),
+            alias: self.alias(),
             order_id: self.order_id(),
             user_id: self.user_order_id(),
             password: self.password(),
-            access_url: self.access_url.clone(),
+            access_url: self.access_url(app.web_url.clone().unwrap_or_default()),
             resources,
             progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
             to_emails: self.to_emails().clone()

@@ -148,7 +148,7 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(scopes)) => {
                     let mut updated_peer = peer.clone();
                     updated_peer.scopes = scopes;
-                    self.notify_event(TransferEvent::PeerUpdated { peer: updated_peer });
+                    self.notify_event(NearbyEvent::PeerUpdated { peer: updated_peer });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
@@ -158,6 +158,9 @@ impl AppCommand {
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id }) => {
                     self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification { session_order_id, resource, peer_id }) => {
+                    self.notify_event(TransferEvent::ResourceNotification { session_order_id, resource, peer_id });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");
@@ -183,8 +186,6 @@ impl AppCommand {
     }
 
     fn update_p2p_sessions_with_peer(&self, peer: Peer) {
-        // Create an event to update the session
-        // This will be handled by the transfer module
-        self.notify_event(TransferEvent::PeerUpdated { peer });
+        self.notify_event(NearbyEvent::PeerUpdated { peer });
     }
 }

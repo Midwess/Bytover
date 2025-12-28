@@ -6,7 +6,7 @@ use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 #[cfg(any(feature = "swift", feature = "java"))]
 use native::repository::path_resolver::{PathResolverMessage, PathResolverResponseMessage};
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::bitbridge::PeerErrorsMessage;
+use schema::devlog::bitbridge::{PeerErrorsMessage, ResourceNotificationRequest};
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
@@ -33,7 +33,7 @@ use shared::app::BitBridge;
 use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
-use shared::entities::target::TransferTarget;
+use shared::entities::target::{P2PConnectionState, TransferTarget};
 use shared::entities::token::Token;
 use shared::entities::transfer_method::TransferMethodSelection;
 use shared::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
@@ -116,6 +116,9 @@ fn main() {
     gen.register_type::<ShelfViewModel>().unwrap();
     gen.register_type::<ViewSessionDetailResponseResult>().unwrap();
     gen.register_type::<PeerErrorsMessage>().unwrap();
+    gen.register_type::<P2POperationOutput>().unwrap();
+    gen.register_type::<P2PConnectionState>().unwrap();
+    gen.register_type::<ResourceNotificationRequest>().unwrap();
 
     gen.register_app::<BitBridge>().unwrap();
 
