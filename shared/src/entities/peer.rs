@@ -1,9 +1,10 @@
-use chrono::Utc;
 use matchbox_protocol::PeerId;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::entities::device::DeviceInfo;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::TransferSession;
 
 // Peer is represent for the information that you want other
 // people to know about
@@ -14,7 +15,7 @@ pub struct Peer {
     pub avatar_url: String,
     pub email: Option<String>,
     pub device: DeviceInfo,
-    pub scopes: Vec<String>
+    pub scopes: Vec<Scope>
 }
 
 impl Peer {
@@ -27,16 +28,34 @@ impl Peer {
         self.id().into()
     }
 
-    pub fn random_avatar() -> String {
-        let animals = [
-            "Penguin", "Rabbit", "Sheep", "Squirrel", "Tiger", "Bear", "Cat", "Chicken", "Cow", "Deer", "Dog", "Elephant", "Fox",
-            "Giraffe", "Koala", "Lion", "Owl", "Panda"
-        ];
+    pub fn owned_scopes(&self) -> Vec<&Scope> {
+        self.scopes.iter().filter(|it| it.is_owner).collect::<Vec<_>>()
+    }
 
-        let rng = (Utc::now().timestamp_millis() % (animals.len() as i64)) as usize;
-        let chosen_animal = animals[rng];
+    pub fn member_scopes(&self) -> Vec<&Scope> {
+        self.scopes.iter().filter(|it| !it.is_owner).collect::<Vec<_>>()
+    }
 
-        format!("https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/animal_avatars/{chosen_animal}.png")
+    pub fn is_owned(&self, session: &TransferSession) -> bool {
+        let TransferTarget::P2P {
+            scope,
+            ..
+        } = &session.target else {
+            return false;
+        };
+
+        self.owned_scopes().iter().any(|it| it.scope_id.eq(&scope))
+    }
+
+    pub fn is_member(&self, session: &TransferSession) -> bool {
+        let TransferTarget::P2P {
+            scope,
+            ..
+        } = &session.target else {
+            return false;
+        };
+
+        self.member_scopes().iter().any(|it| it.scope_id.eq(&scope))
     }
 }
 
@@ -45,11 +64,7 @@ impl From<PeerMessage> for Peer {
         Self {
             id: value.peer_id,
             name: value.name.or_else(|| Some("Unknown".to_string())),
-            avatar_url: if value.avatar_url.is_empty() {
-                Self::random_avatar()
-            } else {
-                value.avatar_url
-            },
+            avatar_url: value.avatar_url,
             email: value.email,
             device: value.device.into(),
             scopes: vec![]
@@ -66,5 +81,38 @@ impl From<Peer> for PeerMessage {
             email: value.email,
             device: value.device.into()
         }
+    }
+}
+
+#[derive(Clone, Debug, Eq)]
+pub struct Scope {
+    scope_id: String,
+    is_direct: bool,
+    is_owner: bool,
+}
+
+impl PartialEq for Scope {
+    fn eq(&self, other: &Self) -> bool {
+        self.scope_id.eq(&other.scope_id)
+    }
+}
+
+impl Scope {
+    fn new(request_scope: &str) -> Self {
+        let (protocol, scope) = {
+            let it = request_scope.split("://").collect::<Vec<_>>();
+            if it.len() < 2 {
+                ("".to_owned(), request_scope.to_owned())
+            }
+            else {
+                (it[0].to_owned(), it[1].to_owned())
+            }
+        };
+
+        let is_direct = protocol.contains("direct");
+        let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
+        let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
+
+        Self { scope_id, is_direct, is_owner }
     }
 }

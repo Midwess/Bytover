@@ -240,6 +240,20 @@ export class WasmCore {
         return clouds
     }
 
+    public useP2PSession() {
+        const [session, setSession] = useState(this.transferState.get()?.p2p_sessions?.[0]);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const p2pSession = transferState?.p2p_sessions?.[0];
+                if (!isEqual(session, p2pSession)) {
+                    setSession(p2pSession);
+                }
+            })
+        }, [session]);
+
+        return session;
+    }
+
     public useNearbySessionsList() {
         const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
         useEffect(() => {

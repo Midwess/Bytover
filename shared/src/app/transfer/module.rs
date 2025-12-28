@@ -42,7 +42,8 @@ pub struct TransferViewModel {
     transfer_method: TransferMethodSelection,
     received_sessions: Vec<ReceiveSessionViewModel>,
     received_cloud_sessions: Vec<ReceiveSessionViewModel>,
-    cloud_session: Option<CloudSession>
+    cloud_session: Option<CloudSession>,
+    p2p_sessions: Vec<CloudSession>
 }
 
 pub struct TransferModule;
@@ -280,7 +281,7 @@ impl AppModule<BitBridge> for TransferModule {
                         ..
                     } = session.target
                     {
-                        if from_peer.is_none() && peer.scopes.contains(scope) {
+                        if from_peer.is_none() && peer.is_owned(&session) {
                             log::info!(
                                 "Updating P2P session {} with peer {} (scope: {})",
                                 session.order_id,
@@ -639,6 +640,21 @@ impl AppModule<BitBridge> for TransferModule {
                         access_url
                     })
                 }),
+            p2p_sessions: model.transfer.sessions.iter()
+                .filter(|it| matches!(it.transfer_type, TransferType::Send))
+                .filter(|it| it.target.is_peer())
+                .filter_map(|it| {
+                    Some(CloudSession {
+                        display_download_speed: it.status().to_string(),
+                        password: it.password.clone(),
+                        session_id: it.order_id.to_string(),
+                        is_completed: it.is_completed(),
+                        is_in_progress: !it.is_completed() && !it.is_canceled(),
+                        progress: it.total_progress(),
+                        access_url: None
+                    })
+                })
+                .collect(),
         }
     }
 }

@@ -797,13 +797,24 @@ function UrlInputWithCopy({ url }: { url: string }) {
 
 function P2PSend() {
     const [password, setPassword] = useState('')
-    const nearbyState = window.core.useNearbyState?.() || { peers: [] }
-    const nearbyAvailable = nearbyState.peers.length > 0
+    const p2pSession = core.useP2PSession()
+    const isInProgress = p2pSession?.is_in_progress ?? false
 
     const handleStartTransfer = () => {
         const pwd = password || null
-        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(nearbyAvailable, pwd)))
+        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(false, pwd)))
         setPassword('')
+    }
+
+    const handleStopTransfer = () => {
+        if (p2pSession?.session_id) {
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantCancelTransfer(
+                    BigInt(p2pSession.session_id),
+                    new TransferTypeVariantSend()
+                )
+            ))
+        }
     }
 
     return <>
@@ -821,13 +832,23 @@ function P2PSend() {
                     type="password"
                     maxLength={20}
                     placeholder="pwd@123"
+                    disabled={isInProgress}
                 />
-                <Button
-                    className="w-fit h-[35px] bg-bluePrimary text-primary"
-                    onClick={handleStartTransfer}
-                >
-                    Start Transfer
-                </Button>
+                {isInProgress ? (
+                    <Button
+                        className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary"
+                        onClick={handleStopTransfer}
+                    >
+                        Cancel
+                    </Button>
+                ) : (
+                    <Button
+                        className="w-fit h-[35px] bg-bluePrimary text-primary"
+                        onClick={handleStartTransfer}
+                    >
+                        Start Transfer
+                    </Button>
+                )}
             </div>
         </div>
     </>

@@ -344,6 +344,7 @@ impl Signaller for WebSignaller {
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
                 // Store scopes for this peer
+                log::info!("New peer found: {id:?}, scopes: {scopes:?}");
                 self.shared_context.update_peer_scopes(id, scopes).await;
 
                 if id.0 <= self.peer_id.0 {
