@@ -250,6 +250,7 @@ impl AppModule<BitBridge> for TransferModule {
                         password,
                         p2p_session.signalling_room_id.clone(),
                         p2p_session.signalling_scope.clone(),
+                        p2p_session.session_id,
                     );
 
                     // Store user info and alias in session
@@ -260,7 +261,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                     it.update_model(TransferSessionModelEvent::Add(session.clone()));
 
-                    let scope = FindingScope::Global(p2p_session.signalling_room_id);
+                    let scope = FindingScope::new(&p2p_session.signalling_room_id);
                     it.update_model(NearbyEvent::AddFindingScope(scope));
 
                     Ok(())
@@ -270,6 +271,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let mut peer_just_connected = false;
                 let mut session_order_id = 0;
 
+                let owned_scopes = peer.owned_scopes();
                 for session in model.transfer.sessions.iter_mut() {
                     if session.transfer_type != TransferType::Receive {
                         continue;
@@ -281,7 +283,9 @@ impl AppModule<BitBridge> for TransferModule {
                         ..
                     } = session.target
                     {
-                        if from_peer.is_none() && peer.is_owned(&session) {
+                        log::info!("Peer {} updated, owned scopes: {:?} vs session scope {}", peer.id, owned_scopes, scope);
+                        let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope);
+                        if from_peer.is_none() && is_peer_owned {
                             log::info!(
                                 "Updating P2P session {} with peer {} (scope: {})",
                                 session.order_id,
@@ -334,7 +338,7 @@ impl AppModule<BitBridge> for TransferModule {
                                 session.resources.clear();
                                 session.progress.clear();
 
-                                scope_to_remove = Some(FindingScope::Global(signalling_key.clone()));
+                                scope_to_remove = Some(FindingScope::new(signalling_key));
 
                                 break;
                             }
@@ -445,7 +449,7 @@ impl AppModule<BitBridge> for TransferModule {
                 match &session.target {
                     TransferTarget::P2P { signalling_key, from_peer, .. } => {
                         if from_peer.is_none() {
-                            let scope = FindingScope::Global(signalling_key.clone());
+                            let scope = FindingScope::new(signalling_key);
                             if !model.nearby.finding_scopes.contains(&scope) {
                                 log::info!("Adding scope {} for session {} - peer not connected", signalling_key, session.order_id);
                                 return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));

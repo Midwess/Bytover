@@ -1,37 +1,56 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FindingScope {
-    Global(String),
-    Local(String)
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
+pub struct FindingScope {
+    scope_id: String,
+    is_direct: bool,
+    is_owner: bool,
+}
+
+impl PartialEq for FindingScope {
+    fn eq(&self, other: &Self) -> bool {
+        self.scope_id.eq(&other.scope_id)
+    }
 }
 
 impl FindingScope {
-    pub fn from_string(s: String) -> Option<Self> {
-        let parts = s.split(':').collect::<Vec<&str>>();
-        if parts.len() < 2 {
-            return None;
-        }
-
-        let Some(scope_key) = parts[1].split('-').next() else {
-            return None;
+    pub fn new(request_scope: &str) -> Self {
+        let (protocol, scope) = {
+            let it = request_scope.split("://").collect::<Vec<_>>();
+            if it.len() < 2 {
+                ("".to_owned(), request_scope.to_owned())
+            }
+            else {
+                (it[0].to_owned(), it[1].to_owned())
+            }
         };
 
-        if parts[0] == "public" {
-            return Some(FindingScope::Global(scope_key.to_string()));
-        } else if parts[0] == "local" {
-            return Some(FindingScope::Local(scope_key.to_string()));
-        }
+        let is_direct = protocol.contains("direct") || protocol.contains("local");
+        let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
+        let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
 
-        None
+        Self { scope_id, is_direct, is_owner }
+    }
+
+    pub fn scope_id(&self) -> &str {
+        &self.scope_id
+    }
+
+    pub fn is_direct(&self) -> bool {
+        self.is_direct
+    }
+
+    pub fn is_owner(&self) -> bool {
+        self.is_owner
+    }
+
+    pub fn from_string(s: String) -> Option<Self> {
+        Some(FindingScope::new(&s))
     }
 
     pub fn as_string(&self) -> String {
-        match self {
-            FindingScope::Global(content) => format!("public:{content}"),
-            FindingScope::Local(content) => format!("local:{content}")
-        }
+        self.scope_id.clone()
     }
 
     fn get_gmt_offset() -> i32 {
@@ -44,11 +63,6 @@ impl FindingScope {
 
 impl From<String> for FindingScope {
     fn from(s: String) -> Self {
-        let parts = s.split(':').collect::<Vec<&str>>();
-        if parts[0] == "public" {
-            FindingScope::Global(parts[1].to_string())
-        } else {
-            FindingScope::Local(parts[1].to_string())
-        }
+        FindingScope::new(&s)
     }
 }

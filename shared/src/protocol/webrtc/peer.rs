@@ -2,6 +2,7 @@ use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
 use crate::protocol::webrtc::errors::WebRtcErrors;
@@ -203,10 +204,9 @@ impl WebRtcPeer {
 
         let mut peer: PeerEntity = response.peer.into();
 
-        // Look up scopes for this peer from SharedContext
         let peer_id = peer.peer_id();
         let scopes = shared_context.get_peer_scopes(&peer_id).await;
-        peer.scopes = scopes;
+        peer.scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
 
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
@@ -280,11 +280,10 @@ impl WebRtcPeer {
         msg_channel.send_response(request_id, introduce_response).await?;
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
-        // Create peer and look up scopes
         let mut peer: PeerEntity = msg.mine.into();
         let peer_id = peer.peer_id();
         let scopes = shared_context.get_peer_scopes(&peer_id).await;
-        peer.scopes = scopes;
+        peer.scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
 
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
@@ -337,13 +336,16 @@ impl WebRtcPeer {
                 };
             }
             Request::ViewSessionRequest(req) => {
+                log::info!("Received view session request for order_id {}", req.order_id);
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
                     peer_id: self.peer.id().to_string(),
                     request_id,
                     order_id: req.order_id,
                     password: req.password,
                 });
+
                 if let Some(core_request) = self.core_request() {
+                    log::info!("Forwarding to core");
                     core_request.response(response).await;
                 }
             }
@@ -374,6 +376,15 @@ impl WebRtcPeer {
         log::info!("Peer disconnected, will cancel all transfers");
         self.transfers_context.cancel_all_transfers().await;
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
+        if let Some(core_request) = self.core_request() {
+            core_request.response(response).await;
+        }
+    }
+
+    pub async fn update_scopes(&self, scopes: Vec<String>) {
+        let finding_scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
+        log::info!("Updating peer {} scopes to: {:?}", self.peer.id(), finding_scopes);
+        let response = CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(finding_scopes));
         if let Some(core_request) = self.core_request() {
             core_request.response(response).await;
         }
@@ -603,9 +614,11 @@ impl WebRtcPeer {
         session: Option<TransferSession>,
         error: Option<CoreError>,
     ) -> Result<(), WebRtcErrors> {
+        log::info!("Sending session detail response");
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
 
         if let Some(error_msg) = error {
+            log::error!("Failed to send session detail response: {:?}", error_msg);
             match error_msg {
                 CoreError::PeerRequestError(e) => {
                     self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(e.into())) })).await?;
@@ -619,6 +632,7 @@ impl WebRtcPeer {
             return Ok(())
         }
 
+        log::info!("Sending session detail response");
         let Some(session) = session else {
             return Ok(())
         };

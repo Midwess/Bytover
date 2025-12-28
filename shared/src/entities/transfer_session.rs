@@ -192,11 +192,11 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String) -> Self {
+    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String, id: u64) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
         Self {
-            order_id: gen_id_sync(),
+            order_id: id,
             progress: resources
                 .iter()
                 .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))

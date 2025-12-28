@@ -19,10 +19,10 @@ pub struct NetworkResponse {
 
 impl NetworkResponse {
     pub fn finding_scopes(&self) -> Vec<FindingScope> {
-        let mut scopes = vec![FindingScope::Global(self.ip_address.clone())];
+        let mut scopes = vec![FindingScope::new(&self.ip_address)];
 
         for code in &self.location_codes {
-            scopes.push(FindingScope::Local(code.to_string()))
+            scopes.push(FindingScope::new(&format!("local://{}", code)))
         }
 
         scopes

@@ -44,7 +44,7 @@ impl AppCommand {
 
         // If P2P session, remove scope from Nearby module
         if let TransferTarget::P2P { ref signalling_key, .. } = transfer_session.target {
-            let finding_scope = FindingScope::Global(signalling_key.clone());
+            let finding_scope = FindingScope::new(&signalling_key);
             self.update_model(NearbyEvent::RemoveFindingScope(finding_scope));
         }
 
@@ -252,7 +252,8 @@ impl AppCommand {
         session: Option<TransferSession>
     ) -> Result<(), CoreError> {
         let Some(session) = session else {
-           return Ok(());
+            log::warn!("Failed to load session detail: session not found");
+            return Ok(());
         };
 
         let is_password_valid = if session.is_required_password {
@@ -266,6 +267,7 @@ impl AppCommand {
         };
 
         if !is_password_valid {
+            log::warn!("Failed to load session detail: invalid password");
             return Ok(());
         }
 

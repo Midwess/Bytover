@@ -49,6 +49,7 @@ pub enum P2POperation {
 pub enum P2POperationOutput {
     PeerConnected(Peer),
     PeerDisconnected(),
+    PeerScopesUpdated(Vec<FindingScope>),
     CancelSessionRequest { session_id: u64 },
     NearbyServerStopped,
     AlreadyRunning,

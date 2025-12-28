@@ -66,15 +66,15 @@ impl P2PSession {
         format!("{base_url}/p2p?session={}", self.alias)
     }
 
-    pub fn get_scope(&self) -> &str {
-        &self.alias
+    pub fn get_scope(&self) -> String {
+        format!("{}-{}", self.alias, self.session_id)
     }
 
     pub fn owner_signalling_key(&self) -> String {
-        format!("direct://{}-{};owner", self.alias, self.session_id)
+        format!("direct://{};owner", self.get_scope())
     }
 
     pub fn member_signalling_key(&self) -> String {
-        format!("direct://{}-{};member", self.alias, self.session_id)
+        format!("direct://{};member", self.get_scope())
     }
 }

@@ -3,6 +3,7 @@ use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::entities::device::DeviceInfo;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::TransferSession;
 
@@ -15,7 +16,7 @@ pub struct Peer {
     pub avatar_url: String,
     pub email: Option<String>,
     pub device: DeviceInfo,
-    pub scopes: Vec<Scope>
+    pub scopes: Vec<FindingScope>
 }
 
 impl Peer {
@@ -28,12 +29,13 @@ impl Peer {
         self.id().into()
     }
 
-    pub fn owned_scopes(&self) -> Vec<&Scope> {
-        self.scopes.iter().filter(|it| it.is_owner).collect::<Vec<_>>()
+    pub fn owned_scopes(&self) -> Vec<&FindingScope> {
+        log::info!("Owned scopes: {:?}", self.scopes);
+        self.scopes.iter().filter(|it| it.is_owner()).collect::<Vec<_>>()
     }
 
-    pub fn member_scopes(&self) -> Vec<&Scope> {
-        self.scopes.iter().filter(|it| !it.is_owner).collect::<Vec<_>>()
+    pub fn member_scopes(&self) -> Vec<&FindingScope> {
+        self.scopes.iter().filter(|it| !it.is_owner()).collect::<Vec<_>>()
     }
 
     pub fn is_owned(&self, session: &TransferSession) -> bool {
@@ -44,7 +46,7 @@ impl Peer {
             return false;
         };
 
-        self.owned_scopes().iter().any(|it| it.scope_id.eq(&scope))
+        self.owned_scopes().iter().any(|it| it.scope_id().eq(scope))
     }
 
     pub fn is_member(&self, session: &TransferSession) -> bool {
@@ -55,7 +57,7 @@ impl Peer {
             return false;
         };
 
-        self.member_scopes().iter().any(|it| it.scope_id.eq(&scope))
+        self.member_scopes().iter().any(|it| it.scope_id().eq(scope))
     }
 }
 
@@ -84,35 +86,3 @@ impl From<Peer> for PeerMessage {
     }
 }
 
-#[derive(Clone, Debug, Eq)]
-pub struct Scope {
-    scope_id: String,
-    is_direct: bool,
-    is_owner: bool,
-}
-
-impl PartialEq for Scope {
-    fn eq(&self, other: &Self) -> bool {
-        self.scope_id.eq(&other.scope_id)
-    }
-}
-
-impl Scope {
-    fn new(request_scope: &str) -> Self {
-        let (protocol, scope) = {
-            let it = request_scope.split("://").collect::<Vec<_>>();
-            if it.len() < 2 {
-                ("".to_owned(), request_scope.to_owned())
-            }
-            else {
-                (it[0].to_owned(), it[1].to_owned())
-            }
-        };
-
-        let is_direct = protocol.contains("direct");
-        let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
-        let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
-
-        Self { scope_id, is_direct, is_owner }
-    }
-}

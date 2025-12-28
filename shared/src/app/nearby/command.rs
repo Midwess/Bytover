@@ -144,6 +144,11 @@ impl AppCommand {
                     self.notify_event(TransferEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(scopes)) => {
+                    let mut updated_peer = peer.clone();
+                    updated_peer.scopes = scopes;
+                    self.notify_event(TransferEvent::PeerUpdated { peer: updated_peer });
+                }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }

@@ -148,6 +148,7 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
+        self.peer_scopes.lock().await.remove(peer_id);
         let peer_weak = self.peers.lock().await.remove(peer_id).and_then(|it| it.get().cloned());
         if let Some(peer_weak) = peer_weak {
             if let Some(peer) = peer_weak.upgrade() {
@@ -177,9 +178,9 @@ impl SharedContext {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
     }
 
-    pub async fn update_peer_scopes(&self, peer_id: &PeerId, scopes: Vec<String>) {
+    pub async fn update_peer_scopes(&self, peer_id: &PeerId, scopes: &[String]) {
         let mut peer_scopes = self.peer_scopes.lock().await;
-        peer_scopes.insert(*peer_id, scopes);
+        peer_scopes.insert(*peer_id, scopes.to_vec());
     }
 
     pub async fn get_peer_scopes(&self, peer_id: &PeerId) -> Vec<String> {
@@ -343,9 +344,14 @@ impl Signaller for WebSignaller {
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
-                // Store scopes for this peer
-                log::info!("New peer found: {id:?}, scopes: {scopes:?}");
-                self.shared_context.update_peer_scopes(id, scopes).await;
+                self.shared_context.update_peer_scopes(id, &scopes).await;
+
+                if let Some(peer_weak) = self.shared_context.get_peer(id).await {
+                    if let Some(peer_arc) = peer_weak.upgrade() {
+                        log::info!("Updating scopes for existing peer {id:?}: {scopes:?}");
+                        peer_arc.update_scopes(scopes).await;
+                    }
+                }
 
                 if id.0 <= self.peer_id.0 {
                     continue;
