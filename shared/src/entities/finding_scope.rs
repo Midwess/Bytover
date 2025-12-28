@@ -50,7 +50,23 @@ impl FindingScope {
     }
 
     pub fn as_string(&self) -> String {
-        self.scope_id.clone()
+        let protocol = if self.is_direct { "direct" } else { "" };
+        let base = if protocol.is_empty() {
+            self.scope_id.clone()
+        } else {
+            format!("{}://{}", protocol, self.scope_id)
+        };
+
+        if self.is_direct {
+            if self.is_owner {
+                format!("{};owner", base)
+            } else {
+                format!("direct:{};member", base)
+            }
+        }
+        else {
+            base
+        }
     }
 
     fn get_gmt_offset() -> i32 {

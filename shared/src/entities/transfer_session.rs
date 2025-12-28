@@ -234,6 +234,18 @@ impl TransferSession {
         }
     }
 
+    pub fn owner_connected(&mut self, peer: Peer) {
+        if let TransferTarget::P2P { from_peer, .. } = &mut self.target {
+            from_peer.replace(peer);
+        }
+    }
+
+    pub fn owner_disconnected(&mut self) {
+        if let TransferTarget::P2P { from_peer, .. } = &mut self.target {
+            from_peer.take();
+        }
+    }
+
     pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, is_required_password: bool) -> Self {
         Self {
             order_id,

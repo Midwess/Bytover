@@ -292,25 +292,19 @@ impl AppCommand {
             password
         }.into());
 
-        let mut session_id = None;
+        let session_id = TransferSessionId {
+            order_id: Some(order_id.to_string()),
+            transfer_type: Some(TransferType::Receive)
+        };
+
         let mut requests = HashMap::new();
         while let Some(output) = stream.next().await {
             match output {
-                CoreOperationOutput::TransferSession(session) => {
-                    session_id.replace(session.id());
-                    self.update_model(TransferSessionModelEvent::Remove(session.id()));
-                    self.update_model(TransferSessionModelEvent::Add(session));
-                }
                 CoreOperationOutput::LocalResource(mut resource) => {
-                    let Some(session_id) = session_id.clone() else {
-                        log::warn!("Failed to load session detail: session id not found");
-                        continue;
-                    };
-
                     requests.insert(resource.order_id, resource.name.clone());
                     let mut generated_saved_paths = self
                         .run(TransferSessionPersistentOperation::generate_resource_paths(
-                            session_id.order_id.as_ref().and_then(|it| it.parse().ok()).unwrap_or_default(),
+                            order_id,
                             requests.clone()
                         ))
                         .await?;
@@ -321,7 +315,7 @@ impl AppCommand {
                     };
 
                     resource.path = path;
-                    self.update_model(TransferSessionModelEvent::Update(session_id, resource.into()));
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), resource.into()));
                 }
                 CoreOperationOutput::Error(err) => {
                     log::error!("Failed to load session detail: {err:?}");

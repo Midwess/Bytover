@@ -30,7 +30,6 @@ impl Peer {
     }
 
     pub fn owned_scopes(&self) -> Vec<&FindingScope> {
-        log::info!("Owned scopes: {:?}", self.scopes);
         self.scopes.iter().filter(|it| it.is_owner()).collect::<Vec<_>>()
     }
 

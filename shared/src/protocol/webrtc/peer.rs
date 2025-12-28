@@ -204,10 +204,6 @@ impl WebRtcPeer {
 
         let mut peer: PeerEntity = response.peer.into();
 
-        let peer_id = peer.peer_id();
-        let scopes = shared_context.get_peer_scopes(&peer_id).await;
-        peer.scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
-
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
             unreliable2_data_channel,
@@ -281,10 +277,6 @@ impl WebRtcPeer {
         log::info!("Sent introduce response to other peer {:?}", msg.mine.peer_id);
 
         let mut peer: PeerEntity = msg.mine.into();
-        let peer_id = peer.peer_id();
-        let scopes = shared_context.get_peer_scopes(&peer_id).await;
-        peer.scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
-
         let quad_unreliable_channel = Arc::new(Mutex::new(QuadUnreliableChannel::new(
             unreliable_data_channel,
             unreliable2_data_channel,
@@ -383,7 +375,6 @@ impl WebRtcPeer {
 
     pub async fn update_scopes(&self, scopes: Vec<String>) {
         let finding_scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
-        log::info!("Updating peer {} scopes to: {:?}", self.peer.id(), finding_scopes);
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(finding_scopes));
         if let Some(core_request) = self.core_request() {
             core_request.response(response).await;

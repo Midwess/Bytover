@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::TransferSessionModelEvent;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
@@ -10,9 +9,8 @@ use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::module::TransferEvent;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
-use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::TransferType;
 use crate::entities::user::User;
 use futures_util::StreamExt;
 use uuid::Uuid;
@@ -69,6 +67,7 @@ impl AppCommand {
         let peer = self.gen_peer(user, device).await;
 
         self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
+        self.notify_event(NearbyEvent::AddFindingScope(FindingScope::new(&peer.id)));
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
@@ -84,7 +83,8 @@ impl AppCommand {
                         removed: vec![]
                     });
 
-                    // Update P2P receiver sessions that are waiting for a peer
+                    self.notify_event(NearbyEvent::AddFindingScope(FindingScope::new(&peer.id)));
+
                     self.update_p2p_sessions_with_peer(peer.clone());
 
                     self.spawn(|it| async move {
@@ -141,6 +141,7 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
+                    self.notify_event(NearbyEvent::RemoveFindingScope(FindingScope::new(&peer.id)));
                     self.notify_event(TransferEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }

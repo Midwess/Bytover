@@ -43,7 +43,6 @@ pub struct SharedContext {
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: Arc<Mutex<PeerId>>,
     signaller: Arc<Mutex<Weak<SignallingClient>>>,
-    peer_scopes: Arc<Mutex<HashMap<PeerId, Vec<String>>>>
 }
 
 impl Default for SharedContext {
@@ -60,7 +59,6 @@ impl SharedContext {
             peers: Default::default(),
             peer_msg_channels: Default::default(),
             signaller: Default::default(),
-            peer_scopes: Default::default()
         }
     }
 
@@ -148,7 +146,6 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        self.peer_scopes.lock().await.remove(peer_id);
         let peer_weak = self.peers.lock().await.remove(peer_id).and_then(|it| it.get().cloned());
         if let Some(peer_weak) = peer_weak {
             if let Some(peer) = peer_weak.upgrade() {
@@ -176,15 +173,6 @@ impl SharedContext {
 
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
-    }
-
-    pub async fn update_peer_scopes(&self, peer_id: &PeerId, scopes: &[String]) {
-        let mut peer_scopes = self.peer_scopes.lock().await;
-        peer_scopes.insert(*peer_id, scopes.to_vec());
-    }
-
-    pub async fn get_peer_scopes(&self, peer_id: &PeerId) -> Vec<String> {
-        self.peer_scopes.lock().await.get(peer_id).cloned().unwrap_or_default()
     }
 }
 
@@ -344,8 +332,6 @@ impl Signaller for WebSignaller {
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
-                self.shared_context.update_peer_scopes(id, &scopes).await;
-
                 if let Some(peer_weak) = self.shared_context.get_peer(id).await {
                     if let Some(peer_arc) = peer_weak.upgrade() {
                         log::info!("Updating scopes for existing peer {id:?}: {scopes:?}");

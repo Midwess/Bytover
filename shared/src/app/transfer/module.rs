@@ -270,6 +270,7 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::PeerUpdated { peer } => {
                 let mut peer_just_connected = false;
                 let mut session_order_id = 0;
+                let mut peer_lost_ownership = false;
 
                 let owned_scopes = peer.owned_scopes();
                 for session in model.transfer.sessions.iter_mut() {
@@ -283,21 +284,24 @@ impl AppModule<BitBridge> for TransferModule {
                         ..
                     } = session.target
                     {
-                        log::info!("Peer {} updated, owned scopes: {:?} vs session scope {}", peer.id, owned_scopes, scope);
                         let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope);
-                        if from_peer.is_none() && is_peer_owned {
-                            log::info!(
-                                "Updating P2P session {} with peer {} (scope: {})",
-                                session.order_id,
-                                peer.id,
-                                scope
-                            );
 
+                        if from_peer.is_none() && is_peer_owned {
                             *from_peer = Some(peer.clone());
                             peer_just_connected = true;
                             session_order_id = session.order_id;
 
                             break;
+                        }
+                        else if let Some(ref connected_peer) = from_peer {
+                            if connected_peer.id == peer.id && !is_peer_owned {
+                                *from_peer = None;
+                                session.resources.clear();
+                                session.progress.clear();
+                                peer_lost_ownership = true;
+
+                                break;
+                            }
                         }
                     }
                 }
@@ -311,13 +315,13 @@ impl AppModule<BitBridge> for TransferModule {
                     })).then(Command::render());
                 }
 
+                if peer_lost_ownership {
+                    return Command::render();
+                }
+
                 Command::render()
             }
             TransferEvent::PeerDisconnected { peer_id } => {
-                log::info!("Handling peer disconnect for peer: {}", peer_id);
-
-                let mut scope_to_remove: Option<FindingScope> = None;
-
                 for session in model.transfer.sessions.iter_mut() {
                     if session.transfer_type != TransferType::Receive {
                         continue;
@@ -325,7 +329,6 @@ impl AppModule<BitBridge> for TransferModule {
 
                     if let TransferTarget::P2P {
                         ref mut from_peer,
-                        ref signalling_key,
                         ..
                     } = session.target
                     {
@@ -338,17 +341,10 @@ impl AppModule<BitBridge> for TransferModule {
                                 session.resources.clear();
                                 session.progress.clear();
 
-                                scope_to_remove = Some(FindingScope::new(signalling_key));
-
                                 break;
                             }
                         }
                     }
-                }
-
-                if let Some(scope) = scope_to_remove {
-                    log::info!("Removing scope {:?} after peer disconnect", scope);
-                    return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::RemoveFindingScope(scope))).then(Command::render());
                 }
 
                 Command::render()
