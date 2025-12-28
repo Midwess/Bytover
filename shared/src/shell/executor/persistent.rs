@@ -7,6 +7,7 @@ use crate::app::operations::persistent::{
 };
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::LocalResourceRepository;
@@ -110,8 +111,8 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::ResourceType(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
-                if let crate::entities::target::TransferTarget::P2P { connection_state, from_peer, .. } = &mut session.target {
-                    *connection_state = crate::entities::target::P2PConnectionState::NotConnected;
+                if let TransferTarget::P2P { connection_state, from_peer, .. } = &mut session.target {
+                    *connection_state = P2PConnectionState::NotConnected;
                     *from_peer = None;
                 }
                 let session = self.transfer_session_repository().create(session).await?;

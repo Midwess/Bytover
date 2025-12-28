@@ -472,9 +472,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
-                if session.add_resource_from_peer(resource, peer) {
-                    log::info!("Added resource to session {} from peer {}", session_order_id, peer_id);
-                }
+                session.add_resource_from_peer(resource, peer);
 
                 Command::render()
             }

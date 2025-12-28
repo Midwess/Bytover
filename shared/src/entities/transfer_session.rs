@@ -308,6 +308,10 @@ impl TransferSession {
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
+        if self.resource_progress(resource.order_id).is_none() {
+            self.progress.push(TransferProgress::new(resource.order_id, resource.size, self.transfer_type.clone()));
+        }
+
         if self.resources.iter().any(|it| it.order_id == resource.order_id) {
             return
         }
