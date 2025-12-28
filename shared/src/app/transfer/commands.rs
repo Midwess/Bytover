@@ -286,7 +286,7 @@ impl AppCommand {
         order_id: u64,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        let mut stream= self.stream_from_shell(P2POperation::ViewSessionDetail {
+        let mut stream = self.stream_from_shell(P2POperation::ViewSessionDetail {
             peer_id,
             order_id,
             password
@@ -297,25 +297,12 @@ impl AppCommand {
             transfer_type: Some(TransferType::Receive)
         };
 
-        let mut requests = HashMap::new();
         while let Some(output) = stream.next().await {
             match output {
-                CoreOperationOutput::LocalResource(mut resource) => {
-                    requests.insert(resource.order_id, resource.name.clone());
-                    let mut generated_saved_paths = self
-                        .run(TransferSessionPersistentOperation::generate_resource_paths(
-                            order_id,
-                            requests.clone()
-                        ))
-                        .await?;
-
-                    let Some(path) = generated_saved_paths.remove(&resource.order_id) else {
-                        log::warn!("Failed to generate resource path");
-                        continue;
-                    };
-
-                    resource.path = path;
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), resource.into()));
+                CoreOperationOutput::TransferSession(session) => {
+                    // Save session to persistent storage
+                    let _ = self.run(TransferSessionPersistentOperation::save(session)).await;
+                    break;
                 }
                 CoreOperationOutput::Error(err) => {
                     log::error!("Failed to load session detail: {err:?}");

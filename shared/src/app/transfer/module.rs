@@ -260,7 +260,9 @@ impl AppModule<BitBridge> for TransferModule {
 
                     it.update_model(TransferSessionModelEvent::Add(session.clone()));
 
-                    let scope = FindingScope::new(&p2p_session.signalling_room_id);
+                    // Create scope with direct protocol and owner flag
+                    let scope_string = format!("direct://{};owner", p2p_session.signalling_room_id);
+                    let scope = FindingScope::new(&scope_string);
                     it.update_model(NearbyEvent::AddFindingScope(scope));
 
                     Ok(())
@@ -442,29 +444,35 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 match &session.target {
-                    TransferTarget::P2P { signalling_key, from_peer, .. } => {
+                    TransferTarget::P2P { connection_state, signalling_key, from_peer, .. } => {
+                        // Only trigger view detail if NOT connected or FAILED
+                        let should_request = match connection_state {
+                            crate::entities::target::P2PConnectionState::NotConnected |
+                            crate::entities::target::P2PConnectionState::Failed(_) => true,
+                            crate::entities::target::P2PConnectionState::Connected => session.resources.is_empty(),
+                            crate::entities::target::P2PConnectionState::Connecting => false, // Already in progress
+                        };
+
+                        if !should_request {
+                            return Command::done();
+                        }
+
+                        // Ensure we're in the finding scope
                         if from_peer.is_none() {
                             let scope = FindingScope::new(signalling_key);
                             if !model.nearby.finding_scopes.contains(&scope) {
-                                log::info!("Adding scope {} for session {} - peer not connected", signalling_key, session.order_id);
+                                log::info!("Adding scope {} for session {}", signalling_key, session.order_id);
                                 return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));
                             }
+                            // Return early - peer not connected yet
+                            return Command::done();
                         }
 
-                        let Some(peer_id) = session.peer_id() else {
-                            return Command::new(|it| async move {
-                                DialogOperation::toast("Waiting for connection...".to_string())
-                                    .into_future(it.clone()).await;
-                            });
-                        };
+                        let peer_id = from_peer.as_ref().unwrap().id().to_string();
 
-                        if session.resources.is_empty() {
-                            Command::handle_result(move |it| async move {
-                                it.app().request_session_detail(peer_id, session.order_id, password).await
-                            })
-                        } else {
-                            Command::done()
-                        }
+                        Command::handle_result(move |it| async move {
+                            it.app().request_session_detail(peer_id, session.order_id, password).await
+                        })
                     }
                     TransferTarget::Internet { .. } => {
                         Command::handle_result(|it| async move {

@@ -71,6 +71,7 @@ where
                             from_peer: None,
                             signalling_key: p2p_session.signalling_room_id,
                             scope: p2p_session.signalling_scope,
+                            connection_state: crate::entities::target::P2PConnectionState::NotConnected,
                         },
                         access_url: String::new(),
                         alias: alias.clone(),

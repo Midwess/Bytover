@@ -551,6 +551,7 @@ impl WebRtcPeer {
                             from_peer: Some(self.peer.clone()),
                             signalling_key: String::new(),  // Local P2P doesn't use backend signalling
                             scope: String::new(),  // Local P2P doesn't use scopes
+                            connection_state: crate::entities::target::P2PConnectionState::Connected,
                         },
                         access_url: String::new(),
                         alias: proto_session.alias.clone().unwrap_or_default(),
