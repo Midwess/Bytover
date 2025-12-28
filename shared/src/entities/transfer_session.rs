@@ -56,6 +56,7 @@ pub struct TransferSession {
     pub access_url: String,
     pub alias: String,
     pub from_user: User,
+    pub description: Option<String>,
     pub password: Option<String>,
     pub is_required_password: bool,
     #[serde(skip)]
@@ -206,6 +207,7 @@ impl TransferSession {
                 .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
                 .collect(),
             resources,
+            description: None,
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
                 from_peer: None,
@@ -233,6 +235,7 @@ impl TransferSession {
             target: TransferTarget::Internet {
                 to_emails
             },
+            description: None,
             from_user: current_user,
             password,
             is_required_password,
@@ -302,6 +305,7 @@ impl TransferSession {
                 to_emails: vec![],
             },
             from_user: from_user,
+            description: None,
             password: None,
             is_required_password,
         }
@@ -543,5 +547,11 @@ impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {
         if let Some(resource) = data.resources.iter_mut().find(|r| r.order_id == self.resource_id) {
             resource.thumbnail_path = Some(self.path);
         }
+    }
+}
+
+impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
+    fn update(self, data: &mut TransferSession) {
+        data.description = self.description;
     }
 }

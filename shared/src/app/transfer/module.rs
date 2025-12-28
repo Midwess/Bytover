@@ -412,9 +412,10 @@ impl AppModule<BitBridge> for TransferModule {
                         }
 
                         let peer_id = from_peer.as_ref().unwrap().id().to_string();
+                        let session_id_clone = session_id.clone();
 
                         Command::handle_result(move |it| async move {
-                            it.app().request_session_detail(peer_id, session.order_id, password).await
+                            it.app().request_session_detail(peer_id, session_id_clone, session.order_id, password).await
                         })
                     }
                     TransferTarget::Internet { .. } => {
@@ -436,8 +437,13 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
+                let session_id = TransferSessionId {
+                    order_id: Some(order_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
+                };
+
                 Command::handle_result(move |it| async move {
-                    it.app().request_session_detail(peer_id, order_id, password).await
+                    it.app().request_session_detail(peer_id, session_id, order_id, password).await
                 })
             }
             TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id } => {

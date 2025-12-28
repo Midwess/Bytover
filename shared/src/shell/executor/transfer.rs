@@ -76,6 +76,7 @@ where
                         access_url: String::new(),
                         alias: alias.clone(),
                         from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
+                        description: None,
                         password: None,
                         is_required_password: p2p_session.password_protected,
                         cancellation_token: CancellationToken::new(),

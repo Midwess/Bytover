@@ -31,6 +31,7 @@ pub enum TransferOperationOutput {
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
     SubscribeSessionEnded,
     ThumbnailUpdated(ThumbnailUpdatedEvent),
+    SessionDetailReceived(schema::devlog::bitbridge::P2pTransferSessionMessage),
 }
 
 impl Operation for TransferOperation {

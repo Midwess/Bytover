@@ -27,7 +27,8 @@ pub trait UpdateAction<Data> {
 pub enum TransferSessionUpdateEvent {
     ProgressUpdate(TransferProgress),
     ThumbnailUpdated(ThumbnailUpdatedEvent),
-    ResourceUpdate(LocalResource)
+    ResourceUpdate(LocalResource),
+    SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]

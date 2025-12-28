@@ -479,8 +479,10 @@ impl WebRtcPeer {
         match response_result {
             Response::ViewSessionResponse(resp) => {
                 match resp.result {
-                    Some(ResponseResult::Session(_)) => {
-                        core_request.response(CoreOperationOutput::None).await;
+                    Some(ResponseResult::Session(session)) => {
+                        core_request.response(CoreOperationOutput::Transfer(
+                            TransferOperationOutput::SessionDetailReceived(session)
+                        )).await;
                     }
                     Some(ResponseResult::Error(error_type)) => {
                         let error_msg = PeerErrorsMessage::try_from(error_type)
@@ -542,9 +544,7 @@ impl WebRtcPeer {
 
         let proto_session = P2pTransferSessionMessage {
             order_id: session.order_id,
-            resources: vec![],
-            user_id,
-            alias,
+            description: session.description.clone(),
         };
 
         let response = ViewSessionDetailResponse {

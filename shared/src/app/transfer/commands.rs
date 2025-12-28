@@ -283,10 +283,28 @@ impl AppCommand {
     pub async fn request_session_detail(
         &self,
         peer_id: String,
+        session_id: TransferSessionId,
         order_id: u64,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        let _ = self.run(P2POperation::view_session_detail(peer_id, order_id, password)).await?;
+        let mut stream = self.stream_from_shell(P2POperation::ViewSessionDetail { peer_id, order_id, password }.into());
+
+        while let Some(output) = stream.next().await {
+            match output {
+                CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(session)) => {
+                    log::info!("Received session detail for order_id {}: description={:?}", session.order_id, session.description);
+
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), session.into()));
+                    break;
+                }
+                CoreOperationOutput::Error(e) => {
+                    log::error!("Error receiving session detail: {:?}", e);
+                    return Err(e);
+                }
+                _ => continue
+            }
+        }
+
         Ok(())
     }
 
