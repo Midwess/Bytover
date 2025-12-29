@@ -44,6 +44,7 @@ use crate::errors::CoreError;
 use crate::protocol::webrtc::signalling::SharedContext;
 
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
+const ON_HOLD_STOP_THRESHOLD: u32 = 6;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -355,6 +356,7 @@ impl WebRtcPeer {
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
         let mut buff_counter = 0;
+        let mut hold_counter: u32 = 0;
 
         loop {
             if let Some(rtt) = self.buffer.rtt().await {
@@ -376,7 +378,16 @@ impl WebRtcPeer {
                 },
                 fb = fb_fut => {
                     match fb {
-                        Some(fb) => fec_sender.feedback(fb),
+                        Some(fb) => {
+                            use schema::devlog::bitbridge::fec_feedback::Feedback;
+                            if matches!(fb, Feedback::Network(_)) {
+                                if hold_counter > 0 {
+                                    hold_counter -= 1;
+                                    log::info!("Decreased hold_counter to {} after receiving network feedback", hold_counter);
+                                }
+                            }
+                            fec_sender.feedback(fb)
+                        },
                         _ => FecAction::Noop,
                     }
                 },
@@ -397,6 +408,7 @@ impl WebRtcPeer {
                         buff_counter += packet.len();
                         let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
                     }
+                    buff_counter = buff_counter.max(MAX_BUFFER_SIZE / 2);
                 },
                 FecAction::Terminated => {
                     log::info!("FEC sender terminated in sending_loop");
@@ -429,6 +441,9 @@ impl WebRtcPeer {
                 for frame in frames {
                     let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
                 }
+
+                hold_counter += 1;
+                hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
 
                 let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                 let stats_after = quad_ch.bytes_sent().await;
@@ -745,6 +760,9 @@ impl WebRtcPeer {
     }
 
     pub async fn receiving_loop(&self) -> Result<(), WebRtcErrors> {
+        use schema::devlog::bitbridge::fec_feedback::Feedback;
+        use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
+
         let mut fec_receiver = FecReceiver::new();
         let mut data_rx = self.inbound_data_stream_receiver.retrieve().await?;
 
@@ -776,6 +794,32 @@ impl WebRtcPeer {
             match action {
                 FecAction::Constructed(packets_with_prefix, _next_check) => {
                     for (prefix, packet) in packets_with_prefix {
+                        if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
+                            let loss_rate = fec_receiver.calculate_loss_rate();
+                            let current_block_id = fec_receiver.current_block_id();
+                            let rtt = self.buffer.rtt().await.unwrap_or(0.0);
+
+                            let network_stats = NetworkStats {
+                                current_block_id: Some(current_block_id),
+                                rtt: Some(rtt as u32),
+                                loss_rate,
+                            };
+
+                            let feedback = FecFeedback {
+                                feedback: Some(Feedback::Network(network_stats)),
+                            };
+
+                            log::info!(
+                                "Received hold delimiter, sending network feedback: loss_rate={}, rtt={}, block_id={}",
+                                loss_rate,
+                                rtt,
+                                current_block_id
+                            );
+
+                            let _ = self.msg_channel.notify(Request::FecFeedback(feedback)).await;
+                            continue;
+                        }
+
                         let channels = self.prefix_channels.lock().await;
                         if let Some(sender) = channels.get(&prefix) {
                             if let Err(e) = sender.unbounded_send(packet){

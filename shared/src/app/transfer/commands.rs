@@ -425,7 +425,7 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(new_progress)) => {
-                    progress = progress;
+                    progress = new_progress;
                     self.update_model(TransferSessionModelEvent::Update(session_id.clone(), progress.clone().into()));
                     if progress.is_completed() {
                         log::info!("Resource download completed with progress {progress:?}");
