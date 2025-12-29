@@ -627,6 +627,7 @@ impl WebRtcPeer {
             channels.insert(prefix, tx);
         }
 
+        log::info!("Requesting download for resource {:?}", request);
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
         let prefix_channels = self.prefix_channels.clone();
@@ -701,6 +702,7 @@ impl WebRtcPeer {
             _ => resource.name.clone(),
         };
 
+        log::info!("Streaming resource {} for transfer id {}", resource_id, transfer_id);
         let compressed = is_compressible(&resource_name);
 
         let start_delimiter = TransferDelimiterShema::start(session_id, resource_id, compressed);
@@ -776,8 +778,7 @@ impl WebRtcPeer {
                     for (prefix, packet) in packets_with_prefix {
                         let channels = self.prefix_channels.lock().await;
                         if let Some(sender) = channels.get(&prefix) {
-                            let mut sender_clone = sender.clone();
-                            if let Err(e) = sender_clone.send(packet).await {
+                            if let Err(e) = sender.unbounded_send(packet){
                                 log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
                             }
                         } else {

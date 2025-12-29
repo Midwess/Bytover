@@ -11,6 +11,7 @@ import {
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewSession,
     TransferEventVariantRequestSessionDetail,
+    TransferEventVariantRequestDownloadResource,
     TransferTypeVariantReceive,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -256,7 +257,7 @@ function ContentBoard() {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={image.model.order_id} isCloud={selectedSession.is_cloud}/>
+                                        <MediaView id={image.model.order_id} isCloud={selectedSession.is_cloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -274,7 +275,7 @@ function ContentBoard() {
                             selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={video.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={video.model.order_id} isCloud={isCloud}/>
+                                        <MediaView id={video.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -293,7 +294,7 @@ function ContentBoard() {
                             selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={file.model.order_id} index={index}>
                                     <div className={"h-fit"}>
-                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud}/>
+                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -583,10 +584,12 @@ function TransferSession(props: {
 
 function FileView(props: {
     id: string,
-    isCloud: boolean
+    isCloud: boolean,
+    sessionId: string
 }) {
-    const { id, isCloud } = props;
+    const { id, isCloud, sessionId } = props;
     const file = core.useReceiveResource(id, isCloud);
+    const session = core.useSession(sessionId);
     const model = file?.model;
 
     const isFolder = model?.type instanceof ResourceTypeVariantFolder;
@@ -606,9 +609,24 @@ function FileView(props: {
     }, [model, model?.thumbnail_path, thumbnailSource]);
 
     const onDownloadClick = useCallback(() => {
-        if (!model) return
-        core.downloadFile(model.path, model.name)
-    }, [model?.path, model?.name])
+        if (!model || !session) return
+
+        if (!isCloud) {
+            const peerId = session.sender_id;
+            const sessionOrderId = BigInt(sessionId);
+            const resourceOrderId = BigInt(id);
+
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantRequestDownloadResource(
+                    peerId,
+                    sessionOrderId,
+                    resourceOrderId
+                )
+            ));
+        } else {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [model?.path, model?.name, isCloud, session, sessionId, id])
 
     if (!file || !model) return null;
 
@@ -672,10 +690,12 @@ function FileView(props: {
 
 function MediaView(props: {
     id: string,
-    isCloud: boolean
+    isCloud: boolean,
+    sessionId: string
 }) {
-    const { id, isCloud } = props;
+    const { id, isCloud, sessionId } = props;
     const media = core.useReceiveResource(id, isCloud);
+    const session = core.useSession(sessionId);
 
     const model: SelectedResourceViewModel | undefined = media?.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
@@ -689,9 +709,24 @@ function MediaView(props: {
     }, [model?.thumbnail_path]);
 
     const onDownloadClick = useCallback(() => {
-        if (!model) return
-        core.downloadFile(model.path, model.name)
-    }, [model?.path, model?.name])
+        if (!model || !session) return
+
+        if (!isCloud) {
+            const peerId = session.sender_id;
+            const sessionOrderId = BigInt(sessionId);
+            const resourceOrderId = BigInt(id);
+
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantRequestDownloadResource(
+                    peerId,
+                    sessionOrderId,
+                    resourceOrderId
+                )
+            ));
+        } else {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [model?.path, model?.name, isCloud, session, sessionId, id])
 
     if (!media || !model) return null;
 

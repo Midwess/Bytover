@@ -53,6 +53,7 @@ pub struct FrameEntry {
     pub data_shards: u8,
     pub parity_shards: u8,
     pub is_parity: bool,
+    pub prefix: u16,
     pub data: Arc<[u8]>,
     pub timestamp: u64,
 }
@@ -174,7 +175,7 @@ impl Frame {
 
 impl FrameEntry {
     pub fn serialize(&self) -> Box<[u8]> {
-        let header_len = size_of::<u32>() * 2 + size_of::<u64>() + 4;
+        let header_len = size_of::<u32>() * 2 + size_of::<u64>() + size_of::<u16>() + 4;
         let mut buf = Vec::with_capacity(header_len + self.data.len());
 
         buf.extend_from_slice(bytes_of(&self.block_id));
@@ -183,6 +184,7 @@ impl FrameEntry {
         buf.push(self.data_shards);
         buf.push(self.parity_shards);
         buf.push(self.is_parity as u8);
+        buf.extend_from_slice(bytes_of(&self.prefix));
         buf.extend_from_slice(bytes_of(&self.timestamp));
         buf.extend_from_slice(&self.data);
 
@@ -209,6 +211,7 @@ impl FrameEntry {
         let parity_shards = buf[offset]; offset += 1;
         let is_parity = buf[offset] != 0; offset += 1;
 
+        let prefix: u16 = read!(u16);
         let timestamp: u64 = read!(u64);
         let data: Arc<[u8]> = buf[offset..].to_vec().into();
 
@@ -219,6 +222,7 @@ impl FrameEntry {
             data_shards,
             parity_shards,
             is_parity,
+            prefix,
             data,
             timestamp,
         })
@@ -430,6 +434,7 @@ impl FecSender {
                     data_shards: frame.data_shards,
                     parity_shards: frame.parity_shards,
                     is_parity: frame.is_parity,
+                    prefix: frame.prefix,
                     data: payload,
                     timestamp: now_micros(),
                 };
@@ -485,7 +490,7 @@ impl FecSender {
                                         e.parity_shards,
                                         e.total_size,
                                         e.is_parity,
-                                        0, // prefix will be stored in FrameEntry in future
+                                        e.prefix,
                                         payload,
                                     )
                                 })
