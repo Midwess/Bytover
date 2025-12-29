@@ -175,7 +175,7 @@ function ContentBoard() {
         </div>
     }
 
-    if (selectedSession.password_required && !selectedSession.password && isLoading) {
+    if (selectedSession.password_required && !selectedSession.password) {
         return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
             <div className={"w-[50%] flex flex-col gap-4"}>
                 <p className={"text-muted-foreground flex flex-row items-center"}>
@@ -184,18 +184,23 @@ function ContentBoard() {
                            color={'white'}/>
                     This session is password protected</p>
                 <input type="password" name="fake-password" style={{display: 'none'}}/>
-                <Input
-                    className="h-10"
-                    placeholder="Enter password"
-                    value={enteredPassword}
-                    onChange={(e) => setEnteredPassword(e.target.value)}
-                    type="password"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            onSelected()
-                        }
-                    }}
-                />
+                <div className="flex flex-col gap-2">
+                    <Input
+                        className="h-10"
+                        placeholder="Enter password"
+                        value={enteredPassword}
+                        onChange={(e) => setEnteredPassword(e.target.value)}
+                        type="password"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                onSelected()
+                            }
+                        }}
+                    />
+                    {selectedSession.error_message && (
+                        <p className="text-red-500 text-sm">{selectedSession.error_message}</p>
+                    )}
+                </div>
                 <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
             </div>
         </div>
@@ -208,15 +213,34 @@ function ContentBoard() {
     }
 
     if (isLoading) {
-        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
-            {
-                loadMessage.message
-                    ? <p>{loadMessage.message}</p>
-                    : <>
-                        <LoaderCircle className={"animate-spin"}/>
-                        <p>Loading...</p>
-                    </>
-            }
+        return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
+            <LoaderCircle className={"animate-spin"}/>
+
+            {selectedSession.loading_status && (
+                <p className="text-muted-foreground">{selectedSession.loading_status}</p>
+            )}
+
+            {selectedSession.error_message && (
+                <div className="flex flex-col gap-2 items-center">
+                    <p className="text-red-500">{selectedSession.error_message}</p>
+                    <Button
+                        onClick={() => {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                                selectedSession.password ?? undefined,
+                                BigInt(selectedSession.id),
+                                new TransferTypeVariantReceive()
+                            )))
+                        }}
+                        className="bg-bluePrimary text-white hover:bg-bluePrimary/90"
+                    >
+                        Retry
+                    </Button>
+                </div>
+            )}
+
+            {loadMessage.message && !selectedSession.error_message && (
+                <p className="text-red-500">{loadMessage.message}</p>
+            )}
         </div>
     }
 
@@ -328,7 +352,11 @@ function FindSessionSection() {
     useEffect(() => {
         if (publicSessions?.length === 1 && keywords) {
             setUrl({ session: publicSessions[0].alias })
-            core.updateSelectedSession(publicSessions[0])
+            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                publicSessions[0].password ?? undefined,
+                BigInt(publicSessions[0].id),
+                new TransferTypeVariantReceive()
+            )))
         }
     }, [publicSessions, keywords, setUrl])
 
@@ -394,7 +422,11 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] 
                         return <div key={item.id}>
                             <TransferSession
                                 onPress={() => {
-                                    core.updateSelectedSession(item)
+                                    core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                                        item.password ?? undefined,
+                                        BigInt(item.id),
+                                        new TransferTypeVariantReceive()
+                                    )))
                                     if (isMobile) {
                                         setOpenMobile(false)
                                     }

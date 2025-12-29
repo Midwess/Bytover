@@ -116,8 +116,12 @@ impl AppModule<BitBridge> for NearbyModule {
 
                         if from_peer.is_none() && is_peer_owned {
                             session.owner_connected(peer.clone());
-                            peer_just_connected = true;
-                            session_order_id = session.order_id;
+
+                            let is_selected = model.transfer.selected_receive_session_id == Some(session.order_id);
+                            if is_selected {
+                                peer_just_connected = true;
+                                session_order_id = session.order_id;
+                            }
 
                             break;
                         }

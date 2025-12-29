@@ -41,6 +41,8 @@ pub struct ReceiveSessionViewModel {
     pub is_authenticated: bool,
     pub has_details: bool,
     pub is_loading: bool,
+    pub loading_status: Option<String>,
+    pub error_message: Option<String>,
     pub image_resources: Vec<ImageReceiveResourceViewModel>,
     pub video_resources: Vec<VideoReceiveResourceViewModel>,
     pub file_resources: Vec<FileReceiveResourceViewModel>,

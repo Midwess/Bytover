@@ -2,16 +2,17 @@ use std::collections::HashMap;
 use core_services::db::repository::abstraction::table::Table;
 use n0_future::StreamExt;
 use core_services::utils::string::StringExt;
-
+use schema::devlog::bitbridge::PeerErrorsMessage;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
+use crate::app::core::model_events::{ConnectionError, TransferSessionModelEvent, UpdateAction};
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
@@ -361,7 +362,14 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::Error(e) => {
+                    let msg = match &e {
+                        CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound) => "Session not found".to_string(),
+                        CoreError::PeerRequestError(PeerErrorsMessage::InvalidPassword) => "Invalid password".to_string(),
+                        _ => format!("Failed to load session detail: {e:?}"),
+                    };
+
                     log::error!("Error receiving session detail: {:?}", e);
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), ConnectionError(msg).into()));
                     return Err(e);
                 }
                 _ => continue

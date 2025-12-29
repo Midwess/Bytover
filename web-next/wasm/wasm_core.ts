@@ -94,18 +94,18 @@ export class WasmCore {
 
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
-    selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
-
     constructor() { }
 
     public useSelectedSession() {
-        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel>()
+        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | undefined>()
 
         useEffect(() => {
-            return this.selectedSession.subscribe((value) => {
-                setSelectedSession(value)
+            return this.transferState.subscribe((transferState) => {
+                if (!isEqual(selectedSession, transferState?.selected_session)) {
+                    setSelectedSession(transferState?.selected_session)
+                }
             })
-        }, []);
+        }, [selectedSession])
 
         return selectedSession
     }
@@ -166,10 +166,6 @@ export class WasmCore {
         }, [id, resource, isCloud])
 
         return resource
-    }
-
-    public updateSelectedSession(session: ReceiveSessionViewModel) {
-        this.selectedSession.set(session)
     }
 
     public useMessage(reason: MessageReason) {
@@ -581,12 +577,6 @@ export class WasmCore {
         this.nearbyState.set(viewModel.nearby!)
         this.transferState.set(viewModel.transfer!)
         this.shelfState.set(viewModel.shelf!)
-        const selectedSession = this.selectedSession.get()
-        if (selectedSession) {
-            const newSession = viewModel.transfer?.received_sessions.find(it => it.id === selectedSession.id) ||
-                viewModel.transfer?.received_cloud_sessions.find(it => it.id === selectedSession.id)
-            this.selectedSession.set(newSession)
-        }
     }
 
     async update_app_event(appEvent: Uint8Array) {

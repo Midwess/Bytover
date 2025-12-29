@@ -1,723 +1,582 @@
-# Updated P2P Transfer Session Password-Protected Flow
+# Implementation Plan: Receive Session Select Flow
 
 ## Overview
-Update the P2P transfer session flow to support password-protected sessions with a two-phase authentication approach. The receiver initially requests session metadata without a password, and if password-protected, prompts for password before receiving full session details and resources.
-
-## Current Implementation Analysis
-
-### Current Flow
-1. **Receiver** sends `ViewSessionDetailRequest` with `order_id` + optional `password`
-2. **Sender** validates password in `handle_view_session_request` (shared/src/app/transfer/commands.rs:248)
-3. **Sender** responds with `ViewSessionDetailResponse` containing `P2pTransferSessionMessage`
-4. **Sender** then streams all resources via `ResourceNotificationRequest`
-5. **Receiver** updates session using `UpdateAction` pattern (shared/src/entities/transfer_session.rs:553)
-
-### Current Schema (libs/schema/proto/devlog/bitbridge/)
-
-**request.proto:**
-```protobuf
-message ViewSessionDetailRequest {
-    required uint64 order_id = 1;
-    optional string password = 2;
-}
-
-message ViewSessionDetailResponse {
-    oneof result {
-        P2PTransferSessionMessage session = 1;
-        ResourceMessage resource_updated = 2;
-        PeerErrorsMessage error = 3;
-    }
-}
-```
-
-**session.proto:**
-```protobuf
-message P2PTransferSessionMessage {
-  required uint64 order_id = 1;
-  optional string description = 2;
-}
-```
-
-**Existing UpdateAction:**
-```rust
-impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
-    fn update(self, data: &mut TransferSession) {
-        data.description = self.description;
-    }
-}
-```
+Implement explicit session selection tracking to control when session details are requested from peers, with enhanced loading states and retry functionality.
 
 ---
 
-## Implementation Plan
+## Part 1: Backend - Session Selection Tracking
 
-### Phase 1: Schema Updates
+### 1.1 Add Selected Session to TransferModel and ViewModel
+**File:** `shared/src/app/transfer/module.rs:32-37` (TransferModel)
 
-#### File: `libs/schema/proto/devlog/bitbridge/session.proto`
-**Update `P2PTransferSessionMessage` to include password protection flag:**
-```protobuf
-message P2PTransferSessionMessage {
-  required uint64 order_id = 1;
-  optional string description = 2;
-  required bool password_protected = 3;  // NEW: Indicates if session requires password
+**Changes:**
+```rust
+pub struct TransferModel {
+    selected_method: TransferMethodSelection,
+    pub sessions: Vec<TransferSession>,
+    keywords: String,
+    selected_receive_session_id: Option<u64>  // ADD THIS
 }
 ```
+
+**File:** `shared/src/app/transfer/module.rs:39-46` (TransferViewModel)
+
+**Changes:**
+```rust
+pub struct TransferViewModel {
+    transfer_method: TransferMethodSelection,
+    received_sessions: Vec<ReceiveSessionViewModel>,
+    received_cloud_sessions: Vec<ReceiveSessionViewModel>,
+    cloud_session: Option<CloudSession>,
+    p2p_sessions: Vec<CloudSession>,
+    selected_session: Option<ReceiveSessionViewModel>  // ADD THIS
+}
+```
+
+**Purpose:**
+- TransferModel tracks the selected session ID (internal state)
+- TransferViewModel exposes the full selected session (UI state)
+- Single source of truth in backend, no separate frontend Observable needed
 
 ---
 
-### Phase 2: Sender-Side Implementation
+### 1.2 Track Selection on ViewSession Event
+**File:** `shared/src/app/transfer/module.rs` (ViewSession handler, ~lines 348-393)
 
-#### File: `shared/src/app/transfer/commands.rs`
-
-**Update `handle_view_session_request` (line 248-285):**
-
-Current logic:
-- Validates password if `session.is_required_password` is true
-- Returns early if invalid
-- Sends full session detail with all resources
-
-New logic:
+**Changes:**
 ```rust
-pub async fn handle_view_session_request(
-    &self,
-    peer_id: String,
-    request_id: String,
-    password: Option<String>,
-    session: Option<TransferSession>,
-    device_info: Option<DeviceInfo>
-) -> Result<(), CoreError> {
-    let Some(mut session) = session else {
-        log::warn!("Failed to load session detail: session not found");
-        // Send error response
-        self.run(P2POperation::send_session_detail_error(
-            peer_id,
-            request_id,
-            CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)
-        )).await?;
-        return Ok(());
-    };
+TransferEvent::ViewSession { session_id, password, transfer_type } => {
+    // ADD: Track selected session
+    if transfer_type == TransferType::Receive {
+        model.transfer.selected_receive_session_id = Some(session_id.order_id.unwrap_or(0));
+    }
 
-    session.description = device_info.map(|it| format!("{} - {}", it.name, it.platform.as_str_name()));
-
-    // NEW: Two-phase authentication logic
-    if session.is_required_password {
-        match (&session.password, &password) {
-            (Some(expected), Some(provided)) if expected == provided => {
-                // Password correct: Send full session with resources
-                let proto_session = P2pTransferSessionMessage {
-                    order_id: session.order_id,
-                    description: session.description.clone(),
-                    password_protected: true,
-                };
-
-                self.run(P2POperation::send_session_detail(
-                    peer_id,
-                    request_id,
-                    Some(proto_session),
-                    Some(session.resources)  // Send resources
-                )).await?;
-            }
-            (Some(_), None) => {
-                // No password provided: Send metadata only (password_protected=true, no resources)
-                let proto_session = P2pTransferSessionMessage {
-                    order_id: session.order_id,
-                    description: session.description.clone(),
-                    password_protected: true,
-                };
-
-                self.run(P2POperation::send_session_detail(
-                    peer_id,
-                    request_id,
-                    Some(proto_session),
-                    None  // No resources
-                )).await?;
-            }
-            (Some(_), Some(_)) => {
-                // Password incorrect
-                log::warn!("Invalid password for session {}", session.order_id);
-                self.run(P2POperation::send_session_detail_error(
-                    peer_id,
-                    request_id,
-                    CoreError::PeerRequestError(PeerErrorsMessage::InvalidPassword)
-                )).await?;
-            }
-            (None, _) => {
-                // No password required but flag is set (shouldn't happen)
-                let proto_session = P2pTransferSessionMessage {
-                    order_id: session.order_id,
-                    description: session.description.clone(),
-                    password_protected: false,
-                };
-
-                self.run(P2POperation::send_session_detail(
-                    peer_id,
-                    request_id,
-                    Some(proto_session),
-                    Some(session.resources)
-                )).await?;
-            }
+    // Existing logic continues...
+    match session.target {
+        TransferTarget::P2P { ... } => {
+            // existing P2P handling
         }
-    } else {
-        // Not password protected: Send full session
-        let proto_session = P2pTransferSessionMessage {
-            order_id: session.order_id,
-            description: session.description.clone(),
-            password_protected: false,
-        };
-
-        self.run(P2POperation::send_session_detail(
-            peer_id,
-            request_id,
-            Some(proto_session),
-            Some(session.resources)
-        )).await?;
-    }
-
-    Ok(())
-}
-```
-
-#### File: `shared/src/app/operations/p2p.rs`
-
-**Update `P2POperation::SendSessionDetail` variant (line 28-33):**
-
-Current:
-```rust
-SendSessionDetail {
-    peer_id: String,
-    request_id: String,
-    session: Option<TransferSession>,
-    error: Option<CoreError>
-}
-```
-
-New:
-```rust
-SendSessionDetail {
-    peer_id: String,
-    request_id: String,
-    session_message: Option<P2pTransferSessionMessage>,  // NEW: Direct proto message
-    resources: Option<Vec<LocalResource>>,                // NEW: Optional resources
-    error: Option<CoreError>
-}
-```
-
-**Update helper methods:**
-```rust
-pub fn send_session_detail(
-    peer_id: String,
-    request_id: String,
-    session_message: Option<P2pTransferSessionMessage>,
-    resources: Option<Vec<LocalResource>>
-) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-    Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
-        peer_id,
-        request_id,
-        session_message,
-        resources,
-        error: None
-    })).map(|it| it.result())
-}
-
-pub fn send_session_detail_error(
-    peer_id: String,
-    request_id: String,
-    error: CoreError
-) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-    Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
-        peer_id,
-        request_id,
-        session_message: None,
-        resources: None,
-        error: Some(error)
-    })).map(|it| it.result())
-}
-```
-
-#### File: `shared/src/shell/executor/p2p.rs`
-
-**Update handler for `SendSessionDetail` (line 48-50):**
-
-Current:
-```rust
-P2POperation::SendSessionDetail { peer_id, request_id, session, error } => {
-    self.web_rtc().send_session_detail(peer_id, request_id, session, error).await?;
-    Ok(CoreOperationOutput::None)
-}
-```
-
-New:
-```rust
-P2POperation::SendSessionDetail { peer_id, request_id, session_message, resources, error } => {
-    self.web_rtc().send_session_detail(peer_id, request_id, session_message, resources, error).await?;
-    Ok(CoreOperationOutput::None)
-}
-```
-
-#### File: `shared/src/protocol/webrtc/webrtc.rs`
-
-**Update `send_session_detail` signature (line 123-136):**
-
-Current:
-```rust
-pub async fn send_session_detail(
-    &self,
-    peer_id: String,
-    request_id: String,
-    session: Option<TransferSession>,
-    error: Option<CoreError>,
-) -> Result<(), WebRtcErrors>
-```
-
-New:
-```rust
-pub async fn send_session_detail(
-    &self,
-    peer_id: String,
-    request_id: String,
-    session_message: Option<P2pTransferSessionMessage>,
-    resources: Option<Vec<LocalResource>>,
-    error: Option<CoreError>,
-) -> Result<(), WebRtcErrors> {
-    let peer_id = PeerId(peer_id.parse()?);
-    if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-        peer.send_session_detail_response(request_id, session_message, resources, error).await
-    } else {
-        Err(WebRtcErrors::ConnectionNotFound(peer_id))
-    }
-}
-```
-
-#### File: `shared/src/protocol/webrtc/peer.rs`
-
-**Update `send_session_detail_response` (line 508-560):**
-
-Current signature:
-```rust
-pub async fn send_session_detail_response(
-    &self,
-    request_id: String,
-    session: Option<TransferSession>,
-    error: Option<CoreError>,
-) -> Result<(), WebRtcErrors>
-```
-
-New implementation:
-```rust
-pub async fn send_session_detail_response(
-    &self,
-    request_id: String,
-    session_message: Option<P2pTransferSessionMessage>,  // NEW: Direct proto message
-    resources: Option<Vec<LocalResource>>,                // NEW: Optional resources
-    error: Option<CoreError>,
-) -> Result<(), WebRtcErrors> {
-    log::info!("Sending session detail response");
-    use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
-
-    if let Some(error_msg) = error {
-        log::error!("Failed to send session detail response: {:?}", error_msg);
-        match error_msg {
-            CoreError::PeerRequestError(e) => {
-                self.msg_channel.send_response(
-                    request_id,
-                    Response::ViewSessionResponse(ViewSessionDetailResponse {
-                        result: Some(ResponseResult::Error(e.into()))
-                    })
-                ).await?;
-            }
-            e => {
-                log::error!("Failed to send session detail response: {:?}", e);
-                self.msg_channel.send_response(
-                    request_id,
-                    Response::ViewSessionResponse(ViewSessionDetailResponse {
-                        result: Some(ResponseResult::Error(PeerErrorsMessage::InvalidRequest.into()))
-                    })
-                ).await?;
-            }
+        TransferTarget::Internet { ... } => {
+            // existing Internet handling
         }
-        return Ok(())
     }
-
-    let Some(proto_session) = session_message else {
-        return Ok(())
-    };
-
-    log::info!(
-        "Sending session detail: order_id={}, password_protected={}, has_resources={}",
-        proto_session.order_id,
-        proto_session.password_protected,
-        resources.is_some()
-    );
-
-    // Send the proto message
-    let response = ViewSessionDetailResponse {
-        result: Some(ResponseResult::Session(proto_session))
-    };
-
-    self.msg_channel.send_response(request_id, Response::ViewSessionResponse(response)).await?;
-
-    sleep(Duration::from_millis(100)).await;
-
-    // NEW: Only send resources if provided (authenticated or not password-protected)
-    if let Some(resources) = resources {
-        if !resources.is_empty() {
-            let session_order_id = proto_session.order_id;
-            for resource in resources {
-                self.send_resource_notification(session_order_id, resource).await?;
-                sleep(Duration::from_millis(50)).await;
-            }
-        }
-    } else {
-        log::info!(
-            "No resources to send for session {} (password-protected, awaiting auth)",
-            proto_session.order_id
-        );
-    }
-
-    Ok(())
 }
 ```
+
+**Purpose:** Mark session as selected when user explicitly clicks to view it.
 
 ---
 
-### Phase 3: Receiver-Side Implementation
+### 1.3 Conditional Auto-Request in Nearby Module
+**File:** `shared/src/app/nearby/module.rs:92-144` (PeerUpdated handler)
 
-#### File: `shared/src/entities/transfer_session.rs`
-
-**Update existing `UpdateAction` implementation (line 553-557):**
-
-Current:
+**Current Logic:**
 ```rust
-impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
-    fn update(self, data: &mut TransferSession) {
-        data.description = self.description;
-    }
+// When peer connects, automatically request details
+if from_peer.is_none() && is_peer_owned {
+    session.owner_connected(peer.clone());
+    return Command::event(AppEvent::Transfer(
+        TransferEvent::RequestSessionDetail { ... }
+    ))
 }
 ```
 
-New:
+**Modified Logic:**
 ```rust
-impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
-    fn update(self, data: &mut TransferSession) {
-        data.description = self.description;
-        data.is_required_password = self.password_protected;  // NEW: Update password flag
+if from_peer.is_none() && is_peer_owned {
+    session.owner_connected(peer.clone());
 
-        log::info!(
-            "Updated session {} with description={:?}, password_protected={}",
-            data.order_id,
-            self.description,
-            self.password_protected
-        );
-    }
-}
-```
+    // ONLY request details if session is selected
+    let is_selected = model.transfer.selected_receive_session_id
+        == Some(session.order_id);
 
-#### File: `shared/src/protocol/webrtc/peer.rs`
-
-**Update `request_session_detail` (line 454-506):**
-
-Current logic:
-- Sends request with password
-- Receives `P2pTransferSessionMessage`
-- Emits `SessionDetailReceived` with proto message
-
-Keep the same but ensure we're emitting the proto message correctly:
-```rust
-pub async fn request_session_detail(
-    &self,
-    core_request: CoreRequest,
-    order_id: u64,
-    password: Option<String>,
-) -> Result<(), WebRtcErrors> {
-    use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
-
-    log::info!(
-        "Requesting session detail for order_id {} (password: {})",
-        order_id,
-        if password.is_some() { "provided" } else { "not provided" }
-    );
-
-    let request = ViewSessionDetailRequest {
-        order_id,
-        password,
-    };
-
-    let timeout_token = CancellationToken::timeout(Duration::from_secs(6));
-
-    let response_result = self.msg_channel.send(Request::ViewSessionRequest(request), None)
-        .with_cancel(&timeout_token)
-        .await
-        .map_err(|_| {
-            log::error!("Timeout waiting for session detail response");
-            WebRtcErrors::Timeout
-        })??;
-
-    match response_result {
-        Response::ViewSessionResponse(resp) => {
-            match resp.result {
-                Some(ResponseResult::Session(proto_session)) => {
-                    // Send the proto message directly for UpdateAction
-                    core_request.response(CoreOperationOutput::Transfer(
-                        TransferOperationOutput::SessionDetailReceived(proto_session)
-                    )).await;
-                }
-                Some(ResponseResult::Error(error_type)) => {
-                    let error_msg = PeerErrorsMessage::try_from(error_type)
-                        .unwrap_or(PeerErrorsMessage::InvalidRequest);
-                    core_request.response(CoreOperationOutput::Error(
-                        CoreError::PeerRequestError(error_msg)
-                    )).await;
-                    return Err(WebRtcErrors::PeerError(error_msg.to_string()));
-                }
-                _ => {
-                    return Err(WebRtcErrors::InvalidResponse("Unexpected response".to_string()));
-                }
+    if is_selected {
+        return Command::event(AppEvent::Transfer(
+            TransferEvent::RequestSessionDetail {
+                peer_id: peer.id.clone(),
+                order_id: session.order_id,
+                password: session.password.clone()
             }
-        }
-        _ => {
-            return Err(WebRtcErrors::InvalidResponse("Expected ViewSessionResponse".to_string()));
-        }
+        ))
     }
-
-    Ok(())
 }
 ```
 
-#### File: `shared/src/app/operations/transfer.rs`
-
-**Keep `SessionDetailReceived` using proto message:**
-```rust
-pub enum TransferOperationOutput {
-    // ... existing variants ...
-    SessionDetailReceived(schema::devlog::bitbridge::P2pTransferSessionMessage),
-    // ... other variants ...
-}
-```
-
-#### File: `shared/src/app/transfer/commands.rs`
-
-**Update `request_session_detail` (line 287-313):**
-
-Current logic:
-- Streams responses
-- Updates session with description when received
-
-New logic using `UpdateAction`:
-```rust
-pub async fn request_session_detail(
-    &self,
-    peer_id: String,
-    session_id: TransferSessionId,
-    order_id: u64,
-    password: Option<String>
-) -> Result<(), CoreError> {
-    let mut stream = self.stream_from_shell(P2POperation::ViewSessionDetail { peer_id, order_id, password }.into());
-
-    while let Some(output) = stream.next().await {
-        match output {
-            CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(proto_session)) => {
-                log::info!(
-                    "Received session detail for order_id {}: description={:?}, password_protected={}",
-                    proto_session.order_id,
-                    proto_session.description,
-                    proto_session.password_protected
-                );
-
-                // NEW: Use UpdateAction pattern directly with proto message
-                self.update_model(TransferSessionModelEvent::Update(
-                    session_id.clone(),
-                    proto_session.into()  // proto_session implements UpdateAction
-                ));
-                break;
-            }
-            CoreOperationOutput::Error(e) => {
-                log::error!("Error receiving session detail: {:?}", e);
-                return Err(e);
-            }
-            _ => continue
-        }
-    }
-
-    Ok(())
-}
-```
+**Purpose:** Only fetch session details when user has actively selected the session, not automatically for all discovered sessions.
 
 ---
 
-### Phase 4: UI/Module Integration
+## Part 2: Backend - Enhanced Loading States
 
-#### File: `shared/src/app/transfer/module.rs`
+### 2.1 Add Loading State Context to ViewModel
+**File:** `shared/src/app/view_models/receive_session.rs:29-52`
 
-**Update `ViewSession` event handler (line 379-426):**
-
-Current behavior:
-- Checks if should_request based on connection state
-- Requests session detail with password if provided
-
-New behavior:
+**Changes:**
 ```rust
-TransferEvent::ViewSession { password, session_id, .. } => {
-    let session_id = TransferSessionId {
-        order_id: Some(session_id.to_string()),
-        transfer_type: Some(TransferType::Receive)
-    };
+pub struct ReceiveSessionViewModel {
+    // ... existing fields ...
+    pub is_loading: bool,
+    pub loading_status: Option<String>,  // ADD THIS - e.g. "Signalling", "Authorizing..."
+    pub error_message: Option<String>,   // ADD THIS - for retry UI
+    // ... rest of fields ...
+}
+```
 
-    let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
-        return Command::done()
-    };
+**Purpose:** Provide contextual loading text and error state for UI.
 
-    match &session.target {
-        TransferTarget::P2P { connection_state, signalling_key, from_peer, .. } => {
-            // Determine if we should request session detail
-            let should_request = match connection_state {
-                P2PConnectionState::NotConnected |
-                P2PConnectionState::Failed(_) => true,
-                P2PConnectionState::Connected => {
-                    session.resources.is_empty()
+---
+
+### 2.2 Compute Loading Status and Selected Session in View Function
+**File:** `shared/src/app/transfer/module.rs:471-609` (view() function)
+
+**Changes in session mapping (~line 520-560):**
+```rust
+// Helper function to compute loading state for a session
+fn compute_session_loading_state(session: &TransferSession) -> (bool, Option<String>, Option<String>) {
+    let (is_loading, loading_status) = match &session.target {
+        TransferTarget::P2P { from_peer, connection_state, .. } => {
+            match connection_state {
+                P2PConnectionState::NotConnected | P2PConnectionState::Connecting
+                    if from_peer.is_none() => {
+                    (true, Some("Signalling".to_string()))
                 },
-                P2PConnectionState::Connecting => false,
-            };
-
-            if !should_request {
-                return Command::done();
+                P2PConnectionState::Connected if session.resources.is_empty() => {
+                    (true, Some("Authorizing...".to_string()))
+                },
+                P2PConnectionState::Failed(_) => {
+                    (false, None)  // error_message handles this
+                },
+                _ => (false, None)
             }
+        },
+        TransferTarget::Internet { .. } if session.resources.is_empty() => {
+            (true, Some("Loading...".to_string()))
+        },
+        _ => (false, None)
+    };
 
-            // Ensure we're in the finding scope
-            if from_peer.is_none() {
-                let scope = FindingScope::new(signalling_key);
-                if !model.nearby.finding_scopes.contains(&scope) {
-                    log::info!("Adding scope {} for session {}", signalling_key, session.order_id);
-                    return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));
+    let error_message = match &session.target {
+        TransferTarget::P2P { connection_state, .. } => {
+            if let P2PConnectionState::Failed(msg) = connection_state {
+                Some(msg.clone())
+            } else {
+                None
+            }
+        },
+        _ => None
+    };
+
+    (is_loading, loading_status, error_message)
+}
+
+// In view() function, when building ReceiveSessionViewModel
+let (is_loading, loading_status, error_message) = compute_session_loading_state(&session);
+
+let session_vm = ReceiveSessionViewModel {
+    // ... existing fields ...
+    is_loading,
+    loading_status,
+    error_message,
+    // ... rest of fields ...
+};
+
+// After building all session ViewModels, find the selected one
+let selected_session = model.selected_receive_session_id.and_then(|selected_id| {
+    received_sessions.iter()
+        .chain(received_cloud_sessions.iter())
+        .find(|s| s.id == selected_id.to_string())
+        .cloned()
+});
+
+TransferViewModel {
+    transfer_method: model.selected_method.clone(),
+    received_sessions,
+    received_cloud_sessions,
+    cloud_session,
+    p2p_sessions,
+    selected_session  // ADD THIS
+}
+```
+
+**Purpose:**
+- Compute loading status and error messages for all sessions
+- Find and expose the selected session in the ViewModel
+- Frontend can simply read `transferState.selected_session`
+
+---
+
+### 2.3 Enhance TransferSessionStatus Display
+**File:** `shared/src/entities/transfer_session.rs:21-47`
+
+**Option A: Add LoadingContext variant (Recommended)**
+```rust
+pub enum TransferSessionStatus {
+    Initializing { context: Option<String> },  // CHANGE THIS
+    InProgress { bytes_per_second: u64, percentage: f64 },
+    Success,
+    Failed(String),
+    Canceled
+}
+
+impl Display for TransferSessionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TransferSessionStatus::Initializing { context } => {
+                if let Some(ctx) = context {
+                    write!(f, "{}", ctx)
+                } else {
+                    write!(f, "Initializing...")
                 }
-                return Command::done();
-            }
-
-            let peer_id = from_peer.as_ref().unwrap().id().to_string();
-            let session_id_clone = session_id.clone();
-
-            Command::handle_result(move |it| async move {
-                it.app().request_session_detail(peer_id, session_id_clone, session.order_id, password).await
-            })
-        }
-        TransferTarget::Internet { .. } => {
-            Command::handle_result(|it| async move {
-                it.app().view_public_session(session, password).await
-            })
+            },
+            // ... rest unchanged ...
         }
     }
 }
 ```
 
----
+**Option B: Keep existing, use loading_status field instead**
+- Simpler: no need to update all Initializing usages
+- Loading context lives only in ViewModel
 
-## Testing Strategy
-
-### Test Case 1: Non-Password-Protected Session
-1. **Sender** creates P2P session without password
-2. **Receiver** finds session and views it (no password)
-3. **Expected**:
-   - Receiver receives `P2pTransferSessionMessage` with `password_protected=false`
-   - Resources are streamed immediately
-   - Session updates via `UpdateAction`
-
-### Test Case 2: Password-Protected Session - Initial View
-1. **Sender** creates P2P session with password "test123"
-2. **Receiver** finds session and views it (no password provided initially)
-3. **Expected**:
-   - Receiver receives `P2pTransferSessionMessage` with `password_protected=true`
-   - No resources sent
-   - Session updates `is_required_password=true` via `UpdateAction`
-   - UI shows password input field
-
-### Test Case 3: Password-Protected Session - Correct Password
-1. **Receiver** enters correct password "test123" and views session
-2. **Expected**:
-   - Receiver receives `P2pTransferSessionMessage` with `password_protected=true`
-   - Resources are streamed via `ResourceNotificationRequest`
-   - UI updates to show resources
-
-### Test Case 4: Password-Protected Session - Incorrect Password
-1. **Receiver** enters incorrect password "wrong" and views session
-2. **Expected**:
-   - Receiver gets `InvalidPassword` error response
-   - UI shows error message
-   - Session remains in metadata-only state
-
-### Test Case 5: Re-authentication
-1. **Receiver** has metadata for password-protected session
-2. **Receiver** enters password (wrong first, then correct)
-3. **Expected**:
-   - First attempt fails with error
-   - Second attempt succeeds and loads resources
-   - UI updates progressively
+**Recommendation:** Use Option B to minimize changes.
 
 ---
 
-## Key Implementation Details
+## Part 3: Frontend - Simplify State Management & Add Retry UI
 
-### 1. **Single Function for Both Phases**
-Both authentication phases use the same `handle_view_session_request` function. The logic creates appropriate `P2pTransferSessionMessage` based on:
-- `session.is_required_password` flag
-- Presence/absence of `password` parameter
-- Password match validation
+### 3.0 Remove Frontend-Managed selectedSession Observable
+**File:** `web-next/wasm/wasm_core.ts`
 
-### 2. **Direct Proto Message**
-No `clone_metadata_only` helper needed. Instead:
-- Create `P2pTransferSessionMessage` directly with appropriate fields
-- Pass `None` for resources when not authenticated
-- Pass `Some(resources)` when authenticated or not password-protected
+**Remove these (lines 97, 101-111, 171-173, 584-589):**
+```typescript
+// DELETE THIS:
+selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
 
-### 3. **UpdateAction Pattern**
-Follows existing codebase pattern:
-- `P2pTransferSessionMessage` implements `UpdateAction<TransferSession>`
-- Updates both `description` and `is_required_password` fields
-- Receiver uses `TransferSessionModelEvent::Update` with proto message
+public useSelectedSession() {
+    // DELETE entire method - will be replaced
+}
 
-### 4. **Resource Streaming**
-Resources are only streamed when:
-- `resources` parameter is `Some(vec)` in `send_session_detail_response`
-- This happens when session is NOT password-protected OR password is correct
+public updateSelectedSession(session: ReceiveSessionViewModel) {
+    // DELETE entire method - no longer needed
+}
 
-### 5. **State Management**
-Session state transitions via `UpdateAction`:
-1. **Initial**: `resources=[]`, `is_required_password=false`
-2. **Metadata Received**: `is_required_password=true` set by `UpdateAction`, `resources` still `[]`
-3. **Authenticated**: Resources added via `ResourceNotificationRequest` events
+// In updateView(), DELETE this selectedSession sync logic:
+const selectedSession = this.selectedSession.get()
+if (selectedSession) {
+    const newSession = viewModel.transfer?.received_sessions.find(it => it.id === selectedSession.id) ||
+        viewModel.transfer?.received_cloud_sessions.find(it => it.id === selectedSession.id)
+    this.selectedSession.set(newSession)
+}
+```
 
----
+**Replace with simpler hook:**
+```typescript
+public useSelectedSession() {
+    const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | undefined>()
 
-## Files Modified Summary
+    useEffect(() => {
+        return this.transferState.subscribe((transferState) => {
+            if (!isEqual(selectedSession, transferState?.selected_session)) {
+                setSelectedSession(transferState?.selected_session)
+            }
+        })
+    }, [selectedSession])
 
-### Schema Changes (Proto)
-- `libs/schema/proto/devlog/bitbridge/session.proto` - Add `password_protected` to `P2PTransferSessionMessage`
+    return selectedSession
+}
+```
 
-### Rust Implementation
-- `shared/src/entities/transfer_session.rs` - Update `UpdateAction` for `P2pTransferSessionMessage`
-- `shared/src/app/transfer/commands.rs` - Update `handle_view_session_request` and `request_session_detail`
-- `shared/src/app/operations/p2p.rs` - Update `SendSessionDetail` operation signature
-- `shared/src/shell/executor/p2p.rs` - Update executor for new signature
-- `shared/src/protocol/webrtc/webrtc.rs` - Update `send_session_detail` signature
-- `shared/src/protocol/webrtc/peer.rs` - Update `send_session_detail_response` signature
-- `shared/src/app/operations/transfer.rs` - Keep `SessionDetailReceived` with proto message
-- `shared/src/app/transfer/module.rs` - Update `ViewSession` event handling
-
----
-
-## Migration Notes
-
-- **Backward Compatibility**: Existing sessions without password continue to work unchanged
-- **Proto Compatibility**: New `password_protected` field is `required` in proto, needs careful rollout
-- **Client Updates**: UI must handle `is_required_password` flag to show password input when needed
+**Purpose:**
+- Remove duplicate state management in frontend
+- Single source of truth: backend manages selection via selected_receive_session_id
+- Frontend simply reads from transferState.selected_session
 
 ---
 
-## Benefits of This Approach
+### 3.1 Update Session Selection Logic in receive_board.tsx
+**File:** `web-next/app/transfer/receive_board.tsx`
 
-1. ✅ **Single Function**: Both phases handled in `handle_view_session_request`
-2. ✅ **Follows Existing Pattern**: Uses `UpdateAction` like other session updates
-3. ✅ **No Helper Methods**: Direct proto message creation, cleaner code
-4. ✅ **Type Safe**: Proto message enforces structure at compile time
-5. ✅ **Secure**: Password validated server-side, never sent unnecessarily
-6. ✅ **Clear UX**: Distinct states (metadata vs. full session) with clear UI feedback
-7. ✅ **Efficient**: Avoids streaming resources unnecessarily before authentication
-8. ✅ **Maintainable**: Leverages existing message types and flow patterns
+**Find where sessions are clicked (likely in TransferSession component or session list):**
+
+**Replace:**
+```typescript
+// OLD: Manual state update
+onClick={() => {
+    core.updateSelectedSession(item)
+    // ...
+}}
+```
+
+**With:**
+```typescript
+// NEW: Trigger ViewSession event (backend handles selection)
+onClick={() => {
+    core.update(new TransferEventVariantViewSession(
+        item.password ?? undefined,
+        new TransferSessionId(
+            new TransferType(item.is_cloud ? "Internet" : "P2P"),
+            item.id
+        )
+    ))
+    // No need to manually update selected session - backend will do it
+}}
+```
+
+**Purpose:** Selection is now handled by the backend when ViewSession event fires.
+
+---
+
+### 3.2 Display Loading Status
+**File:** `web-next/app/transfer/receive_board.tsx` (ContentBoard component, ~lines 210-221)
+
+**Current:**
+```typescript
+if (isLoading) {
+  return <div className="...">
+    <div className="spinner" />
+    {loadMessage.message && <p>{loadMessage.message}</p>}
+  </div>
+}
+```
+
+**Enhanced:**
+```typescript
+if (isLoading || selectedSession?.is_loading) {
+  return <div className="...">
+    <div className="spinner" />
+
+    {/* Show contextual status */}
+    {selectedSession?.loading_status && (
+      <p className="text-muted-foreground">
+        {selectedSession.loading_status}
+      </p>
+    )}
+
+    {/* Show error with retry */}
+    {selectedSession?.error_message && (
+      <div className="flex flex-col gap-2">
+        <p className="text-red-500">{selectedSession.error_message}</p>
+        <Button onClick={handleRetry}>Retry</Button>
+      </div>
+    )}
+
+    {loadMessage.message && <p>{loadMessage.message}</p>}
+  </div>
+}
+```
+
+---
+
+### 3.3 Implement Retry Handler
+**File:** `web-next/app/transfer/receive_board.tsx`
+
+**Add handler:**
+```typescript
+const handleRetry = () => {
+  if (!selectedSession) return;
+
+  // Re-trigger ViewSession event (same as clicking the session)
+  core.update(new TransferEventVariantViewSession(
+    selectedSession.password ?? undefined,
+    new TransferSessionId(
+      new TransferType(selectedSession.is_cloud ? "Internet" : "P2P"),
+      selectedSession.id
+    )
+  ));
+};
+```
+
+**Purpose:** Allow user to retry failed session loads without refreshing page.
+
+---
+
+### 3.4 Update TypeScript Types (Auto-generated)
+**Ensure new fields appear in generated types:**
+- `ReceiveSessionViewModel`: `loading_status?: string`, `error_message?: string`
+- `TransferViewModel`: `selected_session?: ReceiveSessionViewModel`
+
+Will be generated in step 5.2 below.
+
+---
+
+## Part 4: Data Flow Summary
+
+```
+USER CLICKS SESSION
+  ↓
+TransferEvent::ViewSession
+  ↓
+selected_receive_session_id = Some(order_id)
+  ↓
+┌─────────────────────────────────────┐
+│ P2P PATH                            │
+├─────────────────────────────────────┤
+│ 1. Add FindingScope (if not found)  │
+│ 2. Wait for peer...                 │
+│    loading_status = "Signalling"    │
+│                                     │
+│ PEER CONNECTS                       │
+│   ↓                                 │
+│ NearbyEvent::PeerUpdated            │
+│   ↓                                 │
+│ Check: is_selected?                 │
+│   YES → RequestSessionDetail        │
+│   NO  → Just set owner, no request  │
+│                                     │
+│ REQUESTING DETAILS                  │
+│   loading_status = "Authorizing..." │
+│                                     │
+│ DETAILS RECEIVED                    │
+│   is_loading = false                │
+│   Show resources                    │
+└─────────────────────────────────────┘
+
+┌─────────────────────────────────────┐
+│ INTERNET PATH                       │
+├─────────────────────────────────────┤
+│ 1. Call view_public_session()       │
+│    loading_status = "Loading..."    │
+│                                     │
+│ 2. Subscribe to session stream      │
+│                                     │
+│ 3. Resources arrive                 │
+│    is_loading = false               │
+│    Show resources                   │
+└─────────────────────────────────────┘
+
+ERROR HANDLING:
+  connection_state = Failed(msg)
+    ↓
+  error_message = Some(msg)
+  is_loading = false
+    ↓
+  UI shows error + Retry button
+    ↓
+  User clicks Retry
+    ↓
+  Re-trigger ViewSession event
+```
+
+---
+
+## Part 5: Testing & Build
+
+### 5.1 Verify Compilation
+```bash
+cargo check -p shared
+```
+
+**Expected:** No errors, all new fields compile correctly.
+
+---
+
+### 5.2 Generate TypeScript Types
+```bash
+cargo build -p shared_types \
+  --target wasm32-unknown-unknown \
+  --no-default-features \
+  --features typescript
+```
+
+**Expected:**
+- New fields `loading_status` and `error_message` appear in `ReceiveSessionViewModel` TS interface
+- File location: `web-next/wasm/types/` (or similar)
+
+---
+
+### 5.3 Manual Test Cases
+
+**Test Case 1: P2P Session - Signalling**
+1. Start sender with P2P session
+2. Open receiver, see session in list (don't click yet)
+3. Verify: No auto-request sent
+4. Click session → should show "Signalling"
+5. Sender goes online → should show "Authorizing..."
+6. Resources load → shows files/media
+
+**Test Case 2: P2P Session - Retry on Failure**
+1. Click session while sender offline
+2. Wait for connection timeout/failure
+3. Verify: error_message displayed with Retry button
+4. Click Retry → re-triggers ViewSession
+5. If sender online → should succeed
+
+**Test Case 3: Internet Session - Loading**
+1. Click internet session
+2. Should show "Loading..."
+3. Resources arrive → display content
+
+**Test Case 4: Multiple Sessions**
+1. Have 3 P2P sessions discovered
+2. Click session A → only session A requests details
+3. Sessions B and C remain in discovered state (no auto-request)
+4. Click session B → session B now requests details
+
+---
+
+## Implementation Checklist
+
+### Backend (shared/)
+- [ ] Add `selected_receive_session_id: Option<u64>` to TransferModel
+- [ ] Add `selected_session: Option<ReceiveSessionViewModel>` to TransferViewModel
+- [ ] Set selected_receive_session_id in ViewSession handler
+- [ ] Add conditional check in nearby/module.rs PeerUpdated handler
+- [ ] Add `loading_status: Option<String>` to ReceiveSessionViewModel
+- [ ] Add `error_message: Option<String>` to ReceiveSessionViewModel
+- [ ] Create helper function to compute loading state
+- [ ] Compute selected_session in view() by finding session matching selected_receive_session_id
+- [ ] Run `cargo check -p shared`
+
+### Frontend (web-next/)
+- [ ] Remove `selectedSession` Observable from wasm_core.ts
+- [ ] Remove `updateSelectedSession()` method from wasm_core.ts
+- [ ] Simplify `useSelectedSession()` to read from transferState.selected_session
+- [ ] Remove selectedSession sync logic in updateView()
+- [ ] Update session click handlers to trigger ViewSession event only
+- [ ] Add loading_status display in ContentBoard loading UI
+- [ ] Add error_message display with styling
+- [ ] Implement Retry button in error state
+- [ ] Create handleRetry function to re-trigger ViewSession
+- [ ] Test all loading states (Signalling, Authorizing, Loading)
+- [ ] Test retry functionality
+
+### Build & Verification
+- [ ] Run `cargo check -p shared` - ensure passes
+- [ ] Run TypeScript build command to generate types
+- [ ] Verify new fields in generated TS types
+- [ ] Manual test P2P session selection flow
+- [ ] Manual test retry on connection failure
+- [ ] Manual test internet session loading
+- [ ] Verify no auto-requests for non-selected sessions
+
+---
+
+## File Reference
+
+| File | Lines | Changes |
+|------|-------|---------|
+| `shared/src/app/transfer/module.rs` | 32-37 | Add selected_receive_session_id to TransferModel |
+| `shared/src/app/transfer/module.rs` | 39-46 | Add selected_session to TransferViewModel |
+| `shared/src/app/transfer/module.rs` | ~348-393 | Track selection in ViewSession handler |
+| `shared/src/app/transfer/module.rs` | ~520-560 | Compute loading states + selected_session |
+| `shared/src/app/nearby/module.rs` | 92-144 | Conditional auto-request based on selection |
+| `shared/src/app/view_models/receive_session.rs` | 29-52 | Add loading_status, error_message fields |
+| `web-next/wasm/wasm_core.ts` | 97, 101-111, 171-173, 584-589 | Remove selectedSession Observable, simplify hook |
+| `web-next/app/transfer/receive_board.tsx` | various | Update click handlers to use ViewSession event |
+| `web-next/app/transfer/receive_board.tsx` | ~210-221 | Enhanced loading UI with status/error |
+| `web-next/app/transfer/receive_board.tsx` | new | Add handleRetry function |
+
+---
+
+## Notes
+
+- **Architecture Improvement:** Selected session now managed in backend, not frontend
+  - Single source of truth: `TransferModel.selected_receive_session_id`
+  - Exposed via `TransferViewModel.selected_session`
+  - Frontend simply reads from transferState (no separate Observable)
+- **Breaking Change:** Adding fields to TransferModel requires Default impl update
+- **Backward Compatibility:** New Optional fields in ViewModel are non-breaking
+- **Performance:** Conditional request reduces unnecessary network calls
+- **UX Improvement:** Clear loading states improve user understanding of what's happening
+- **Simplified Frontend:** No manual state synchronization, everything flows through normal view update cycle

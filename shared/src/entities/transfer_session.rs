@@ -569,3 +569,9 @@ impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSes
         data.is_required_password = self.password_protected;
     }
 }
+
+impl UpdateAction<TransferSession> for crate::app::core::model_events::ConnectionError {
+    fn update(self, data: &mut TransferSession) {
+        data.set_connection_failed(self.0);
+    }
+}

@@ -10,6 +10,9 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConnectionError(pub String);
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum ModelEvent<D, I, U> {
     Update(I, U),
@@ -28,7 +31,8 @@ pub enum TransferSessionUpdateEvent {
     ProgressUpdate(TransferProgress),
     ThumbnailUpdated(ThumbnailUpdatedEvent),
     ResourceUpdate(LocalResource),
-    SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage)
+    SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage),
+    ConnectionError(ConnectionError)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
