@@ -79,9 +79,9 @@ where
                         access_url: String::new(),
                         alias: alias.clone(),
                         from_user: user,
-                        description: None,
+                        description: p2p_session.description.clone(),
                         password: None,
-                        is_required_password: p2p_session.password_protected,
+                        is_required_password: false,
                         connection_error: None,
                         cancellation_token: CancellationToken::new(),
                     };

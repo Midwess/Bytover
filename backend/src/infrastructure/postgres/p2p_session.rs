@@ -25,7 +25,7 @@ impl TryFrom<P2PSessionModel> for P2PSession {
             model.device_id as u64,
             model.user_id as u64,
             model.alias,
-            model.password_protected,
+            model.description,
         ))
     }
 }
@@ -39,7 +39,7 @@ impl TryFrom<&P2PSession> for P2PSessionActiveModel {
             device_id: Set(entity.device_id() as i64),
             user_id: Set(entity.user_id() as i64),
             alias: Set(entity.alias().to_string()),
-            password_protected: Set(entity.password_protected()),
+            description: Set(entity.description().map(|s| s.to_string())),
         })
     }
 }

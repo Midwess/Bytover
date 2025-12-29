@@ -33,7 +33,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         let p2p_transfer_service = DiContainer::instance().await.get_p2p_transfer_service().await;
 
         let session = p2p_transfer_service
-            .create_user_device_session(user.order_id, device.order_id, request_body.password_protected)
+            .create_user_device_session(user.order_id, device.order_id, device.name.clone())
             .await?;
 
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
@@ -43,7 +43,7 @@ impl P2pOrchestrationService for P2PGrpcService {
                 session_id: session.session_id(),
                 signalling_room_id: session.owner_signalling_key(),
                 owner_user_id: session.user_id(),
-                password_protected: session.password_protected(),
+                description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
                 signalling_scope: session.get_scope().to_string(),
@@ -75,7 +75,7 @@ impl P2pOrchestrationService for P2PGrpcService {
                 session_id: session.session_id(),
                 signalling_room_id: session.member_signalling_key(),
                 owner_user_id: session.user_id(),
-                password_protected: session.password_protected(),
+                description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
                 signalling_scope: session.get_scope().to_string(),

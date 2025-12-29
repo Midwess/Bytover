@@ -40,8 +40,8 @@ where
                 let avatar = self.app_server().random_avatar().await?;
                 Ok(CoreOperationOutput::String(avatar))
             }
-            RpcOperation::CreateP2PSession { password_protected } => {
-                let p2p_session = self.app_server().create_device_session(password_protected).await?;
+            RpcOperation::CreateP2PSession => {
+                let p2p_session = self.app_server().create_device_session().await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))
             }
         }

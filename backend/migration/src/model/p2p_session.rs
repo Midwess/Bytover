@@ -8,7 +8,7 @@ pub struct Model {
     pub device_id: i64,
     pub user_id: i64,
     pub alias: String,
-    pub password_protected: bool,
+    pub description: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

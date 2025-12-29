@@ -26,9 +26,8 @@ impl P2PTransferService {
         &self,
         user_id: u64,
         device_id: u64,
-        password_protected: bool,
+        device_name: String,
     ) -> Result<P2PSession, P2PTransferErrors> {
-        // Try to find existing session for this user and device
         let existing_session = self
             .p2p_repository
             .find_by_user_id_and_device_id(user_id, device_id)
@@ -40,7 +39,7 @@ impl P2PTransferService {
                 device_id,
                 user_id,
                 session.alias().to_string(),
-                password_protected,
+                Some(device_name),
             );
 
             let updated_session = self.p2p_repository.update_session(updated_session).await?;
@@ -53,7 +52,7 @@ impl P2PTransferService {
             device_id,
             user_id,
             alias,
-            password_protected,
+            Some(device_name),
         )
         .await;
 

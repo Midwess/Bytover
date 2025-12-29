@@ -145,9 +145,9 @@ where
         Ok(())
     }
 
-    pub async fn create_device_session(&self, password_protected: bool) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+    pub async fn create_device_session(&self) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
-        let req = CreateDeviceSessionRequest { password_protected };
+        let req = CreateDeviceSessionRequest {};
         let mut request = Request::new(req);
 
         // Add auth (User + Device extensions)

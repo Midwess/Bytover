@@ -7,7 +7,7 @@ pub struct P2PSession {
     device_id: u64,
     user_id: u64,
     alias: String,
-    password_protected: bool,
+    description: Option<String>,
 }
 
 impl P2PSession {
@@ -15,14 +15,14 @@ impl P2PSession {
         device_id: u64,
         user_id: u64,
         alias: String,
-        password_protected: bool,
+        description: Option<String>,
     ) -> Self {
         Self {
             session_id: gen_id().await,
             device_id,
             user_id,
             alias,
-            password_protected,
+            description,
         }
     }
 
@@ -31,14 +31,14 @@ impl P2PSession {
         device_id: u64,
         user_id: u64,
         alias: String,
-        password_protected: bool,
+        description: Option<String>,
     ) -> Self {
         Self {
             session_id,
             device_id,
             user_id,
             alias,
-            password_protected,
+            description,
         }
     }
 
@@ -58,8 +58,8 @@ impl P2PSession {
         &self.alias
     }
 
-    pub fn password_protected(&self) -> bool {
-        self.password_protected
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
     }
 
     pub fn access_url(&self, base_url: String) -> String {

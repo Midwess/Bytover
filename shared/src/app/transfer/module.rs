@@ -241,7 +241,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::handle_result(move |it| async move {
-                    let p2p_session = it.app().run(RpcOperation::create_p2p_session(password.is_some())).await?;
+                    let p2p_session = it.app().run(RpcOperation::create_p2p_session()).await?;
 
                     let mut session = TransferSession::p2p(
                         selected_resources,
@@ -265,8 +265,19 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
+                        let should_persist = matches!(action, crate::app::core::model_events::TransferSessionUpdateEvent::SessionDetailUpdated(_));
+
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
                             action.update(session);
+
+                            if should_persist {
+                                let session_clone = session.clone();
+                                model.transfer.sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+                                return Command::handle_result(|it| async move {
+                                    let _ = it.app().run(TransferSessionPersistentOperation::save(session_clone)).await;
+                                    Ok(())
+                                }).then(Command::render());
+                            }
                         }
                     }
                     TransferSessionModelEvent::Add(new) => {
