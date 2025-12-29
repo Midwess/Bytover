@@ -176,6 +176,7 @@ impl WebRtc {
 
         self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
         self.shared_context.set_current_id(current_user.peer_id()).await;
+        self.shared_context.set_core_request(core_request.clone()).await;
         log::info!("Starting WebRTC server with my peer = {current_user:?}");
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())

@@ -495,6 +495,7 @@ function TransferSession(props: {
     }
 
     const is_public = session.is_cloud;
+    const is_scope_online = !is_public && (session as ReceiveSessionViewModel).is_scope_online;
 
     const name = session.sender_name
     const display_datetime = session.display_datetime;
@@ -521,8 +522,14 @@ function TransferSession(props: {
                     {is_public
                         ? <Globe
                             className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
-                        : <Wifi
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
+                        : <>
+                            <Wifi
+                                className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
+                            <div
+                                className={`w-2.5 h-2.5 rounded-full absolute top-[-8%] right-[-8%] border-2 border-muted ${is_scope_online ? 'bg-green-500' : 'bg-gray-400'}`}
+                                title={is_scope_online ? 'Online' : 'Offline'}
+                            />
+                        </>
                     }
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>

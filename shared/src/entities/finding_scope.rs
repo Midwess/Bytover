@@ -1,11 +1,14 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
+use schema::devlog::rpc_signalling::server::ScopeState;
 
 #[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct FindingScope {
     scope_id: String,
     is_direct: bool,
     is_owner: bool,
+    is_watcher: bool,
+    state: ScopeState,
 }
 
 impl PartialEq for FindingScope {
@@ -29,8 +32,15 @@ impl FindingScope {
         let is_direct = protocol.contains("direct");
         let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
         let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
+        let is_watcher = request_scope.split(";").any(|s| s.starts_with("watcher"));
 
-        Self { scope_id, is_direct, is_owner }
+        Self {
+            scope_id,
+            is_direct,
+            is_owner,
+            is_watcher,
+            state: ScopeState::Offline,
+        }
     }
 
     pub fn scope_id(&self) -> &str {
@@ -43,6 +53,26 @@ impl FindingScope {
 
     pub fn is_owner(&self) -> bool {
         self.is_owner
+    }
+
+    pub fn is_watcher(&self) -> bool {
+        self.is_watcher
+    }
+
+    pub fn set_watcher(&mut self, is_watcher: bool) {
+        self.is_watcher = is_watcher;
+    }
+
+    pub fn is_online(&self) -> bool {
+        self.state == ScopeState::Online
+    }
+
+    pub fn state(&self) -> ScopeState {
+        self.state
+    }
+
+    pub fn update_state(&mut self, state: ScopeState) {
+        self.state = state;
     }
 
     pub fn from_string(s: String) -> Option<Self> {
@@ -58,11 +88,16 @@ impl FindingScope {
         };
 
         if self.is_direct {
-            if self.is_owner {
-                format!("{};owner", base)
-            } else {
-                format!("{};member", base)
+            let role = if self.is_watcher {
+                "watcher"
             }
+            else if self.is_owner {
+                "owner"
+            } else {
+                "member"
+            };
+
+            format!("{};{}", base, role)
         }
         else {
             base

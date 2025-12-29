@@ -10,6 +10,7 @@ use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::errors::CoreError;
+use schema::devlog::rpc_signalling::server::ScopeState;
 
 use super::CoreOperation;
 
@@ -77,6 +78,10 @@ pub enum P2POperationOutput {
         session_order_id: u64,
         resource: LocalResource,
         peer_id: String,
+    },
+    ScopeStateChanged {
+        scope_id: String,
+        state: ScopeState,
     }
 }
 

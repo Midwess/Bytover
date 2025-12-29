@@ -45,7 +45,7 @@ impl Peer {
             return false;
         };
 
-        self.owned_scopes().iter().any(|it| it.scope_id().eq(scope))
+        self.owned_scopes().iter().any(|it| it.scope_id().eq(scope.scope_id()))
     }
 
     pub fn is_member(&self, session: &TransferSession) -> bool {
@@ -56,7 +56,7 @@ impl Peer {
             return false;
         };
 
-        self.member_scopes().iter().any(|it| it.scope_id().eq(scope))
+        self.member_scopes().iter().any(|it| it.scope_id().eq(scope.scope_id()))
     }
 }
 

@@ -13,7 +13,7 @@ use crate::app::view_models::receive_session::{
     VideoReceiveResourceViewModel
 };
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -358,7 +358,7 @@ impl AppModule<BitBridge> for TransferModule {
                 model.transfer.selected_receive_session_id = Some(session.order_id);
 
                 match &session.target {
-                    TransferTarget::P2P { connection_state, signalling_key, from_peer, .. } => {
+                    TransferTarget::P2P { connection_state, scope, from_peer, .. } => {
                         let should_request = match connection_state {
                             P2PConnectionState::NotConnected |
                             P2PConnectionState::Failed(_) => true,
@@ -371,10 +371,9 @@ impl AppModule<BitBridge> for TransferModule {
                         }
 
                         if from_peer.is_none() {
-                            let scope = FindingScope::new(signalling_key);
-                            if !model.nearby.finding_scopes.contains(&scope) {
-                                log::info!("Adding scope {} for session {}", signalling_key, session.order_id);
-                                return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));
+                            if !model.nearby.finding_scopes.contains(scope) {
+                                log::info!("Adding scope {} for session {}", scope.scope_id(), session.order_id);
+                                return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone())));
                             }
 
                             return Command::done();
@@ -411,6 +410,20 @@ impl AppModule<BitBridge> for TransferModule {
                     order_id: Some(order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
                 };
+
+                if let Some(session) = model.transfer.sessions.lookup(&session_id) {
+                    if let TransferTarget::P2P { ref scope, .. } = session.target {
+                        let mut scope = scope.clone();
+                        scope.set_watcher(false);
+                        model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
+                        model.nearby.finding_scopes.push(scope.clone());
+                        return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope))).then(
+                            Command::handle_result(move |it| async move {
+                                it.app().request_session_detail(peer_id, session_id, order_id, password).await
+                            })
+                        );
+                    }
+                }
 
                 Command::handle_result(move |it| async move {
                     it.app().request_session_detail(peer_id, session_id, order_id, password).await
@@ -550,6 +563,10 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
+                    is_scope_online: match &it.target {
+                        TransferTarget::P2P { scope, .. } => scope.is_online(),
+                        _ => false
+                    },
                     id: it.order_id.to_string(),
                     sender_id,
                     sender_avatar,
@@ -579,8 +596,17 @@ impl AppModule<BitBridge> for TransferModule {
             })
             .collect::<Vec<_>>();
 
-        let (received_cloud_sessions, received_sessions): (Vec<_>, Vec<_>) =
+        let (received_cloud_sessions, mut received_sessions): (Vec<_>, Vec<_>) =
             received_sessions.into_iter().partition(|it| it.is_cloud);
+
+        // Sort P2P sessions: online ones first
+        received_sessions.sort_by(|a, b| {
+            match (a.is_scope_online, b.is_scope_online) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => std::cmp::Ordering::Equal,
+            }
+        });
 
         let selected_session = model.transfer.selected_receive_session_id.and_then(|selected_id| {
             received_sessions.iter()

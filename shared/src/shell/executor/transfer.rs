@@ -73,8 +73,7 @@ where
                         transfer_type: TransferType::Receive,
                         target: TransferTarget::P2P {
                             from_peer: None,
-                            signalling_key: p2p_session.signalling_room_id,
-                            scope: p2p_session.signalling_scope,
+                            scope: crate::entities::finding_scope::FindingScope::new(&p2p_session.signalling_room_id),
                             connection_state: crate::entities::target::P2PConnectionState::NotConnected,
                         },
                         access_url: String::new(),

@@ -7,6 +7,7 @@ use native::native::message_to_shell::{MessageToShell, MessageToShellResponse};
 use native::repository::path_resolver::{PathResolverMessage, PathResolverResponseMessage};
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::{PeerErrorsMessage, ResourceNotificationRequest};
+use schema::devlog::rpc_signalling::server::ScopeState;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
@@ -76,6 +77,7 @@ fn main() {
     gen.register_type::<LocalResourcePath>().unwrap();
     gen.register_type::<ResourceSelection>().unwrap();
     gen.register_type::<FindingScope>().unwrap();
+    gen.register_type::<ScopeState>().unwrap();
     gen.register_type::<GeoLocation>().unwrap();
     gen.register_type::<AlertDialog>().unwrap();
     gen.register_type::<MessageReason>().unwrap();

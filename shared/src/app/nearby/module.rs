@@ -11,6 +11,7 @@ use crate::entities::transfer_session::TransferType;
 use crate::app::transfer::module::TransferEvent;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use schema::devlog::rpc_signalling::server::ScopeState;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NearbyModel {
@@ -38,6 +39,7 @@ pub enum NearbyEvent {
     RemoveFindingScope(FindingScope),
     PeerUpdated { peer: Peer },
     PeerDisconnected { peer_id: String },
+    ScopeStateUpdated { scope_id: String, state: ScopeState },
 }
 
 impl AppModule<BitBridge> for NearbyModule {
@@ -112,7 +114,7 @@ impl AppModule<BitBridge> for NearbyModule {
                         ..
                     } = session.target
                     {
-                        let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope);
+                        let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope.scope_id());
 
                         if from_peer.is_none() && is_peer_owned {
                             session.owner_connected(peer.clone());
@@ -164,6 +166,22 @@ impl AppModule<BitBridge> for NearbyModule {
                                 session.owner_disconnected();
                                 break;
                             }
+                        }
+                    }
+                }
+
+                Command::render()
+            }
+            NearbyEvent::ScopeStateUpdated { scope_id, state } => {
+                if let Some(scope) = model.nearby.finding_scopes.iter_mut()
+                    .find(|s| s.scope_id() == scope_id) {
+                    scope.update_state(state);
+                }
+
+                for session in model.transfer.sessions.iter_mut() {
+                    if let TransferTarget::P2P { scope, .. } = &mut session.target {
+                        if scope.scope_id() == scope_id {
+                            scope.update_state(state);
                         }
                     }
                 }

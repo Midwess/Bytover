@@ -109,6 +109,10 @@ impl AppCommand {
                     self.notify_event(NearbyEvent::ClearNearbyPeers);
                     break;
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
+                    log::info!(target: "nearby", "Scope state changed: {} -> {:?}", scope_id, state);
+                    self.notify_event(NearbyEvent::ScopeStateUpdated { scope_id, state });
+                }
                 CoreOperationOutput::None => {}
                 _ => {
                     panic!("Unexpected output from nearby server, output: {output:?}");
@@ -165,6 +169,9 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");
                     break;
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
+                    self.notify_event(NearbyEvent::ScopeStateUpdated { scope_id, state });
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");

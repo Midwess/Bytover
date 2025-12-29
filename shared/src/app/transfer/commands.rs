@@ -19,13 +19,21 @@ use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus, TransferType};
-use crate::entities::user::User;
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
         let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
+
+        for session in &receive_sessions {
+            if let TransferTarget::P2P { ref scope, .. } = session.target {
+                let mut scope = scope.clone();
+                scope.set_watcher(true);
+                self.update_model(NearbyEvent::AddFindingScope(scope));
+            }
+        }
+
         let events = receive_sessions
             .into_iter()
             .map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it)))
@@ -44,10 +52,8 @@ impl AppCommand {
         ))
             .await;
 
-        // If P2P session, remove scope from Nearby module
-        if let TransferTarget::P2P { ref signalling_key, .. } = transfer_session.target {
-            let finding_scope = FindingScope::new(&signalling_key);
-            self.update_model(NearbyEvent::RemoveFindingScope(finding_scope));
+        if let TransferTarget::P2P { ref scope, .. } = transfer_session.target {
+            self.update_model(NearbyEvent::RemoveFindingScope(scope.clone()));
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
@@ -160,7 +166,7 @@ impl AppCommand {
     pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
         let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
 
-        let Some(mut session) = session_overview else {
+        let Some(session) = session_overview else {
             log::info!("No session found");
             self.run(DialogOperation::message(
                 "Not found 🤔".to_owned(),
@@ -173,6 +179,12 @@ impl AppCommand {
         if let Err(e) = self.run(TransferSessionPersistentOperation::save(session.clone())).await {
             log::error!("Failed to save session: {e:?}");
         };
+
+        if let TransferTarget::P2P { ref scope, .. } = session.target {
+            let mut scope = scope.clone();
+            scope.set_watcher(true);
+            self.update_model(NearbyEvent::AddFindingScope(scope));
+        }
 
         self.update_model(TransferSessionModelEvent::Add(session));
         Ok(())

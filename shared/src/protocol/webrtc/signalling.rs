@@ -1,14 +1,16 @@
 use super::errors::WebRtcErrors;
+use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::finding_scope::FindingScope;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling_client::SignallingClient;
+use crate::shell::api::CoreRequest;
 use futures_util::lock::Mutex;
 use matchbox_protocol::{PeerId, RtcIceServerConfig};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, Message, OfferMessage};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, Message, OfferMessage, ScopeState};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
@@ -43,6 +45,7 @@ pub struct SharedContext {
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: Arc<Mutex<PeerId>>,
     signaller: Arc<Mutex<Weak<SignallingClient>>>,
+    core_request: Arc<Mutex<Option<CoreRequest>>>,
 }
 
 impl Default for SharedContext {
@@ -59,6 +62,7 @@ impl SharedContext {
             peers: Default::default(),
             peer_msg_channels: Default::default(),
             signaller: Default::default(),
+            core_request: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -72,6 +76,10 @@ impl SharedContext {
 
     pub async fn get_current_id(&self) -> PeerId {
         self.current_id.lock().await.clone()
+    }
+
+    pub async fn set_core_request(&self, core_request: CoreRequest) {
+        *self.core_request.lock().await = Some(core_request);
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
@@ -173,6 +181,12 @@ impl SharedContext {
 
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
+    }
+
+    pub async fn send_scope_state(&self, scope_id: String, state: ScopeState) {
+        if let Some(core_request) = self.core_request.lock().await.as_ref() {
+            let _ = core_request.response(P2POperationOutput::ScopeStateChanged { scope_id, state }).await;
+        }
     }
 }
 
@@ -325,6 +339,14 @@ impl Signaller for WebSignaller {
                 n0_future::time::sleep(Duration::from_millis(100)).await;
                 continue;
             };
+
+            if let Some(scope_state_msg) = message.scope_state_changed {
+                let scope_id = scope_state_msg.scope_id.clone();
+                let state = scope_state_msg.state();
+                log::info!("Received scope state changed: {:?} -> {:?}", scope_id, state);
+                self.shared_context.send_scope_state(scope_id, state).await;
+                continue;
+            }
 
             let scopes = message.scopes.clone();
 

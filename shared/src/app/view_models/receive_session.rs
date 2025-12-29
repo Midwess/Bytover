@@ -30,6 +30,7 @@ pub struct FileReceiveResourceViewModel {
 pub struct ReceiveSessionViewModel {
     pub id: String,
     pub is_cloud: bool,
+    pub is_scope_online: bool,
     pub sender_id: String,
     pub sender_avatar: String,
     pub sender_name: String,

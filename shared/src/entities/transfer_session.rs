@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::app::core::model_events::{SessionLoadError, UpdateAction};
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -223,8 +224,7 @@ impl TransferSession {
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
                 from_peer: None,
-                signalling_key,
-                scope,
+                scope: FindingScope::new(&signalling_key),
                 connection_state: P2PConnectionState::NotConnected,
             },
             from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
@@ -265,9 +265,11 @@ impl TransferSession {
     }
 
     pub fn owner_disconnected(&mut self) {
-        if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut self.target {
+        if let TransferTarget::P2P { from_peer, connection_state, scope } = &mut self.target {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
+            scope.set_watcher(true);
+            scope.update_state(schema::devlog::rpc_signalling::server::ScopeState::Offline);
         }
 
         self.is_required_password = false;
