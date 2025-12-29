@@ -111,9 +111,6 @@ pub enum TransferEvent {
         session_order_id: u64,
         resource_order_id: u64
     },
-    PeerDisconnected {
-        peer_id: String
-    },
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -264,34 +261,6 @@ impl AppModule<BitBridge> for TransferModule {
 
                     Ok(())
                 })
-            }
-            TransferEvent::PeerDisconnected { peer_id } => {
-                for session in model.transfer.sessions.iter_mut() {
-                    if session.transfer_type != TransferType::Receive {
-                        continue;
-                    }
-
-                    if let TransferTarget::P2P {
-                        ref mut from_peer,
-                        ..
-                    } = session.target
-                    {
-                        if let Some(ref peer) = from_peer {
-                            if peer.id == peer_id {
-                                log::info!("Cleaning up session {} after peer disconnect", session.order_id);
-
-                                *from_peer = None;
-
-                                session.resources.clear();
-                                session.progress.clear();
-
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                Command::render()
             }
             TransferEvent::ModelEvent(event) => {
                 match event {

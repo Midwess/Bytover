@@ -37,6 +37,7 @@ pub enum NearbyEvent {
     AddFindingScope(FindingScope),
     RemoveFindingScope(FindingScope),
     PeerUpdated { peer: Peer },
+    PeerDisconnected { peer_id: String },
 }
 
 impl AppModule<BitBridge> for NearbyModule {
@@ -144,6 +145,34 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 if peer_lost_ownership {
                     return Command::render();
+                }
+
+                Command::render()
+            }
+            NearbyEvent::PeerDisconnected { peer_id } => {
+                for session in model.transfer.sessions.iter_mut() {
+                    if session.transfer_type != TransferType::Receive {
+                        continue;
+                    }
+
+                    if let TransferTarget::P2P {
+                        ref mut from_peer,
+                        ..
+                    } = session.target
+                    {
+                        if let Some(ref peer) = from_peer {
+                            if peer.id == peer_id {
+                                log::info!("Cleaning up session {} after peer disconnect", session.order_id);
+
+                                *from_peer = None;
+
+                                session.resources.clear();
+                                session.progress.clear();
+
+                                break;
+                            }
+                        }
+                    }
                 }
 
                 Command::render()

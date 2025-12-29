@@ -142,7 +142,7 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
                     self.notify_event(NearbyEvent::RemoveFindingScope(FindingScope::new(&peer.id)));
-                    self.notify_event(TransferEvent::PeerDisconnected { peer_id: peer.id.clone() });
+                    self.notify_event(NearbyEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(scopes)) => {
