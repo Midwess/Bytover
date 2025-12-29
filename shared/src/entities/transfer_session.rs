@@ -70,6 +70,7 @@ pub struct TransferSession {
     pub description: Option<String>,
     pub password: Option<String>,
     pub is_required_password: bool,
+    pub connection_error: Option<SessionLoadError>,
     #[serde(skip)]
     pub cancellation_token: CancellationToken
 }
@@ -229,6 +230,7 @@ impl TransferSession {
             from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
             password,
             is_required_password,
+            connection_error: None,
             cancellation_token: CancellationToken::new()
         }
     }
@@ -238,7 +240,7 @@ impl TransferSession {
         Self {
             alias: "".to_owned(),
             access_url: "".to_owned(),
-            order_id: 0, // It is decided by the backend
+            order_id: 0,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             cancellation_token: CancellationToken::new(),
             resources,
@@ -250,6 +252,7 @@ impl TransferSession {
             from_user: current_user,
             password,
             is_required_password,
+            connection_error: None,
         }
     }
 
@@ -258,6 +261,7 @@ impl TransferSession {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
         }
+        self.connection_error = None;
     }
 
     pub fn owner_disconnected(&mut self) {
@@ -270,6 +274,7 @@ impl TransferSession {
         self.password.take();
         self.progress.clear();
         self.resources.clear();
+        self.connection_error = None;
     }
 
     pub fn set_connecting(&mut self) {
@@ -324,6 +329,7 @@ impl TransferSession {
             description: None,
             password: None,
             is_required_password,
+            connection_error: None,
         }
     }
 
@@ -459,6 +465,13 @@ impl TransferSession {
     }
 
     pub fn status(&self) -> TransferSessionStatus {
+        if let Some(error) = &self.connection_error {
+            return TransferSessionStatus::Initializing {
+                loading_state: None,
+                loading_error: Some(error.0.clone())
+            };
+        }
+
         if let TransferTarget::P2P { connection_state, .. } = &self.target {
             return match connection_state {
                 P2PConnectionState::NotConnected => {
@@ -595,11 +608,6 @@ impl UpdateAction<TransferSession> for P2pTransferSessionMessage {
 
 impl UpdateAction<TransferSession> for SessionLoadError {
     fn update(self, data: &mut TransferSession) {
-        let TransferTarget::P2P { connection_state, .. } = &mut data.target else {
-            data.force_complete(self.0);
-            return;
-        };
-
-        *connection_state = P2PConnectionState::Failed(self.0);
+        data.connection_error = Some(self);
     }
 }

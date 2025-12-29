@@ -83,6 +83,7 @@ where
                         description: None,
                         password: None,
                         is_required_password: p2p_session.password_protected,
+                        connection_error: None,
                         cancellation_token: CancellationToken::new(),
                     };
 
