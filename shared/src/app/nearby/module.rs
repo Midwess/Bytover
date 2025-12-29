@@ -73,15 +73,12 @@ impl AppModule<BitBridge> for NearbyModule {
                 Command::render()
             }
             NearbyEvent::AddFindingScope(scope) => {
-                if !model.nearby.finding_scopes.contains(&scope) {
-                    model.nearby.finding_scopes.push(scope);
-
-                    let scopes = model.nearby.finding_scopes.clone();
-                    return Command::handle_result(|it| async move {
-                        it.app().run(P2POperation::update_finding_scopes(scopes)).await
-                    });
-                }
-                Command::done()
+                model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
+                model.nearby.finding_scopes.push(scope);
+                let scopes = model.nearby.finding_scopes.clone();
+                Command::handle_result(|it| async move {
+                    it.app().run(P2POperation::update_finding_scopes(scopes)).await
+                })
             }
             NearbyEvent::RemoveFindingScope(scope) => {
                 model.nearby.finding_scopes.retain(|s| s != &scope);

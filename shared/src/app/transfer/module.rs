@@ -346,16 +346,22 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await }).then_render()
             }
             TransferEvent::ViewSession { password, session_id, .. } => {
+                log::info!("View session: {}", session_id);
                 let session_id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+                let Some(mut session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+                    log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
 
                 model.transfer.selected_receive_session_id = Some(session.order_id);
+
+                if let TransferTarget::P2P { scope, .. } = &mut session.target {
+                    scope.set_watcher(false);
+                };
 
                 match &session.target {
                     TransferTarget::P2P { connection_state, scope, from_peer, .. } => {
@@ -367,16 +373,13 @@ impl AppModule<BitBridge> for TransferModule {
                         };
 
                         if !should_request {
+                            log::info!("Session {:?} is already connected", connection_state);
                             return Command::done();
                         }
 
                         if from_peer.is_none() {
-                            if !model.nearby.finding_scopes.contains(scope) {
-                                log::info!("Adding scope {} for session {}", scope.scope_id(), session.order_id);
-                                return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone())));
-                            }
-
-                            return Command::done();
+                            log::info!("Adding scope {:?} for session {}", scope.as_string(), session.order_id);
+                            return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone())));
                         }
 
                         let peer_id = from_peer.as_ref().unwrap().id().to_string();

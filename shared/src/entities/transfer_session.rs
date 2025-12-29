@@ -474,7 +474,11 @@ impl TransferSession {
             };
         }
 
-        if let TransferTarget::P2P { connection_state, .. } = &self.target {
+        if let TransferTarget::P2P { connection_state, scope, .. } = &self.target {
+            if !scope.is_online() {
+                return TransferSessionStatus::Initializing { loading_state: Some("Waiting for the session owner to come online...".to_owned()), loading_error: None };
+            }
+
             return match connection_state {
                 P2PConnectionState::NotConnected => {
                     TransferSessionStatus::Initializing { loading_state: Some("Signalling...".to_owned()), loading_error: None }

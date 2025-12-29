@@ -18,6 +18,14 @@ impl PartialEq for FindingScope {
 }
 
 impl FindingScope {
+    pub fn direct_member(scope_id: &str) -> Self {
+        Self::new(&format!("direct://{};member", scope_id))
+    }
+
+    pub fn direct_owned(scope_id: &str) -> Self {
+        Self::new(&format!("direct://{};owner", scope_id))
+    }
+
     pub fn new(request_scope: &str) -> Self {
         let (protocol, scope) = {
             let it = request_scope.split("://").collect::<Vec<_>>();

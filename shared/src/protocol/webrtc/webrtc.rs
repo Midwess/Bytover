@@ -76,7 +76,6 @@ impl WebRtc {
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
-        log::info!("Updating finding scopes: {:?}", scopes);
         self.shared_context.update_finding_scopes(scopes).await;
     }
 

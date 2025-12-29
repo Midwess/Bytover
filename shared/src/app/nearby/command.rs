@@ -67,7 +67,7 @@ impl AppCommand {
         let peer = self.gen_peer(user, device).await;
 
         self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
-        self.notify_event(NearbyEvent::AddFindingScope(FindingScope::new(&peer.id)));
+        self.notify_event(NearbyEvent::AddFindingScope(FindingScope::direct_owned(&peer.id)));
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
@@ -83,7 +83,7 @@ impl AppCommand {
                         removed: vec![]
                     });
 
-                    self.notify_event(NearbyEvent::AddFindingScope(FindingScope::new(&peer.id)));
+                    self.notify_event(NearbyEvent::AddFindingScope(FindingScope::direct_member(&peer.id)));
 
                     self.update_p2p_sessions_with_peer(peer.clone());
 
