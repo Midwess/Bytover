@@ -508,7 +508,8 @@ impl WebRtcPeer {
     pub async fn send_session_detail_response(
         &self,
         request_id: String,
-        session: Option<TransferSession>,
+        session_message: Option<P2pTransferSessionMessage>,
+        resources: Option<Vec<LocalResource>>,
         error: Option<CoreError>,
     ) -> Result<(), WebRtcErrors> {
         log::info!("Sending session detail response");
@@ -518,45 +519,58 @@ impl WebRtcPeer {
             log::error!("Failed to send session detail response: {:?}", error_msg);
             match error_msg {
                 CoreError::PeerRequestError(e) => {
-                    self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(e.into())) })).await?;
+                    self.msg_channel.send_response(
+                        request_id,
+                        Response::ViewSessionResponse(ViewSessionDetailResponse {
+                            result: Some(ResponseResult::Error(e.into()))
+                        })
+                    ).await?;
                 }
                 e => {
                     log::error!("Failed to send session detail response: {:?}", e);
-                    self.msg_channel.send_response(request_id, Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(ResponseResult::Error(PeerErrorsMessage::InvalidRequest.into())) })).await?;
+                    self.msg_channel.send_response(
+                        request_id,
+                        Response::ViewSessionResponse(ViewSessionDetailResponse {
+                            result: Some(ResponseResult::Error(PeerErrorsMessage::InvalidRequest.into()))
+                        })
+                    ).await?;
                 }
             }
-
             return Ok(())
         }
 
-        log::info!("Sending session detail response");
-        let Some(session) = session else {
+        let Some(proto_session) = session_message else {
             return Ok(())
         };
 
-        // Extract user_id and alias from session
-        let user_id = Some(session.from_user.id);
-        let alias = if !session.alias.is_empty() {
-            Some(session.alias.clone())
-        } else {
-            None
-        };
-
-        let proto_session = P2pTransferSessionMessage {
-            order_id: session.order_id,
-            description: session.description.clone(),
-        };
+        log::info!(
+            "Sending session detail: order_id={}, password_protected={}, has_resources={}",
+            proto_session.order_id,
+            proto_session.password_protected,
+            resources.is_some()
+        );
 
         let response = ViewSessionDetailResponse {
-            result: Some(ResponseResult::Session(proto_session))
+            result: Some(ResponseResult::Session(proto_session.clone()))
         };
 
         self.msg_channel.send_response(request_id, Response::ViewSessionResponse(response)).await?;
 
         sleep(Duration::from_millis(100)).await;
 
-        for resource in session.resources {
-            self.send_resource_notification(session.order_id, resource).await?;
+        if let Some(resources) = resources {
+            if !resources.is_empty() {
+                let session_order_id = proto_session.order_id;
+                for resource in resources {
+                    self.send_resource_notification(session_order_id, resource).await?;
+                    sleep(Duration::from_millis(50)).await;
+                }
+            }
+        } else {
+            log::info!(
+                "No resources to send for session {} (password-protected, awaiting auth)",
+                proto_session.order_id
+            );
         }
 
         Ok(())

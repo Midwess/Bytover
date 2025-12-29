@@ -124,12 +124,13 @@ impl WebRtc {
         &self,
         peer_id: String,
         request_id: String,
-        session: Option<TransferSession>,
+        session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        resources: Option<Vec<LocalResource>>,
         error: Option<CoreError>,
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            peer.send_session_detail_response(request_id, session, error).await
+            peer.send_session_detail_response(request_id, session_message, resources, error).await
         } else {
             Err(WebRtcErrors::ConnectionNotFound(peer_id))
         }

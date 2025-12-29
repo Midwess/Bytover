@@ -28,7 +28,8 @@ pub enum P2POperation {
     SendSessionDetail {
         peer_id: String,
         request_id: String,
-        session: Option<TransferSession>,
+        session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        resources: Option<Vec<LocalResource>>,
         error: Option<CoreError>
     },
     DownloadResource {
@@ -104,12 +105,29 @@ impl P2POperation {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::ViewSessionDetail { peer_id, order_id, password })).map(|it| it.result())
     }
 
-    pub fn send_session_detail(peer_id: String, request_id: String, session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session: Some(session), error: None })).map(|it| it.result())
+    pub fn send_session_detail(
+        peer_id: String,
+        request_id: String,
+        session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        resources: Option<Vec<LocalResource>>
+    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
+            peer_id,
+            request_id,
+            session_message,
+            resources,
+            error: None
+        })).map(|it| it.result())
     }
 
     pub fn send_session_detail_error(peer_id: String, request_id: String, error: CoreError) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail { peer_id, request_id, session: None, error: Some(error) })).map(|it| it.result())
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
+            peer_id,
+            request_id,
+            session_message: None,
+            resources: None,
+            error: Some(error)
+        })).map(|it| it.result())
     }
 
     pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {

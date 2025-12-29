@@ -61,6 +61,10 @@ where
             TransferOperation::FindPublicSession { alias } => {
                 // Try P2P session first
                 if let Ok(Some(p2p_session)) = self.app_server().find_p2p_session_by_alias(alias.clone()).await {
+                    let Some(user) = self.app_server().find_user(p2p_session.owner_user_id).await? else {
+                        return Err(CoreError::BadRequest("Not found session".to_owned()));
+                    };
+
                     // Create P2P transfer session
                     let transfer_session = TransferSession {
                         order_id: p2p_session.session_id,
@@ -75,7 +79,7 @@ where
                         },
                         access_url: String::new(),
                         alias: alias.clone(),
-                        from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
+                        from_user: user,
                         description: None,
                         password: None,
                         is_required_password: p2p_session.password_protected,

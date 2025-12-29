@@ -432,8 +432,9 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let session = model.transfer.sessions.lookup(&session_id).cloned();
+                let device = model.environment.device.clone();
                 Command::handle_result(move |it| async move {
-                    it.app().handle_view_session_request(peer_id, request_id, password, session).await
+                    it.app().handle_view_session_request(peer_id, request_id, password, session, device).await
                 })
             }
             TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
@@ -508,12 +509,13 @@ impl AppModule<BitBridge> for TransferModule {
             .filter(|it| it.transfer_type == TransferType::Receive)
             .filter_map(|it| {
                 let from_user = &it.from_user;
+                log::info!("Received session user, rendering: {:?}", it);
                 let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading) = match &it.target {
                     TransferTarget::P2P { from_peer, .. } => {
                         let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
                         let has_details = !it.resources.is_empty();
                         let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
-                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), "Nearby".to_string(), alias, None, None, it.is_required_password, !has_details)
+                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), it.description.clone().unwrap_or_default(), alias, None, None, it.is_required_password, !has_details)
                     }
                     TransferTarget::Internet { .. } => {
                         let access_url_ref = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };

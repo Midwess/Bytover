@@ -552,6 +552,14 @@ impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {
 
 impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
     fn update(self, data: &mut TransferSession) {
+        log::info!(
+            "Updated session {} with description={:?}, password_protected={}",
+            data.order_id,
+            self.description,
+            self.password_protected
+        );
+
         data.description = self.description;
+        data.is_required_password = self.password_protected;
     }
 }

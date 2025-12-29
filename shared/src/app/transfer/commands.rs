@@ -13,6 +13,7 @@ use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
+use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
@@ -158,7 +159,7 @@ impl AppCommand {
     pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
         let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
 
-        let Some(session) = session_overview else {
+        let Some(mut session) = session_overview else {
             log::info!("No session found");
             self.run(DialogOperation::message(
                 "Not found 🤔".to_owned(),
@@ -249,33 +250,90 @@ impl AppCommand {
         peer_id: String,
         request_id: String,
         password: Option<String>,
-        session: Option<TransferSession>
+        session: Option<TransferSession>,
+        device_info: Option<DeviceInfo>
     ) -> Result<(), CoreError> {
-        let Some(session) = session else {
+        use schema::devlog::bitbridge::{P2pTransferSessionMessage, PeerErrorsMessage};
+
+        let Some(mut session) = session else {
             log::warn!("Failed to load session detail: session not found");
+            self.run(P2POperation::send_session_detail_error(
+                peer_id,
+                request_id,
+                CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)
+            )).await?;
             return Ok(());
         };
 
-        let is_password_valid = if session.is_required_password {
+        session.description = device_info.map(|it| format!("{} - {}", it.name, it.platform.as_str_name()));
+
+        if session.is_required_password {
             match (&session.password, &password) {
-                (Some(expected), Some(provided)) => expected == provided,
-                (Some(_), None) => false,
-                (None, _) => true
+                (Some(expected), Some(provided)) if expected == provided => {
+                    let proto_session = P2pTransferSessionMessage {
+                        order_id: session.order_id,
+                        description: session.description.clone(),
+                        password_protected: true,
+                    };
+
+                    self.run(P2POperation::send_session_detail(
+                        peer_id,
+                        request_id,
+                        Some(proto_session),
+                        Some(session.resources)
+                    )).await?;
+                }
+                (Some(_), None) => {
+                    let proto_session = P2pTransferSessionMessage {
+                        order_id: session.order_id,
+                        description: session.description.clone(),
+                        password_protected: true,
+                    };
+
+                    self.run(P2POperation::send_session_detail(
+                        peer_id,
+                        request_id,
+                        Some(proto_session),
+                        None
+                    )).await?;
+                }
+                (Some(_), Some(_)) => {
+                    log::warn!("Invalid password for session {}", session.order_id);
+                    self.run(P2POperation::send_session_detail_error(
+                        peer_id,
+                        request_id,
+                        CoreError::PeerRequestError(PeerErrorsMessage::InvalidPassword)
+                    )).await?;
+                }
+                (None, _) => {
+                    let proto_session = P2pTransferSessionMessage {
+                        order_id: session.order_id,
+                        description: session.description.clone(),
+                        password_protected: false,
+                    };
+
+                    self.run(P2POperation::send_session_detail(
+                        peer_id,
+                        request_id,
+                        Some(proto_session),
+                        Some(session.resources)
+                    )).await?;
+                }
             }
         } else {
-            true
-        };
+            let proto_session = P2pTransferSessionMessage {
+                order_id: session.order_id,
+                description: session.description.clone(),
+                password_protected: false,
+            };
 
-        if !is_password_valid {
-            log::warn!("Failed to load session detail: invalid password");
-            return Ok(());
+            self.run(P2POperation::send_session_detail(
+                peer_id,
+                request_id,
+                Some(proto_session),
+                Some(session.resources)
+            )).await?;
         }
-
-        self.run(P2POperation::send_session_detail(
-            peer_id,
-            request_id,
-            session
-        )).await?;
 
         Ok(())
     }
@@ -291,10 +349,15 @@ impl AppCommand {
 
         while let Some(output) = stream.next().await {
             match output {
-                CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(session)) => {
-                    log::info!("Received session detail for order_id {}: description={:?}", session.order_id, session.description);
+                CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(proto_session)) => {
+                    log::info!(
+                        "Received session detail for order_id {}: description={:?}, password_protected={}",
+                        proto_session.order_id,
+                        proto_session.description,
+                        proto_session.password_protected
+                    );
 
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), session.into()));
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), proto_session.into()));
                     break;
                 }
                 CoreOperationOutput::Error(e) => {
