@@ -12,6 +12,7 @@ use core_services::db::repository::abstraction::id::DbId;
 use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
 use schema::devlog::bitbridge::P2pTransferSessionMessage;
+use schema::devlog::rpc_signalling::server::ScopeState;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -269,7 +270,7 @@ impl TransferSession {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
             scope.set_watcher(true);
-            scope.update_state(schema::devlog::rpc_signalling::server::ScopeState::Offline);
+            scope.update_state(ScopeState::Offline);
         }
 
         self.is_required_password = false;

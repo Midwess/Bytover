@@ -532,9 +532,9 @@ function TransferSession(props: {
                     }
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
+                    <p className={"text-primaryText text-sm"}>{session.alias}</p>
                     <p className={"text-primaryText text-sm text-start"}>{name}</p>
-                    <p className={"text-primaryText/70 text-xs"}>{session.alias}</p>
-                    <p className={"text-primaryText/70 text-xs"}>{session.sender_description}</p>
+                    <p className={"text-primaryText/70 text-sm"}>{session.sender_description}</p>
                 </div>
             </div>
             <div className="flex items-center gap-2">
