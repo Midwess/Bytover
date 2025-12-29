@@ -557,15 +557,13 @@ impl AppModule<BitBridge> for TransferModule {
             })
             .collect::<Vec<_>>();
 
-        // TODO: Implement split
-        let mut cloud_sessions = received_sessions.clone();
-        cloud_sessions.retain(|it| it.is_cloud);
-        received_sessions.retain(|it| !it.is_cloud);
+        let (received_cloud_sessions, received_sessions): (Vec<_>, Vec<_>) =
+            received_sessions.into_iter().partition(|it| it.is_cloud);
 
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
             received_sessions,
-            received_cloud_sessions: cloud_sessions,
+            received_cloud_sessions,
             cloud_session: model.transfer.sessions.iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_public())
