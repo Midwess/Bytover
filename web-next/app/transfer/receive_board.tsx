@@ -533,16 +533,29 @@ function TransferSession(props: {
 
                 {/* Content Section */}
                 <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
-                    {/* Alias tag */}
-                    <span className={`px-1 py-0.3 rounded-md text-[10px] font-medium border w-fit ${
-                        is_public
-                            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                            : is_scope_online
-                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                    }`}>
-                        {session.alias}
-                    </span>
+                    {/* Alias tag and password */}
+                    <div className={"flex flex-row items-center gap-1.5"}>
+                        <span className={`px-1 py-0.3 rounded-md text-xs font-medium border w-fit ${
+                            is_public
+                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                : is_scope_online
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                        }`}>
+                            {session.alias}
+                        </span>
+                        {is_required_password && (
+                            <div className={"bg-muted-foreground/20 rounded-md p-0.5 border border-white/10"}>
+                                <Image
+                                    alt={"lock"}
+                                    width={10}
+                                    height={10}
+                                    className={"w-2.5 h-2.5"}
+                                    src={"/lock.svg"}
+                                />
+                            </div>
+                        )}
+                    </div>
 
                     {/* Name */}
                     <p className={"text-start text-sm text-primaryText font-semibold"}>{name}</p>
@@ -553,7 +566,7 @@ function TransferSession(props: {
                     )}
                 </div>
 
-                {/* Right Section - Progress & Password */}
+                {/* Right Section - Progress */}
                 <div className={"flex flex-col items-end gap-1.5 flex-shrink-0"}>
                     <CircleProgress
                         isCompleted={is_completed}
@@ -562,17 +575,6 @@ function TransferSession(props: {
                         size={28}
                         strokeWidth={3}
                     />
-                    {is_required_password && (
-                        <div className={"bg-muted-foreground/20 rounded-md p-1 border border-white/10"}>
-                            <Image
-                                alt={"lock"}
-                                width={10}
-                                height={10}
-                                className={"w-2.5 h-2.5"}
-                                src={"/lock.svg"}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </button>

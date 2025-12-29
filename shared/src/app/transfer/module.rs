@@ -384,7 +384,6 @@ impl AppModule<BitBridge> for TransferModule {
                         };
 
                         if !should_request {
-                            log::info!("Session {:?} is already connected", connection_state);
                             return Command::done();
                         }
 
