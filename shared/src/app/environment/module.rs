@@ -5,6 +5,7 @@ use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 
@@ -29,7 +30,8 @@ pub enum EnvironmentEvent {
     UpdateAutoLaunchNearby {
         auto: bool,
         anonymous: bool
-    }
+    },
+    DeviceInfoUpdated(DeviceInfo)
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -43,10 +45,19 @@ impl AppModule<BitBridge> for EnvironmentModule {
         _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
+            EnvironmentEvent::DeviceInfoUpdated(device) => {
+                model.environment.device = Some(device);
+                Command::render()
+            }
             EnvironmentEvent::AppLaunched { auto_launch_nearby, allowed_nearby_anonymous } => {
                 model.environment.auto_launch_nearby = auto_launch_nearby;
                 model.environment.allowed_nearby_anonymous = allowed_nearby_anonymous;
                 Command::handle_result(|ctx| async move {
+                    let device = ctx.app().run(DeviceOperation::get_device_info()).await;
+                    if let Some(device) = device {
+                        ctx.notify_event(EnvironmentEvent::DeviceInfoUpdated(device));
+                    }
+
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
                     ctx.app().notify_event(ShelfEvent::Launch);
                     ctx.app().notify_event(TransferEvent::Launch);

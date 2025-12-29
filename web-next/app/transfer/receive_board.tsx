@@ -498,7 +498,6 @@ function TransferSession(props: {
     const is_scope_online = !is_public && (session as ReceiveSessionViewModel).is_scope_online;
 
     const name = session.sender_name
-    const display_datetime = session.display_datetime;
     const avatar_url = session.sender_avatar
     const is_required_password = session.password_required;
 
@@ -534,7 +533,8 @@ function TransferSession(props: {
                 </div>
                 <div className={"flex flex-col gap-1 items-start"}>
                     <p className={"text-primaryText text-sm text-start"}>{name}</p>
-                    <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
+                    <p className={"text-primaryText/70 text-xs"}>{session.alias}</p>
+                    <p className={"text-primaryText/70 text-xs"}>{session.sender_description}</p>
                 </div>
             </div>
             <div className="flex items-center gap-2">

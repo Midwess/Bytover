@@ -278,7 +278,7 @@ impl AppCommand {
             return Ok(());
         };
 
-        session.description = device_info.map(|it| format!("{} - {}", it.name, it.platform.as_str_name()));
+        session.description = device_info.map(|it| format!("{}", it.name));
 
         if session.is_required_password {
             match (&session.password, &password) {
