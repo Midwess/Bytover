@@ -175,44 +175,38 @@ function ContentBoard() {
         </div>
     }
 
-    if (selectedSession.password_required && !selectedSession.password) {
-        return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
-            <div className={"w-[50%] flex flex-col gap-4"}>
-                <p className={"text-muted-foreground flex flex-row items-center"}>
-                    <Image alt={"lock"} width={10} height={10}
-                           className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
-                           color={'white'}/>
-                    This session is password protected</p>
-                <input type="password" name="fake-password" style={{display: 'none'}}/>
-                <div className="flex flex-col gap-2">
-                    <Input
-                        className="h-10"
-                        placeholder="Enter password"
-                        value={enteredPassword}
-                        onChange={(e) => setEnteredPassword(e.target.value)}
-                        type="password"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                onSelected()
-                            }
-                        }}
-                    />
-                    {selectedSession.error_message && (
-                        <p className="text-red-500 text-sm">{selectedSession.error_message}</p>
-                    )}
-                </div>
-                <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
-            </div>
-        </div>
-    }
-
-    if (!selectedSession) {
-        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
-            <p>No session selected</p>
-        </div>
-    }
-
     if (isLoading) {
+        if (selectedSession.password_required && !selectedSession.password) {
+            return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
+                <div className={"w-[50%] flex flex-col gap-4"}>
+                    <p className={"text-muted-foreground flex flex-row items-center"}>
+                        <Image alt={"lock"} width={10} height={10}
+                               className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                               color={'white'}/>
+                        This session is password protected</p>
+                    <input type="password" name="fake-password" style={{display: 'none'}}/>
+                    <div className="flex flex-col gap-2">
+                        <Input
+                            className="h-10"
+                            placeholder="Enter password"
+                            value={enteredPassword}
+                            onChange={(e) => setEnteredPassword(e.target.value)}
+                            type="password"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    onSelected()
+                                }
+                            }}
+                        />
+                        {selectedSession.error_message && (
+                            <p className="text-red-500 text-sm">{selectedSession.error_message}</p>
+                        )}
+                    </div>
+                    <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
+                </div>
+            </div>
+        }
+
         return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
             <LoaderCircle className={"animate-spin"}/>
 
@@ -241,6 +235,12 @@ function ContentBoard() {
             {loadMessage.message && !selectedSession.error_message && (
                 <p className="text-red-500">{loadMessage.message}</p>
             )}
+        </div>
+    }
+
+    if (!selectedSession) {
+        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
+            <p>No session selected</p>
         </div>
     }
 

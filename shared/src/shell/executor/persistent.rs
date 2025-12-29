@@ -111,10 +111,8 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::ResourceType(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
-                if let TransferTarget::P2P { connection_state, from_peer, .. } = &mut session.target {
-                    *connection_state = P2PConnectionState::NotConnected;
-                    *from_peer = None;
-                }
+                // Reset back to disconnected state
+                session.owner_disconnected();
                 let session = self.transfer_session_repository().create(session).await?;
                 Ok(session.into())
             }

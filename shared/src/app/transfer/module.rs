@@ -18,15 +18,13 @@ use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, ResourceType};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_method::TransferMethodSelection;
-use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
+use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use crate::repository::transfer_session::TransferSessionId;
 use core_services::db::repository::abstraction::id::{DbId, VecTableLookup};
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use serde::{Deserialize, Serialize};
-use url::Url;
-use core_services::utils::cancellation::CancellationToken;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -473,7 +471,7 @@ impl AppModule<BitBridge> for TransferModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        let mut received_sessions = model
+        let received_sessions = model
             .transfer
             .sessions
             .iter()
@@ -481,26 +479,28 @@ impl AppModule<BitBridge> for TransferModule {
             .filter_map(|it| {
                 let from_user = &it.from_user;
                 let is_p2p = it.is_p2p_connected();
-                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading, loading_status, error_message) = match &it.target {
-                    TransferTarget::P2P { from_peer, connection_state, .. } => {
+
+                let status = it.status();
+                let is_loading = matches!(status, TransferSessionStatus::Initializing { .. });
+                let loading_status = if let TransferSessionStatus::Initializing { loading_state: Some(text), .. } = &status {
+                    Some(text.clone())
+                } else {
+                    None
+                };
+
+                let error_message = if let TransferSessionStatus::Failed(msg) = &status {
+                    Some(msg.clone())
+                } else if let TransferSessionStatus::Initializing { loading_error: Some(error), .. } = &status {
+                    Some(error.clone())
+                } else {
+                    None
+                };
+
+                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password) = match &it.target {
+                    TransferTarget::P2P { from_peer, .. } => {
                         let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
-                        let has_details = !it.resources.is_empty();
                         let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
-
-                        let (is_loading, loading_status, error_message) = match connection_state {
-                            P2PConnectionState::NotConnected | P2PConnectionState::Connecting if from_peer.is_none() => {
-                                (true, Some("Signalling".to_string()), None)
-                            }
-                            P2PConnectionState::Connected if !has_details => {
-                                (true, Some("Authorizing...".to_string()), None)
-                            }
-                            P2PConnectionState::Failed(msg) => {
-                                (false, None, Some(msg.clone()))
-                            }
-                            _ => (false, None, None)
-                        };
-
-                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), it.description.clone().unwrap_or_default(), alias, None, None, it.is_required_password, is_loading, loading_status, error_message)
+                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), it.description.clone().unwrap_or_default(), alias, None, None, it.is_required_password)
                     }
                     TransferTarget::Internet { .. } => {
                         let access_url_ref = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
@@ -509,9 +509,7 @@ impl AppModule<BitBridge> for TransferModule {
                             Some(a) => format!("{} ({})", from_user.name, a),
                             None => from_user.name.to_string()
                         };
-                        let is_loading = it.resources.is_empty();
-                        let loading_status = if is_loading { Some("Loading...".to_string()) } else { None };
-                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, access_url_ref, it.password.clone(), it.is_required_password, is_loading, loading_status, None)
+                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, access_url_ref, it.password.clone(), it.is_required_password)
                     }
                 };
 
@@ -628,7 +626,7 @@ impl AppModule<BitBridge> for TransferModule {
                         password: it.password.clone(),
                         session_id: it.order_id.to_string(),
                         is_completed: it.is_completed(),
-                        is_in_progress: !it.is_completed() && !it.is_canceled(),
+                        is_in_progress: !it.is_completed(),
                         progress: it.total_progress(),
                         access_url: None
                     })

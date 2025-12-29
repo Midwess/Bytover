@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::app::core::model_events::UpdateAction;
+use crate::app::core::model_events::{SessionLoadError, UpdateAction};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -10,7 +10,7 @@ use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
 use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
-use devlog_sdk::distributed_id::gen_id_sync;
+use schema::devlog::bitbridge::P2pTransferSessionMessage;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -20,17 +20,28 @@ pub enum TransferType {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferSessionStatus {
-    Initializing,
+    Initializing {
+        loading_error: Option<String>,
+        loading_state: Option<String>
+    },
     InProgress { bytes_per_second: u64, percentage: f64 },
     Success,
     Failed(String),
     Canceled
 }
 
+impl TransferSessionStatus {
+    pub fn is_completed(&self) -> bool {
+        matches!(self, TransferSessionStatus::Success | TransferSessionStatus::Failed(_) | TransferSessionStatus::Canceled)
+    }
+}
+
 impl Display for TransferSessionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransferSessionStatus::Initializing => write!(f, "Initializing..."),
+            TransferSessionStatus::Initializing { loading_state: Some(text), loading_error: None } => write!(f, "{text}"),
+            TransferSessionStatus::Initializing { loading_error: Some(text), .. } => write!(f, "Error: {text}"),
+            TransferSessionStatus::Initializing {.. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 let kb_per_second = *bytes_per_second as f64 / 1000.0;
                 if kb_per_second < 100.0 {
@@ -41,7 +52,7 @@ impl Display for TransferSessionStatus {
             }
             TransferSessionStatus::Success => write!(f, "Done ☺️!"),
             TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
-            TransferSessionStatus::Canceled => write!(f, "Canceled")
+            TransferSessionStatus::Canceled => write!(f, "Canceled"),
         }
     }
 }
@@ -255,6 +266,8 @@ impl TransferSession {
             *connection_state = P2PConnectionState::NotConnected;
         }
 
+        self.is_required_password = false;
+        self.password.take();
         self.progress.clear();
         self.resources.clear();
     }
@@ -406,7 +419,7 @@ impl TransferSession {
     }
 
     pub fn is_completed(&self) -> bool {
-        self.progress.iter().all(|it| it.is_completed())
+        self.status().is_completed()
     }
 
     pub fn is_canceled(&self) -> bool {
@@ -449,17 +462,22 @@ impl TransferSession {
         if let TransferTarget::P2P { connection_state, .. } = &self.target {
             return match connection_state {
                 P2PConnectionState::NotConnected => {
-                    TransferSessionStatus::Initializing
+                    TransferSessionStatus::Initializing { loading_state: Some("Signalling...".to_owned()), loading_error: None }
                 }
                 P2PConnectionState::Connecting => {
-                    TransferSessionStatus::Initializing
+                    TransferSessionStatus::Initializing { loading_state: Some("Dialing...".to_owned()), loading_error: None }
                 }
                 P2PConnectionState::Failed(msg) => {
-                    TransferSessionStatus::Failed(msg.clone())
+                    if self.resources.is_empty() {
+                        TransferSessionStatus::Initializing { loading_state: None, loading_error: Some(msg.clone()) }
+                    }
+                    else {
+                        TransferSessionStatus::Failed(msg.clone())
+                    }
                 }
                 P2PConnectionState::Connected => {
                     if self.resources.is_empty() {
-                        return TransferSessionStatus::Initializing;
+                        return TransferSessionStatus::Initializing { loading_state: Some("Waiting for resources...".to_owned()), loading_error: None };
                     }
 
                     TransferSessionStatus::Success
@@ -468,7 +486,7 @@ impl TransferSession {
         }
 
         if self.is_initializing() {
-            return TransferSessionStatus::Initializing;
+            return TransferSessionStatus::Initializing { loading_state: Some("Waiting for resources...".to_owned()), loading_error: None };
         }
 
         let failed_messages = self
@@ -556,7 +574,7 @@ impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {
     }
 }
 
-impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSessionMessage {
+impl UpdateAction<TransferSession> for P2pTransferSessionMessage {
     fn update(self, data: &mut TransferSession) {
         log::info!(
             "Updated session {} with description={:?}, password_protected={}",
@@ -567,11 +585,21 @@ impl UpdateAction<TransferSession> for schema::devlog::bitbridge::P2pTransferSes
 
         data.description = self.description;
         data.is_required_password = self.password_protected;
+        let TransferTarget::P2P { connection_state, .. } = &mut data.target else {
+            return;
+        };
+
+        *connection_state = P2PConnectionState::Connected;
     }
 }
 
-impl UpdateAction<TransferSession> for crate::app::core::model_events::ConnectionError {
+impl UpdateAction<TransferSession> for SessionLoadError {
     fn update(self, data: &mut TransferSession) {
-        data.set_connection_failed(self.0);
+        let TransferTarget::P2P { connection_state, .. } = &mut data.target else {
+            data.force_complete(self.0);
+            return;
+        };
+
+        *connection_state = P2PConnectionState::Failed(self.0);
     }
 }

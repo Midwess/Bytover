@@ -161,12 +161,7 @@ impl AppModule<BitBridge> for NearbyModule {
                         if let Some(ref peer) = from_peer {
                             if peer.id == peer_id {
                                 log::info!("Cleaning up session {} after peer disconnect", session.order_id);
-
-                                *from_peer = None;
-
-                                session.resources.clear();
-                                session.progress.clear();
-
+                                session.owner_disconnected();
                                 break;
                             }
                         }

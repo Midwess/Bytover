@@ -5,7 +5,7 @@ use core_services::utils::string::StringExt;
 use schema::devlog::bitbridge::PeerErrorsMessage;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::{ConnectionError, TransferSessionModelEvent, UpdateAction};
+use crate::app::core::model_events::{SessionLoadError, TransferSessionModelEvent, UpdateAction};
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
@@ -369,7 +369,7 @@ impl AppCommand {
                     };
 
                     log::error!("Error receiving session detail: {:?}", e);
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), ConnectionError(msg).into()));
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), SessionLoadError(msg).into()));
                     return Err(e);
                 }
                 _ => continue
