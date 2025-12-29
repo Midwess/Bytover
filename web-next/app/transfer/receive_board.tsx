@@ -511,38 +511,70 @@ function TransferSession(props: {
     return <>
         <button
             onClick={onPress}
-            className={"w-full p-1 flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between hover:bg-muted-foreground/50 hover:cursor-pointer"}>
-            <div className={"flex flex-row items-center gap-5"}>
-                <div
-                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
-                    <Avatar className={"p-1"}>
-                        <AvatarImage src={avatar_url} />
-                    </Avatar>
-                    {is_public
-                        ? <Globe
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
-                        : <>
-                            <Wifi
-                                className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
-                            <div
-                                className={`w-3.5 h-3.5 rounded-full absolute top-[-8%] right-[-8%] border-2 border-muted ${is_scope_online ? 'bg-green-500' : 'bg-gray-400'}`}
-                                title={is_scope_online ? 'Online' : 'Offline'}
+            className={"w-full bg-muted/50 rounded-xl p-2.5 h-fit border border-white/10 hover:bg-muted hover:border-white/20 hover:cursor-pointer"}>
+            <div className={"flex flex-row items-start gap-3"}>
+                {/* Avatar Section */}
+                <div className={"relative flex-shrink-0"}>
+                    <div className={"bg-gradient-to-br from-bluePrimary to-bluePrimary/80 rounded-xl p-1 w-11 h-11"}>
+                        <Avatar className={"w-full h-full"}>
+                            <AvatarImage src={avatar_url} className={"rounded-lg"} />
+                        </Avatar>
+                    </div>
+                    {is_public ? (
+                        <div className={"absolute -bottom-1 -right-1 bg-bluePrimary rounded-full p-1 border-2 border-muted"}>
+                            <Globe className={"w-3 h-3 text-white"} />
+                        </div>
+                    ) : (
+                        <div className={"absolute -bottom-1 -right-1 bg-bluePrimary rounded-full p-1 border-2 border-muted"}>
+                            <Wifi className={"w-3 h-3 text-white"} />
+                        </div>
+                    )}
+                </div>
+
+                {/* Content Section */}
+                <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
+                    {/* Alias tag */}
+                    <span className={`px-1 py-0.3 rounded-md text-[10px] font-medium border w-fit ${
+                        is_public
+                            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                            : is_scope_online
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                    }`}>
+                        {session.alias}
+                    </span>
+
+                    {/* Name */}
+                    <p className={"text-start text-sm text-primaryText font-semibold"}>{name}</p>
+
+                    {/* Description */}
+                    {session.sender_description && (
+                        <p className={"text-start text-[11px] text-primaryText/60 line-clamp-1"}>{session.sender_description}</p>
+                    )}
+                </div>
+
+                {/* Right Section - Progress & Password */}
+                <div className={"flex flex-col items-end gap-1.5 flex-shrink-0"}>
+                    <CircleProgress
+                        isCompleted={is_completed}
+                        isInProgress={!!progress && progress < 1}
+                        progress={progress}
+                        size={28}
+                        strokeWidth={3}
+                    />
+                    {is_required_password && (
+                        <div className={"bg-muted-foreground/20 rounded-md p-1 border border-white/10"}>
+                            <Image
+                                alt={"lock"}
+                                width={10}
+                                height={10}
+                                className={"w-2.5 h-2.5"}
+                                src={"/lock.svg"}
                             />
-                        </>
-                    }
-                </div>
-                <div className={"flex flex-col gap-1 items-start"}>
-                    <p className={"text-primaryText text-sm"}>{session.alias}</p>
-                    <p className={"text-primaryText text-sm text-start"}>{name}</p>
-                    <p className={"text-primaryText/70 text-sm"}>{session.sender_description}</p>
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="flex items-center gap-2">
-                <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3} />
-            </div>
-            {is_required_password &&
-                <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
-                    src={"/lock.svg"} color={'white'} />}
         </button>
     </>
 }
