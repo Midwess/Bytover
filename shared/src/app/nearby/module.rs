@@ -2,7 +2,7 @@ use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::view_models::peer::PeerViewModel;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
@@ -115,7 +115,7 @@ impl AppModule<BitBridge> for NearbyModule {
                         let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope);
 
                         if from_peer.is_none() && is_peer_owned {
-                            *from_peer = Some(peer.clone());
+                            session.owner_connected(peer.clone());
                             peer_just_connected = true;
                             session_order_id = session.order_id;
 
@@ -124,8 +124,7 @@ impl AppModule<BitBridge> for NearbyModule {
                         else if let Some(ref connected_peer) = from_peer {
                             if connected_peer.id == peer.id && !is_peer_owned {
                                 *from_peer = None;
-                                session.resources.clear();
-                                session.progress.clear();
+                                session.owner_disconnected();
                                 peer_lost_ownership = true;
 
                                 break;
@@ -135,16 +134,11 @@ impl AppModule<BitBridge> for NearbyModule {
                 }
 
                 if peer_just_connected {
-                    log::info!("Sending detail request for session {} to peer {}", session_order_id, peer.id);
-                    return Command::event(crate::app::AppEvent::Transfer(TransferEvent::RequestSessionDetail {
+                    return Command::event(AppEvent::Transfer(TransferEvent::RequestSessionDetail {
                         peer_id: peer.id,
                         order_id: session_order_id,
                         password: None
                     })).then(Command::render());
-                }
-
-                if peer_lost_ownership {
-                    return Command::render();
                 }
 
                 Command::render()

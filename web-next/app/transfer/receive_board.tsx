@@ -581,7 +581,7 @@ function FileView(props: {
 
             {/* Download Button / Progress */}
             {
-                file.is_completed
+                file.is_ready
                     ? <button
                         className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
@@ -709,7 +709,7 @@ function MediaView(props: {
 
                         {/* Download Button / Progress */}
                         <div className="flex-shrink-0">
-                            {media.is_completed
+                            {media.is_ready
                                 ? <button
                                     className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                                transition-all duration-300 hover:scale-110 shadow-lg"
@@ -743,7 +743,7 @@ function MediaView(props: {
             {/* Mobile: Actions */}
             {isMobile && (
                 <div className="flex-shrink-0">
-                    {media.is_completed ? (
+                    {media.is_ready ? (
                         <button
                             className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
                                        transition-all duration-300 hover:scale-110 shadow-lg"

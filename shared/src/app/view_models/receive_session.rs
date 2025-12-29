@@ -6,21 +6,24 @@ use super::selected_resource::SelectedResourceViewModel;
 pub struct ImageReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
-    pub is_completed: bool
+    pub is_completed: bool,
+    pub is_ready: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VideoReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
-    pub is_completed: bool
+    pub is_completed: bool,
+    pub is_ready: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FileReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
-    pub is_completed: bool
+    pub is_completed: bool,
+    pub is_ready: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

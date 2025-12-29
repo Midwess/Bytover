@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::app::core::model_events::UpdateAction;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
-use crate::entities::target::TransferTarget;
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::user::User;
 use crate::repository::local_resource::LocalResourceId;
 use chrono::Utc;
@@ -213,7 +213,7 @@ impl TransferSession {
                 from_peer: None,
                 signalling_key,
                 scope,
-                connection_state: crate::entities::target::P2PConnectionState::NotConnected,
+                connection_state: P2PConnectionState::NotConnected,
             },
             from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
             password,
@@ -245,26 +245,29 @@ impl TransferSession {
     pub fn owner_connected(&mut self, peer: Peer) {
         if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut self.target {
             from_peer.replace(peer);
-            *connection_state = crate::entities::target::P2PConnectionState::Connected;
+            *connection_state = P2PConnectionState::Connected;
         }
     }
 
     pub fn owner_disconnected(&mut self) {
         if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut self.target {
             from_peer.take();
-            *connection_state = crate::entities::target::P2PConnectionState::NotConnected;
+            *connection_state = P2PConnectionState::NotConnected;
         }
+
+        self.progress.clear();
+        self.resources.clear();
     }
 
     pub fn set_connecting(&mut self) {
         if let TransferTarget::P2P { connection_state, .. } = &mut self.target {
-            *connection_state = crate::entities::target::P2PConnectionState::Connecting;
+            *connection_state = P2PConnectionState::Connecting;
         }
     }
 
     pub fn set_connection_failed(&mut self, error: String) {
         if let TransferTarget::P2P { connection_state, .. } = &mut self.target {
-            *connection_state = crate::entities::target::P2PConnectionState::Failed(error);
+            *connection_state = P2PConnectionState::Failed(error);
         }
     }
 
@@ -272,7 +275,7 @@ impl TransferSession {
         matches!(
             self.target,
             TransferTarget::P2P {
-                connection_state: crate::entities::target::P2PConnectionState::Connected,
+                connection_state: P2PConnectionState::Connected,
                 ..
             }
         )
@@ -368,7 +371,7 @@ impl TransferSession {
         from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
     }
 
-    pub fn is_initializing(&self) -> bool {
+    fn is_initializing(&self) -> bool {
         self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
@@ -443,20 +446,23 @@ impl TransferSession {
     }
 
     pub fn status(&self) -> TransferSessionStatus {
-        // For P2P sessions, check connection state first
         if let TransferTarget::P2P { connection_state, .. } = &self.target {
-            match connection_state {
-                crate::entities::target::P2PConnectionState::NotConnected => {
-                    return TransferSessionStatus::Initializing;
+            return match connection_state {
+                P2PConnectionState::NotConnected => {
+                    TransferSessionStatus::Initializing
                 }
-                crate::entities::target::P2PConnectionState::Connecting => {
-                    return TransferSessionStatus::Initializing;
+                P2PConnectionState::Connecting => {
+                    TransferSessionStatus::Initializing
                 }
-                crate::entities::target::P2PConnectionState::Failed(msg) => {
-                    return TransferSessionStatus::Failed(msg.clone());
+                P2PConnectionState::Failed(msg) => {
+                    TransferSessionStatus::Failed(msg.clone())
                 }
-                crate::entities::target::P2PConnectionState::Connected => {
-                    // Continue with normal status logic
+                P2PConnectionState::Connected => {
+                    if self.resources.is_empty() {
+                        return TransferSessionStatus::Initializing;
+                    }
+
+                    TransferSessionStatus::Success
                 }
             }
         }

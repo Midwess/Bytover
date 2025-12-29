@@ -16,7 +16,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, ResourceType};
-use crate::entities::target::TransferTarget;
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferStatus, TransferType};
 use crate::repository::transfer_session::TransferSessionId;
@@ -357,26 +357,24 @@ impl AppModule<BitBridge> for TransferModule {
 
                 match &session.target {
                     TransferTarget::P2P { connection_state, signalling_key, from_peer, .. } => {
-                        // Only trigger view detail if NOT connected or FAILED
                         let should_request = match connection_state {
-                            crate::entities::target::P2PConnectionState::NotConnected |
-                            crate::entities::target::P2PConnectionState::Failed(_) => true,
-                            crate::entities::target::P2PConnectionState::Connected => session.resources.is_empty(),
-                            crate::entities::target::P2PConnectionState::Connecting => false, // Already in progress
+                            P2PConnectionState::NotConnected |
+                            P2PConnectionState::Failed(_) => true,
+                            P2PConnectionState::Connected => session.resources.is_empty(),
+                            P2PConnectionState::Connecting => false
                         };
 
                         if !should_request {
                             return Command::done();
                         }
 
-                        // Ensure we're in the finding scope
                         if from_peer.is_none() {
                             let scope = FindingScope::new(signalling_key);
                             if !model.nearby.finding_scopes.contains(&scope) {
                                 log::info!("Adding scope {} for session {}", signalling_key, session.order_id);
                                 return Command::event(crate::app::AppEvent::Nearby(NearbyEvent::AddFindingScope(scope)));
                             }
-                            // Return early - peer not connected yet
+
                             return Command::done();
                         }
 
@@ -478,7 +476,7 @@ impl AppModule<BitBridge> for TransferModule {
             .filter(|it| it.transfer_type == TransferType::Receive)
             .filter_map(|it| {
                 let from_user = &it.from_user;
-                log::info!("Received session user, rendering: {:?}", it);
+                let is_p2p = it.is_p2p_connected();
                 let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password, is_loading) = match &it.target {
                     TransferTarget::P2P { from_peer, .. } => {
                         let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
@@ -499,12 +497,14 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 let image_resources = it.resources.iter().filter_map(|resource| {
-                    if resource.r#type != ResourceType::Image { return None; }
                     let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+
+                    if resource.r#type != ResourceType::Image { return None; }
                     Some(ImageReceiveResourceViewModel {
                         model: SelectedResourceViewModel::from(resource),
                         completion: progress.percentage() as f32,
-                        is_completed: progress.status.is_completed()
+                        is_ready: is_p2p || progress.status.is_completed(),
+                        is_completed: progress.status.is_completed(),
                     })
                 }).collect();
 
@@ -514,17 +514,20 @@ impl AppModule<BitBridge> for TransferModule {
                     Some(VideoReceiveResourceViewModel {
                         model: SelectedResourceViewModel::from(resource),
                         completion: progress.percentage() as f32,
-                        is_completed: progress.status.is_completed()
+                        is_completed: progress.status.is_completed(),
+                        is_ready: is_p2p || progress.status.is_completed(),
                     })
                 }).collect();
 
                 let file_resources = it.resources.iter().filter_map(|resource| {
                     if !matches!(resource.r#type, ResourceType::File | ResourceType::Folder) { return None; }
                     let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+
                     Some(FileReceiveResourceViewModel {
                         model: SelectedResourceViewModel::from(resource),
                         completion: progress.percentage() as f32,
-                        is_completed: progress.status.is_completed()
+                        is_completed: progress.status.is_completed(),
+                        is_ready: is_p2p || progress.status.is_completed(),
                     })
                 }).collect();
 
