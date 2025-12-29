@@ -1,5 +1,6 @@
+use std::collections::HashMap;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
-use crate::app::core::model_events::{TransferSessionModelEvent, UpdateAction};
+use crate::app::core::model_events::{TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
@@ -463,19 +464,50 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(session) = model.transfer.sessions.lookup_mut(&session_id) else {
+                let Some(session) = model.transfer.sessions.lookup(&session_id) else {
                     log::warn!("Session {} not found for resource notification", session_order_id);
                     return Command::done();
                 };
 
-                let Some(peer) = model.nearby.peers.iter().find(|p| p.id == peer_id) else {
+                let Some(peer) = model.nearby.peers.iter().find(|p| p.id == peer_id).cloned() else {
                     log::warn!("Peer {} not found, ignoring resource notification", peer_id);
                     return Command::done();
                 };
 
-                session.add_resource_from_peer(resource, peer);
+                if !peer.is_owned(session) {
+                    log::warn!("Peer {} is not owner of session {}, ignoring resource notification", peer_id, session_order_id);
+                    return Command::done();
+                }
 
-                Command::render()
+                let resource_order_id = resource.order_id;
+                let resource_name = resource.name.clone();
+
+                Command::handle_result(move |it| async move {
+                    let mut generate_file_paths_request = HashMap::new();
+                    generate_file_paths_request.insert(resource_order_id, resource_name);
+
+                    let mut generated_saved_paths = it.app().run(
+                        TransferSessionPersistentOperation::generate_resource_paths(
+                            session_order_id,
+                            generate_file_paths_request
+                        )
+                    ).await?;
+
+                    let Some(generated_path) = generated_saved_paths.remove(&resource_order_id) else {
+                        log::warn!("Failed to generate path for resource {}", resource_order_id);
+                        return Ok(());
+                    };
+
+                    let mut updated_resource = resource;
+                    updated_resource.path = generated_path;
+
+                    it.update_model(TransferSessionModelEvent::Update(
+                        session_id,
+                        TransferSessionUpdateEvent::ResourceUpdate(updated_resource)
+                    ));
+
+                    Ok(())
+                })
             }
             TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id } => {
                 let id = TransferSessionId {

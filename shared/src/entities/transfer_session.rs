@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
 use schema::devlog::bitbridge::P2pTransferSessionMessage;
 use schema::devlog::rpc_signalling::server::ScopeState;
+use crate::app::operations::persistent::LocalResourcePersistentOperation;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
