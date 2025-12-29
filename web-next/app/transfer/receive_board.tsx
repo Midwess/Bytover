@@ -526,7 +526,7 @@ function TransferSession(props: {
                             <Wifi
                                 className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
                             <div
-                                className={`w-2.5 h-2.5 rounded-full absolute top-[-8%] right-[-8%] border-2 border-muted ${is_scope_online ? 'bg-green-500' : 'bg-gray-400'}`}
+                                className={`w-3.5 h-3.5 rounded-full absolute top-[-8%] right-[-8%] border-2 border-muted ${is_scope_online ? 'bg-green-500' : 'bg-gray-400'}`}
                                 title={is_scope_online ? 'Online' : 'Offline'}
                             />
                         </>

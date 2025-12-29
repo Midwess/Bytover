@@ -378,7 +378,6 @@ impl AppModule<BitBridge> for TransferModule {
                         }
 
                         if from_peer.is_none() {
-                            log::info!("Adding scope {:?} for session {}", scope.as_string(), session.order_id);
                             return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone())));
                         }
 
