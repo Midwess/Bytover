@@ -458,12 +458,12 @@ impl WebRtcPeer {
 
                 if bw_kbps > 0 {
                     self.bandwidth.store(bw_kbps, Ordering::Relaxed);
-                    log::info!(
-                        "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
-                        total_sent,
-                        time,
-                        bw_kbps
-                    );
+                    // log::info!(
+                    //     "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
+                    //     total_sent,
+                    //     time,
+                    //     bw_kbps
+                    // );
                 }
             }
         }
