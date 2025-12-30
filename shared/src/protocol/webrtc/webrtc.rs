@@ -19,6 +19,7 @@ use n0_future::task::spawn;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
+use schema::devlog::rpc_signalling::server::{LeftMessage, Message as SignallingMessage};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
@@ -41,6 +42,7 @@ pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
 
 pub static MAX_BUFFER_SIZE: usize = 3 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
+
 
 pub struct WebRtc {
     addr: String,
@@ -195,7 +197,7 @@ impl WebRtc {
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
-            .signaling_keep_alive_interval(Some(Duration::from_millis(2500)))
+            .signaling_keep_alive_interval(Some(Duration::from_millis(6000)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
             .build();
@@ -279,6 +281,7 @@ impl WebRtc {
                             let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                             let result = peer.run_loop().await;
                             log::info!("Peer {peer_id} loop finished with result {result:?}");
+                            context.disconnect_peer(&peer_id).await;
                         }));
                     }
                 }
@@ -349,6 +352,7 @@ impl WebRtc {
                         let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         let result = peer.run_loop().await;
                         log::info!("Peer {peer_id} loop finished with result {result:?}");
+                        context.disconnect_peer(&peer_id).await;
                     }));
 
                     continue;

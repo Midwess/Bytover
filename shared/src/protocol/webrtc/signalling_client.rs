@@ -153,6 +153,12 @@ impl SignallingClient {
         Ok(())
     }
 
+    // This msg will loop around back to us
+    pub fn append_msg(&self, msg: Message) -> Result<(), WebRtcErrors> {
+        let _ = self.sender.unbounded_send(msg);
+        Ok(())
+    }
+
     pub async fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();

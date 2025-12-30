@@ -7,10 +7,9 @@ import {
     MessageReasonVariantFailedToLoadSession,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
-    SelectedResourceViewModel, TransferEventVariantCancelTransfer,
+    SelectedResourceViewModel,
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewSession,
-    TransferEventVariantRequestSessionDetail,
     TransferEventVariantRequestDownloadResource,
     TransferTypeVariantReceive,
     VideoReceiveResourceViewModel
@@ -19,7 +18,7 @@ import {
     ArrowDown,
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, Play, Square, Wifi
+    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {

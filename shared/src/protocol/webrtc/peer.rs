@@ -47,6 +47,7 @@ use std::time::Duration;
 
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
 const ON_HOLD_STOP_THRESHOLD: u32 = 6;
+const ON_HOLD_SLOW_THRESHOLD: u32 = 2;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -63,8 +64,6 @@ pub struct WebRtcPeer {
 
     pub transfers_context: TransfersContext,
 
-    pub inbound_thumbnail_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
-    pub inbound_thumbnail_stream_sender: mpsc::Sender<Packet>,
     pub inbound_data_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
     pub inbound_data_stream_sender: mpsc::Sender<Packet>,
 
@@ -90,9 +89,8 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
 
-        let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
-        let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(32);
+        let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
 
         let introduce_request = IntroduceRequestMessage {
             mine: PeerMessage {
@@ -123,10 +121,8 @@ impl WebRtcPeer {
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
-            inbound_thumbnail_stream_sender: thumbnail_data_tx,
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
-            inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
             prefix_channels: Arc::new(Mutex::new(HashMap::new())),
@@ -153,7 +149,6 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (thumbnail_data_tx, thumbnail_data_rx) = mpsc::channel(1024);
         let (data_tx, data_rx) = mpsc::channel(1024);
         let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
@@ -181,10 +176,8 @@ impl WebRtcPeer {
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
-            inbound_thumbnail_stream_sender: thumbnail_data_tx,
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
-            inbound_thumbnail_stream_receiver: YieldContainer::new(thumbnail_data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
             prefix_channels: Arc::new(Mutex::new(HashMap::new())),
@@ -362,7 +355,8 @@ impl WebRtcPeer {
 
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
-                    let timeout_fut = sleep(Duration::from_secs(60)).fuse();
+                    // Just creating timeout to preventing it to stuck forever but it should never happen.
+                    let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(timeout_fut);
@@ -379,8 +373,8 @@ impl WebRtcPeer {
                 } else {
                     let reader_fut = async {
                         let data = packet_rx.next().await;
-                        if hold_counter > 3 {
-                            sleep(Duration::from_millis(fec_sender.rtt().max(10) * hold_counter as u64)).await;
+                        if hold_counter > ON_HOLD_SLOW_THRESHOLD {
+                            sleep(Duration::from_millis(fec_sender.rtt().max(12) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64)).await;
                         }
 
                         data
@@ -470,12 +464,12 @@ impl WebRtcPeer {
 
                 if bw_kbps > 0 {
                     self.bandwidth.store(bw_kbps, Ordering::Relaxed);
-                    // log::info!(
-                    //     "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
-                    //     total_sent,
-                    //     time,
-                    //     bw_kbps
-                    // );
+                    log::info!(
+                        "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
+                        total_sent,
+                        time,
+                        bw_kbps
+                    );
                 }
             }
         }
@@ -593,7 +587,7 @@ impl WebRtcPeer {
                 let session_order_id = proto_session.order_id;
                 for resource in resources {
                     self.send_resource_notification(session_order_id, resource).await?;
-                    sleep(Duration::from_millis(50)).await;
+                    sleep(Duration::from_millis(20)).await;
                 }
             }
         } else {
@@ -704,7 +698,10 @@ impl WebRtcPeer {
             }
 
             let bytes = Bytes::from(packet.to_vec());
-            let written = writer.write(bytes).await?;
+            let Some(written) = writer.d_write(bytes).await? else {
+              continue
+            };
+
             progress.update_progress(written as u64);
             core_request
                 .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))

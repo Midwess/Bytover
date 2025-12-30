@@ -10,7 +10,7 @@ use matchbox_protocol::{PeerId, RtcIceServerConfig};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, Message, OfferMessage, ScopeState};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, LeftMessage, Message, OfferMessage, ScopeState};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
@@ -134,6 +134,30 @@ impl SharedContext {
     pub async fn add_peer_place_holder(&self, peer_id: PeerId) {
         let mut peers = self.peers.lock().await;
         peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
+    }
+
+    pub async fn disconnect_peer(&self, peer_id: &PeerId) {
+        if let Some(signaller) = self.signaller().await {
+            let _ = signaller.append_msg(Message {
+                left_message: Some(LeftMessage {
+                    id: peer_id.0.to_string(),
+                }),
+                from_id: peer_id.0.to_string(),
+                ..Default::default()
+            });
+
+            let current_id = self.get_current_id().await;
+            let _ = signaller.send(Message {
+                left_message: Some(LeftMessage {
+                    id: current_id.to_string()
+                }),
+                from_id: current_id.to_string(),
+                to_id: Some(peer_id.to_string()),
+                ..Default::default()
+            }).await;
+
+            log::info!("Disconnect signal has been emitted: {peer_id:?}");
+        }
     }
 
     pub async fn remove_all(&self) -> Vec<PeerId> {
