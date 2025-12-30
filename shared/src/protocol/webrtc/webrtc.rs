@@ -92,6 +92,32 @@ impl WebRtc {
         Err(WebRtcErrors::ConnectionNotFound(peer_id))
     }
 
+    pub async fn cancel_resource(&self, peer_id: String, session_id: u64, resource_id: u64) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {
+            peer.cancel_resource_transfer(session_id, resource_id).await;
+            return Ok(())
+        };
+
+        Err(WebRtcErrors::ConnectionNotFound(peer_id))
+    }
+
+    pub async fn broadcast_cancel_session(&self, session_id: u64, resource_id: Option<u64>) -> Result<(), WebRtcErrors> {
+        let peers = self.shared_context.get_all_connected_peers().await;
+
+        log::info!("Broadcasting cancel for session {} to {} peers", session_id, peers.len());
+
+        for peer in peers {
+            if let Some(resource_id) = resource_id {
+                peer.cancel_resource_transfer(session_id, resource_id).await;
+            } else {
+                peer.cancel_transfer(session_id).await;
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|peer| peer.upgrade()) {

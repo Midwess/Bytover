@@ -1,4 +1,3 @@
-use std::cell::OnceCell;
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use futures::channel::mpsc;
 use futures_util::lock::Mutex;
@@ -9,6 +8,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use anyhow::Context;
 use core_services::utils::cancellation::CancellationToken;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum TransferDelimiterShema {
@@ -178,19 +178,21 @@ impl TransferDelimiterShema {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 struct SessionContext {
     session_id: u64,
     rtc_request_id: String,
-    token: OnceCell<CancellationToken>
+    token: Arc<Mutex<Option<CancellationToken>>>,
+    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>,
 }
 
 impl SessionContext {
     pub fn new(session_id: u64, rtc_request_id: String) -> Self {
         Self {
-            token: OnceCell::new(),
+            token: Arc::new(Mutex::new(Some(CancellationToken::new()))),
             session_id,
             rtc_request_id,
+            resource_tokens: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -220,7 +222,10 @@ impl TransfersContext {
 
     pub async fn add_token(&self, session_id: u64, token: CancellationToken) {
         let actives = self.active_transfers.lock().await;
-        actives.iter().find(|it| it.session_id == session_id).map(|it| it.token.set(token));
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let mut session_token = session.token.lock().await;
+            *session_token = Some(token);
+        }
     }
 
     pub async fn start_transfer(&self, session_id: u64, rtc_request_id: String) {
@@ -229,17 +234,59 @@ impl TransfersContext {
     }
 
     pub async fn cancel_transfer(&self, session_id: u64) {
-        let actives = self.active_transfers.lock().await;
-        let item = actives.iter().find(|it| it.session_id == session_id).and_then(|it| it.token.get());
-        if let Some(token) = item {
-            token.cancel();
+        let mut actives = self.active_transfers.lock().await;
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let session_token = session.token.lock().await;
+            if let Some(token) = session_token.as_ref() {
+                token.cancel();
+            }
         }
+
+        actives.retain(|it| it.session_id != session_id);
     }
 
     pub async fn cancel_all_transfers(&self) {
         let actives = self.active_transfers.lock().await;
-        for item in actives.iter() {
-            item.token.get().map(|it| it.cancel());
+        for session in actives.iter() {
+            let session_token = session.token.lock().await;
+            if let Some(token) = session_token.as_ref() {
+                token.cancel();
+            }
+        }
+    }
+
+    pub async fn get_or_create_resource_token(&self, session_id: u64, resource_id: u64) -> CancellationToken {
+        let mut actives = self.active_transfers.lock().await;
+
+        // Find or create session if it doesn't exist
+        if actives.iter().find(|it| it.session_id == session_id).is_none() {
+            actives.push(SessionContext::new(session_id, String::new()));
+        }
+
+        let session = actives.iter().find(|it| it.session_id == session_id).unwrap();
+
+        let mut resource_tokens = session.resource_tokens.lock().await;
+
+        if let Some(token) = resource_tokens.get(&resource_id) {
+            if !token.is_cancelled() {
+                return token.clone();
+            }
+        }
+
+        let session_token = session.token.lock().await;
+        let parent_token = session_token.as_ref().cloned().unwrap_or_else(|| CancellationToken::new());
+        let child_token = parent_token.child_token();
+        resource_tokens.insert(resource_id, child_token.clone());
+        child_token
+    }
+
+    pub async fn cancel_resource(&self, session_id: u64, resource_id: u64) {
+        let actives = self.active_transfers.lock().await;
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let resource_tokens = session.resource_tokens.lock().await;
+            if let Some(token) = resource_tokens.get(&resource_id) {
+                token.cancel();
+            }
         }
     }
 }

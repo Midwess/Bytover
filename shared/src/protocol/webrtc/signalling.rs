@@ -201,6 +201,14 @@ impl SharedContext {
         self.peers.lock().await.get(peer_id).is_some()
     }
 
+    pub async fn get_all_connected_peers(&self) -> Vec<Arc<WebRtcPeer>> {
+        let peers = self.peers.lock().await;
+        peers
+            .values()
+            .filter_map(|process| process.get().and_then(|weak| weak.upgrade()))
+            .collect()
+    }
+
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
     }

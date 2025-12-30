@@ -57,6 +57,14 @@ pub trait P2PNativeExecutor: Send + Sync {
                 self.web_rtc().stream_resource_to_peer(peer_id, session_id, transfer_id, resource).await?;
                 Ok(CoreOperationOutput::None)
             }
+            P2POperation::CancelResource { peer_id, session_id, resource_id } => {
+                self.web_rtc().cancel_resource(peer_id, session_id, resource_id).await?;
+                Ok(CoreOperationOutput::None)
+            }
+            P2POperation::BroadcastCancelSession { session_id, resource_id } => {
+                self.web_rtc().broadcast_cancel_session(session_id, resource_id).await?;
+                Ok(CoreOperationOutput::None)
+            }
         }
     }
 }

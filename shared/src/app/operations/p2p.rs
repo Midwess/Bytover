@@ -44,6 +44,15 @@ pub enum P2POperation {
         session_id: u64,
         transfer_id: u16,
         resource: LocalResource
+    },
+    CancelResource {
+        peer_id: String,
+        session_id: u64,
+        resource_id: u64
+    },
+    BroadcastCancelSession {
+        session_id: u64,
+        resource_id: Option<u64>
     }
 }
 
@@ -137,5 +146,13 @@ impl P2POperation {
 
     pub fn stream_resource_to_peer(peer_id: String, session_id: u64, transfer_id: u16, resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer { peer_id, session_id, transfer_id, resource })).map(|it| it.result())
+    }
+
+    pub fn cancel_resource(peer_id: String, session_id: u64, resource_id: u64) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::CancelResource { peer_id, session_id, resource_id })).map(|it| it.result())
+    }
+
+    pub fn broadcast_cancel_session(session_id: u64, resource_id: Option<u64>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::BroadcastCancelSession { session_id, resource_id })).map(|it| it.result())
     }
 }

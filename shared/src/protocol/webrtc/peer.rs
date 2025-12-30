@@ -36,8 +36,8 @@ use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::Response::IntroduceResponse;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::{
-    CancelTransferSessionRequest, DownloadResourceRequest, IntroduceRequestMessage, IntroduceResponseMessage,
-    P2pTransferSessionMessage, PeerErrorsMessage, PeerMessage, ResourceTypeMessage, ViewSessionDetailRequest,
+    DownloadResourceRequest, IntroduceRequestMessage, IntroduceResponseMessage,
+    P2pCancelSessionRequest, P2pTransferSessionMessage, PeerErrorsMessage, PeerMessage, ResourceTypeMessage, ViewSessionDetailRequest,
     ViewSessionDetailResponse, VoidResponseMessage,
 };
 use std::collections::HashMap;
@@ -194,7 +194,12 @@ impl WebRtcPeer {
     pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
             Request::CancelRequest(request) => {
-                self.transfers_context.cancel_transfer(request.session_id as u64).await;
+                log::info!("Received cancel request {:?}", request);
+                if let Some(resource_id) = request.resource_id {
+                    self.transfers_context.cancel_resource(request.session_id, resource_id).await;
+                } else {
+                    self.transfers_context.cancel_transfer(request.session_id).await;
+                }
             }
             Request::ViewSessionRequest(req) => {
                 log::info!("Received view session request for order_id {}", req.order_id);
@@ -293,13 +298,27 @@ impl WebRtcPeer {
     }
 
     pub async fn cancel_transfer(&self, session_id: u64) {
-        let cancel_msg = CancelTransferSessionRequest {
-            session_id: session_id as i64,
+        let cancel_msg = P2pCancelSessionRequest {
+            session_id,
+            resource_id: None,
         };
 
         self.transfers_context.cancel_transfer(session_id).await;
 
         log::info!("Cancelling transfer session {session_id} to peer {}", self.peer.peer_id());
+        let request = Request::CancelRequest(cancel_msg);
+        let _ = self.msg_channel.notify(request).await;
+    }
+
+    pub async fn cancel_resource_transfer(&self, session_id: u64, resource_id: u64) {
+        let cancel_msg = P2pCancelSessionRequest {
+            session_id,
+            resource_id: Some(resource_id),
+        };
+
+        self.transfers_context.cancel_resource(session_id, resource_id).await;
+
+        log::info!("Cancelling resource {resource_id} in session {session_id} to peer {}", self.peer.peer_id());
         let request = Request::CancelRequest(cancel_msg);
         let _ = self.msg_channel.notify(request).await;
     }
@@ -328,8 +347,9 @@ impl WebRtcPeer {
     pub async fn cancel_transfer_session(&self, session_id: u64) -> Result<(), WebRtcErrors> {
         self.transfers_context.cancel_transfer(session_id).await;
         self.msg_channel
-            .notify(Request::CancelRequest(CancelTransferSessionRequest {
-                session_id: session_id as i64,
+            .notify(Request::CancelRequest(P2pCancelSessionRequest {
+                session_id,
+                resource_id: None,
             }))
             .await?;
         Ok(())
@@ -349,7 +369,6 @@ impl WebRtcPeer {
 
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
-                    // Just creating timeout to preventing it to stuck forever but it should never happen.
                     let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
@@ -641,19 +660,28 @@ impl WebRtcPeer {
             channels.insert(prefix, tx);
         }
 
+        let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
+
         log::info!("Requesting download for resource {:?}", request);
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
         let prefix_channels = self.prefix_channels.clone();
 
         let start_delimiter = loop {
-            if let Some(packet) = rx.next().await {
-                if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
-                    break delimiter;
+            match rx.next().with_cancel(&resource_token).await {
+                Ok(Some(packet)) => {
+                    if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
+                        break delimiter;
+                    }
                 }
-            } else {
-                log::warn!("Channel closed before receiving start delimiter");
-                return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
+                Ok(None) => {
+                    log::warn!("Channel closed before receiving start delimiter");
+                    return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
+                }
+                Err(_) => {
+                    log::info!("Download cancelled while waiting for start delimiter");
+                    return Err(WebRtcErrors::InvalidDelimiter("Download cancelled".into()));
+                }
             }
         };
 
@@ -673,33 +701,35 @@ impl WebRtcPeer {
         };
 
         loop {
-            let Some(packet) = rx.next().await else {
-                log::warn!("Channel closed before receiving end delimiter");
-                break;
-            };
+            match rx.next().with_cancel(&resource_token).await? {
+               Some(packet) => {
+                    if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
+                        log::info!("Received end delimiter for resource {}", resource_id);
+                        progress.success();
+                        core_request
+                            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                            .await;
+                        break;
+                    }
 
-            if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
-                log::info!("Received end delimiter for resource {}", resource_id);
-                progress.success();
-                core_request
-                    .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                    .await;
-                break;
+                    if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
+                        continue;
+                    }
+
+                    let bytes = Bytes::from(packet.to_vec());
+                    let Some(written) = writer.d_write(bytes).await? else {
+                        continue
+                    };
+
+                    progress.update_progress(written as u64);
+                    core_request
+                        .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                        .await;
+                }
+                None => {
+                    return Err(WebRtcErrors::InvalidDelimiter("Channel closed before end delimiter".into()));
+                }
             }
-
-            if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
-                continue;
-            }
-
-            let bytes = Bytes::from(packet.to_vec());
-            let Some(written) = writer.d_write(bytes).await? else {
-              continue
-            };
-
-            progress.update_progress(written as u64);
-            core_request
-                .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                .await;
         }
 
         prefix_channels.lock().await.remove(&prefix);
@@ -713,6 +743,8 @@ impl WebRtcPeer {
         let resource_id = resource.order_id;
         let prefix = transfer_id;
 
+        let resource_token = self.transfers_context.get_or_create_resource_token(session_id, resource_id).await;
+
         let resource_name = match resource.r#type {
             ResourceType::Folder => format!("{}.zip", &resource.name),
             _ => resource.name.clone(),
@@ -724,10 +756,17 @@ impl WebRtcPeer {
         let start_delimiter = TransferDelimiterShema::start(session_id, resource_id, compressed);
         let start_packet = start_delimiter.as_bytes()?;
         let mut outbound_packet_sender = self.outbound_packet_sender.clone();
-        outbound_packet_sender
+        match outbound_packet_sender
             .send((prefix, start_packet))
-            .await
-            .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to send start delimiter: {:?}", e)))?;
+            .with_cancel(&resource_token)
+            .await {
+                Ok(Ok(_)) => {},
+                Ok(Err(e)) => return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to send start delimiter: {:?}", e))),
+                Err(_) => {
+                    log::info!("Stream cancelled while sending start delimiter");
+                    return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
+                }
+            }
 
         let chunk_size = if compressed {
             (CHUNK_SIZE * DATA_SHARDS_DEFAULT - CHUNK_SIZE) as u64
@@ -741,35 +780,53 @@ impl WebRtcPeer {
             cursor
                 .compression_stats_mut()
                 .update_network_bandwidth(self.bandwidth.load(Ordering::Relaxed) as f64 * 1024f64);
-            match cursor.c_next(None).await {
-                Ok(Some((data, _raw_size))) => {
+            match cursor.c_next(None).with_cancel(&resource_token).await {
+                Ok(Ok(Some((data, _raw_size)))) => {
                     if data.is_empty() {
                         break;
                     }
 
                     let packet = data.to_vec().into_boxed_slice();
-                    self.outbound_packet_sender
+                    match self.outbound_packet_sender
                         .clone()
                         .send((prefix, packet))
-                        .await
-                        .map_err(|e| anyhow!("Failed to send data packet: {:?}", e))?;
+                        .with_cancel(&resource_token)
+                        .await {
+                            Ok(Ok(_)) => {},
+                            Ok(Err(e)) => return Err(anyhow!("Failed to send data packet: {:?}", e).into()),
+                            Err(_) => {
+                                log::info!("Stream cancelled while sending data packet");
+                                return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
+                            }
+                        }
                 }
-                Ok(None) => {
+                Ok(Ok(None)) => {
                     break;
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     log::error!("Error reading resource data: {:?}", e);
                     return Err(anyhow!("Failed to read resource: {:?}", e).into());
+                }
+                Err(_) => {
+                    log::info!("Stream cancelled while reading resource data");
+                    return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
                 }
             }
         }
 
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
-        outbound_packet_sender
+        match outbound_packet_sender
             .send((prefix, end_packet))
-            .await
-            .map_err(|e| WebRtcErrors::InvalidDelimiter(format!("Failed to send end delimiter: {:?}", e)))?;
+            .with_cancel(&resource_token)
+            .await {
+                Ok(Ok(_)) => {},
+                Ok(Err(e)) => return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to send end delimiter: {:?}", e))),
+                Err(_) => {
+                    log::info!("Stream cancelled while sending end delimiter");
+                    return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
+                }
+            }
 
         log::info!("Completed streaming resource {} for session {}", resource_id, session_id);
         Ok(())

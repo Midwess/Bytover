@@ -112,6 +112,11 @@ pub enum TransferEvent {
         session_order_id: u64,
         resource_order_id: u64
     },
+    CancelResourceTransfer {
+        session_id: u64,
+        transfer_type: TransferType,
+        resource_id: Option<u64>
+    },
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -169,6 +174,7 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     }
 
+                    let _ = it.app().cancel_resource_transfer(&session, None).await;
                     it.app().delete_session(&session).await
                 })
             }
@@ -522,6 +528,21 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(move |it| async move {
                     it.app().request_download_resource(peer_id, id, resource).await
+                })
+            }
+            TransferEvent::CancelResourceTransfer { session_id, transfer_type, resource_id } => {
+                let id = TransferSessionId {
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(transfer_type),
+                };
+
+                let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
+                    log::warn!("Session not found: {}", session_id);
+                    return Command::done();
+                };
+
+                Command::handle_result(move |it| async move {
+                    it.app().cancel_resource_transfer(&session, resource_id).await
                 })
             }
         }

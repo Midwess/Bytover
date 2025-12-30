@@ -100,9 +100,11 @@ export default function CircleProgress({
 
     return (
         <div
+            onClick={isInProgress ? onClick : undefined}
             className={clsx(
                 "relative flex items-center justify-center transition-all duration-500",
-                showGreen && "scale-110"
+                showGreen && "scale-110",
+                isInProgress && "cursor-pointer hover:scale-105"
             )}
             style={{
                 width: size,
@@ -163,18 +165,17 @@ export default function CircleProgress({
                         </svg>
                     </div>
                 ) : center ? (
-                    <div onClick={onClick} className={clsx(
+                    <div className={clsx(
                         "absolute flex items-center justify-center",
-                        "cursor-pointer m-3",
+                        "m-3",
                         showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
                         "transition-colors duration-500"
                     )}>{center}</div>
                 ) : (
                     <div
-                        onClick={onClick}
                         className={clsx(
                             "absolute flex items-center justify-center",
-                            "cursor-pointer m-3",
+                            "m-3",
                             showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
                             "transition-colors duration-500"
                         )}

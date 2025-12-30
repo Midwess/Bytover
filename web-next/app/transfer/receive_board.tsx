@@ -11,7 +11,7 @@ import {
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewSession,
     TransferEventVariantRequestDownloadResource,
-    TransferTypeVariantReceive,
+    TransferTypeVariantReceive,TransferEventVariantCancelResourceTransfer,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
@@ -679,6 +679,18 @@ function FileView(props: {
         }
     }, [model?.path, model?.name, isCloud, session, sessionId, id])
 
+    const onCancelClick = useCallback(() => {
+        if (!model || !session) return
+
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantCancelResourceTransfer(
+                BigInt(sessionId),
+                new TransferTypeVariantReceive(),
+                BigInt(id)
+            )
+        ));
+    }, [model, session, sessionId, id])
+
     if (!file || !model) return null;
 
     let displaySize = `${model.size_mb} MB`;
@@ -732,7 +744,14 @@ function FileView(props: {
                         <ArrowDown className="w-5 h-5 text-white" />
                     </button>
                     : <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                        <CircleProgress isCompleted={file.is_completed} isInProgress={!file.is_completed} progress={file.completion} size={40} strokeWidth={4} />
+                        <CircleProgress
+                            isCompleted={file.is_completed}
+                            isInProgress={!file.is_completed}
+                            progress={file.completion}
+                            size={40}
+                            strokeWidth={4}
+                            onClick={onCancelClick}
+                        />
                     </div>
             }
         </div>
@@ -778,6 +797,18 @@ function MediaView(props: {
             core.downloadFile(model.path, model.name)
         }
     }, [model?.path, model?.name, isCloud, session, sessionId, id])
+
+    const onCancelClick = useCallback(() => {
+        if (!model || !session) return
+
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantCancelResourceTransfer(
+                BigInt(sessionId),
+                new TransferTypeVariantReceive(),
+                BigInt(id)
+            )
+        ));
+    }, [model, session, sessionId, id])
 
     if (!media || !model) return null;
 
@@ -876,7 +907,12 @@ function MediaView(props: {
                                     <ArrowDown className="w-5 h-5 text-white" />
                                 </button>
                                 : <div className="flex flex-col items-center gap-0.5">
-                                    <CircleProgress progress={media.completion} size={36} strokeWidth={3} />
+                                    <CircleProgress
+                                        progress={media.completion}
+                                        size={36}
+                                        strokeWidth={3}
+                                        onClick={onCancelClick}
+                                    />
                                     <span className="text-[9px] text-white/60 font-medium">
                                         {(media.completion * 100).toFixed(0)}%
                                     </span>
@@ -917,7 +953,12 @@ function MediaView(props: {
                         </button>
                     ) : (
                         <div className="flex flex-col items-center gap-0.5">
-                            <CircleProgress progress={media.completion} size={32} strokeWidth={3} />
+                            <CircleProgress
+                                progress={media.completion}
+                                size={32}
+                                strokeWidth={3}
+                                onClick={onCancelClick}
+                            />
                         </div>
                     )}
                 </div>

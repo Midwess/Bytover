@@ -403,7 +403,10 @@ impl AppCommand {
             return Ok(());
         };
 
-        self.run(P2POperation::stream_resource_to_peer(peer_id, session_id, transfer_id, resource)).await?;
+        if let Err(e) = self.run(P2POperation::stream_resource_to_peer(peer_id, session_id, transfer_id, resource)).await {
+            log::error!("Failed to stream resource to peer: {e:?}");
+        }
+
         Ok(())
     }
 
@@ -439,6 +442,43 @@ impl AppCommand {
                     break;
                 }
                 _ => continue
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn cancel_resource_transfer(
+        &self,
+        session: &TransferSession,
+        resource_id: Option<u64>
+    ) -> Result<(), CoreError> {
+        if !session.target.is_peer() {
+            log::warn!("Cancel resource transfer is only supported for P2P sessions");
+            return Ok(());
+        }
+
+        match session.transfer_type {
+            TransferType::Send => {
+                log::info!("Broadcasting cancel for session {} to all receivers", session.order_id);
+                self.run(P2POperation::broadcast_cancel_session(session.order_id, resource_id)).await?;
+            }
+            TransferType::Receive => {
+                let peer_id = match session.peer_id() {
+                    Some(id) => id,
+                    None => {
+                        log::error!("P2P session has no peer_id");
+                        return Ok(());
+                    }
+                };
+
+                if let Some(resource_id) = resource_id {
+                    log::info!("Cancelling resource {} for session {}", resource_id, session.order_id);
+                    self.run(P2POperation::cancel_resource(peer_id, session.order_id, resource_id)).await?;
+                } else {
+                    log::info!("Cancelling session {} from receiver", session.order_id);
+                    self.run(TransferOperation::cancel_session(Some(peer_id), session.order_id)).await?;
+                }
             }
         }
 
