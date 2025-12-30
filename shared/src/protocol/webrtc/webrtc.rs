@@ -40,7 +40,7 @@ pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 pub static TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID: usize = 5;
 pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
 
-pub static MAX_BUFFER_SIZE: usize = 3 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
+pub static MAX_BUFFER_SIZE: usize = 2 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
 
@@ -429,7 +429,7 @@ impl WebRtc {
                 };
 
                 if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) {
-                    peer.process_unordered_message_packet(request_id, request).await;
+                    peer.process_message_packet(request_id, request).await;
                 };
             }
 

@@ -476,6 +476,11 @@ impl FecSender {
                 let mut all_frames = Vec::new();
 
                 for missing_block in missing_blocks.blocks {
+                    // Ignore retransmit block that we did not sent yet
+                    if missing_block.block_id > self.block_id {
+                        continue;
+                    }
+
                     if let Some(frames_vec) = self.buffer.get(missing_block.block_id) {
                         let frames: Vec<Frame> = missing_block.frames
                             .iter()

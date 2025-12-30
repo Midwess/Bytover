@@ -64,8 +64,8 @@ pub struct WebRtcPeer {
 
     pub transfers_context: TransfersContext,
 
-    pub inbound_data_stream_receiver: YieldContainer<mpsc::Receiver<Packet>>,
-    pub inbound_data_stream_sender: mpsc::Sender<Packet>,
+    pub inbound_data_stream_receiver: YieldContainer<mpsc::UnboundedReceiver<Packet>>,
+    pub inbound_data_stream_sender: mpsc::UnboundedSender<Packet>,
 
     pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet)>>,
     pub outbound_packet_sender: mpsc::Sender<(u16, Packet)>,
@@ -89,7 +89,7 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
 
-        let (data_tx, data_rx) = mpsc::channel(1024);
+        let (data_tx, data_rx) = unbounded();
         let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
 
         let introduce_request = IntroduceRequestMessage {
@@ -149,7 +149,7 @@ impl WebRtcPeer {
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
-        let (data_tx, data_rx) = mpsc::channel(1024);
+        let (data_tx, data_rx) = unbounded();
         let (outbound_packet_tx, outbound_packet_rx) = mpsc::channel(16);
         let introduce_response = IntroduceResponse(IntroduceResponseMessage {
             peer: PeerMessage {
@@ -262,16 +262,6 @@ impl WebRtcPeer {
 
                 let _ = self.msg_channel.send_response(request_id, Response::VoidResponse(VoidResponseMessage {})).await;
             }
-            _ => {}
-        }
-    }
-
-    pub async fn process_data_packet(&self, packet: Packet) {
-        let _ = self.inbound_data_stream_sender.clone().try_send(packet);
-    }
-
-    pub async fn process_unordered_message_packet(&self, request_id: String, msg: Request) {
-        match msg {
             Request::FecFeedback(feedback) => {
                 if let Some(feedback) = feedback.feedback {
                     let _ = self.transfer_feedback_sender.unbounded_send(feedback);
@@ -279,6 +269,10 @@ impl WebRtcPeer {
             }
             _ => {}
         }
+    }
+
+    pub async fn process_data_packet(&self, packet: Packet) {
+        let _ = self.inbound_data_stream_sender.unbounded_send(packet);
     }
 
     pub async fn peer_disconnected(&self) {
@@ -787,12 +781,31 @@ impl WebRtcPeer {
 
         let mut fec_receiver = FecReceiver::new();
         let mut data_rx = self.inbound_data_stream_receiver.retrieve().await?;
+        let mut next_check_time: Option<Instant> = None;
 
         loop {
             let frames = {
                 let mut frames = Vec::new();
 
-                if let Some(packet) = data_rx.next().await {
+                let timeout_duration = next_check_time.take().map(|check_time| {
+                    let now = Instant::now();
+                    if check_time > now {
+                        check_time.duration_since(now)
+                    } else {
+                        Duration::from_millis(0)
+                    }
+                });
+
+                let packet_result = if let Some(timeout) = timeout_duration {
+                    select! {
+                        packet = data_rx.next().fuse() => packet,
+                        _ = sleep(timeout).fuse() => None,
+                    }
+                } else {
+                    data_rx.next().await
+                };
+
+                if let Some(packet) = packet_result {
                     if let Some(frame) = Frame::deserialize(&packet) {
                         frames.push(frame);
                     }
@@ -811,10 +824,16 @@ impl WebRtcPeer {
                 fec_receiver.set_rtt(rtt as u64);
             }
 
-            let action = fec_receiver.receive(frames)?;
+            let action = if frames.is_empty() {
+                fec_receiver.ping()?
+            } else {
+                fec_receiver.receive(frames)?
+            };
 
             match action {
-                FecAction::Constructed(packets_with_prefix, _next_check) => {
+                FecAction::Constructed(packets_with_prefix, next_check) => {
+                    next_check_time = Some(next_check);
+
                     for (prefix, packet) in packets_with_prefix {
                         if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
                             let loss_rate = fec_receiver.calculate_loss_rate();
@@ -845,13 +864,17 @@ impl WebRtcPeer {
                         }
                     }
                 }
-                FecAction::Feedback(fb, _next_check) => {
+                FecAction::Feedback(fb, next_check) => {
+                    next_check_time = Some(next_check);
                     log::info!("Sending FEC feedback from receiver: {:?}", fb);
                     let _ = self.unordered_msg_channel.notify(Request::FecFeedback(fb)).await;
                 }
                 FecAction::Terminated => {
                     log::warn!("FEC receiver terminated");
                     break;
+                }
+                FecAction::Queued(time) => {
+                    next_check_time = Some(time);
                 }
                 _ => {}
             }
