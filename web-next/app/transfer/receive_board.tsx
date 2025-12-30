@@ -65,9 +65,10 @@ export default function ReceiveBoard() {
                 </Sidebar>
                 <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                        <div className="flex items-center gap-2 px-4">
+                        <div className="flex items-center gap-2 px-4 w-full">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 h-4" />
+                            <HeaderInfo />
                         </div>
                     </header>
                     <div className="flex flex-1 flex-col min-h-0 px-2 pt-0 overflow-y-auto">
@@ -75,6 +76,54 @@ export default function ReceiveBoard() {
                     </div>
                 </SidebarInset>
             </SidebarProvider>
+        </div>
+    );
+}
+
+function HeaderInfo() {
+    const selectedSessionId = core.useSelectedSession()?.id;
+    const selectedSession = core.useSession(selectedSessionId ?? '');
+
+    if (!selectedSession || selectedSession.is_loading) {
+        return null;
+    }
+
+    const progress = (selectedSession as ReceiveSessionViewModel).progress || 0
+    const displaySpeed = (selectedSession as ReceiveSessionViewModel).display_download_speed || ''
+    const isCompleted = (selectedSession as ReceiveSessionViewModel).is_completed || false
+
+    const totalResources = (selectedSession.image_resources?.length || 0) +
+        (selectedSession.video_resources?.length || 0) +
+        (selectedSession.file_resources?.length || 0);
+
+    return (
+        <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                    {totalResources} {totalResources === 1 ? 'item' : 'items'}
+                </span>
+            </div>
+            {!isCompleted && progress > 0 && (
+                <>
+                    <Separator orientation="vertical" className="h-4" />
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                            {(progress * 100).toFixed(0)}%
+                        </span>
+                        {displaySpeed && (
+                            <span className="text-sm text-muted-foreground">
+                                {displaySpeed}
+                            </span>
+                        )}
+                    </div>
+                </>
+            )}
+            {isCompleted && (
+                <>
+                    <Separator orientation="vertical" className="h-4" />
+                    <span className="text-sm text-green-500 font-medium">Completed</span>
+                </>
+            )}
         </div>
     );
 }
@@ -221,7 +270,7 @@ function ContentBoard() {
                     <Button
                         onClick={() => {
                             core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
-                                selectedSession.password ?? undefined,
+                                selectedSession.password,
                                 BigInt(selectedSession.id),
                                 new TransferTypeVariantReceive()
                             )))
@@ -354,7 +403,7 @@ function FindSessionSection() {
         if (publicSessions?.length === 1 && keywords) {
             setUrl({ session: publicSessions[0].alias })
             core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
-                publicSessions[0].password ?? undefined,
+                publicSessions[0].password,
                 BigInt(publicSessions[0].id),
                 new TransferTypeVariantReceive()
             )))
@@ -424,7 +473,7 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] 
                             <TransferSession
                                 onPress={() => {
                                     core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
-                                        item.password ?? undefined,
+                                        item.password,
                                         BigInt(item.id),
                                         new TransferTypeVariantReceive()
                                     )))
@@ -503,11 +552,14 @@ function TransferSession(props: {
     const is_required_password = session.password_required;
 
     const progress = is_public
-        ? 0
-        : (session as ReceiveSessionViewModel).progress || 0;
+        ? (session as ReceiveSessionViewModel).progress || 0
+        : 0;
     const is_completed = is_public
-        ? false
-        : (session as ReceiveSessionViewModel).is_completed || false;
+        ? (session as ReceiveSessionViewModel).is_completed || false
+        : false;
+    const is_in_progress = is_public
+        ? (session as ReceiveSessionViewModel).is_in_progress || false
+        : false;
 
     return <>
         <button
@@ -568,10 +620,10 @@ function TransferSession(props: {
                 </div>
 
                 {/* Right Section - Progress */}
-                <div className={"flex flex-col items-end gap-1.5 flex-shrink-0"}>
+                <div className={"flex flex-col items-end gap-1 flex-shrink-0"}>
                     <CircleProgress
                         isCompleted={is_completed}
-                        isInProgress={!!progress && progress < 1}
+                        isInProgress={is_in_progress}
                         progress={progress}
                         size={28}
                         strokeWidth={3}
@@ -672,7 +724,7 @@ function FileView(props: {
 
             {/* Download Button / Progress */}
             {
-                file.is_ready
+                file.is_ready && !file.completion
                     ? <button
                         className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
@@ -680,7 +732,7 @@ function FileView(props: {
                     >
                         <ArrowDown className="w-5 h-5 text-white" />
                     </button>
-                    : <div className="flex-shrink-0">
+                    : <div className="flex flex-col items-center gap-1 flex-shrink-0">
                         <CircleProgress isCompleted={file.is_completed} isInProgress={!file.is_completed} progress={file.completion} size={40} strokeWidth={4} />
                     </div>
             }
@@ -824,7 +876,12 @@ function MediaView(props: {
                                     onClick={onDownloadClick}>
                                     <ArrowDown className="w-5 h-5 text-white" />
                                 </button>
-                                : <CircleProgress progress={media.completion} size={36} />
+                                : <div className="flex flex-col items-center gap-0.5">
+                                    <CircleProgress progress={media.completion} size={36} strokeWidth={3} />
+                                    <span className="text-[9px] text-white/60 font-medium">
+                                        {(media.completion * 100).toFixed(0)}%
+                                    </span>
+                                </div>
                             }
                         </div>
                     </div>
@@ -851,7 +908,7 @@ function MediaView(props: {
             {/* Mobile: Actions */}
             {isMobile && (
                 <div className="flex-shrink-0">
-                    {media.is_ready ? (
+                    {media.is_ready && !media.completion ? (
                         <button
                             className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
                                        transition-all duration-300 hover:scale-110 shadow-lg"
@@ -860,7 +917,9 @@ function MediaView(props: {
                             <ArrowDown className="w-5 h-5 text-white" />
                         </button>
                     ) : (
-                        <CircleProgress progress={media.completion} size={32} />
+                        <div className="flex flex-col items-center gap-0.5">
+                            <CircleProgress progress={media.completion} size={32} strokeWidth={3} />
+                        </div>
                     )}
                 </div>
             )}

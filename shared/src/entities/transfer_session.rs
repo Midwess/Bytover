@@ -329,7 +329,7 @@ impl TransferSession {
             target: TransferTarget::Internet {
                 to_emails: vec![],
             },
-            from_user: from_user,
+            from_user,
             description: None,
             password: None,
             is_required_password,
@@ -398,10 +398,16 @@ impl TransferSession {
         self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
-    pub fn update_progress(&mut self, progress: TransferProgress) {
+    pub fn update_progress(&mut self, mut progress: TransferProgress) {
+        let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
         if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+            if progress.status.is_completed() && is_p2p_receive {
+                progress = TransferProgress::new(progress.resource_order_id, progress.total_bytes_counter, progress.transfer_type);
+            }
+
             self.progress[index] = progress;
-        } else {
+        }
+        else {
             self.progress.push(progress);
         }
     }
@@ -415,12 +421,22 @@ impl TransferSession {
     }
 
     pub fn total_progress(&self) -> f64 {
+        let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
         let total_size = self.resources.iter().map(|it| it.size).sum::<u64>();
         if total_size == 0 {
             return 1.0;
         }
 
-        let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
+        let total_bytes_sent = self.progress.iter()
+            .filter(|it| {
+                if is_p2p_receive {
+                    return it.status == TransferStatus::InProgress && it.percentage() > 0f64;
+                }
+
+                return true
+            })
+            .map(|it| it.total_bytes_counter).sum::<u64>();
+
         total_bytes_sent as f64 / total_size as f64
     }
 
@@ -481,33 +497,32 @@ impl TransferSession {
                 return TransferSessionStatus::Initializing { loading_state: Some("Waiting for the session owner to come online...".to_owned()), loading_error: None };
             }
 
-            return match connection_state {
+            match connection_state {
                 P2PConnectionState::NotConnected => {
-                    TransferSessionStatus::Initializing { loading_state: Some("Signalling...".to_owned()), loading_error: None }
+                    return TransferSessionStatus::Initializing { loading_state: Some("Signalling...".to_owned()), loading_error: None };
                 }
                 P2PConnectionState::Connecting => {
-                    TransferSessionStatus::Initializing { loading_state: Some("Dialing...".to_owned()), loading_error: None }
+                    return TransferSessionStatus::Initializing { loading_state: Some("Dialing...".to_owned()), loading_error: None };
                 }
                 P2PConnectionState::Failed(msg) => {
                     if self.resources.is_empty() {
-                        TransferSessionStatus::Initializing { loading_state: None, loading_error: Some(msg.clone()) }
+                        return TransferSessionStatus::Initializing { loading_state: None, loading_error: Some(msg.clone()) };
                     }
                     else {
-                        TransferSessionStatus::Failed(msg.clone())
+                        return TransferSessionStatus::Failed(msg.clone());
                     }
                 }
                 P2PConnectionState::Connected => {
                     if self.resources.is_empty() {
                         return TransferSessionStatus::Initializing { loading_state: Some("Waiting for resources...".to_owned()), loading_error: None };
                     }
-
-                    TransferSessionStatus::Success
                 }
             }
         }
-
-        if self.is_initializing() {
-            return TransferSessionStatus::Initializing { loading_state: Some("Waiting for resources...".to_owned()), loading_error: None };
+        else {
+            if self.is_initializing()  {
+                return TransferSessionStatus::Initializing { loading_state: Some("Initialzing...".to_owned()), loading_error: None };
+            }
         }
 
         let failed_messages = self

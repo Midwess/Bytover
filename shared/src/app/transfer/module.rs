@@ -626,7 +626,7 @@ impl AppModule<BitBridge> for TransferModule {
                     loading_status,
                     error_message,
                     is_completed: it.is_completed(),
-                    is_in_progress: !it.is_completed() && !it.is_canceled(),
+                    is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
                     display_download_speed: it.status().to_string(),
                     progress: it.total_progress(),
                     image_resources,
@@ -671,15 +671,16 @@ impl AppModule<BitBridge> for TransferModule {
                     match &it.target {
                         TransferTarget::Internet { .. } => {
                             let access_url = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
+                            let status = it.status();
                             Some(CloudSession {
                                 display_download_speed: match access_url.is_none() {
                                     true => "Initializing...".to_owned(),
-                                    false => it.status().to_string()
+                                    false => status.to_string()
                                 },
                                 password: it.password.clone(),
                                 session_id: it.order_id.to_string(),
                                 is_completed: it.is_completed(),
-                                is_in_progress: !it.is_completed() && !it.is_canceled(),
+                                is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
                                 progress: it.total_progress(),
                                 access_url
                             })
@@ -691,8 +692,9 @@ impl AppModule<BitBridge> for TransferModule {
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_peer())
                 .filter_map(|it| {
+                    let status = it.status();
                     Some(CloudSession {
-                        display_download_speed: it.status().to_string(),
+                        display_download_speed: status.to_string(),
                         password: it.password.clone(),
                         session_id: it.order_id.to_string(),
                         is_completed: it.is_completed(),
