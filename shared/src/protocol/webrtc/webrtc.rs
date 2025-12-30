@@ -34,7 +34,7 @@ use crate::protocol::webrtc::fec::{CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
 pub static TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID: usize = 2;
-pub static TRANSFER_THUMBNAIL_CHANNEL_ID: usize = 3;
+pub static UNORDERED_MSG_CHANNEL_ID: usize = 3;
 pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 pub static TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID: usize = 5;
 pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
@@ -180,17 +180,21 @@ impl WebRtc {
         let signaller_builder = Arc::new(WebSignallerBuilder::new(self.shared_context.clone()));
         let (mut socket, loop_fut) = WebRtcSocket::builder(self.addr.clone())
             .signaller_builder(signaller_builder.clone())
-            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Msg
-            .add_channel(ChannelConfig { // resource reliable channel for retransmissions
+            .add_reliable_channel(Some(MIN_BUFFER_SIZE))
+            .add_channel(ChannelConfig {
                 buffer_low_threshold: Some(MIN_BUFFER_SIZE),
                 ordered: false,
                 max_retransmits: None
-            }) // Resource reliable, for retransmissions and delimiter
-            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource unreliable, for retransmissions
-            .add_reliable_channel(Some(MIN_BUFFER_SIZE)) // Thumbnail
-            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource2 unreliable, for retransmissions
-            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource3 unreliable, for retransmissions
-            .add_unreliable_channel(Some(MIN_BUFFER_SIZE)) // Resource4 unreliable, for retransmissions
+            })
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
+            .add_channel(ChannelConfig {
+                buffer_low_threshold: Some(MIN_BUFFER_SIZE),
+                ordered: false,
+                max_retransmits: None
+            })
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
+            .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .signaling_keep_alive_interval(Some(Duration::from_millis(2500)))
             .reconnect_attempts(Some(u16::MAX))
             .handshake_timeout(Duration::from_secs(10))
@@ -202,9 +206,9 @@ impl WebRtc {
         futures::pin_mut!(timeout);
 
         let outbound_msg_sender = socket.channel(MSG_CHANNEL_ID).sender_clone();
+        let outbound_unordered_msg_sender = socket.channel(UNORDERED_MSG_CHANNEL_ID).sender_clone();
         let outbound_reliable_data_sender = socket.channel(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID).sender_clone();
         let outbound_unreliable_data_sender = socket.channel(TRANSFER_RESOURCE_UNRELIABLE_CHANNEL_ID).sender_clone();
-        let outbound_thumbnail_sender = socket.channel(TRANSFER_THUMBNAIL_CHANNEL_ID).sender_clone();
         let outbound_unreliable2_data_sender = socket.channel(TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID).sender_clone();
         let outbound_unreliable3_data_sender = socket.channel(TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID).sender_clone();
         let outbound_unreliable4_data_sender = socket.channel(TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID).sender_clone();
@@ -231,9 +235,9 @@ impl WebRtc {
                         };
 
                         let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
+                        let unordered_msg_channel = DirectMessageChannel::new(peer_id, outbound_unordered_msg_sender.clone());
                         let current_user = current_user.clone();
                         let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
-                        let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                         let local_resource_repository = self.local_resource_repository.clone();
                         let context = self.shared_context.clone();
                         let core_request = core_request.clone();
@@ -253,9 +257,9 @@ impl WebRtc {
                             let peer = match WebRtcPeer::new(
                                 current_user.clone(),
                                 direct_message_channel,
+                                unordered_msg_channel,
                                 outbound_reliable_data_sender,
                                 quad_channel,
-                                outbound_thumbnail_sender,
                                 buffer,
                                 local_resource_repository,
                             )
@@ -298,10 +302,10 @@ impl WebRtc {
                         continue;
                     };
                     let direct_message_channel = DirectMessageChannel::new(peer_id, outbound_msg_sender.clone());
+                    let unordered_msg_channel = DirectMessageChannel::new(peer_id, outbound_unordered_msg_sender.clone());
                     let current_user = current_user.clone();
                     let peer_id = peer_id;
                     let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
-                    let outbound_thumbnail_sender = outbound_thumbnail_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
                     let request_id = msg.request_id.clone();
                     let core_request = core_request.clone();
@@ -324,9 +328,9 @@ impl WebRtc {
                             request_id,
                             request,
                             direct_message_channel,
+                            unordered_msg_channel,
                             outbound_reliable_data_sender,
                             quad_channel,
-                            outbound_thumbnail_sender,
                             buffer,
                             local_resource_repository,
                         )
@@ -405,12 +409,24 @@ impl WebRtc {
                 peer.process_data_packet(data).await;
             }
 
-            for (peer_id, data) in socket.channel_mut(TRANSFER_THUMBNAIL_CHANNEL_ID).receive() {
-                let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) else {
+            for (peer_id, msg) in socket.channel_mut(UNORDERED_MSG_CHANNEL_ID).receive() {
+                let Ok(msg) = PeerMessageBody::decode(&msg[..]) else {
                     continue;
                 };
 
-                peer.process_thumbnail_packet(data).await;
+                let request_id = msg.request_id;
+                if let Some(response) = msg.response {
+                    self.shared_context.notify_peer_response(&peer_id, request_id.clone(), response).await;
+                    continue;
+                };
+
+                let Some(request) = msg.request else {
+                    continue;
+                };
+
+                if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|it| it.upgrade()) {
+                    peer.process_unordered_message_packet(request_id, request).await;
+                };
             }
 
             select! {

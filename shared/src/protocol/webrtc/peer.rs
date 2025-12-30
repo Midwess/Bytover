@@ -52,14 +52,10 @@ pub struct WebRtcPeer {
     pub peer: PeerEntity,
     pub resource_repo: Arc<dyn LocalResourceRepository>,
 
-    // Channel used to communicate with the peer
     pub msg_channel: DirectMessageChannel,
-    // Quad unreliable channels for load-balanced data transfer
+    pub unordered_msg_channel: DirectMessageChannel,
     pub quad_unreliable_channel: Arc<Mutex<QuadUnreliableChannel>>,
     pub reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-    // This channel is used to transfer the thumbnail
-    pub thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
-    // Webrtc buffer, used to control the amount of data that can be sent to the peer
     pub buffer: PeerBuffered,
 
     pub transfer_feedback_receiver: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
@@ -79,7 +75,6 @@ pub struct WebRtcPeer {
 
     pub bandwidth: Arc<AtomicU64>,
 
-    // Connect to the core stream, where all state is stored
     pub core_request: OnceCell<CoreRequest>,
 }
 
@@ -87,9 +82,9 @@ impl WebRtcPeer {
     pub async fn new(
         user: PeerEntity,
         msg_channel: DirectMessageChannel,
+        unordered_msg_channel: DirectMessageChannel,
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         quad_unreliable_channel: QuadUnreliableChannel,
-        thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
@@ -120,12 +115,12 @@ impl WebRtcPeer {
 
         Ok(Self {
             msg_channel,
+            unordered_msg_channel,
             peer,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             transfer_feedback_sender,
             reliable_data_channel,
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
-            thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             inbound_thumbnail_stream_sender: thumbnail_data_tx,
@@ -150,9 +145,9 @@ impl WebRtcPeer {
         request_id: String,
         msg: IntroduceRequestMessage,
         msg_channel: DirectMessageChannel,
+        unordered_msg_channel: DirectMessageChannel,
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         quad_unreliable_channel: QuadUnreliableChannel,
-        thumbnail_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         buffer: PeerBuffered,
         repository: Arc<dyn LocalResourceRepository>,
     ) -> Result<Self, WebRtcErrors> {
@@ -178,12 +173,12 @@ impl WebRtcPeer {
 
         Ok(Self {
             msg_channel,
+            unordered_msg_channel,
             transfer_feedback_sender,
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             peer,
             reliable_data_channel,
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
-            thumbnail_channel,
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             inbound_thumbnail_stream_sender: thumbnail_data_tx,
@@ -207,11 +202,6 @@ impl WebRtcPeer {
         match msg {
             Request::CancelRequest(request) => {
                 self.transfers_context.cancel_transfer(request.session_id as u64).await;
-            }
-            Request::FecFeedback(feedback) => {
-                if let Some(feedback) = feedback.feedback {
-                    let _ = self.transfer_feedback_sender.unbounded_send(feedback);
-                };
             }
             Request::ViewSessionRequest(req) => {
                 log::info!("Received view session request for order_id {}", req.order_id);
@@ -287,8 +277,15 @@ impl WebRtcPeer {
         let _ = self.inbound_data_stream_sender.clone().try_send(packet);
     }
 
-    pub async fn process_thumbnail_packet(&self, packet: Packet) {
-        let _ = self.inbound_thumbnail_stream_sender.clone().try_send(packet);
+    pub async fn process_unordered_message_packet(&self, request_id: String, msg: Request) {
+        match msg {
+            Request::FecFeedback(feedback) => {
+                if let Some(feedback) = feedback.feedback {
+                    let _ = self.transfer_feedback_sender.unbounded_send(feedback);
+                };
+            }
+            _ => {}
+        }
     }
 
     pub async fn peer_disconnected(&self) {
@@ -328,7 +325,7 @@ impl WebRtcPeer {
             }
             FecAction::Feedback(fb, next_check) => {
                 log::info!("Sending FEC feedback: {:?}", fb);
-                self.msg_channel.notify(Request::FecFeedback(fb)).await?;
+                self.unordered_msg_channel.notify(Request::FecFeedback(fb)).await?;
                 Ok((vec![], Some(next_check)))
             }
             FecAction::Terminated => {
@@ -837,7 +834,7 @@ impl WebRtcPeer {
                                 feedback: Some(Feedback::Network(network_stats)),
                             };
 
-                            let _ = self.msg_channel.notify(Request::FecFeedback(feedback)).await;
+                            let _ = self.unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                             continue;
                         }
 
@@ -853,7 +850,7 @@ impl WebRtcPeer {
                 }
                 FecAction::Feedback(fb, _next_check) => {
                     log::info!("Sending FEC feedback from receiver: {:?}", fb);
-                    let _ = self.msg_channel.notify(Request::FecFeedback(fb)).await;
+                    let _ = self.unordered_msg_channel.notify(Request::FecFeedback(fb)).await;
                 }
                 FecAction::Terminated => {
                     log::warn!("FEC receiver terminated");
