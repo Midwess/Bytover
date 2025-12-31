@@ -9,11 +9,10 @@ use crate::entities::user::User;
 use crate::repository::local_resource::LocalResourceId;
 use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
-use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
 use schema::devlog::bitbridge::P2pTransferSessionMessage;
 use schema::devlog::rpc_signalling::server::ScopeState;
-use crate::app::operations::persistent::LocalResourcePersistentOperation;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -27,7 +26,10 @@ pub enum TransferSessionStatus {
         loading_error: Option<String>,
         loading_state: Option<String>
     },
-    InProgress { bytes_per_second: u64, percentage: f64 },
+    InProgress {
+        bytes_per_second: u64,
+        percentage: f64
+    },
     Success,
     Failed(String),
     Canceled
@@ -35,16 +37,24 @@ pub enum TransferSessionStatus {
 
 impl TransferSessionStatus {
     pub fn is_completed(&self) -> bool {
-        matches!(self, TransferSessionStatus::Success | TransferSessionStatus::Failed(_) | TransferSessionStatus::Canceled)
+        matches!(
+            self,
+            TransferSessionStatus::Success | TransferSessionStatus::Failed(_) | TransferSessionStatus::Canceled
+        )
     }
 }
 
 impl Display for TransferSessionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransferSessionStatus::Initializing { loading_state: Some(text), loading_error: None } => write!(f, "{text}"),
-            TransferSessionStatus::Initializing { loading_error: Some(text), .. } => write!(f, "Error: {text}"),
-            TransferSessionStatus::Initializing {.. } => write!(f, "Initializing..."),
+            TransferSessionStatus::Initializing {
+                loading_state: Some(text),
+                loading_error: None
+            } => write!(f, "{text}"),
+            TransferSessionStatus::Initializing {
+                loading_error: Some(text), ..
+            } => write!(f, "Error: {text}"),
+            TransferSessionStatus::Initializing { .. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 let kb_per_second = *bytes_per_second as f64 / 1000.0;
                 if kb_per_second < 100.0 {
@@ -55,7 +65,7 @@ impl Display for TransferSessionStatus {
             }
             TransferSessionStatus::Success => write!(f, "Done ☺️!"),
             TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
-            TransferSessionStatus::Canceled => write!(f, "Canceled"),
+            TransferSessionStatus::Canceled => write!(f, "Canceled")
         }
     }
 }
@@ -88,7 +98,7 @@ pub struct TransferProgress {
     bytes_sec_counter: u64,
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
-    pub status: TransferStatus,
+    pub status: TransferStatus
 }
 
 impl TransferProgress {
@@ -102,7 +112,7 @@ impl TransferProgress {
             last_update_time_ms: Utc::now().timestamp_millis() as u64,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
-            status: TransferStatus::Pending,
+            status: TransferStatus::Pending
         }
     }
 
@@ -210,26 +220,36 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn p2p(mut resources: Vec<LocalResource>, password: Option<String>, signalling_key: String, scope: String, alias: String, access_url: String, id: u64) -> Self {
+    pub fn p2p(
+        mut resources: Vec<LocalResource>,
+        password: Option<String>,
+        signalling_key: String,
+        scope: String,
+        alias: String,
+        access_url: String,
+        id: u64
+    ) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
         Self {
             order_id: id,
             access_url,
             alias,
-            progress: resources
-                .iter()
-                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send))
-                .collect(),
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
             description: None,
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
                 from_peer: None,
                 scope: FindingScope::new(&signalling_key),
-                connection_state: P2PConnectionState::NotConnected,
+                connection_state: P2PConnectionState::NotConnected
             },
-            from_user: User { id: 0, email: String::new(), name: String::new(), avatar: String::new() },
+            from_user: User {
+                id: 0,
+                email: String::new(),
+                name: String::new(),
+                avatar: String::new()
+            },
             password,
             is_required_password,
             connection_error: None,
@@ -247,19 +267,22 @@ impl TransferSession {
             cancellation_token: CancellationToken::new(),
             resources,
             transfer_type: TransferType::Send,
-            target: TransferTarget::Internet {
-                to_emails
-            },
+            target: TransferTarget::Internet { to_emails },
             description: None,
             from_user: current_user,
             password,
             is_required_password,
-            connection_error: None,
+            connection_error: None
         }
     }
 
     pub fn owner_connected(&mut self, peer: Peer) {
-        if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut self.target {
+        if let TransferTarget::P2P {
+            from_peer,
+            connection_state,
+            ..
+        } = &mut self.target
+        {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
         }
@@ -267,7 +290,12 @@ impl TransferSession {
     }
 
     pub fn owner_disconnected(&mut self) {
-        if let TransferTarget::P2P { from_peer, connection_state, scope } = &mut self.target {
+        if let TransferTarget::P2P {
+            from_peer,
+            connection_state,
+            scope
+        } = &mut self.target
+        {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
             scope.set_watcher(true);
@@ -317,7 +345,13 @@ impl TransferSession {
         true
     }
 
-    pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, alias: String, is_required_password: bool) -> Self {
+    pub fn from_public_overview(
+        order_id: u64,
+        from_user: User,
+        access_url: String,
+        alias: String,
+        is_required_password: bool
+    ) -> Self {
         Self {
             order_id,
             progress: vec![],
@@ -326,20 +360,22 @@ impl TransferSession {
             alias,
             transfer_type: TransferType::Receive,
             cancellation_token: CancellationToken::new(),
-            target: TransferTarget::Internet {
-                to_emails: vec![],
-            },
+            target: TransferTarget::Internet { to_emails: vec![] },
             from_user,
             description: None,
             password: None,
             is_required_password,
-            connection_error: None,
+            connection_error: None
         }
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
         if self.resource_progress(resource.order_id).is_none() {
-            self.progress.push(TransferProgress::new(resource.order_id, resource.size, self.transfer_type.clone()));
+            self.progress.push(TransferProgress::new(
+                resource.order_id,
+                resource.size,
+                self.transfer_type.clone()
+            ));
         }
 
         if self.resources.iter().any(|it| it.order_id == resource.order_id) {
@@ -352,7 +388,11 @@ impl TransferSession {
 
     pub fn replace_resource(&mut self, resource: LocalResource) {
         if self.resource_progress(resource.order_id).is_none() {
-            self.progress.push(TransferProgress::new(resource.order_id, resource.size, self.transfer_type.clone()));
+            self.progress.push(TransferProgress::new(
+                resource.order_id,
+                resource.size,
+                self.transfer_type.clone()
+            ));
         }
 
         self.resources.retain(|it| it.order_id != resource.order_id);
@@ -406,8 +446,7 @@ impl TransferSession {
             }
 
             self.progress[index] = progress;
-        }
-        else {
+        } else {
             self.progress.push(progress);
         }
     }
@@ -427,15 +466,18 @@ impl TransferSession {
             return 1.0;
         }
 
-        let total_bytes_sent = self.progress.iter()
+        let total_bytes_sent = self
+            .progress
+            .iter()
             .filter(|it| {
                 if is_p2p_receive {
                     return it.status == TransferStatus::InProgress && it.percentage() > 0f64;
                 }
 
-                return true
+                true
             })
-            .map(|it| it.total_bytes_counter).sum::<u64>();
+            .map(|it| it.total_bytes_counter)
+            .sum::<u64>();
 
         total_bytes_sent as f64 / total_size as f64
     }
@@ -492,37 +534,54 @@ impl TransferSession {
             };
         }
 
-        if let TransferTarget::P2P { connection_state, scope, .. } = &self.target {
+        if let TransferTarget::P2P {
+            connection_state, scope, ..
+        } = &self.target
+        {
             if !scope.is_online() {
-                return TransferSessionStatus::Initializing { loading_state: Some("Waiting for the session owner to come online...".to_owned()), loading_error: None };
+                return TransferSessionStatus::Initializing {
+                    loading_state: Some("Waiting for the session owner to come online...".to_owned()),
+                    loading_error: None
+                };
             }
 
             match connection_state {
                 P2PConnectionState::NotConnected => {
-                    return TransferSessionStatus::Initializing { loading_state: Some("Signalling...".to_owned()), loading_error: None };
+                    return TransferSessionStatus::Initializing {
+                        loading_state: Some("Signalling...".to_owned()),
+                        loading_error: None
+                    };
                 }
                 P2PConnectionState::Connecting => {
-                    return TransferSessionStatus::Initializing { loading_state: Some("Dialing...".to_owned()), loading_error: None };
+                    return TransferSessionStatus::Initializing {
+                        loading_state: Some("Dialing...".to_owned()),
+                        loading_error: None
+                    };
                 }
                 P2PConnectionState::Failed(msg) => {
                     if self.resources.is_empty() {
-                        return TransferSessionStatus::Initializing { loading_state: None, loading_error: Some(msg.clone()) };
-                    }
-                    else {
+                        return TransferSessionStatus::Initializing {
+                            loading_state: None,
+                            loading_error: Some(msg.clone())
+                        };
+                    } else {
                         return TransferSessionStatus::Failed(msg.clone());
                     }
                 }
                 P2PConnectionState::Connected => {
                     if self.resources.is_empty() {
-                        return TransferSessionStatus::Initializing { loading_state: Some("Waiting for resources...".to_owned()), loading_error: None };
+                        return TransferSessionStatus::Initializing {
+                            loading_state: Some("Waiting for resources...".to_owned()),
+                            loading_error: None
+                        };
                     }
                 }
             }
-        }
-        else {
-            if self.is_initializing()  {
-                return TransferSessionStatus::Initializing { loading_state: Some("Initialzing...".to_owned()), loading_error: None };
-            }
+        } else if self.is_initializing() {
+            return TransferSessionStatus::Initializing {
+                loading_state: Some("Initialzing...".to_owned()),
+                loading_error: None
+            };
         }
 
         let failed_messages = self

@@ -1,6 +1,6 @@
 use chrono::Local;
-use serde::{Deserialize, Serialize};
 use schema::devlog::rpc_signalling::server::ScopeState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct FindingScope {
@@ -8,7 +8,7 @@ pub struct FindingScope {
     is_direct: bool,
     is_owner: bool,
     is_watcher: bool,
-    state: ScopeState,
+    state: ScopeState
 }
 
 impl PartialEq for FindingScope {
@@ -31,8 +31,7 @@ impl FindingScope {
             let it = request_scope.split("://").collect::<Vec<_>>();
             if it.len() < 2 {
                 ("".to_owned(), request_scope.to_owned())
-            }
-            else {
+            } else {
                 (it[0].to_owned(), it[1].to_owned())
             }
         };
@@ -47,7 +46,7 @@ impl FindingScope {
             is_direct,
             is_owner,
             is_watcher,
-            state: ScopeState::Offline,
+            state: ScopeState::Offline
         }
     }
 
@@ -98,16 +97,14 @@ impl FindingScope {
         if self.is_direct {
             let role = if self.is_watcher {
                 "watcher"
-            }
-            else if self.is_owner {
+            } else if self.is_owner {
                 "owner"
             } else {
                 "member"
             };
 
             format!("{};{}", base, role)
-        }
-        else {
+        } else {
             base
         }
     }

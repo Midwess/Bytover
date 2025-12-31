@@ -1,4 +1,3 @@
-use core_services::db::repository::abstraction::table::Table;
 use crate::app::operations::persistent::{
     LocalResourcePersistentOperation,
     PersistentOperation,
@@ -7,11 +6,11 @@ use crate::app::operations::persistent::{
 };
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
-use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
+use core_services::db::repository::abstraction::table::Table;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -45,7 +44,11 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::None)
             }
             PersistentOperation::Session(SessionPersistentOperation::Remove) => {
-                self.auth_session_repository().delete_one(&AuthSessionId { r#type: SessionType::Access }).await?;
+                self.auth_session_repository()
+                    .delete_one(&AuthSessionId {
+                        r#type: SessionType::Access
+                    })
+                    .await?;
                 Ok(CoreOperationOutput::None)
             }
             PersistentOperation::Session(SessionPersistentOperation::Get()) => {
@@ -85,9 +88,7 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
-                self.local_resource_repository()
-                    .remove(path)
-                    .await?;
+                self.local_resource_repository().remove(path).await?;
 
                 Ok(CoreOperationOutput::Bool(true))
             }

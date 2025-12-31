@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entities::peer::Peer;
 use crate::entities::finding_scope::FindingScope;
+use crate::entities::peer::Peer;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum P2PConnectionState {
     NotConnected,
     Connecting,
     Connected,
-    Failed(String),
+    Failed(String)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -16,7 +16,7 @@ pub enum TransferTarget {
     P2P {
         from_peer: Option<Peer>,
         scope: FindingScope,
-        connection_state: P2PConnectionState,
+        connection_state: P2PConnectionState
     },
     Internet {
         to_emails: Vec<String>
@@ -37,7 +37,7 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Connected)
             }
-            TransferTarget::Internet { .. } => false,
+            TransferTarget::Internet { .. } => false
         }
     }
 
@@ -46,7 +46,7 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Connecting)
             }
-            TransferTarget::Internet { .. } => false,
+            TransferTarget::Internet { .. } => false
         }
     }
 
@@ -55,14 +55,14 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Failed(_))
             }
-            TransferTarget::Internet { .. } => false,
+            TransferTarget::Internet { .. } => false
         }
     }
 
     pub fn connection_state(&self) -> Option<&P2PConnectionState> {
         match self {
             TransferTarget::P2P { connection_state, .. } => Some(connection_state),
-            TransferTarget::Internet { .. } => None,
+            TransferTarget::Internet { .. } => None
         }
     }
 

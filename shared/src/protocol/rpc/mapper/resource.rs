@@ -31,7 +31,9 @@ impl From<CloudResourceMessage> for LocalResource {
             size: value.size as u64,
             path: LocalResourcePath::AbsolutePath(value.download_url),
             thumbnail_path: value.thumbnail_download_url.map(LocalResourcePath::AbsolutePath),
-            r#type: cloud_resource_message::ResourceType::try_from(value.r#type).unwrap_or(cloud_resource_message::ResourceType::File).into()
+            r#type: cloud_resource_message::ResourceType::try_from(value.r#type)
+                .unwrap_or(cloud_resource_message::ResourceType::File)
+                .into()
         }
     }
 }

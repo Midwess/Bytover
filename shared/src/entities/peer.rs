@@ -38,10 +38,7 @@ impl Peer {
     }
 
     pub fn is_owned(&self, session: &TransferSession) -> bool {
-        let TransferTarget::P2P {
-            scope,
-            ..
-        } = &session.target else {
+        let TransferTarget::P2P { scope, .. } = &session.target else {
             return false;
         };
 
@@ -49,10 +46,7 @@ impl Peer {
     }
 
     pub fn is_member(&self, session: &TransferSession) -> bool {
-        let TransferTarget::P2P {
-            scope,
-            ..
-        } = &session.target else {
+        let TransferTarget::P2P { scope, .. } = &session.target else {
             return false;
         };
 
@@ -84,4 +78,3 @@ impl From<Peer> for PeerMessage {
         }
     }
 }
-

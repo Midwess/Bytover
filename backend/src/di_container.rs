@@ -2,8 +2,8 @@ use crate::app_gateway::app_info::AppInfoService;
 use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
-use crate::grpc::p2p_service::P2PGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
+use crate::grpc::p2p_service::P2PGrpcService;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::postgres::p2p_session::P2PSessionPostgresRepository;
@@ -155,7 +155,7 @@ impl DiContainer {
     pub async fn get_grpc_p2p_service(&'static self) -> P2PGrpcService {
         P2PGrpcService {
             p2p_repository: Arc::new(self.get_p2p_session_repository().await),
-            app_service: Box::new(self.get_app_service().await),
+            app_service: Box::new(self.get_app_service().await)
         }
     }
 
@@ -192,7 +192,7 @@ impl DiContainer {
         P2PTransferService {
             p2p_repository: std::sync::Arc::new(self.get_p2p_session_repository().await),
             app_service: Box::new(self.get_app_service().await),
-            markov_generator: Box::new(self.markov_generator()),
+            markov_generator: Box::new(self.markov_generator())
         }
     }
 

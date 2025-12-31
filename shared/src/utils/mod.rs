@@ -1,2 +1,2 @@
-pub mod serde;
 pub mod compression;
+pub mod serde;

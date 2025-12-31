@@ -1,84 +1,11 @@
 use crate::protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
 
 pub static NON_COMPRESSIBLE_EXTENSIONS: &[&str] = &[
-    "3gp",
-    "7z",
-    "aac",
-    "alac",
-    "aiff",
-    "apk",
-    "avi",
-    "avif",
-    "bin",
-    "bmp",
-    "bz2",
-    "class",
-    "cpio",
-    "db",
-    "dbf",
-    "deb",
-    "dll",
-    "dmg",
-    "docx",
-    "enc",
-    "exe",
-    "exr",
-    "fbx",
-    "flac",
-    "flv",
-    "gif",
-    "glb",
-    "gltf",
-    "gpg",
-    "gz",
-    "heic",
-    "ico",
-    "img",
-    "iso",
-    "jpeg",
-    "jpg",
-    "jar",
-    "m4a",
-    "m4v",
-    "mkv",
-    "mov",
-    "msi",
-    "o",
-    "obj",
-    "ods",
-    "odt",
-    "ogg",
-    "ogv",
-    "opus",
-    "pdf",
-    "pgp",
-    "png",
-    "pptx",
-    "psd",
-    "rar",
-    "rpm",
-    "so",
-    "sqlite",
-    "sqlite3",
-    "tar",
-    "tar.bz2",
-    "tar.gz",
-    "tar.xz",
-    "tif",
-    "tiff",
-    "webm",
-    "webp",
-    "wmv",
-    "wma",
-    "xlsx",
-    "xz",
-    "zip",
-    "lz",
-    "lzma",
-    "zst",
-    "zstd",
-    "wasm",
-    "ipa"
+    "3gp", "7z", "aac", "alac", "aiff", "apk", "avi", "avif", "bin", "bmp", "bz2", "class", "cpio", "db", "dbf", "deb", "dll", "dmg",
+    "docx", "enc", "exe", "exr", "fbx", "flac", "flv", "gif", "glb", "gltf", "gpg", "gz", "heic", "ico", "img", "iso", "jpeg", "jpg",
+    "jar", "m4a", "m4v", "mkv", "mov", "msi", "o", "obj", "ods", "odt", "ogg", "ogv", "opus", "pdf", "pgp", "png", "pptx", "psd",
+    "rar", "rpm", "so", "sqlite", "sqlite3", "tar", "tar.bz2", "tar.gz", "tar.xz", "tif", "tiff", "webm", "webp", "wmv", "wma",
+    "xlsx", "xz", "zip", "lz", "lzma", "zst", "zstd", "wasm", "ipa"
 ];
 
 pub fn is_compressible(file_name: &str) -> bool {
@@ -100,14 +27,29 @@ pub struct CompressStats {
 
 impl CompressStats {
     pub fn new(is_compression_support: bool) -> Self {
-        Self { chunk_size: 0, compression_time_micro: 0, compressed_size: 0, network_bandwidth_bps: 0.0, read_time_micro: 0, failed_bytes: 0, should_compress: false, is_compression_support }
+        Self {
+            chunk_size: 0,
+            compression_time_micro: 0,
+            compressed_size: 0,
+            network_bandwidth_bps: 0.0,
+            read_time_micro: 0,
+            failed_bytes: 0,
+            should_compress: false,
+            is_compression_support
+        }
     }
 
     pub fn is_compression_support(&self) -> bool {
         self.is_compression_support
     }
 
-    pub fn add_chunk_stats(&mut self, raw_size: usize, compression_time_micro: u64, compressed_size: usize, read_time_micro: u64) -> bool {
+    pub fn add_chunk_stats(
+        &mut self,
+        raw_size: usize,
+        compression_time_micro: u64,
+        compressed_size: usize,
+        read_time_micro: u64
+    ) -> bool {
         self.chunk_size += raw_size;
         self.compression_time_micro += compression_time_micro;
         self.compressed_size += compressed_size;
@@ -115,8 +57,7 @@ impl CompressStats {
         let is_success = self.should_compress && compressed_size < raw_size;
         if is_success {
             self.failed_bytes = 0;
-        }
-        else {
+        } else {
             self.failed_bytes += raw_size;
         }
 
@@ -128,7 +69,7 @@ impl CompressStats {
         if network_bandwidth_bps == self.network_bandwidth_bps {
             return self.should_compress;
         }
-        
+
         self.network_bandwidth_bps = network_bandwidth_bps;
         self.should_compress = self.cal_should_compress();
         self.should_compress

@@ -3,7 +3,10 @@ pub mod network;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
+use crate::utils::compression::CompressStats;
+use bytes::Bytes;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
+use core_services::local_storage::stream::IOCursor;
 use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use crux_core::RequestHandle;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
@@ -16,9 +19,6 @@ use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use bytes::Bytes;
-use core_services::local_storage::stream::IOCursor;
-use crate::utils::compression::CompressStats;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {

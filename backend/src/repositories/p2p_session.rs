@@ -6,7 +6,7 @@ use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Default)]
 pub struct P2PSessionId {
-    pub session_id: Option<u64>,
+    pub session_id: Option<u64>
 }
 
 impl Table<P2PSessionId> for P2PSession {
@@ -16,7 +16,7 @@ impl Table<P2PSessionId> for P2PSession {
 
     fn id(&self) -> P2PSessionId {
         P2PSessionId {
-            session_id: Some(self.session_id()),
+            session_id: Some(self.session_id())
         }
     }
 }
@@ -27,11 +27,7 @@ impl DbId for P2PSessionId {
 
 #[async_trait::async_trait]
 pub trait P2PSessionRepository: Repository<P2PSession, P2PSessionId> {
-    async fn find_by_user_id_and_device_id(
-        &self,
-        user_id: u64,
-        device_id: u64,
-    ) -> Result<Option<P2PSession>, RepositoryError>;
+    async fn find_by_user_id_and_device_id(&self, user_id: u64, device_id: u64) -> Result<Option<P2PSession>, RepositoryError>;
 
     async fn find_by_alias(&self, alias: String) -> Result<Option<P2PSession>, RepositoryError>;
 

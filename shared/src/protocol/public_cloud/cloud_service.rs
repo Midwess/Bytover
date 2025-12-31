@@ -7,6 +7,7 @@ use crate::protocol::rpc::errors::RpcErrors;
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{CoreRequest, NetStream, NetStreamEvent};
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::maybe::MaybeSend;
 use futures::channel::oneshot;
 use futures_util::future::join_all;
@@ -21,7 +22,6 @@ use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -153,7 +153,8 @@ where
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = join!(
             self.upload_thumbnails(&session, thumbnail_upload_requests).with_cancel(&token),
-            self.upload_resources(&session, response.first_resource_upload_request, core_request).with_cancel(&token)
+            self.upload_resources(&session, response.first_resource_upload_request, core_request)
+                .with_cancel(&token)
         );
 
         thumbnail_result??;

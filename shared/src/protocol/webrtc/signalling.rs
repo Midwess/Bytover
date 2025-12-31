@@ -10,7 +10,17 @@ use matchbox_protocol::{PeerId, RtcIceServerConfig};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, LeftMessage, Message, OfferMessage, ScopeState};
+use schema::devlog::rpc_signalling::server::{
+    AnswerMessage,
+    IceCandidate,
+    IceCandidateUpdateMessage,
+    IceConfig,
+    JoinMessage,
+    LeftMessage,
+    Message,
+    OfferMessage,
+    ScopeState
+};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
@@ -45,7 +55,7 @@ pub struct SharedContext {
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: Arc<Mutex<PeerId>>,
     signaller: Arc<Mutex<Weak<SignallingClient>>>,
-    core_request: Arc<Mutex<Option<CoreRequest>>>,
+    core_request: Arc<Mutex<Option<CoreRequest>>>
 }
 
 impl Default for SharedContext {
@@ -62,7 +72,7 @@ impl SharedContext {
             peers: Default::default(),
             peer_msg_channels: Default::default(),
             signaller: Default::default(),
-            core_request: Arc::new(Mutex::new(None)),
+            core_request: Arc::new(Mutex::new(None))
         }
     }
 
@@ -75,7 +85,7 @@ impl SharedContext {
     }
 
     pub async fn get_current_id(&self) -> PeerId {
-        self.current_id.lock().await.clone()
+        *self.current_id.lock().await
     }
 
     pub async fn set_core_request(&self, core_request: CoreRequest) {
@@ -139,22 +149,22 @@ impl SharedContext {
     pub async fn disconnect_peer(&self, peer_id: &PeerId) {
         if let Some(signaller) = self.signaller().await {
             let _ = signaller.append_msg(Message {
-                left_message: Some(LeftMessage {
-                    id: peer_id.0.to_string(),
-                }),
+                left_message: Some(LeftMessage { id: peer_id.0.to_string() }),
                 from_id: peer_id.0.to_string(),
                 ..Default::default()
             });
 
             let current_id = self.get_current_id().await;
-            let _ = signaller.send(Message {
-                left_message: Some(LeftMessage {
-                    id: current_id.to_string()
-                }),
-                from_id: current_id.to_string(),
-                to_id: Some(peer_id.to_string()),
-                ..Default::default()
-            }).await;
+            let _ = signaller
+                .send(Message {
+                    left_message: Some(LeftMessage {
+                        id: current_id.to_string()
+                    }),
+                    from_id: current_id.to_string(),
+                    to_id: Some(peer_id.to_string()),
+                    ..Default::default()
+                })
+                .await;
 
             log::info!("Disconnect signal has been emitted: {peer_id:?}");
         }
@@ -181,8 +191,7 @@ impl SharedContext {
             if let Some(peer) = peer_weak.upgrade() {
                 peer.peer_disconnected().await;
             }
-        }
-        else {
+        } else {
             log::warn!("Peer not found: {peer_id:?}");
         }
     }
@@ -203,10 +212,7 @@ impl SharedContext {
 
     pub async fn get_all_connected_peers(&self) -> Vec<Arc<WebRtcPeer>> {
         let peers = self.peers.lock().await;
-        peers
-            .values()
-            .filter_map(|process| process.get().and_then(|weak| weak.upgrade()))
-            .collect()
+        peers.values().filter_map(|process| process.get().and_then(|weak| weak.upgrade())).collect()
     }
 
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
@@ -245,7 +251,10 @@ impl TryFrom<SignallingPeerRequest> for Message {
                         msg.ice_candidate_update = Some(IceCandidateUpdateMessage { ice_candidates: ice_msg });
                     }
                     PeerSignal::Offer { offer, .. } => {
-                        msg.offer = Some(OfferMessage { sdp: offer, ..Default::default() });
+                        msg.offer = Some(OfferMessage {
+                            sdp: offer,
+                            ..Default::default()
+                        });
                     }
                     PeerSignal::Answer(sdp) => msg.answer = Some(AnswerMessage { sdp })
                 };
@@ -257,7 +266,10 @@ impl TryFrom<SignallingPeerRequest> for Message {
                 // the room about our present
                 Ok(Message {
                     from_id: my_id.to_string(),
-                    join: Some(JoinMessage { id: my_id.to_string(), ..Default::default() }),
+                    join: Some(JoinMessage {
+                        id: my_id.to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 })
             }
@@ -273,7 +285,10 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
         let sender_id: PeerId = PeerId(value.from_id.parse()?);
         if let Some(join_msg) = value.join {
             let peer_id = PeerId(join_msg.id.parse()?);
-            return Ok(Self::NewPeer {id: peer_id, ice_config: join_msg.ice_config.map(create_matchbox_ice_config)})
+            return Ok(Self::NewPeer {
+                id: peer_id,
+                ice_config: join_msg.ice_config.map(create_matchbox_ice_config)
+            })
         } else if let Some(ice_msg) = value.ice_candidate_update {
             let ice = ice_msg.ice_candidates.as_string();
             let signal = PeerSignal::IceCandidate(ice);
@@ -283,7 +298,10 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
             })
         } else if let Some(offer_msg) = value.offer {
             let offer = offer_msg.sdp;
-            let signal = PeerSignal::Offer { offer, config: offer_msg.ice_config.map(create_matchbox_ice_config) };
+            let signal = PeerSignal::Offer {
+                offer,
+                config: offer_msg.ice_config.map(create_matchbox_ice_config)
+            };
             return Ok(Self::Signal {
                 sender: sender_id,
                 data: signal

@@ -7,38 +7,27 @@ pub struct P2PSession {
     device_id: u64,
     user_id: u64,
     alias: String,
-    description: Option<String>,
+    description: Option<String>
 }
 
 impl P2PSession {
-    pub async fn new(
-        device_id: u64,
-        user_id: u64,
-        alias: String,
-        description: Option<String>,
-    ) -> Self {
+    pub async fn new(device_id: u64, user_id: u64, alias: String, description: Option<String>) -> Self {
         Self {
             session_id: gen_id().await,
             device_id,
             user_id,
             alias,
-            description,
+            description
         }
     }
 
-    pub fn from_db(
-        session_id: u64,
-        device_id: u64,
-        user_id: u64,
-        alias: String,
-        description: Option<String>,
-    ) -> Self {
+    pub fn from_db(session_id: u64, device_id: u64, user_id: u64, alias: String, description: Option<String>) -> Self {
         Self {
             session_id,
             device_id,
             user_id,
             alias,
-            description,
+            description
         }
     }
 

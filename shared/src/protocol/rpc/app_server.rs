@@ -1,22 +1,27 @@
 use crate::entities::device::DeviceInfo;
-use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
 use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
+use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
+use schema::devlog::app_gateway::rpc::authenticate_response::Action;
+use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, GenerateRandomAvatarRequest, MeRequest};
+use schema::devlog::app_gateway::rpc::{
+    AppFeedbackRequest,
+    AuthenticateRequest,
+    FindUserRequest,
+    GenerateRandomAvatarRequest,
+    MeRequest
+};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
-use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
-use schema::devlog::app_gateway::rpc::authenticate_response::Action;
-use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 
 pub struct AppServer<T>
 where
@@ -59,13 +64,19 @@ where
                 platform: device.platform.into(),
                 device_type: device.device_type.into(),
                 url: format!("{}/oauth", device.url)
-            },
+            }
         };
 
         let auth_client = AuthServiceClient::new(channel);
         let response = auth_client.clone().authenticate(request).await.map(|it| it.into_inner())?;
 
-        Ok(response.action.map(|it| match it { Action::OpenUrl(url) => url }).clone().unwrap_or_default())
+        Ok(response
+            .action
+            .map(|it| match it {
+                Action::OpenUrl(url) => url
+            })
+            .clone()
+            .unwrap_or_default())
     }
 
     pub async fn get_me(&self) -> Result<User, RpcErrors> {
@@ -112,7 +123,8 @@ where
     }
 
     pub async fn get_user_by_id(&self, user_id: u64) -> Result<User, RpcErrors> {
-        self.find_user(user_id).await?
+        self.find_user(user_id)
+            .await?
             .ok_or_else(|| RpcErrors::BadRequest(format!("User {} not found", user_id)))
     }
 
@@ -127,11 +139,7 @@ where
         Ok(avatar.into_inner().avatar.unwrap_or_default())
     }
 
-    pub async fn feedback(
-        &self,
-        email: String,
-        message: String
-    ) -> Result<(), RpcErrors> {
+    pub async fn feedback(&self, email: String, message: String) -> Result<(), RpcErrors> {
         let request = AppFeedbackRequest {
             app_name: "BitBridge".to_string(),
             user_email: Some(email),

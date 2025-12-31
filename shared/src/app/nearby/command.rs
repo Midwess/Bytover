@@ -7,22 +7,22 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
+use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::transfer::module::TransferEvent;
+use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
+use crate::errors::CoreError;
+use crate::CoreOperation;
 use futures_util::StreamExt;
 use uuid::Uuid;
-use crate::app::operations::rpc::RpcOperation;
-use crate::CoreOperation;
-use crate::entities::device::DeviceInfo;
-use crate::errors::CoreError;
 
 impl AppCommand {
     pub async fn restart_nearby(&self, auto_launch: bool) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
-        self.notify_event(NearbyEvent::Launch {auto_launch});
+        self.notify_event(NearbyEvent::Launch { auto_launch });
 
         Ok(())
     }
@@ -97,7 +97,7 @@ impl AppCommand {
                     let _ = self.run(P2POperation::stop()).await;
 
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
-                    self.notify_event(NearbyEvent::Launch {auto_launch});
+                    self.notify_event(NearbyEvent::Launch { auto_launch });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning) => {
@@ -157,14 +157,42 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
-                    self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
+                    peer_id,
+                    request_id,
+                    order_id,
+                    password
+                }) => {
+                    self.notify_event(TransferEvent::ReceivedViewSessionRequest {
+                        peer_id,
+                        request_id,
+                        order_id,
+                        password
+                    });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id }) => {
-                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
+                    peer_id,
+                    session_order_id,
+                    resource_order_id,
+                    transfer_id
+                }) => {
+                    self.notify_event(TransferEvent::ReceivedDownloadRequest {
+                        peer_id,
+                        session_order_id,
+                        resource_order_id,
+                        transfer_id
+                    });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification { session_order_id, resource, peer_id }) => {
-                    self.notify_event(TransferEvent::ResourceNotification { session_order_id, resource, peer_id });
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                    session_order_id,
+                    resource,
+                    peer_id
+                }) => {
+                    self.notify_event(TransferEvent::ResourceNotification {
+                        session_order_id,
+                        resource,
+                        peer_id
+                    });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");

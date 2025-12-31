@@ -1,20 +1,20 @@
 use crate::protocol::webrtc::errors::WebRtcErrors;
+use crate::protocol::webrtc::signalling::SharedContext;
 use crate::shell::api::TimeoutReceiver;
 use anyhow::anyhow;
 use ewebsock::{connect, Options, WsEvent, WsMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::executor::block_on;
 use futures_timer::Delay;
 use futures_util::lock::Mutex;
 use futures_util::SinkExt;
 use n0_future::task::{spawn, JoinHandle};
+use n0_future::StreamExt;
 use once_cell::sync::OnceCell;
 use prost::Message as prost_message;
 use schema::devlog::rpc_signalling::server::{LeftMessage, Message};
 use std::sync::Arc;
 use std::time::Duration;
-use futures::executor::block_on;
-use n0_future::StreamExt;
-use crate::protocol::webrtc::signalling::SharedContext;
 
 pub struct SignallingClient {
     socket_addr: String,
@@ -118,12 +118,12 @@ impl SignallingClient {
                 log::info!("websocket disconnected, notifying all peers to cancel");
                 let removed_peers = context.remove_all().await;
                 for peer_id in removed_peers {
-                    let _ = left_signal_sender.send(Message {
-                        left_message: Some(LeftMessage {
-                            id: peer_id.to_string()
-                        }),
-                        ..Default::default()
-                    }).await;
+                    let _ = left_signal_sender
+                        .send(Message {
+                            left_message: Some(LeftMessage { id: peer_id.to_string() }),
+                            ..Default::default()
+                        })
+                        .await;
                 }
             }
         });

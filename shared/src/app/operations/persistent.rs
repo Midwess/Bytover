@@ -98,8 +98,10 @@ impl LocalResourcePersistentOperation {
     }
 
     pub fn remove(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)))
-            .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(
+            path
+        )))
+        .map(|it| it.result())
     }
 
     pub fn find_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<LocalResource>, CoreError>>> {

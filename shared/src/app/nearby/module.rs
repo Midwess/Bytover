@@ -1,6 +1,7 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::p2p::P2POperation;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::view_models::peer::PeerViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
@@ -8,10 +9,9 @@ use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::TransferType;
-use crate::app::transfer::module::TransferEvent;
 use crux_core::{App, Command};
-use serde::{Deserialize, Serialize};
 use schema::devlog::rpc_signalling::server::ScopeState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NearbyModel {
@@ -39,7 +39,7 @@ pub enum NearbyEvent {
     RemoveFindingScope(FindingScope),
     PeerUpdated { peer: Peer },
     PeerDisconnected { peer_id: String },
-    ScopeStateUpdated { scope_id: String, state: ScopeState },
+    ScopeStateUpdated { scope_id: String, state: ScopeState }
 }
 
 impl AppModule<BitBridge> for NearbyModule {
@@ -53,11 +53,12 @@ impl AppModule<BitBridge> for NearbyModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            NearbyEvent::Launch {auto_launch} => {
+            NearbyEvent::Launch { auto_launch } => {
                 model.environment.auto_launch_nearby = auto_launch;
                 Command::new(|it| async move {
                     it.app().start_nearby_server(auto_launch).await;
-                }).then_render()
+                })
+                .then_render()
             }
             NearbyEvent::UpdateNearbyPeers { new_peer, removed } => {
                 model.nearby.peers.retain(|it| !removed.contains(it));
@@ -76,17 +77,13 @@ impl AppModule<BitBridge> for NearbyModule {
                 model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
                 model.nearby.finding_scopes.push(scope);
                 let scopes = model.nearby.finding_scopes.clone();
-                Command::handle_result(|it| async move {
-                    it.app().run(P2POperation::update_finding_scopes(scopes)).await
-                })
+                Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
             }
             NearbyEvent::RemoveFindingScope(scope) => {
                 model.nearby.finding_scopes.retain(|s| s != &scope);
 
                 let scopes = model.nearby.finding_scopes.clone();
-                Command::handle_result(|it| async move {
-                    it.app().run(P2POperation::update_finding_scopes(scopes)).await
-                })
+                Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
             }
             NearbyEvent::PeerUpdated { peer } => {
                 if let Some(existing_peer) = model.nearby.peers.iter_mut().find(|p| p.id == peer.id) {
@@ -123,8 +120,7 @@ impl AppModule<BitBridge> for NearbyModule {
                             }
 
                             break;
-                        }
-                        else if let Some(ref connected_peer) = from_peer {
+                        } else if let Some(ref connected_peer) = from_peer {
                             if connected_peer.id == peer.id && !is_peer_owned {
                                 *from_peer = None;
                                 session.owner_disconnected();
@@ -141,7 +137,8 @@ impl AppModule<BitBridge> for NearbyModule {
                         peer_id: peer.id,
                         order_id: session_order_id,
                         password: None
-                    })).then(Command::render());
+                    }))
+                    .then(Command::render());
                 }
 
                 Command::render()
@@ -152,11 +149,7 @@ impl AppModule<BitBridge> for NearbyModule {
                         continue;
                     }
 
-                    if let TransferTarget::P2P {
-                        ref mut from_peer,
-                        ..
-                    } = session.target
-                    {
+                    if let TransferTarget::P2P { ref mut from_peer, .. } = session.target {
                         if let Some(ref peer) = from_peer {
                             if peer.id == peer_id {
                                 log::info!("Cleaning up session {} after peer disconnect", session.order_id);
@@ -170,8 +163,7 @@ impl AppModule<BitBridge> for NearbyModule {
                 Command::render()
             }
             NearbyEvent::ScopeStateUpdated { scope_id, state } => {
-                if let Some(scope) = model.nearby.finding_scopes.iter_mut()
-                    .find(|s| s.scope_id() == scope_id) {
+                if let Some(scope) = model.nearby.finding_scopes.iter_mut().find(|s| s.scope_id() == scope_id) {
                     scope.update_state(state);
                 }
 

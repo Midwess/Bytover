@@ -2,7 +2,6 @@ use crate::app::operations::transfer::{TransferOperation, TransferOperationOutpu
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferSession, TransferType};
-use crate::entities::user::User;
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::app_server::AppServer;
@@ -74,7 +73,7 @@ where
                         target: TransferTarget::P2P {
                             from_peer: None,
                             scope: crate::entities::finding_scope::FindingScope::new(&p2p_session.signalling_room_id),
-                            connection_state: crate::entities::target::P2PConnectionState::NotConnected,
+                            connection_state: crate::entities::target::P2PConnectionState::NotConnected
                         },
                         access_url: String::new(),
                         alias: alias.clone(),
@@ -83,7 +82,7 @@ where
                         password: None,
                         is_required_password: false,
                         connection_error: None,
-                        cancellation_token: CancellationToken::new(),
+                        cancellation_token: CancellationToken::new()
                     };
 
                     return Ok(Some(transfer_session).into());
@@ -101,8 +100,13 @@ where
                     return Err(CoreError::BadRequest("Not found session".to_owned()));
                 };
 
-                let transfer_session =
-                    TransferSession::from_public_overview(session_key.order_id, user, access_url.clone(), access_url, is_required_password);
+                let transfer_session = TransferSession::from_public_overview(
+                    session_key.order_id,
+                    user,
+                    access_url.clone(),
+                    access_url,
+                    is_required_password
+                );
 
                 Ok(Some(transfer_session).into())
             }

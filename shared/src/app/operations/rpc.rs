@@ -16,18 +16,15 @@ pub enum RpcOperation {
     GetAuthenticateUrl(DeviceInfo),
     GetMe(),
     GetUserById(u64),
-    Feedback {
-        email: String,
-        message: String,
-    },
+    Feedback { email: String, message: String },
     RandomAvatar,
-    CreateP2PSession,
+    CreateP2PSession
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     GetMe(User),
-    GetUserById(User),
+    GetUserById(User)
 }
 
 impl Operation for RpcOperation {

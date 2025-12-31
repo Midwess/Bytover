@@ -10,6 +10,7 @@ pub mod view_models;
 
 pub use crate::app::operations::CoreOperation;
 
+use crate::app::environment::module::EnvironmentModel;
 use crate::app::shelf::module::{ShelfEvent, ShelfModel, ShelfModule, ShelfViewModel};
 use authentication::module::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
 use crux_core::command::{CommandContext, RequestBuilder};
@@ -21,7 +22,6 @@ use modules::AppModule;
 use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
 use serde::{Deserialize, Serialize};
 use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
-use crate::app::environment::module::EnvironmentModel;
 
 pub type AppCommand = Command<<BitBridge as App>::Effect, <BitBridge as App>::Event>;
 pub type AppCommandContext = CommandContext<<BitBridge as App>::Effect, <BitBridge as App>::Event>;

@@ -27,9 +27,7 @@ pub trait P2PNativeExecutor: Send + Sync {
                 self.web_rtc().stop().await;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::IsRunning => {
-                Ok(CoreOperationOutput::Bool(self.web_rtc().is_running()))
-            }
+            P2POperation::IsRunning => Ok(CoreOperationOutput::Bool(self.web_rtc().is_running())),
             P2POperation::StartNearbyServer(peer) => {
                 let web_rtc = self.web_rtc().clone();
                 spawn(async move {
@@ -41,23 +39,47 @@ pub trait P2PNativeExecutor: Send + Sync {
 
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::ViewSessionDetail { peer_id, order_id, password } => {
+            P2POperation::ViewSessionDetail {
+                peer_id,
+                order_id,
+                password
+            } => {
                 self.web_rtc().view_session_detail(peer_id, request, order_id, password).await?;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::SendSessionDetail { peer_id, request_id, session_message, resources, error } => {
+            P2POperation::SendSessionDetail {
+                peer_id,
+                request_id,
+                session_message,
+                resources,
+                error
+            } => {
                 self.web_rtc().send_session_detail(peer_id, request_id, session_message, resources, error).await?;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::DownloadResource { peer_id, session_id, resource, progress } => {
+            P2POperation::DownloadResource {
+                peer_id,
+                session_id,
+                resource,
+                progress
+            } => {
                 self.web_rtc().download_resource(peer_id, request, session_id, resource, progress).await?;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::StreamResourceToPeer { peer_id, session_id, transfer_id, resource } => {
+            P2POperation::StreamResourceToPeer {
+                peer_id,
+                session_id,
+                transfer_id,
+                resource
+            } => {
                 self.web_rtc().stream_resource_to_peer(peer_id, session_id, transfer_id, resource).await?;
                 Ok(CoreOperationOutput::None)
             }
-            P2POperation::CancelResource { peer_id, session_id, resource_id } => {
+            P2POperation::CancelResource {
+                peer_id,
+                session_id,
+                resource_id
+            } => {
                 self.web_rtc().cancel_resource(peer_id, session_id, resource_id).await?;
                 Ok(CoreOperationOutput::None)
             }

@@ -12,13 +12,13 @@ pub enum P2PTransferErrors {
     #[error("Failed to generate alias {0}")]
     MarkovError(#[from] MarkovErrors),
     #[error("Application service error {0}")]
-    ApplicationServiceError(#[from] AppInfoErrors),
+    ApplicationServiceError(#[from] AppInfoErrors)
 }
 
 pub struct P2PTransferService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
     pub app_service: Box<dyn AppInfoService>,
-    pub markov_generator: Box<dyn Markov>,
+    pub markov_generator: Box<dyn Markov>
 }
 
 impl P2PTransferService {
@@ -26,12 +26,9 @@ impl P2PTransferService {
         &self,
         user_id: u64,
         device_id: u64,
-        device_name: String,
+        device_name: String
     ) -> Result<P2PSession, P2PTransferErrors> {
-        let existing_session = self
-            .p2p_repository
-            .find_by_user_id_and_device_id(user_id, device_id)
-            .await?;
+        let existing_session = self.p2p_repository.find_by_user_id_and_device_id(user_id, device_id).await?;
 
         if let Some(session) = existing_session {
             let updated_session = P2PSession::from_db(
@@ -39,7 +36,7 @@ impl P2PTransferService {
                 device_id,
                 user_id,
                 session.alias().to_string(),
-                Some(device_name),
+                Some(device_name)
             );
 
             let updated_session = self.p2p_repository.update_session(updated_session).await?;
@@ -48,13 +45,7 @@ impl P2PTransferService {
 
         let alias = self.markov_generator.generate_name().await?;
 
-        let new_session = P2PSession::new(
-            device_id,
-            user_id,
-            alias,
-            Some(device_name),
-        )
-        .await;
+        let new_session = P2PSession::new(device_id, user_id, alias, Some(device_name)).await;
 
         let created_session = self.p2p_repository.create_session(new_session).await?;
 

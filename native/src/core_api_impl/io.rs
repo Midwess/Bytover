@@ -1,21 +1,21 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use bytes::{Bytes, BytesMut};
 use core_services::local_storage::entry::FileEntry;
 use core_services::local_storage::stream::IOCursor;
+use lz4_flex::{compress_prepend_size, decompress_size_prepended};
+use n0_future::time::Instant;
 use shared::shell::api::{CIOCursor, DIOWriter, IOWriter};
 use shared::utils::compression::CompressStats;
 use std::path::PathBuf;
-use bytes::{Bytes, BytesMut};
-use lz4_flex::{compress_prepend_size, decompress_size_prepended};
-use n0_future::time::Instant;
 
 pub struct DIOWriterWrapper<W: IOWriter> {
     inner: W,
-    compression_support: bool,
+    compression_support: bool
 }
 
 pub struct FileEntryWriter {
-    file: FileEntry,
+    file: FileEntry
 }
 
 #[async_trait]
@@ -31,7 +31,7 @@ impl<W: IOWriter> DIOWriterWrapper<W> {
     pub fn new(inner: W, compression_support: bool) -> Self {
         Self {
             inner,
-            compression_support,
+            compression_support
         }
     }
 }
@@ -41,7 +41,7 @@ impl DIOWriterWrapper<FileEntryWriter> {
         let file = FileEntry::new(None, path).await?;
         Ok(Self {
             inner: FileEntryWriter { file },
-            compression_support,
+            compression_support
         })
     }
 }
@@ -68,9 +68,9 @@ impl<W: IOWriter> DIOWriter for DIOWriterWrapper<W> {
             let compressed = data[0] == 1;
             let data_to_write = if compressed {
                 let data_slice = data[1..].to_vec();
-                tokio::task::spawn_blocking(move || {
-                    decompress_size_prepended(&data_slice)
-                }).await.map_err(|e| anyhow::anyhow!("Decompression task failed: {}", e))?
+                tokio::task::spawn_blocking(move || decompress_size_prepended(&data_slice))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Decompression task failed: {}", e))?
                     .map_err(|e| anyhow::anyhow!("Decompression failed: {}", e))?
             } else {
                 data[1..].to_vec()
@@ -88,18 +88,14 @@ impl<W: IOWriter> DIOWriter for DIOWriterWrapper<W> {
 pub struct CIOCursorBoxWrapper {
     inner: Box<dyn IOCursor>,
     stats: CompressStats,
-    buffer: BytesMut,
+    buffer: BytesMut
 }
 
 impl CIOCursorBoxWrapper {
     pub fn new(inner: Box<dyn IOCursor>, is_compressible: bool) -> Self {
         let stats = CompressStats::new(is_compressible);
         let buffer = BytesMut::with_capacity(inner.buffer_size().unwrap_or(1024) + 1);
-        Self {
-            inner,
-            stats,
-            buffer,
-        }
+        Self { inner, stats, buffer }
     }
 }
 
@@ -143,7 +139,7 @@ impl CIOCursor for CIOCursorBoxWrapper {
         };
 
         let raw_size = raw_data.len();
-        
+
         if !self.stats.should_compress() {
             if self.buffer.len() < raw_size + 1 {
                 self.buffer.resize(raw_size + 1, 0);
@@ -154,17 +150,17 @@ impl CIOCursor for CIOCursorBoxWrapper {
             self.stats.add_chunk_stats(raw_size, 0, raw_size, read_time_micro);
             return Ok(Some((&self.buffer[..raw_size + 1], raw_size)));
         }
-        
+
         let compress_start = Instant::now();
         let raw_data_vec = raw_data.to_vec();
-        let compressed = tokio::task::spawn_blocking(move || {
-            compress_prepend_size(&raw_data_vec)
-        }).await.map_err(|e| anyhow::anyhow!("Compression task failed: {}", e))?;
+        let compressed = tokio::task::spawn_blocking(move || compress_prepend_size(&raw_data_vec))
+            .await
+            .map_err(|e| anyhow::anyhow!("Compression task failed: {}", e))?;
         let compression_time_micro = compress_start.elapsed().as_micros() as u64;
-        
+
         let compressed_size = compressed.len();
         let is_compressed_success = self.stats.add_chunk_stats(raw_size, compression_time_micro, compressed_size, read_time_micro);
-        
+
         if is_compressed_success {
             if self.buffer.len() < compressed_size + 1 {
                 self.buffer.resize(compressed_size + 1, 0);

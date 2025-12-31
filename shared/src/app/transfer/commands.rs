@@ -1,8 +1,3 @@
-use std::collections::HashMap;
-use core_services::db::repository::abstraction::table::Table;
-use n0_future::StreamExt;
-use core_services::utils::string::StringExt;
-use schema::devlog::bitbridge::PeerErrorsMessage;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{SessionLoadError, TransferSessionModelEvent, UpdateAction};
@@ -12,15 +7,17 @@ use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::operations::device::DeviceOperation;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus, TransferType};
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
+use core_services::db::repository::abstraction::table::Table;
+use core_services::utils::string::StringExt;
+use n0_future::StreamExt;
+use schema::devlog::bitbridge::PeerErrorsMessage;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
@@ -46,10 +43,11 @@ impl AppCommand {
     pub async fn delete_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
         log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
-        let _ = self.run(TransferOperation::cancel_session(
-            transfer_session.peer_id(),
-            transfer_session.order_id
-        ))
+        let _ = self
+            .run(TransferOperation::cancel_session(
+                transfer_session.peer_id(),
+                transfer_session.order_id
+            ))
             .await;
 
         if let TransferTarget::P2P { ref scope, .. } = transfer_session.target {
@@ -62,10 +60,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn upload(
-        &self,
-        session: TransferSession
-    ) -> Result<(), CoreError> {
+    pub async fn upload(&self, session: TransferSession) -> Result<(), CoreError> {
         if session.resources.is_empty() {
             self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
             return Ok(());
@@ -274,11 +269,12 @@ impl AppCommand {
                 peer_id,
                 request_id,
                 CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)
-            )).await?;
+            ))
+            .await?;
             return Ok(());
         };
 
-        session.description = device_info.map(|it| format!("{}", it.name));
+        session.description = device_info.map(|it| it.name.to_string());
 
         if session.is_required_password {
             match (&session.password, &password) {
@@ -286,7 +282,7 @@ impl AppCommand {
                     let proto_session = P2pTransferSessionMessage {
                         order_id: session.order_id,
                         description: session.description.clone(),
-                        password_protected: true,
+                        password_protected: true
                     };
 
                     self.run(P2POperation::send_session_detail(
@@ -294,13 +290,14 @@ impl AppCommand {
                         request_id,
                         Some(proto_session),
                         Some(session.resources)
-                    )).await?;
+                    ))
+                    .await?;
                 }
                 (Some(_), None) => {
                     let proto_session = P2pTransferSessionMessage {
                         order_id: session.order_id,
                         description: session.description.clone(),
-                        password_protected: true,
+                        password_protected: true
                     };
 
                     self.run(P2POperation::send_session_detail(
@@ -308,7 +305,8 @@ impl AppCommand {
                         request_id,
                         Some(proto_session),
                         None
-                    )).await?;
+                    ))
+                    .await?;
                 }
                 (Some(_), Some(_)) => {
                     log::warn!("Invalid password for session {}", session.order_id);
@@ -316,13 +314,14 @@ impl AppCommand {
                         peer_id,
                         request_id,
                         CoreError::PeerRequestError(PeerErrorsMessage::InvalidPassword)
-                    )).await?;
+                    ))
+                    .await?;
                 }
                 (None, _) => {
                     let proto_session = P2pTransferSessionMessage {
                         order_id: session.order_id,
                         description: session.description.clone(),
-                        password_protected: false,
+                        password_protected: false
                     };
 
                     self.run(P2POperation::send_session_detail(
@@ -330,14 +329,15 @@ impl AppCommand {
                         request_id,
                         Some(proto_session),
                         Some(session.resources)
-                    )).await?;
+                    ))
+                    .await?;
                 }
             }
         } else {
             let proto_session = P2pTransferSessionMessage {
                 order_id: session.order_id,
                 description: session.description.clone(),
-                password_protected: false,
+                password_protected: false
             };
 
             self.run(P2POperation::send_session_detail(
@@ -345,7 +345,8 @@ impl AppCommand {
                 request_id,
                 Some(proto_session),
                 Some(session.resources)
-            )).await?;
+            ))
+            .await?;
         }
 
         Ok(())
@@ -358,7 +359,14 @@ impl AppCommand {
         order_id: u64,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        let mut stream = self.stream_from_shell(P2POperation::ViewSessionDetail { peer_id, order_id, password }.into());
+        let mut stream = self.stream_from_shell(
+            P2POperation::ViewSessionDetail {
+                peer_id,
+                order_id,
+                password
+            }
+            .into()
+        );
 
         while let Some(output) = stream.next().await {
             match output {
@@ -377,11 +385,14 @@ impl AppCommand {
                     let msg = match &e {
                         CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound) => "Session not found".to_string(),
                         CoreError::PeerRequestError(PeerErrorsMessage::InvalidPassword) => "Invalid password".to_string(),
-                        _ => format!("Failed to load session detail: {e:?}"),
+                        _ => format!("Failed to load session detail: {e:?}")
                     };
 
                     log::error!("Error receiving session detail: {:?}", e);
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), SessionLoadError(msg).into()));
+                    self.update_model(TransferSessionModelEvent::Update(
+                        session_id.clone(),
+                        SessionLoadError(msg).into()
+                    ));
                     return Err(e);
                 }
                 _ => continue
@@ -403,7 +414,15 @@ impl AppCommand {
             return Ok(());
         };
 
-        if let Err(e) = self.run(P2POperation::stream_resource_to_peer(peer_id, session_id, transfer_id, resource)).await {
+        if let Err(e) = self
+            .run(P2POperation::stream_resource_to_peer(
+                peer_id,
+                session_id,
+                transfer_id,
+                resource
+            ))
+            .await
+        {
             log::error!("Failed to stream resource to peer: {e:?}");
         }
 
@@ -414,17 +433,21 @@ impl AppCommand {
         &self,
         peer_id: String,
         session_id: TransferSessionId,
-        resource: LocalResource,
+        resource: LocalResource
     ) -> Result<(), CoreError> {
-        let mut progress = TransferProgress::new(
-            resource.order_id,
-            resource.size,
-            TransferType::Receive
-        );
+        let mut progress = TransferProgress::new(resource.order_id, resource.size, TransferType::Receive);
 
         self.update_model(TransferSessionModelEvent::Update(session_id.clone(), progress.clone().into()));
 
-        let mut stream = self.stream_from_shell(P2POperation::DownloadResource { peer_id, session_id: session_id.order_id.clone().unwrap_or_default().parse().unwrap_or_default(), resource, progress: progress.clone() }.into());
+        let mut stream = self.stream_from_shell(
+            P2POperation::DownloadResource {
+                peer_id,
+                session_id: session_id.order_id.clone().unwrap_or_default().parse().unwrap_or_default(),
+                resource,
+                progress: progress.clone()
+            }
+            .into()
+        );
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(new_progress)) => {
@@ -448,11 +471,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn cancel_resource_transfer(
-        &self,
-        session: &TransferSession,
-        resource_id: Option<u64>
-    ) -> Result<(), CoreError> {
+    pub async fn cancel_resource_transfer(&self, session: &TransferSession, resource_id: Option<u64>) -> Result<(), CoreError> {
         if !session.target.is_peer() {
             log::warn!("Cancel resource transfer is only supported for P2P sessions");
             return Ok(());

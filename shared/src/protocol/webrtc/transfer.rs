@@ -1,14 +1,14 @@
 use crate::protocol::webrtc::errors::WebRtcErrors;
+use anyhow::Context;
+use core_services::utils::cancellation::CancellationToken;
 use futures::channel::mpsc;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use anyhow::Context;
-use core_services::utils::cancellation::CancellationToken;
-use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum TransferDelimiterShema {
@@ -16,13 +16,13 @@ pub enum TransferDelimiterShema {
         session_id: u64,
         resource_id: u64,
         total_size: Option<u64>,
-        compressed: bool,
+        compressed: bool
     },
     End {
         session_id: u64,
-        resource_id: u64,
+        resource_id: u64
     },
-    Hold,
+    Hold
 }
 
 impl TransferDelimiterShema {
@@ -31,15 +31,12 @@ impl TransferDelimiterShema {
             session_id,
             resource_id,
             total_size: None,
-            compressed,
+            compressed
         }
     }
 
     pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
-        Self::End {
-            session_id,
-            resource_id,
-        }
+        Self::End { session_id, resource_id }
     }
 
     pub fn hold() -> Self {
@@ -50,7 +47,7 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { session_id, .. } => Some(*session_id),
             Self::End { session_id, .. } => Some(*session_id),
-            Self::Hold => None,
+            Self::Hold => None
         }
     }
 
@@ -58,14 +55,14 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { resource_id, .. } => Some(*resource_id),
             Self::End { resource_id, .. } => Some(*resource_id),
-            Self::Hold => None,
+            Self::Hold => None
         }
     }
 
     pub fn compressed(&self) -> bool {
         match self {
             Self::Start { compressed, .. } => *compressed,
-            _ => false,
+            _ => false
         }
     }
 
@@ -105,9 +102,10 @@ impl TransferDelimiterShema {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::Start { .. }) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected Start delimiter but got {:?}", result)
-            ));
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected Start delimiter but got {:?}",
+                result
+            )));
         }
 
         if result.session_id() != Some(session_id) {
@@ -123,9 +121,10 @@ impl TransferDelimiterShema {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::End { .. }) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected End delimiter but got {:?}", result)
-            ));
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected End delimiter but got {:?}",
+                result
+            )));
         }
 
         if result.session_id() != Some(session_id) {
@@ -141,9 +140,10 @@ impl TransferDelimiterShema {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::Hold) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected Hold delimiter but got {:?}", result)
-            ));
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected Hold delimiter but got {:?}",
+                result
+            )));
         }
 
         Ok(result)
@@ -183,7 +183,7 @@ struct SessionContext {
     session_id: u64,
     rtc_request_id: String,
     token: Arc<Mutex<Option<CancellationToken>>>,
-    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>,
+    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>
 }
 
 impl SessionContext {
@@ -192,7 +192,7 @@ impl SessionContext {
             token: Arc::new(Mutex::new(Some(CancellationToken::new()))),
             session_id,
             rtc_request_id,
-            resource_tokens: Arc::new(Mutex::new(HashMap::new())),
+            resource_tokens: Arc::new(Mutex::new(HashMap::new()))
         }
     }
 }
@@ -259,7 +259,7 @@ impl TransfersContext {
         let mut actives = self.active_transfers.lock().await;
 
         // Find or create session if it doesn't exist
-        if actives.iter().find(|it| it.session_id == session_id).is_none() {
+        if !actives.iter().any(|it| it.session_id == session_id) {
             actives.push(SessionContext::new(session_id, String::new()));
         }
 
@@ -274,7 +274,7 @@ impl TransfersContext {
         }
 
         let session_token = session.token.lock().await;
-        let parent_token = session_token.as_ref().cloned().unwrap_or_else(|| CancellationToken::new());
+        let parent_token = session_token.as_ref().cloned().unwrap_or_else(CancellationToken::new);
         let child_token = parent_token.child_token();
         resource_tokens.insert(resource_id, child_token.clone());
         child_token

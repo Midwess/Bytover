@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::{TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{
@@ -26,7 +26,7 @@ use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
 use devlog_sdk::distributed_id::id_to_datetime;
 use serde::{Deserialize, Serialize};
-use crate::app::operations::persistent::TransferSessionPersistentOperation;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
@@ -105,7 +105,7 @@ pub enum TransferEvent {
     ResourceNotification {
         session_order_id: u64,
         resource: LocalResource,
-        peer_id: String,
+        peer_id: String
     },
     RequestDownloadResource {
         peer_id: String,
@@ -137,14 +137,14 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::Clear => {
                 model.transfer.sessions.clear();
                 Command::handle_result(|it| async move {
-                    let _  = it.app().run(TransferSessionPersistentOperation::clear_all()).await;
+                    let _ = it.app().run(TransferSessionPersistentOperation::clear_all()).await;
                     Ok(())
                 })
-            },
-            TransferEvent::CancelTransfer { session_id, transfer_type} => {
+            }
+            TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
-                    transfer_type: Some(transfer_type),
+                    transfer_type: Some(transfer_type)
                 };
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::new(|it| async move {
@@ -257,7 +257,7 @@ impl AppModule<BitBridge> for TransferModule {
                         p2p_session.signalling_scope.clone(),
                         p2p_session.alias.clone(),
                         String::new(),
-                        p2p_session.session_id,
+                        p2p_session.session_id
                     );
 
                     let scope = FindingScope::new(&p2p_session.signalling_room_id);
@@ -272,7 +272,10 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
-                        let should_persist = matches!(action, crate::app::core::model_events::TransferSessionUpdateEvent::SessionDetailUpdated(_));
+                        let should_persist = matches!(
+                            action,
+                            crate::app::core::model_events::TransferSessionUpdateEvent::SessionDetailUpdated(_)
+                        );
 
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
                             action.update(session);
@@ -283,7 +286,8 @@ impl AppModule<BitBridge> for TransferModule {
                                 return Command::handle_result(|it| async move {
                                     let _ = it.app().run(TransferSessionPersistentOperation::save(session_clone)).await;
                                     Ok(())
-                                }).then(Command::render());
+                                })
+                                .then(Command::render());
                             }
                         }
                     }
@@ -357,7 +361,12 @@ impl AppModule<BitBridge> for TransferModule {
 
                 model.transfer.keywords = keywords.clone();
                 log::info!("Find public session with keywords: {}", keywords);
-                if model.transfer.sessions.iter().any(|it| matches!(it.transfer_type, TransferType::Receive) && it.is_keyword_match(&keywords)) {
+                if model
+                    .transfer
+                    .sessions
+                    .iter()
+                    .any(|it| matches!(it.transfer_type, TransferType::Receive) && it.is_keyword_match(&keywords))
+                {
                     return Command::render();
                 }
 
@@ -382,10 +391,14 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 match &session.target {
-                    TransferTarget::P2P { connection_state, scope, from_peer, .. } => {
+                    TransferTarget::P2P {
+                        connection_state,
+                        scope,
+                        from_peer,
+                        ..
+                    } => {
                         let should_request = match connection_state {
-                            P2PConnectionState::NotConnected |
-                            P2PConnectionState::Failed(_) => true,
+                            P2PConnectionState::NotConnected | P2PConnectionState::Failed(_) => true,
                             P2PConnectionState::Connected => session.resources.is_empty(),
                             P2PConnectionState::Connecting => false
                         };
@@ -403,16 +416,20 @@ impl AppModule<BitBridge> for TransferModule {
 
                         Command::handle_result(move |it| async move {
                             it.app().request_session_detail(peer_id, session_id_clone, session.order_id, password).await
-                        }).then_render()
+                        })
+                        .then_render()
                     }
                     TransferTarget::Internet { .. } => {
-                        Command::handle_result(|it| async move {
-                            it.app().view_public_session(session, password).await
-                        }).then_render()
+                        Command::handle_result(|it| async move { it.app().view_public_session(session, password).await }).then_render()
                     }
                 }
             }
-            TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password } => {
+            TransferEvent::ReceivedViewSessionRequest {
+                peer_id,
+                request_id,
+                order_id,
+                password
+            } => {
                 let session_id = TransferSessionId {
                     order_id: Some(order_id.to_string()),
                     transfer_type: Some(TransferType::Send)
@@ -424,7 +441,11 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().handle_view_session_request(peer_id, request_id, password, session, device).await
                 })
             }
-            TransferEvent::RequestSessionDetail { peer_id, order_id, password } => {
+            TransferEvent::RequestSessionDetail {
+                peer_id,
+                order_id,
+                password
+            } => {
                 let session_id = TransferSessionId {
                     order_id: Some(order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
@@ -436,11 +457,9 @@ impl AppModule<BitBridge> for TransferModule {
                         scope.set_watcher(false);
                         model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
                         model.nearby.finding_scopes.push(scope.clone());
-                        return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope))).then(
-                            Command::handle_result(move |it| async move {
-                                it.app().request_session_detail(peer_id, session_id, order_id, password).await
-                            })
-                        );
+                        return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope))).then(Command::handle_result(
+                            move |it| async move { it.app().request_session_detail(peer_id, session_id, order_id, password).await }
+                        ));
                     }
                 }
 
@@ -448,7 +467,12 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().request_session_detail(peer_id, session_id, order_id, password).await
                 })
             }
-            TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id } => {
+            TransferEvent::ReceivedDownloadRequest {
+                peer_id,
+                session_order_id,
+                resource_order_id,
+                transfer_id
+            } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
                     transfer_type: Some(TransferType::Send)
@@ -464,7 +488,11 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().handle_download_request(peer_id, session_order_id, transfer_id, resource).await
                 })
             }
-            TransferEvent::ResourceNotification { session_order_id, resource, peer_id } => {
+            TransferEvent::ResourceNotification {
+                session_order_id,
+                resource,
+                peer_id
+            } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
@@ -481,7 +509,11 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 if !peer.is_owned(session) {
-                    log::warn!("Peer {} is not owner of session {}, ignoring resource notification", peer_id, session_order_id);
+                    log::warn!(
+                        "Peer {} is not owner of session {}, ignoring resource notification",
+                        peer_id,
+                        session_order_id
+                    );
                     return Command::done();
                 }
 
@@ -492,12 +524,13 @@ impl AppModule<BitBridge> for TransferModule {
                     let mut generate_file_paths_request = HashMap::new();
                     generate_file_paths_request.insert(resource_order_id, resource_name);
 
-                    let mut generated_saved_paths = it.app().run(
-                        TransferSessionPersistentOperation::generate_resource_paths(
+                    let mut generated_saved_paths = it
+                        .app()
+                        .run(TransferSessionPersistentOperation::generate_resource_paths(
                             session_order_id,
                             generate_file_paths_request
-                        )
-                    ).await?;
+                        ))
+                        .await?;
 
                     let Some(generated_path) = generated_saved_paths.remove(&resource_order_id) else {
                         log::warn!("Failed to generate path for resource {}", resource_order_id);
@@ -515,25 +548,36 @@ impl AppModule<BitBridge> for TransferModule {
                     Ok(())
                 })
             }
-            TransferEvent::RequestDownloadResource { peer_id, session_order_id, resource_order_id } => {
+            TransferEvent::RequestDownloadResource {
+                peer_id,
+                session_order_id,
+                resource_order_id
+            } => {
                 let id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(resource) = model.transfer.sessions.lookup(&id).and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned()) else {
+                let Some(resource) = model
+                    .transfer
+                    .sessions
+                    .lookup(&id)
+                    .and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned())
+                else {
                     log::warn!("Resource not found in session: {}", resource_order_id);
                     return Command::done();
                 };
 
-                Command::handle_result(move |it| async move {
-                    it.app().request_download_resource(peer_id, id, resource).await
-                })
+                Command::handle_result(move |it| async move { it.app().request_download_resource(peer_id, id, resource).await })
             }
-            TransferEvent::CancelResourceTransfer { session_id, transfer_type, resource_id } => {
+            TransferEvent::CancelResourceTransfer {
+                session_id,
+                transfer_type,
+                resource_id
+            } => {
                 let id = TransferSessionId {
                     order_id: Some(session_id.to_string()),
-                    transfer_type: Some(transfer_type),
+                    transfer_type: Some(transfer_type)
                 };
 
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
@@ -541,9 +585,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
-                Command::handle_result(move |it| async move {
-                    it.app().cancel_resource_transfer(&session, resource_id).await
-                })
+                Command::handle_result(move |it| async move { it.app().cancel_resource_transfer(&session, resource_id).await })
             }
         }
     }
@@ -560,7 +602,10 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let status = it.status();
                 let is_loading = matches!(status, TransferSessionStatus::Initializing { .. });
-                let loading_status = if let TransferSessionStatus::Initializing { loading_state: Some(text), .. } = &status {
+                let loading_status = if let TransferSessionStatus::Initializing {
+                    loading_state: Some(text), ..
+                } = &status
+                {
                     Some(text.clone())
                 } else {
                     None
@@ -568,63 +613,108 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let error_message = if let TransferSessionStatus::Failed(msg) = &status {
                     Some(msg.clone())
-                } else if let TransferSessionStatus::Initializing { loading_error: Some(error), .. } = &status {
+                } else if let TransferSessionStatus::Initializing {
+                    loading_error: Some(error),
+                    ..
+                } = &status
+                {
                     Some(error.clone())
                 } else {
                     None
                 };
 
-                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password) = match &it.target {
-                    TransferTarget::P2P { from_peer, .. } => {
-                        let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
-                        let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
-                        (sender_id, from_user.avatar.clone(), from_user.name.clone(), it.description.clone().unwrap_or_default(), alias, None, None, it.is_required_password)
-                    }
-                    TransferTarget::Internet { .. } => {
-                        let access_url_ref = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
-                        let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
-                        let name = match &alias {
-                            Some(a) => format!("{} ({})", from_user.name, a),
-                            None => from_user.name.to_string()
-                        };
-                        (from_user.id.to_string(), from_user.avatar.clone(), name, "Public".to_string(), alias, access_url_ref, it.password.clone(), it.is_required_password)
-                    }
-                };
+                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password) =
+                    match &it.target {
+                        TransferTarget::P2P { from_peer, .. } => {
+                            let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
+                            let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
+                            (
+                                sender_id,
+                                from_user.avatar.clone(),
+                                from_user.name.clone(),
+                                it.description.clone().unwrap_or_default(),
+                                alias,
+                                None,
+                                None,
+                                it.is_required_password
+                            )
+                        }
+                        TransferTarget::Internet { .. } => {
+                            let access_url_ref = if !it.access_url.is_empty() {
+                                Some(it.access_url.clone())
+                            } else {
+                                None
+                            };
+                            let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
+                            let name = match &alias {
+                                Some(a) => format!("{} ({})", from_user.name, a),
+                                None => from_user.name.to_string()
+                            };
+                            (
+                                from_user.id.to_string(),
+                                from_user.avatar.clone(),
+                                name,
+                                "Public".to_string(),
+                                alias,
+                                access_url_ref,
+                                it.password.clone(),
+                                it.is_required_password
+                            )
+                        }
+                    };
 
-                let image_resources = it.resources.iter().filter_map(|resource| {
-                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                let image_resources = it
+                    .resources
+                    .iter()
+                    .filter_map(|resource| {
+                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
 
-                    if resource.r#type != ResourceType::Image { return None; }
-                    Some(ImageReceiveResourceViewModel {
-                        model: SelectedResourceViewModel::from(resource),
-                        completion: progress.percentage() as f32,
-                        is_ready: is_p2p || progress.status.is_completed(),
-                        is_completed: progress.status.is_completed(),
+                        if resource.r#type != ResourceType::Image {
+                            return None;
+                        }
+                        Some(ImageReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            completion: progress.percentage() as f32,
+                            is_ready: is_p2p || progress.status.is_completed(),
+                            is_completed: progress.status.is_completed()
+                        })
                     })
-                }).collect();
+                    .collect();
 
-                let video_resources = it.resources.iter().filter_map(|resource| {
-                    if resource.r#type != ResourceType::Video { return None; }
-                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
-                    Some(VideoReceiveResourceViewModel {
-                        model: SelectedResourceViewModel::from(resource),
-                        completion: progress.percentage() as f32,
-                        is_completed: progress.status.is_completed(),
-                        is_ready: is_p2p || progress.status.is_completed(),
+                let video_resources = it
+                    .resources
+                    .iter()
+                    .filter_map(|resource| {
+                        if resource.r#type != ResourceType::Video {
+                            return None;
+                        }
+                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                        Some(VideoReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            completion: progress.percentage() as f32,
+                            is_completed: progress.status.is_completed(),
+                            is_ready: is_p2p || progress.status.is_completed()
+                        })
                     })
-                }).collect();
+                    .collect();
 
-                let file_resources = it.resources.iter().filter_map(|resource| {
-                    if !matches!(resource.r#type, ResourceType::File | ResourceType::Folder) { return None; }
-                    let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+                let file_resources = it
+                    .resources
+                    .iter()
+                    .filter_map(|resource| {
+                        if !matches!(resource.r#type, ResourceType::File | ResourceType::Folder) {
+                            return None;
+                        }
+                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
 
-                    Some(FileReceiveResourceViewModel {
-                        model: SelectedResourceViewModel::from(resource),
-                        completion: progress.percentage() as f32,
-                        is_completed: progress.status.is_completed(),
-                        is_ready: is_p2p || progress.status.is_completed(),
+                        Some(FileReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            completion: progress.percentage() as f32,
+                            is_completed: progress.status.is_completed(),
+                            is_ready: is_p2p || progress.status.is_completed()
+                        })
                     })
-                }).collect();
+                    .collect();
 
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
@@ -653,10 +743,7 @@ impl AppModule<BitBridge> for TransferModule {
                     image_resources,
                     video_resources,
                     file_resources,
-                    display_datetime: id_to_datetime(it.order_id)
-                        .with_timezone(&chrono::Local)
-                        .format("%Y-%m-%d %H:%M")
-                        .to_string()
+                    display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
                 })
             })
             .collect::<Vec<_>>();
@@ -665,16 +752,15 @@ impl AppModule<BitBridge> for TransferModule {
             received_sessions.into_iter().partition(|it| it.is_cloud);
 
         // Sort P2P sessions: online ones first
-        received_sessions.sort_by(|a, b| {
-            match (a.is_scope_online, b.is_scope_online) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => std::cmp::Ordering::Equal,
-            }
+        received_sessions.sort_by(|a, b| match (a.is_scope_online, b.is_scope_online) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => std::cmp::Ordering::Equal
         });
 
         let selected_session = model.transfer.selected_receive_session_id.and_then(|selected_id| {
-            received_sessions.iter()
+            received_sessions
+                .iter()
                 .chain(received_cloud_sessions.iter())
                 .find(|s| s.id == selected_id.to_string())
                 .cloned()
@@ -685,31 +771,39 @@ impl AppModule<BitBridge> for TransferModule {
             received_sessions,
             received_cloud_sessions,
             selected_session,
-            cloud_session: model.transfer.sessions.iter()
+            cloud_session: model
+                .transfer
+                .sessions
+                .iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_public())
-                .find_map(|it| {
-                    match &it.target {
-                        TransferTarget::Internet { .. } => {
-                            let access_url = if !it.access_url.is_empty() { Some(it.access_url.clone()) } else { None };
-                            let status = it.status();
-                            Some(CloudSession {
-                                display_download_speed: match access_url.is_none() {
-                                    true => "Initializing...".to_owned(),
-                                    false => status.to_string()
-                                },
-                                password: it.password.clone(),
-                                session_id: it.order_id.to_string(),
-                                is_completed: it.is_completed(),
-                                is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
-                                progress: it.total_progress(),
-                                access_url
-                            })
-                        },
-                        _ => None
+                .find_map(|it| match &it.target {
+                    TransferTarget::Internet { .. } => {
+                        let access_url = if !it.access_url.is_empty() {
+                            Some(it.access_url.clone())
+                        } else {
+                            None
+                        };
+                        let status = it.status();
+                        Some(CloudSession {
+                            display_download_speed: match access_url.is_none() {
+                                true => "Initializing...".to_owned(),
+                                false => status.to_string()
+                            },
+                            password: it.password.clone(),
+                            session_id: it.order_id.to_string(),
+                            is_completed: it.is_completed(),
+                            is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
+                            progress: it.total_progress(),
+                            access_url
+                        })
                     }
+                    _ => None
                 }),
-            p2p_sessions: model.transfer.sessions.iter()
+            p2p_sessions: model
+                .transfer
+                .sessions
+                .iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_peer())
                 .filter_map(|it| {
@@ -724,7 +818,7 @@ impl AppModule<BitBridge> for TransferModule {
                         access_url: None
                     })
                 })
-                .collect(),
+                .collect()
         }
     }
 }

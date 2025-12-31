@@ -1,36 +1,34 @@
 use crate::app::operations::p2p::P2POperationOutput;
+use crate::app::operations::CoreOperationOutput;
 use crate::entities::finding_scope::FindingScope;
-use crate::entities::local_resource::{LocalResource, LocalResourcePath};
+use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer as PeerEntity;
-use crate::entities::transfer_session::{TransferProgress, TransferSession};
+use crate::entities::transfer_session::TransferProgress;
+use crate::errors::CoreError;
 use crate::protocol::webrtc::errors::WebRtcErrors;
+use crate::protocol::webrtc::fec::{CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::CoreRequest;
+use anyhow::anyhow;
+use futures::executor::block_on;
 use futures::select;
 use futures_timer::Delay;
 use futures_util::FutureExt;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{ChannelConfig, WebRtcSocket};
 use n0_future::task::spawn;
+use n0_future::time::sleep;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Request;
 use schema::devlog::bitbridge::PeerMessageBody;
-use schema::devlog::rpc_signalling::server::{LeftMessage, Message as SignallingMessage};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::Arc;
 use std::time::Duration;
-use anyhow::anyhow;
-use futures::executor::block_on;
-use log::error;
-use n0_future::time::sleep;
-use crate::app::operations::CoreOperationOutput;
-use crate::errors::CoreError;
-use crate::protocol::webrtc::fec::{CHUNK_SIZE, DATA_SHARDS_DEFAULT};
 
 pub static MSG_CHANNEL_ID: usize = 0;
 pub static TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID: usize = 1;
@@ -42,7 +40,6 @@ pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
 
 pub static MAX_BUFFER_SIZE: usize = 2 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
-
 
 pub struct WebRtc {
     addr: String,
@@ -135,11 +132,11 @@ impl WebRtc {
         peer_id: String,
         request: CoreRequest,
         order_id: u64,
-        password: Option<String>,
+        password: Option<String>
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
-            let _session = peer.request_session_detail(request, order_id, password).await?;
+            peer.request_session_detail(request, order_id, password).await?;
             // Session is emitted via core_request in the peer method
             Ok(())
         } else {
@@ -153,7 +150,7 @@ impl WebRtc {
         request_id: String,
         session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>,
+        error: Option<CoreError>
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
@@ -184,7 +181,7 @@ impl WebRtc {
         peer_id: String,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource,
+        resource: LocalResource
     ) -> Result<(), WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
@@ -278,7 +275,7 @@ impl WebRtc {
                             TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
                             TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
                             TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
-                            buffer.clone(),
+                            buffer.clone()
                         );
                         self.shared_context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                         handles.push(spawn(async move {
@@ -289,7 +286,7 @@ impl WebRtc {
                                 outbound_reliable_data_sender,
                                 quad_channel,
                                 buffer,
-                                local_resource_repository,
+                                local_resource_repository
                             )
                             .await
                             {
@@ -310,8 +307,7 @@ impl WebRtc {
                             context.disconnect_peer(&peer_id).await;
                         }));
                     }
-                }
-                else if state == matchbox_socket::PeerState::Disconnected {
+                } else if state == matchbox_socket::PeerState::Disconnected {
                     log::info!("Peer {peer_id} disconnected");
                     let context = self.shared_context.clone();
                     spawn(async move {
@@ -348,7 +344,7 @@ impl WebRtc {
                         TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID,
                         TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID,
                         TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID,
-                        buffer.clone(),
+                        buffer.clone()
                     );
                     context.add_peer_msg_channel(&peer_id, &direct_message_channel).await;
                     handles.push(spawn(async move {
@@ -361,7 +357,7 @@ impl WebRtc {
                             outbound_reliable_data_sender,
                             quad_channel,
                             buffer,
-                            local_resource_repository,
+                            local_resource_repository
                         )
                         .await
                         {

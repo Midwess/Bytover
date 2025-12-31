@@ -20,7 +20,12 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
     async fn save_thumbnail(&self, png_bytes: Vec<u8>, resource_id: u64) -> Result<LocalResourcePath, PersistenceError>;
     async fn get_resource_type(&self, path: LocalResourcePath) -> Result<ResourceType, PersistenceError>;
     async fn load_all(&self) -> Result<Vec<LocalResource>, PersistenceError>;
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError>;
+    async fn read(
+        &self,
+        path: LocalResourcePath,
+        buffer_size: usize,
+        compressed: bool
+    ) -> Result<Box<dyn CIOCursor>, PersistenceError>;
     async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError>;
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError>;
     async fn generate_thumbnail_paths(

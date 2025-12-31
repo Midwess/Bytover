@@ -9,7 +9,7 @@ pub struct QuadUnreliableChannel {
     channels: [mpsc::UnboundedSender<(PeerId, Packet)>; 4],
     channel_ids: [usize; 4],
     buffer: PeerBuffered,
-    current_channel: u8,
+    current_channel: u8
 }
 
 impl QuadUnreliableChannel {
@@ -22,20 +22,20 @@ impl QuadUnreliableChannel {
         channel2_id: usize,
         channel3_id: usize,
         channel4_id: usize,
-        buffer: PeerBuffered,
+        buffer: PeerBuffered
     ) -> Self {
         Self {
             channels: [
-                channel1, channel2, channel3, channel4,
+                channel1, channel2, channel3, channel4
             ],
             channel_ids: [
                 channel1_id,
                 channel2_id,
                 channel3_id,
-                channel4_id,
+                channel4_id
             ],
             buffer,
-            current_channel: 0,
+            current_channel: 0
         }
     }
 

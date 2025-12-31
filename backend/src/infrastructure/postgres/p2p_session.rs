@@ -25,7 +25,7 @@ impl TryFrom<P2PSessionModel> for P2PSession {
             model.device_id as u64,
             model.user_id as u64,
             model.alias,
-            model.description,
+            model.description
         ))
     }
 }
@@ -39,7 +39,7 @@ impl TryFrom<&P2PSession> for P2PSessionActiveModel {
             device_id: Set(entity.device_id() as i64),
             user_id: Set(entity.user_id() as i64),
             alias: Set(entity.alias().to_string()),
-            description: Set(entity.description().map(|s| s.to_string())),
+            description: Set(entity.description().map(|s| s.to_string()))
         })
     }
 }
@@ -74,11 +74,7 @@ impl Repository<P2PSession, P2PSessionId> for P2PSessionPostgresRepository {
 
 #[async_trait::async_trait]
 impl P2PSessionRepository for P2PSessionPostgresRepository {
-    async fn find_by_user_id_and_device_id(
-        &self,
-        user_id: u64,
-        device_id: u64,
-    ) -> Result<Option<P2PSession>, RepositoryError> {
+    async fn find_by_user_id_and_device_id(&self, user_id: u64, device_id: u64) -> Result<Option<P2PSession>, RepositoryError> {
         let model = P2PSessionEntity::find()
             .filter(P2PSessionColumn::UserId.eq(user_id as i64))
             .filter(P2PSessionColumn::DeviceId.eq(device_id as i64))
@@ -101,19 +97,13 @@ impl P2PSessionRepository for P2PSessionPostgresRepository {
 
     async fn create_session(&self, session: P2PSession) -> Result<P2PSession, RepositoryError> {
         let active_model = P2PSessionActiveModel::try_from(&session)?;
-        let result = active_model
-            .insert(&self.db)
-            .await
-            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let result = active_model.insert(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
         P2PSession::try_from(result)
     }
 
     async fn update_session(&self, session: P2PSession) -> Result<P2PSession, RepositoryError> {
         let active_model = P2PSessionActiveModel::try_from(&session)?;
-        let result = active_model
-            .update(&self.db)
-            .await
-            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+        let result = active_model.update(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
         P2PSession::try_from(result)
     }
 }

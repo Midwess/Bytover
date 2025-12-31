@@ -1,7 +1,7 @@
 use crate::protocol::public_cloud::cloud_service::CloudTransferErrors;
 use crate::protocol::rpc::errors::RpcErrors;
-use serde::{Deserialize, Serialize};
 use schema::devlog::bitbridge::PeerErrorsMessage;
+use serde::{Deserialize, Serialize};
 
 /// Any error defined here must has friendly message
 /// because it will be displayed to the user (Display trait)
@@ -33,7 +33,7 @@ pub enum CoreError {
     PeerRequestError(PeerErrorsMessage),
 
     #[error("Timeout: {0}")]
-    Timeout(String),
+    Timeout(String)
 }
 
 impl From<CloudTransferErrors> for CoreError {

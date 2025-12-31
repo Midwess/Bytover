@@ -17,7 +17,7 @@ pub struct SessionLoadError(pub String);
 pub enum ModelEvent<D, I, U> {
     Update(I, U),
     Add(D),
-    Remove(I),
+    Remove(I)
 }
 
 #[delegatable_trait]
