@@ -391,11 +391,11 @@ impl AppModule<BitBridge> for TransferModule {
                         };
 
                         if !should_request {
-                            return Command::done();
+                            return Command::render();
                         }
 
                         if from_peer.is_none() {
-                            return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone())));
+                            return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone()))).then_render();
                         }
 
                         let peer_id = from_peer.as_ref().unwrap().id().to_string();
@@ -403,12 +403,12 @@ impl AppModule<BitBridge> for TransferModule {
 
                         Command::handle_result(move |it| async move {
                             it.app().request_session_detail(peer_id, session_id_clone, session.order_id, password).await
-                        })
+                        }).then_render()
                     }
                     TransferTarget::Internet { .. } => {
                         Command::handle_result(|it| async move {
                             it.app().view_public_session(session, password).await
-                        })
+                        }).then_render()
                     }
                 }
             }
