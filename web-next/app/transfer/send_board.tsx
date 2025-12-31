@@ -6,7 +6,7 @@ import {
 } from "@/components/animate-ui/radix/dropdown-menu";
 import {
     Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus, Square,
+    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
 } from 'lucide-react'
 import { Button } from "@/components/ui/button";
 import { ChevronsUpDown } from "lucide-react";
@@ -35,7 +35,6 @@ import {
     AppEventVariantShelf,
     ShelfEventVariantRemoveResource
 } from 'shared_types/types/shared_types'
-import CircleProgress from "@/components/ui/progress";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { useEffect, useRef, useState } from "react";

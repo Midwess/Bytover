@@ -88,7 +88,7 @@ impl fmt::Debug for Frame {
 }
 
 impl Frame {
-    /// Get payload data as a slice (zero-copy)
+    #[inline]
     pub fn data(&self) -> &[u8] {
         &self.buffer[self.payload_offset..]
     }
@@ -119,17 +119,22 @@ impl Frame {
 
     pub fn serialize(&self) -> Box<[u8]> {
         let payload = self.data();
-        let header_len = size_of::<u32>() * 2 + 6; // u32 + u32 + u8*4 + u16
-        let mut buf = Vec::with_capacity(header_len + payload.len());
+        let header_len = size_of::<u32>() * 2 + 6;
+        let total_len = header_len + payload.len();
+        let mut buf = Vec::with_capacity(total_len);
 
-        buf.extend_from_slice(bytes_of(&self.block_id));
-        buf.extend_from_slice(bytes_of(&self.total_size));
-        buf.push(self.frame_idx);
-        buf.push(self.data_shards);
-        buf.push(self.parity_shards);
-        buf.push(self.is_parity as u8);
-        buf.extend_from_slice(bytes_of(&self.prefix)); // u16 = 2 bytes
-        buf.extend_from_slice(payload);
+        unsafe {
+            let ptr = buf.as_mut_ptr();
+            std::ptr::copy_nonoverlapping(&self.block_id as *const u32 as *const u8, ptr, 4);
+            std::ptr::copy_nonoverlapping(&self.total_size as *const u32 as *const u8, ptr.add(4), 4);
+            ptr.add(8).write(self.frame_idx);
+            ptr.add(9).write(self.data_shards);
+            ptr.add(10).write(self.parity_shards);
+            ptr.add(11).write(self.is_parity as u8);
+            std::ptr::copy_nonoverlapping(&self.prefix as *const u16 as *const u8, ptr.add(12), 2);
+            std::ptr::copy_nonoverlapping(payload.as_ptr(), ptr.add(14), payload.len());
+            buf.set_len(total_len);
+        }
 
         buf.into_boxed_slice()
     }
@@ -184,17 +189,22 @@ impl Frame {
 impl FrameEntry {
     pub fn serialize(&self) -> Box<[u8]> {
         let header_len = size_of::<u32>() * 2 + size_of::<u64>() + size_of::<u16>() + 4;
-        let mut buf = Vec::with_capacity(header_len + self.data.len());
+        let total_len = header_len + self.data.len();
+        let mut buf = Vec::with_capacity(total_len);
 
-        buf.extend_from_slice(bytes_of(&self.block_id));
-        buf.extend_from_slice(bytes_of(&self.total_size));
-        buf.push(self.frame_idx);
-        buf.push(self.data_shards);
-        buf.push(self.parity_shards);
-        buf.push(self.is_parity as u8);
-        buf.extend_from_slice(bytes_of(&self.prefix));
-        buf.extend_from_slice(bytes_of(&self.timestamp));
-        buf.extend_from_slice(&self.data);
+        unsafe {
+            let ptr = buf.as_mut_ptr();
+            std::ptr::copy_nonoverlapping(&self.block_id as *const u32 as *const u8, ptr, 4);
+            std::ptr::copy_nonoverlapping(&self.total_size as *const u32 as *const u8, ptr.add(4), 4);
+            ptr.add(8).write(self.frame_idx);
+            ptr.add(9).write(self.data_shards);
+            ptr.add(10).write(self.parity_shards);
+            ptr.add(11).write(self.is_parity as u8);
+            std::ptr::copy_nonoverlapping(&self.prefix as *const u16 as *const u8, ptr.add(12), 2);
+            std::ptr::copy_nonoverlapping(&self.timestamp as *const u64 as *const u8, ptr.add(14), 8);
+            std::ptr::copy_nonoverlapping(self.data.as_ptr(), ptr.add(22), self.data.len());
+            buf.set_len(total_len);
+        }
 
         buf.into_boxed_slice()
     }
@@ -249,50 +259,57 @@ impl FrameEntry {
 /// block_id maps to index (block_id % window_size)
 #[derive(Debug)]
 pub struct RingBuffer<T> {
-    entries: Vec<Option<(u32, T)>>, // (block_id, data)
-    window_size: usize
+    entries: Vec<Option<(u32, T)>>,
+    window_size: usize,
+    window_mask: usize
 }
 
 impl<T> RingBuffer<T> {
     pub fn new(window_size: usize) -> Self {
+        assert!(window_size.is_power_of_two(), "window_size must be power of 2");
         Self {
             entries: (0..window_size).map(|_| None).collect(),
-            window_size
+            window_size,
+            window_mask: window_size - 1
         }
     }
 
-    // Replace and return the old value, if any
+    #[inline]
     pub fn insert(&mut self, block_id: u32, data: T) -> Option<(u32, T)> {
-        let idx = (block_id as usize) % self.window_size;
+        let idx = (block_id as usize) & self.window_mask;
         self.entries[idx].replace((block_id, data))
     }
 
+    #[inline]
     pub fn get(&self, block_id: u32) -> Option<&T> {
-        let idx = (block_id as usize) % self.window_size;
+        let idx = (block_id as usize) & self.window_mask;
         match &self.entries[idx] {
             Some((id, data)) if *id == block_id => Some(data),
             _ => None
         }
     }
 
+    #[inline]
     pub fn get_mut(&mut self, block_id: u32) -> Option<&mut T> {
-        let idx = (block_id as usize) % self.window_size;
+        let idx = (block_id as usize) & self.window_mask;
         match &mut self.entries[idx] {
             Some((id, data)) if *id == block_id => Some(data),
             _ => None
         }
     }
 
+    #[inline]
     pub fn remove(&mut self, block_id: u32) -> Option<T> {
-        let idx = (block_id as usize) % self.window_size;
+        let idx = (block_id as usize) & self.window_mask;
         match &self.entries[idx] {
             Some((id, _)) if *id == block_id => self.entries[idx].take().map(|(_, data)| data),
             _ => None
         }
     }
 
+    #[inline]
     pub fn contains_key(&self, block_id: u32) -> bool {
-        let idx = (block_id as usize) % self.window_size;
+        let idx = (block_id as usize) & self.window_mask;
         match &self.entries[idx] {
             Some((id, _)) => *id == block_id,
             None => false
@@ -343,10 +360,12 @@ impl FecSender {
         }
     }
 
+    #[inline]
     pub fn rtt(&self) -> u64 {
         self.rtt_ms
     }
 
+    #[inline]
     pub fn set_rtt(&mut self, rtt_ms: u64) {
         if self.rtt_ms == rtt_ms {
             return;
@@ -365,7 +384,9 @@ impl FecSender {
 
     pub fn send(&mut self, prefix: u16, packet: Box<[u8]>) -> Result<FecAction, FecError> {
         let mut offset = 0usize;
-        let mut frames_to_send: Vec<Frame> = Vec::new();
+        let estimated_frames = (packet.len() / (CHUNK_SIZE * self.data_shards)).saturating_add(1)
+            * (self.data_shards + MAX_PARITY_SHARDS);
+        let mut frames_to_send: Vec<Frame> = Vec::with_capacity(estimated_frames);
 
         while offset < packet.len() {
             let block_size = (packet.len() - offset).min(CHUNK_SIZE * self.data_shards);
@@ -528,20 +549,14 @@ impl FecSender {
 
     fn parity_count_from_ratio(packet_loss: f32, data_shards: usize) -> usize {
         if packet_loss == 0.0 {
-            return 0 // Early exit for zero loss rate
+            return 0;
         }
 
-        const PACKETS_PER_CHUNK: f32 = 2.0;
-        let q = 1.0 - (1.0 - packet_loss).powf(PACKETS_PER_CHUNK);
-        let mut p = (q * data_shards as f32).round() as usize;
+        let p_success = 1.0 - packet_loss;
+        let q = 1.0 - (p_success * p_success);
+        let p = (q * data_shards as f32).round() as usize;
 
-        if p < MIN_PARITY_SHARDS {
-            p = MIN_PARITY_SHARDS;
-        }
-        if p > MAX_PARITY_SHARDS {
-            p = MAX_PARITY_SHARDS;
-        }
-        p
+        p.clamp(MIN_PARITY_SHARDS, MAX_PARITY_SHARDS)
     }
 }
 
@@ -805,6 +820,7 @@ impl ReceiverBlock {
         }
     }
 
+    #[inline]
     fn is_constructed(&self) -> bool {
         self.is_complete
     }
@@ -846,7 +862,8 @@ pub struct FecReceiver {
     total_lost_frames: u64,
     decoders: HashMap<(usize, usize), ReedSolomon>,
     block_pool: Vec<ReceiverBlock>,
-    rtt_estimator: RttEstimator
+    rtt_estimator: RttEstimator,
+    blocks_to_reconstruct_buf: Vec<u32>
 }
 
 impl FecReceiver {
@@ -866,10 +883,12 @@ impl FecReceiver {
             total_frames_received: 0,
             total_lost_frames: 0,
             decoders: HashMap::new(),
-            block_pool
+            block_pool,
+            blocks_to_reconstruct_buf: Vec::new()
         }
     }
 
+    #[inline]
     pub fn calculate_loss_rate(&self) -> f32 {
         if self.total_frames_received == 0 {
             return 0.0;
@@ -877,10 +896,12 @@ impl FecReceiver {
         (self.total_lost_frames as f32) / (self.total_frames_received as f32)
     }
 
+    #[inline]
     pub fn current_block_id(&self) -> u32 {
         self.next_block_id
     }
 
+    #[inline]
     pub fn set_rtt(&mut self, rtt_ms: u64) {
         let rtt_ms = rtt_ms.max(MIN_LOSS_DELAY_US / 1000);
         self.rtt_estimator.update(rtt_ms * 1000);
@@ -897,7 +918,7 @@ impl FecReceiver {
             return self.ping();
         }
 
-        let mut blocks_to_reconstruct = Vec::new();
+        self.blocks_to_reconstruct_buf.clear();
 
         for frame in frames {
             if frame.data().len() != CHUNK_SIZE {
@@ -971,13 +992,13 @@ impl FecReceiver {
             let can_decode = block.insert_frame(idx, prefix, payload_box, &mut self.false_retransmit)?;
             self.total_frames_received += 1;
 
-            if can_decode && !blocks_to_reconstruct.contains(&block_id) {
-                blocks_to_reconstruct.push(block_id);
+            if can_decode && !self.blocks_to_reconstruct_buf.contains(&block_id) {
+                self.blocks_to_reconstruct_buf.push(block_id);
             }
         }
 
-        // Try reconstruction
-        for block_id in blocks_to_reconstruct {
+        let blocks_to_reconstruct = &self.blocks_to_reconstruct_buf;
+        for &block_id in blocks_to_reconstruct {
             if let Some(block) = self.blocks.get_mut(block_id) {
                 let _ = block.try_reconstruct(&mut self.decoders)?;
             }
@@ -1033,7 +1054,11 @@ impl FecReceiver {
 
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
-        let ratio = (self.retransmit_count as f64 + (self.false_retransmit as f64 * 2f64)) / self.retransmit_count as f64;
+        let ratio = if self.retransmit_count > 0 {
+            (self.retransmit_count as f64 + (self.false_retransmit as f64 * 2.0)) / self.retransmit_count as f64
+        } else {
+            1.0
+        };
         let time_threshold_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, Some(ratio));
 
         let mut all_missing_blocks = Vec::new();
@@ -1114,7 +1139,7 @@ pub enum FecAction {
     Terminated
 }
 
-// Helper functions
+#[inline]
 fn now_micros() -> u64 {
     epoch_micro()
 }
@@ -1140,6 +1165,7 @@ impl RttEstimator {
         }
     }
 
+    #[inline]
     pub fn update(&mut self, latest_rtt_us: u64) {
         if !self.initialized {
             self.srtt_us = latest_rtt_us;
@@ -1160,10 +1186,10 @@ impl RttEstimator {
 }
 
 pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<f64>) -> u64 {
-    let base = srtt_us.max(1) * 4 * rttvar_us.max(1);
+    let srtt_clamped = srtt_us.max(1);
+    let rttvar_clamped = rttvar_us.max(1);
+    let base = (srtt_clamped * rttvar_clamped) << 2;
 
-    let mut delay = (base as f64 * K_TIME_THRESHOLD) as u64;
-
-    delay = ((delay as f64) * mul.unwrap_or(1f64)) as u64;
-    delay.max(MIN_LOSS_DELAY_US).min(MAX_BLOCK_TIMEOUT_MS * 1000)
+    let delay = ((base as f64) * K_TIME_THRESHOLD * mul.unwrap_or(1.0)) as u64;
+    delay.clamp(MIN_LOSS_DELAY_US, MAX_BLOCK_TIMEOUT_MS * 1000)
 }
