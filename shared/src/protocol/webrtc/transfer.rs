@@ -22,7 +22,7 @@ pub enum TransferDelimiterShema {
         session_id: u64,
         resource_id: u64
     },
-    Hold
+    Hold(u8)
 }
 
 impl TransferDelimiterShema {
@@ -39,15 +39,15 @@ impl TransferDelimiterShema {
         Self::End { session_id, resource_id }
     }
 
-    pub fn hold() -> Self {
-        Self::Hold
+    pub fn hold(counter: u8) -> Self {
+        Self::Hold(counter)
     }
 
     pub fn session_id(&self) -> Option<u64> {
         match self {
             Self::Start { session_id, .. } => Some(*session_id),
             Self::End { session_id, .. } => Some(*session_id),
-            Self::Hold => None
+            Self::Hold(_) => None
         }
     }
 
@@ -55,7 +55,7 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { resource_id, .. } => Some(*resource_id),
             Self::End { resource_id, .. } => Some(*resource_id),
-            Self::Hold => None
+            Self::Hold(_) => None
         }
     }
 
@@ -139,7 +139,7 @@ impl TransferDelimiterShema {
     pub fn from_hold_packet(data: &Packet) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
-        if !matches!(result, Self::Hold) {
+        if !matches!(result, Self::Hold(_)) {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Expected Hold delimiter but got {:?}",
                 result
@@ -147,6 +147,14 @@ impl TransferDelimiterShema {
         }
 
         Ok(result)
+    }
+
+    pub fn hold_counter(&self) -> Option<u8> {
+        if let Self::Hold(counter) = self {
+            Some(*counter)
+        } else {
+            None
+        }
     }
 
     pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {

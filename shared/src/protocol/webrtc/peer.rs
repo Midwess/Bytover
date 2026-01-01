@@ -49,8 +49,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
-const ON_HOLD_STOP_THRESHOLD: u32 = 6;
-const ON_HOLD_SLOW_THRESHOLD: u32 = 2;
+const ON_HOLD_STOP_THRESHOLD: u8 = 6;
+const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -366,7 +366,7 @@ impl WebRtcPeer {
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
         let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
-        let mut hold_counter: u32 = 0;
+        let mut hold_counter: u8 = 0;
 
         loop {
             if let Some(rtt) = self.buffer.rtt().await {
@@ -422,9 +422,23 @@ impl WebRtcPeer {
                 (Some((prefix, packet)), _) => fec_sender.send(prefix, packet)?,
                 (_, Some(fb)) => {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
-                    if matches!(fb, Feedback::Network(_)) {
-                        hold_counter = hold_counter.saturating_sub(1);
+                    if let Feedback::Network(stats) = fb {
+                        if let Some(peer_block_id) = stats.current_block_id {
+                            if peer_block_id.abs_diff(fec_sender.block_id) < 2 {
+                                hold_counter = 0;
+                            }
+                            else {
+                                let peer_counter = stats.hold_counter.unwrap_or(0) as u8;
+                                if peer_counter < hold_counter {
+                                    hold_counter = hold_counter.saturating_sub(1);
+                                }
+                                else {
+                                    hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD - peer_counter);
+                                }
+                            }
+                        }
                     }
+
                     fec_sender.feedback(fb)
                 }
                 _ => break
@@ -457,7 +471,7 @@ impl WebRtcPeer {
 
             if buff_counter > MAX_BUFFER_SIZE {
                 let tick = Instant::now();
-                let quad_ch = self.quad_unreliable_channel.lock().await;
+                let mut quad_ch = self.quad_unreliable_channel.lock().await;
                 let stats_before = quad_ch.bytes_sent().await;
                 let timeout = Duration::from_millis(5 * fec_sender.rtt().max(100));
 
@@ -465,17 +479,16 @@ impl WebRtcPeer {
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
                 buff_counter = MIN_BUFFER_SIZE;
 
-                let hold_delimiter = TransferDelimiterShema::hold().as_bytes()?;
+                hold_counter += 1;
+                hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
+                let hold_delimiter = TransferDelimiterShema::hold(hold_counter).as_bytes()?;
                 let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter)? else {
                     return Err(anyhow!("Failed to build hold delimiter").into());
                 };
 
                 for frame in frames {
-                    let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                    let _ = quad_ch.send(self.peer.peer_id(), frame.serialize());
                 }
-
-                hold_counter += 1;
-                hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
 
                 let time = tick.elapsed().as_secs_f64().max(f64::MIN);
                 let stats_after = quad_ch.bytes_sent().await;
@@ -883,7 +896,7 @@ impl WebRtcPeer {
                     next_check_time = Some(next_check);
 
                     for (prefix, packet) in packets_with_prefix {
-                        if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
+                        if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
                             let loss_rate = fec_receiver.calculate_loss_rate();
                             let current_block_id = fec_receiver.current_block_id();
                             let rtt = self.buffer.rtt().await.unwrap_or(0.0);
@@ -891,7 +904,8 @@ impl WebRtcPeer {
                             let network_stats = NetworkStats {
                                 current_block_id: Some(current_block_id),
                                 rtt: Some(rtt as u32),
-                                loss_rate
+                                loss_rate,
+                                hold_counter: hold.hold_counter().map(|it| it as u32)
                             };
 
                             let feedback = FecFeedback {
