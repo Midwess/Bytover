@@ -142,6 +142,27 @@ impl OpfsWorker {
         match operation {
             FileOperation::Open => {
                 match async {
+                    if file_path.contains("zip_entry://") {
+                        if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
+                            if let Some((zip_filename, entry_name)) = path_after_prefix.split_once('/') {
+                                let zip_writer = {
+                                    let writers = self.zip_writers.lock().await;
+                                    writers.get(zip_filename).cloned()
+                                };
+
+                                if let Some(writer) = zip_writer {
+                                    let mut guard = writer.lock().await;
+                                    guard.new_entry(entry_name).await
+                                        .map_err(|e| JsValue::from(format!("Failed to create zip entry: {}", e)))?;
+                                    return Ok::<(), JsValue>(());
+                                } else {
+                                    return Err(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                                }
+                            }
+                        }
+                        return Err(JsValue::from("Invalid zip_entry path format"));
+                    }
+
                     if self.file_handles.lock().await.contains_key(&file_path) {
                         return Ok::<(), JsValue>(());
                     }
@@ -498,6 +519,13 @@ impl OpfsWorker {
             }
             FileOperation::CreateZipWriter { zip_filename } => {
                 match async {
+                    {
+                        let writers = self.zip_writers.lock().await;
+                        if writers.contains_key(&zip_filename) {
+                            return Ok::<(), JsValue>(());
+                        }
+                    }
+
                     let sync_handle = root.open_file(&zip_filename).await?;
 
                     let zip_writer = crate::file_system::zip_writer::OpfsZipWriter::new(sync_handle);
