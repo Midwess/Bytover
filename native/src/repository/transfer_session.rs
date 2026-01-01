@@ -12,7 +12,7 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::entities::transfer_session::{TransferProgress, TransferSession};
 use shared::repository::errors::PersistenceError;
 use shared::repository::path_resolver::PathResolver;
-use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository, ZipDownloadPaths};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -176,6 +176,24 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         }
 
         Ok(result)
+    }
+
+    async fn generate_zip_download_paths(
+        &self,
+        _session_order_id: u64,
+        _resource_names: HashMap<u64, String>
+    ) -> Result<ZipDownloadPaths, PersistenceError> {
+        Err(PersistenceError::IOError(
+            "generate_zip_download_paths is not supported on native platform".to_string()
+        ))
+    }
+
+    async fn start_download_session(&self, _zip_path: LocalResourcePath) -> Result<(), PersistenceError> {
+        Ok(())
+    }
+
+    async fn stop_download_session(&self, _zip_path: LocalResourcePath) -> Result<(), PersistenceError> {
+        Ok(())
     }
 }
 

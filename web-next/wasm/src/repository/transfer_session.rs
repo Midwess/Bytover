@@ -1,5 +1,8 @@
+use crate::file_system::io::OPFS_WORKER;
 use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::repository::id::IdbIdWrapper;
+use crate::web_worker::bridge::WorkerMessage;
+use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use core_services::db::idb::id::IdbId;
 use core_services::db::idb::repository::IdbRepository;
 use core_services::db::idb::table::IdbTable;
@@ -13,7 +16,7 @@ use idb::Database;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::entities::transfer_session::{TransferProgress, TransferSession};
 use shared::repository::errors::PersistenceError;
-use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository};
+use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository, ZipDownloadPaths};
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 
@@ -170,5 +173,79 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         }
 
         Ok(result)
+    }
+
+    async fn generate_zip_download_paths(
+        &self,
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    ) -> Result<ZipDownloadPaths, PersistenceError> {
+        let mut resource_paths = HashMap::new();
+
+        // Generate paths with zip_entry:// prefix for each resource
+        for (resource_order_id, resource_name) in resource_names {
+            let zip_entry_path = format!("opfs://zip_entry://{}.zip/{}", session_order_id, resource_name);
+            resource_paths.insert(resource_order_id, LocalResourcePath::PlatformIdentifier(zip_entry_path));
+        }
+
+        // Generate session path (the zip file itself)
+        let session_path = LocalResourcePath::PlatformIdentifier(format!("opfs://{}.zip", session_order_id));
+
+        Ok(ZipDownloadPaths {
+            resource_paths,
+            session_path
+        })
+    }
+
+    async fn start_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError> {
+        log::info!("Starting download session for zip: {}", zip_path.as_string());
+
+        let path_str = zip_path.as_string();
+        let zip_filename = path_str
+            .strip_prefix("opfs://")
+            .unwrap_or(&path_str)
+            .to_string();
+
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: String::new(),
+            operation: FileOperation::CreateZipWriter { zip_filename }
+        });
+
+        match OPFS_WORKER.send(msg).await {
+            Some(response) => match response.message {
+                OpfsOperationOutput::Void => Ok(()),
+                OpfsOperationOutput::Error(e) => {
+                    Err(PersistenceError::IOError(format!("Failed to create zip writer: {:?}", e)))
+                }
+                _ => Err(PersistenceError::IOError("Unexpected response from OPFS worker".to_string()))
+            },
+            None => Err(PersistenceError::IOError("Failed to communicate with OPFS worker".to_string()))
+        }
+    }
+
+    async fn stop_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError> {
+        log::info!("Stopping download session for zip: {}", zip_path.as_string());
+
+        let path_str = zip_path.as_string();
+        let zip_filename = path_str
+            .strip_prefix("opfs://")
+            .unwrap_or(&path_str)
+            .to_string();
+
+        let msg = WorkerMessage::new(OpfsOperation {
+            file_path: String::new(),
+            operation: FileOperation::FinalizeZip { zip_filename }
+        });
+
+        match OPFS_WORKER.send(msg).await {
+            Some(response) => match response.message {
+                OpfsOperationOutput::Void => Ok(()),
+                OpfsOperationOutput::Error(e) => {
+                    Err(PersistenceError::IOError(format!("Failed to finalize zip: {:?}", e)))
+                }
+                _ => Err(PersistenceError::IOError("Unexpected response from OPFS worker".to_string()))
+            },
+            None => Err(PersistenceError::IOError("Failed to communicate with OPFS worker".to_string()))
+        }
     }
 }

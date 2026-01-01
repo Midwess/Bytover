@@ -29,6 +29,12 @@ impl From<&TransferTarget> for TransferTargetId {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ZipDownloadPaths {
+    pub resource_paths: HashMap<u64, LocalResourcePath>,
+    pub session_path: LocalResourcePath
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
@@ -49,6 +55,16 @@ pub trait TransferSessionRepository: Repository<TransferSession, TransferSession
         session_order_id: u64,
         resource_names: HashMap<u64, String>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
+
+    async fn generate_zip_download_paths(
+        &self,
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    ) -> Result<ZipDownloadPaths, PersistenceError>;
+
+    async fn start_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError>;
+
+    async fn stop_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError>;
 }
 
 impl Table<TransferSessionId> for TransferSession {

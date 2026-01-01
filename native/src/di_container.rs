@@ -148,7 +148,12 @@ impl DiContainer {
         }
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
-        let web_rtc = Arc::new(WebRtc::new(get_signalling_server_ws_url(), local_resource_repo.clone()));
+        let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
+        let web_rtc = Arc::new(WebRtc::new(
+            get_signalling_server_ws_url(),
+            local_resource_repo.clone(),
+            transfer_session_repo
+        ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),

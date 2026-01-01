@@ -20,6 +20,7 @@ use crate::entities::token::Token;
 use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
 use crate::errors::CoreError;
+use crate::repository::transfer_session::ZipDownloadPaths;
 use crux_core::capability::Operation;
 use derive_more::{From, TryFrom, TryInto};
 use device::DeviceOperation;
@@ -75,6 +76,7 @@ pub enum CoreOperationOutput {
     LocalResources(Vec<LocalResource>),
     LocalResource(LocalResource),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
+    ZipDownloadPaths(ZipDownloadPaths),
 
     Error(CoreError),
 

@@ -13,6 +13,7 @@ use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
 use crate::repository::local_resource::LocalResourceRepository;
+use crate::repository::transfer_session::TransferSessionRepository;
 use crate::shell::api::CoreRequest;
 use crate::utils::compression::is_compressible;
 use anyhow::anyhow;
@@ -55,6 +56,7 @@ const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
     pub resource_repo: Arc<dyn LocalResourceRepository>,
+    pub transfer_session_repo: Arc<dyn TransferSessionRepository>,
 
     pub msg_channel: DirectMessageChannel,
     pub unordered_msg_channel: DirectMessageChannel,
@@ -88,7 +90,8 @@ impl WebRtcPeer {
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         quad_unreliable_channel: QuadUnreliableChannel,
         buffer: PeerBuffered,
-        repository: Arc<dyn LocalResourceRepository>
+        repository: Arc<dyn LocalResourceRepository>,
+        transfer_session_repo: Arc<dyn TransferSessionRepository>
     ) -> Result<Self, WebRtcErrors> {
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
 
@@ -124,6 +127,7 @@ impl WebRtcPeer {
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
+            transfer_session_repo,
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
@@ -148,7 +152,8 @@ impl WebRtcPeer {
         reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
         quad_unreliable_channel: QuadUnreliableChannel,
         buffer: PeerBuffered,
-        repository: Arc<dyn LocalResourceRepository>
+        repository: Arc<dyn LocalResourceRepository>,
+        transfer_session_repo: Arc<dyn TransferSessionRepository>
     ) -> Result<Self, WebRtcErrors> {
         log::info!("Received introduce request from other peer {:?}", msg.mine.peer_id);
         let (transfer_feedback_sender, transfer_feedback_receiver) = unbounded();
@@ -179,6 +184,7 @@ impl WebRtcPeer {
             quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
+            transfer_session_repo,
             inbound_data_stream_sender: data_tx,
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
@@ -750,6 +756,43 @@ impl WebRtcPeer {
         prefix_channels.lock().await.remove(&prefix);
 
         log::info!("Completed download for resource {}", resource_id);
+
+        Ok(())
+    }
+
+    pub async fn download_all_resources(
+        &self,
+        core_request: CoreRequest,
+        session_order_id: u64,
+        session_resource: LocalResource,
+        resources: Vec<LocalResource>
+    ) -> Result<(), WebRtcErrors> {
+        use crate::entities::transfer_session::TransferType;
+
+        log::info!("Starting download all resources for session {}", session_order_id);
+
+        let zip_path = session_resource.path.clone();
+        if let Err(e) = self.transfer_session_repo.start_download_session(zip_path.clone()).await {
+            log::error!("Failed to start download session: {:?}", e);
+        }
+
+        for resource in resources {
+            let progress = crate::entities::transfer_session::TransferProgress::new(
+                resource.order_id,
+                resource.size,
+                TransferType::Receive
+            );
+
+            if let Err(e) = self.request_resource_download(core_request.clone(), session_order_id, resource.clone(), progress).await {
+                log::error!("Failed to download resource {}: {:?}", resource.order_id, e);
+            }
+        }
+
+        if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
+            log::error!("Failed to stop download session: {:?}", e);
+        }
+
+        log::info!("Completed download all resources for session {}", session_order_id);
 
         Ok(())
     }

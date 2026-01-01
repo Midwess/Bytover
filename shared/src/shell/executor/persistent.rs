@@ -154,6 +154,25 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().generate_thumbnail_paths(session_id, resource_ids).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
             }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateZipDownloadPaths {
+                session_order_id,
+                resource_names
+            }) => {
+                let result = self.transfer_session_repository().generate_zip_download_paths(session_order_id, resource_names).await?;
+                Ok(CoreOperationOutput::ZipDownloadPaths(result))
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::StartDownloadSession {
+                zip_path
+            }) => {
+                self.transfer_session_repository().start_download_session(zip_path).await?;
+                Ok(CoreOperationOutput::None)
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::StopDownloadSession {
+                zip_path
+            }) => {
+                self.transfer_session_repository().stop_download_session(zip_path).await?;
+                Ok(CoreOperationOutput::None)
+            }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
                 let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
                 for session in sessions {

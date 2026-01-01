@@ -18,6 +18,7 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::string::StringExt;
 use n0_future::StreamExt;
 use schema::devlog::bitbridge::PeerErrorsMessage;
+use std::collections::HashMap;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
@@ -500,6 +501,115 @@ impl AppCommand {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    pub async fn request_download_all_resources(
+        &self,
+        peer_id: String,
+        session_id: TransferSessionId,
+        mut session: TransferSession
+    ) -> Result<(), CoreError> {
+        use crate::repository::transfer_session::ZipDownloadPaths;
+        use crate::entities::local_resource::ResourceType;
+
+        // 1. Fire operation to generate paths for all resources
+        let resource_names: HashMap<u64, String> = session
+            .resources
+            .iter()
+            .map(|r| (r.order_id, r.name.clone()))
+            .collect();
+
+        let zip_paths: ZipDownloadPaths = self
+            .run(TransferSessionPersistentOperation::generate_zip_download_paths(
+                session.order_id,
+                resource_names
+            ))
+            .await?;
+
+        // 2. Update resources with zip_entry paths
+        for resource in &mut session.resources {
+            if let Some(path) = zip_paths.resource_paths.get(&resource.order_id) {
+                resource.path = path.clone();
+            }
+        }
+
+        // 3. Calculate total size and create session_resource
+        let total_size: u64 = session.resources.iter().map(|r| r.size).sum();
+        let session_resource = LocalResource {
+            order_id: u64::MAX,
+            name: format!("{}.zip", session.order_id),
+            size: total_size,
+            path: zip_paths.session_path.clone(),
+            r#type: ResourceType::File,
+            thumbnail_path: None
+        };
+
+        // 4. Create aggregate progress for the entire session
+        let mut aggregate_progress = TransferProgress::new(u64::MAX, total_size, TransferType::Receive);
+        session.session_resource = Some(session_resource.clone());
+        session.progress.push(aggregate_progress.clone());
+
+        // Update model with modified session
+        self.update_model(TransferSessionModelEvent::Update(
+            session_id.clone(),
+            session.session_resource.clone().unwrap().into()
+        ));
+        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+
+        // 4.5. Start zip writer session
+        self.run(TransferSessionPersistentOperation::start_download_session(
+            zip_paths.session_path.clone()
+        )).await?;
+
+        // 5. Fire download-all operation (returns stream)
+        let mut stream = self.stream_from_shell(
+            P2POperation::DownloadAllResources {
+                peer_id,
+                session_id: session.order_id,
+                session_path: session_resource,
+                resources: session.resources.clone(),
+                aggregate_progress: aggregate_progress.clone()
+            }
+            .into()
+        );
+
+        // 6. Process progress updates - SUM individual resources
+        let mut resource_progress_map: HashMap<u64, u64> = HashMap::new();
+
+        while let Some(output) = stream.next().await {
+            match output {
+                CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress)) => {
+                    resource_progress_map.insert(progress.resource_order_id, progress.total_bytes());
+
+                    let total_downloaded: u64 = resource_progress_map.values().sum();
+
+                    let bytes_delta = total_downloaded.saturating_sub(aggregate_progress.total_bytes());
+
+                    aggregate_progress.update_progress(bytes_delta);
+
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+
+                    if aggregate_progress.is_completed() {
+                        log::info!("All resources download completed");
+                        break;
+                    }
+                }
+                CoreOperationOutput::Error(e) => {
+                    log::info!("Download all resources error: {e:?}");
+                    aggregate_progress.fail(e.to_string());
+                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                    break;
+                }
+                _ => continue
+            }
+        }
+
+        // 7. Finalize zip
+        self.run(TransferSessionPersistentOperation::stop_download_session(
+            zip_paths.session_path
+        )).await?;
 
         Ok(())
     }

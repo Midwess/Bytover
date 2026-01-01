@@ -53,6 +53,13 @@ pub enum P2POperation {
     BroadcastCancelSession {
         session_id: u64,
         resource_id: Option<u64>
+    },
+    DownloadAllResources {
+        peer_id: String,
+        session_id: u64,
+        session_path: LocalResource,
+        resources: Vec<LocalResource>,
+        aggregate_progress: TransferProgress
     }
 }
 

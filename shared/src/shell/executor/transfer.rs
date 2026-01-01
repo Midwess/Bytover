@@ -69,6 +69,7 @@ where
                         order_id: p2p_session.session_id,
                         resources: vec![],
                         progress: vec![],
+                        session_resource: None,
                         transfer_type: TransferType::Receive,
                         target: TransferTarget::P2P {
                             from_peer: None,

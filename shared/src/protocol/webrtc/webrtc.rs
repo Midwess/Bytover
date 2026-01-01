@@ -12,6 +12,7 @@ use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::signalling::{SharedContext, WebSignallerBuilder};
 use crate::repository::local_resource::LocalResourceRepository;
+use crate::repository::transfer_session::TransferSessionRepository;
 use crate::shell::api::CoreRequest;
 use anyhow::anyhow;
 use futures::executor::block_on;
@@ -44,15 +45,21 @@ pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 pub struct WebRtc {
     addr: String,
     local_resource_repository: Arc<dyn LocalResourceRepository>,
+    transfer_session_repo: Arc<dyn TransferSessionRepository>,
     shared_context: SharedContext,
     is_running: AtomicBool
 }
 
 impl WebRtc {
-    pub fn new(addr: String, local_resource_repository: Arc<dyn LocalResourceRepository>) -> Self {
+    pub fn new(
+        addr: String,
+        local_resource_repository: Arc<dyn LocalResourceRepository>,
+        transfer_session_repo: Arc<dyn TransferSessionRepository>
+    ) -> Self {
         Self {
             addr,
             local_resource_repository,
+            transfer_session_repo,
             shared_context: SharedContext::new(),
             is_running: AtomicBool::new(false)
         }
@@ -176,6 +183,23 @@ impl WebRtc {
         }
     }
 
+    pub async fn download_all_resources(
+        &self,
+        peer_id: String,
+        request: CoreRequest,
+        session_order_id: u64,
+        session_resource: LocalResource,
+        resources: Vec<LocalResource>,
+        _aggregate_progress: TransferProgress
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.download_all_resources(request, session_order_id, session_resource, resources).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
     pub async fn stream_resource_to_peer(
         &self,
         peer_id: String,
@@ -264,6 +288,7 @@ impl WebRtc {
                         let current_user = current_user.clone();
                         let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
                         let local_resource_repository = self.local_resource_repository.clone();
+                        let transfer_session_repo = self.transfer_session_repo.clone();
                         let context = self.shared_context.clone();
                         let core_request = core_request.clone();
                         let quad_channel = QuadUnreliableChannel::new(
@@ -286,7 +311,8 @@ impl WebRtc {
                                 outbound_reliable_data_sender,
                                 quad_channel,
                                 buffer,
-                                local_resource_repository
+                                local_resource_repository,
+                                transfer_session_repo
                             )
                             .await
                             {
@@ -332,6 +358,7 @@ impl WebRtc {
                     let peer_id = peer_id;
                     let outbound_reliable_data_sender = outbound_reliable_data_sender.clone();
                     let local_resource_repository = self.local_resource_repository.clone();
+                    let transfer_session_repo = self.transfer_session_repo.clone();
                     let request_id = msg.request_id.clone();
                     let core_request = core_request.clone();
                     let context = self.shared_context.clone();
@@ -357,7 +384,8 @@ impl WebRtc {
                             outbound_reliable_data_sender,
                             quad_channel,
                             buffer,
-                            local_resource_repository
+                            local_resource_repository,
+                            transfer_session_repo
                         )
                         .await
                         {

@@ -75,6 +75,7 @@ pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
     pub progress: Vec<TransferProgress>,
+    pub session_resource: Option<LocalResource>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
     pub access_url: String,
@@ -141,6 +142,10 @@ impl TransferProgress {
 
     pub fn percentage(&self) -> f64 {
         (self.total_bytes_counter as f64 / self.file_size as f64).min(1.0)
+    }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.total_bytes_counter
     }
 
     pub fn is_completed(&self) -> bool {
@@ -237,6 +242,7 @@ impl TransferSession {
             alias,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             resources,
+            session_resource: None,
             description: None,
             transfer_type: TransferType::Send,
             target: TransferTarget::P2P {
@@ -266,6 +272,7 @@ impl TransferSession {
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             cancellation_token: CancellationToken::new(),
             resources,
+            session_resource: None,
             transfer_type: TransferType::Send,
             target: TransferTarget::Internet { to_emails },
             description: None,
@@ -356,6 +363,7 @@ impl TransferSession {
             order_id,
             progress: vec![],
             resources: vec![],
+            session_resource: None,
             access_url,
             alias,
             transfer_type: TransferType::Receive,

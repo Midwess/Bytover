@@ -12,7 +12,7 @@ use crate::entities::token::Token;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
 use crate::errors::CoreError;
-use crate::repository::transfer_session::TransferSessionId;
+use crate::repository::transfer_session::{TransferSessionId, ZipDownloadPaths};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperation {
@@ -63,6 +63,16 @@ pub enum TransferSessionPersistentOperation {
     GenerateThumbnailPath {
         session_id: Option<u64>,
         resource_ids: Vec<u64>
+    },
+    GenerateZipDownloadPaths {
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    },
+    StartDownloadSession {
+        zip_path: LocalResourcePath
+    },
+    StopDownloadSession {
+        zip_path: LocalResourcePath
     }
 }
 
@@ -202,6 +212,37 @@ impl TransferSessionPersistentOperation {
                 session_id: id,
                 resource_names
             }
+        ))
+        .map(|it| it.result())
+    }
+
+    pub fn generate_zip_download_paths(
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    ) -> AppRequestBuilder<impl Future<Output = Result<ZipDownloadPaths, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
+            TransferSessionPersistentOperation::GenerateZipDownloadPaths {
+                session_order_id,
+                resource_names
+            }
+        ))
+        .map(|it| it.result())
+    }
+
+    pub fn start_download_session(
+        zip_path: LocalResourcePath
+    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
+            TransferSessionPersistentOperation::StartDownloadSession { zip_path }
+        ))
+        .map(|it| it.result())
+    }
+
+    pub fn stop_download_session(
+        zip_path: LocalResourcePath
+    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::TransferSession(
+            TransferSessionPersistentOperation::StopDownloadSession { zip_path }
         ))
         .map(|it| it.result())
     }
