@@ -735,25 +735,25 @@ function FileView(props: {
 
             {/* Download Button / Progress */}
             {
-                file.is_ready && !file.completion
-                    ? <button
+                file.is_ready && !file.completion &&
+                    <button
                         className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
                                    transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
                         onClick={onDownloadClick}
                     >
-                        <ArrowDown className="w-5 h-5 text-white" />
+                        <ArrowDown className="w-5 h-5 text-white"/>
                     </button>
-                    : <div className="flex flex-col items-center gap-1 flex-shrink-0">
+            }
+            <div className="flex flex-col items-center gap-1 flex-shrink-0">
                         <CircleProgress
                             isCompleted={file.is_completed}
-                            isInProgress={!file.is_completed}
+                            isInProgress={!file.is_completed && file.completion > 0}
                             progress={file.completion}
                             size={40}
                             strokeWidth={4}
                             onClick={onCancelClick}
                         />
                     </div>
-            }
         </div>
     );
 }

@@ -98,6 +98,11 @@ export default function CircleProgress({
     const finalProgress = showCheckmark ? 1 : displayProgress;
     const offset = circumference * (1 - finalProgress);
 
+    // Don't render at all when not visible
+    if (!isVisible) {
+        return null;
+    }
+
     return (
         <div
             onClick={isInProgress ? onClick : undefined}
@@ -109,8 +114,7 @@ export default function CircleProgress({
             style={{
                 width: size,
                 height: size,
-                visibility: isVisible ? 'visible' : 'hidden',
-                opacity: isVisible ? (showCheckmark ? 1 : (showGreen ? 0 : 1)) : 0,
+                opacity: showCheckmark ? 1 : (showGreen ? 0 : 1),
                 transition: showCheckmark
                     ? 'opacity 0.3s ease-in, transform 0.3s ease-in'
                     : (showGreen ? 'opacity 0.5s ease-out 0.5s, transform 0.5s ease-out' : 'opacity 0.3s ease-out')
