@@ -356,7 +356,6 @@ impl OpfsWorker {
                 OpfsOperationOutput::Error("No file selected".into())
             }
             FileOperation::Write { data, position, decompress } => {
-                // Check if this is a zip_entry:// path and write to zip writer
                 if file_path.contains("zip_entry://") {
                     if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
                         if let Some((zip_filename, _entry_name)) = path_after_prefix.split_once('/') {
@@ -368,7 +367,6 @@ impl OpfsWorker {
                             if let Some(writer) = zip_writer {
                                 let mut guard = writer.lock().await;
 
-                                // Decompress data if needed (same as regular file write)
                                 let data_vec = match decompress {
                                     true => {
                                         match decompress_size_prepended(data.to_vec().as_slice()) {
@@ -379,9 +377,9 @@ impl OpfsWorker {
                                     false => data.to_vec()
                                 };
 
-                                match guard.write(&data_vec).await {
-                                    Ok(_) => return OpfsOperationOutput::Written(data_vec.len()),
-                                    Err(e) => return OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e)))
+                               return match guard.write(&data_vec).await {
+                                    Ok(_) => OpfsOperationOutput::Written(data_vec.len()),
+                                    Err(e) => OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e)))
                                 }
                             } else {
                                 return OpfsOperationOutput::Error(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
@@ -552,7 +550,8 @@ impl OpfsWorker {
                             .into_inner();
                         writer.finalize().await
                             .map_err(|e| JsValue::from(e.to_string()))?;
-                    } else {
+                    }
+                    else {
                         return Err(JsValue::from(format!("Zip writer not found: {}", zip_filename)));
                     }
 

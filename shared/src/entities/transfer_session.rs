@@ -669,11 +669,20 @@ pub struct ThumbnailUpdatedEvent {
     pub path: LocalResourcePath
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SessionResourceUpdate(pub LocalResource);
+
 impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {
     fn update(self, data: &mut TransferSession) {
         if let Some(resource) = data.resources.iter_mut().find(|r| r.order_id == self.resource_id) {
             resource.thumbnail_path = Some(self.path);
         }
+    }
+}
+
+impl UpdateAction<TransferSession> for SessionResourceUpdate {
+    fn update(self, data: &mut TransferSession) {
+        data.session_resource = Some(self.0);
     }
 }
 

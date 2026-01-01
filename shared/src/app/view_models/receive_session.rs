@@ -51,5 +51,9 @@ pub struct ReceiveSessionViewModel {
     pub is_in_progress: bool,
     pub display_download_speed: String,
     pub progress: f64,
-    pub display_datetime: String
+    pub display_datetime: String,
+    pub download_all_enabled: bool,
+    pub download_all_progress: Option<f32>,
+    pub download_all_in_progress: bool,
+    pub download_all_completed: bool
 }

@@ -736,6 +736,8 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                     .collect();
 
+                let download_all_progress = it.progress.iter().find(|p| p.resource_order_id == u64::MAX);
+
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
                     is_scope_online: match &it.target {
@@ -763,7 +765,11 @@ impl AppModule<BitBridge> for TransferModule {
                     image_resources,
                     video_resources,
                     file_resources,
-                    display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string()
+                    display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+                    download_all_enabled: is_p2p && !it.resources.is_empty(),
+                    download_all_progress: download_all_progress.map(|p| p.percentage() as f32),
+                    download_all_in_progress: download_all_progress.map(|p| !p.is_completed()).unwrap_or(false),
+                    download_all_completed: download_all_progress.map(|p| p.is_success()).unwrap_or(false)
                 })
             })
             .collect::<Vec<_>>();

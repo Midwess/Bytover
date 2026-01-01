@@ -400,7 +400,7 @@ impl WebRtcPeer {
                         let data = packet_rx.next().await;
                         if hold_counter > ON_HOLD_SLOW_THRESHOLD {
                             sleep(Duration::from_millis(
-                                fec_sender.rtt().max(12) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64
+                                fec_sender.rtt().max(10) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64
                             ))
                             .await;
                         }
@@ -777,14 +777,15 @@ impl WebRtcPeer {
         }
 
         for resource in resources {
-            let progress = crate::entities::transfer_session::TransferProgress::new(
+            let progress = TransferProgress::new(
                 resource.order_id,
                 resource.size,
                 TransferType::Receive
             );
 
-            if let Err(e) = self.request_resource_download(core_request.clone(), session_order_id, resource.clone(), progress).await {
-                log::error!("Failed to download resource {}: {:?}", resource.order_id, e);
+            let resource_order_id = resource.order_id;
+            if let Err(e) = self.request_resource_download(core_request.clone(), session_order_id, resource, progress).await {
+                log::error!("Failed to download resource {}: {:?}", resource_order_id, e);
             }
         }
 
@@ -840,8 +841,8 @@ impl WebRtcPeer {
             cursor
                 .compression_stats_mut()
                 .update_network_bandwidth(self.bandwidth.load(Ordering::Relaxed) as f64 * 1024f64);
-            match cursor.c_next(None).with_cancel(&resource_token).await {
-                Ok(Ok(Some((data, _raw_size)))) => {
+            match cursor.c_next(None).with_cancel(&resource_token).await?? {
+                Some((data, _raw_size)) => {
                     if data.is_empty() {
                         break;
                     }
@@ -856,30 +857,16 @@ impl WebRtcPeer {
                         }
                     }
                 }
-                Ok(Ok(None)) => {
+                None => {
                     break;
-                }
-                Ok(Err(e)) => {
-                    log::error!("Error reading resource data: {:?}", e);
-                    return Err(anyhow!("Failed to read resource: {:?}", e).into());
-                }
-                Err(_) => {
-                    log::info!("Stream cancelled while reading resource data");
-                    return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
                 }
             }
         }
 
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
-        match outbound_packet_sender.send((prefix, end_packet)).with_cancel(&resource_token).await {
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to send end delimiter: {:?}", e))),
-            Err(_) => {
-                log::info!("Stream cancelled while sending end delimiter");
-                return Err(WebRtcErrors::InvalidDelimiter("Stream cancelled".into()));
-            }
-        }
+        outbound_packet_sender.send((prefix, end_packet)).with_cancel(&resource_token).await?
+            .map_err(|it| anyhow!("Failed to send end delimiter: {:?}", it))?;
 
         log::info!("Completed streaming resource {} for session {}", resource_id, session_id);
         Ok(())

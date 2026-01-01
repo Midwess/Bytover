@@ -11,7 +11,7 @@ use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferSessionStatus, TransferType};
+use crate::entities::transfer_session::{SessionResourceUpdate, TransferProgress, TransferSession, TransferSessionStatus, TransferType};
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
 use core_services::db::repository::abstraction::table::Table;
@@ -514,7 +514,6 @@ impl AppCommand {
         use crate::repository::transfer_session::ZipDownloadPaths;
         use crate::entities::local_resource::ResourceType;
 
-        // 1. Fire operation to generate paths for all resources
         let resource_names: HashMap<u64, String> = session
             .resources
             .iter()
@@ -528,14 +527,12 @@ impl AppCommand {
             ))
             .await?;
 
-        // 2. Update resources with zip_entry paths
         for resource in &mut session.resources {
             if let Some(path) = zip_paths.resource_paths.get(&resource.order_id) {
                 resource.path = path.clone();
             }
         }
 
-        // 3. Calculate total size and create session_resource
         let total_size: u64 = session.resources.iter().map(|r| r.size).sum();
         let session_resource = LocalResource {
             order_id: u64::MAX,
@@ -546,24 +543,21 @@ impl AppCommand {
             thumbnail_path: None
         };
 
-        // 4. Create aggregate progress for the entire session
         let mut aggregate_progress = TransferProgress::new(u64::MAX, total_size, TransferType::Receive);
         session.session_resource = Some(session_resource.clone());
         session.progress.push(aggregate_progress.clone());
 
-        // Update model with modified session
         self.update_model(TransferSessionModelEvent::Update(
             session_id.clone(),
-            session.session_resource.clone().unwrap().into()
+            SessionResourceUpdate(session_resource.clone()).into()
         ));
+
         self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
 
-        // 4.5. Start zip writer session
         self.run(TransferSessionPersistentOperation::start_download_session(
             zip_paths.session_path.clone()
         )).await?;
 
-        // 5. Fire download-all operation (returns stream)
         let mut stream = self.stream_from_shell(
             P2POperation::DownloadAllResources {
                 peer_id,
@@ -575,7 +569,6 @@ impl AppCommand {
             .into()
         );
 
-        // 6. Process progress updates - SUM individual resources
         let mut resource_progress_map: HashMap<u64, u64> = HashMap::new();
 
         while let Some(output) = stream.next().await {
@@ -606,7 +599,6 @@ impl AppCommand {
             }
         }
 
-        // 7. Finalize zip
         self.run(TransferSessionPersistentOperation::stop_download_session(
             zip_paths.session_path
         )).await?;

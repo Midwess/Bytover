@@ -2,7 +2,7 @@ use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResource;
-use crate::entities::transfer_session::{ThumbnailUpdatedEvent, TransferProgress, TransferSession};
+use crate::entities::transfer_session::{SessionResourceUpdate, ThumbnailUpdatedEvent, TransferProgress, TransferSession};
 use crate::repository::local_resource::LocalResourceId;
 use crate::repository::transfer_session::TransferSessionId;
 use ambassador::{delegatable_trait, Delegate};
@@ -31,6 +31,7 @@ pub enum TransferSessionUpdateEvent {
     ProgressUpdate(TransferProgress),
     ThumbnailUpdated(ThumbnailUpdatedEvent),
     ResourceUpdate(LocalResource),
+    SessionResourceUpdate(SessionResourceUpdate),
     SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage),
     SessionLoadError(SessionLoadError)
 }

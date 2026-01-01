@@ -102,7 +102,10 @@ function HeaderInfo() {
     const progress = (selectedSession as ReceiveSessionViewModel).progress || 0
     const displaySpeed = (selectedSession as ReceiveSessionViewModel).display_download_speed || ''
     const isCompleted = (selectedSession as ReceiveSessionViewModel).is_completed || false
-    const isCloud = selectedSession.is_cloud || false
+    const downloadAllEnabled = (selectedSession as ReceiveSessionViewModel).download_all_enabled || false
+    const downloadAllProgress = (selectedSession as ReceiveSessionViewModel).download_all_progress ?? 0
+    const downloadAllInProgress = (selectedSession as ReceiveSessionViewModel).download_all_in_progress || false
+    const downloadAllCompleted = (selectedSession as ReceiveSessionViewModel).download_all_completed || false
 
     const totalResources = (selectedSession.image_resources?.length || 0) +
         (selectedSession.video_resources?.length || 0) +
@@ -136,17 +139,29 @@ function HeaderInfo() {
                     <span className="text-sm text-green-500 font-medium">Completed</span>
                 </>
             )}
-            {!isCloud && totalResources > 0 && !isCompleted && (
+            {downloadAllEnabled && !isCompleted && (
                 <div className="ml-auto">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-2"
-                        onClick={onDownloadAll}
-                    >
-                        <Download className="h-4 w-4" />
-                        Download All
-                    </Button>
+                    {downloadAllInProgress || downloadAllCompleted ? (
+                        <DownloadButtonWithProgress
+                            progress={downloadAllProgress}
+                            isReady={true}
+                            isCompleted={downloadAllCompleted}
+                            isInProgress={downloadAllInProgress}
+                            onDownloadClick={onDownloadAll}
+                            size={40}
+                            strokeWidth={4}
+                        />
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-2"
+                            onClick={onDownloadAll}
+                        >
+                            <Download className="h-4 w-4" />
+                            Download All
+                        </Button>
+                    )}
                 </div>
             )}
         </div>
