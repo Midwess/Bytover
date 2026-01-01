@@ -1,52 +1,10 @@
-# Transfer Cancellation Implementation
-
-## 1. Backend: Transfer Context (webrtc/transfer.rs:181-245)
-
-### Add Resource-Level Cancellation
-- Add `HashMap<u64, CancellationToken>` to `SessionContext` for resource tokens
-- Resource tokens are children of session token (cancel session → cancels all resources)
-- Add methods:
-  - `add_resource_token(session_id, resource_id, token)`
-  - `cancel_resource(session_id, resource_id)`
-  - `get_resource_token(session_id, resource_id)`
-
-## 2. Backend: Peer Download Logic (webrtc/peer.rs:618-708)
-
-### Integrate Cancellation in `request_resource_download`
-- Create child token from session token at start (line ~627)
-- Store in `TransfersContext` with resource_id
-- Wrap async operations with `.with_cancel(&token)`:
-  - `rx.next().with_cancel(&token).await` in download loop (674-702)
-  - Handle `Err(_)` → cancelled, break loop
-- Clean up token on completion/cancellation (line ~704)
-
-### Integrate Cancellation in `stream_resource` (711-774)
-- Get token from `TransfersContext`
-- Wrap async operations with `.with_cancel(&token)`:
-  - `cursor.c_next(None).with_cancel(&token).await` (line 743)
-  - `outbound_packet_sender.send().with_cancel(&token).await` (752, 768)
-- Stop sending packets when cancelled
-
-## 3. Backend: Cancel Message Handler (webrtc/peer.rs:194-272)
-
-### Extend `process_message_packet`
-- Add new message type: `CancelResourceRequest { session_id, resource_id }`
-- Handler calls `transfers_context.cancel_resource(session_id, resource_id)`
-
-## 4. Backend: Transfer Command Validation (transfer/command or module)
-
-### Add P2P Check for Cancellation
-- When receiving cancel resource operation, check if session is P2P
-- Only allow cancellation if `session.transfer_type == TransferType::P2P`
-- Return error for cloud transfers (not cancellable)
-- Forward to peer.rs only if P2P
-
-## 5. Core Operation Flow
-```
-User clicks progress → CancelResourceTransfer operation
-→ transfer/module checks if session is P2P
-→ If P2P: sends CancelResourceRequest to peer
-→ peer.rs cancels token via TransfersContext
-→ download/upload loop exits on cancellation
-→ If Cloud: ignore or return error
-```
+# Support feature download all resources for P2P Session
+1. We want to allow receivers to have a button to download all resources into a zip file
+2. When user press on download all buttons, we will forward event DownloadAll to the transfer module
+3. Then the transfer module will create a command to handle, it will create a new progress and session local resource for download all to keep track of progress
+4. The command will start a stream to receive series of events about the progress update of each resource, it will not update progress to the entities but it will progress to update to progress instance of session local resource only.
+4. We will need to modify the entities/transfer_session.rs to have session_resource: Option<LocalResource> it will be a resource for download all
+4. Send operation with list of resources to the webrtc/peer to download all resources
+5. The peer will change the saved path of each local resource from opfs://<path> to opfs://zip_entry://<session-order-id>.zip/<path>; then request resource one by one, 
+6. in worker/opfs.rs, we will handle the write operation to detect path and create zip entry accordingly
+7. Save the zip entry to a HashMap<String, ZipEntry> to keep track of all zip entries
