@@ -102,7 +102,7 @@ export class WasmCore {
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 if (!isEqual(selectedSession, transferState?.selected_session)) {
-                    setSelectedSession(transferState?.selected_session)
+                    setSelectedSession(transferState?.selected_session ?? undefined)
                 }
             })
         }, [selectedSession])

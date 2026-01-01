@@ -43,7 +43,6 @@ impl SignallingClient {
 
         let mut msg_sender = self.sender.clone();
         let addr = self.socket_addr.clone();
-        let mut left_signal_sender = signal_sender.clone();
         let handle = spawn(async move {
             loop {
                 let (mut sender, receiver) = match connect(addr.clone(), options.clone()) {
@@ -116,15 +115,7 @@ impl SignallingClient {
                 let drained_messages = signal_receiver.drain().collect::<Vec<_>>().await;
                 log::info!("websocket disconnected, draining {} messages", drained_messages.len());
                 log::info!("websocket disconnected, notifying all peers to cancel");
-                let removed_peers = context.remove_all().await;
-                for peer_id in removed_peers {
-                    let _ = left_signal_sender
-                        .send(Message {
-                            left_message: Some(LeftMessage { id: peer_id.to_string() }),
-                            ..Default::default()
-                        })
-                        .await;
-                }
+                context.remove_all().await;
             }
         });
 

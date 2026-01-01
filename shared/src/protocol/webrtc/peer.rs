@@ -482,16 +482,6 @@ impl WebRtcPeer {
                 let total_sent = stats_after.saturating_sub(stats_before);
                 let bw = (total_sent as f64 / time) as u64;
                 let bw_kbps = bw / 1000;
-
-                if bw_kbps > 0 {
-                    self.bandwidth.store(bw_kbps, Ordering::Relaxed);
-                    // log::info!(
-                    //     "Buffer low, sent {} bytes in {} seconds, bandwidth: {} kbps",
-                    //     total_sent,
-                    //     time,
-                    //     bw_kbps
-                    // );
-                }
             }
         }
 

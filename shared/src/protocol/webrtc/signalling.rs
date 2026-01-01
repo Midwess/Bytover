@@ -146,7 +146,7 @@ impl SharedContext {
         peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
     }
 
-    pub async fn disconnect_peer(&self, peer_id: &PeerId) {
+    async fn disconnect_peer(&self, peer_id: &PeerId) {
         if let Some(signaller) = self.signaller().await {
             let _ = signaller.append_msg(Message {
                 left_message: Some(LeftMessage { id: peer_id.0.to_string() }),
@@ -175,6 +175,7 @@ impl SharedContext {
         let mut removed_peers = Vec::new();
         for (id, peer) in peers {
             if let Some(peer_weak) = peer.get() {
+                self.disconnect_peer(&id).await;
                 if let Some(peer) = peer_weak.upgrade() {
                     removed_peers.push(id);
                     peer.peer_disconnected().await;
@@ -189,6 +190,7 @@ impl SharedContext {
         let peer_weak = self.peers.lock().await.remove(peer_id).and_then(|it| it.get().cloned());
         if let Some(peer_weak) = peer_weak {
             if let Some(peer) = peer_weak.upgrade() {
+                self.disconnect_peer(peer_id).await;
                 peer.peer_disconnected().await;
             }
         } else {

@@ -304,7 +304,7 @@ impl WebRtc {
                             let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                             let result = peer.run_loop().await;
                             log::info!("Peer {peer_id} loop finished with result {result:?}");
-                            context.disconnect_peer(&peer_id).await;
+                            context.remove_peer(&peer_id).await;
                         }));
                     }
                 } else if state == matchbox_socket::PeerState::Disconnected {
@@ -374,7 +374,7 @@ impl WebRtc {
                         let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         let result = peer.run_loop().await;
                         log::info!("Peer {peer_id} loop finished with result {result:?}");
-                        context.disconnect_peer(&peer_id).await;
+                        context.remove_peer(&peer_id).await;
                     }));
 
                     continue;
