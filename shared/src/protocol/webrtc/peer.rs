@@ -674,6 +674,12 @@ impl WebRtcPeer {
         let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
 
         log::info!("Requesting download for resource {:?}", request);
+
+        progress.update_progress(1);
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+            .await;
+
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
         let prefix_channels = self.prefix_channels.clone();

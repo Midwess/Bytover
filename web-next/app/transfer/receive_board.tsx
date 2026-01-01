@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import DownloadButtonWithProgress from "./download-button-with-progress";
 import { useUrlState } from "@/hooks/use-url";
 import {
     SidebarProvider,
@@ -734,26 +735,16 @@ function FileView(props: {
             </div>
 
             {/* Download Button / Progress */}
-            {
-                file.is_ready && !file.completion &&
-                    <button
-                        className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
-                                   transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
-                        onClick={onDownloadClick}
-                    >
-                        <ArrowDown className="w-5 h-5 text-white"/>
-                    </button>
-            }
-            <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                        <CircleProgress
-                            isCompleted={file.is_completed}
-                            isInProgress={!file.is_completed && file.completion > 0}
-                            progress={file.completion}
-                            size={40}
-                            strokeWidth={4}
-                            onClick={onCancelClick}
-                        />
-                    </div>
+            <DownloadButtonWithProgress
+                progress={file.completion}
+                isReady={file.is_ready}
+                isCompleted={file.is_completed}
+                isInProgress={!file.is_completed && file.completion > 0}
+                onDownloadClick={onDownloadClick}
+                onCancelClick={onCancelClick}
+                size={40}
+                strokeWidth={4}
+            />
         </div>
     );
 }
@@ -898,26 +889,22 @@ function MediaView(props: {
                         </div>
 
                         {/* Download Button / Progress */}
-                        <div className="flex-shrink-0">
-                            {media.is_ready
-                                ? <button
-                                    className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
-                                               transition-all duration-300 hover:scale-110 shadow-lg"
-                                    onClick={onDownloadClick}>
-                                    <ArrowDown className="w-5 h-5 text-white" />
-                                </button>
-                                : <div className="flex flex-col items-center gap-0.5">
-                                    <CircleProgress
-                                        progress={media.completion}
-                                        size={36}
-                                        strokeWidth={3}
-                                        onClick={onCancelClick}
-                                    />
-                                    <span className="text-[9px] text-white/60 font-medium">
-                                        {(media.completion * 100).toFixed(0)}%
-                                    </span>
-                                </div>
-                            }
+                        <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
+                            <DownloadButtonWithProgress
+                                progress={media.completion}
+                                isReady={media.is_ready}
+                                isCompleted={media.is_completed}
+                                isInProgress={media.completion > 0 && !media.is_completed}
+                                onDownloadClick={onDownloadClick}
+                                onCancelClick={onCancelClick}
+                                size={36}
+                                strokeWidth={3}
+                            />
+                            {media.completion > 0 && !media.is_completed && (
+                                <span className="text-[9px] text-white/60 font-medium">
+                                    {(media.completion * 100).toFixed(0)}%
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -943,24 +930,16 @@ function MediaView(props: {
             {/* Mobile: Actions */}
             {isMobile && (
                 <div className="flex-shrink-0">
-                    {media.is_ready && !media.completion ? (
-                        <button
-                            className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
-                                       transition-all duration-300 hover:scale-110 shadow-lg"
-                            onClick={onDownloadClick}
-                        >
-                            <ArrowDown className="w-5 h-5 text-white" />
-                        </button>
-                    ) : (
-                        <div className="flex flex-col items-center gap-0.5">
-                            <CircleProgress
-                                progress={media.completion}
-                                size={32}
-                                strokeWidth={3}
-                                onClick={onCancelClick}
-                            />
-                        </div>
-                    )}
+                    <DownloadButtonWithProgress
+                        progress={media.completion}
+                        isReady={media.is_ready}
+                        isCompleted={media.is_completed}
+                        isInProgress={media.completion > 0 && !media.is_completed}
+                        onDownloadClick={onDownloadClick}
+                        onCancelClick={onCancelClick}
+                        size={32}
+                        strokeWidth={3}
+                    />
                 </div>
             )}
         </div>
