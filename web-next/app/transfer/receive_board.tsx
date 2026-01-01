@@ -11,6 +11,7 @@ import {
     TransferEventVariantFindPublicSession,
     TransferEventVariantViewSession,
     TransferEventVariantRequestDownloadResource,
+    TransferEventVariantRequestDownloadAllResources,
     TransferTypeVariantReceive,TransferEventVariantCancelResourceTransfer,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
@@ -18,6 +19,7 @@ import {
     ArrowDown,
     Book,
     ChevronsUpDown,
+    Download,
     Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -84,6 +86,15 @@ function HeaderInfo() {
     const selectedSessionId = core.useSelectedSession()?.id;
     const selectedSession = core.useSession(selectedSessionId ?? '');
 
+    const onDownloadAll = useCallback(() => {
+        if (!selectedSession) return;
+        const peerId = selectedSession.sender_id;
+        const sessionOrderId = BigInt(selectedSession.id);
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantRequestDownloadAllResources(peerId, sessionOrderId)
+        ));
+    }, [selectedSession]);
+
     if (!selectedSession || selectedSession.is_loading) {
         return null;
     }
@@ -91,6 +102,7 @@ function HeaderInfo() {
     const progress = (selectedSession as ReceiveSessionViewModel).progress || 0
     const displaySpeed = (selectedSession as ReceiveSessionViewModel).display_download_speed || ''
     const isCompleted = (selectedSession as ReceiveSessionViewModel).is_completed || false
+    const isCloud = selectedSession.is_cloud || false
 
     const totalResources = (selectedSession.image_resources?.length || 0) +
         (selectedSession.video_resources?.length || 0) +
@@ -123,6 +135,19 @@ function HeaderInfo() {
                     <Separator orientation="vertical" className="h-4" />
                     <span className="text-sm text-green-500 font-medium">Completed</span>
                 </>
+            )}
+            {!isCloud && totalResources > 0 && !isCompleted && (
+                <div className="ml-auto">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-2"
+                        onClick={onDownloadAll}
+                    >
+                        <Download className="h-4 w-4" />
+                        Download All
+                    </Button>
+                </div>
             )}
         </div>
     );
