@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU8, Ordering};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::shell::api::BufferExt;
 use futures::channel::mpsc;
@@ -9,7 +10,7 @@ pub struct QuadUnreliableChannel {
     channels: [mpsc::UnboundedSender<(PeerId, Packet)>; 4],
     channel_ids: [usize; 4],
     buffer: PeerBuffered,
-    current_channel: u8
+    current_channel: AtomicU8
 }
 
 impl QuadUnreliableChannel {
@@ -35,14 +36,14 @@ impl QuadUnreliableChannel {
                 channel4_id
             ],
             buffer,
-            current_channel: 0
+            current_channel: AtomicU8::new(0)
         }
     }
 
-    pub fn send(&mut self, peer_id: PeerId, packet: Packet) -> Result<(), mpsc::TrySendError<(PeerId, Packet)>> {
-        let channel_index = self.current_channel as usize;
-        let result = self.channels[channel_index].unbounded_send((peer_id, packet));
-        self.current_channel = (self.current_channel + 1) % 4;
+    pub fn send(&self, peer_id: PeerId, packet: Packet) -> Result<(), mpsc::TrySendError<(PeerId, Packet)>> {
+        let channel_index = self.current_channel.load(Ordering::Relaxed);
+        let result = self.channels[channel_index as usize].unbounded_send((peer_id, packet));
+        self.current_channel.store((channel_index + 1) % 4, Ordering::Relaxed);
         result
     }
 

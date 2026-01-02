@@ -49,7 +49,6 @@ use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
 const ON_HOLD_STOP_THRESHOLD: u8 = 6;
 const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
 
@@ -60,7 +59,7 @@ pub struct WebRtcPeer {
 
     pub msg_channel: DirectMessageChannel,
     pub unordered_msg_channel: DirectMessageChannel,
-    pub quad_unreliable_channel: Arc<Mutex<QuadUnreliableChannel>>,
+    pub quad_unreliable_channel: Arc<QuadUnreliableChannel>,
     pub reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     pub buffer: PeerBuffered,
 
@@ -124,7 +123,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             transfer_feedback_sender,
             reliable_data_channel,
-            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
+            quad_unreliable_channel: Arc::new(quad_unreliable_channel),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             transfer_session_repo,
@@ -181,7 +180,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             peer,
             reliable_data_channel,
-            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
+            quad_unreliable_channel: Arc::new(quad_unreliable_channel),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             transfer_session_repo,
@@ -452,11 +451,10 @@ impl WebRtcPeer {
 
             match action {
                 FecAction::Framed(frames) => {
-                    let mut quad_channel = self.quad_unreliable_channel.lock().await;
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
-                        let _ = quad_channel.send(self.peer.peer_id(), packet);
+                        let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), packet);
                     }
                 }
                 FecAction::Retransmit(frames) => {
@@ -477,11 +475,10 @@ impl WebRtcPeer {
 
             if buff_counter > MAX_BUFFER_SIZE {
                 let tick = Instant::now();
-                let mut quad_ch = self.quad_unreliable_channel.lock().await;
-                let stats_before = quad_ch.bytes_sent().await;
+                let stats_before = self.quad_unreliable_channel.bytes_sent().await;
                 let timeout = Duration::from_millis(5 * fec_sender.rtt().max(100));
 
-                quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, timeout).await;
+                self.quad_unreliable_channel.wait_buffer_low(MIN_BUFFER_SIZE, timeout).await;
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
                 buff_counter = MIN_BUFFER_SIZE;
 
@@ -493,11 +490,11 @@ impl WebRtcPeer {
                 };
 
                 for frame in frames {
-                    let _ = quad_ch.send(self.peer.peer_id(), frame.serialize());
+                    let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), frame.serialize());
                 }
 
                 let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                let stats_after = quad_ch.bytes_sent().await;
+                let stats_after = self.quad_unreliable_channel.bytes_sent().await;
                 let total_sent = stats_after.saturating_sub(stats_before);
                 let bw = (total_sent as f64 / time) as u64;
                 let bw_kbps = bw / 1000;
@@ -659,9 +656,11 @@ impl WebRtcPeer {
         resource: LocalResource,
         mut progress: TransferProgress
     ) -> Result<(), WebRtcErrors> {
+        static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
+
         let resource_order_id = resource.order_id;
 
-        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         let request = DownloadResourceRequest {
             session_order_id,
@@ -669,13 +668,9 @@ impl WebRtcPeer {
             transfer_id: transfer_id as u32
         };
 
-        let (tx, mut rx) = mpsc::unbounded::<Packet>();
-
+        let (tx, mut rx) = unbounded::<Packet>();
         let prefix = transfer_id;
-        {
-            let mut channels = self.prefix_channels.lock().await;
-            channels.insert(prefix, tx);
-        }
+        self.prefix_channels.lock().await.insert(prefix, tx);
 
         let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
 
@@ -688,22 +683,17 @@ impl WebRtcPeer {
 
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
-        let prefix_channels = self.prefix_channels.clone();
 
         let start_delimiter = loop {
-            match rx.next().with_cancel(&resource_token).await {
-                Ok(Some(packet)) => {
+            match rx.next().with_cancel(&resource_token).await? {
+                Some(packet) => {
                     if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
                         break delimiter;
                     }
                 }
-                Ok(None) => {
+                None => {
                     log::warn!("Channel closed before receiving start delimiter");
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
-                }
-                Err(_) => {
-                    log::info!("Download cancelled while waiting for start delimiter");
-                    return Err(WebRtcErrors::InvalidDelimiter("Download cancelled".into()));
                 }
             }
         };
@@ -753,7 +743,7 @@ impl WebRtcPeer {
             }
         }
 
-        prefix_channels.lock().await.remove(&prefix);
+        self.prefix_channels.lock().await.remove(&prefix);
 
         log::info!("Completed download for resource {}", resource_id);
 
@@ -848,7 +838,7 @@ impl WebRtcPeer {
                     }
 
                     let packet = data.to_vec().into_boxed_slice();
-                    match self.outbound_packet_sender.clone().send((prefix, packet)).with_cancel(&resource_token).await {
+                    match outbound_packet_sender.send((prefix, packet)).with_cancel(&resource_token).await {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => return Err(anyhow!("Failed to send data packet: {:?}", e).into()),
                         Err(_) => {
@@ -952,8 +942,7 @@ impl WebRtcPeer {
                             continue;
                         }
 
-                        let channels = self.prefix_channels.lock().await;
-                        if let Some(sender) = channels.get(&prefix) {
+                        if let Some(sender) = self.prefix_channels.lock().await.get(&prefix) {
                             if let Err(e) = sender.unbounded_send(packet) {
                                 log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
                             }
