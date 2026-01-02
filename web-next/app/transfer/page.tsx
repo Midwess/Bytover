@@ -16,6 +16,7 @@ import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 import {DownloadPlatforms} from "@/components/download-platforms";
 import {JoinWaitList} from "@/components/join-waitlist";
+import PixelBlast from "@/components/PixelBlast";
 
 function TransferBoardInner() {
     const [url, setUrl] = useUrlState(['session']);
@@ -124,11 +125,34 @@ export default function TransferBoard() {
                 <h1 className="flex-1 text-3xl md:text-4xl lg:text-5xl font-bold text-primaryText">
                     Transfer files between all your devices
                 </h1>
-                <div className={"flex-1 flex flex-col gap-4 bg-muted border h-full rounded-xl items-center justify-center px-4"}>
-                    <p className="text-2xl text-primaryText/70 max-w-2xl">
+                <div className="flex-1 flex flex-col gap-4 border border-amber-700/40 h-full rounded-xl items-center justify-center px-4 shadow-lg relative overflow-hidden">
+                    <div className="absolute w-screen h-screen inset-0 rounded-xl overflow-hidden">
+                        <PixelBlast
+                            variant="circle"
+                            pixelSize={6}
+                            color="#B19EEF"
+                            patternScale={3}
+                            patternDensity={1.2}
+                            pixelSizeJitter={0.5}
+                            enableRipples
+                            rippleSpeed={0.4}
+                            rippleThickness={0.12}
+                            rippleIntensityScale={1.5}
+                            liquid
+                            liquidStrength={0.12}
+                            liquidRadius={1.2}
+                            liquidWobbleSpeed={5}
+                            speed={0.6}
+                            edgeFade={0.25}
+                            transparent
+                        />
+                    </div>
+                    <p className="text-2xl text-amber-50 max-w-2xl relative z-10">
                         Try our desktop app with seamless experience.
                     </p>
-                    <DownloadPlatforms/>
+                    <div className="relative z-10">
+                        <DownloadPlatforms/>
+                    </div>
                 </div>
             </section>
             <section

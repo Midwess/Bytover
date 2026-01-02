@@ -41,6 +41,7 @@
     "next": "15.3.5",
     "ogl": "^1.0.11",
     "overlayscrollbars": "^2.12.0",
+    "postprocessing": "^6.38.2",
     "radix-ui": "^1.4.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -50,7 +51,7 @@
     "shared_types": "file:../shared_types/generated/typescript",
     "simplex-noise": "^4.0.3",
     "tailwind-merge": "^3.4.0",
-    "three": "^0.181.2"
+    "three": "^0.167.1"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.35.1",
