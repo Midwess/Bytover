@@ -12,7 +12,6 @@ interface DownloadPlatformsProps {
 const PLATFORMS = [
   { id: "windows", label: "Windows", icon: "/windows.svg" },
   { id: "macos", label: "Mac OS", icon: "/apple.svg" },
-  { id: "linux", label: "OS", icon: "/apple.svg" },
 ];
 
 export function DownloadPlatforms({ className }: DownloadPlatformsProps) {

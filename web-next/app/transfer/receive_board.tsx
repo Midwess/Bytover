@@ -56,7 +56,7 @@ import { Label } from "@/components/ui/label";
 
 export default function ReceiveBoard() {
     return (
-        <div className="rounded-xl border-2 overflow-hidden min-h-[450px] max-h-[70vh] sm:max-h-[80vh] h-[950px]">
+        <div className="rounded-xl border-1 overflow-hidden min-h-[450px] max-h-[70vh] sm:max-h-[80vh] h-[950px]">
             <SidebarProvider className="h-[100%]">
                 <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
@@ -216,7 +216,6 @@ function ContentBoard() {
     const isMobile = useIsMobile();
     const {setOpenMobile} = useSidebar();
 
-    console.log(selectedSession)
     useEffect(() => {
         if (selectedSession?.is_cloud) {
             if (selectedSession.alias) {

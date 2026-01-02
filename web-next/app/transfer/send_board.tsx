@@ -81,9 +81,9 @@ export default function SendBoard() {
     const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
 
     return (
-        <div className="rounded-xl border-2 overflow-hidden max-h-[70vh] sm:max-h-[80vh] min-h-[450px] h-[950px]">
+        <div className="rounded-xl border-1 overflow-hidden max-h-[70vh] sm:max-h-[80vh] min-h-[450px] h-[950px]">
             <SidebarProvider className="h-[100%]">
-                <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-2 border-muted rounded-xl mb-1">
+                <Sidebar collapsible="icon" className="h-full bg-card overflow-hidden border-1 border-muted rounded-xl mb-1">
                     <SidebarHeader className="rounded-tl-xl">
                         <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod} />
                     </SidebarHeader>
@@ -868,7 +868,7 @@ function MyPeerInfo() {
             <div className="w-full mb-6">
                 <div className="relative overflow-hidden rounded-2xl backdrop-blur-sm">
                     <div className="flex items-center justify-center gap-3 py-2">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        <div className="h-4 w-4 animate-spin rounded-full border-1 border-white/20 border-t-white"></div>
                         <span className="text-sm font-medium text-muted-foreground animate-pulse">Initializing...</span>
                     </div>
                 </div>
@@ -897,12 +897,12 @@ function MyPeerInfo() {
                         </p>
                         <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
                     </div>
-                    <div className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-2 rounded-2xl">
+                    <div className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-1 rounded-2xl">
                         <Avatar className="p-1 rounded-xl" style={{ backgroundColor: color }}>
                             <AvatarImage src={myPeer.avatar.url} />
                         </Avatar>
                         {/* Online status indicator */}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-2 border-background" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-1 border-background" />
                     </div>
                 </div>
             </div>
@@ -917,7 +917,7 @@ function MyPeerInfo() {
                 </div>
                 <div className="flex items-center gap-2">
                     {isLocationLoading && (
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        <div className="h-3 w-3 animate-spin rounded-full border-1 border-white/20 border-t-white"></div>
                     )}
                     <Switch
                         checked={isLocationEnabled}
