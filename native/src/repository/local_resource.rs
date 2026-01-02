@@ -17,7 +17,7 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::repository::errors::PersistenceError;
 use shared::repository::local_resource::{LocalResourceId, LocalResourceRepository};
 use shared::repository::path_resolver::PathResolver;
-use shared::shell::api::{CIOCursor, DIOWriter, IOWriter};
+use shared::shell::api::{CIOCursor, DIOWriter};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -204,14 +204,16 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         }
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
+    async fn read(
+        &self,
+        path: LocalResourcePath,
+        buffer_size: usize,
+        compressed: bool
+    ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        let file_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
             let cursor = folder.cursor(buffer_size).await.map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
@@ -228,7 +230,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        let writer = DIOWriterWrapper::from_path(path, compressed).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
+        let writer = DIOWriterWrapper::from_path(path, compressed)
+            .await
+            .map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;
         Ok(Box::new(writer))
     }
 
@@ -272,12 +276,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             order_id: None
         };
 
-        let items = RedbRepository::<LocalResource, RedbIdWrapper<LocalResourceId>>::find_all(
-            self,
-            Some(&RedbIdWrapper(from_id)),
-            None,
-            None
-        ).await?;
+        let items =
+            RedbRepository::<LocalResource, RedbIdWrapper<LocalResourceId>>::find_all(self, Some(&RedbIdWrapper(from_id)), None, None)
+                .await?;
 
         let mut removed_items = vec![];
         for item in items.iter() {

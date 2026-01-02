@@ -155,7 +155,8 @@ impl DiContainer {
 
         let web_rtc = Arc::new(WebRtc::new(
             get_signalling_server_ws_url(),
-            self.get_local_resource_repository().await
+            self.get_local_resource_repository().await,
+            self.get_transfer_session_repository()
         ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),

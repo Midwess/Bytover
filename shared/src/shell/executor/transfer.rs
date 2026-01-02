@@ -1,12 +1,14 @@
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::CoreOperationOutput;
-use crate::entities::transfer_session::TransferSession;
+use crate::entities::target::TransferTarget;
+use crate::entities::transfer_session::{TransferSession, TransferType};
 use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::app_server::AppServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
 use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;
+use core_services::utils::cancellation::CancellationToken;
 use core_services::utils::maybe::MaybeSend;
 use std::sync::Arc;
 
@@ -38,21 +40,8 @@ where
                 Ok(CoreOperationOutput::TransferSession(session))
             }
             TransferOperation::SendSession(session) => {
-                if session.target.is_public() {
-                    let status = self.cloud_service().send_session(session, request).await?;
-                    return Ok(TransferOperationOutput::TransferCompleted(status).into());
-                }
-
-                let status = self.web_rtc().send_session(request, session).await?;
+                let status = self.cloud_service().send_session(session, request).await?;
                 Ok(TransferOperationOutput::TransferCompleted(status).into())
-            }
-            TransferOperation::AnswerSessionRequest {
-                peer_id,
-                session,
-                session_id
-            } => {
-                let result = self.web_rtc().answer_session(request, peer_id, session, session_id).await?;
-                Ok(TransferOperationOutput::TransferCompleted(result).into())
             }
             TransferOperation::CancelSession(peer_id, session_id) => {
                 log::info!(target: "executor", "Cancelling session: {session_id:?}");
@@ -69,6 +58,38 @@ where
                 Ok(CoreOperationOutput::None)
             }
             TransferOperation::FindPublicSession { alias } => {
+                // Try P2P session first
+                if let Ok(Some(p2p_session)) = self.app_server().find_p2p_session_by_alias(alias.clone()).await {
+                    let Some(user) = self.app_server().find_user(p2p_session.owner_user_id).await? else {
+                        return Err(CoreError::BadRequest("Not found session".to_owned()));
+                    };
+
+                    // Create P2P transfer session
+                    let transfer_session = TransferSession {
+                        order_id: p2p_session.session_id,
+                        resources: vec![],
+                        progress: vec![],
+                        session_resource: None,
+                        transfer_type: TransferType::Receive,
+                        target: TransferTarget::P2P {
+                            from_peer: None,
+                            scope: crate::entities::finding_scope::FindingScope::new(&p2p_session.signalling_room_id),
+                            connection_state: crate::entities::target::P2PConnectionState::NotConnected
+                        },
+                        access_url: String::new(),
+                        alias: alias.clone(),
+                        from_user: user,
+                        description: p2p_session.description.clone(),
+                        password: None,
+                        is_required_password: false,
+                        connection_error: None,
+                        cancellation_token: CancellationToken::new()
+                    };
+
+                    return Ok(Some(transfer_session).into());
+                }
+
+                // Fallback to public session search
                 let response = self.cloud_server().find_public_session(alias).await?;
                 let is_required_password = response.is_required_password;
                 let access_url = response.access_url;
@@ -80,8 +101,13 @@ where
                     return Err(CoreError::BadRequest("Not found session".to_owned()));
                 };
 
-                let transfer_session =
-                    TransferSession::from_public_overview(session_key.order_id, user, access_url, is_required_password);
+                let transfer_session = TransferSession::from_public_overview(
+                    session_key.order_id,
+                    user,
+                    access_url.clone(),
+                    access_url,
+                    is_required_password
+                );
 
                 Ok(Some(transfer_session).into())
             }

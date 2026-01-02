@@ -98,17 +98,23 @@ export default function CircleProgress({
     const finalProgress = showCheckmark ? 1 : displayProgress;
     const offset = circumference * (1 - finalProgress);
 
+    // Don't render at all when not visible
+    if (!isVisible) {
+        return null;
+    }
+
     return (
         <div
+            onClick={isInProgress ? onClick : undefined}
             className={clsx(
                 "relative flex items-center justify-center transition-all duration-500",
-                showGreen && "scale-110"
+                showGreen && "scale-110",
+                isInProgress && "cursor-pointer hover:scale-105"
             )}
             style={{
                 width: size,
                 height: size,
-                visibility: isVisible ? 'visible' : 'hidden',
-                opacity: isVisible ? (showCheckmark ? 1 : (showGreen ? 0 : 1)) : 0,
+                opacity: showCheckmark ? 1 : (showGreen ? 0 : 1),
                 transition: showCheckmark
                     ? 'opacity 0.3s ease-in, transform 0.3s ease-in'
                     : (showGreen ? 'opacity 0.5s ease-out 0.5s, transform 0.5s ease-out' : 'opacity 0.3s ease-out')
@@ -163,18 +169,17 @@ export default function CircleProgress({
                         </svg>
                     </div>
                 ) : center ? (
-                    <div onClick={onClick} className={clsx(
+                    <div className={clsx(
                         "absolute flex items-center justify-center",
-                        "cursor-pointer m-3",
+                        "m-3",
                         showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
                         "transition-colors duration-500"
                     )}>{center}</div>
                 ) : (
                     <div
-                        onClick={onClick}
                         className={clsx(
                             "absolute flex items-center justify-center",
-                            "cursor-pointer m-3",
+                            "m-3",
                             showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
                             "transition-colors duration-500"
                         )}

@@ -1,15 +1,18 @@
 use std::fmt::Display;
 
-use crate::app::core::model_events::UpdateAction;
+use crate::app::core::model_events::{SessionLoadError, UpdateAction};
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
-use crate::entities::target::TransferTarget;
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::user::User;
 use crate::repository::local_resource::LocalResourceId;
 use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
-use serde::{Deserialize, Serialize};
 use core_services::utils::cancellation::CancellationToken;
+use schema::devlog::bitbridge::P2pTransferSessionMessage;
+use schema::devlog::rpc_signalling::server::ScopeState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
@@ -19,17 +22,39 @@ pub enum TransferType {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferSessionStatus {
-    Initializing,
-    InProgress { bytes_per_second: u64, percentage: f64 },
+    Initializing {
+        loading_error: Option<String>,
+        loading_state: Option<String>
+    },
+    InProgress {
+        bytes_per_second: u64,
+        percentage: f64
+    },
     Success,
     Failed(String),
     Canceled
 }
 
+impl TransferSessionStatus {
+    pub fn is_completed(&self) -> bool {
+        matches!(
+            self,
+            TransferSessionStatus::Success | TransferSessionStatus::Failed(_) | TransferSessionStatus::Canceled
+        )
+    }
+}
+
 impl Display for TransferSessionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransferSessionStatus::Initializing => write!(f, "Initializing..."),
+            TransferSessionStatus::Initializing {
+                loading_state: Some(text),
+                loading_error: None
+            } => write!(f, "{text}"),
+            TransferSessionStatus::Initializing {
+                loading_error: Some(text), ..
+            } => write!(f, "Error: {text}"),
+            TransferSessionStatus::Initializing { .. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 let kb_per_second = *bytes_per_second as f64 / 1000.0;
                 if kb_per_second < 100.0 {
@@ -50,8 +75,16 @@ pub struct TransferSession {
     pub order_id: u64,
     pub resources: Vec<LocalResource>,
     pub progress: Vec<TransferProgress>,
+    pub session_resource: Option<LocalResource>,
     pub transfer_type: TransferType,
     pub target: TransferTarget,
+    pub access_url: String,
+    pub alias: String,
+    pub from_user: User,
+    pub description: Option<String>,
+    pub password: Option<String>,
+    pub is_required_password: bool,
+    pub connection_error: Option<SessionLoadError>,
     #[serde(skip)]
     pub cancellation_token: CancellationToken
 }
@@ -66,7 +99,7 @@ pub struct TransferProgress {
     bytes_sec_counter: u64,
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
-    pub status: TransferStatus,
+    pub status: TransferStatus
 }
 
 impl TransferProgress {
@@ -80,7 +113,7 @@ impl TransferProgress {
             last_update_time_ms: Utc::now().timestamp_millis() as u64,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
-            status: TransferStatus::Pending,
+            status: TransferStatus::Pending
         }
     }
 
@@ -109,6 +142,10 @@ impl TransferProgress {
 
     pub fn percentage(&self) -> f64 {
         (self.total_bytes_counter as f64 / self.file_size as f64).min(1.0)
+    }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.total_bytes_counter
     }
 
     pub fn is_completed(&self) -> bool {
@@ -188,69 +225,167 @@ impl TransferStatus {
 }
 
 impl TransferSession {
-    pub fn answer(id: u64, mut out_resources: Vec<LocalResource>, target: TransferTarget) -> Self {
-        out_resources.sort_by(|a, b| a.size.cmp(&b.size));
+    pub fn p2p(
+        mut resources: Vec<LocalResource>,
+        password: Option<String>,
+        signalling_key: String,
+        scope: String,
+        alias: String,
+        access_url: String,
+        id: u64
+    ) -> Self {
+        resources.sort_by(|a, b| a.size.cmp(&b.size));
+        let is_required_password = password.is_some();
         Self {
             order_id: id,
-            progress: out_resources
-                .iter()
-                .map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Receive))
-                .collect(),
-            resources: out_resources,
-            transfer_type: TransferType::Receive,
-            target,
+            access_url,
+            alias,
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            resources,
+            session_resource: None,
+            description: None,
+            transfer_type: TransferType::Send,
+            target: TransferTarget::P2P {
+                from_peer: None,
+                scope: FindingScope::new(&signalling_key),
+                connection_state: P2PConnectionState::NotConnected
+            },
+            from_user: User {
+                id: 0,
+                email: String::new(),
+                name: String::new(),
+                avatar: String::new()
+            },
+            password,
+            is_required_password,
+            connection_error: None,
             cancellation_token: CancellationToken::new()
         }
     }
 
     pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>) -> Self {
+        let is_required_password = password.is_some();
         Self {
-            order_id: 0, // It is decided by the backend
+            alias: "".to_owned(),
+            access_url: "".to_owned(),
+            order_id: 0,
             progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
             cancellation_token: CancellationToken::new(),
             resources,
+            session_resource: None,
             transfer_type: TransferType::Send,
-            target: TransferTarget::Internet {
-                is_required_password: password.is_some(),
-                password,
-                access_url: None,
-                from_user: current_user,
-                to_emails
-            }
+            target: TransferTarget::Internet { to_emails },
+            description: None,
+            from_user: current_user,
+            password,
+            is_required_password,
+            connection_error: None
         }
     }
 
-    pub fn from_public_overview(order_id: u64, from_user: User, access_url: String, is_required_password: bool) -> Self {
+    pub fn owner_connected(&mut self, peer: Peer) {
+        if let TransferTarget::P2P {
+            from_peer,
+            connection_state,
+            ..
+        } = &mut self.target
+        {
+            from_peer.replace(peer);
+            *connection_state = P2PConnectionState::Connected;
+        }
+        self.connection_error = None;
+    }
+
+    pub fn owner_disconnected(&mut self) {
+        if let TransferTarget::P2P {
+            from_peer,
+            connection_state,
+            scope
+        } = &mut self.target
+        {
+            from_peer.take();
+            *connection_state = P2PConnectionState::NotConnected;
+            scope.set_watcher(true);
+            scope.update_state(ScopeState::Offline);
+        }
+
+        self.is_required_password = false;
+        self.password.take();
+        self.progress.clear();
+        self.resources.clear();
+        self.connection_error = None;
+    }
+
+    pub fn set_connecting(&mut self) {
+        if let TransferTarget::P2P { connection_state, .. } = &mut self.target {
+            *connection_state = P2PConnectionState::Connecting;
+        }
+    }
+
+    pub fn set_connection_failed(&mut self, error: String) {
+        if let TransferTarget::P2P { connection_state, .. } = &mut self.target {
+            *connection_state = P2PConnectionState::Failed(error);
+        }
+    }
+
+    pub fn is_p2p_connected(&self) -> bool {
+        matches!(
+            self.target,
+            TransferTarget::P2P {
+                connection_state: P2PConnectionState::Connected,
+                ..
+            }
+        )
+    }
+
+    pub fn add_resource_from_peer(&mut self, resource: LocalResource, peer: &Peer) -> bool {
+        if !peer.is_owned(self) {
+            log::warn!(
+                "Peer {} is not owner of session {}, ignoring resource",
+                peer.id(),
+                self.order_id
+            );
+            return false;
+        }
+
+        self.add_resource(resource);
+        true
+    }
+
+    pub fn from_public_overview(
+        order_id: u64,
+        from_user: User,
+        access_url: String,
+        alias: String,
+        is_required_password: bool
+    ) -> Self {
         Self {
             order_id,
             progress: vec![],
             resources: vec![],
+            session_resource: None,
+            access_url,
+            alias,
             transfer_type: TransferType::Receive,
             cancellation_token: CancellationToken::new(),
-            target: TransferTarget::Internet {
-                is_required_password,
-                password: None,
-                access_url: Some(access_url),
-                from_user,
-                to_emails: vec![],
-            }
-        }
-    }
-
-    pub async fn send(order_id: u64, resources: Vec<LocalResource>, target: TransferTarget) -> Self {
-        let mut resources = resources;
-        resources.sort_by(|a, b| a.size.cmp(&b.size));
-        Self {
-            cancellation_token: CancellationToken::new(),
-            order_id,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
-            resources,
-            transfer_type: TransferType::Send,
-            target
+            target: TransferTarget::Internet { to_emails: vec![] },
+            from_user,
+            description: None,
+            password: None,
+            is_required_password,
+            connection_error: None
         }
     }
 
     pub fn add_resource(&mut self, resource: LocalResource) {
+        if self.resource_progress(resource.order_id).is_none() {
+            self.progress.push(TransferProgress::new(
+                resource.order_id,
+                resource.size,
+                self.transfer_type.clone()
+            ));
+        }
+
         if self.resources.iter().any(|it| it.order_id == resource.order_id) {
             return
         }
@@ -260,6 +395,14 @@ impl TransferSession {
     }
 
     pub fn replace_resource(&mut self, resource: LocalResource) {
+        if self.resource_progress(resource.order_id).is_none() {
+            self.progress.push(TransferProgress::new(
+                resource.order_id,
+                resource.size,
+                self.transfer_type.clone()
+            ));
+        }
+
         self.resources.retain(|it| it.order_id != resource.order_id);
         self.resources.push(resource);
         self.resources.sort_by(|a, b| a.size.cmp(&b.size));
@@ -267,24 +410,49 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::Nearby(peer) => Some(peer.id().to_string()),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id().to_string()),
             _ => None
         }
     }
 
     pub fn peer(&self) -> Option<&Peer> {
         match &self.target {
-            TransferTarget::Nearby(peer) => Some(peer),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref(),
             _ => None
         }
     }
 
-    pub fn is_initializing(&self) -> bool {
+    pub fn is_keyword_match(&self, keywords: &str) -> bool {
+        if keywords.is_empty() {
+            return true;
+        }
+
+        let from_user = &self.from_user;
+
+        let mut name: String = "".to_string();
+        if let Ok(url) = url::Url::parse(&self.access_url) {
+            let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
+                return false
+            };
+
+            log::info!("Found query key session: {}", query);
+            name = query;
+        }
+
+        from_user.name.to_lowercase() == keywords.to_lowercase() || name.to_lowercase() == keywords.to_lowercase()
+    }
+
+    fn is_initializing(&self) -> bool {
         self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
-    pub fn update_progress(&mut self, progress: TransferProgress) {
+    pub fn update_progress(&mut self, mut progress: TransferProgress) {
+        let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
         if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
+            if progress.status.is_completed() && is_p2p_receive {
+                progress = TransferProgress::new(progress.resource_order_id, progress.total_bytes_counter, progress.transfer_type);
+            }
+
             self.progress[index] = progress;
         } else {
             self.progress.push(progress);
@@ -300,12 +468,25 @@ impl TransferSession {
     }
 
     pub fn total_progress(&self) -> f64 {
+        let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
         let total_size = self.resources.iter().map(|it| it.size).sum::<u64>();
         if total_size == 0 {
             return 1.0;
         }
 
-        let total_bytes_sent = self.progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
+        let total_bytes_sent = self
+            .progress
+            .iter()
+            .filter(|it| {
+                if is_p2p_receive {
+                    return it.status == TransferStatus::InProgress && it.percentage() > 0f64;
+                }
+
+                true
+            })
+            .map(|it| it.total_bytes_counter)
+            .sum::<u64>();
+
         total_bytes_sent as f64 / total_size as f64
     }
 
@@ -314,7 +495,7 @@ impl TransferSession {
     }
 
     pub fn is_completed(&self) -> bool {
-        self.progress.iter().all(|it| it.is_completed())
+        self.status().is_completed()
     }
 
     pub fn is_canceled(&self) -> bool {
@@ -354,8 +535,61 @@ impl TransferSession {
     }
 
     pub fn status(&self) -> TransferSessionStatus {
-        if self.is_initializing() {
-            return TransferSessionStatus::Initializing;
+        if let Some(error) = &self.connection_error {
+            return TransferSessionStatus::Initializing {
+                loading_state: None,
+                loading_error: Some(error.0.clone())
+            };
+        }
+
+        if let TransferTarget::P2P {
+            connection_state, scope, ..
+        } = &self.target
+        {
+            if !scope.is_online() {
+                return TransferSessionStatus::Initializing {
+                    loading_state: Some("Waiting for the session owner to come online...".to_owned()),
+                    loading_error: None
+                };
+            }
+
+            match connection_state {
+                P2PConnectionState::NotConnected => {
+                    return TransferSessionStatus::Initializing {
+                        loading_state: Some("Signalling...".to_owned()),
+                        loading_error: None
+                    };
+                }
+                P2PConnectionState::Connecting => {
+                    return TransferSessionStatus::Initializing {
+                        loading_state: Some("Dialing...".to_owned()),
+                        loading_error: None
+                    };
+                }
+                P2PConnectionState::Failed(msg) => {
+                    if self.resources.is_empty() {
+                        return TransferSessionStatus::Initializing {
+                            loading_state: None,
+                            loading_error: Some(msg.clone())
+                        };
+                    } else {
+                        return TransferSessionStatus::Failed(msg.clone());
+                    }
+                }
+                P2PConnectionState::Connected => {
+                    if self.resources.is_empty() {
+                        return TransferSessionStatus::Initializing {
+                            loading_state: Some("Waiting for resources...".to_owned()),
+                            loading_error: None
+                        };
+                    }
+                }
+            }
+        } else if self.is_initializing() {
+            return TransferSessionStatus::Initializing {
+                loading_state: Some("Initialzing...".to_owned()),
+                loading_error: None
+            };
         }
 
         let failed_messages = self
@@ -435,10 +669,44 @@ pub struct ThumbnailUpdatedEvent {
     pub path: LocalResourcePath
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SessionResourceUpdate(pub LocalResource);
+
 impl UpdateAction<TransferSession> for ThumbnailUpdatedEvent {
     fn update(self, data: &mut TransferSession) {
         if let Some(resource) = data.resources.iter_mut().find(|r| r.order_id == self.resource_id) {
             resource.thumbnail_path = Some(self.path);
         }
+    }
+}
+
+impl UpdateAction<TransferSession> for SessionResourceUpdate {
+    fn update(self, data: &mut TransferSession) {
+        data.session_resource = Some(self.0);
+    }
+}
+
+impl UpdateAction<TransferSession> for P2pTransferSessionMessage {
+    fn update(self, data: &mut TransferSession) {
+        log::info!(
+            "Updated session {} with description={:?}, password_protected={}",
+            data.order_id,
+            self.description,
+            self.password_protected
+        );
+
+        data.description = self.description;
+        data.is_required_password = self.password_protected;
+        let TransferTarget::P2P { connection_state, .. } = &mut data.target else {
+            return;
+        };
+
+        *connection_state = P2PConnectionState::Connected;
+    }
+}
+
+impl UpdateAction<TransferSession> for SessionLoadError {
+    fn update(self, data: &mut TransferSession) {
+        data.connection_error = Some(self);
     }
 }

@@ -5,19 +5,21 @@ import {
     FileReceiveResourceViewModel,
     ImageReceiveResourceViewModel, MessageReasonVariantFailedToFindPublicSession,
     MessageReasonVariantFailedToLoadSession,
-    ReceiveCloudSessionViewModel,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
-    SelectedResourceViewModel, TransferEventVariantCancelTransfer,
+    SelectedResourceViewModel,
     TransferEventVariantFindPublicSession,
-    TransferEventVariantViewPublicSession,
-    TransferTypeVariantReceive,
+    TransferEventVariantViewSession,
+    TransferEventVariantRequestDownloadResource,
+    TransferEventVariantRequestDownloadAllResources,
+    TransferTypeVariantReceive,TransferEventVariantCancelResourceTransfer,
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
     ArrowDown,
     Book,
     ChevronsUpDown,
+    Download,
     Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -34,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import DownloadButtonWithProgress from "./download-button-with-progress";
 import { useUrlState } from "@/hooks/use-url";
 import {
     SidebarProvider,
@@ -64,9 +67,10 @@ export default function ReceiveBoard() {
                 </Sidebar>
                 <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                        <div className="flex items-center gap-2 px-4">
+                        <div className="flex items-center gap-2 px-4 w-full">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 h-4" />
+                            <HeaderInfo />
                         </div>
                     </header>
                     <div className="flex flex-1 flex-col min-h-0 px-2 pt-0 overflow-y-auto">
@@ -74,6 +78,92 @@ export default function ReceiveBoard() {
                     </div>
                 </SidebarInset>
             </SidebarProvider>
+        </div>
+    );
+}
+
+function HeaderInfo() {
+    const selectedSessionId = core.useSelectedSession()?.id;
+    const selectedSession = core.useSession(selectedSessionId ?? '');
+
+    const onDownloadAll = useCallback(() => {
+        if (!selectedSession) return;
+        const peerId = selectedSession.sender_id;
+        const sessionOrderId = BigInt(selectedSession.id);
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantRequestDownloadAllResources(peerId, sessionOrderId)
+        ));
+    }, [selectedSession]);
+
+    if (!selectedSession || selectedSession.is_loading) {
+        return null;
+    }
+
+    const progress = (selectedSession as ReceiveSessionViewModel).progress || 0
+    const displaySpeed = (selectedSession as ReceiveSessionViewModel).display_download_speed || ''
+    const isCompleted = (selectedSession as ReceiveSessionViewModel).is_completed || false
+    const downloadAllEnabled = (selectedSession as ReceiveSessionViewModel).download_all_enabled || false
+    const downloadAllProgress = (selectedSession as ReceiveSessionViewModel).download_all_progress ?? 0
+    const downloadAllInProgress = (selectedSession as ReceiveSessionViewModel).download_all_in_progress || false
+    const downloadAllCompleted = (selectedSession as ReceiveSessionViewModel).download_all_completed || false
+
+    const totalResources = (selectedSession.image_resources?.length || 0) +
+        (selectedSession.video_resources?.length || 0) +
+        (selectedSession.file_resources?.length || 0);
+
+    return (
+        <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                    {totalResources} {totalResources === 1 ? 'item' : 'items'}
+                </span>
+            </div>
+            {!isCompleted && progress > 0 && (
+                <>
+                    <Separator orientation="vertical" className="h-4" />
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                            {(progress * 100).toFixed(0)}%
+                        </span>
+                        {displaySpeed && (
+                            <span className="text-sm text-muted-foreground">
+                                {displaySpeed}
+                            </span>
+                        )}
+                    </div>
+                </>
+            )}
+            {isCompleted && (
+                <>
+                    <Separator orientation="vertical" className="h-4" />
+                    <span className="text-sm text-green-500 font-medium">Completed</span>
+                </>
+            )}
+            {downloadAllEnabled && !isCompleted && (
+                <div className="ml-auto">
+                    {downloadAllInProgress || downloadAllCompleted ? (
+                        <DownloadButtonWithProgress
+                            progress={downloadAllProgress}
+                            isReady={true}
+                            isCompleted={downloadAllCompleted}
+                            isInProgress={downloadAllInProgress}
+                            onDownloadClick={onDownloadAll}
+                            size={40}
+                            strokeWidth={4}
+                        />
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-2"
+                            onClick={onDownloadAll}
+                        >
+                            <Download className="h-4 w-4" />
+                            Download All
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -117,19 +207,18 @@ function SidebarContentWrapper() {
 function ContentBoard() {
     const selectedSessionId = core.useSelectedSession()?.id
     const selectedSession = core.useSession(selectedSessionId ?? '');
-    const isCloud = selectedSession instanceof ReceiveCloudSessionViewModel
+    const isCloud = selectedSession?.is_cloud || false
     const coreReady = core.useCoreReady()
     const [url, setUrl] = useUrlState(['session'])
-    const isLoading = selectedSession instanceof ReceiveCloudSessionViewModel
-        ? (selectedSession as ReceiveCloudSessionViewModel)?.is_loading
-        : false
+    const isLoading = selectedSession?.is_loading
     const loadMessage = core.useMessage(new MessageReasonVariantFailedToLoadSession(BigInt(selectedSessionId ?? '0')));
-    const [enteredPassword, setEnteredPassword] = useState<string>((selectedSession as ReceiveCloudSessionViewModel)?.password ?? '')
+    const [enteredPassword, setEnteredPassword] = useState<string>(selectedSession?.password ?? '')
     const isMobile = useIsMobile();
-    const { setOpenMobile } = useSidebar();
+    const {setOpenMobile} = useSidebar();
 
+    console.log(selectedSession)
     useEffect(() => {
-        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
+        if (selectedSession?.is_cloud) {
             if (selectedSession.alias) {
                 setUrl({
                     session: selectedSession.alias ?? ''
@@ -149,21 +238,18 @@ function ContentBoard() {
             return
         }
 
-        core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
+        core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
             enteredPassword ? enteredPassword : null, BigInt(selectedSession!.id), new TransferTypeVariantReceive()
         )))
     }
 
     useEffect(() => {
-        if (selectedSession && selectedSession instanceof ReceiveCloudSessionViewModel) {
-            const cloud = selectedSession as ReceiveCloudSessionViewModel
-            if (!cloud.is_required_password && isLoading) {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantViewPublicSession(
-                    null,
-                    BigInt(cloud.id),
-                    new TransferTypeVariantReceive(),
-                )))
-            }
+        if (!selectedSession?.password_required && selectedSession?.is_loading) {
+            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                null,
+                BigInt(selectedSession.id),
+                new TransferTypeVariantReceive(),
+            )))
         }
     }, [selectedSession?.id]);
 
@@ -179,33 +265,67 @@ function ContentBoard() {
         </div>
     }
 
-    if (selectedSession instanceof ReceiveCloudSessionViewModel) {
-        const cloud = selectedSession as ReceiveCloudSessionViewModel
-        if (cloud.is_required_password && !cloud.password && isLoading) {
+    if (isLoading) {
+        if (selectedSession.password_required && !selectedSession.password) {
             return <div className={"text-foreground w-full h-full flex flex-col justify-center items-center gap-2"}>
                 <div className={"w-[50%] flex flex-col gap-4"}>
                     <p className={"text-muted-foreground flex flex-row items-center"}>
                         <Image alt={"lock"} width={10} height={10}
-                            className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
-                            color={'white'} />
+                               className={"w-7 text-white bg-muted p-1.5 rounded-lg mr-2 h-7"} src={"/lock.svg"}
+                               color={'white'}/>
                         This session is password protected</p>
-                    <input type="password" name="fake-password" style={{ display: 'none' }} />
-                    <Input
-                        className="h-10"
-                        placeholder="Enter password"
-                        value={enteredPassword}
-                        onChange={(e) => setEnteredPassword(e.target.value)}
-                        type="password"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                onSelected()
-                            }
-                        }}
-                    />
+                    <input type="password" name="fake-password" style={{display: 'none'}}/>
+                    <div className="flex flex-col gap-2">
+                        <Input
+                            className="h-10"
+                            placeholder="Enter password"
+                            value={enteredPassword}
+                            onChange={(e) => setEnteredPassword(e.target.value)}
+                            type="password"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    onSelected()
+                                }
+                            }}
+                        />
+                        {selectedSession.error_message && (
+                            <p className="text-red-500 text-sm">{selectedSession.error_message}</p>
+                        )}
+                    </div>
                     <Button onClick={onSelected} className={"w-fit bg-foreground"}>Continue</Button>
                 </div>
             </div>
         }
+
+        return <div className={"w-full h-full flex flex-col justify-center items-center gap-4"}>
+            <LoaderCircle className={"animate-spin"}/>
+
+            {selectedSession.loading_status && (
+                <p className="text-muted-foreground">{selectedSession.loading_status}</p>
+            )}
+
+            {selectedSession.error_message && (
+                <div className="flex flex-col gap-2 items-center">
+                    <p className="text-red-500">{selectedSession.error_message}</p>
+                    <Button
+                        onClick={() => {
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                                selectedSession.password,
+                                BigInt(selectedSession.id),
+                                new TransferTypeVariantReceive()
+                            )))
+                        }}
+                        className="bg-bluePrimary text-white hover:bg-bluePrimary/90"
+                    >
+                        Retry
+                    </Button>
+                </div>
+            )}
+
+            {loadMessage.message && !selectedSession.error_message && (
+                <p className="text-red-500">{loadMessage.message}</p>
+            )}
+        </div>
     }
 
     if (!selectedSession) {
@@ -214,32 +334,19 @@ function ContentBoard() {
         </div>
     }
 
-    if (isLoading) {
-        return <div className={"w-full h-full flex justify-center items-center gap-2"}>
-            {
-                loadMessage.message
-                    ? <p>{loadMessage.message}</p>
-                    : <>
-                        <LoaderCircle className={"animate-spin"} />
-                        <p>Loading...</p>
-                    </>
-            }
-        </div>
-    }
-
     return (
         <div className="w-full h-full flex flex-col gap-4 pb-4">
             <Collapsible
                 className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={image.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={image.model.order_id} isCloud={selectedSession.is_cloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -250,14 +357,14 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={video.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
-                                        <MediaView id={video.model.order_id} isCloud={isCloud} />
+                                        <MediaView id={video.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -268,7 +375,7 @@ function ContentBoard() {
             <Collapsible
                 className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`} />
+                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"h-full"}>
                     <div
                         className="flex flex-col gap-4 h-fit min-h-[400px]">
@@ -276,7 +383,7 @@ function ContentBoard() {
                             selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={file.model.order_id} index={index}>
                                     <div className={"h-fit"}>
-                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} />
+                                        <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
                                     </div>
                                 </ItemEffect>
                             })
@@ -335,7 +442,11 @@ function FindSessionSection() {
     useEffect(() => {
         if (publicSessions?.length === 1 && keywords) {
             setUrl({ session: publicSessions[0].alias })
-            core.updateSelectedSession(publicSessions[0])
+            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                publicSessions[0].password,
+                BigInt(publicSessions[0].id),
+                new TransferTypeVariantReceive()
+            )))
         }
     }, [publicSessions, keywords, setUrl])
 
@@ -389,7 +500,7 @@ const SessionListWrapper = ({ title, children }: { title: string, children: Reac
     )
 }
 
-const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewModel | ReceiveSessionViewModel)[] }) => {
+const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] }) => {
     const { isMobile, setOpenMobile } = useSidebar();
 
     return (
@@ -401,7 +512,11 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveCloudSessionViewMode
                         return <div key={item.id}>
                             <TransferSession
                                 onPress={() => {
-                                    core.updateSelectedSession(item)
+                                    core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
+                                        item.password,
+                                        BigInt(item.id),
+                                        new TransferTypeVariantReceive()
+                                    )))
                                     if (isMobile) {
                                         setOpenMobile(false)
                                     }
@@ -469,67 +584,104 @@ function TransferSession(props: {
         return null;
     }
 
-    const is_public = session instanceof ReceiveCloudSessionViewModel;
+    const is_public = session.is_cloud;
+    const is_scope_online = !is_public && (session as ReceiveSessionViewModel).is_scope_online;
 
-    const name = is_public
-        ? (session as ReceiveCloudSessionViewModel).sender_name
-        : (session as ReceiveSessionViewModel).peer_name;
-    const display_datetime = session.display_datetime;
-    const avatar_url = is_public
-        ? (session as ReceiveCloudSessionViewModel).avatar_url
-        : (session as ReceiveSessionViewModel).peer_avatar?.url;
-    const is_required_password = is_public
-        ? (session as ReceiveCloudSessionViewModel).is_required_password
-        : false;
+    const name = session.sender_name
+    const avatar_url = session.sender_avatar
+    const is_required_password = session.password_required;
 
     const progress = is_public
-        ? 0
-        : (session as ReceiveSessionViewModel).progress || 0;
+        ? (session as ReceiveSessionViewModel).progress || 0
+        : 0;
     const is_completed = is_public
-        ? false
-        : (session as ReceiveSessionViewModel).is_completed || false;
+        ? (session as ReceiveSessionViewModel).is_completed || false
+        : false;
+    const is_in_progress = is_public
+        ? (session as ReceiveSessionViewModel).is_in_progress || false
+        : false;
 
     return <>
         <button
             onClick={onPress}
-            className={"w-full p-1 flex flex-row bg-muted rounded-2xl items-center px-2 py-2 h-fit max-h-[80px] border-1 border-primaryText/5 justify-between hover:bg-muted-foreground/50 hover:cursor-pointer"}>
-            <div className={"flex flex-row items-center gap-5"}>
-                <div
-                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px] relative"}>
-                    <Avatar className={"p-1"}>
-                        <AvatarImage src={avatar_url} />
-                    </Avatar>
-                    {is_public
-                        ? <Globe
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
-                        : <Wifi
-                            className={"bg-bluePrimary w-5 h-5 p-0.5 text-white rounded-full absolute bottom-[-20%] right-[-24%]"} />
-                    }
+            className={"w-full bg-muted/50 rounded-xl p-2.5 h-fit border border-white/10 hover:bg-muted hover:border-white/20 hover:cursor-pointer"}>
+            <div className={"flex flex-row items-start gap-3"}>
+                {/* Avatar Section */}
+                <div className={"relative flex-shrink-0"}>
+                    <div className={"bg-gradient-to-br from-bluePrimary to-bluePrimary/80 rounded-xl p-1 w-11 h-11"}>
+                        <Avatar className={"w-full h-full"}>
+                            <AvatarImage src={avatar_url} className={"rounded-lg"} />
+                        </Avatar>
+                    </div>
+                    {is_public ? (
+                        <div className={"absolute -bottom-1 -right-1 bg-bluePrimary rounded-full p-1 border-2 border-muted"}>
+                            <Globe className={"w-3 h-3 text-white"} />
+                        </div>
+                    ) : (
+                        <div className={"absolute -bottom-1 -right-1 bg-bluePrimary rounded-full p-1 border-2 border-muted"}>
+                            <Wifi className={"w-3 h-3 text-white"} />
+                        </div>
+                    )}
                 </div>
-                <div className={"flex flex-col gap-1 items-start"}>
-                    <p className={"text-primaryText text-sm text-start"}>{name}</p>
-                    <p className={"text-primaryText/70 text-xs"}>{display_datetime}</p>
+
+                {/* Content Section */}
+                <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
+                    {/* Alias tag and password */}
+                    <div className={"flex flex-row items-center gap-1.5"}>
+                        <span className={`px-1 py-0.3 rounded-md text-xs font-medium border w-fit ${
+                            is_public
+                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                : is_scope_online
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                        }`}>
+                            {session.alias}
+                        </span>
+                        {is_required_password && (
+                            <div className={"bg-muted-foreground/20 rounded-md p-0.5 border border-white/10"}>
+                                <Image
+                                    alt={"lock"}
+                                    width={10}
+                                    height={10}
+                                    className={"w-2.5 h-2.5"}
+                                    src={"/lock.svg"}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Name */}
+                    <p className={"text-start text-sm text-primaryText font-semibold"}>{name}</p>
+
+                    {/* Description */}
+                    {session.sender_description && (
+                        <p className={"text-start text-[11px] text-primaryText/60 line-clamp-1"}>{session.sender_description}</p>
+                    )}
+                </div>
+
+                {/* Right Section - Progress */}
+                <div className={"flex flex-col items-end gap-1 flex-shrink-0"}>
+                    <CircleProgress
+                        isCompleted={is_completed}
+                        isInProgress={is_in_progress}
+                        progress={progress}
+                        size={28}
+                        strokeWidth={3}
+                    />
                 </div>
             </div>
-            <CircleProgress isCompleted={is_completed} isInProgress={!!progress && progress < 1} progress={progress} size={30} strokeWidth={3}
-                onClick={() => {
-                    if (!is_public) {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(id), new TransferTypeVariantReceive())))
-                    }
-                }} />
-            {is_required_password &&
-                <Image alt={"lock"} width={10} height={10} className={"w-4 text-white mr-2 bg-muted h-4"}
-                    src={"/lock.svg"} color={'white'} />}
         </button>
     </>
 }
 
 function FileView(props: {
     id: string,
-    isCloud: boolean
+    isCloud: boolean,
+    sessionId: string
 }) {
-    const { id, isCloud } = props;
+    const { id, isCloud, sessionId } = props;
     const file = core.useReceiveResource(id, isCloud);
+    const session = core.useSession(sessionId);
     const model = file?.model;
 
     const isFolder = model?.type instanceof ResourceTypeVariantFolder;
@@ -549,9 +701,36 @@ function FileView(props: {
     }, [model, model?.thumbnail_path, thumbnailSource]);
 
     const onDownloadClick = useCallback(() => {
-        if (!model) return
-        core.downloadFile(model.path, model.name)
-    }, [model?.path, model?.name])
+        if (!model || !session) return
+
+        if (!isCloud) {
+            const peerId = session.sender_id;
+            const sessionOrderId = BigInt(sessionId);
+            const resourceOrderId = BigInt(id);
+
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantRequestDownloadResource(
+                    peerId,
+                    sessionOrderId,
+                    resourceOrderId
+                )
+            ));
+        } else {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [model?.path, model?.name, isCloud, session, sessionId, id])
+
+    const onCancelClick = useCallback(() => {
+        if (!model || !session) return
+
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantCancelResourceTransfer(
+                BigInt(sessionId),
+                new TransferTypeVariantReceive(),
+                BigInt(id)
+            )
+        ));
+    }, [model, session, sessionId, id])
 
     if (!file || !model) return null;
 
@@ -596,29 +775,28 @@ function FileView(props: {
             </div>
 
             {/* Download Button / Progress */}
-            {
-                file.is_completed
-                    ? <button
-                        className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
-                                   transition-all duration-300 hover:scale-110 shadow-lg flex-shrink-0"
-                        onClick={onDownloadClick}
-                    >
-                        <ArrowDown className="w-5 h-5 text-white" />
-                    </button>
-                    : <div className="flex-shrink-0">
-                        <CircleProgress isCompleted={file.is_completed} isInProgress={!file.is_completed} progress={file.completion} size={40} strokeWidth={4} />
-                    </div>
-            }
+            <DownloadButtonWithProgress
+                progress={file.completion}
+                isReady={file.is_ready}
+                isCompleted={file.is_completed}
+                isInProgress={!file.is_completed && file.completion > 0}
+                onDownloadClick={onDownloadClick}
+                onCancelClick={onCancelClick}
+                size={40}
+                strokeWidth={4}
+            />
         </div>
     );
 }
 
 function MediaView(props: {
     id: string,
-    isCloud: boolean
+    isCloud: boolean,
+    sessionId: string
 }) {
-    const { id, isCloud } = props;
+    const { id, isCloud, sessionId } = props;
     const media = core.useReceiveResource(id, isCloud);
+    const session = core.useSession(sessionId);
 
     const model: SelectedResourceViewModel | undefined = media?.model;
     const isVideo = media instanceof VideoReceiveResourceViewModel;
@@ -632,9 +810,36 @@ function MediaView(props: {
     }, [model?.thumbnail_path]);
 
     const onDownloadClick = useCallback(() => {
-        if (!model) return
-        core.downloadFile(model.path, model.name)
-    }, [model?.path, model?.name])
+        if (!model || !session) return
+
+        if (!isCloud) {
+            const peerId = session.sender_id;
+            const sessionOrderId = BigInt(sessionId);
+            const resourceOrderId = BigInt(id);
+
+            core.update(new AppEventVariantTransfer(
+                new TransferEventVariantRequestDownloadResource(
+                    peerId,
+                    sessionOrderId,
+                    resourceOrderId
+                )
+            ));
+        } else {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [model?.path, model?.name, isCloud, session, sessionId, id])
+
+    const onCancelClick = useCallback(() => {
+        if (!model || !session) return
+
+        core.update(new AppEventVariantTransfer(
+            new TransferEventVariantCancelResourceTransfer(
+                BigInt(sessionId),
+                new TransferTypeVariantReceive(),
+                BigInt(id)
+            )
+        ));
+    }, [model, session, sessionId, id])
 
     if (!media || !model) return null;
 
@@ -724,16 +929,22 @@ function MediaView(props: {
                         </div>
 
                         {/* Download Button / Progress */}
-                        <div className="flex-shrink-0">
-                            {media.is_completed
-                                ? <button
-                                    className="rounded-xl p-2 bg-white/10 hover:bg-white/20 border border-white/20
-                                               transition-all duration-300 hover:scale-110 shadow-lg"
-                                    onClick={onDownloadClick}>
-                                    <ArrowDown className="w-5 h-5 text-white" />
-                                </button>
-                                : <CircleProgress progress={media.completion} size={36} />
-                            }
+                        <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
+                            <DownloadButtonWithProgress
+                                progress={media.completion}
+                                isReady={media.is_ready}
+                                isCompleted={media.is_completed}
+                                isInProgress={media.completion > 0 && !media.is_completed}
+                                onDownloadClick={onDownloadClick}
+                                onCancelClick={onCancelClick}
+                                size={36}
+                                strokeWidth={3}
+                            />
+                            {media.completion > 0 && !media.is_completed && (
+                                <span className="text-[9px] text-white/60 font-medium">
+                                    {(media.completion * 100).toFixed(0)}%
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -759,17 +970,16 @@ function MediaView(props: {
             {/* Mobile: Actions */}
             {isMobile && (
                 <div className="flex-shrink-0">
-                    {media.is_completed ? (
-                        <button
-                            className="rounded-xl p-2.5 bg-white/10 hover:bg-white/20 border border-white/20
-                                       transition-all duration-300 hover:scale-110 shadow-lg"
-                            onClick={onDownloadClick}
-                        >
-                            <ArrowDown className="w-5 h-5 text-white" />
-                        </button>
-                    ) : (
-                        <CircleProgress progress={media.completion} size={32} />
-                    )}
+                    <DownloadButtonWithProgress
+                        progress={media.completion}
+                        isReady={media.is_ready}
+                        isCompleted={media.is_completed}
+                        isInProgress={media.completion > 0 && !media.is_completed}
+                        onDownloadClick={onDownloadClick}
+                        onCancelClick={onCancelClick}
+                        size={32}
+                        strokeWidth={3}
+                    />
                 </div>
             )}
         </div>

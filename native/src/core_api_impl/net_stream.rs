@@ -132,7 +132,7 @@ impl NetStreamInnerImpl {
                     continue_upload.x_content_length = continue_upload.x_content_length.min(remaining as u32);
                     continue_upload.is_last = continue_upload.is_last || continue_upload.x_content_length != main_chunk_size;
                     continue_upload
-                },
+                }
                 None => {
                     return Ok(Some(completion));
                 }
@@ -144,7 +144,7 @@ impl NetStreamInnerImpl {
         let temp_file = NamedTempFile::new()?;
         let temp_path = temp_file.path().to_path_buf();
         let mut temp_writer = tokio::fs::File::create(&temp_path).await?;
-        
+
         let mut written_bytes = 0u64;
         loop {
             let Some(data) = cursor.next(None).await? else { break };
@@ -153,30 +153,33 @@ impl NetStreamInnerImpl {
         }
         temp_writer.flush().await?;
         drop(temp_writer);
-        
+
         if written_bytes == 0 {
             log::info!("No remaining data to upload");
             return Ok(Some(completion));
         }
-        
+
         log::info!("Wrote {} bytes to temporary file, preparing to upload in chunks", written_bytes);
-        
+
         let mut temp_cursor: Box<dyn IOCursor> = Box::new(FileCursor::new(temp_path, READ_CHUNK_SIZE).await?);
-        
+
         let mut remaining = written_bytes;
         while remaining > 0 {
             let chunk_size = remaining.min(main_chunk_size as u64);
 
             let etag = Self::upload_chunk(&upload.upload_url, &mut temp_cursor, tx, &mut uploaded, chunk_size).await?;
             completion.e_tags.push(etag);
-            
+
             remaining -= chunk_size;
-            
+
             if remaining > 0 {
                 upload = match server.complete_part_upload(&upload.context_token).await? {
                     Some(continue_upload) => continue_upload,
                     None => {
-                        log::warn!("Server did not provide continuation upload but we still have {} bytes remaining", remaining);
+                        log::warn!(
+                            "Server did not provide continuation upload but we still have {} bytes remaining",
+                            remaining
+                        );
                         break;
                     }
                 };

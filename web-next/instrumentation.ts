@@ -140,10 +140,8 @@ export async function setupCDN(): Promise<void> {
             return;
           }
 
-          // Determine the Content-Type
           const contentType = mime.lookup(fullPath) || 'application/octet-stream';
 
-          // Read file and upload
           const fileContent = await fs.readFile(fullPath);
 
           const command = new PutObjectCommand({
@@ -151,7 +149,7 @@ export async function setupCDN(): Promise<void> {
             Key: s3Key,
             Body: fileContent,
             ACL: acl,
-            ContentType: contentType, // Set the Content-Type
+            ContentType: contentType,
           });
 
           await s3.send(command);
@@ -160,12 +158,8 @@ export async function setupCDN(): Promise<void> {
       }, { concurrency: 30 });
     };
 
-    // Upload public directory
     await uploadDirectory(publicDir, `${bucketBase}`);
-
-    // Upload .next/static directory
     await uploadDirectory(nextStaticDir, `${bucketBase}/_next/static`);
-
     console.log(ns, 'Upload completed successfully.');
   } catch (error) {
     console.error('Error uploading to CDN:', error);

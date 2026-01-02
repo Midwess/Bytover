@@ -15,8 +15,8 @@ use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
 use redb::Database;
 use shared::protocol::public_cloud::cloud_service::CloudService;
-use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::app_server::AppServer;
+use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
 use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
@@ -148,7 +148,12 @@ impl DiContainer {
         }
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
-        let web_rtc = Arc::new(WebRtc::new(get_signalling_server_ws_url(), local_resource_repo.clone()));
+        let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
+        let web_rtc = Arc::new(WebRtc::new(
+            get_signalling_server_ws_url(),
+            local_resource_repo.clone(),
+            transfer_session_repo
+        ));
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),

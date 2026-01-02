@@ -1,14 +1,14 @@
-use std::cell::OnceCell;
 use crate::protocol::webrtc::errors::WebRtcErrors;
+use anyhow::Context;
+use core_services::utils::cancellation::CancellationToken;
 use futures::channel::mpsc;
 use futures_util::lock::Mutex;
 use matchbox_socket::Packet;
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use anyhow::Context;
-use core_services::utils::cancellation::CancellationToken;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum TransferDelimiterShema {
@@ -16,16 +16,13 @@ pub enum TransferDelimiterShema {
         session_id: u64,
         resource_id: u64,
         total_size: Option<u64>,
-        compressed: bool,
+        compressed: bool
     },
     End {
         session_id: u64,
-        resource_id: u64,
+        resource_id: u64
     },
-    Hold {
-        session_id: u64,
-        resource_id: u64,
-    },
+    Hold(u8)
 }
 
 impl TransferDelimiterShema {
@@ -34,44 +31,38 @@ impl TransferDelimiterShema {
             session_id,
             resource_id,
             total_size: None,
-            compressed,
+            compressed
         }
     }
 
     pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
-        Self::End {
-            session_id,
-            resource_id,
-        }
+        Self::End { session_id, resource_id }
     }
 
-    pub fn hold(session_id: u64, resource_id: u64) -> Self {
-        Self::Hold {
-            session_id,
-            resource_id,
-        }
+    pub fn hold(counter: u8) -> Self {
+        Self::Hold(counter)
     }
 
-    pub fn session_id(&self) -> u64 {
+    pub fn session_id(&self) -> Option<u64> {
         match self {
-            Self::Start { session_id, .. } => *session_id,
-            Self::End { session_id, .. } => *session_id,
-            Self::Hold { session_id, .. } => *session_id,
+            Self::Start { session_id, .. } => Some(*session_id),
+            Self::End { session_id, .. } => Some(*session_id),
+            Self::Hold(_) => None
         }
     }
 
-    pub fn resource_id(&self) -> u64 {
+    pub fn resource_id(&self) -> Option<u64> {
         match self {
-            Self::Start { resource_id, .. } => *resource_id,
-            Self::End { resource_id, .. } => *resource_id,
-            Self::Hold { resource_id, .. } => *resource_id,
+            Self::Start { resource_id, .. } => Some(*resource_id),
+            Self::End { resource_id, .. } => Some(*resource_id),
+            Self::Hold(_) => None
         }
     }
 
     pub fn compressed(&self) -> bool {
         match self {
             Self::Start { compressed, .. } => *compressed,
-            _ => false,
+            _ => false
         }
     }
 
@@ -111,12 +102,13 @@ impl TransferDelimiterShema {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::Start { .. }) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected Start delimiter but got {:?}", result)
-            ));
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected Start delimiter but got {:?}",
+                result
+            )));
         }
 
-        if result.session_id() != session_id {
+        if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
                 "Invalid delimiter, session_id does not match".to_owned()
             ));
@@ -129,12 +121,13 @@ impl TransferDelimiterShema {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::End { .. }) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected End delimiter but got {:?}", result)
-            ));
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected End delimiter but got {:?}",
+                result
+            )));
         }
 
-        if result.session_id() != session_id {
+        if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
                 "Invalid delimiter, session_id does not match".to_owned()
             ));
@@ -143,22 +136,25 @@ impl TransferDelimiterShema {
         Ok(result)
     }
 
-    pub fn from_hold_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+    pub fn from_hold_packet(data: &Packet) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
-        if !matches!(result, Self::Hold { .. }) {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                format!("Expected Hold delimiter but got {:?}", result)
-            ));
-        }
-
-        if result.session_id() != session_id {
-            return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, session_id does not match".to_owned()
-            ));
+        if !matches!(result, Self::Hold(_)) {
+            return Err(WebRtcErrors::InvalidDelimiter(format!(
+                "Expected Hold delimiter but got {:?}",
+                result
+            )));
         }
 
         Ok(result)
+    }
+
+    pub fn hold_counter(&self) -> Option<u8> {
+        if let Self::Hold(counter) = self {
+            Some(*counter)
+        } else {
+            None
+        }
     }
 
     pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {
@@ -190,19 +186,21 @@ impl TransferDelimiterShema {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 struct SessionContext {
     session_id: u64,
     rtc_request_id: String,
-    token: OnceCell<CancellationToken>
+    token: Arc<Mutex<Option<CancellationToken>>>,
+    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>
 }
 
 impl SessionContext {
     pub fn new(session_id: u64, rtc_request_id: String) -> Self {
         Self {
-            token: OnceCell::new(),
+            token: Arc::new(Mutex::new(Some(CancellationToken::new()))),
             session_id,
             rtc_request_id,
+            resource_tokens: Arc::new(Mutex::new(HashMap::new()))
         }
     }
 }
@@ -232,7 +230,10 @@ impl TransfersContext {
 
     pub async fn add_token(&self, session_id: u64, token: CancellationToken) {
         let actives = self.active_transfers.lock().await;
-        actives.iter().find(|it| it.session_id == session_id).map(|it| it.token.set(token));
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let mut session_token = session.token.lock().await;
+            *session_token = Some(token);
+        }
     }
 
     pub async fn start_transfer(&self, session_id: u64, rtc_request_id: String) {
@@ -241,17 +242,59 @@ impl TransfersContext {
     }
 
     pub async fn cancel_transfer(&self, session_id: u64) {
-        let actives = self.active_transfers.lock().await;
-        let item = actives.iter().find(|it| it.session_id == session_id).and_then(|it| it.token.get());
-        if let Some(token) = item {
-            token.cancel();
+        let mut actives = self.active_transfers.lock().await;
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let session_token = session.token.lock().await;
+            if let Some(token) = session_token.as_ref() {
+                token.cancel();
+            }
         }
+
+        actives.retain(|it| it.session_id != session_id);
     }
 
     pub async fn cancel_all_transfers(&self) {
         let actives = self.active_transfers.lock().await;
-        for item in actives.iter() {
-            item.token.get().map(|it| it.cancel());
+        for session in actives.iter() {
+            let session_token = session.token.lock().await;
+            if let Some(token) = session_token.as_ref() {
+                token.cancel();
+            }
+        }
+    }
+
+    pub async fn get_or_create_resource_token(&self, session_id: u64, resource_id: u64) -> CancellationToken {
+        let mut actives = self.active_transfers.lock().await;
+
+        // Find or create session if it doesn't exist
+        if !actives.iter().any(|it| it.session_id == session_id) {
+            actives.push(SessionContext::new(session_id, String::new()));
+        }
+
+        let session = actives.iter().find(|it| it.session_id == session_id).unwrap();
+
+        let mut resource_tokens = session.resource_tokens.lock().await;
+
+        if let Some(token) = resource_tokens.get(&resource_id) {
+            if !token.is_cancelled() {
+                return token.clone();
+            }
+        }
+
+        let session_token = session.token.lock().await;
+        let parent_token = session_token.as_ref().cloned().unwrap_or_else(CancellationToken::new);
+        let child_token = parent_token.child_token();
+        resource_tokens.insert(resource_id, child_token.clone());
+        child_token
+    }
+
+    pub async fn cancel_resource(&self, session_id: u64, resource_id: u64) {
+        let actives = self.active_transfers.lock().await;
+        if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {
+            let resource_tokens = session.resource_tokens.lock().await;
+            if let Some(token) = resource_tokens.get(&resource_id) {
+                token.cancel();
+            }
         }
     }
 }

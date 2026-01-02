@@ -44,12 +44,12 @@ impl From<TransferResourceType> for ResourceTypeMessage {
 
 impl TransferResource {
     pub async fn into_resource_msg(&self, cloud_storage: &Arc<dyn CloudStorage>) -> CloudResourceMessage {
-        let mut source = self.source();
+        let source = self.source();
         let thumbnail_source = self.thumbnail_source();
         let download_url = cloud_storage.generate_download_url(&source).await.unwrap_or_default();
 
         let download_thumbnail_url = match thumbnail_source {
-            Some(mut thumbnail_source) => cloud_storage.generate_download_url(&thumbnail_source).await.ok(),
+            Some(thumbnail_source) => cloud_storage.generate_download_url(&thumbnail_source).await.ok(),
             None => None
         };
 
@@ -73,10 +73,11 @@ impl TransferSession {
         }
 
         let msg = PublicTransferSessionMessage {
+            alias: self.alias(),
             order_id: self.order_id(),
             user_id: self.user_order_id(),
             password: self.password(),
-            access_url: self.access_url(app.web_url().to_owned()),
+            access_url: self.access_url(app.web_url.clone().unwrap_or_default()),
             resources,
             progresses: self.progresses().iter().map(|it| it.clone().into()).collect(),
             to_emails: self.to_emails().clone()

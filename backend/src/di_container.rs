@@ -3,12 +3,16 @@ use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
+use crate::grpc::p2p_service::P2PGrpcService;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
+use crate::infrastructure::postgres::p2p_session::P2PSessionPostgresRepository;
 use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::mail::service::EmailService;
+use crate::repositories::p2p_session::P2PSessionRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
+use crate::transfer::p2p_transfer_service::P2PTransferService;
 use crate::transfer::transfer_service::TransferService;
 use crate::user::Token;
 use devlog_sdk::distributed_id::{init_id_generator, EtcdWorkerOptions};
@@ -148,6 +152,13 @@ impl DiContainer {
         }
     }
 
+    pub async fn get_grpc_p2p_service(&'static self) -> P2PGrpcService {
+        P2PGrpcService {
+            p2p_repository: Arc::new(self.get_p2p_session_repository().await),
+            app_service: Box::new(self.get_app_service().await)
+        }
+    }
+
     pub async fn get_app_service(&'static self) -> impl AppInfoService {
         AppGatewayImpl {
             channel: self.grpc_gateway_channel.clone()
@@ -168,6 +179,20 @@ impl DiContainer {
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
         TransferSessionPostgresRepository {
             db: self.get_db_connection()
+        }
+    }
+
+    pub async fn get_p2p_session_repository(&'static self) -> impl P2PSessionRepository {
+        P2PSessionPostgresRepository {
+            db: self.get_db_connection()
+        }
+    }
+
+    pub async fn get_p2p_transfer_service(&'static self) -> P2PTransferService {
+        P2PTransferService {
+            p2p_repository: std::sync::Arc::new(self.get_p2p_session_repository().await),
+            app_service: Box::new(self.get_app_service().await),
+            markov_generator: Box::new(self.markov_generator())
         }
     }
 

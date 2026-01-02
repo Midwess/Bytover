@@ -1,9 +1,9 @@
-use crux_core::{App, Command};
-use serde::{Deserialize, Serialize};
-use core_services::utils::string::StringExt;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::{AppModel, BitBridge};
 use crate::entities::user::User;
+use core_services::utils::string::StringExt;
+use crux_core::{App, Command};
+use serde::{Deserialize, Serialize};
 
 use crate::app::modules::AppModule;
 use crate::app::nearby::module::NearbyEvent;
@@ -17,13 +17,13 @@ pub struct AuthenticationModule;
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
     pub user: Option<User>,
-    pub is_already_feedback: bool,
+    pub is_already_feedback: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationViewModel {
     pub user: Option<User>,
-    pub is_already_feedback: bool,
+    pub is_already_feedback: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -57,7 +57,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
                     return Command::new(|it| async move {
                         let _ = it.app().run(P2POperation::stop()).await;
-                    }).then_render();
+                    })
+                    .then_render();
                 }
 
                 Command::handle_result(|ctx| async move {
@@ -66,7 +67,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     let _ = ctx.app().restart_nearby(true).await;
                     Ok(())
                 })
-            },
+            }
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
                     log::info!("User is already authorized, skipping...");
@@ -105,7 +106,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     app.notify_event(NearbyEvent::Launch { auto_launch: true });
                 })
             }
-            AuthenticationEvent::Feedback {email, message} => {
+            AuthenticationEvent::Feedback { email, message } => {
                 if let Some(message) = message.as_ref() {
                     if message.len() > 4024 {
                         return Command::new(|it| async move {

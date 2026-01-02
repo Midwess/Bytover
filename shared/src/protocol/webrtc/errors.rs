@@ -1,4 +1,5 @@
 use crate::errors::CoreError;
+use crate::protocol::webrtc::fec::FecError;
 use crate::repository::errors::PersistenceError;
 use core_services::utils::cancellation::TaskErrors;
 use core_services::utils::yield_container::YieldError;
@@ -6,7 +7,6 @@ use matchbox_protocol::PeerId;
 use matchbox_socket::ChannelError;
 use n0_future::task::JoinError;
 use prost::{DecodeError, EncodeError};
-use crate::protocol::webrtc::fec::FecError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
@@ -62,6 +62,15 @@ pub enum WebRtcErrors {
 
     #[error("Panic")]
     Panic(#[from] JoinError),
+
+    #[error("Peer error: {0}")]
+    PeerError(String),
+
+    #[error("Timeout waiting for response")]
+    Timeout,
+
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String)
 }
 
 impl From<WebRtcErrors> for matchbox_socket::SignalingError {

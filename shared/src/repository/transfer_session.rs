@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferTargetId {
     Internet,
-    Nearby
+    P2P
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -24,9 +24,15 @@ impl From<&TransferTarget> for TransferTargetId {
     fn from(value: &TransferTarget) -> Self {
         match value {
             TransferTarget::Internet { .. } => TransferTargetId::Internet,
-            TransferTarget::Nearby(_) => TransferTargetId::Nearby
+            TransferTarget::P2P { .. } => TransferTargetId::P2P
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ZipDownloadPaths {
+    pub resource_paths: HashMap<u64, LocalResourcePath>,
+    pub session_path: LocalResourcePath
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -49,6 +55,16 @@ pub trait TransferSessionRepository: Repository<TransferSession, TransferSession
         session_order_id: u64,
         resource_names: HashMap<u64, String>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
+
+    async fn generate_zip_download_paths(
+        &self,
+        session_order_id: u64,
+        resource_names: HashMap<u64, String>
+    ) -> Result<ZipDownloadPaths, PersistenceError>;
+
+    async fn start_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError>;
+
+    async fn stop_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError>;
 }
 
 impl Table<TransferSessionId> for TransferSession {

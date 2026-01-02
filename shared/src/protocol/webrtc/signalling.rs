@@ -1,14 +1,26 @@
 use super::errors::WebRtcErrors;
+use crate::app::operations::p2p::P2POperationOutput;
 use crate::entities::finding_scope::FindingScope;
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::peer::WebRtcPeer;
 use crate::protocol::webrtc::signalling_client::SignallingClient;
+use crate::shell::api::CoreRequest;
 use futures_util::lock::Mutex;
 use matchbox_protocol::{PeerId, RtcIceServerConfig};
 use matchbox_socket::{PeerEvent, PeerRequest, PeerSignal, SignalingError, Signaller, SignallerBuilder};
 use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceCandidate, IceCandidateUpdateMessage, IceConfig, JoinMessage, Message, OfferMessage};
+use schema::devlog::rpc_signalling::server::{
+    AnswerMessage,
+    IceCandidate,
+    IceCandidateUpdateMessage,
+    IceConfig,
+    JoinMessage,
+    LeftMessage,
+    Message,
+    OfferMessage,
+    ScopeState
+};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
@@ -16,7 +28,7 @@ use std::time::Duration;
 
 pub enum WebRtcPeerConnectionProcess {
     Connecting(Instant),
-    Connected(Arc<WebRtcPeer>)
+    Connected(Weak<WebRtcPeer>)
 }
 
 impl WebRtcPeerConnectionProcess {
@@ -24,14 +36,14 @@ impl WebRtcPeerConnectionProcess {
         Self::Connecting(Instant::now())
     }
 
-    pub fn connected(peer: Arc<WebRtcPeer>) -> Self {
+    pub fn connected(peer: Weak<WebRtcPeer>) -> Self {
         Self::Connected(peer)
     }
 
-    pub fn get(&self) -> Option<Arc<WebRtcPeer>> {
+    pub fn get(&self) -> Option<&Weak<WebRtcPeer>> {
         match self {
             Self::Connecting(_) => None,
-            Self::Connected(peer) => Some(peer.clone())
+            Self::Connected(peer) => Some(peer)
         }
     }
 }
@@ -42,7 +54,8 @@ pub struct SharedContext {
     peer_msg_channels: Arc<Mutex<HashMap<PeerId, DirectMessageChannel>>>,
     finding_scopes: Arc<Mutex<Vec<FindingScope>>>,
     current_id: Arc<Mutex<PeerId>>,
-    signaller: Arc<Mutex<Weak<SignallingClient>>>
+    signaller: Arc<Mutex<Weak<SignallingClient>>>,
+    core_request: Arc<Mutex<Option<CoreRequest>>>
 }
 
 impl Default for SharedContext {
@@ -58,7 +71,8 @@ impl SharedContext {
             finding_scopes: Default::default(),
             peers: Default::default(),
             peer_msg_channels: Default::default(),
-            signaller: Default::default()
+            signaller: Default::default(),
+            core_request: Arc::new(Mutex::new(None))
         }
     }
 
@@ -71,15 +85,17 @@ impl SharedContext {
     }
 
     pub async fn get_current_id(&self) -> PeerId {
-        self.current_id.lock().await.clone()
+        *self.current_id.lock().await
+    }
+
+    pub async fn set_core_request(&self, core_request: CoreRequest) {
+        *self.core_request.lock().await = Some(core_request);
     }
 
     pub async fn update_finding_scopes(&self, scopes: Vec<FindingScope>) {
         let id = self.get_current_id().await;
         let mut finding_scopes = self.finding_scopes.lock().await;
-        if scopes.ne(&*finding_scopes) {
-            log::info!("Updating finding scopes: {scopes:?}");
-        }
+        log::info!("Updating finding scopes: {scopes:?}");
 
         finding_scopes.clear();
         finding_scopes.extend(scopes);
@@ -119,7 +135,7 @@ impl SharedContext {
     pub async fn get_peer(&self, peer_id: &PeerId) -> Option<Weak<WebRtcPeer>> {
         let peers = self.peers.lock().await;
         if let Some(peer) = peers.get(peer_id).and_then(|it| it.get()) {
-            return Some(Arc::downgrade(&peer));
+            return Some(peer.clone());
         }
 
         None
@@ -130,13 +146,40 @@ impl SharedContext {
         peers.insert(peer_id, WebRtcPeerConnectionProcess::connecting());
     }
 
+    async fn disconnect_peer(&self, peer_id: &PeerId) {
+        if let Some(signaller) = self.signaller().await {
+            let _ = signaller.append_msg(Message {
+                left_message: Some(LeftMessage { id: peer_id.0.to_string() }),
+                from_id: peer_id.0.to_string(),
+                ..Default::default()
+            });
+
+            let current_id = self.get_current_id().await;
+            let _ = signaller
+                .send(Message {
+                    left_message: Some(LeftMessage {
+                        id: current_id.to_string()
+                    }),
+                    from_id: current_id.to_string(),
+                    to_id: Some(peer_id.to_string()),
+                    ..Default::default()
+                })
+                .await;
+
+            log::info!("Disconnect signal has been emitted: {peer_id:?}");
+        }
+    }
+
     pub async fn remove_all(&self) -> Vec<PeerId> {
         let peers = self.peers.lock().await.drain().collect::<Vec<_>>();
         let mut removed_peers = Vec::new();
         for (id, peer) in peers {
-            if let Some(peer) = peer.get() {
-                removed_peers.push(id);
-                peer.peer_disconnected().await;
+            if let Some(peer_weak) = peer.get() {
+                self.disconnect_peer(&id).await;
+                if let Some(peer) = peer_weak.upgrade() {
+                    removed_peers.push(id);
+                    peer.peer_disconnected().await;
+                }
             }
         }
 
@@ -144,19 +187,23 @@ impl SharedContext {
     }
 
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        let peer = self.peers.lock().await.remove(peer_id).and_then(|it| it.get());
-        if let Some(peer) = peer {
-            peer.peer_disconnected().await;
-        }
-        else {
+        let peer_weak = self.peers.lock().await.remove(peer_id).and_then(|it| it.get().cloned());
+        if let Some(peer_weak) = peer_weak {
+            if let Some(peer) = peer_weak.upgrade() {
+                self.disconnect_peer(peer_id).await;
+                peer.peer_disconnected().await;
+            }
+        } else {
             log::warn!("Peer not found: {peer_id:?}");
         }
     }
 
-    pub async fn add_peer(&self, peer: WebRtcPeer) {
-        let peer_id = peer.peer.peer_id();
-        let mut peers = self.peers.lock().await;
-        peers.insert(peer_id, WebRtcPeerConnectionProcess::connected(Arc::new(peer)));
+    pub async fn add_peer(&self, peer: Weak<WebRtcPeer>) {
+        if let Some(peer) = peer.upgrade() {
+            let peer_id = peer.peer.peer_id();
+            let mut peers = self.peers.lock().await;
+            peers.insert(peer_id, WebRtcPeerConnectionProcess::connected(Arc::downgrade(&peer)));
+        }
     }
 
     // Return true when peer is not connected
@@ -165,8 +212,19 @@ impl SharedContext {
         self.peers.lock().await.get(peer_id).is_some()
     }
 
+    pub async fn get_all_connected_peers(&self) -> Vec<Arc<WebRtcPeer>> {
+        let peers = self.peers.lock().await;
+        peers.values().filter_map(|process| process.get().and_then(|weak| weak.upgrade())).collect()
+    }
+
     pub async fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
+    }
+
+    pub async fn send_scope_state(&self, scope_id: String, state: ScopeState) {
+        if let Some(core_request) = self.core_request.lock().await.as_ref() {
+            let _ = core_request.response(P2POperationOutput::ScopeStateChanged { scope_id, state }).await;
+        }
     }
 }
 
@@ -195,7 +253,10 @@ impl TryFrom<SignallingPeerRequest> for Message {
                         msg.ice_candidate_update = Some(IceCandidateUpdateMessage { ice_candidates: ice_msg });
                     }
                     PeerSignal::Offer { offer, .. } => {
-                        msg.offer = Some(OfferMessage { sdp: offer, ..Default::default() });
+                        msg.offer = Some(OfferMessage {
+                            sdp: offer,
+                            ..Default::default()
+                        });
                     }
                     PeerSignal::Answer(sdp) => msg.answer = Some(AnswerMessage { sdp })
                 };
@@ -207,7 +268,10 @@ impl TryFrom<SignallingPeerRequest> for Message {
                 // the room about our present
                 Ok(Message {
                     from_id: my_id.to_string(),
-                    join: Some(JoinMessage { id: my_id.to_string(), ..Default::default() }),
+                    join: Some(JoinMessage {
+                        id: my_id.to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 })
             }
@@ -223,7 +287,10 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
         let sender_id: PeerId = PeerId(value.from_id.parse()?);
         if let Some(join_msg) = value.join {
             let peer_id = PeerId(join_msg.id.parse()?);
-            return Ok(Self::NewPeer {id: peer_id, ice_config: join_msg.ice_config.map(create_matchbox_ice_config)})
+            return Ok(Self::NewPeer {
+                id: peer_id,
+                ice_config: join_msg.ice_config.map(create_matchbox_ice_config)
+            })
         } else if let Some(ice_msg) = value.ice_candidate_update {
             let ice = ice_msg.ice_candidates.as_string();
             let signal = PeerSignal::IceCandidate(ice);
@@ -233,7 +300,10 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
             })
         } else if let Some(offer_msg) = value.offer {
             let offer = offer_msg.sdp;
-            let signal = PeerSignal::Offer { offer, config: offer_msg.ice_config.map(create_matchbox_ice_config) };
+            let signal = PeerSignal::Offer {
+                offer,
+                config: offer_msg.ice_config.map(create_matchbox_ice_config)
+            };
             return Ok(Self::Signal {
                 sender: sender_id,
                 data: signal
@@ -320,9 +390,25 @@ impl Signaller for WebSignaller {
                 continue;
             };
 
+            if let Some(scope_state_msg) = message.scope_state_changed {
+                let scope_id = scope_state_msg.scope_id.clone();
+                let state = scope_state_msg.state();
+                log::info!("Received scope state changed: {:?} -> {:?}", scope_id, state);
+                self.shared_context.send_scope_state(scope_id, state).await;
+                continue;
+            }
+
+            let scopes = message.scopes.clone();
+
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
+                if let Some(peer_weak) = self.shared_context.get_peer(id).await {
+                    if let Some(peer_arc) = peer_weak.upgrade() {
+                        peer_arc.update_scopes(scopes).await;
+                    }
+                }
+
                 if id.0 <= self.peer_id.0 {
                     continue;
                 }

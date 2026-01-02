@@ -11,9 +11,9 @@ use url::Url;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::dialog::DialogOperation;
-use devlog_sdk::distributed_id::gen_id;
 use crate::app::transfer::module::TransferEvent;
 use crate::CoreOperation;
+use devlog_sdk::distributed_id::gen_id;
 
 impl AppCommand {
     pub async fn authenticate(&self) {

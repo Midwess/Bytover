@@ -67,7 +67,13 @@ pub enum FileOperation {
     LocalResourceInstance,
     GenerateSource,
     Blob,
-    ClearAll
+    ClearAll,
+    CreateZipWriter {
+        zip_filename: String
+    },
+    FinalizeZip {
+        zip_filename: String
+    }
 }
 
 unsafe impl Send for OpfsOperation {}
@@ -107,6 +113,7 @@ pub struct OpfsWorker {
     file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>,
     cursors: AMutex<HashMap<u32, AMutex<Box<dyn IOCursor>>>>,
     device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
+    zip_writers: AMutex<HashMap<String, AMutex<crate::file_system::zip_writer::OpfsZipWriter>>>,
     id_gen: Arc<AtomicU32>
 }
 
@@ -135,6 +142,27 @@ impl OpfsWorker {
         match operation {
             FileOperation::Open => {
                 match async {
+                    if file_path.contains("zip_entry://") {
+                        if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
+                            if let Some((zip_filename, entry_name)) = path_after_prefix.split_once('/') {
+                                let zip_writer = {
+                                    let writers = self.zip_writers.lock().await;
+                                    writers.get(zip_filename).cloned()
+                                };
+
+                                if let Some(writer) = zip_writer {
+                                    let mut guard = writer.lock().await;
+                                    guard.new_entry(entry_name).await
+                                        .map_err(|e| JsValue::from(format!("Failed to create zip entry: {}", e)))?;
+                                    return Ok::<(), JsValue>(());
+                                } else {
+                                    return Err(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                                }
+                            }
+                        }
+                        return Err(JsValue::from("Invalid zip_entry path format"));
+                    }
+
                     if self.file_handles.lock().await.contains_key(&file_path) {
                         return Ok::<(), JsValue>(());
                     }
@@ -193,6 +221,28 @@ impl OpfsWorker {
                 OpfsOperationOutput::Void
             },
             FileOperation::Cursor { buffer_size } => {
+                // Check if this is a zip_entry:// path and create entry if needed
+                if file_path.contains("zip_entry://") {
+                    if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
+                        if let Some((zip_filename, entry_name)) = path_after_prefix.split_once('/') {
+                            // Get or wait for zip writer
+                            let zip_writer = {
+                                let writers = self.zip_writers.lock().await;
+                                writers.get(zip_filename).cloned()
+                            };
+
+                            if let Some(writer) = zip_writer {
+                                let mut guard = writer.lock().await;
+                                if let Err(e) = guard.new_entry(entry_name).await {
+                                    return OpfsOperationOutput::Error(JsValue::from(format!("Failed to create zip entry: {}", e)));
+                                }
+                            } else {
+                                return OpfsOperationOutput::Error(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                            }
+                        }
+                    }
+                }
+
                 let cursor = if let Some(device_file) = self.device_files.lock().await.get(&file_path) {
                     let guard = device_file.lock().await;
                     match IOReaderBlobImpl::from_file(&guard.file, buffer_size).await {
@@ -306,6 +356,38 @@ impl OpfsWorker {
                 OpfsOperationOutput::Error("No file selected".into())
             }
             FileOperation::Write { data, position, decompress } => {
+                if file_path.contains("zip_entry://") {
+                    if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
+                        if let Some((zip_filename, _entry_name)) = path_after_prefix.split_once('/') {
+                            let zip_writer = {
+                                let writers = self.zip_writers.lock().await;
+                                writers.get(zip_filename).cloned()
+                            };
+
+                            if let Some(writer) = zip_writer {
+                                let mut guard = writer.lock().await;
+
+                                let data_vec = match decompress {
+                                    true => {
+                                        match decompress_size_prepended(data.to_vec().as_slice()) {
+                                            Ok(out) => out,
+                                            Err(e) => return OpfsOperationOutput::Error(JsValue::from(format!("Failed to decompress: {}", e)))
+                                        }
+                                    },
+                                    false => data.to_vec()
+                                };
+
+                               return match guard.write(&data_vec).await {
+                                    Ok(_) => OpfsOperationOutput::Written(data_vec.len()),
+                                    Err(e) => OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e)))
+                                }
+                            } else {
+                                return OpfsOperationOutput::Error(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                            }
+                        }
+                    }
+                }
+
                 let Some(file_handle) = self.file_handles.lock().await.get(&file_path).cloned() else {
                     return OpfsOperationOutput::Error("No file handle open".into());
                 };
@@ -433,6 +515,54 @@ impl OpfsWorker {
 
                 response
             }
+            FileOperation::CreateZipWriter { zip_filename } => {
+                match async {
+                    {
+                        let writers = self.zip_writers.lock().await;
+                        if writers.contains_key(&zip_filename) {
+                            return Ok::<(), JsValue>(());
+                        }
+                    }
+
+                    let sync_handle = root.open_file(&zip_filename).await?;
+
+                    let zip_writer = crate::file_system::zip_writer::OpfsZipWriter::new(sync_handle);
+                    self.zip_writers.lock().await.insert(zip_filename.clone(), Arc::new(Mutex::new(zip_writer)));
+
+                    Ok::<(), JsValue>(())
+                }
+                .await
+                {
+                    Ok(_) => OpfsOperationOutput::Void,
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            }
+            FileOperation::FinalizeZip { zip_filename } => {
+                match async {
+                    let zip_writer = {
+                        let mut writers = self.zip_writers.lock().await;
+                        writers.remove(&zip_filename)
+                    };
+
+                    if let Some(writer) = zip_writer {
+                        let writer = Arc::try_unwrap(writer)
+                            .map_err(|_| JsValue::from("Failed to unwrap zip writer"))?
+                            .into_inner();
+                        writer.finalize().await
+                            .map_err(|e| JsValue::from(e.to_string()))?;
+                    }
+                    else {
+                        return Err(JsValue::from(format!("Zip writer not found: {}", zip_filename)));
+                    }
+
+                    Ok::<(), JsValue>(())
+                }
+                .await
+                {
+                    Ok(_) => OpfsOperationOutput::Void,
+                    Err(e) => OpfsOperationOutput::Error(e)
+                }
+            }
         }
     }
 }
@@ -452,7 +582,8 @@ impl Worker for OpfsWorker {
             device_files: Default::default(),
             cursors: Default::default(),
             id_gen: Arc::new(AtomicU32::new(0)),
-            device_folders: Default::default()
+            device_folders: Default::default(),
+            zip_writers: Default::default()
         }
     }
 

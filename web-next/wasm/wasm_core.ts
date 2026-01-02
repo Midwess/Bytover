@@ -40,7 +40,6 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     ReceiveSessionViewModel,
-    ReceiveCloudSessionViewModel,
     PeerViewModel,
     LocalResourcePath,
     SelectedResourceViewModel,
@@ -95,18 +94,18 @@ export class WasmCore {
 
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
-    selectedSession: Observable<ReceiveSessionViewModel | ReceiveCloudSessionViewModel> = new Observable()
-
     constructor() { }
 
     public useSelectedSession() {
-        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel>()
+        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | undefined>()
 
         useEffect(() => {
-            return this.selectedSession.subscribe((value) => {
-                setSelectedSession(value)
+            return this.transferState.subscribe((transferState) => {
+                if (!isEqual(selectedSession, transferState?.selected_session)) {
+                    setSelectedSession(transferState?.selected_session ?? undefined)
+                }
             })
-        }, []);
+        }, [selectedSession])
 
         return selectedSession
     }
@@ -126,12 +125,11 @@ export class WasmCore {
     }
 
     public useSession(id: String) {
-        const [session, setSession] = useState<ReceiveSessionViewModel | ReceiveCloudSessionViewModel | undefined>(undefined)
+        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>(undefined)
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
-                    transferState?.received_cloud_sessions?.find(it => it.id === id)
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id)
 
                 if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
@@ -168,10 +166,6 @@ export class WasmCore {
         }, [id, resource, isCloud])
 
         return resource
-    }
-
-    public updateSelectedSession(session: ReceiveSessionViewModel | ReceiveCloudSessionViewModel) {
-        this.selectedSession.set(session)
     }
 
     public useMessage(reason: MessageReason) {
@@ -242,6 +236,20 @@ export class WasmCore {
         return clouds
     }
 
+    public useP2PSession() {
+        const [session, setSession] = useState(this.transferState.get()?.p2p_sessions?.[0]);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const p2pSession = transferState?.p2p_sessions?.[0];
+                if (!isEqual(session, p2pSession)) {
+                    setSession(p2pSession);
+                }
+            })
+        }, [session]);
+
+        return session;
+    }
+
     public useNearbySessionsList() {
         const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
         useEffect(() => {
@@ -273,24 +281,6 @@ export class WasmCore {
         }, []);
 
         return state
-    }
-
-    usePeerState(peerId: string | undefined) {
-        const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
-
-        useEffect(() => {
-            return this.transferState.subscribe((value) => {
-                let peer = value?.nearby_peers?.find((it: any) => {
-                    return it.id === peerId
-                })
-
-                if (!isEqual(peer, currentPeer)) {
-                    setPeer(peer)
-                }
-            })
-        }, [currentPeer, peerId])
-
-        return currentPeer
     }
 
     public useIsCoreCompatible() {
@@ -392,11 +382,6 @@ export class WasmCore {
         this.isLocationEnabled.set(false);
         this.isLocationLoading.set(false);
         console.log("Location tracking disabled");
-    }
-
-    async updateGeoLocation() {
-        await delay(2000)
-        await this.enableLocation();
     }
 
     public async update(event: AppEvent) {
@@ -592,12 +577,6 @@ export class WasmCore {
         this.nearbyState.set(viewModel.nearby!)
         this.transferState.set(viewModel.transfer!)
         this.shelfState.set(viewModel.shelf!)
-        const selectedSession = this.selectedSession.get()
-        if (selectedSession) {
-            const newSession = viewModel.transfer?.received_sessions.find(it => it.id === selectedSession.id) ||
-                viewModel.transfer?.received_cloud_sessions.find(it => it.id === selectedSession.id)
-            this.selectedSession.set(newSession)
-        }
     }
 
     async update_app_event(appEvent: Uint8Array) {

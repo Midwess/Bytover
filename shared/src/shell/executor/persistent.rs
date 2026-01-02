@@ -1,4 +1,3 @@
-use core_services::db::repository::abstraction::table::Table;
 use crate::app::operations::persistent::{
     LocalResourcePersistentOperation,
     PersistentOperation,
@@ -11,6 +10,7 @@ use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
+use core_services::db::repository::abstraction::table::Table;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -44,7 +44,11 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::None)
             }
             PersistentOperation::Session(SessionPersistentOperation::Remove) => {
-                self.auth_session_repository().delete_one(&AuthSessionId { r#type: SessionType::Access }).await?;
+                self.auth_session_repository()
+                    .delete_one(&AuthSessionId {
+                        r#type: SessionType::Access
+                    })
+                    .await?;
                 Ok(CoreOperationOutput::None)
             }
             PersistentOperation::Session(SessionPersistentOperation::Get()) => {
@@ -84,9 +88,7 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
-                self.local_resource_repository()
-                    .remove(path)
-                    .await?;
+                self.local_resource_repository().remove(path).await?;
 
                 Ok(CoreOperationOutput::Bool(true))
             }
@@ -109,7 +111,9 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().get_resource_type(path).await?;
                 Ok(CoreOperationOutput::ResourceType(result))
             }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(session)) => {
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
+                // Reset back to disconnected state
+                session.owner_disconnected();
                 let session = self.transfer_session_repository().create(session).await?;
                 Ok(session.into())
             }
@@ -149,6 +153,13 @@ pub trait NativePersistent: Send + Sync {
             }) => {
                 let result = self.local_resource_repository().generate_thumbnail_paths(session_id, resource_ids).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
+            }
+            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateZipDownloadPaths {
+                session_order_id,
+                resource_names
+            }) => {
+                let result = self.transfer_session_repository().generate_zip_download_paths(session_order_id, resource_names).await?;
+                Ok(CoreOperationOutput::ZipDownloadPaths(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
                 let sessions = self.transfer_session_repository().find_all(None, None, None).await?;

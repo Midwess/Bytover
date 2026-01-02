@@ -7,6 +7,7 @@ use crate::protocol::rpc::errors::RpcErrors;
 use crate::repository::errors::PersistenceError;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::shell::api::{CoreRequest, NetStream, NetStreamEvent};
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::maybe::MaybeSend;
 use futures::channel::oneshot;
 use futures_util::future::join_all;
@@ -21,7 +22,6 @@ use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{ClientUploadRequest, CloudResourceMessage, MultiPartUploadComplete};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
@@ -81,26 +81,23 @@ where
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
-        let (password, to_emails) = match &session.target {
-            TransferTarget::Internet { password, to_emails, .. } => (password.clone(), to_emails.clone()),
+        let to_emails = match &session.target {
+            TransferTarget::Internet { to_emails, .. } => to_emails.clone(),
             _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
         };
 
-        let user = match session.target {
-            TransferTarget::Internet { from_user, .. } => from_user,
-            _ => return Err(CloudTransferErrors::InvalidSessionTarget)
-        };
+        let user = &session.from_user;
 
-        let response = self.server.create_public_transfer_session(password, to_emails).await?;
+        let response = self.server.create_public_transfer_session(session.password.clone(), to_emails).await?;
 
         session.order_id = response.order_id as u64;
+        session.access_url = response.access_url;
         session.target = TransferTarget::Internet {
-            is_required_password: response.password.is_some(),
-            password: response.password,
-            access_url: Some(response.access_url),
-            from_user: user,
             to_emails: response.to_emails
         };
+        session.from_user = user.clone();
+        session.password = response.password.clone();
+        session.is_required_password = response.password.is_some();
 
         Ok(session)
     }
@@ -156,7 +153,8 @@ where
         let thumbnail_upload_requests = response.thumbnail_upload_requests;
         let (thumbnail_result, upload_result) = join!(
             self.upload_thumbnails(&session, thumbnail_upload_requests).with_cancel(&token),
-            self.upload_resources(&session, response.first_resource_upload_request, core_request).with_cancel(&token)
+            self.upload_resources(&session, response.first_resource_upload_request, core_request)
+                .with_cancel(&token)
         );
 
         thumbnail_result??;
