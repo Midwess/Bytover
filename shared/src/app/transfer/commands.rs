@@ -554,10 +554,6 @@ impl AppCommand {
 
         self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
 
-        self.run(TransferSessionPersistentOperation::start_download_session(
-            zip_paths.session_path.clone()
-        )).await?;
-
         let mut stream = self.stream_from_shell(
             P2POperation::DownloadAllResources {
                 peer_id,
@@ -598,10 +594,6 @@ impl AppCommand {
                 _ => continue
             }
         }
-
-        self.run(TransferSessionPersistentOperation::stop_download_session(
-            zip_paths.session_path
-        )).await?;
 
         Ok(())
     }

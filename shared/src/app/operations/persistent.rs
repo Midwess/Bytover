@@ -68,12 +68,6 @@ pub enum TransferSessionPersistentOperation {
         session_order_id: u64,
         resource_names: HashMap<u64, String>
     },
-    StartDownloadSession {
-        zip_path: LocalResourcePath
-    },
-    StopDownloadSession {
-        zip_path: LocalResourcePath
-    }
 }
 
 impl Operation for PersistentOperation {
@@ -225,24 +219,6 @@ impl TransferSessionPersistentOperation {
                 session_order_id,
                 resource_names
             }
-        ))
-        .map(|it| it.result())
-    }
-
-    pub fn start_download_session(
-        zip_path: LocalResourcePath
-    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::StartDownloadSession { zip_path }
-        ))
-        .map(|it| it.result())
-    }
-
-    pub fn stop_download_session(
-        zip_path: LocalResourcePath
-    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::StopDownloadSession { zip_path }
         ))
         .map(|it| it.result())
     }
