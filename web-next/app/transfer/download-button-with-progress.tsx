@@ -1,8 +1,7 @@
 'use client'
 
-import { ArrowDown } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import CircleProgress from '@/components/ui/progress'
+import { Download, Check, Square } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface DownloadButtonWithProgressProps {
     /** Progress value between 0 and 1 */
@@ -19,7 +18,7 @@ interface DownloadButtonWithProgressProps {
     onCancelClick?: () => void
     /** Size of the button/progress indicator */
     size?: number
-    /** Stroke width for the progress circle */
+    /** Stroke width for the progress bar */
     strokeWidth?: number
     /** Custom class name */
     className?: string
@@ -36,71 +35,65 @@ export default function DownloadButtonWithProgress({
     strokeWidth = 4,
     className = ''
 }: DownloadButtonWithProgressProps) {
-    const [showProgress, setShowProgress] = useState(false)
+    // Determine button state
+    const getButtonState = () => {
+        if (isCompleted) return 'completed'
+        if (isInProgress) return 'downloading'
+        return 'idle'
+    }
 
-    // Determine if we should show progress indicator
-    useEffect(() => {
-        if (isInProgress || (progress > 0 && !isCompleted)) {
-            setShowProgress(true)
-        } else if (isCompleted || progress === 0) {
-            // Delay hiding progress to allow smooth transition
-            const timeout = setTimeout(() => setShowProgress(false), 300)
-            return () => clearTimeout(timeout)
-        }
-    }, [isInProgress, progress, isCompleted])
-
-    const containerSize = size + 8 // Add padding
+    const state = getButtonState()
 
     return (
-        <div
-            className={`relative flex items-center justify-center ${className}`}
-            style={{ width: containerSize, height: containerSize }}
-        >
-            {/* Download Button */}
-            <button
-                className={`
-                    absolute rounded-xl bg-white/10 hover:bg-white/20 border border-white/20
-                    transition-all duration-500 ease-out hover:scale-110 shadow-lg
-                    flex items-center justify-center
-                    ${showProgress ? 'opacity-0 scale-50 pointer-events-none' : 'opacity-100 scale-100'}
-                `}
-                onClick={onDownloadClick}
-                disabled={!isReady || showProgress}
-                style={{
-                    width: size,
-                    height: size,
-                    transitionProperty: 'opacity, transform, scale'
-                }}
-            >
-                <ArrowDown
-                    className="text-white"
-                    style={{
-                        width: size * 0.5,
-                        height: size * 0.5
-                    }}
-                />
-            </button>
+        <div className={`relative ${className}`} style={{ width: size, height: size }}>
+            {/* Idle State - Download Button */}
+            {state === 'idle' && (
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={onDownloadClick}
+                    disabled={!isReady}
+                    className="h-full w-full rounded-lg bg-primary/10 hover:bg-primary/20 border border-border transition-colors"
+                    style={{ width: size, height: size }}
+                >
+                    <Download className="h-[50%] w-[50%] text-foreground" />
+                </Button>
+            )}
 
-            {/* Progress Circle */}
-            <div
-                className={`
-                    absolute flex items-center justify-center
-                    transition-all duration-500 ease-out
-                    ${showProgress ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}
-                `}
-                style={{
-                    transitionProperty: 'opacity, transform, scale'
-                }}
-            >
-                <CircleProgress
-                    isCompleted={isCompleted}
-                    isInProgress={isInProgress}
-                    progress={progress}
-                    size={size}
-                    strokeWidth={strokeWidth}
+            {/* Downloading State - Progress Bar with Cancel */}
+            {state === 'downloading' && (
+                <button
                     onClick={onCancelClick}
-                />
-            </div>
+                    className="relative flex flex-col items-center justify-center h-full w-full rounded-lg bg-primary/10 hover:bg-destructive/20 border border-border transition-colors group overflow-hidden"
+                    style={{ width: size, height: size }}
+                    title="Cancel download"
+                >
+                    {/* Progress Bar - Bottom to Top */}
+                    <div
+                        className="absolute bottom-0 left-0 right-0 bg-primary/30 transition-all duration-300 ease-out"
+                        style={{ height: `${progress * 100}%` }}
+                    />
+
+                    {/* Center content - Percentage or Stop icon on hover */}
+                    <div className="relative flex items-center justify-center z-10">
+                        <span className="text-[10px] font-medium text-foreground group-hover:hidden tabular-nums">
+                            {Math.round(progress * 100)}%
+                        </span>
+                        <Square className="h-[35%] w-[35%] text-destructive fill-destructive hidden group-hover:block absolute" />
+                    </div>
+                </button>
+            )}
+
+            {/* Completed State - Checkmark (persists) */}
+            {state === 'completed' && (
+                <button
+                    className="flex items-center justify-center h-full w-full rounded-lg bg-green-500/20 border border-green-500/50 cursor-default"
+                    style={{ width: size, height: size }}
+                    disabled
+                >
+                    <Check className="h-[50%] w-[50%] text-green-600 dark:text-green-400" />
+                </button>
+            )}
         </div>
     )
 }

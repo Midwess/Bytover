@@ -4,7 +4,7 @@ let heic2any: any
 
 export async function getThumbnailFromFile(
     file: File,
-    size: number = 300
+    size: number = 200
 ): Promise<Uint8Array> {
     const fileType = file.type;
 

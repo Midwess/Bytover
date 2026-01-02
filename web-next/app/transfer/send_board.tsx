@@ -274,7 +274,7 @@ function FileSelections() {
                         ) : null}
                     </div>
                 ) : (
-                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 md:gap-4 p-2 md:px-1">
+                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 p-2 md:px-1">
                         {selectedResources.map((resource) => (
                             <div className="md:h-[230px] flex items-start flex-row" key={resource.order_id}>
                                 <ResourceView model={resource} />
@@ -325,94 +325,85 @@ function FileView(props: {
         await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
     }
 
+    if (isMobile) {
+        return (
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
+                {/* Thumbnail */}
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
+                    <Image
+                        className="w-6 h-6 object-contain opacity-70"
+                        width={24}
+                        height={24}
+                        alt={model.name}
+                        src={thumbnailPath}
+                    />
+                </div>
+
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground">
+                        {model.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        {displaySize}
+                    </p>
+                </div>
+
+                {/* Actions */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 shrink-0">
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                            onClick={handleRemove}
+                            variant="destructive"
+                            className="text-destructive"
+                        >
+                            <X className="w-4 h-4" />
+                            <span>Remove</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        );
+    }
+
     return (
-        <div
-            className={clsx(
-                "w-full overflow-hidden rounded-2xl flex relative group",
-                "bg-muted/60 backdrop-blur-xl border border-white/10",
-                "transition-all duration-300 ease-out",
-                "hover:scale-[1.02] hover:shadow-2xl hover:shadow-muted/10 hover:border-white/30 hover:backdrop-blur-sm hover:bg-muted/80",
-                isMobile ? "flex-row items-center gap-3 p-1.5 h-auto" : "flex-col h-full"
-            )}>
-
-            {/* Desktop: Remove button overlay */}
-            {!isMobile && (
-                <div className="absolute z-20 inset-0 flex items-center justify-center rounded-2xl opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-none transition-all duration-300">
-                    <Button
-                        size="sm"
-                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
-                        onClick={handleRemove}>
-                        <X className="w-4 h-4" />
-                        <span className="ml-1 text-xs">Remove</span>
-                    </Button>
-                </div>
-            )}
-
-            {/* Mobile: Dropdown menu */}
-            {isMobile && (
-                <div className="absolute top-1/2 right-2 -translate-y-1/2 z-20">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onClick={handleRemove}
-                                variant="destructive"
-                                className="text-destructive"
-                            >
-                                <X className="w-4 h-4" />
-                                <span>Remove</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            )}
-
+        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
             {/* Thumbnail */}
-            <div className={clsx(
-                "flex items-center justify-center relative",
-                isMobile ? "w-14 h-14 shrink-0" : "flex-1 p-2.5"
-            )}>
-                <div className={clsx(
-                    "relative flex items-center justify-center rounded-2xl transition-all duration-300 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md",
-                    isMobile ? "w-12 h-12" : "w-24 h-24"
-                )}>
-                    <div className={clsx("relative", isMobile ? "w-10 h-10" : "w-20 h-20")}>
-                        <Image
-                            className="w-full h-full object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-110"
-                            layout="fill"
-                            alt={`${model.type}`}
-                            src={thumbnailPath}
-                        />
-                    </div>
-                </div>
+            <div className="flex-1 flex items-center justify-center p-6 bg-muted/30 relative">
+                <Image
+                    className="w-16 h-16 object-contain opacity-70"
+                    width={64}
+                    height={64}
+                    alt={model.name}
+                    src={thumbnailPath}
+                />
+
+                {/* Remove button - shows on hover */}
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={handleRemove}>
+                    <X className="h-3.5 w-3.5" />
+                </Button>
             </div>
 
             {/* File info */}
-            <div className={clsx(
-                "flex flex-col",
-                isMobile ? "flex-1 min-w-0" : "gap-2.5 px-2 pb-3 bg-gradient-to-t from-black/20 to-transparent pt-2.5"
-            )}>
-                <p className={clsx(
-                    "text-sm font-medium text-white/90 break-words leading-tight",
-                    isMobile ? "line-clamp-1 text-left" : "text-center"
-                )}>
+            <div className="p-3 border-t border-border">
+                <p className="text-sm font-medium truncate text-foreground mb-1">
                     {model.name}
                 </p>
-                <div className={clsx(
-                    "flex items-center",
-                    isMobile ? "mt-1" : "justify-center"
-                )}>
-                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80 whitespace-nowrap">
-                        {displaySize}
-                    </span>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                    {displaySize}
+                </p>
             </div>
         </div>
     );
@@ -426,12 +417,6 @@ function MediaView(props: {
     const isMobile = useIsMobile()
     const isVideo = model.type.constructor == ResourceTypeVariantVideo
     const isImage = model.type.constructor == ResourceTypeVariantImage
-    const defaultThumbnail = <Image
-        className="w-full h-auto text-primaryText p-10"
-        layout="fill"
-        alt={`${model.name}`}
-        src={'/file.svg'}
-    />
 
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
@@ -454,117 +439,97 @@ function MediaView(props: {
         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
     }
 
-    return (
-        <div
-            className={clsx(
-                "w-full overflow-hidden rounded-2xl relative group",
-                "border border-white/10",
-                "transition-all duration-300 ease-out",
-                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-white/30",
-                isMobile ? "flex flex-row items-center gap-3 p-1.5 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
-            )}>
-            {/* Desktop: Thumbnail - full background */}
-            {!isMobile && (
-                <>
-                    <div className="absolute inset-0 z-0">
-                        {thumbnailUrl ? (
-                            <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
-                        ) : (
-                            defaultThumbnail
-                        )}
-                    </div>
-                    {/* Video play icon */}
-                    {isVideo && (
-                        <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
-                                       transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                            <Play className="w-4 h-4 text-white fill-white" />
-                        </div>
-                    )}
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                    {/* Background overlay for hover effect */}
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-15 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl" />
-                </>
-            )}
-
-            {/* Mobile: Thumbnail - small square */}
-            {isMobile && (
-                <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+    if (isMobile) {
+        return (
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
+                {/* Thumbnail */}
+                <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
                     {thumbnailUrl ? (
                         <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-6 h-6 opacity-40" />
+                            <ImageUpIcon className="w-5 h-5 opacity-40" />
                         </div>
                     )}
                     {isVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                            <Play className="w-4 h-4 text-white fill-white" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play className="w-3 h-3 text-white fill-white" />
                         </div>
                     )}
                 </div>
-            )}
 
-            {/* Desktop: Remove button - centered */}
-            {!isMobile && (
-                <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                    <Button
-                        size="sm"
-                        className="rounded-full bg-black/80 shadow-lg border border-white/20 px-4 text-white"
-                        onClick={handleRemove}>
-                        <X className="w-4 h-4" />
-                        <span className="ml-1 text-xs">Remove</span>
-                    </Button>
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground">
+                        {model.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        {displaySize}
+                    </p>
                 </div>
-            )}
 
-            {/* Mobile: Dropdown menu */}
-            {isMobile && (
-                <div className="absolute top-1/2 right-2 -translate-y-1/2 z-30">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 rounded-full hover:bg-muted/50">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onClick={handleRemove}
-                                variant="destructive"
-                                className="text-destructive"
-                            >
-                                <X className="w-4 h-4" />
-                                <span>Remove</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            )}
+                {/* Actions */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 shrink-0">
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                            onClick={handleRemove}
+                            variant="destructive"
+                            className="text-destructive"
+                        >
+                            <X className="w-4 h-4" />
+                            <span>Remove</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
+            {/* Thumbnail */}
+            <div className="flex-1 relative bg-muted/30">
+                {thumbnailUrl ? (
+                    <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name} />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <ImageUpIcon className="w-12 h-12 opacity-20" />
+                    </div>
+                )}
+
+                {/* Video play icon */}
+                {isVideo && (
+                    <div className="absolute top-2 left-2 bg-black/60 rounded-full p-1.5">
+                        <Play className="w-3 h-3 text-white fill-white" />
+                    </div>
+                )}
+
+                {/* Remove button - shows on hover */}
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-destructive rounded-md text-white"
+                    onClick={handleRemove}>
+                    <X className="h-3.5 w-3.5" />
+                </Button>
+            </div>
 
             {/* File info */}
-            <div className={clsx(
-                "flex flex-col z-20",
-                isMobile
-                    ? "flex-1 min-w-0"
-                    : "absolute bottom-0 left-0 right-0 p-3 gap-2.5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm rounded-b-2xl"
-            )}>
-                <p className={clsx(
-                    "text-white text-sm font-medium leading-tight",
-                    isMobile ? "line-clamp-1 text-left" : "line-clamp-2"
-                )}>
+            <div className="p-3 border-t border-border">
+                <p className="text-sm font-medium truncate text-foreground mb-1">
                     {model.name}
                 </p>
-                <div className={clsx(
-                    "flex items-center",
-                    isMobile ? "mt-1" : "justify-center"
-                )}>
-                    <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80 whitespace-nowrap">
-                        {displaySize}
-                    </span>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                    {displaySize}
+                </p>
             </div>
         </div>
     );

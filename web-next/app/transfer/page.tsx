@@ -128,7 +128,7 @@ export default function TransferBoard() {
                 </p>
                 <DownloadPlatforms />
             </section>
-            <section className="w-full px-2 md:px-0 md:min-w-[800px] lg:w-[1200px] md:max-w-[80vw] py-10 flex items-center justify-center">
+            <section className="w-full px-2 md:px-0 md:min-w-[800px] lg:w-[1000px] md:max-w-[80vw] py-10 flex items-center justify-center">
                 <React.Suspense fallback={<div className="w-full h-64 flex items-center justify-center"><div className="text-lg text-muted-foreground animate-pulse">Loading transfer board...</div></div>}>
                     <TransferBoardInner />
                 </React.Suspense>

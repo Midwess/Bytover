@@ -340,7 +340,7 @@ function ContentBoard() {
                 <ReceiveCategory
                     title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
-                    <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 pb-8">
+                    <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
                         {
                             selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
@@ -739,51 +739,46 @@ function FileView(props: {
     }
 
     return (
-        <div
-            className="gap-4 flex flex-row w-full overflow-clip justify-between items-center h-fit rounded-2xl relative group 
-                       bg-muted/60
-                       backdrop-blur-xl border border-white/10 p-1.5
-                       transition-all duration-300 ease-out
-                       hover:shadow-xl hover:shadow-white/10 hover:border-white/30 hover:backdrop-blur-sm
-                       hover:bg-muted/80">
-            <div className={"flex flex-row gap-4 items-center flex-1 min-w-0"}>
-                {/* Icon Container */}
-                <div className="relative w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-300 flex-shrink-0 bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 shadow-md">
-                    <div className="relative w-10 h-10">
-                        <img
-                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110"
-                            alt="Thumbnail"
-                            src={thumbnailSource || fallbackThumbnail}
-                            onError={() => setThumbnailSource(fallbackThumbnail)}
-                        />
-                    </div>
-                </div>
+        <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
+            {/* Thumbnail */}
+            <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
+                <img
+                    className="w-6 h-6 object-contain opacity-70"
+                    alt={model.name}
+                    src={thumbnailSource || fallbackThumbnail}
+                    onError={() => setThumbnailSource(fallbackThumbnail)}
+                />
+            </div>
 
-                {/* File Info */}
-                <div className="flex flex-col text-white items-start gap-1.5 flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white/90 break-words w-full line-clamp-2">{model.name}</p>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
-                            {displaySize}
-                        </span>
-                        <span className="text-xs text-white/50">
-                            {isFolder ? "Folder" : "File"}
-                        </span>
-                    </div>
+            {/* File Info */}
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-foreground">
+                    {model.name}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xs text-muted-foreground">
+                        {displaySize}
+                    </p>
+                    <span className="text-xs text-muted-foreground/60">•</span>
+                    <p className="text-xs text-muted-foreground">
+                        {isFolder ? "Folder" : "File"}
+                    </p>
                 </div>
             </div>
 
             {/* Download Button / Progress */}
-            <DownloadButtonWithProgress
-                progress={file.completion}
-                isReady={file.is_ready}
-                isCompleted={file.is_completed}
-                isInProgress={!file.is_completed && file.completion > 0}
-                onDownloadClick={onDownloadClick}
-                onCancelClick={onCancelClick}
-                size={40}
-                strokeWidth={4}
-            />
+            <div className="shrink-0">
+                <DownloadButtonWithProgress
+                    progress={file.completion}
+                    isReady={file.is_ready}
+                    isCompleted={file.is_completed}
+                    isInProgress={!file.is_completed && file.completion > 0}
+                    onDownloadClick={onDownloadClick}
+                    onCancelClick={onCancelClick}
+                    size={40}
+                    strokeWidth={4}
+                />
+            </div>
         </div>
     );
 }
@@ -847,128 +842,43 @@ function MediaView(props: {
         displaySize = `${model.size_gb} GB`;
     }
 
-    return (
-        <div
-            className={clsx(
-                "w-full rounded-2xl relative group overflow-clip",
-                "border border-white/10 backdrop-blur-sm",
-                "transition-all duration-300 ease-out",
-                "hover:scale-[1.02] hover:shadow-lg hover:shadow-muted/20 hover:border-muted-foreground m-1",
-                isMobile ? "flex flex-row items-center gap-3 p-1.5 h-auto bg-muted/60 backdrop-blur-xl" : "h-full"
-            )}>
-            {/* Desktop: Thumbnail - full background */}
-            {!isMobile && (
-                <>
-                    <div className="absolute inset-0 z-0">
-                        {thumbnailSource ? (
-                            <img
-                                className="object-cover w-full h-full rounded-2xl"
-                                alt={model.name}
-                                src={thumbnailSource}
-                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            />
-                        ) : (
-                            <div className="w-full h-full bg-muted/40 flex items-center justify-center">
-                                <Image
-                                    className="w-16 h-16 opacity-50"
-                                    width={64}
-                                    height={64}
-                                    alt="placeholder"
-                                    src="/file.svg"
-                                />
-                            </div>
-                        )}
-                    </div>
-                    {/* Video play icon */}
-                    {isVideo && (
-                        <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md rounded-full p-2 border border-white/20 
-                                       transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                            <Play className="w-4 h-4 text-white fill-white" />
-                        </div>
-                    )}
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                </>
-            )}
-
-            {/* Mobile: Thumbnail - small square */}
-            {isMobile && (
-                <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden relative bg-muted/20">
+    if (isMobile) {
+        return (
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
+                {/* Thumbnail */}
+                <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
                     {thumbnailSource ? (
                         <img className="w-full h-full object-cover" src={thumbnailSource} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-6 h-6 opacity-40" />
+                            <ImageUpIcon className="w-5 h-5 opacity-40" />
                         </div>
                     )}
                     {isVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                            <Play className="w-4 h-4 text-white fill-white" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play className="w-3 h-3 text-white fill-white" />
                         </div>
                     )}
                 </div>
-            )}
 
-            {/* Desktop: Download Button / Progress - centered */}
-            {!isMobile && (
-                <div className="absolute bottom-0 left-0 right-0 p-3 z-20 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-sm">
-                    <div className="flex items-center justify-between gap-3">
-                        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                            <p className="text-white text-sm font-medium line-clamp-2 leading-tight">
-                                {model.name}
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
-                                    {displaySize}
-                                </span>
-                                <span className="text-xs text-white/60">
-                                    {isVideo ? "Video" : "Image"}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Download Button / Progress */}
-                        <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
-                            <DownloadButtonWithProgress
-                                progress={media.completion}
-                                isReady={media.is_ready}
-                                isCompleted={media.is_completed}
-                                isInProgress={media.completion > 0 && !media.is_completed}
-                                onDownloadClick={onDownloadClick}
-                                onCancelClick={onCancelClick}
-                                size={36}
-                                strokeWidth={3}
-                            />
-                            {media.completion > 0 && !media.is_completed && (
-                                <span className="text-[9px] text-white/60 font-medium">
-                                    {(media.completion * 100).toFixed(0)}%
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Mobile: File info */}
-            {isMobile && (
-                <div className="flex flex-col flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium leading-tight line-clamp-1 text-left">
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground">
                         {model.name}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-white/5 border-white/20 text-white/80">
+                    <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-muted-foreground">
                             {displaySize}
-                        </span>
-                        <span className="text-xs text-white/60">
+                        </p>
+                        <span className="text-xs text-muted-foreground/60">•</span>
+                        <p className="text-xs text-muted-foreground">
                             {isVideo ? "Video" : "Image"}
-                        </span>
+                        </p>
                     </div>
                 </div>
-            )}
 
-            {/* Mobile: Actions */}
-            {isMobile && (
-                <div className="flex-shrink-0">
+                {/* Actions */}
+                <div className="shrink-0">
                     <DownloadButtonWithProgress
                         progress={media.completion}
                         isReady={media.is_ready}
@@ -980,7 +890,65 @@ function MediaView(props: {
                         strokeWidth={3}
                     />
                 </div>
-            )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
+            {/* Thumbnail */}
+            <div className="relative bg-muted/30 h-[calc(100%-76px)]">
+                {thumbnailSource ? (
+                    <img
+                        className="w-full h-full object-cover"
+                        alt={model.name}
+                        src={thumbnailSource}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <ImageUpIcon className="w-12 h-12 opacity-20" />
+                    </div>
+                )}
+
+                {/* Video play icon */}
+                {isVideo && (
+                    <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5">
+                        <Play className="w-3 h-3 text-white fill-white" />
+                    </div>
+                )}
+            </div>
+
+            {/* File info */}
+            <div className="p-3 border-t border-border flex items-center gap-3 h-[76px] flex-shrink-0">
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground mb-1">
+                        {model.name}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                            {displaySize}
+                        </p>
+                        <span className="text-xs text-muted-foreground/60">•</span>
+                        <p className="text-xs text-muted-foreground">
+                            {isVideo ? "Video" : "Image"}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Download Button / Progress */}
+                <div className="shrink-0">
+                    <DownloadButtonWithProgress
+                        progress={media.completion}
+                        isReady={media.is_ready}
+                        isCompleted={media.is_completed}
+                        isInProgress={media.completion > 0 && !media.is_completed}
+                        onDownloadClick={onDownloadClick}
+                        onCancelClick={onCancelClick}
+                        size={36}
+                        strokeWidth={3}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
