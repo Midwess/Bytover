@@ -40,7 +40,6 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import { useEffect, useRef, useState } from "react";
 import core from "@/wasm/wasm_core";
 import { useIsMobile } from "@/hooks/use-mobile";
-import clsx from "clsx";
 import Image from "next/image";
 import { Progress, ProgressTrack } from "@/components/animate-ui/base/progress";
 import {
@@ -57,7 +56,6 @@ import {
     useSidebar,
 } from '@/components/animate-ui/components/radix/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 
 enum TransferType {
     Public,

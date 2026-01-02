@@ -32,7 +32,6 @@ export default function DownloadButtonWithProgress({
     onDownloadClick = () => {},
     onCancelClick = () => {},
     size = 40,
-    strokeWidth = 4,
     className = ''
 }: DownloadButtonWithProgressProps) {
     // Determine button state

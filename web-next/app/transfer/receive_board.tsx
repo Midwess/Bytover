@@ -16,7 +16,6 @@ import {
     VideoReceiveResourceViewModel
 } from 'shared_types/types/shared_types'
 import {
-    ArrowDown,
     Book,
     ChevronsUpDown,
     Download,
@@ -31,7 +30,6 @@ import {
 import { ReactElement, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
-import clsx from "clsx";
 import { Input } from "@/components/ui/input";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
