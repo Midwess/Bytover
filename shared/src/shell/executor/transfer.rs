@@ -76,7 +76,7 @@ where
                             scope: crate::entities::finding_scope::FindingScope::new(&p2p_session.signalling_room_id),
                             connection_state: crate::entities::target::P2PConnectionState::NotConnected
                         },
-                        access_url: String::new(),
+                        access_url: p2p_session.access_url.clone(),
                         alias: alias.clone(),
                         from_user: user,
                         description: p2p_session.description.clone(),

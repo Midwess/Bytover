@@ -20,7 +20,6 @@ import {
     DeviceOperationVariantLoadThumbnailPng,
     CoreOperationVariantPersistent,
     DeviceOperationVariantGetGeoLocation,
-    GeoLocation,
     CoreOperationVariantRpc,
     CoreOperationVariantRender,
     CoreOperationVariantTransfer,
@@ -49,7 +48,6 @@ import {
     CoreOperationOutputVariantNone,
     CoreOperationOutputVariantDeviceInfo,
     CoreOperationOutputVariantLocalResourcePath,
-    CoreOperationOutputVariantGeoLocation,
     CoreOperationOutputVariantBool,
     MessageReason,
     FileReceiveResourceViewModel,
@@ -79,13 +77,9 @@ import { noop } from 'lodash';
 export class WasmCore {
     // If it is not compatible, then the current browser is not supported.
     // We should recommend user to download the app instead.
-    cachedGeoLocation: GeoLocation | undefined = undefined;
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
-    isCoreLoaded: Observable<boolean> = new Observable(false)
     isNearbyEnabled: Observable<boolean> = new Observable(false)
-    isLocationEnabled: Observable<boolean> = new Observable(true)
-    isLocationLoading: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
     nearbyState: Observable<NearbyViewModel> = new Observable()
@@ -292,24 +286,6 @@ export class WasmCore {
         return isCompatible
     }
 
-    public useLocationEnabled() {
-        const [isEnabled, setIsEnabled] = useState(this.isLocationEnabled.get());
-        useEffect(() => {
-            return this.isLocationEnabled.subscribe(setIsEnabled)
-        }, []);
-
-        return isEnabled
-    }
-
-    public useLocationLoading() {
-        const [isLoading, setIsLoading] = useState(this.isLocationLoading.get());
-        useEffect(() => {
-            return this.isLocationLoading.subscribe(setIsLoading)
-        }, []);
-
-        return isLoading
-    }
-
     public async launch() {
         const isTransferPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/transfer')
         this.isNearbyEnabled.set(isTransferPage)
@@ -329,59 +305,7 @@ export class WasmCore {
         }
 
         this.isNearbyEnabled.set(true)
-        console.log('Launching nearby')
         await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
-    }
-
-    public async enableLocation() {
-        if (this.isLocationLoading.get()) {
-            console.log("Location request already in progress");
-            return;
-        }
-
-        if (!navigator.geolocation) {
-            console.log("Geolocation is not supported");
-            this.isLocationEnabled.set(false);
-            return;
-        }
-
-        // Reset state before requesting
-        this.cachedGeoLocation = undefined;
-        this.isLocationLoading.set(true);
-
-        try {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                    resolve,
-                    reject,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 8888, // Not always available, let's choose a lucky number
-                        maximumAge: 0  // Always request fresh location
-                    }
-                );
-            });
-
-            this.cachedGeoLocation = new GeoLocation(
-                position.coords.latitude,
-                position.coords.longitude
-            );
-            this.isLocationEnabled.set(true);
-            this.isLocationLoading.set(false);
-            console.log("Location retrieved:", position.coords);
-        } catch (error) {
-            console.log("Failed to get geolocation", error);
-            this.cachedGeoLocation = undefined;
-            this.isLocationEnabled.set(false);
-            this.isLocationLoading.set(false);
-        }
-    }
-
-    public disableLocation() {
-        this.cachedGeoLocation = undefined;
-        this.isLocationEnabled.set(false);
-        this.isLocationLoading.set(false);
-        console.log("Location tracking disabled");
     }
 
     public async update(event: AppEvent) {
@@ -454,10 +378,6 @@ export class WasmCore {
                         }
                     }
                     case DeviceOperationVariantGetGeoLocation: {
-                        if (this.cachedGeoLocation) {
-                            return handle_response(request_id, serialize(new CoreOperationOutputVariantGeoLocation(this.cachedGeoLocation)))
-                        }
-
                         return handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
                     }
                 }

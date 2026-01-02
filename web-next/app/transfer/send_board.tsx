@@ -760,9 +760,15 @@ function UrlInputWithCopy({ url }: { url: string }) {
 }
 
 function P2PSend() {
-    const [password, setPassword] = useState('')
     const p2pSession = core.useP2PSession()
+    const [password, setPassword] = useState(p2pSession?.password || '')
     const isInProgress = p2pSession?.is_in_progress ?? false
+
+    useEffect(() => {
+        if (p2pSession?.password) {
+            setPassword(p2pSession?.password || password)
+        }
+    }, [p2pSession?.password, password])
 
     const handleStartTransfer = () => {
         const pwd = password || null
@@ -798,6 +804,13 @@ function P2PSend() {
                     placeholder="pwd@123"
                     disabled={isInProgress}
                 />
+                {
+                    p2pSession?.access_url &&
+                    <>
+                        <Label>Generated url</Label>
+                        <UrlInputWithCopy url={p2pSession?.access_url ?? ''} />
+                    </>
+                }
                 {isInProgress ? (
                     <Button
                         className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary"
@@ -820,13 +833,6 @@ function P2PSend() {
 
 function MyPeerInfo() {
     const myPeer = core.useMyPeer()
-    const isLocationEnabled = core.useLocationEnabled()
-    const isLocationLoading = core.useLocationLoading()
-
-    // Request location on mount
-    useEffect(() => {
-        core.enableLocation()
-    }, [])
 
     if (!myPeer) {
         return (
@@ -842,15 +848,6 @@ function MyPeerInfo() {
     }
 
     const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
-
-    const handleLocationToggle = async (checked: boolean) => {
-        if (checked) {
-            // Reset and request fresh permission
-            await core.enableLocation()
-        } else {
-            core.disableLocation()
-        }
-    }
 
     return (
         <div className="flex flex-col w-full gap-3">
@@ -872,24 +869,7 @@ function MyPeerInfo() {
                 </div>
             </div>
 
-            {/* Location Toggle */}
             <div className="flex items-center justify-between py-2 border-t border-white/10">
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium text-primaryText">Allow Location</span>
-                    <span className="text-xs text-muted-foreground">
-                        {isLocationLoading ? "Getting location..." : "Helps find nearby devices"}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    {isLocationLoading && (
-                        <div className="h-3 w-3 animate-spin rounded-full border-1 border-white/20 border-t-white"></div>
-                    )}
-                    <Switch
-                        checked={isLocationEnabled}
-                        onCheckedChange={handleLocationToggle}
-                        disabled={isLocationLoading}
-                    />
-                </div>
             </div>
         </div>
     )

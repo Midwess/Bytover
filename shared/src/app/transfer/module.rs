@@ -260,7 +260,7 @@ impl AppModule<BitBridge> for TransferModule {
                         p2p_session.signalling_room_id.clone(),
                         p2p_session.signalling_scope.clone(),
                         p2p_session.alias.clone(),
-                        String::new(),
+                        p2p_session.access_url.clone(),
                         p2p_session.session_id
                     );
 
@@ -833,6 +833,11 @@ impl AppModule<BitBridge> for TransferModule {
                 .filter(|it| matches!(it.transfer_type, TransferType::Send))
                 .filter(|it| it.target.is_peer())
                 .filter_map(|it| {
+                    let access_url = if !it.access_url.is_empty() {
+                        Some(it.access_url.clone())
+                    } else {
+                        None
+                    };
                     let status = it.status();
                     Some(CloudSession {
                         display_download_speed: status.to_string(),
@@ -841,7 +846,7 @@ impl AppModule<BitBridge> for TransferModule {
                         is_completed: it.is_completed(),
                         is_in_progress: !it.is_completed(),
                         progress: it.total_progress(),
-                        access_url: None
+                        access_url
                     })
                 })
                 .collect()

@@ -52,7 +52,7 @@ impl P2PSession {
     }
 
     pub fn access_url(&self, base_url: String) -> String {
-        format!("{base_url}/p2p?session={}", self.alias)
+        format!("{base_url}/transfer?session={}", self.alias)
     }
 
     pub fn get_scope(&self) -> String {
