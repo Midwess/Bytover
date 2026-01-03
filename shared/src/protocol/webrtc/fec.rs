@@ -906,7 +906,7 @@ impl FecReceiver {
         self.rtt_estimator.update(rtt_ms * 1000);
     }
 
-    fn calculate_next_check_time(&self) -> Instant {
+    pub fn calculate_next_check_time(&self) -> Instant {
         let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, None).min(100_000);
 
         Instant::now() + Duration::from_micros(timeout_us)

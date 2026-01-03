@@ -45,12 +45,16 @@ use schema::devlog::bitbridge::{
     VoidResponseMessage
 };
 use std::collections::HashMap;
+use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-const ON_HOLD_STOP_THRESHOLD: u8 = 4;
-const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
+// This configuration is what I found the best
+// Increasing these number could cause randomly hang
+// Maybe the NAT got overloaded
+// We need to figure out why.
+const ON_HOLD_STOP_THRESHOLD: u8 = 3;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -382,7 +386,7 @@ impl WebRtcPeer {
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
                     log::debug!("Stopped {}", fec_sender.block_id);
-                    let timeout_fut = sleep(Duration::from_secs(60 * 1)).fuse();
+                    let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(timeout_fut);
@@ -396,20 +400,9 @@ impl WebRtcPeer {
                             fb.map(|f| (None, Some(f))).unwrap_or((None, None))
                         },
                     }
-                } else {
-                    let reader_fut = async {
-                        let data = packet_rx.next().await;
-
-                        if hold_counter > ON_HOLD_SLOW_THRESHOLD {
-                            sleep(Duration::from_millis(
-                                fec_sender.rtt().max(10) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64
-                            ))
-                            .await;
-                        }
-
-                        data
-                    }
-                    .fuse();
+                }
+                else {
+                    let reader_fut = packet_rx.next().fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(fb_fut);
@@ -434,13 +427,19 @@ impl WebRtcPeer {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
                     if let Feedback::Network(stats) = fb {
                         if let Some(peer_block_id) = stats.current_block_id {
-                            let diff = peer_block_id.abs_diff(fec_sender.block_id);
-                            if diff <= 1 {
-                                hold_counter = 0;
-                            }
-                            else if block_holding_id <= peer_block_id {
-                                log::info!("Sub ack");
-                                hold_counter = hold_counter.saturating_sub(1);
+                            if block_holding_id <= peer_block_id {
+                                let diff = peer_block_id.abs_diff(fec_sender.block_id);
+                                log::debug!("Received network report {diff}");
+                                if diff == 0 {
+                                    hold_counter = 0;
+                                } else {
+                                    hold_counter = hold_counter.saturating_sub(1);
+                                }
+
+                                if diff > ON_HOLD_STOP_THRESHOLD as u32 {
+                                    hold_counter = ON_HOLD_STOP_THRESHOLD;
+                                    buff_counter = MAX_BUFFER_SIZE;
+                                }
                             }
                         }
 
@@ -469,7 +468,7 @@ impl WebRtcPeer {
                 }
                 FecAction::Retransmit(frames) => {
                     let frame_idx = frames.iter().map(|it| it.frame_idx).collect::<Vec<_>>();
-                    log::debug!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
+                    log::info!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
@@ -491,7 +490,7 @@ impl WebRtcPeer {
             if buff_counter >= MAX_BUFFER_SIZE {
                 let tick = Instant::now();
                 let stats_before = self.quad_unreliable_channel.bytes_sent().await;
-                let timeout = Duration::from_millis(5 * fec_sender.rtt().max(100));
+                let timeout = Duration::from_millis(20 * fec_sender.rtt().max(100));
 
                 self.quad_unreliable_channel.wait_buffer_low(MIN_BUFFER_SIZE, timeout).await;
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
@@ -898,22 +897,19 @@ impl WebRtcPeer {
             let frames = {
                 let mut frames = Vec::new();
 
-                let timeout_duration = next_check_time.take().map(|check_time| {
-                    let now = Instant::now();
-                    if check_time > now {
-                        check_time.duration_since(now)
-                    } else {
-                        Duration::from_millis(0)
-                    }
-                });
+                let check_time = next_check_time.take().unwrap_or(fec_receiver.calculate_next_check_time());
+                let now = Instant::now();
+                let timeout_duration = if check_time > now {
+                    check_time.duration_since(now)
+                } else {
+                    Duration::from_millis(50)
+                };
 
-                let packet_result = if let Some(timeout) = timeout_duration {
+                let packet_result = {
                     select! {
                         packet = data_rx.next().fuse() => packet,
-                        _ = sleep(timeout).fuse() => None,
+                        _ = sleep(timeout_duration).fuse() => None,
                     }
-                } else {
-                    data_rx.next().await
                 };
 
                 if let Some(packet) = packet_result {
