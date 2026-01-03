@@ -1007,6 +1007,7 @@ impl FecReceiver {
         // Emit completed blocks
         if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
             if let Some(block) = self.blocks.remove(self.next_block_id) {
+                log::info!("Block {} constructed", self.next_block_id);
                 let mut completed_blocks = vec![block];
 
                 loop {
@@ -1019,16 +1020,24 @@ impl FecReceiver {
                             ReceiverBlock::placeholder()
                         };
 
-                        // CHECK FOR EVICTION when inserting placeholder
                         if let Some(evicted) = self.blocks.insert(self.next_block_id, placeholder) {
                             let (evicted_id, evicted_block) = evicted;
-                            log::error!(
-                                "CRITICAL: Placeholder insertion evicted block {} (next_block_id={}, evicted_block_id={}, was_complete={}, received={}/{})",
-                                evicted_id, self.next_block_id, evicted_id, evicted_block.is_constructed(), evicted_block.received, evicted_block.data_shards
+
+                            if evicted_block.is_constructed() {
+                                log::error!(
+                                    "CRITICAL: Placeholder evicted COMPLETED block {} (next_block_id={}, received={}/{})",
+                                    evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
+                                );
+
+                                return Ok(FecAction::Terminated);
+                            }
+
+                            log::warn!(
+                                "Placeholder evicted IN-PROGRESS block {} (next_block_id={}, received={}/{})",
+                                evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
                             );
-                            // Don't return Terminated here - we're inserting a placeholder for the NEXT expected block
-                            // But this indicates the window is too small or blocks are too out of order
                         }
+
                         break;
                     }
 
@@ -1036,14 +1045,15 @@ impl FecReceiver {
 
                     if is_completed {
                         let block = self.blocks.remove(self.next_block_id).unwrap();
+                        log::info!("Block id {} constructed", self.next_block_id);
                         completed_blocks.push(block);
-                    } else {
+                    }
+                    else {
                         break;
                     }
                 }
 
                 let bytes = completed_blocks.into_iter().map(|b| b.into_packet()).collect();
-
                 let next_check = self.calculate_next_check_time();
                 return Ok(FecAction::Constructed(bytes, next_check));
             }

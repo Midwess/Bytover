@@ -71,10 +71,10 @@ pub struct WebRtcPeer {
     pub inbound_data_stream_receiver: YieldContainer<mpsc::UnboundedReceiver<Packet>>,
     pub inbound_data_stream_sender: mpsc::UnboundedSender<Packet>,
 
-    pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet)>>,
-    pub outbound_packet_sender: mpsc::Sender<(u16, Packet)>,
+    pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet, bool)>>,
+    pub outbound_packet_sender: mpsc::Sender<(u16, Packet, bool)>,
 
-    pub prefix_channels: Arc<Mutex<HashMap<u16, mpsc::UnboundedSender<Packet>>>>,
+    pub prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Packet>>>,
 
     pub bandwidth: Arc<AtomicU64>,
 
@@ -131,7 +131,7 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
-            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            prefix_channels: Mutex::new(HashMap::new()),
             bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default()
@@ -188,7 +188,7 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
-            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            prefix_channels: Mutex::new(HashMap::new()),
             bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default()
@@ -423,8 +423,10 @@ impl WebRtcPeer {
                 }
             };
 
-            let action = match (packet, feedback) {
-                (Some((prefix, packet)), _) => fec_sender.send(prefix, packet)?,
+            let (reliable, action) = match (packet, feedback) {
+                (Some((prefix, packet, reliable)), _) => {
+                    (reliable, fec_sender.send(prefix, packet)?)
+                },
                 (_, Some(fb)) => {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
                     if let Feedback::Network(stats) = fb {
@@ -444,7 +446,7 @@ impl WebRtcPeer {
                         }
                     }
 
-                    fec_sender.feedback(fb)
+                    (true, fec_sender.feedback(fb))
                 }
                 _ => break
             };
@@ -454,7 +456,12 @@ impl WebRtcPeer {
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
-                        let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), packet);
+                        if reliable {
+                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
+                        }
+                        else {
+                            let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), packet);
+                        }
                     }
                 }
                 FecAction::Retransmit(frames) => {
@@ -485,7 +492,7 @@ impl WebRtcPeer {
                 hold_counter += 1;
                 hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
                 let hold_delimiter = TransferDelimiterShema::hold(hold_counter).as_bytes()?;
-                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter)? else {
+                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice())? else {
                     return Err(anyhow!("Failed to build hold delimiter").into());
                 };
 
@@ -668,7 +675,7 @@ impl WebRtcPeer {
             transfer_id: transfer_id as u32
         };
 
-        let (tx, mut rx) = unbounded::<Packet>();
+        let (tx, mut rx) = mpsc::channel::<Packet>(64);
         let prefix = transfer_id;
         self.prefix_channels.lock().await.insert(prefix, tx);
 
@@ -684,18 +691,19 @@ impl WebRtcPeer {
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
 
-        let start_delimiter = loop {
-            match rx.next().with_cancel(&resource_token).await? {
+        let start_delimiter = match rx.next().with_cancel(&resource_token).await? {
                 Some(packet) => {
                     if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
-                        break delimiter;
+                        delimiter
+                    }
+                    else {
+                        return Err(WebRtcErrors::InvalidDelimiter("First delimiter must be start delimiter".to_string()))
                     }
                 }
                 None => {
                     log::warn!("Channel closed before receiving start delimiter");
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
                 }
-            }
         };
 
         let Some(resource_id) = start_delimiter.resource_id() else {
@@ -713,9 +721,12 @@ impl WebRtcPeer {
             }
         };
 
+        let mut total_packet = 0;
         loop {
-            match rx.next().with_cancel(&resource_token).await? {
-                Some(packet) => {
+            let cancellation = CancellationToken::timeout(Duration::from_secs(10));
+            match rx.next().with_cancel(&cancellation).await {
+                Ok(Some(packet)) => {
+                    total_packet += 1;
                     if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
                         log::info!("Received end delimiter for resource {}", resource_id);
                         progress.success();
@@ -723,10 +734,6 @@ impl WebRtcPeer {
                             .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                             .await;
                         break;
-                    }
-
-                    if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
-                        continue;
                     }
 
                     let bytes = Bytes::from(packet.to_vec());
@@ -737,13 +744,17 @@ impl WebRtcPeer {
                         .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                         .await;
                 }
-                None => {
+                Ok(None) => {
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before end delimiter".into()));
+                }
+                Err(e) => {
+                    log::info!("Stuck at packet = {}", total_packet);
+                    return Err(e.into())
                 }
             }
         }
 
-        self.prefix_channels.lock().await.remove(&prefix);
+        // self.prefix_channels.lock().await.remove(&prefix);
 
         log::info!("Completed download for resource {}", resource_id);
 
@@ -805,7 +816,7 @@ impl WebRtcPeer {
         let start_delimiter = TransferDelimiterShema::start(session_id, resource_id, compressed);
         let start_packet = start_delimiter.as_bytes()?;
         let mut outbound_packet_sender = self.outbound_packet_sender.clone();
-        match outbound_packet_sender.send((prefix, start_packet)).with_cancel(&resource_token).await {
+        match outbound_packet_sender.send((prefix, start_packet, true)).with_cancel(&resource_token).await {
             Ok(Ok(_)) => {}
             Ok(Err(e)) => {
                 return Err(WebRtcErrors::InvalidDelimiter(format!(
@@ -838,7 +849,7 @@ impl WebRtcPeer {
                     }
 
                     let packet = data.to_vec().into_boxed_slice();
-                    match outbound_packet_sender.send((prefix, packet)).with_cancel(&resource_token).await {
+                    match outbound_packet_sender.send((prefix, packet, false)).with_cancel(&resource_token).await {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => return Err(anyhow!("Failed to send data packet: {:?}", e).into()),
                         Err(_) => {
@@ -855,7 +866,7 @@ impl WebRtcPeer {
 
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
-        outbound_packet_sender.send((prefix, end_packet)).with_cancel(&resource_token).await?
+        outbound_packet_sender.send((prefix, end_packet, true)).with_cancel(&resource_token).await?
             .map_err(|it| anyhow!("Failed to send end delimiter: {:?}", it))?;
 
         log::info!("Completed streaming resource {} for session {}", resource_id, session_id);
@@ -942,8 +953,8 @@ impl WebRtcPeer {
                             continue;
                         }
 
-                        if let Some(sender) = self.prefix_channels.lock().await.get(&prefix) {
-                            if let Err(e) = sender.unbounded_send(packet) {
+                        if let Some(mut sender) = self.prefix_channels.lock().await.get_mut(&prefix) {
+                            if let Err(e) = sender.send(packet).await {
                                 log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
                             }
                         } else {
