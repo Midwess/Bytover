@@ -570,14 +570,12 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress)) => {
-                    resource_progress_map.insert(progress.resource_order_id, progress.total_bytes());
+                    let mut current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
+                    *current = (*current).max(progress.total_bytes());
 
                     let total_downloaded: u64 = resource_progress_map.values().sum();
-
                     let bytes_delta = total_downloaded.saturating_sub(aggregate_progress.total_bytes());
-
                     aggregate_progress.update_progress(bytes_delta);
-
                     self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
 
                     if aggregate_progress.is_completed() {

@@ -39,7 +39,8 @@ pub static TRANSFER_RESOURCE2_UNRELIABLE_CHANNEL_ID: usize = 4;
 pub static TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID: usize = 5;
 pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
 
-pub static MAX_BUFFER_SIZE: usize = 2 * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
+pub static MAX_NUM_BLOCK: usize = 1;
+pub static MAX_BUFFER_SIZE: usize = MAX_NUM_BLOCK * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
 pub struct WebRtc {

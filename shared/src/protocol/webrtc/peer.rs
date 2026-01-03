@@ -7,11 +7,11 @@ use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::TransferProgress;
 use crate::errors::CoreError;
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
+use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT, MIN_PARITY_SHARDS};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
+use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MAX_NUM_BLOCK, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
 use crate::shell::api::CoreRequest;
@@ -45,13 +45,16 @@ use schema::devlog::bitbridge::{
     VoidResponseMessage
 };
 use std::collections::HashMap;
+use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
-const ON_HOLD_STOP_THRESHOLD: u8 = 6;
-const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
+// This configuration is what I found the best
+// Increasing these number could cause randomly hang
+// Maybe the NAT got overloaded
+// We need to figure out why.
+const ON_HOLD_STOP_THRESHOLD: u8 = 3;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -60,7 +63,7 @@ pub struct WebRtcPeer {
 
     pub msg_channel: DirectMessageChannel,
     pub unordered_msg_channel: DirectMessageChannel,
-    pub quad_unreliable_channel: Arc<Mutex<QuadUnreliableChannel>>,
+    pub quad_unreliable_channel: Arc<QuadUnreliableChannel>,
     pub reliable_data_channel: mpsc::UnboundedSender<(PeerId, Packet)>,
     pub buffer: PeerBuffered,
 
@@ -72,10 +75,10 @@ pub struct WebRtcPeer {
     pub inbound_data_stream_receiver: YieldContainer<mpsc::UnboundedReceiver<Packet>>,
     pub inbound_data_stream_sender: mpsc::UnboundedSender<Packet>,
 
-    pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet)>>,
-    pub outbound_packet_sender: mpsc::Sender<(u16, Packet)>,
+    pub outbound_packet_receiver: YieldContainer<mpsc::Receiver<(u16, Packet, bool)>>,
+    pub outbound_packet_sender: mpsc::Sender<(u16, Packet, bool)>,
 
-    pub prefix_channels: Arc<Mutex<HashMap<u16, mpsc::UnboundedSender<Packet>>>>,
+    pub prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Packet>>>,
 
     pub bandwidth: Arc<AtomicU64>,
 
@@ -124,7 +127,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             transfer_feedback_sender,
             reliable_data_channel,
-            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
+            quad_unreliable_channel: Arc::new(quad_unreliable_channel),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             transfer_session_repo,
@@ -132,7 +135,7 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
-            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            prefix_channels: Mutex::new(HashMap::new()),
             bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default()
@@ -181,7 +184,7 @@ impl WebRtcPeer {
             transfer_feedback_receiver: YieldContainer::new(transfer_feedback_receiver),
             peer,
             reliable_data_channel,
-            quad_unreliable_channel: Arc::new(Mutex::new(quad_unreliable_channel)),
+            quad_unreliable_channel: Arc::new(quad_unreliable_channel),
             transfers_context: TransfersContext::new(),
             resource_repo: repository,
             transfer_session_repo,
@@ -189,7 +192,7 @@ impl WebRtcPeer {
             inbound_data_stream_receiver: YieldContainer::new(data_rx),
             outbound_packet_receiver: YieldContainer::new(outbound_packet_rx),
             outbound_packet_sender: outbound_packet_tx,
-            prefix_channels: Arc::new(Mutex::new(HashMap::new())),
+            prefix_channels: Mutex::new(HashMap::new()),
             bandwidth: Arc::new(AtomicU64::new(0)),
             buffer,
             core_request: Default::default()
@@ -373,6 +376,7 @@ impl WebRtcPeer {
         let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
         let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
         let mut hold_counter: u8 = 0;
+        let mut block_holding_id = fec_sender.block_id;
 
         loop {
             if let Some(rtt) = self.buffer.rtt().await {
@@ -381,6 +385,7 @@ impl WebRtcPeer {
 
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
+                    log::debug!("Stopped {}", fec_sender.block_id);
                     let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
@@ -395,19 +400,9 @@ impl WebRtcPeer {
                             fb.map(|f| (None, Some(f))).unwrap_or((None, None))
                         },
                     }
-                } else {
-                    let reader_fut = async {
-                        let data = packet_rx.next().await;
-                        if hold_counter > ON_HOLD_SLOW_THRESHOLD {
-                            sleep(Duration::from_millis(
-                                fec_sender.rtt().max(10) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64
-                            ))
-                            .await;
-                        }
-
-                        data
-                    }
-                    .fuse();
+                }
+                else {
+                    let reader_fut = packet_rx.next().fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(fb_fut);
@@ -424,42 +419,56 @@ impl WebRtcPeer {
                 }
             };
 
-            let action = match (packet, feedback) {
-                (Some((prefix, packet)), _) => fec_sender.send(prefix, packet)?,
+            let (reliable, action) = match (packet, feedback) {
+                (Some((prefix, packet, reliable)), _) => {
+                    (reliable, fec_sender.send(prefix, packet)?)
+                },
                 (_, Some(fb)) => {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
                     if let Feedback::Network(stats) = fb {
                         if let Some(peer_block_id) = stats.current_block_id {
-                            if peer_block_id.abs_diff(fec_sender.block_id) < 2 {
-                                hold_counter = 0;
-                            }
-                            else {
-                                let peer_counter = stats.hold_counter.unwrap_or(0) as u8;
-                                if peer_counter < hold_counter {
+                            if block_holding_id <= peer_block_id {
+                                let diff = peer_block_id.abs_diff(fec_sender.block_id);
+                                log::debug!("Received network report {diff}");
+                                if diff == 0 {
+                                    hold_counter = 0;
+                                } else {
                                     hold_counter = hold_counter.saturating_sub(1);
                                 }
-                                else {
-                                    hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD - peer_counter);
+
+                                if diff > ON_HOLD_STOP_THRESHOLD as u32 {
+                                    hold_counter = ON_HOLD_STOP_THRESHOLD;
+                                    buff_counter = MAX_BUFFER_SIZE;
                                 }
                             }
                         }
+
+                        if hold_counter == 0 {
+                            block_holding_id = fec_sender.block_id;
+                        }
                     }
 
-                    fec_sender.feedback(fb)
+                    (true, fec_sender.feedback(fb))
                 }
                 _ => break
             };
 
             match action {
                 FecAction::Framed(frames) => {
-                    let mut quad_channel = self.quad_unreliable_channel.lock().await;
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
-                        let _ = quad_channel.send(self.peer.peer_id(), packet);
+                        if reliable {
+                            let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
+                        }
+                        else {
+                            let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), packet);
+                        }
                     }
                 }
                 FecAction::Retransmit(frames) => {
+                    let frame_idx = frames.iter().map(|it| it.frame_idx).collect::<Vec<_>>();
+                    log::info!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
@@ -472,32 +481,39 @@ impl WebRtcPeer {
                     log::info!("FEC sender terminated in sending_loop");
                     break;
                 }
+                FecAction::Noop => {
+                    continue;
+                }
                 _ => {}
             }
 
-            if buff_counter > MAX_BUFFER_SIZE {
+            if buff_counter >= MAX_BUFFER_SIZE {
                 let tick = Instant::now();
-                let mut quad_ch = self.quad_unreliable_channel.lock().await;
-                let stats_before = quad_ch.bytes_sent().await;
-                let timeout = Duration::from_millis(5 * fec_sender.rtt().max(100));
+                let stats_before = self.quad_unreliable_channel.bytes_sent().await;
+                let timeout = Duration::from_millis(20 * fec_sender.rtt().max(100));
 
-                quad_ch.wait_buffer_low(MIN_BUFFER_SIZE, timeout).await;
+                self.quad_unreliable_channel.wait_buffer_low(MIN_BUFFER_SIZE, timeout).await;
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
                 buff_counter = MIN_BUFFER_SIZE;
 
                 hold_counter += 1;
                 hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
                 let hold_delimiter = TransferDelimiterShema::hold(hold_counter).as_bytes()?;
-                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter)? else {
+                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice())? else {
                     return Err(anyhow!("Failed to build hold delimiter").into());
                 };
 
                 for frame in frames {
-                    let _ = quad_ch.send(self.peer.peer_id(), frame.serialize());
+                    if hold_counter >= ON_HOLD_STOP_THRESHOLD {
+                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                    }
+                    else {
+                        let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), frame.serialize());
+                    }
                 }
 
                 let time = tick.elapsed().as_secs_f64().max(f64::MIN);
-                let stats_after = quad_ch.bytes_sent().await;
+                let stats_after = self.quad_unreliable_channel.bytes_sent().await;
                 let total_sent = stats_after.saturating_sub(stats_before);
                 let bw = (total_sent as f64 / time) as u64;
                 let bw_kbps = bw / 1000;
@@ -659,9 +675,11 @@ impl WebRtcPeer {
         resource: LocalResource,
         mut progress: TransferProgress
     ) -> Result<(), WebRtcErrors> {
+        static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
+
         let resource_order_id = resource.order_id;
 
-        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         let request = DownloadResourceRequest {
             session_order_id,
@@ -669,17 +687,13 @@ impl WebRtcPeer {
             transfer_id: transfer_id as u32
         };
 
-        let (tx, mut rx) = mpsc::unbounded::<Packet>();
-
+        let (tx, mut rx) = mpsc::channel::<Packet>(64);
         let prefix = transfer_id;
-        {
-            let mut channels = self.prefix_channels.lock().await;
-            channels.insert(prefix, tx);
-        }
+        self.prefix_channels.lock().await.insert(prefix, tx);
 
         let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
 
-        log::info!("Requesting download for resource {:?}", request);
+        log::info!("Requesting download for resource {:?}, registered prefix channel: {}", request, prefix);
 
         progress.update_progress(1);
         core_request
@@ -688,24 +702,20 @@ impl WebRtcPeer {
 
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
-        let prefix_channels = self.prefix_channels.clone();
 
-        let start_delimiter = loop {
-            match rx.next().with_cancel(&resource_token).await {
-                Ok(Some(packet)) => {
+        let start_delimiter = match rx.next().with_cancel(&resource_token).await? {
+                Some(packet) => {
                     if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
-                        break delimiter;
+                        delimiter
+                    }
+                    else {
+                        return Err(WebRtcErrors::InvalidDelimiter("First delimiter must be start delimiter".to_string()))
                     }
                 }
-                Ok(None) => {
+                None => {
                     log::warn!("Channel closed before receiving start delimiter");
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
                 }
-                Err(_) => {
-                    log::info!("Download cancelled while waiting for start delimiter");
-                    return Err(WebRtcErrors::InvalidDelimiter("Download cancelled".into()));
-                }
-            }
         };
 
         let Some(resource_id) = start_delimiter.resource_id() else {
@@ -723,9 +733,13 @@ impl WebRtcPeer {
             }
         };
 
+        let mut total_packet = 0;
         loop {
+            log::debug!("Waiting for packet {} on prefix {} channel (resource {})", total_packet + 1, prefix, resource_id);
             match rx.next().with_cancel(&resource_token).await? {
                 Some(packet) => {
+                    total_packet += 1;
+                    log::debug!("Received packet {} (size={}) for resource {}", total_packet, packet.len(), resource_id);
                     if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
                         log::info!("Received end delimiter for resource {}", resource_id);
                         progress.success();
@@ -733,10 +747,6 @@ impl WebRtcPeer {
                             .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                             .await;
                         break;
-                    }
-
-                    if TransferDelimiterShema::from_hold_packet(&packet).is_ok() {
-                        continue;
                     }
 
                     let bytes = Bytes::from(packet.to_vec());
@@ -748,12 +758,14 @@ impl WebRtcPeer {
                         .await;
                 }
                 None => {
+                    log::error!("Channel closed before end delimiter. Received {} packets for resource {}, prefix {}",
+                        total_packet, resource_id, prefix);
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before end delimiter".into()));
                 }
             }
         }
 
-        prefix_channels.lock().await.remove(&prefix);
+        self.prefix_channels.lock().await.remove(&prefix);
 
         log::info!("Completed download for resource {}", resource_id);
 
@@ -815,7 +827,7 @@ impl WebRtcPeer {
         let start_delimiter = TransferDelimiterShema::start(session_id, resource_id, compressed);
         let start_packet = start_delimiter.as_bytes()?;
         let mut outbound_packet_sender = self.outbound_packet_sender.clone();
-        match outbound_packet_sender.send((prefix, start_packet)).with_cancel(&resource_token).await {
+        match outbound_packet_sender.send((prefix, start_packet, true)).with_cancel(&resource_token).await {
             Ok(Ok(_)) => {}
             Ok(Err(e)) => {
                 return Err(WebRtcErrors::InvalidDelimiter(format!(
@@ -841,14 +853,15 @@ impl WebRtcPeer {
             cursor
                 .compression_stats_mut()
                 .update_network_bandwidth(self.bandwidth.load(Ordering::Relaxed) as f64 * 1024f64);
-            match cursor.c_next(None).with_cancel(&resource_token).await?? {
+            match cursor.c_next(None).await? {
                 Some((data, _raw_size)) => {
                     if data.is_empty() {
+                        log::warn!("Cursor return empty data");
                         break;
                     }
 
                     let packet = data.to_vec().into_boxed_slice();
-                    match self.outbound_packet_sender.clone().send((prefix, packet)).with_cancel(&resource_token).await {
+                    match outbound_packet_sender.send((prefix, packet, false)).with_cancel(&resource_token).await {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => return Err(anyhow!("Failed to send data packet: {:?}", e).into()),
                         Err(_) => {
@@ -865,7 +878,7 @@ impl WebRtcPeer {
 
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
-        outbound_packet_sender.send((prefix, end_packet)).with_cancel(&resource_token).await?
+        outbound_packet_sender.send((prefix, end_packet, true)).with_cancel(&resource_token).await?
             .map_err(|it| anyhow!("Failed to send end delimiter: {:?}", it))?;
 
         log::info!("Completed streaming resource {} for session {}", resource_id, session_id);
@@ -884,22 +897,19 @@ impl WebRtcPeer {
             let frames = {
                 let mut frames = Vec::new();
 
-                let timeout_duration = next_check_time.take().map(|check_time| {
-                    let now = Instant::now();
-                    if check_time > now {
-                        check_time.duration_since(now)
-                    } else {
-                        Duration::from_millis(0)
-                    }
-                });
+                let check_time = next_check_time.take().unwrap_or(fec_receiver.calculate_next_check_time());
+                let now = Instant::now();
+                let timeout_duration = if check_time > now {
+                    check_time.duration_since(now)
+                } else {
+                    Duration::from_millis(50)
+                };
 
-                let packet_result = if let Some(timeout) = timeout_duration {
+                let packet_result = {
                     select! {
                         packet = data_rx.next().fuse() => packet,
-                        _ = sleep(timeout).fuse() => None,
+                        _ = sleep(timeout_duration).fuse() => None,
                     }
-                } else {
-                    data_rx.next().await
                 };
 
                 if let Some(packet) = packet_result {
@@ -952,13 +962,26 @@ impl WebRtcPeer {
                             continue;
                         }
 
-                        let channels = self.prefix_channels.lock().await;
-                        if let Some(sender) = channels.get(&prefix) {
-                            if let Err(e) = sender.unbounded_send(packet) {
-                                log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
+                        let sender = {
+                            let mut channels = self.prefix_channels.lock().await;
+                            channels.get(&prefix).cloned()
+                        };
+
+                        if let Some(mut sender) = sender {
+                            log::debug!("Routing packet (size={}) to prefix {} channel", packet.len(), prefix);
+                            if let Err(e) = sender.send(packet).await {
+                                log::warn!("Failed to send packet to prefix {} channel (receiver dropped): {:?}. Removing channel.", prefix, e);
+                                // Receiver was dropped (download canceled/errored), clean up the channel
+                                self.prefix_channels.lock().await.remove(&prefix);
+                            } else {
+                                log::debug!("Successfully sent packet to prefix {}", prefix);
                             }
                         } else {
-                            log::warn!("No channel registered for prefix {}", prefix);
+                            let registered_prefixes: Vec<u16> = self.prefix_channels.lock().await.keys().copied().collect();
+                            log::warn!(
+                                "No channel registered for prefix {}. Registered prefixes: {:?}, packet_size={}. Packet dropped.",
+                                prefix, registered_prefixes, packet.len()
+                            );
                         }
                     }
                 }

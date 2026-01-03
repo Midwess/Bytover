@@ -17,14 +17,14 @@ use std::sync::Arc;
 pub struct DirectMessageChannel {
     to_peer_id: PeerId,
     response_streams: Arc<Mutex<HashMap<String, mpsc::Sender<Response>>>>,
-    outbound_sender: Arc<Mutex<UnboundedSender<(PeerId, Packet)>>>
+    outbound_sender: UnboundedSender<(PeerId, Packet)>
 }
 
 impl DirectMessageChannel {
     pub fn new(peer_id: PeerId, outbound_sender: UnboundedSender<(PeerId, Packet)>) -> Self {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
-            outbound_sender: Arc::new(Mutex::new(outbound_sender)),
+            outbound_sender,
             to_peer_id: peer_id
         }
     }
@@ -40,7 +40,7 @@ impl DirectMessageChannel {
         .encode(&mut binary)?;
 
         let packet = Packet::from(binary);
-        let _ = self.outbound_sender.lock().await.unbounded_send((self.to_peer_id, packet));
+        let _ = self.outbound_sender.unbounded_send((self.to_peer_id, packet));
 
         Ok(())
     }
@@ -66,8 +66,6 @@ impl DirectMessageChannel {
         let packet = Packet::from(bytes);
 
         self.outbound_sender
-            .lock()
-            .await
             .unbounded_send((self.to_peer_id, packet))
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
@@ -94,8 +92,6 @@ impl DirectMessageChannel {
         let packet = Packet::from(bytes);
 
         self.outbound_sender
-            .lock()
-            .await
             .unbounded_send((self.to_peer_id, packet))
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 

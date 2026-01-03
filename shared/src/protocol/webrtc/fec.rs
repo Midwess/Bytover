@@ -705,7 +705,7 @@ impl ReceiverBlock {
         }
     }
 
-    fn new(data_shards: usize, parity_shards: usize, total_size: usize) -> Self {
+    fn new(data_shards: usize, parity_shards: usize, total_size: usize, prefix: u16) -> Self {
         let total = data_shards + parity_shards;
         let now = now_micros();
         Self {
@@ -721,12 +721,12 @@ impl ReceiverBlock {
             last_frame_ts: now,
             last_ping_ts: now,
             is_complete: false,
-            prefix: 0,
+            prefix,
             loss_detector: Some(LossDetector::new(total))
         }
     }
 
-    fn place_value(&mut self, data_shards: usize, parity_shards: usize, total_size: usize) {
+    fn place_value(&mut self, data_shards: usize, parity_shards: usize, total_size: usize, prefix: u16) {
         let now = now_micros();
         if self.is_placeholder {
             let total = data_shards + parity_shards;
@@ -740,6 +740,7 @@ impl ReceiverBlock {
             self.received = 0;
             self.first_ts = now;
             self.last_frame_ts = now;
+            self.prefix = prefix;
             self.last_ping_ts = now;
             self.is_complete = false;
             self.loss_detector = Some(LossDetector::new(total));
@@ -749,7 +750,6 @@ impl ReceiverBlock {
     fn insert_frame(
         &mut self,
         idx: usize,
-        prefix: u16,
         payload: Box<[u8]>,
         false_retransmit_counter: &mut u64
     ) -> Result<bool, FecError> {
@@ -764,7 +764,6 @@ impl ReceiverBlock {
             self.shards[idx] = Some(Vec::from(payload));
             self.frame_send_times[idx] = now_micros(); // Record when frame arrived
             self.received += 1;
-            self.prefix = prefix; // Store prefix from the frame
         } else {
             *false_retransmit_counter = false_retransmit_counter.saturating_add(1);
         }
@@ -907,7 +906,7 @@ impl FecReceiver {
         self.rtt_estimator.update(rtt_ms * 1000);
     }
 
-    fn calculate_next_check_time(&self) -> Instant {
+    pub fn calculate_next_check_time(&self) -> Instant {
         let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, None).min(100_000);
 
         Instant::now() + Duration::from_micros(timeout_us)
@@ -942,7 +941,8 @@ impl FecReceiver {
                     pooled.place_value(
                         frame.data_shards as usize,
                         frame.parity_shards as usize,
-                        frame.total_size as usize
+                        frame.total_size as usize,
+                        frame.prefix
                     );
 
                     pooled
@@ -950,7 +950,8 @@ impl FecReceiver {
                     ReceiverBlock::new(
                         frame.data_shards as usize,
                         frame.parity_shards as usize,
-                        frame.total_size as usize
+                        frame.total_size as usize,
+                        frame.prefix
                     )
                 };
 
@@ -983,13 +984,13 @@ impl FecReceiver {
             block.place_value(
                 frame.data_shards as usize,
                 frame.parity_shards as usize,
-                frame.total_size as usize
+                frame.total_size as usize,
+                frame.prefix
             );
 
             let idx = frame.frame_idx as usize;
-            let prefix = frame.prefix;
             let payload_box = Box::from(frame.data());
-            let can_decode = block.insert_frame(idx, prefix, payload_box, &mut self.false_retransmit)?;
+            let can_decode = block.insert_frame(idx, payload_box, &mut self.false_retransmit)?;
             self.total_frames_received += 1;
 
             if can_decode && !self.blocks_to_reconstruct_buf.contains(&block_id) {
@@ -1007,6 +1008,7 @@ impl FecReceiver {
         // Emit completed blocks
         if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
             if let Some(block) = self.blocks.remove(self.next_block_id) {
+                log::debug!("Block {} constructed with pefix {}, size {} bytes", self.next_block_id, block.prefix, block.total_size);
                 let mut completed_blocks = vec![block];
 
                 loop {
@@ -1019,16 +1021,24 @@ impl FecReceiver {
                             ReceiverBlock::placeholder()
                         };
 
-                        // CHECK FOR EVICTION when inserting placeholder
                         if let Some(evicted) = self.blocks.insert(self.next_block_id, placeholder) {
                             let (evicted_id, evicted_block) = evicted;
-                            log::error!(
-                                "CRITICAL: Placeholder insertion evicted block {} (next_block_id={}, evicted_block_id={}, was_complete={}, received={}/{})",
-                                evicted_id, self.next_block_id, evicted_id, evicted_block.is_constructed(), evicted_block.received, evicted_block.data_shards
+
+                            if evicted_block.is_constructed() {
+                                log::error!(
+                                    "CRITICAL: Placeholder evicted COMPLETED block {} (next_block_id={}, received={}/{})",
+                                    evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
+                                );
+
+                                return Ok(FecAction::Terminated);
+                            }
+
+                            log::warn!(
+                                "Placeholder evicted IN-PROGRESS block {} (next_block_id={}, received={}/{})",
+                                evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
                             );
-                            // Don't return Terminated here - we're inserting a placeholder for the NEXT expected block
-                            // But this indicates the window is too small or blocks are too out of order
                         }
+
                         break;
                     }
 
@@ -1036,14 +1046,16 @@ impl FecReceiver {
 
                     if is_completed {
                         let block = self.blocks.remove(self.next_block_id).unwrap();
+                        log::debug!("Block {} constructed with prefix {}, size {} bytes", self.next_block_id, block.prefix, block.total_size);
                         completed_blocks.push(block);
-                    } else {
+                    }
+                    else {
                         break;
                     }
                 }
 
-                let bytes = completed_blocks.into_iter().map(|b| b.into_packet()).collect();
-
+                let bytes: Vec<(u16, Packet)> = completed_blocks.into_iter().map(|b| b.into_packet()).collect();
+                log::debug!("Emitting {} reconstructed packets from consecutive blocks", bytes.len());
                 let next_check = self.calculate_next_check_time();
                 return Ok(FecAction::Constructed(bytes, next_check));
             }
