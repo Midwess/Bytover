@@ -7,11 +7,11 @@ use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::TransferProgress;
 use crate::errors::CoreError;
 use crate::protocol::webrtc::errors::WebRtcErrors;
-use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
+use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHUNK_SIZE, DATA_SHARDS_DEFAULT, MIN_PARITY_SHARDS};
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
+use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MAX_NUM_BLOCK, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
 use crate::shell::api::CoreRequest;
@@ -49,7 +49,7 @@ use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-const ON_HOLD_STOP_THRESHOLD: u8 = 6;
+const ON_HOLD_STOP_THRESHOLD: u8 = 4;
 const ON_HOLD_SLOW_THRESHOLD: u8 = 2;
 
 pub struct WebRtcPeer {
@@ -372,6 +372,7 @@ impl WebRtcPeer {
         let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
         let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
         let mut hold_counter: u8 = 0;
+        let mut block_holding_id = fec_sender.block_id;
 
         loop {
             if let Some(rtt) = self.buffer.rtt().await {
@@ -380,7 +381,8 @@ impl WebRtcPeer {
 
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
-                    let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
+                    log::debug!("Stopped {}", fec_sender.block_id);
+                    let timeout_fut = sleep(Duration::from_secs(60 * 1)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(timeout_fut);
@@ -397,6 +399,7 @@ impl WebRtcPeer {
                 } else {
                     let reader_fut = async {
                         let data = packet_rx.next().await;
+
                         if hold_counter > ON_HOLD_SLOW_THRESHOLD {
                             sleep(Duration::from_millis(
                                 fec_sender.rtt().max(10) * (hold_counter - ON_HOLD_SLOW_THRESHOLD) as u64
@@ -431,13 +434,18 @@ impl WebRtcPeer {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
                     if let Feedback::Network(stats) = fb {
                         if let Some(peer_block_id) = stats.current_block_id {
-                            if peer_block_id.abs_diff(fec_sender.block_id) < 2 {
+                            let diff = peer_block_id.abs_diff(fec_sender.block_id);
+                            if diff <= 1 {
                                 hold_counter = 0;
                             }
-                            else {
-                                let peer_counter = stats.hold_counter.unwrap_or(0) as u8;
-                                hold_counter= hold_counter.saturating_sub(1);
+                            else if block_holding_id <= peer_block_id {
+                                log::info!("Sub ack");
+                                hold_counter = hold_counter.saturating_sub(1);
                             }
+                        }
+
+                        if hold_counter == 0 {
+                            block_holding_id = fec_sender.block_id;
                         }
                     }
 
@@ -460,6 +468,8 @@ impl WebRtcPeer {
                     }
                 }
                 FecAction::Retransmit(frames) => {
+                    let frame_idx = frames.iter().map(|it| it.frame_idx).collect::<Vec<_>>();
+                    log::debug!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
                     for frame in frames {
                         let packet = frame.serialize();
                         buff_counter += packet.len();
@@ -471,6 +481,9 @@ impl WebRtcPeer {
                 FecAction::Terminated => {
                     log::info!("FEC sender terminated in sending_loop");
                     break;
+                }
+                FecAction::Noop => {
+                    continue;
                 }
                 _ => {}
             }
@@ -841,9 +854,10 @@ impl WebRtcPeer {
             cursor
                 .compression_stats_mut()
                 .update_network_bandwidth(self.bandwidth.load(Ordering::Relaxed) as f64 * 1024f64);
-            match cursor.c_next(None).with_cancel(&resource_token).await?? {
+            match cursor.c_next(None).await? {
                 Some((data, _raw_size)) => {
                     if data.is_empty() {
+                        log::warn!("Cursor return empty data");
                         break;
                     }
 
@@ -960,14 +974,16 @@ impl WebRtcPeer {
                         if let Some(mut sender) = sender {
                             log::debug!("Routing packet (size={}) to prefix {} channel", packet.len(), prefix);
                             if let Err(e) = sender.send(packet).await {
-                                log::error!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
+                                log::warn!("Failed to send packet to prefix {} channel (receiver dropped): {:?}. Removing channel.", prefix, e);
+                                // Receiver was dropped (download canceled/errored), clean up the channel
+                                self.prefix_channels.lock().await.remove(&prefix);
                             } else {
                                 log::debug!("Successfully sent packet to prefix {}", prefix);
                             }
                         } else {
                             let registered_prefixes: Vec<u16> = self.prefix_channels.lock().await.keys().copied().collect();
-                            log::error!(
-                                "No channel registered for prefix {}. Registered prefixes: {:?}, packet_size={}",
+                            log::warn!(
+                                "No channel registered for prefix {}. Registered prefixes: {:?}, packet_size={}. Packet dropped.",
                                 prefix, registered_prefixes, packet.len()
                             );
                         }
