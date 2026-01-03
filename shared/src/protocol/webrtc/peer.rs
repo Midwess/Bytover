@@ -436,12 +436,7 @@ impl WebRtcPeer {
                             }
                             else {
                                 let peer_counter = stats.hold_counter.unwrap_or(0) as u8;
-                                if peer_counter < hold_counter {
-                                    hold_counter = hold_counter.saturating_sub(1);
-                                }
-                                else {
-                                    hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD - peer_counter);
-                                }
+                                hold_counter= hold_counter.saturating_sub(1);
                             }
                         }
                     }
@@ -480,7 +475,7 @@ impl WebRtcPeer {
                 _ => {}
             }
 
-            if buff_counter > MAX_BUFFER_SIZE {
+            if buff_counter >= MAX_BUFFER_SIZE {
                 let tick = Instant::now();
                 let stats_before = self.quad_unreliable_channel.bytes_sent().await;
                 let timeout = Duration::from_millis(5 * fec_sender.rtt().max(100));
@@ -497,7 +492,12 @@ impl WebRtcPeer {
                 };
 
                 for frame in frames {
-                    let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), frame.serialize());
+                    if hold_counter >= ON_HOLD_STOP_THRESHOLD {
+                        let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
+                    }
+                    else {
+                        let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), frame.serialize());
+                    }
                 }
 
                 let time = tick.elapsed().as_secs_f64().max(f64::MIN);
@@ -681,7 +681,7 @@ impl WebRtcPeer {
 
         let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
 
-        log::info!("Requesting download for resource {:?}", request);
+        log::info!("Requesting download for resource {:?}, registered prefix channel: {}", request, prefix);
 
         progress.update_progress(1);
         core_request
@@ -723,10 +723,11 @@ impl WebRtcPeer {
 
         let mut total_packet = 0;
         loop {
-            let cancellation = CancellationToken::timeout(Duration::from_secs(10));
-            match rx.next().with_cancel(&cancellation).await {
-                Ok(Some(packet)) => {
+            log::debug!("Waiting for packet {} on prefix {} channel (resource {})", total_packet + 1, prefix, resource_id);
+            match rx.next().with_cancel(&resource_token).await? {
+                Some(packet) => {
                     total_packet += 1;
+                    log::debug!("Received packet {} (size={}) for resource {}", total_packet, packet.len(), resource_id);
                     if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
                         log::info!("Received end delimiter for resource {}", resource_id);
                         progress.success();
@@ -744,17 +745,15 @@ impl WebRtcPeer {
                         .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                         .await;
                 }
-                Ok(None) => {
+                None => {
+                    log::error!("Channel closed before end delimiter. Received {} packets for resource {}, prefix {}",
+                        total_packet, resource_id, prefix);
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before end delimiter".into()));
-                }
-                Err(e) => {
-                    log::info!("Stuck at packet = {}", total_packet);
-                    return Err(e.into())
                 }
             }
         }
 
-        // self.prefix_channels.lock().await.remove(&prefix);
+        self.prefix_channels.lock().await.remove(&prefix);
 
         log::info!("Completed download for resource {}", resource_id);
 
@@ -953,12 +952,24 @@ impl WebRtcPeer {
                             continue;
                         }
 
-                        if let Some(mut sender) = self.prefix_channels.lock().await.get_mut(&prefix) {
+                        let sender = {
+                            let mut channels = self.prefix_channels.lock().await;
+                            channels.get(&prefix).cloned()
+                        };
+
+                        if let Some(mut sender) = sender {
+                            log::debug!("Routing packet (size={}) to prefix {} channel", packet.len(), prefix);
                             if let Err(e) = sender.send(packet).await {
-                                log::warn!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
+                                log::error!("Failed to send packet to prefix {} channel: {:?}", prefix, e);
+                            } else {
+                                log::debug!("Successfully sent packet to prefix {}", prefix);
                             }
                         } else {
-                            log::warn!("No channel registered for prefix {}", prefix);
+                            let registered_prefixes: Vec<u16> = self.prefix_channels.lock().await.keys().copied().collect();
+                            log::error!(
+                                "No channel registered for prefix {}. Registered prefixes: {:?}, packet_size={}",
+                                prefix, registered_prefixes, packet.len()
+                            );
                         }
                     }
                 }
