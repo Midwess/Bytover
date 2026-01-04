@@ -436,7 +436,6 @@ impl TransferSession {
                 return false
             };
 
-            log::info!("Found query key session: {}", query);
             name = query;
         }
 

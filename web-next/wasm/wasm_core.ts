@@ -351,7 +351,7 @@ export class WasmCore {
                         return await handle_response(request_id, serialize(new CoreOperationOutputVariantDeviceInfo(new DeviceInfo(
                             new PlatformVariantWeb(),
                             name,
-                            Date.now().toString(),
+                            getOrCreateDeviceId(),
                             isMobile ? new DeviceTypeVariantOtherPhone() : new DeviceTypeVariantOtherLaptop(),
                             window.location.origin
                         ))));
@@ -554,6 +554,23 @@ export function serialize(object: any): Uint8Array {
 const core = new WasmCore();
 
 export default core
+
+function getOrCreateDeviceId(): string {
+    const DEVICE_ID_KEY = 'bitbridge_device_id';
+
+    if (typeof window === 'undefined') {
+        return Date.now().toString();
+    }
+
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+
+    if (!deviceId) {
+        deviceId = crypto.randomUUID();
+        localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+
+    return deviceId;
+}
 
 function getBrowserDeviceInfo() {
     if (typeof navigator === "undefined")

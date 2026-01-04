@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-
+use crate::entities::local_resource::LocalResourcePath;
 use super::selected_resource::SelectedResourceViewModel;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -7,7 +7,8 @@ pub struct ImageReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
     pub is_completed: bool,
-    pub is_ready: bool
+    pub is_ready: bool,
+    pub is_success: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -15,7 +16,8 @@ pub struct VideoReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
     pub is_completed: bool,
-    pub is_ready: bool
+    pub is_ready: bool,
+    pub is_success: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -23,7 +25,8 @@ pub struct FileReceiveResourceViewModel {
     pub model: SelectedResourceViewModel,
     pub completion: f32,
     pub is_completed: bool,
-    pub is_ready: bool
+    pub is_ready: bool,
+    pub is_success: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -56,5 +59,7 @@ pub struct ReceiveSessionViewModel {
     pub download_all_progress: Option<f32>,
     pub download_all_in_progress: bool,
     pub download_all_completed: bool,
+    pub download_all_success: bool,
+    pub download_resource_path: Option<LocalResourcePath>,
     pub download_all_resource_id: Option<u64>
 }

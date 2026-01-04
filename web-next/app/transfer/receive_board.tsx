@@ -85,12 +85,26 @@ function HeaderInfo() {
 
     const onDownloadAll = useCallback(() => {
         if (!selectedSession) return;
+        if (selectedSession?.download_all_success && selectedSession?.download_resource_path) {
+            core.downloadFile(selectedSession!.download_resource_path!)
+            return
+        }
+
         const peerId = selectedSession.sender_id;
         const sessionOrderId = BigInt(selectedSession.id);
         core.update(new AppEventVariantTransfer(
             new TransferEventVariantRequestDownloadAllResources(peerId, sessionOrderId)
         ));
-    }, [selectedSession]);
+    }, [selectedSession, selectedSession?.download_all_success, selectedSession?.download_resource_path]);
+
+    useEffect(() => {
+        if (selectedSession?.is_scope_online && selectedSession?.download_all_success && selectedSession?.download_resource_path) {
+            core.downloadFile(selectedSession!.download_resource_path!)
+        }
+    }, [
+        selectedSession?.download_all_success,
+        JSON.stringify(selectedSession?.download_resource_path),
+    ])
 
     const onCancelClicked = useCallback(() => {
         if (!selectedSession) return
@@ -694,7 +708,7 @@ function FileView(props: {
     const onDownloadClick = useCallback(() => {
         if (!model || !session) return
 
-        if (!isCloud) {
+        if (!isCloud && !file?.is_success) {
             const peerId = session.sender_id;
             const sessionOrderId = BigInt(sessionId);
             const resourceOrderId = BigInt(id);
@@ -706,10 +720,11 @@ function FileView(props: {
                     resourceOrderId
                 )
             ));
-        } else {
+        }
+        else {
             core.downloadFile(model.path, model.name)
         }
-    }, [model?.path, model?.name, isCloud, session, sessionId, id])
+    }, [model?.path, model?.name, isCloud, session, sessionId, id, file?.is_success])
 
     const onCancelClick = useCallback(() => {
         if (!model || !session) return
@@ -798,7 +813,7 @@ function MediaView(props: {
     const onDownloadClick = useCallback(() => {
         if (!model || !session) return
 
-        if (!isCloud) {
+        if (!isCloud && !media?.is_success) {
             const peerId = session.sender_id;
             const sessionOrderId = BigInt(sessionId);
             const resourceOrderId = BigInt(id);
@@ -813,7 +828,7 @@ function MediaView(props: {
         } else {
             core.downloadFile(model.path, model.name)
         }
-    }, [model?.path, model?.name, isCloud, session, sessionId, id])
+    }, [model?.path, model?.name, isCloud, session, sessionId, id, media?.is_success])
 
     const onCancelClick = useCallback(() => {
         if (!model || !session) return
@@ -858,13 +873,9 @@ function MediaView(props: {
                     <p className="text-sm font-medium truncate text-foreground">
                         {model.name}
                     </p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex flex-col items-center gap-2 mt-0.5">
                         <p className="text-xs text-muted-foreground">
                             {displaySize}
-                        </p>
-                        <span className="text-xs text-muted-foreground/60">•</span>
-                        <p className="text-xs text-muted-foreground">
-                            {isVideo ? "Video" : "Image"}
                         </p>
                     </div>
                 </div>
@@ -916,13 +927,9 @@ function MediaView(props: {
                     <p className="text-sm font-medium truncate text-foreground mb-1">
                         {model.name}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-0">
                         <p className="text-xs text-muted-foreground">
                             {displaySize}
-                        </p>
-                        <span className="text-xs text-muted-foreground/60">•</span>
-                        <p className="text-xs text-muted-foreground">
-                            {isVideo ? "Video" : "Image"}
                         </p>
                     </div>
                 </div>

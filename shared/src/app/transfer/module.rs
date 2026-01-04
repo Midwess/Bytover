@@ -695,7 +695,8 @@ impl AppModule<BitBridge> for TransferModule {
                             model: SelectedResourceViewModel::from(resource),
                             completion: progress.percentage() as f32,
                             is_ready: is_p2p || progress.status.is_completed(),
-                            is_completed: progress.status.is_completed()
+                            is_completed: progress.status.is_completed(),
+                            is_success: progress.is_success()
                         })
                     })
                     .collect();
@@ -712,7 +713,8 @@ impl AppModule<BitBridge> for TransferModule {
                             model: SelectedResourceViewModel::from(resource),
                             completion: progress.percentage() as f32,
                             is_completed: progress.status.is_completed(),
-                            is_ready: is_p2p || progress.status.is_completed()
+                            is_ready: is_p2p || progress.status.is_completed(),
+                            is_success: progress.is_success()
                         })
                     })
                     .collect();
@@ -730,12 +732,14 @@ impl AppModule<BitBridge> for TransferModule {
                             model: SelectedResourceViewModel::from(resource),
                             completion: progress.percentage() as f32,
                             is_completed: progress.status.is_completed(),
-                            is_ready: is_p2p || progress.status.is_completed()
+                            is_ready: is_p2p || progress.status.is_completed(),
+                            is_success: progress.is_success()
                         })
                     })
                     .collect();
 
                 let download_all_progress = it.progress.iter().find(|p| p.resource_order_id == u64::MAX);
+                let resource_all = it.session_resource.as_ref();
 
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
@@ -768,6 +772,8 @@ impl AppModule<BitBridge> for TransferModule {
                     download_all_enabled: is_p2p && !it.resources.is_empty(),
                     download_all_progress: download_all_progress.map(|p| p.percentage() as f32),
                     download_all_in_progress: download_all_progress.map(|p| !p.is_completed()).unwrap_or(false),
+                    download_all_success: download_all_progress.map(|it| it.is_success()).unwrap_or(false),
+                    download_resource_path: resource_all.map(|r| r.path.clone()),
                     download_all_completed: download_all_progress.map(|p| p.is_success()).unwrap_or(false),
                     download_all_resource_id: download_all_progress.map(|_| u64::MAX)
                 })
