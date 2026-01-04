@@ -105,7 +105,7 @@ where
                     session_key.order_id,
                     user,
                     access_url.clone(),
-                    access_url,
+                    response.alias.clone(),
                     is_required_password
                 );
 

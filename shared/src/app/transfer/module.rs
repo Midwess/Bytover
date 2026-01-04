@@ -76,7 +76,7 @@ pub enum TransferEvent {
         session_id: u64,
         resource_id: u64
     },
-    FindPublicSession {
+    FindSession {
         keywords: String
     },
     ViewSession {
@@ -353,7 +353,7 @@ impl AppModule<BitBridge> for TransferModule {
                     let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
-            TransferEvent::FindPublicSession { mut keywords } => {
+            TransferEvent::FindSession { mut keywords } => {
                 if let Ok(url) = url::Url::parse(&keywords) {
                     let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
                         log::info!("Not found query key session");
@@ -364,7 +364,6 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 model.transfer.keywords = keywords.clone();
-                log::info!("Find public session with keywords: {}", keywords);
                 if model
                     .transfer
                     .sessions
@@ -666,7 +665,7 @@ impl AppModule<BitBridge> for TransferModule {
                             };
                             let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
                             let name = match &alias {
-                                Some(a) => format!("{} ({})", from_user.name, a),
+                                Some(a) => format!("{}", from_user.name),
                                 None => from_user.name.to_string()
                             };
                             (

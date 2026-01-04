@@ -293,6 +293,7 @@ impl TransferSession {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
         }
+
         self.connection_error = None;
     }
 

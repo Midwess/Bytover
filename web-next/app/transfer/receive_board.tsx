@@ -8,7 +8,7 @@ import {
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
-    TransferEventVariantFindPublicSession,
+    TransferEventVariantFindSession,
     TransferEventVariantViewSession,
     TransferEventVariantRequestDownloadResource,
     TransferEventVariantRequestDownloadAllResources,
@@ -26,7 +26,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
-import { ReactElement, useCallback, useEffect, useState } from "react";
+import {ReactElement, useCallback, useEffect, useRef, useState} from "react";
 import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
@@ -206,20 +206,19 @@ function ContentBoard() {
     const [enteredPassword, setEnteredPassword] = useState<string>(selectedSession?.password ?? '')
     const isMobile = useIsMobile();
     const {setOpenMobile} = useSidebar();
+    const nearbySessions = core.useNearbySessionsList()
 
     useEffect(() => {
-        if (selectedSession?.is_cloud) {
-            if (selectedSession.alias) {
-                setUrl({
-                    session: selectedSession.alias ?? ''
-                })
-            }
+        if (selectedSession?.alias) {
+            setUrl({
+                session: selectedSession.alias ?? ''
+            })
         }
     }, [selectedSession?.id])
 
     useEffect(() => {
         if (url.session && coreReady) {
-            core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(url.session)))
+            core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(url.session)))
         }
     }, [coreReady])
 
@@ -409,7 +408,6 @@ function FindSessionSection() {
     const [url, setUrl] = useUrlState(['session'])
     const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
     const [keywords, setKeywords] = useState<string>(url.session || '')
-    const publicSessions = core.useCloudSessionsList()
 
     useEffect(() => {
         if (url.session) {
@@ -425,20 +423,8 @@ function FindSessionSection() {
         }
 
         message?.resolveMessage()
-        console.log('finding public session with keywords: ', searchTerms || '')
-        core.update(new AppEventVariantTransfer(new TransferEventVariantFindPublicSession(searchTerms || '')))
+        core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(searchTerms || '')))
     }, [keywords, message, setUrl])
-
-    useEffect(() => {
-        if (publicSessions?.length === 1 && keywords) {
-            setUrl({ session: publicSessions[0].alias })
-            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(
-                publicSessions[0].password,
-                BigInt(publicSessions[0].id),
-                new TransferTypeVariantReceive()
-            )))
-        }
-    }, [publicSessions, keywords, setUrl])
 
     return (
         <div className={"flex flex-col justify-start text-primaryText gap-3"}>
@@ -542,7 +528,7 @@ const NearbySessionItems = () => {
 
 const NearbySessionList = () => {
     return (
-        <SessionListWrapper title="Nearby">
+        <SessionListWrapper title="P2P">
             <NearbySessionItems />
         </SessionListWrapper>
     )
@@ -618,7 +604,7 @@ function TransferSession(props: {
                 <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
                     {/* Alias tag and password */}
                     <div className={"flex flex-row items-center gap-1.5"}>
-                        <span className={`px-1 py-0.3 rounded-md text-xs font-medium border w-fit ${
+                        <span className={`px-1 py-0.3 rounded-sm text-xs font-medium border w-fit ${
                             is_public
                                 ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
                                 : is_scope_online

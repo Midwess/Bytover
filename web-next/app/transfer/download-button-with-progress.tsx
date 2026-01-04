@@ -2,7 +2,7 @@
 
 import { Download, Check, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface DownloadButtonWithProgressProps {
     /** Progress value between 0 and 1 */
@@ -45,18 +45,28 @@ export default function DownloadButtonWithProgress({
     buttonSize = 'sm'
 }: DownloadButtonWithProgressProps) {
     const [showCompleted, setShowCompleted] = useState(false)
+    const wasInProgressRef = useRef(false)
 
     useEffect(() => {
-        if (isCompleted) {
+        // Track if download was in progress
+        if (isInProgress) {
+            wasInProgressRef.current = true
+        }
+
+        // Only show green completed state if transitioning from in-progress to complete
+        if (isCompleted && wasInProgressRef.current) {
             setShowCompleted(true)
             const timer = setTimeout(() => {
                 setShowCompleted(false)
+                wasInProgressRef.current = false
             }, 1000)
             return () => clearTimeout(timer)
-        } else {
+        } else if (!isInProgress && !isCompleted) {
+            // Reset when returning to idle state
+            wasInProgressRef.current = false
             setShowCompleted(false)
         }
-    }, [isCompleted])
+    }, [isCompleted, isInProgress])
 
     const getButtonState = () => {
         if (showCompleted) return 'completed'

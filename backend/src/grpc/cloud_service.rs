@@ -59,7 +59,8 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Ok(Response::new(FindSessionResponse {
                 session: None,
                 access_url: "".to_string(),
-                is_required_password: false
+                is_required_password: false,
+                alias: "".to_string()
             }))
         };
 
@@ -67,7 +68,8 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Ok(Response::new(FindSessionResponse {
                 session: None,
                 access_url: "".to_string(),
-                is_required_password: false
+                is_required_password: false,
+                alias: "".to_string()
             }))
         }
 
@@ -78,7 +80,8 @@ impl BitBridgeCloudService for CloudGrpcService {
                 user_id: session.user_order_id()
             }),
             access_url: session.access_url(app.unwrap().web_url().to_string()),
-            is_required_password: session.password().is_some()
+            is_required_password: session.password().is_some(),
+            alias: session.alias(),
         };
 
         Ok(Response::new(response))

@@ -123,7 +123,8 @@ export class WasmCore {
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id)
+                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
+                    transferState?.received_cloud_sessions?.find((it) => it.id === id)
 
                 if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
