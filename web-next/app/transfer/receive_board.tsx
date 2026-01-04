@@ -206,7 +206,6 @@ function ContentBoard() {
     const [enteredPassword, setEnteredPassword] = useState<string>(selectedSession?.password ?? '')
     const isMobile = useIsMobile();
     const {setOpenMobile} = useSidebar();
-    const nearbySessions = core.useNearbySessionsList()
 
     useEffect(() => {
         if (selectedSession?.alias) {
@@ -408,6 +407,9 @@ function FindSessionSection() {
     const [url, setUrl] = useUrlState(['session'])
     const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
     const [keywords, setKeywords] = useState<string>(url.session || '')
+    const publicSessions = core.useCloudSessionsList()
+    const selectedId = useRef<string | null>(null)
+    const p2pSessions = core.useNearbySessionsList()
 
     useEffect(() => {
         if (url.session) {
@@ -425,6 +427,19 @@ function FindSessionSection() {
         message?.resolveMessage()
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(searchTerms || '')))
     }, [keywords, message, setUrl])
+
+    useEffect(() => {
+        const all = [...publicSessions, ...p2pSessions]
+        if (all.length === 1) {
+            const selected = all[0]
+            if (selectedId.current === selected.id) {
+                return
+            }
+
+            selectedId.current = selected.id
+            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(null, BigInt(selected.id), new TransferTypeVariantReceive())))
+        }
+    }, [publicSessions?.length, p2pSessions?.length]);
 
     return (
         <div className={"flex flex-col justify-start text-primaryText gap-3"}>
