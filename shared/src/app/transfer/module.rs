@@ -613,6 +613,7 @@ impl AppModule<BitBridge> for TransferModule {
             .transfer
             .sessions
             .iter()
+            .filter(|it| it.is_keyword_match(&model.transfer.keywords))
             .filter(|it| it.transfer_type == TransferType::Receive)
             .filter_map(|it| {
                 let from_user = &it.from_user;

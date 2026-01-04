@@ -308,9 +308,9 @@ impl TransferSession {
             *connection_state = P2PConnectionState::NotConnected;
             scope.set_watcher(true);
             scope.update_state(ScopeState::Offline);
+            self.is_required_password = false;
         }
 
-        self.is_required_password = false;
         self.password.take();
         self.progress.clear();
         self.resources.clear();
@@ -424,7 +424,7 @@ impl TransferSession {
     }
 
     pub fn is_keyword_match(&self, keywords: &str) -> bool {
-        if keywords.is_empty() {
+        if keywords.trim().is_empty() {
             return true;
         }
 
