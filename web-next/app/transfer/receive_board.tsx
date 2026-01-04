@@ -86,7 +86,7 @@ function HeaderInfo() {
     const onDownloadAll = useCallback(() => {
         if (!selectedSession) return;
         if (selectedSession?.download_all_success && selectedSession?.download_resource_path) {
-            core.downloadFile(selectedSession!.download_resource_path!)
+            core.downloadFile(selectedSession!.download_resource_path!, `all-resources-${selectedSession.alias}.zip`)
             return
         }
 
@@ -99,11 +99,10 @@ function HeaderInfo() {
 
     useEffect(() => {
         if (selectedSession?.is_scope_online && selectedSession?.download_all_success && selectedSession?.download_resource_path) {
-            core.downloadFile(selectedSession!.download_resource_path!)
+            core.downloadFile(selectedSession!.download_resource_path!, `all-resources-${selectedSession.alias}.zip`)
         }
     }, [
-        selectedSession?.download_all_success,
-        JSON.stringify(selectedSession?.download_resource_path),
+        selectedSession?.download_all_success
     ])
 
     const onCancelClicked = useCallback(() => {
@@ -738,6 +737,12 @@ function FileView(props: {
         ));
     }, [model, session, sessionId, id])
 
+    useEffect(() => {
+        if (session?.is_scope_online && file?.is_success && model?.path) {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [file?.is_success, session?.is_scope_online])
+
     if (!file || !model) return null;
 
     let displaySize = `${model.size_mb} MB`;
@@ -841,6 +846,12 @@ function MediaView(props: {
             )
         ));
     }, [model, session, sessionId, id])
+
+    useEffect(() => {
+        if (session?.is_scope_online && media?.is_success && model?.path) {
+            core.downloadFile(model.path, model.name)
+        }
+    }, [media?.is_success, session?.is_scope_online])
 
     if (!media || !model) return null;
 
