@@ -55,5 +55,6 @@ pub struct ReceiveSessionViewModel {
     pub download_all_enabled: bool,
     pub download_all_progress: Option<f32>,
     pub download_all_in_progress: bool,
-    pub download_all_completed: bool
+    pub download_all_completed: bool,
+    pub download_all_resource_id: Option<u64>
 }

@@ -436,7 +436,7 @@ impl WebRtcPeer {
                                     hold_counter = hold_counter.saturating_sub(1);
                                 }
 
-                                if diff > ON_HOLD_STOP_THRESHOLD as u32 {
+                                if diff >= ON_HOLD_STOP_THRESHOLD as u32 * MAX_NUM_BLOCK as u32 {
                                     hold_counter = ON_HOLD_STOP_THRESHOLD;
                                     buff_counter = MAX_BUFFER_SIZE;
                                 }
@@ -782,26 +782,52 @@ impl WebRtcPeer {
 
         log::info!("Starting download all resources for session {}", session_order_id);
 
+        let token = self.transfers_context.get_or_create_resource_token(session_order_id, session_resource.order_id).await;
         let zip_path = session_resource.path.clone();
+
         if let Err(e) = self.transfer_session_repo.start_download_session(zip_path.clone()).await {
             log::error!("Failed to start download session: {:?}", e);
+            self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
+            return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to start download session: {:?}", e)));
         }
 
+        let mut download_failed = false;
+
         for resource in resources {
+            let resource_id = resource.order_id;
             let progress = TransferProgress::new(
-                resource.order_id,
+                resource_id,
                 resource.size,
                 TransferType::Receive
             );
 
-            let resource_order_id = resource.order_id;
-            if let Err(e) = self.request_resource_download(core_request.clone(), session_order_id, resource, progress).await {
-                log::error!("Failed to download resource {}: {:?}", resource_order_id, e);
+            let result = self.request_resource_download(core_request.clone(), session_order_id, resource, progress).with_cancel(&token).await;
+
+            match result {
+                Ok(Ok(_)) => {},
+                Err(_) => {
+                    log::warn!("Download all cancelled for session {}, resource {}", session_order_id, resource_id);
+                    self.cancel_resource_transfer(session_order_id, resource_id).await;
+                    download_failed = true;
+                    break;
+                },
+                Ok(Err(e)) => {
+                    log::error!("Failed to download resource {}: {:?}", resource_id, e);
+                    self.cancel_resource_transfer(session_order_id, resource_id).await;
+                    download_failed = true;
+                    break;
+                }
             }
         }
 
         if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
             log::error!("Failed to stop download session: {:?}", e);
+        }
+
+        if download_failed {
+            log::info!("Download all resources failed for session {}", session_order_id);
+            self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
+            return Err(WebRtcErrors::InvalidDelimiter("Download all failed".into()));
         }
 
         log::info!("Completed download all resources for session {}", session_order_id);

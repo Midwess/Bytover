@@ -768,7 +768,8 @@ impl AppModule<BitBridge> for TransferModule {
                     download_all_enabled: is_p2p && !it.resources.is_empty(),
                     download_all_progress: download_all_progress.map(|p| p.percentage() as f32),
                     download_all_in_progress: download_all_progress.map(|p| !p.is_completed()).unwrap_or(false),
-                    download_all_completed: download_all_progress.map(|p| p.is_success()).unwrap_or(false)
+                    download_all_completed: download_all_progress.map(|p| p.is_success()).unwrap_or(false),
+                    download_all_resource_id: download_all_progress.map(|_| u64::MAX)
                 })
             })
             .collect::<Vec<_>>();

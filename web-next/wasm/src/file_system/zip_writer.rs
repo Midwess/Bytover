@@ -51,18 +51,18 @@ impl OpfsZipWriter {
         }
     }
 
-    pub async fn finalize(mut self) -> Result<()> {
+    pub async fn finalize(mut self) -> Result<SyncAccessHandleWriter> {
         let state = std::mem::replace(&mut self.state, WriterState::Closed);
 
         let zip_writer = match state {
             WriterState::Writer(w) => w,
             WriterState::Entry(e) => e.close().await?,
-            WriterState::Closed => return Ok(())
+            WriterState::Closed => return Err(anyhow::anyhow!("Writer is closed"))
         };
 
         let mut inner = zip_writer.close().await?;
         use futures::io::AsyncWriteExt;
         inner.close().await?;
-        Ok(())
+        Ok(inner)
     }
 }

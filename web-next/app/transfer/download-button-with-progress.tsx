@@ -2,6 +2,7 @@
 
 import { Download, Check, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react'
 
 interface DownloadButtonWithProgressProps {
     /** Progress value between 0 and 1 */
@@ -22,6 +23,12 @@ interface DownloadButtonWithProgressProps {
     strokeWidth?: number
     /** Custom class name */
     className?: string
+    /** Text to display on button when idle. If provided, shows text button instead of icon button */
+    buttonText?: string
+    /** Button variant when idle */
+    buttonVariant?: 'default' | 'outline' | 'ghost'
+    /** Button size when idle */
+    buttonSize?: 'default' | 'sm' | 'lg' | 'icon'
 }
 
 export default function DownloadButtonWithProgress({
@@ -32,11 +39,27 @@ export default function DownloadButtonWithProgress({
     onDownloadClick = () => {},
     onCancelClick = () => {},
     size = 40,
-    className = ''
+    className = '',
+    buttonText,
+    buttonVariant = 'outline',
+    buttonSize = 'sm'
 }: DownloadButtonWithProgressProps) {
-    // Determine button state
+    const [showCompleted, setShowCompleted] = useState(false)
+
+    useEffect(() => {
+        if (isCompleted) {
+            setShowCompleted(true)
+            const timer = setTimeout(() => {
+                setShowCompleted(false)
+            }, 1000)
+            return () => clearTimeout(timer)
+        } else {
+            setShowCompleted(false)
+        }
+    }, [isCompleted])
+
     const getButtonState = () => {
-        if (isCompleted) return 'completed'
+        if (showCompleted) return 'completed'
         if (isInProgress) return 'downloading'
         return 'idle'
     }
@@ -44,9 +67,9 @@ export default function DownloadButtonWithProgress({
     const state = getButtonState()
 
     return (
-        <div className={`relative ${className}`} style={{ width: size, height: size }}>
+        <div className={`relative ${className}`} style={buttonText ? {} : { width: size, height: size }}>
             {/* Idle State - Download Button */}
-            {state === 'idle' && (
+            {state === 'idle' && !buttonText && (
                 <Button
                     size="icon"
                     variant="ghost"
@@ -56,6 +79,20 @@ export default function DownloadButtonWithProgress({
                     style={{ width: size, height: size }}
                 >
                     <Download className="h-[50%] w-[50%] text-foreground" />
+                </Button>
+            )}
+
+            {/* Idle State - Text Button */}
+            {state === 'idle' && buttonText && (
+                <Button
+                    variant={buttonVariant}
+                    size={buttonSize}
+                    onClick={onDownloadClick}
+                    disabled={!isReady}
+                    className="h-8 gap-2"
+                >
+                    <Download className="h-4 w-4" />
+                    {buttonText}
                 </Button>
             )}
 

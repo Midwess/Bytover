@@ -120,7 +120,8 @@ impl AppModule<BitBridge> for NearbyModule {
                             }
 
                             break;
-                        } else if let Some(ref connected_peer) = from_peer {
+                        }
+                        else if let Some(ref connected_peer) = from_peer {
                             if connected_peer.id == peer.id && !is_peer_owned {
                                 *from_peer = None;
                                 session.owner_disconnected();

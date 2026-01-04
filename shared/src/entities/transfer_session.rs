@@ -447,12 +447,7 @@ impl TransferSession {
     }
 
     pub fn update_progress(&mut self, mut progress: TransferProgress) {
-        let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
         if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
-            if progress.status.is_completed() && is_p2p_receive {
-                progress = TransferProgress::new(progress.resource_order_id, progress.total_bytes_counter, progress.transfer_type);
-            }
-
             self.progress[index] = progress;
         } else {
             self.progress.push(progress);

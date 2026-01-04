@@ -11,7 +11,7 @@ use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{SessionResourceUpdate, TransferProgress, TransferSession, TransferSessionStatus, TransferType};
+use crate::entities::transfer_session::{SessionResourceUpdate, TransferProgress, TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
 use core_services::db::repository::abstraction::table::Table;
@@ -495,7 +495,8 @@ impl AppCommand {
                 if let Some(resource_id) = resource_id {
                     log::info!("Cancelling resource {} for session {}", resource_id, session.order_id);
                     self.run(P2POperation::cancel_resource(peer_id, session.order_id, resource_id)).await?;
-                } else {
+                }
+                else {
                     log::info!("Cancelling session {} from receiver", session.order_id);
                     self.run(TransferOperation::cancel_session(Some(peer_id), session.order_id)).await?;
                 }
@@ -545,7 +546,7 @@ impl AppCommand {
 
         let mut aggregate_progress = TransferProgress::new(u64::MAX, total_size, TransferType::Receive);
         session.session_resource = Some(session_resource.clone());
-        session.progress.push(aggregate_progress.clone());
+        session.update_progress(aggregate_progress.clone());
 
         self.update_model(TransferSessionModelEvent::Update(
             session_id.clone(),
@@ -570,6 +571,20 @@ impl AppCommand {
         while let Some(output) = stream.next().await {
             match output {
                 CoreOperationOutput::Transfer(TransferOperationOutput::TransferResourceProgressUpdate(progress)) => {
+                    if progress.is_failed() {
+                        log::warn!("Resource {} failed, cancelling download all", progress.resource_order_id);
+                        aggregate_progress.fail(format!("Resource {} failed", progress.resource_order_id));
+                        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                        break;
+                    }
+
+                    if progress.is_canceled() {
+                        log::warn!("Resource {} cancelled, cancelling download all", progress.resource_order_id);
+                        aggregate_progress.status = TransferStatus::Canceled;
+                        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                        break;
+                    }
+
                     let mut current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
                     *current = (*current).max(progress.total_bytes());
 

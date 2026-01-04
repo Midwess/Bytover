@@ -18,7 +18,6 @@ import {
 import {
     Book,
     ChevronsUpDown,
-    Download,
     Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -65,7 +64,7 @@ export default function ReceiveBoard() {
                 </Sidebar>
                 <SidebarInset className="flex flex-col h-[100%] min-h-0">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                        <div className="flex items-center gap-2 px-4 w-full">
+                        <div className="flex items-center gap-2 px-2 w-full">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 h-4" />
                             <HeaderInfo />
@@ -92,6 +91,14 @@ function HeaderInfo() {
             new TransferEventVariantRequestDownloadAllResources(peerId, sessionOrderId)
         ));
     }, [selectedSession]);
+
+    const onCancelClicked = useCallback(() => {
+        if (!selectedSession) return
+        const resourceId = selectedSession.download_all_resource_id
+        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelResourceTransfer(
+            BigInt(selectedSession.id), new TransferTypeVariantReceive(), resourceId
+        )))
+    }, [selectedSession])
 
     if (!selectedSession || selectedSession.is_loading) {
         return null;
@@ -131,35 +138,21 @@ function HeaderInfo() {
                     </div>
                 </>
             )}
-            {isCompleted && (
-                <>
-                    <Separator orientation="vertical" className="h-4" />
-                    <span className="text-sm text-green-500 font-medium">Completed</span>
-                </>
-            )}
-            {downloadAllEnabled && !isCompleted && (
+            {downloadAllEnabled && (
                 <div className="ml-auto">
-                    {downloadAllInProgress || downloadAllCompleted ? (
-                        <DownloadButtonWithProgress
-                            progress={downloadAllProgress}
-                            isReady={true}
-                            isCompleted={downloadAllCompleted}
-                            isInProgress={downloadAllInProgress}
-                            onDownloadClick={onDownloadAll}
-                            size={40}
-                            strokeWidth={4}
-                        />
-                    ) : (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-2"
-                            onClick={onDownloadAll}
-                        >
-                            <Download className="h-4 w-4" />
-                            Download All
-                        </Button>
-                    )}
+                    <DownloadButtonWithProgress
+                        progress={downloadAllProgress}
+                        isReady={true}
+                        isCompleted={downloadAllCompleted}
+                        isInProgress={downloadAllInProgress}
+                        onDownloadClick={onDownloadAll}
+                        onCancelClick={onCancelClicked}
+                        size={40}
+                        strokeWidth={4}
+                        buttonText="Download All"
+                        buttonVariant="outline"
+                        buttonSize="sm"
+                    />
                 </div>
             )}
         </div>

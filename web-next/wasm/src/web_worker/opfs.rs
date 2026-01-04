@@ -22,6 +22,7 @@ use n0_future::time::Instant;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle};
+use crate::file_system::zip_writer::OpfsZipWriter;
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:
@@ -142,6 +143,14 @@ impl OpfsWorker {
         match operation {
             FileOperation::Open => {
                 match async {
+                    if self.file_handles.lock().await.contains_key(&file_path) {
+                        return Ok::<(), JsValue>(());
+                    }
+
+                    if self.device_files.lock().await.contains_key(&file_path) {
+                        return Ok::<(), JsValue>(());
+                    }
+
                     if file_path.contains("zip_entry://") {
                         if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
                             if let Some((zip_filename, entry_name)) = path_after_prefix.split_once('/') {
@@ -161,14 +170,6 @@ impl OpfsWorker {
                             }
                         }
                         return Err(JsValue::from("Invalid zip_entry path format"));
-                    }
-
-                    if self.file_handles.lock().await.contains_key(&file_path) {
-                        return Ok::<(), JsValue>(());
-                    }
-
-                    if self.device_files.lock().await.contains_key(&file_path) {
-                        return Ok::<(), JsValue>(());
                     }
 
                     let file_handle = root.open_file(&file_path).await?;
@@ -517,17 +518,29 @@ impl OpfsWorker {
             }
             FileOperation::CreateZipWriter { zip_filename } => {
                 match async {
-                    {
-                        let writers = self.zip_writers.lock().await;
-                        if writers.contains_key(&zip_filename) {
-                            return Ok::<(), JsValue>(());
+                    let existing_writer = {
+                        let mut writers = self.zip_writers.lock().await;
+                        writers.remove(&zip_filename)
+                    };
+
+                    if let Some(writer) = existing_writer {
+                        log::warn!("Cleaning up existing zip writer for: {}", zip_filename);
+                        let mut writer = Arc::try_unwrap(writer)
+                            .map_err(|_| JsValue::from("Failed to unwrap zip writer"))?
+                            .into_inner();
+                        if let Err(e) = writer.finalize().await {
+                            log::error!("Failed to finalize existing zip writer: {}", e);
                         }
                     }
 
-                    let sync_handle = root.open_file(&zip_filename).await?;
+                    let remove_options = FileSystemRemoveOptions::new();
+                    let _ = root.remove_entry_with_options(&zip_filename, &remove_options);
 
-                    let zip_writer = crate::file_system::zip_writer::OpfsZipWriter::new(sync_handle);
+                    let sync_handle = root.open_file(&zip_filename).await?;
+                    let zip_writer = OpfsZipWriter::new(sync_handle);
+
                     self.zip_writers.lock().await.insert(zip_filename.clone(), Arc::new(Mutex::new(zip_writer)));
+                    log::info!("Created new zip writer for: {}", zip_filename);
 
                     Ok::<(), JsValue>(())
                 }
