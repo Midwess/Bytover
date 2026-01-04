@@ -703,19 +703,18 @@ impl WebRtcPeer {
         self.msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
         let resource_repo = self.resource_repo.clone();
 
-        let start_delimiter = match rx.next().with_cancel(&resource_token).await? {
+        let start_delimiter = loop {
+            match rx.next().with_cancel(&resource_token).await? {
                 Some(packet) => {
-                    if let Ok(delimiter) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
-                        delimiter
-                    }
-                    else {
-                        return Err(WebRtcErrors::InvalidDelimiter("First delimiter must be start delimiter".to_string()))
+                    if let Ok(v) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
+                        break v
                     }
                 }
                 None => {
                     log::warn!("Channel closed before receiving start delimiter");
                     return Err(WebRtcErrors::InvalidDelimiter("Channel closed before start delimiter".into()));
                 }
+            }
         };
 
         let Some(resource_id) = start_delimiter.resource_id() else {
