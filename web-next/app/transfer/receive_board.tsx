@@ -20,6 +20,7 @@ import {
     Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import BPromise from 'bluebird'
 import {
     Collapsible,
     CollapsibleContent,
@@ -406,7 +407,9 @@ function FindSessionSection() {
             }
 
             selectedId.current = selected.id
-            core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(null, BigInt(selected.id), new TransferTypeVariantReceive())))
+            BPromise.delay(100).then(() => {
+                core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(null, BigInt(selected.id), new TransferTypeVariantReceive())))
+            })
         }
     }, [publicSessions?.length, p2pSessions?.length]);
 

@@ -74,7 +74,7 @@ export function useDownloadResource({
         if (session?.is_scope_online && resource?.is_success && resource?.model.path) {
             core.downloadFile(resource.model.path, resource.model.name);
         }
-    }, [resource?.is_success, session?.is_scope_online, resource?.model.path, resource?.model.name]);
+    }, [resource?.is_success, session?.is_scope_online]);
 
     return {
         handleDownload,
