@@ -50,9 +50,8 @@ import {
     CoreOperationOutputVariantLocalResourcePath,
     CoreOperationOutputVariantBool,
     MessageReason,
-    FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel,
-    VideoReceiveResourceViewModel, WebViewOperationVariantOpenUrl,
+    ReceiveResourceViewModel,
+    WebViewOperationVariantOpenUrl,
     NearbyEventVariantLaunch,
     AppEventVariantNearby,
 } from 'shared_types/types/shared_types'
@@ -136,23 +135,15 @@ export class WasmCore {
     }
 
     public useReceiveResource(id: String, isCloud: boolean = false) {
-        const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
+        const [resource, setResource] = useState<ReceiveResourceViewModel | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 if (!transferState) return
 
                 const foundResource = isCloud ?
-                    transferState.received_cloud_sessions?.flatMap(session => [
-                        ...session.file_resources,
-                        ...session.image_resources,
-                        ...session.video_resources
-                    ]).find(r => r.model.order_id === id)
-                    : transferState.received_sessions?.flatMap(session => [
-                        ...session.file_resources,
-                        ...session.image_resources,
-                        ...session.video_resources
-                    ]).find(r => r.model.order_id === id)
+                    transferState.received_cloud_sessions?.flatMap(session => session.resources).find(r => r.model.order_id === id)
+                    : transferState.received_sessions?.flatMap(session => session.resources).find(r => r.model.order_id === id)
 
                 if (!isEqual(resource, foundResource)) {
                     setResource(foundResource)

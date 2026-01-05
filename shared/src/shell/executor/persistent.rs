@@ -144,7 +144,7 @@ pub trait NativePersistent: Send + Sync {
                 session_id,
                 resource_names
             }) => {
-                let result = self.transfer_session_repository().generate_resource_paths(session_id, resource_names).await?;
+                let result = self.transfer_session_repository().generate_resource_saved_paths(session_id, resource_names).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateThumbnailPath {

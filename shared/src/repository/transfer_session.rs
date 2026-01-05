@@ -50,7 +50,7 @@ pub trait TransferSessionRepository: Repository<TransferSession, TransferSession
     ) -> Result<Option<TransferSession>, PersistenceError>;
 
     async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError>;
-    async fn generate_resource_paths(
+    async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
         resource_names: HashMap<u64, String>

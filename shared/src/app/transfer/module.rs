@@ -8,15 +8,13 @@ use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{
-    FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel,
-    ReceiveSessionViewModel,
-    VideoReceiveResourceViewModel
+    ReceiveResourceViewModel,
+    ReceiveSessionViewModel
 };
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::finding_scope::FindingScope;
-use crate::entities::local_resource::{LocalResource, ResourceType};
+use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
@@ -278,7 +276,7 @@ impl AppModule<BitBridge> for TransferModule {
                     TransferSessionModelEvent::Update(session_id, action) => {
                         let should_persist = matches!(
                             action,
-                            crate::app::core::model_events::TransferSessionUpdateEvent::SessionDetailUpdated(_)
+                            TransferSessionUpdateEvent::SessionDetailUpdated(_)
                         );
 
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
@@ -682,16 +680,13 @@ impl AppModule<BitBridge> for TransferModule {
                         }
                     };
 
-                let image_resources = it
+                let resources = it
                     .resources
                     .iter()
                     .filter_map(|resource| {
                         let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
 
-                        if resource.r#type != ResourceType::Image {
-                            return None;
-                        }
-                        Some(ImageReceiveResourceViewModel {
+                        Some(ReceiveResourceViewModel {
                             model: SelectedResourceViewModel::from(resource),
                             completion: progress.percentage() as f32,
                             is_ready: is_p2p || progress.status.is_completed(),
@@ -701,45 +696,47 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                     .collect();
 
-                let video_resources = it
-                    .resources
-                    .iter()
-                    .filter_map(|resource| {
-                        if resource.r#type != ResourceType::Video {
-                            return None;
+                let download_all_resource = if is_p2p && !it.resources.is_empty() {
+                    let download_all_progress = it.progress.iter().find(|p| p.resource_order_id == u64::MAX);
+
+                    let model = if let Some(resource_all) = it.session_resource.as_ref() {
+                        let mut m = SelectedResourceViewModel::from(resource_all);
+                        m.name = format!("all-resources-{}.zip", it.alias);
+                        m.order_id = u64::MAX.to_string();
+                        m
+                    } else {
+                        SelectedResourceViewModel {
+                            order_id: u64::MAX.to_string(),
+                            name: format!("all-resources-{}.zip", it.alias),
+                            size_gb: 0.0,
+                            size_mb: 0.0,
+                            display_path: String::new(),
+                            path: LocalResourcePath::RelativePath { path: String::new(), is_private: false },
+                            thumbnail_path: None,
+                            r#type: ResourceType::File,
                         }
-                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
-                        Some(VideoReceiveResourceViewModel {
-                            model: SelectedResourceViewModel::from(resource),
-                            completion: progress.percentage() as f32,
-                            is_completed: progress.status.is_completed(),
-                            is_ready: is_p2p || progress.status.is_completed(),
-                            is_success: progress.is_success()
-                        })
-                    })
-                    .collect();
+                    };
 
-                let file_resources = it
-                    .resources
-                    .iter()
-                    .filter_map(|resource| {
-                        if !matches!(resource.r#type, ResourceType::File | ResourceType::Folder) {
-                            return None;
+                    Some(if let Some(progress) = download_all_progress {
+                        ReceiveResourceViewModel {
+                            model,
+                            completion: progress.percentage() as f32,
+                            is_ready: progress.status.is_completed(),
+                            is_completed: progress.status.is_completed(),
+                            is_success: progress.is_success()
                         }
-                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
-
-                        Some(FileReceiveResourceViewModel {
-                            model: SelectedResourceViewModel::from(resource),
-                            completion: progress.percentage() as f32,
-                            is_completed: progress.status.is_completed(),
-                            is_ready: is_p2p || progress.status.is_completed(),
-                            is_success: progress.is_success()
-                        })
+                    } else {
+                        ReceiveResourceViewModel {
+                            model,
+                            completion: 0.0,
+                            is_ready: true,
+                            is_completed: false,
+                            is_success: false
+                        }
                     })
-                    .collect();
-
-                let download_all_progress = it.progress.iter().find(|p| p.resource_order_id == u64::MAX);
-                let resource_all = it.session_resource.as_ref();
+                } else {
+                    None
+                };
 
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
@@ -761,21 +758,13 @@ impl AppModule<BitBridge> for TransferModule {
                     is_loading,
                     loading_status,
                     error_message,
+                    resources,
                     is_completed: it.is_completed(),
                     is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
                     display_download_speed: it.status().to_string(),
                     progress: it.total_progress(),
-                    image_resources,
-                    video_resources,
-                    file_resources,
                     display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
-                    download_all_enabled: is_p2p && !it.resources.is_empty(),
-                    download_all_progress: download_all_progress.map(|p| p.percentage() as f32),
-                    download_all_in_progress: download_all_progress.map(|p| !p.is_completed()).unwrap_or(false),
-                    download_all_success: download_all_progress.map(|it| it.is_success()).unwrap_or(false),
-                    download_resource_path: resource_all.map(|r| r.path.clone()),
-                    download_all_completed: download_all_progress.map(|p| p.is_success()).unwrap_or(false),
-                    download_all_resource_id: download_all_progress.map(|_| u64::MAX)
+                    download_all_resource
                 })
             })
             .collect::<Vec<_>>();

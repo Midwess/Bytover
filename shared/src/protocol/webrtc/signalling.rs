@@ -386,7 +386,7 @@ impl Signaller for WebSignaller {
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
         loop {
             let Some(message) = self.client.try_next_message().await.map_err(Into::<SignalingError>::into)? else {
-                n0_future::time::sleep(Duration::from_millis(100)).await;
+                n0_future::time::sleep(Duration::from_millis(5)).await;
                 continue;
             };
 

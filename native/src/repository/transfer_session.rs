@@ -149,7 +149,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         Ok(())
     }
 
-    async fn generate_resource_paths(
+    async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
         resource_names: HashMap<u64, String>

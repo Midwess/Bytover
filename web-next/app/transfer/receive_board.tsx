@@ -2,18 +2,17 @@
 import * as React from "react";
 import {
     AppEventVariantTransfer,
-    FileReceiveResourceViewModel,
-    ImageReceiveResourceViewModel, MessageReasonVariantFailedToFindPublicSession,
+    ReceiveResourceViewModel,
+    MessageReasonVariantFailedToFindPublicSession,
     MessageReasonVariantFailedToLoadSession,
     ReceiveSessionViewModel,
     ResourceTypeVariantFolder,
+    ResourceTypeVariantImage,
+    ResourceTypeVariantVideo,
     SelectedResourceViewModel,
     TransferEventVariantFindSession,
     TransferEventVariantViewSession,
-    TransferEventVariantRequestDownloadResource,
-    TransferEventVariantRequestDownloadAllResources,
-    TransferTypeVariantReceive,TransferEventVariantCancelResourceTransfer,
-    VideoReceiveResourceViewModel
+    TransferTypeVariantReceive
 } from 'shared_types/types/shared_types'
 import {
     Book,
@@ -33,8 +32,9 @@ import { Input } from "@/components/ui/input";
 import CircleProgress from "@/components/ui/progress";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import DownloadButtonWithProgress from "./download-button-with-progress";
 import { useUrlState } from "@/hooks/use-url";
+import { ResourceDownload } from "./components/resource-download";
+import { DownloadAllButton } from "./components/download-all-button";
 import {
     SidebarProvider,
     SidebarInset,
@@ -83,36 +83,6 @@ function HeaderInfo() {
     const selectedSessionId = core.useSelectedSession()?.id;
     const selectedSession = core.useSession(selectedSessionId ?? '');
 
-    const onDownloadAll = useCallback(() => {
-        if (!selectedSession) return;
-        if (selectedSession?.download_all_success && selectedSession?.download_resource_path) {
-            core.downloadFile(selectedSession!.download_resource_path!, `all-resources-${selectedSession.alias}.zip`)
-            return
-        }
-
-        const peerId = selectedSession.sender_id;
-        const sessionOrderId = BigInt(selectedSession.id);
-        core.update(new AppEventVariantTransfer(
-            new TransferEventVariantRequestDownloadAllResources(peerId, sessionOrderId)
-        ));
-    }, [selectedSession, selectedSession?.download_all_success, selectedSession?.download_resource_path]);
-
-    useEffect(() => {
-        if (selectedSession?.is_scope_online && selectedSession?.download_all_success && selectedSession?.download_resource_path) {
-            core.downloadFile(selectedSession!.download_resource_path!, `all-resources-${selectedSession.alias}.zip`)
-        }
-    }, [
-        selectedSession?.download_all_success
-    ])
-
-    const onCancelClicked = useCallback(() => {
-        if (!selectedSession) return
-        const resourceId = selectedSession.download_all_resource_id
-        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelResourceTransfer(
-            BigInt(selectedSession.id), new TransferTypeVariantReceive(), resourceId
-        )))
-    }, [selectedSession])
-
     if (!selectedSession || selectedSession.is_loading) {
         return null;
     }
@@ -120,14 +90,8 @@ function HeaderInfo() {
     const progress = (selectedSession as ReceiveSessionViewModel).progress || 0
     const displaySpeed = (selectedSession as ReceiveSessionViewModel).display_download_speed || ''
     const isCompleted = (selectedSession as ReceiveSessionViewModel).is_completed || false
-    const downloadAllEnabled = (selectedSession as ReceiveSessionViewModel).download_all_enabled || false
-    const downloadAllProgress = (selectedSession as ReceiveSessionViewModel).download_all_progress ?? 0
-    const downloadAllInProgress = (selectedSession as ReceiveSessionViewModel).download_all_in_progress || false
-    const downloadAllCompleted = (selectedSession as ReceiveSessionViewModel).download_all_completed || false
 
-    const totalResources = (selectedSession.image_resources?.length || 0) +
-        (selectedSession.video_resources?.length || 0) +
-        (selectedSession.file_resources?.length || 0);
+    const totalResources = selectedSession.resources?.length || 0;
 
     return (
         <div className="flex items-center gap-3 flex-1">
@@ -151,21 +115,9 @@ function HeaderInfo() {
                     </div>
                 </>
             )}
-            {downloadAllEnabled && (
+            {selectedSession.download_all_resource && (
                 <div className="ml-auto">
-                    <DownloadButtonWithProgress
-                        progress={downloadAllProgress}
-                        isReady={true}
-                        isCompleted={downloadAllCompleted}
-                        isInProgress={downloadAllInProgress}
-                        onDownloadClick={onDownloadAll}
-                        onCancelClick={onCancelClicked}
-                        size={40}
-                        strokeWidth={4}
-                        buttonText="Download All"
-                        buttonVariant="outline"
-                        buttonSize="sm"
-                    />
+                    <DownloadAllButton session={selectedSession as ReceiveSessionViewModel} />
                 </div>
             )}
         </div>
@@ -335,16 +287,20 @@ function ContentBoard() {
         </div>
     }
 
+    const images = selectedSession?.resources.filter(r => r.model.type instanceof ResourceTypeVariantImage) || [];
+    const videos = selectedSession?.resources.filter(r => r.model.type instanceof ResourceTypeVariantVideo) || [];
+    const files = selectedSession?.resources.filter(r => !(r.model.type instanceof ResourceTypeVariantImage) && !(r.model.type instanceof ResourceTypeVariantVideo)) || [];
+
     return (
         <div className="w-full h-full flex flex-col gap-4 pb-4">
             <Collapsible
-                className={`w-full ${selectedSession?.image_resources.length ? 'visible' : 'hidden'}`}>
+                className={`w-full ${images.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.image_resources.length} Image${selectedSession?.image_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${images.length} Image${images.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
                         {
-                            selectedSession?.image_resources.map((image: ImageReceiveResourceViewModel, index: number) => {
+                            images.map((image: ReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={image.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
                                         <MediaView id={image.model.order_id} isCloud={selectedSession.is_cloud} sessionId={selectedSession.id}/>
@@ -356,13 +312,13 @@ function ContentBoard() {
                 </CollapsibleContent>
             </Collapsible>
             <Collapsible
-                className={`w-full ${selectedSession?.video_resources.length ? 'visible' : 'hidden'}`}>
+                className={`w-full ${videos.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.video_resources.length} Video${selectedSession?.video_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${videos.length} Video${videos.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"space-y-2"}>
                     <div className="flex flex-col md:grid md:grid-cols-3 gap-4 pb-8">
                         {
-                            selectedSession?.video_resources.map((video: VideoReceiveResourceViewModel, index: number) => {
+                            videos.map((video: ReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={video.model.order_id} index={index}>
                                     <div className={isMobile ? "h-auto" : "h-[200px]"}>
                                         <MediaView id={video.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
@@ -374,14 +330,14 @@ function ContentBoard() {
                 </CollapsibleContent>
             </Collapsible>
             <Collapsible
-                className={`w-full h-fit ${selectedSession?.file_resources.length ? 'visible' : 'hidden'}`}>
+                className={`w-full h-fit ${files.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
-                    title={`${selectedSession?.file_resources.length} File${selectedSession?.file_resources.length !== 1 ? 's' : ''}`}/>
+                    title={`${files.length} File${files.length !== 1 ? 's' : ''}`}/>
                 <CollapsibleContent className={"h-full"}>
                     <div
                         className="flex flex-col gap-4 h-fit min-h-[400px]">
                         {
-                            selectedSession?.file_resources.map((file: FileReceiveResourceViewModel, index: number) => {
+                            files.map((file: ReceiveResourceViewModel, index: number) => {
                                 return <ItemEffect key={file.model.order_id} index={index}>
                                     <div className={"h-fit"}>
                                         <FileView key={file.model.order_id} id={file.model.order_id} isCloud={isCloud} sessionId={selectedSession.id}/>
@@ -704,46 +660,7 @@ function FileView(props: {
         }
     }, [model, model?.thumbnail_path, thumbnailSource]);
 
-    const onDownloadClick = useCallback(() => {
-        if (!model || !session) return
-
-        if (!isCloud && !file?.is_success) {
-            const peerId = session.sender_id;
-            const sessionOrderId = BigInt(sessionId);
-            const resourceOrderId = BigInt(id);
-
-            core.update(new AppEventVariantTransfer(
-                new TransferEventVariantRequestDownloadResource(
-                    peerId,
-                    sessionOrderId,
-                    resourceOrderId
-                )
-            ));
-        }
-        else {
-            core.downloadFile(model.path, model.name)
-        }
-    }, [model?.path, model?.name, isCloud, session, sessionId, id, file?.is_success])
-
-    const onCancelClick = useCallback(() => {
-        if (!model || !session) return
-
-        core.update(new AppEventVariantTransfer(
-            new TransferEventVariantCancelResourceTransfer(
-                BigInt(sessionId),
-                new TransferTypeVariantReceive(),
-                BigInt(id)
-            )
-        ));
-    }, [model, session, sessionId, id])
-
-    useEffect(() => {
-        if (session?.is_scope_online && file?.is_success && model?.path) {
-            core.downloadFile(model.path, model.name)
-        }
-    }, [file?.is_success, session?.is_scope_online])
-
-    if (!file || !model) return null;
+    if (!file || !model || !session) return null;
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
@@ -780,13 +697,9 @@ function FileView(props: {
 
             {/* Download Button / Progress */}
             <div className="shrink-0">
-                <DownloadButtonWithProgress
-                    progress={file.completion}
-                    isReady={file.is_ready}
-                    isCompleted={file.is_completed}
-                    isInProgress={!file.is_completed && file.completion > 0}
-                    onDownloadClick={onDownloadClick}
-                    onCancelClick={onCancelClick}
+                <ResourceDownload
+                    resource={file}
+                    session={session as ReceiveSessionViewModel}
                     size={40}
                     strokeWidth={4}
                 />
@@ -805,7 +718,7 @@ function MediaView(props: {
     const session = core.useSession(sessionId);
 
     const model: SelectedResourceViewModel | undefined = media?.model;
-    const isVideo = media instanceof VideoReceiveResourceViewModel;
+    const isVideo = model?.type instanceof ResourceTypeVariantVideo;
     const isMobile = useIsMobile();
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
@@ -815,45 +728,7 @@ function MediaView(props: {
         }
     }, [model?.thumbnail_path]);
 
-    const onDownloadClick = useCallback(() => {
-        if (!model || !session) return
-
-        if (!isCloud && !media?.is_success) {
-            const peerId = session.sender_id;
-            const sessionOrderId = BigInt(sessionId);
-            const resourceOrderId = BigInt(id);
-
-            core.update(new AppEventVariantTransfer(
-                new TransferEventVariantRequestDownloadResource(
-                    peerId,
-                    sessionOrderId,
-                    resourceOrderId
-                )
-            ));
-        } else {
-            core.downloadFile(model.path, model.name)
-        }
-    }, [model?.path, model?.name, isCloud, session, sessionId, id, media?.is_success])
-
-    const onCancelClick = useCallback(() => {
-        if (!model || !session) return
-
-        core.update(new AppEventVariantTransfer(
-            new TransferEventVariantCancelResourceTransfer(
-                BigInt(sessionId),
-                new TransferTypeVariantReceive(),
-                BigInt(id)
-            )
-        ));
-    }, [model, session, sessionId, id])
-
-    useEffect(() => {
-        if (session?.is_scope_online && media?.is_success && model?.path) {
-            core.downloadFile(model.path, model.name)
-        }
-    }, [media?.is_success, session?.is_scope_online])
-
-    if (!media || !model) return null;
+    if (!media || !model || !session) return null;
 
     let displaySize = `${model.size_mb} MB`;
     if (model.size_gb > 0) {
@@ -893,13 +768,9 @@ function MediaView(props: {
 
                 {/* Actions */}
                 <div className="shrink-0">
-                    <DownloadButtonWithProgress
-                        progress={media.completion}
-                        isReady={media.is_ready}
-                        isCompleted={media.is_completed}
-                        isInProgress={media.completion > 0 && !media.is_completed}
-                        onDownloadClick={onDownloadClick}
-                        onCancelClick={onCancelClick}
+                    <ResourceDownload
+                        resource={media}
+                        session={session as ReceiveSessionViewModel}
                         size={32}
                         strokeWidth={3}
                     />
@@ -947,13 +818,9 @@ function MediaView(props: {
 
                 {/* Download Button / Progress */}
                 <div className="shrink-0">
-                    <DownloadButtonWithProgress
-                        progress={media.completion}
-                        isReady={media.is_ready}
-                        isCompleted={media.is_completed}
-                        isInProgress={media.completion > 0 && !media.is_completed}
-                        onDownloadClick={onDownloadClick}
-                        onCancelClick={onCancelClick}
+                    <ResourceDownload
+                        resource={media}
+                        session={session as ReceiveSessionViewModel}
                         size={36}
                         strokeWidth={3}
                     />

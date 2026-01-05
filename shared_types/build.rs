@@ -31,6 +31,7 @@ use shared::app::operations::CoreOperationOutput;
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfViewModel};
 use shared::app::transfer::module::{TransferEvent, TransferModel};
 use shared::app::BitBridge;
+use shared::app::view_models::receive_session::ReceiveResourceViewModel;
 use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
@@ -123,6 +124,7 @@ fn main() {
     gen.register_type::<ResourceNotificationRequest>().unwrap();
 
     gen.register_app::<BitBridge>().unwrap();
+    gen.register_type::<ReceiveResourceViewModel>().unwrap();
 
     let output_root = PathBuf::from("./generated");
 
