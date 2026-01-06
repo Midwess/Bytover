@@ -13,7 +13,7 @@ use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use idb::Database;
-use shared::entities::local_resource::{LocalResource, LocalResourcePath};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::transfer_session::{TransferProgress, TransferSession};
 use shared::repository::errors::PersistenceError;
 use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository, ZipDownloadPaths};
@@ -160,12 +160,17 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, (String, ResourceType)>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
 
-        for (resource_order_id, resource_name) in resource_names {
-            let extension = resource_name.split('.').next_back().unwrap_or("unknown").to_string();
+        for (resource_order_id, (resource_name, resource_type)) in resource_names {
+            let final_name = match resource_type {
+                ResourceType::Folder => format!("{}.zip", resource_name),
+                _ => resource_name
+            };
+
+            let extension = final_name.split('.').next_back().unwrap_or("unknown").to_string();
             result.insert(
                 resource_order_id,
                 LocalResourcePath::session_resource(session_order_id, resource_order_id, extension)

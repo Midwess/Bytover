@@ -1,4 +1,4 @@
-use crate::entities::local_resource::{LocalResource, LocalResourcePath};
+use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferType};
 use crate::repository::errors::PersistenceError;
@@ -53,7 +53,7 @@ pub trait TransferSessionRepository: Repository<TransferSession, TransferSession
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, (String, ResourceType)>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
 
     async fn generate_zip_download_paths(

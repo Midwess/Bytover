@@ -8,7 +8,7 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use shared::entities::local_resource::{LocalResource, LocalResourcePath};
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::transfer_session::{TransferProgress, TransferSession};
 use shared::repository::errors::PersistenceError;
 use shared::repository::path_resolver::PathResolver;
@@ -152,18 +152,23 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, (String, ResourceType)>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let workdir = PathBuf::from(self.path_resolver.get_session_dir_path(session_order_id).await);
         let mut result = HashMap::new();
         let mut used_names = HashSet::new();
 
-        for (resource_id, resource_name) in resource_names {
-            let mut candidate_name = resource_name.clone();
+        for (resource_id, (resource_name, resource_type)) in resource_names {
+            let final_name = match resource_type {
+                ResourceType::Folder => format!("{}.zip", resource_name),
+                _ => resource_name.clone()
+            };
+
+            let mut candidate_name = final_name.clone();
             let mut counter = 1;
 
             while used_names.contains(&candidate_name) {
-                candidate_name = generate_new_filename(&resource_name, counter);
+                candidate_name = generate_new_filename(&final_name, counter);
                 counter += 1;
             }
 

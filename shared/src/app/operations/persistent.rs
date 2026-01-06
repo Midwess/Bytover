@@ -58,7 +58,7 @@ pub enum TransferSessionPersistentOperation {
     },
     GenerateResourcePath {
         session_id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, (String, ResourceType)>
     },
     GenerateThumbnailPath {
         session_id: Option<u64>,
@@ -199,7 +199,7 @@ impl TransferSessionPersistentOperation {
 
     pub fn generate_resource_paths(
         id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, (String, ResourceType)>
     ) -> AppRequestBuilder<impl Future<Output = Result<HashMap<u64, LocalResourcePath>, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::TransferSession(
             TransferSessionPersistentOperation::GenerateResourcePath {

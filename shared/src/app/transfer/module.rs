@@ -466,10 +466,11 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let resource_order_id = resource.order_id;
                 let resource_name = resource.name.clone();
+                let resource_type = resource.r#type.clone();
 
                 Command::handle_result(move |it| async move {
                     let mut generate_file_paths_request = HashMap::new();
-                    generate_file_paths_request.insert(resource_order_id, resource_name);
+                    generate_file_paths_request.insert(resource_order_id, (resource_name, resource_type));
 
                     let mut generated_saved_paths = it
                         .app()
@@ -479,12 +480,14 @@ impl AppModule<BitBridge> for TransferModule {
                         ))
                         .await?;
 
+                    log::info!("Generated saved paths: {:?}", generated_saved_paths);
                     let Some(generated_path) = generated_saved_paths.remove(&resource_order_id) else {
                         log::warn!("Failed to generate path for resource {}", resource_order_id);
                         return Ok(());
                     };
 
                     let mut updated_resource = resource;
+                    updated_resource.name = generated_path.name().unwrap_or(updated_resource.name.clone());
                     updated_resource.path = generated_path;
 
                     it.update_model(TransferSessionModelEvent::Update(
