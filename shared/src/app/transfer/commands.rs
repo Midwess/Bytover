@@ -1,7 +1,7 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{SessionLoadError, TransferSessionModelEvent, UpdateAction};
-use crate::app::nearby::module::NearbyEvent;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
@@ -10,7 +10,7 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResource;
-use crate::entities::target::TransferTarget;
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_session::{SessionResourceUpdate, TransferProgress, TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
@@ -19,6 +19,8 @@ use core_services::utils::string::StringExt;
 use n0_future::StreamExt;
 use schema::devlog::bitbridge::PeerErrorsMessage;
 use std::collections::HashMap;
+use crate::app::operations::rpc::RpcOperation;
+use crate::entities::finding_scope::FindingScope;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
@@ -28,7 +30,7 @@ impl AppCommand {
             if let TransferTarget::P2P { ref scope, .. } = session.target {
                 let mut scope = scope.clone();
                 scope.set_watcher(true);
-                self.update_model(NearbyEvent::AddFindingScope(scope));
+                self.update_model(P2PEvent::AddFindingScope(scope));
             }
         }
 
@@ -52,7 +54,7 @@ impl AppCommand {
             .await;
 
         if let TransferTarget::P2P { ref scope, .. } = transfer_session.target {
-            self.update_model(NearbyEvent::RemoveFindingScope(scope.clone()));
+            self.update_model(P2PEvent::RemoveFindingScope(scope.clone()));
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
@@ -178,7 +180,7 @@ impl AppCommand {
         if let TransferTarget::P2P { ref scope, .. } = session.target {
             let mut scope = scope.clone();
             scope.set_watcher(true);
-            self.update_model(NearbyEvent::AddFindingScope(scope));
+            self.update_model(P2PEvent::AddFindingScope(scope));
         }
 
         self.update_model(TransferSessionModelEvent::Add(session));
@@ -606,6 +608,76 @@ impl AppCommand {
                 _ => continue
             }
         }
+
+        Ok(())
+    }
+
+    pub async fn view_session(
+        &self,
+        mut session: TransferSession,
+        session_id: TransferSessionId,
+        password: Option<String>
+    ) -> Result<(), CoreError> {
+        use crate::app::AppEvent;
+
+        if let TransferTarget::P2P { scope, .. } = &mut session.target {
+            scope.set_watcher(false);
+        };
+
+        match &session.target {
+            TransferTarget::P2P {
+                connection_state,
+                scope,
+                from_peer,
+                ..
+            } => {
+                let should_request = match connection_state {
+                    P2PConnectionState::NotConnected | P2PConnectionState::Failed(_) => true,
+                    P2PConnectionState::Connected => session.resources.is_empty(),
+                    P2PConnectionState::Connecting => false
+                };
+
+                if !should_request {
+                    return Ok(());
+                }
+
+                if from_peer.is_none() {
+                    self.update_model(AppEvent::P2P(P2PEvent::AddFindingScope(scope.clone())));
+                    return Ok(());
+                }
+
+                let peer_id = from_peer.as_ref().unwrap().id().to_string();
+                self.request_session_detail(peer_id, session_id, session.order_id, password).await
+            }
+            TransferTarget::Internet { .. } => {
+                self.view_public_session(session, password).await
+            }
+        }
+    }
+
+    pub async fn start_p2p_transfer(
+        &self,
+        selected_resources: Vec<LocalResource>,
+        password: Option<String>,
+        user: crate::entities::user::User
+    ) -> Result<(), CoreError> {
+        let p2p_session = self.run(RpcOperation::create_p2p_session()).await?;
+
+        let mut session = TransferSession::p2p(
+            selected_resources,
+            password,
+            p2p_session.signalling_room_id.clone(),
+            p2p_session.signalling_scope.clone(),
+            p2p_session.alias.clone(),
+            p2p_session.access_url.clone(),
+            p2p_session.session_id
+        );
+
+        let scope = FindingScope::new(&p2p_session.signalling_room_id);
+        self.update_model(P2PEvent::AddFindingScope(scope));
+
+        session.from_user = user;
+        self.update_model(TransferSessionModelEvent::Add(session.clone()));
 
         Ok(())
     }

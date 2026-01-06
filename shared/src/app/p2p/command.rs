@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::nearby::module::NearbyEvent;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::internet::InternetOperation;
@@ -22,7 +22,7 @@ use uuid::Uuid;
 impl AppCommand {
     pub async fn restart_nearby(&self, auto_launch: bool) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
-        self.notify_event(NearbyEvent::Launch { auto_launch });
+        self.notify_event(P2PEvent::Launch { auto_launch });
 
         Ok(())
     }
@@ -66,8 +66,8 @@ impl AppCommand {
 
         let peer = self.gen_peer(user, device).await;
 
-        self.update_model(NearbyEvent::UpdateMe { new_peer: peer.clone() });
-        self.notify_event(NearbyEvent::AddFindingScope(FindingScope::direct_owned(&peer.id)));
+        self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
+        self.notify_event(P2PEvent::AddFindingScope(FindingScope::direct_owned(&peer.id)));
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
@@ -78,12 +78,12 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
                     log::info!(target: "nearby", "New peer connected: {}", peer.id);
 
-                    self.notify_event(NearbyEvent::UpdateNearbyPeers {
+                    self.notify_event(P2PEvent::UpdateNearbyPeers {
                         new_peer: vec![peer.clone()],
                         removed: vec![]
                     });
 
-                    self.notify_event(NearbyEvent::AddFindingScope(FindingScope::direct_member(&peer.id)));
+                    self.notify_event(P2PEvent::AddFindingScope(FindingScope::direct_member(&peer.id)));
 
                     self.update_p2p_sessions_with_peer(peer.clone());
 
@@ -93,11 +93,11 @@ impl AppCommand {
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
-                    self.notify_event(NearbyEvent::ClearNearbyPeers);
+                    self.notify_event(P2PEvent::ClearNearbyPeers);
                     let _ = self.run(P2POperation::stop()).await;
 
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
-                    self.notify_event(NearbyEvent::Launch { auto_launch });
+                    self.notify_event(P2PEvent::Launch { auto_launch });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning) => {
@@ -106,12 +106,12 @@ impl AppCommand {
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!(target: "nearby", "Nearby server stopped, stop server");
-                    self.notify_event(NearbyEvent::ClearNearbyPeers);
+                    self.notify_event(P2PEvent::ClearNearbyPeers);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
                     log::info!(target: "nearby", "Scope state changed: {} -> {:?}", scope_id, state);
-                    self.notify_event(NearbyEvent::ScopeStateUpdated { scope_id, state });
+                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state });
                 }
                 CoreOperationOutput::None => {}
                 _ => {
@@ -145,14 +145,14 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
-                    self.notify_event(NearbyEvent::RemoveFindingScope(FindingScope::new(&peer.id)));
-                    self.notify_event(NearbyEvent::PeerDisconnected { peer_id: peer.id.clone() });
+                    self.notify_event(P2PEvent::RemoveFindingScope(FindingScope::new(&peer.id)));
+                    self.notify_event(P2PEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(scopes)) => {
                     let mut updated_peer = peer.clone();
                     updated_peer.scopes = scopes;
-                    self.notify_event(NearbyEvent::PeerUpdated { peer: updated_peer });
+                    self.notify_event(P2PEvent::PeerUpdated { peer: updated_peer });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
@@ -199,7 +199,7 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
-                    self.notify_event(NearbyEvent::ScopeStateUpdated { scope_id, state });
+                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state });
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");
@@ -214,13 +214,13 @@ impl AppCommand {
             }
         }
 
-        self.notify_event(NearbyEvent::UpdateNearbyPeers {
+        self.notify_event(P2PEvent::UpdateNearbyPeers {
             new_peer: vec![],
             removed: vec![peer.clone()]
         });
     }
 
     fn update_p2p_sessions_with_peer(&self, peer: Peer) {
-        self.notify_event(NearbyEvent::PeerUpdated { peer });
+        self.notify_event(P2PEvent::PeerUpdated { peer });
     }
 }

@@ -31,7 +31,7 @@ import {
     EnvironmentEventVariantAppLaunched,
     AuthenticationViewModel,
     EnvironmentViewModel,
-    NearbyViewModel,
+    P2PViewModel,
     TransferViewModel,
     ResourceSelection,
     LocalResourcePathVariantPlatformIdentifier,
@@ -52,8 +52,8 @@ import {
     MessageReason,
     ReceiveResourceViewModel,
     WebViewOperationVariantOpenUrl,
-    NearbyEventVariantLaunch,
-    AppEventVariantNearby,
+    P2PEventVariantLaunch,
+    AppEventVariantP2P,
 } from 'shared_types/types/shared_types'
 import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
 import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
@@ -81,7 +81,7 @@ export class WasmCore {
     isNearbyEnabled: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
-    nearbyState: Observable<NearbyViewModel> = new Observable()
+    nearbyState: Observable<P2PViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
     shelfState: Observable<ShelfViewModel> = new Observable()
 
@@ -297,7 +297,7 @@ export class WasmCore {
         }
 
         this.isNearbyEnabled.set(true)
-        await this.update(new AppEventVariantNearby(new NearbyEventVariantLaunch(true)))
+        await this.update(new AppEventVariantP2P(new P2PEventVariantLaunch(true)))
     }
 
     public async update(event: AppEvent) {
@@ -486,7 +486,7 @@ export class WasmCore {
 
         this.environmentState.set(viewModel.environment!)
         this.authenticationState.set(viewModel.authentication!)
-        this.nearbyState.set(viewModel.nearby!)
+        this.nearbyState.set(viewModel.p2p!)
         this.transferState.set(viewModel.transfer!)
         this.shelfState.set(viewModel.shelf!)
     }

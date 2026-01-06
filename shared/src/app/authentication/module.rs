@@ -6,7 +6,7 @@ use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
 
 use crate::app::modules::AppModule;
-use crate::app::nearby::module::NearbyEvent;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
@@ -103,7 +103,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
 
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    app.notify_event(NearbyEvent::Launch { auto_launch: true });
+                    app.notify_event(P2PEvent::Launch { auto_launch: true });
                 })
             }
             AuthenticationEvent::Feedback { email, message } => {

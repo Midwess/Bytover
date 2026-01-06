@@ -2,7 +2,7 @@ pub mod authentication;
 pub mod core;
 pub mod environment;
 pub mod modules;
-pub mod nearby;
+pub mod p2p;
 pub mod operations;
 pub mod shelf;
 pub mod transfer;
@@ -19,7 +19,7 @@ use crux_core::{App, Command};
 use derive_more::From;
 use environment::module::{EnvironmentEvent, EnvironmentModule, EnvironmentViewModel};
 use modules::AppModule;
-use nearby::module::{NearbyEvent, NearbyModel, NearbyModule, NearbyViewModel};
+use p2p::module::{P2PEvent, P2PModel, P2PModule, P2PViewModel};
 use serde::{Deserialize, Serialize};
 use transfer::module::{TransferEvent, TransferModel, TransferModule, TransferViewModel};
 
@@ -31,7 +31,7 @@ pub struct BitBridge {
     environment: EnvironmentModule,
     authentication: AuthenticationModule,
     transfer: TransferModule,
-    nearby: NearbyModule,
+    p2p: P2PModule,
     shelf: ShelfModule
 }
 
@@ -42,7 +42,7 @@ impl Default for BitBridge {
             authentication: AuthenticationModule,
             shelf: ShelfModule,
             transfer: TransferModule,
-            nearby: NearbyModule
+            p2p: P2PModule
         }
     }
 }
@@ -51,7 +51,7 @@ impl Default for BitBridge {
 pub struct AppModel {
     authentication: AuthenticationModel,
     transfer: TransferModel,
-    nearby: NearbyModel,
+    pub p2p: P2PModel,
     shelf: ShelfModel,
     environment: EnvironmentModel
 }
@@ -61,7 +61,7 @@ pub struct AppViewModel {
     pub environment: Option<EnvironmentViewModel>,
     pub authentication: Option<AuthenticationViewModel>,
     pub transfer: Option<TransferViewModel>,
-    pub nearby: Option<NearbyViewModel>,
+    pub p2p: Option<P2PViewModel>,
     pub shelf: Option<ShelfViewModel>
 }
 
@@ -78,7 +78,7 @@ pub enum AppEvent {
     Environment(EnvironmentEvent),
     Authentication(AuthenticationEvent),
     Transfer(TransferEvent),
-    Nearby(NearbyEvent),
+    P2P(P2PEvent),
     Shelf(ShelfEvent),
     Void
 }
@@ -95,7 +95,7 @@ impl App for BitBridge {
             AppEvent::Environment(event) => self.environment.update(event, model, caps),
             AppEvent::Authentication(event) => self.authentication.update(event, model, caps),
             AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
-            AppEvent::Nearby(event) => self.nearby.update(event, model, caps),
+            AppEvent::P2P(event) => self.p2p.update(event, model, caps),
             AppEvent::Shelf(event) => self.shelf.update(event, model, caps),
             AppEvent::Void => Command::done()
         }
@@ -106,7 +106,7 @@ impl App for BitBridge {
             environment: Some(self.environment.view(model)),
             authentication: Some(self.authentication.view(model)),
             transfer: Some(self.transfer.view(model)),
-            nearby: Some(self.nearby.view(model)),
+            p2p: Some(self.p2p.view(model)),
             shelf: Some(self.shelf.view(model))
         }
     }

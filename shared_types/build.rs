@@ -14,7 +14,7 @@ use schema::value::static_resource::static_resource::Source;
 use schema::devlog::bitbridge::view_session_detail_response::Result as ViewSessionDetailResponseResult;
 use shared::app::authentication::module::{AuthenticationEvent, AuthenticationModel};
 use shared::app::environment::module::{EnvironmentEvent, EnvironmentModel};
-use shared::app::nearby::module::NearbyEvent;
+use shared::app::p2p::module::P2PEvent;
 use shared::app::operations::device::{DeviceOperation, GeoLocation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, MessageReason};
 use shared::app::operations::internet::InternetOperation;
@@ -98,7 +98,7 @@ fn main() {
     gen.register_type::<DeviceOperation>().unwrap();
     gen.register_type::<P2POperation>().unwrap();
     gen.register_type::<P2POperationOutput>().unwrap();
-    gen.register_type::<NearbyEvent>().unwrap();
+    gen.register_type::<P2PEvent>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<PathResolverMessage>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]

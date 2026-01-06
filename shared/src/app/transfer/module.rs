@@ -1,11 +1,10 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::{TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
 use crate::app::modules::AppModule;
-use crate::app::nearby::module::NearbyEvent;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
-use crate::app::operations::rpc::RpcOperation;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{
     ReceiveResourceViewModel,
@@ -15,7 +14,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
-use crate::entities::target::{P2PConnectionState, TransferTarget};
+use crate::entities::target::TransferTarget;
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use crate::repository::transfer_session::TransferSessionId;
@@ -235,40 +234,21 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 // Check if user is authenticated - if not, trigger sign-in flow
-                let user = model.authentication.user.clone();
-                if user.is_none() {
+                let Some(user) = model.authentication.user.clone() else {
                     log::info!("User is not logged in, opening login page");
                     return Command::handle_result(|it| async move {
                         it.app().authenticate().await;
                         Ok(())
                     });
-                }
+                };
 
-                let Some(_me) = model.nearby.me.clone() else {
+                let Some(_me) = model.p2p.me.clone() else {
                     log::info!("Nearby service not available");
                     return Command::done()
                 };
 
                 Command::handle_result(move |it| async move {
-                    let p2p_session = it.app().run(RpcOperation::create_p2p_session()).await?;
-
-                    let mut session = TransferSession::p2p(
-                        selected_resources,
-                        password,
-                        p2p_session.signalling_room_id.clone(),
-                        p2p_session.signalling_scope.clone(),
-                        p2p_session.alias.clone(),
-                        p2p_session.access_url.clone(),
-                        p2p_session.session_id
-                    );
-
-                    let scope = FindingScope::new(&p2p_session.signalling_room_id);
-                    it.notify_event(NearbyEvent::AddFindingScope(scope));
-
-                    session.from_user = user.unwrap();
-                    it.update_model(TransferSessionModelEvent::Add(session.clone()));
-
-                    Ok(())
+                    it.app().start_p2p_transfer(selected_resources, password, user).await
                 })
             }
             TransferEvent::ModelEvent(event) => {
@@ -379,50 +359,17 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(mut session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+                let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
                     log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
 
                 model.transfer.selected_receive_session_id = Some(session.order_id);
 
-                if let TransferTarget::P2P { scope, .. } = &mut session.target {
-                    scope.set_watcher(false);
-                };
-
-                match &session.target {
-                    TransferTarget::P2P {
-                        connection_state,
-                        scope,
-                        from_peer,
-                        ..
-                    } => {
-                        let should_request = match connection_state {
-                            P2PConnectionState::NotConnected | P2PConnectionState::Failed(_) => true,
-                            P2PConnectionState::Connected => session.resources.is_empty(),
-                            P2PConnectionState::Connecting => false
-                        };
-
-                        if !should_request {
-                            return Command::render();
-                        }
-
-                        if from_peer.is_none() {
-                            return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope.clone()))).then_render();
-                        }
-
-                        let peer_id = from_peer.as_ref().unwrap().id().to_string();
-                        let session_id_clone = session_id.clone();
-
-                        Command::handle_result(move |it| async move {
-                            it.app().request_session_detail(peer_id, session_id_clone, session.order_id, password).await
-                        })
-                        .then_render()
-                    }
-                    TransferTarget::Internet { .. } => {
-                        Command::handle_result(|it| async move { it.app().view_public_session(session, password).await }).then_render()
-                    }
-                }
+                Command::handle_result(move |it| async move {
+                    it.app().view_session(session, session_id, password).await
+                })
+                .then_render()
             }
             TransferEvent::ReceivedViewSessionRequest {
                 peer_id,
@@ -455,9 +402,9 @@ impl AppModule<BitBridge> for TransferModule {
                     if let TransferTarget::P2P { ref scope, .. } = session.target {
                         let mut scope = scope.clone();
                         scope.set_watcher(false);
-                        model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
-                        model.nearby.finding_scopes.push(scope.clone());
-                        return Command::event(AppEvent::Nearby(NearbyEvent::AddFindingScope(scope))).then(Command::handle_result(
+                        model.p2p.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
+                        model.p2p.finding_scopes.push(scope.clone());
+                        return Command::event(AppEvent::P2P(P2PEvent::AddFindingScope(scope))).then(Command::handle_result(
                             move |it| async move { it.app().request_session_detail(peer_id, session_id, order_id, password).await }
                         ));
                     }
@@ -503,7 +450,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 };
 
-                let Some(peer) = model.nearby.peers.iter().find(|p| p.id == peer_id).cloned() else {
+                let Some(peer) = model.p2p.peers.iter().find(|p| p.id == peer_id).cloned() else {
                     log::warn!("Peer {} not found, ignoring resource notification", peer_id);
                     return Command::done();
                 };

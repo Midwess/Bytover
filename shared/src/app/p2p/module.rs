@@ -14,7 +14,7 @@ use schema::devlog::rpc_signalling::server::ScopeState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct NearbyModel {
+pub struct P2PModel {
     pub device: Option<DeviceInfo>,
     pub finding_scopes: Vec<FindingScope>,
     pub me: Option<Peer>,
@@ -22,15 +22,15 @@ pub struct NearbyModel {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct NearbyViewModel {
+pub struct P2PViewModel {
     pub me: Option<PeerViewModel>,
     pub peers: Vec<PeerViewModel>
 }
 
-pub struct NearbyModule;
+pub struct P2PModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum NearbyEvent {
+pub enum P2PEvent {
     Launch { auto_launch: bool },
     UpdateMe { new_peer: Peer },
     UpdateNearbyPeers { new_peer: Vec<Peer>, removed: Vec<Peer> },
@@ -42,9 +42,9 @@ pub enum NearbyEvent {
     ScopeStateUpdated { scope_id: String, state: ScopeState }
 }
 
-impl AppModule<BitBridge> for NearbyModule {
-    type Event = NearbyEvent;
-    type ViewModel = NearbyViewModel;
+impl AppModule<BitBridge> for P2PModule {
+    type Event = P2PEvent;
+    type ViewModel = P2PViewModel;
 
     fn update(
         &self,
@@ -53,43 +53,43 @@ impl AppModule<BitBridge> for NearbyModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            NearbyEvent::Launch { auto_launch } => {
+            P2PEvent::Launch { auto_launch } => {
                 model.environment.auto_launch_nearby = auto_launch;
                 Command::new(|it| async move {
                     it.app().start_nearby_server(auto_launch).await;
                 })
                 .then_render()
             }
-            NearbyEvent::UpdateNearbyPeers { new_peer, removed } => {
-                model.nearby.peers.retain(|it| !removed.contains(it));
-                model.nearby.peers.extend(new_peer);
+            P2PEvent::UpdateNearbyPeers { new_peer, removed } => {
+                model.p2p.peers.retain(|it| !removed.contains(it));
+                model.p2p.peers.extend(new_peer);
                 Command::render()
             }
-            NearbyEvent::ClearNearbyPeers => {
-                model.nearby.peers.clear();
+            P2PEvent::ClearNearbyPeers => {
+                model.p2p.peers.clear();
                 Command::render()
             }
-            NearbyEvent::UpdateMe { new_peer } => {
-                model.nearby.me = Some(new_peer);
+            P2PEvent::UpdateMe { new_peer } => {
+                model.p2p.me = Some(new_peer);
                 Command::render()
             }
-            NearbyEvent::AddFindingScope(scope) => {
-                model.nearby.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
-                model.nearby.finding_scopes.push(scope);
-                let scopes = model.nearby.finding_scopes.clone();
+            P2PEvent::AddFindingScope(scope) => {
+                model.p2p.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
+                model.p2p.finding_scopes.push(scope);
+                let scopes = model.p2p.finding_scopes.clone();
                 Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
             }
-            NearbyEvent::RemoveFindingScope(scope) => {
-                model.nearby.finding_scopes.retain(|s| s != &scope);
+            P2PEvent::RemoveFindingScope(scope) => {
+                model.p2p.finding_scopes.retain(|s| s != &scope);
 
-                let scopes = model.nearby.finding_scopes.clone();
+                let scopes = model.p2p.finding_scopes.clone();
                 Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
             }
-            NearbyEvent::PeerUpdated { peer } => {
-                if let Some(existing_peer) = model.nearby.peers.iter_mut().find(|p| p.id == peer.id) {
+            P2PEvent::PeerUpdated { peer } => {
+                if let Some(existing_peer) = model.p2p.peers.iter_mut().find(|p| p.id == peer.id) {
                     *existing_peer = peer.clone();
                 } else {
-                    model.nearby.peers.push(peer.clone());
+                    model.p2p.peers.push(peer.clone());
                 }
 
                 let mut peer_just_connected = false;
@@ -144,7 +144,7 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::render()
             }
-            NearbyEvent::PeerDisconnected { peer_id } => {
+            P2PEvent::PeerDisconnected { peer_id } => {
                 for session in model.transfer.sessions.iter_mut() {
                     if session.transfer_type != TransferType::Receive {
                         continue;
@@ -163,8 +163,8 @@ impl AppModule<BitBridge> for NearbyModule {
 
                 Command::render()
             }
-            NearbyEvent::ScopeStateUpdated { scope_id, state } => {
-                if let Some(scope) = model.nearby.finding_scopes.iter_mut().find(|s| s.scope_id() == scope_id) {
+            P2PEvent::ScopeStateUpdated { scope_id, state } => {
+                if let Some(scope) = model.p2p.finding_scopes.iter_mut().find(|s| s.scope_id() == scope_id) {
                     scope.update_state(state);
                 }
 
@@ -183,8 +183,8 @@ impl AppModule<BitBridge> for NearbyModule {
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
-            me: model.nearby.me.as_ref().map(PeerViewModel::from),
-            peers: model.nearby.peers.iter().map(PeerViewModel::from).collect()
+            me: model.p2p.me.as_ref().map(PeerViewModel::from),
+            peers: model.p2p.peers.iter().map(PeerViewModel::from).collect()
         }
     }
 }
