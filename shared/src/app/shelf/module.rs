@@ -85,6 +85,12 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::all(commands)
             }
             Self::Event::RemoveResource(id) => {
+                if model.transfer.has_active_send_session() {
+                    return Command::operate(DialogOperation::Toast(
+                        "Cannot remove resource during active transfer.".to_owned()
+                    ));
+                }
+
                 let Some(resource) = model.shelf.shelf.get(&LocalResourceId {
                     order_id: Some(id),
                     ..Default::default()
@@ -98,7 +104,7 @@ impl AppModule<BitBridge> for ShelfModule {
             Self::Event::ModelEvent(event) => {
                 match event {
                     LocalResourceEvent::Add(resource) => {
-                        model.shelf.shelf.add_resource(resource);
+                        model.shelf.shelf.add_resource(resource.clone());
                     }
                     LocalResourceEvent::Remove(id) => {
                         model.shelf.shelf.remove_resource(&id);

@@ -216,6 +216,20 @@ impl WebRtc {
         }
     }
 
+    pub async fn send_resource_notification(
+        &self,
+        peer_id: String,
+        session_id: u64,
+        resource: LocalResource
+    ) -> Result<(), WebRtcErrors> {
+        let peer_id = PeerId(peer_id.parse()?);
+        if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
+            peer.send_resource_notification(session_id, resource).await
+        } else {
+            Err(WebRtcErrors::ConnectionNotFound(peer_id))
+        }
+    }
+
     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcErrors> {
         if self.is_running() {
             log::info!("The webrtc server is already running");

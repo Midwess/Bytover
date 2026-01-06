@@ -126,6 +126,7 @@ function FileSelections() {
     })
 
     const selectedResources = core.useSelectedResources()
+    const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
 
     useEffect(() => {
         if (files.length) {
@@ -275,7 +276,7 @@ function FileSelections() {
                     <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 p-2 md:px-1">
                         {selectedResources.map((resource) => (
                             <div className="md:h-[230px] flex items-start flex-row" key={resource.order_id}>
-                                <ResourceView model={resource} />
+                                <ResourceView model={resource} isRemoveAllowed={isResourceRemoveAllowed} />
                             </div>
                         ))}
                     </div>
@@ -288,24 +289,26 @@ function FileSelections() {
 
 
 function ResourceView(props: {
-    model: SelectedResourceViewModel
+    model: SelectedResourceViewModel,
+    isRemoveAllowed: boolean
 }) {
-    const { model } = props;
+    const { model, isRemoveAllowed } = props;
 
     const isFile = model.type.constructor == ResourceTypeVariantFile ||
         model.type.constructor == ResourceTypeVariantFolder
 
     if (isFile) {
-        return <FileView model={model} />
+        return <FileView model={model} isRemoveAllowed={isRemoveAllowed} />
     } else {
-        return <MediaView model={model} />
+        return <MediaView model={model} isRemoveAllowed={isRemoveAllowed} />
     }
 }
 
 function FileView(props: {
-    model: SelectedResourceViewModel
+    model: SelectedResourceViewModel,
+    isRemoveAllowed: boolean
 }) {
-    const { model } = props;
+    const { model, isRemoveAllowed } = props;
     const isMobile = useIsMobile();
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
@@ -320,6 +323,7 @@ function FileView(props: {
     }
 
     const handleRemove = async () => {
+        if (!isRemoveAllowed) return;
         await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
     }
 
@@ -348,26 +352,28 @@ function FileView(props: {
                 </div>
 
                 {/* Actions */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 shrink-0">
-                            <MoreVertical className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                            onClick={handleRemove}
-                            variant="destructive"
-                            className="text-destructive"
-                        >
-                            <X className="w-4 h-4" />
-                            <span>Remove</span>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {isRemoveAllowed && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 shrink-0">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onClick={handleRemove}
+                                variant="destructive"
+                                className="text-destructive"
+                            >
+                                <X className="w-4 h-4" />
+                                <span>Remove</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
         );
     }
@@ -385,13 +391,15 @@ function FileView(props: {
                 />
 
                 {/* Remove button - shows on hover */}
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={handleRemove}>
-                    <X className="h-3.5 w-3.5" />
-                </Button>
+                {isRemoveAllowed && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={handleRemove}>
+                        <X className="h-3.5 w-3.5" />
+                    </Button>
+                )}
             </div>
 
             {/* File info */}
@@ -409,8 +417,9 @@ function FileView(props: {
 
 function MediaView(props: {
     model: SelectedResourceViewModel,
+    isRemoveAllowed: boolean
 }) {
-    const { model } = props;
+    const { model, isRemoveAllowed } = props;
 
     const isMobile = useIsMobile()
     const isVideo = model.type.constructor == ResourceTypeVariantVideo
@@ -434,6 +443,7 @@ function MediaView(props: {
     }
 
     const handleRemove = () => {
+        if (!isRemoveAllowed) return;
         core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
     }
 
@@ -467,26 +477,28 @@ function MediaView(props: {
                 </div>
 
                 {/* Actions */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 shrink-0">
-                            <MoreVertical className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                            onClick={handleRemove}
-                            variant="destructive"
-                            className="text-destructive"
-                        >
-                            <X className="w-4 h-4" />
-                            <span>Remove</span>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {isRemoveAllowed && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 shrink-0">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onClick={handleRemove}
+                                variant="destructive"
+                                className="text-destructive"
+                            >
+                                <X className="w-4 h-4" />
+                                <span>Remove</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
         );
     }
@@ -511,13 +523,15 @@ function MediaView(props: {
                 )}
 
                 {/* Remove button - shows on hover */}
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-destructive rounded-md text-white"
-                    onClick={handleRemove}>
-                    <X className="h-3.5 w-3.5" />
-                </Button>
+                {isRemoveAllowed && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-destructive rounded-md text-white"
+                        onClick={handleRemove}>
+                        <X className="h-3.5 w-3.5" />
+                    </Button>
+                )}
             </div>
 
             {/* File info */}

@@ -4,6 +4,7 @@ use crate::app::modules::AppModule;
 use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{
@@ -33,6 +34,24 @@ pub struct TransferModel {
     pub selected_receive_session_id: Option<u64>
 }
 
+impl TransferModel {
+    pub fn has_active_send_session(&self) -> bool {
+        self.sessions.iter().any(|s| {
+            s.transfer_type == TransferType::Send && !s.is_completed()
+        })
+    }
+
+    pub fn get_active_p2p_send_session(&self) -> Option<u64> {
+        let Some(session) = self.sessions
+            .iter()
+            .find(|s| s.transfer_type == TransferType::Send && !s.is_completed()) else {
+            return None;
+        };
+
+        Some(session.order_id)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     transfer_method: TransferMethodSelection,
@@ -40,7 +59,8 @@ pub struct TransferViewModel {
     received_cloud_sessions: Vec<ReceiveSessionViewModel>,
     cloud_session: Option<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
-    selected_session: Option<ReceiveSessionViewModel>
+    selected_session: Option<ReceiveSessionViewModel>,
+    pub is_resource_remove_allowed: bool
 }
 
 pub struct TransferModule;
@@ -117,6 +137,9 @@ pub enum TransferEvent {
     RequestDownloadAllResources {
         peer_id: String,
         session_order_id: u64
+    },
+    NewTransferResource {
+        resource: LocalResource
     },
 
     #[serde(skip)]
@@ -250,6 +273,35 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::handle_result(move |it| async move {
                     it.app().start_p2p_transfer(selected_resources, password, user).await
                 })
+            }
+            TransferEvent::NewTransferResource { resource } => {
+                let Some(active_session_id) = model.transfer.get_active_p2p_send_session() else {
+                    return Command::done()
+                };
+
+                let id = TransferSessionId {
+                    order_id: Some(active_session_id.to_string()),
+                    transfer_type: Some(TransferType::Send)
+                };
+
+                let res = resource.clone();
+
+                let mut commands = vec![];
+                commands.push(Command::event(TransferSessionModelEvent::Update(
+                    id,
+                    TransferSessionUpdateEvent::ResourceUpdate(res)
+                ).into()));
+
+                for peer in model.p2p.peers.iter() {
+                    log::info!("Sending new resource notification to peer {}", peer.id);
+                    let res = resource.clone();
+                    let peer_id = peer.id.clone();
+                    commands.push(Command::handle_result(move |it| async move {
+                        it.app().run(P2POperation::send_resource_notification(peer_id, active_session_id, res)).await
+                    }));
+                }
+
+                Command::all(commands)
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
@@ -800,7 +852,8 @@ impl AppModule<BitBridge> for TransferModule {
                         access_url
                     })
                 })
-                .collect()
+                .collect(),
+            is_resource_remove_allowed: !model.transfer.has_active_send_session()
         }
     }
 }

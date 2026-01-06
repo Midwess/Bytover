@@ -33,6 +33,7 @@ export function Shelf() {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
     const selectedResources = core.useSelectedResources()
+    const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -122,7 +123,7 @@ export function Shelf() {
                 ) : (
                     <div className="flex flex-col gap-2">
                         {selectedResources.map((resource, index) => (
-                            <ResourceView key={index} model={resource} />
+                            <ResourceView key={index} model={resource} isRemoveAllowed={isResourceRemoveAllowed} />
                         ))}
                         <div className={"h-5"}></div>
                     </div>
@@ -133,10 +134,11 @@ export function Shelf() {
                 className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-3">
                 {!!selectedResources.length &&
                     <Button
+                        disabled={!isResourceRemoveAllowed}
                         onClick={() => {
                             invoke("clear_shelf")
                         }}
-                        className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl">
+                        className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed">
                         <div
                             className="overflow-hidden text-foreground bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1 border border-border">
                             <p>
@@ -152,8 +154,8 @@ export function Shelf() {
     </>
 }
 
-function ResourceView(props: { model: SelectedResourceViewModel }) {
-    const { model } = props;
+function ResourceView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
+    const { model, isRemoveAllowed } = props;
     let filePath = (model.path as any).AbsolutePath;
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
@@ -170,14 +172,14 @@ function ResourceView(props: { model: SelectedResourceViewModel }) {
         }}>
         {
             isFile
-                ? <FileView model={model} />
-                : <MediaView model={model} />
+                ? <FileView model={model} isRemoveAllowed={isRemoveAllowed} />
+                : <MediaView model={model} isRemoveAllowed={isRemoveAllowed} />
         }
     </div>
 }
 
-function FileView(props: { model: SelectedResourceViewModel }) {
-    const { model } = props;
+function FileView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
+    const { model, isRemoveAllowed } = props;
 
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
@@ -221,9 +223,12 @@ function FileView(props: { model: SelectedResourceViewModel }) {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="dark">
-                    <DropdownMenuItem variant="destructive" onClick={() => {
-                        invoke("remove_resource", { resourceId: model.order_id })
-                    }}>
+                    <DropdownMenuItem
+                        variant="destructive"
+                        disabled={!isRemoveAllowed}
+                        onClick={() => {
+                            invoke("remove_resource", { resourceId: model.order_id })
+                        }}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Remove
                     </DropdownMenuItem>
@@ -233,8 +238,8 @@ function FileView(props: { model: SelectedResourceViewModel }) {
     );
 }
 
-function MediaView(props: { model: SelectedResourceViewModel }) {
-    const { model } = props;
+function MediaView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
+    const { model, isRemoveAllowed } = props;
 
     const isVideo = (model.type as any) === 'Video';
     const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
@@ -281,9 +286,12 @@ function MediaView(props: { model: SelectedResourceViewModel }) {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className={"dark"}>
-                    <DropdownMenuItem variant="destructive" onClick={() => {
-                        invoke("remove_resource", { resourceId: String(model.order_id) })
-                    }}>
+                    <DropdownMenuItem
+                        variant="destructive"
+                        disabled={!isRemoveAllowed}
+                        onClick={() => {
+                            invoke("remove_resource", { resourceId: String(model.order_id) })
+                        }}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Remove
                     </DropdownMenuItem>

@@ -60,6 +60,11 @@ pub enum P2POperation {
         session_path: LocalResource,
         resources: Vec<LocalResource>,
         aggregate_progress: TransferProgress
+    },
+    SendResourceNotification {
+        peer_id: String,
+        session_id: u64,
+        resource: LocalResource
     }
 }
 
@@ -203,6 +208,19 @@ impl P2POperation {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::BroadcastCancelSession {
             session_id,
             resource_id
+        }))
+        .map(|it| it.result())
+    }
+
+    pub fn send_resource_notification(
+        peer_id: String,
+        session_id: u64,
+        resource: LocalResource
+    ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::SendResourceNotification {
+            peer_id,
+            session_id,
+            resource
         }))
         .map(|it| it.result())
     }

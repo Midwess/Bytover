@@ -4,6 +4,7 @@ use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::LocalResourcePersistentOperation;
 use crate::app::shelf::module::ResourceSelection;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
@@ -66,7 +67,8 @@ impl AppCommand {
                 continue;
             };
 
-            self.update_model(LocalResourceEvent::Add(new_resource));
+            self.update_model(LocalResourceEvent::Add(new_resource.clone()));
+            self.notify_event(TransferEvent::NewTransferResource { resource: new_resource });
         }
 
         Ok(())

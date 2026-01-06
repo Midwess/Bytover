@@ -11,12 +11,10 @@ import {
     CardContent,
 } from "@/components/ui/card"
 import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
+import {PasswordInput} from "@/components/ui/password-input"
 import {
-    Lock,
     Copy,
     Check,
-    Link,
     Users,
     Globe,
 } from "lucide-react"
@@ -52,7 +50,7 @@ export function Transfer() {
                         className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
                         <TabsPanels className="flex-1 flex flex-col min-h-0 overflow-hidden">
                             <TabsPanel value="p2p" className="flex flex-col h-full overflow-hidden">
-                                <CardContent className={"p-0 flex flex-col gap-2 h-full overflow-hidden"}>
+                                <CardContent className={"p-0 flex flex-col gap-1.5 h-full overflow-hidden"}>
                                     <P2PSend/>
                                 </CardContent>
                             </TabsPanel>
@@ -99,9 +97,8 @@ function P2PSend() {
         <Card shadowSize={0.5} className="flex flex-row gap-1 p-1">
             <div
                 className={"flex flex-row items-center gap-1 w-fit rounded-lg"}>
-                <Input
+                <PasswordInput
                     className={"bg-secondary shadow-background"}
-                    type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     maxLength={20}
@@ -185,7 +182,7 @@ function PublicTransfer() {
     return <>
         <Card shadowSize={0} className="flex flex-col gap-2 p-1">
             <div className="grid gap-3">
-                <Input className={"bg-secondary shadow-background"} type="password"
+                <PasswordInput className={"bg-secondary shadow-background"}
                        value={pwd}
                        onChange={(e) => {
                            setPwd(e.target.value)
