@@ -788,7 +788,7 @@ function P2PSend() {
     return <>
         <div className="flex flex-col w-full gap-3">
             <p className="text-start w-full text-primaryText/70 text-sm pb-1">
-                Share with nearby friends and devices
+                Securely share with P2P network
             </p>
             <MyPeerInfo />
             <div className="flex flex-col w-full gap-3">

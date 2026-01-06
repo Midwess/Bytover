@@ -50,7 +50,8 @@ export function useDownloadResource({
                     )
                 ));
             }
-        } else {
+        }
+        else {
             core.downloadFile(resource.model.path, resource.model.name);
         }
     }, [resource, session, isDownloadAll]);

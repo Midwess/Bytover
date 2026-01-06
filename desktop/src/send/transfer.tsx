@@ -5,44 +5,29 @@ import {
     TabsList,
     TabsTab,
 } from '@/components/animate-ui/components/base/tabs'
-import { Button } from "@/components/ui/button"
+import {Button} from "@/components/ui/button"
 import {
     Card,
     CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import {Input} from "@/components/ui/input"
+import {Label} from "@/components/ui/label"
 import {
     Lock,
-    Mail,
-    MapPin,
-    SendHorizonal,
     Copy,
     Check,
     Link,
-    PersonStanding,
     Users,
     Globe,
-    Laptop,
-    Phone, Smartphone
 } from "lucide-react"
 import core from "@/core.ts"
-import { Avatar, AvatarImage } from "@/components/ui/avatar"
-import {
-    PeerViewModel,
-} from 'shared_types/types/shared_types'
-import CircleProgress from "@/components/ui/progress.tsx"
-import { invoke } from "@tauri-apps/api/core"
-import { noop } from "motion"
-import { Slide } from "@/components/animate-ui/primitives/effects/slide.tsx"
-import { MotionGridSignalling } from "@/components/animate-ui/primitives/animate/motion-grid.tsx"
-import { useState } from "react"
-import { Progress } from "@/components/animate-ui/components/radix/progress"
-import { ProgressIndicator } from "@/components/animate-ui/primitives/radix/progress"
+import {Avatar, AvatarImage} from "@/components/ui/avatar"
+import {invoke} from "@tauri-apps/api/core"
+import {noop} from "motion"
+import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx"
+import {useEffect, useState} from "react"
+import {Progress} from "@/components/animate-ui/components/radix/progress"
+import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {
     Tooltip,
     TooltipContent,
@@ -52,79 +37,29 @@ import {
 
 export function Transfer() {
     return (
-        <div className="flex w-full flex-col gap-6 h-full overflow-hidden">
+        <div className="flex w-full flex-col gap-6 h-full overflow-hidden ml-0.5">
             <Slide
                 delay={240}
                 direction={"left"}
                 offset={380}
                 className="h-full flex">
-                <Tabs defaultValue="people" className="w-full items-start flex flex-col h-full">
+                <Tabs defaultValue="p2p" className="w-full items-start flex flex-col h-full">
                     <TabsList className={"ml-2 border-2 shadow-background shadow-sm flex-shrink-0"}>
-                        <TabsTab value="people"><Users /> People</TabsTab>
-                        <TabsTab value="public"><Globe />Link</TabsTab>
-                        <TabsTab value="devices"><Smartphone />Device</TabsTab>
+                        <TabsTab value="p2p"><Users/> P2P</TabsTab>
+                        <TabsTab value="public"><Globe/>Link</TabsTab>
                     </TabsList>
-                    <div className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
+                    <div
+                        className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
                         <TabsPanels className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                            <TabsPanel value="people" className="flex flex-col h-full overflow-hidden">
+                            <TabsPanel value="p2p" className="flex flex-col h-full overflow-hidden">
                                 <CardContent className={"p-0 flex flex-col gap-2 h-full overflow-hidden"}>
-                                    <Card shadowSize={0.5} className="flex flex-col gap-2 py-2 p-1.5 bg-card/95 flex-shrink-0">
-                                        <Label htmlFor="tabs-input-email"
-                                            className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
-                                            <div
-                                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                                                <Mail />
-                                            </div>
-                                            Emails:
-                                        </Label>
-                                        <div className={"flex flex-row gap-2 h-fit"}>
-                                            <Input className={"bg-secondary shadow-background"} id="tabs-input-email"
-                                                type={"email"} defaultValue="someone@company.com" />
-                                            <Button variant={"default"} className={"w-[32px] bg-bluePrimary/80"}>
-                                                <SendHorizonal color={"white"} />
-                                            </Button>
-                                        </div>
-                                    </Card>
-                                    <Card
-                                        shadowSize={0.5}
-                                        className="flex flex-col gap-5 bg-card/95 p-1.5 overflow-hidden flex-1 min-h-0">
-                                        <Label
-                                            className={"flex flex-row items-center gap-2 bg-muted px-2 mb-2 py-1 w-fit rounded-md shadow-black shrink-0"}>
-                                            {
-                                                <div
-                                                    className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                                                    <MapPin />
-                                                </div>
-                                            }
-                                            Nearby:
-                                        </Label>
-                                        <div className="flex-1 min-h-0 overflow-y-auto">
-                                            <NearbyList />
-                                        </div>
-                                    </Card>
+                                    <P2PSend/>
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="public" className="flex flex-col gap-2">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
-                                    <PublicTransfer />
+                                    <PublicTransfer/>
                                 </CardContent>
-                            </TabsPanel>
-                            <TabsPanel value="devices" className="flex flex-col gap-6">
-                                <CardHeader>
-                                    <CardTitle>Devices</CardTitle>
-                                    <CardDescription>
-                                        Sharing to your devices.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-6">
-                                    <div className="grid gap-3">
-                                        <Label htmlFor="tabs-demo-current">Password</Label>
-                                        <Input id="tabs-demo-current" type="password" />
-                                    </div>
-                                </CardContent>
-                                <CardFooter>
-                                    <Button>Send</Button>
-                                </CardFooter>
                             </TabsPanel>
                         </TabsPanels>
                     </div>
@@ -134,73 +69,112 @@ export function Transfer() {
     );
 }
 
-function NearbyList() {
-    const list = core.useNearbyListState();
+function P2PSend() {
+    const p2pSession = core.useP2PSession()
+    const [password, setPassword] = useState(p2pSession?.password || '')
+    const isInProgress = p2pSession?.is_in_progress ?? false
 
-    return <div className={"flex flex-col gap-2 w-full h-full relative"}>
-        {
-            list.map((it) => <>
-                <NearbyPeer peer={it}></NearbyPeer>
-            </>)
+    useEffect(() => {
+        if (p2pSession?.password) {
+            setPassword(p2pSession?.password || password)
         }
-        {
-            !list.length &&
-            <div className={"flex flex-col items-center h-[30px]"}>
-                <MotionGridSignalling />
-            </div>
+    }, [p2pSession?.password, password])
+
+    const handleStartTransfer = () => {
+        const pwd = password || null
+        invoke("p2p_transfer", {password: pwd}).then(noop)
+        setPassword('')
+    }
+
+    const handleStopTransfer = () => {
+        if (p2pSession?.session_id) {
+            invoke("cancel_send", {sessionId: p2pSession.session_id}).then(noop)
         }
-        {/* Bottom fade mask */}
-        <div
-            className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/95 to-transparent pointer-events-none z-20" />
-    </div>
-}
-
-function NearbyPeer(props: { peer: PeerViewModel }) {
-    const peer = core.usePeerState(props.peer?.id) || props.peer
-    const color = `rgb(${peer.avatar.dominant_color_r}, ${peer.avatar.dominant_color_g}, ${peer.avatar.dominant_color_b})`
-
-    // Check if transfer is completed (progress reaches 1.0)
-    const isCompleted = peer.transfer_progress >= 1.0 && peer.transfer_progress > 0;
-    const isInProgress = peer.transfer_progress > 0 && !isCompleted;
+    }
 
     return <>
-        <Card
-            shadowSize={0}
-            className={"flex flex-row overflow-clip bg-muted hover:bg-muted-foreground/30 items-center px-2 py-1 h-fit w-full justify-between"}
-            onClick={() => {
-                invoke("start_transfer", { targetId: peer.id }).then(noop)
-            }}>
-            <div className={"flex flex-row items-center gap-3"}>
-                <div
-                    className={"bg-bluePrimary rounded-xl aspect-square justify-center items-center text-primaryText flex h-[34px] w-[34px]"}>
-                    <Avatar className={"p-1 rounded-xl h-fit"} style={{ backgroundColor: color }}>
-                        <AvatarImage src={peer.avatar.url} />
-                    </Avatar>
-                </div>
-                <div className={"flex flex-col gap-1 items-start"}>
-                    <p className={"text-primaryText font-bold text-sm"}>{peer.display_name}</p>
-                    {
-                        peer.display_upload_speed
-                            ? <p className={"text-primaryText/70 text-xs"}>{peer.display_upload_speed}</p>
-                            : peer.device.name !== peer.display_name && <>
-                                <p className={"text-muted-foreground"}>{peer.device.name}</p>
-                            </>
-                    }
-                </div>
+        <Card shadowSize={0.5} className="flex flex-col gap-3 px-2 py-1 justify-center items-center bg-card/95">
+            <MyPeerInfo/>
+        </Card>
+        <Card shadowSize={0.5} className="flex flex-row gap-1 p-1">
+            <div
+                className={"flex flex-row items-center gap-1 w-fit rounded-lg"}>
+                <Input
+                    className={"bg-secondary shadow-background"}
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    maxLength={20}
+                    placeholder="Password (Optional)"
+                    disabled={isInProgress}
+                />
             </div>
-            {
-                <div className={"w-[40px] h-[40px] flex flex-col justify-center items-center"}>
-                    <CircleProgress
-                        strokeWidth={3}
-                        progress={Number(peer.transfer_progress)}
-                        isInProgress={isInProgress}
-                        isCompleted={isCompleted}
-                        size={30}
-                    />
+        </Card>
+        {
+            p2pSession?.access_url &&
+            <Card shadowSize={0.5} className="flex flex-col gap-3 p-1 bg-card/95">
+                <div
+                    className={"flex flex-row items-center gap-2 w-fit rounded-lg"}>
+                    <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
                 </div>
+            </Card>
+        }
+        <Card className="flex flex-row gap-2 p-2 items-center">
+            {
+                isInProgress ? (
+                    <Button onClick={handleStopTransfer}
+                            className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
+                ) : (
+                    <Button onClick={handleStartTransfer}
+                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Start</Button>
+                )
             }
         </Card>
     </>
+}
+
+function MyPeerInfo() {
+    const myPeer = core.useMyPeer()
+
+    if (!myPeer) {
+        return (
+            <div className="w-full mb-2">
+                <div className="relative overflow-hidden rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center justify-center gap-3 py-2">
+                        <div
+                            className="h-4 w-4 animate-spin rounded-full border-1 border-white/20 border-t-white"></div>
+                        <span className="text-sm font-medium text-muted-foreground animate-pulse">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
+
+    return (
+        <div className="flex flex-col w-full items-center gap-2">
+            <div className="flex flex-row rounded-2xl items-center w-full">
+                <div className="flex flex-row items-center gap-3 justify-between flex-1 rounded-xl">
+                    <div className="flex flex-col gap-[0.5] items-start justify-center h-full">
+                        <p className="text-start w-full text-primaryText/70 text-xs">
+                            You're online as
+                        </p>
+                        <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
+                    </div>
+                    <div
+                        className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-1 rounded-2xl">
+                        <Avatar className="p-1 rounded-xl" style={{backgroundColor: color}}>
+                            <AvatarImage src={myPeer.avatar.url}/>
+                        </Avatar>
+                        {/* Online status indicator */}
+                        <div
+                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-1 border-background"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
 }
 
 function PublicTransfer() {
@@ -209,52 +183,38 @@ function PublicTransfer() {
     const progress = (cloudSession?.progress ?? 0) * 100
 
     return <>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-2">
-            <Label
-                className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
-                <div
-                    className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                    <Lock />
-                </div>
-                Password:
-            </Label>
+        <Card shadowSize={0} className="flex flex-col gap-2 p-1">
             <div className="grid gap-3">
                 <Input className={"bg-secondary shadow-background"} type="password"
-                    value={pwd}
-                    onChange={(e) => {
-                        setPwd(e.target.value)
-                    }}
-                    placeholder={"Pwd@123"} />
-                {
-                    cloudSession?.access_url &&
-                    <>
-                        <Label
-                            className={"flex flex-row items-center gap-1 bg-muted px-2 py-1 w-fit rounded-md"}>
-                            <div
-                                className={"bg-white/10 p-[3px] rounded-sm w-5 h-5 flex items-center justify-center"}>
-                                <Link />
-                            </div>
-                            Generated url:
-                        </Label>
-                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''} />
-                    </>
-                }
+                       value={pwd}
+                       onChange={(e) => {
+                           setPwd(e.target.value)
+                       }}
+                       placeholder={"Password (Optional)"}/>
             </div>
         </Card>
+        {
+            cloudSession?.access_url &&
+            <Card shadowSize={0} className="flex flex-col gap-2 p-1">
+                <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
+            </Card>
+        }
         <Card className="flex flex-row gap-2 p-2 items-center">
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
-                        invoke("cancel_send", { sessionId: cloudSession?.session_id }).then(noop)
+                        invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }} className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
                 ) : cloudSession?.is_completed ? (
                     <Button onClick={() => {
-                        invoke("cancel_send", { sessionId: cloudSession?.session_id }).then(noop)
-                    }} className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                        invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
+                    }}
+                            className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
                     <Button onClick={() => {
-                        invoke("public_transfer", { password: pwd }).then(noop)
-                    }} className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+                        invoke("public_transfer", {password: pwd}).then(noop)
+                    }}
+                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
                 )
             }
             {
@@ -266,7 +226,7 @@ function PublicTransfer() {
                             </span>
                         </div>
                         <Progress value={progress} className="w-full space-y-2">
-                            <ProgressIndicator className="bg-primary rounded-full h-full w-full flex-1" />
+                            <ProgressIndicator className="bg-primary rounded-full h-full w-full flex-1"/>
                         </Progress>
                     </div>
                 )
@@ -275,7 +235,7 @@ function PublicTransfer() {
     </>
 }
 
-function UrlInputWithCopy({ url }: { url: string }) {
+function UrlInputWithCopy({url}: { url: string }) {
     const [isCopied, setIsCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -308,7 +268,7 @@ function UrlInputWithCopy({ url }: { url: string }) {
                         <Input
                             value={getTrimmedUrl(url)}
                             disabled={true}
-                            className="pr-12 cursor-default bg-secondary shadow-background" // Add padding for the button and cursor
+                            className="pr-12 disabled:opacity-100 cursor-default bg-secondary shadow-background"
                         />
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs break-all">
@@ -321,9 +281,9 @@ function UrlInputWithCopy({ url }: { url: string }) {
                     title={isCopied ? "Copied!" : "Copy to clipboard"}
                 >
                     {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-green-500"/>
                     ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
                     )}
                 </button>
             </div>

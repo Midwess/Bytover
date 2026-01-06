@@ -48,22 +48,22 @@ impl DIOWriterWrapper<FileEntryWriter> {
 
 #[async_trait]
 impl<W: IOWriter> IOWriter for DIOWriterWrapper<W> {
-    async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<usize> {
+    async fn write(&mut self, data: Bytes) -> Result<usize> {
         self.inner.write(data).await
     }
 
-    async fn flush(&mut self) -> anyhow::Result<()> {
+    async fn flush(&mut self) -> Result<()> {
         self.inner.flush().await
     }
 
-    async fn end(&mut self) -> anyhow::Result<()> {
+    async fn end(&mut self) -> Result<()> {
         self.inner.end().await
     }
 }
 
 #[async_trait]
 impl<W: IOWriter> DIOWriter for DIOWriterWrapper<W> {
-    async fn d_write(&mut self, data: Bytes) -> anyhow::Result<Option<usize>> {
+    async fn d_write(&mut self, data: Bytes) -> Result<Option<usize>> {
         if self.compression_support {
             let compressed = data[0] == 1;
             let data_to_write = if compressed {

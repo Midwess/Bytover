@@ -77,6 +77,14 @@ async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
 }
 
 #[tauri::command]
+async fn p2p_transfer(app_handle: AppHandle, password: Option<String>) {
+    process_event(TransferEvent::StartP2PTransfer {
+        nearby_available: false,
+        password,
+    }, app_handle).await;
+}
+
+#[tauri::command]
 async fn ui_launched(app_handle: AppHandle) {
     render(CORE.view(), app_handle);
 }
@@ -127,13 +135,6 @@ async fn sign_out(app_handle: AppHandle) {
 #[tauri::command]
 async fn authenticate(app_handle: AppHandle) {
     process_event(AuthenticationEvent::Authenticate, app_handle).await;
-}
-
-#[tauri::command]
-async fn start_transfer(target_id: String, app_handle: AppHandle) {
-    process_event(TransferEvent::StartTransfer {
-        target_id
-    }, app_handle).await;
 }
 
 #[tauri::command]
@@ -297,16 +298,40 @@ pub async fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_positioner::init())
         .invoke_handler(tauri::generate_handler![
-            authenticate, start_transfer, add_resources,
-            remove_resource, ui_launched, public_transfer,
+            authenticate, add_resources,
+            remove_resource, ui_launched, public_transfer, p2p_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
             clear_shelf, sign_out, quit
         ])
         .setup(|app| {
+            use tauri::menu::{MenuBuilder, MenuItemBuilder};
+
+            let sign_out_item = MenuItemBuilder::with_id("sign_out", "Sign Out").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .item(&sign_out_item)
+                .item(&quit_item)
+                .build()?;
+
             let _ = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
                 .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "sign_out" => {
+                            let handle = app.clone();
+                            spawn(async move {
+                                process_event(AuthenticationEvent::SignOut, handle).await;
+                            });
+                        },
+                        "quit" => {
+                            app.close_all_windows(vec![]);
+                        },
+                        _ => {}
+                    }
+                })
                 .on_tray_icon_event(|tray, event| {
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
                     if let TrayIconEvent::Click {
@@ -314,7 +339,7 @@ pub async fn run() {
                         button_state: MouseButtonState::Up,
                         ..
                     } = event {
-                        tray.app_handle().toggle_receive();
+                        tray.app_handle().show_send();
                     }
                 })
                 .build(app)?;

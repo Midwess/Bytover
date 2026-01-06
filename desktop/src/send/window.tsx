@@ -17,7 +17,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 function Window() {
     useOverlayScrollbars()
     const window = getCurrentWindow()
-    const [windowSize, setWindowSize] = useState(new LogicalSize(260, 280))
+    const [windowSize, setWindowSize] = useState(new LogicalSize(200, 260))
     const [isExpanded, setIsExpanded] = useState(false)
     const [showAnimation, setShowAnimation] = useState(false)
 
@@ -47,16 +47,16 @@ function Window() {
 
     useEffect(() => {
         if (!isExpanded) {
-            setWindowSize(new LogicalSize(250, 270))
+            setWindowSize(new LogicalSize(220, 260))
         } else {
-            setWindowSize(new LogicalSize(450, 270))
+            setWindowSize(new LogicalSize(400, 260))
         }
     }, [isExpanded])
 
     return (
-        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 transition-all duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
+        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
-                <div className={`h-full bg-transparent relative min-w-[225px] w-[225px]`}>
+                <div className={`h-[220px] bg-transparent relative min-w-[195px] w-[190px]`}>
                    <Shelf/>
                    {/* Toggle button at the middle-right edge */}
                    <Button

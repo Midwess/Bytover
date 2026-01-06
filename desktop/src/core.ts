@@ -1,12 +1,13 @@
 import {
     AppViewModel,
     AuthenticationViewModel,
+    CloudSession,
     DialogOperationVariantMessage,
-    EnvironmentViewModel, FileReceiveResourceViewModel, ImageReceiveResourceViewModel,
-    NearbyViewModel, PeerViewModel,
-    ReceiveSessionViewModel, SelectedResourceViewModel,
+    EnvironmentViewModel,
+    P2PViewModel, PeerViewModel,
+    ReceiveSessionViewModel, ReceiveResourceViewModel, SelectedResourceViewModel,
     ShelfViewModel,
-    TransferViewModel, VideoReceiveResourceViewModel
+    TransferViewModel
 } from 'shared_types/types/shared_types'
 import { listen } from '@tauri-apps/api/event'
 import {Observable} from "@/utils/observable.ts";
@@ -17,7 +18,7 @@ import {invoke} from "@tauri-apps/api/core";
 export class Core {
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
-    nearbyState: Observable<NearbyViewModel> = new Observable()
+    p2pState: Observable<P2PViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
     shelfState: Observable<ShelfViewModel> = new Observable()
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
@@ -26,9 +27,9 @@ export class Core {
     isLaunched = false;
 
     useNearbyListState() {
-        const [state, setState] = useState(this.nearbyState.get()?.peers ?? []);
+        const [state, setState] = useState(this.p2pState.get()?.peers ?? []);
         useEffect(() => {
-            return this.nearbyState.subscribe((newState) => {
+            return this.p2pState.subscribe((newState) => {
                 if (state.length != newState?.peers.length) {
                     setState(newState?.peers || [])
                 }
@@ -36,6 +37,34 @@ export class Core {
         }, [state.length]);
 
         return state
+    }
+
+    public useMyPeer() {
+        const [myPeer, setMyPeer] = useState<PeerViewModel | undefined>(undefined)
+
+        useEffect(() => {
+            return this.p2pState.subscribe((p2pState) => {
+                if (!isEqual(myPeer, p2pState?.me)) {
+                    setMyPeer(p2pState?.me || undefined)
+                }
+            })
+        }, [myPeer]);
+
+        return myPeer
+    }
+
+    public useP2PSession() {
+        const [session, setSession] = useState<CloudSession | undefined>(this.transferState.get()?.p2p_sessions?.[0]);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const p2pSession = transferState?.p2p_sessions?.[0];
+                if (!isEqual(session, p2pSession)) {
+                    setSession(p2pSession);
+                }
+            })
+        }, [session]);
+
+        return session;
     }
 
     public useSelectedSession() {
@@ -103,17 +132,15 @@ export class Core {
     }
 
     public useReceiveResource(id: bigint) {
-        const [resource, setResource] = useState<FileReceiveResourceViewModel | ImageReceiveResourceViewModel | VideoReceiveResourceViewModel | undefined>()
+        const [resource, setResource] = useState<ReceiveResourceViewModel | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
                 if (!transferState) return
 
-                const foundResource = transferState.received_sessions?.flatMap(session => [
-                        ...session.file_resources,
-                        ...session.image_resources,
-                        ...session.video_resources
-                    ]).find(r => BigInt(r.model.order_id) === id)
+                const foundResource = transferState.received_sessions?.flatMap(session =>
+                    session.resources
+                ).find(r => BigInt(r.model.order_id) === id)
 
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
@@ -128,8 +155,8 @@ export class Core {
         const [currentPeer, setPeer] = useState<PeerViewModel | undefined>(undefined)
 
         useEffect(() => {
-            return this.transferState.subscribe((value) => {
-                let peer = value?.nearby_peers?.find((it: any) => {
+            return this.p2pState.subscribe((value) => {
+                let peer = value?.peers?.find((it) => {
                     return it.id === peerId
                 })
 
@@ -160,7 +187,7 @@ export class Core {
         await listen<AppViewModel>('Render', (viewModel) => {
             this.environmentState.set(viewModel.payload.environment!)
             this.authenticationState.set(viewModel.payload.authentication!)
-            this.nearbyState.set(viewModel.payload.nearby!)
+            this.p2pState.set(viewModel.payload.p2p!)
             this.transferState.set(viewModel.payload.transfer!)
             this.shelfState.set(viewModel.payload.shelf!)
         })

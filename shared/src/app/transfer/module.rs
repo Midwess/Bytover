@@ -487,7 +487,13 @@ impl AppModule<BitBridge> for TransferModule {
                     };
 
                     let mut updated_resource = resource;
-                    updated_resource.name = generated_path.name().unwrap_or(updated_resource.name.clone());
+                    updated_resource.name = match &updated_resource.r#type {
+                        ResourceType::Folder => {
+                            format!("{}.{}", updated_resource.name, generated_path.extension().unwrap_or_default())
+                        }
+                        _ => updated_resource.name.clone()
+                    };
+
                     updated_resource.path = generated_path;
 
                     it.update_model(TransferSessionModelEvent::Update(

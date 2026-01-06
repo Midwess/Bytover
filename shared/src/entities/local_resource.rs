@@ -32,6 +32,10 @@ impl LocalResourcePath {
         self.as_string().split('/').next_back().map(|it| it.to_string())
     }
 
+    pub fn extension(&self) -> Option<String> {
+        self.as_string().split('.').last().map(|it| it.to_string())
+    }
+
     pub fn as_string(&self) -> String {
         match self {
             LocalResourcePath::RelativePath { path, .. } => path.clone(),

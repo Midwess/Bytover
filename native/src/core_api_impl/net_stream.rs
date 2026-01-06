@@ -111,7 +111,7 @@ impl NetStreamInnerImpl {
 
         let mut uploaded = 0u64;
         let total_size = cursor.entry().await?.size;
-        log::info!("Total size of resource is {} bytes", total_size);
+        log::info!("Total size of resource is {} bytes; content_length from server {}", total_size, upload.x_content_length);
 
         // This is the main chunk size, every chunk must be equal in size except the last one
         let main_chunk_size = upload.x_content_length;

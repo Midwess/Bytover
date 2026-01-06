@@ -29,6 +29,9 @@ import {
 
 import {
     ResourceTypeVariantFolder,
+    ResourceTypeVariantVideo,
+    ResourceTypeVariantImage,
+    ReceiveResourceViewModel,
 } from "shared_types/types/shared_types";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 
@@ -136,7 +139,7 @@ function SessionTitle() {
             <div className={"flex flex-row gap-2 items-center"}>
                 <div className={"flex flex-col items-start p-1 z-10"}>
                     <p className={"text-primaryText"}>{
-                        (session?.file_resources?.length || 0) + (session?.image_resources?.length || 0) + (session?.video_resources?.length || 0)} resources
+                        session?.resources?.length || 0} resources
                     </p>
                 </div>
             </div>
@@ -202,7 +205,7 @@ function SessionItem({sessionId}: { sessionId: string }) {
                 src={"https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev/public/avatars/Chicken.png?r=215&g=179&b=100"}/>
         </Avatar>
         <div className={"flex flex-col gap-0.5"}>
-            <p className={`${session.id === selectedSessionId && 'text-white'}`}>{session.peer_name}</p>
+            <p className={`${session.id === selectedSessionId && 'text-white'}`}>{session.sender_name}</p>
             {
                 session.is_in_progress
                     ? <p className="text-muted-foreground animate-pulse">
@@ -223,12 +226,7 @@ function ResourceList() {
         </div>
     }
 
-    // Combine all resources
-    const allResources = [
-        ...(session.file_resources || []).map(r => ({...r, resourceType: 'file' as const})),
-        ...(session.image_resources || []).map(r => ({...r, resourceType: 'image' as const})),
-        ...(session.video_resources || []).map(r => ({...r, resourceType: 'video' as const})),
-    ]
+    const allResources = session.resources || []
 
     if (!allResources.length) {
         return <div className="flex items-center justify-center w-full h-full text-muted-foreground">
@@ -246,14 +244,14 @@ function ResourceList() {
     </div>
 }
 
-function ResourceItem({resource, sessionId}: {resource: any, sessionId: any}) {
-    const {model, completion, is_completed, resourceType} = resource;
-    
+function ResourceItem({resource, sessionId}: {resource: ReceiveResourceViewModel, sessionId: string}) {
+    const {model, is_completed} = resource;
+
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
-    const isVideo = resourceType === 'video';
-    const isImage = resourceType === 'image';
-    
+    const isVideo = model.type instanceof ResourceTypeVariantVideo;
+    const isImage = model.type instanceof ResourceTypeVariantImage;
+
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
 
@@ -277,8 +275,8 @@ function ResourceItem({resource, sessionId}: {resource: any, sessionId: any}) {
             {/* Thumbnail */}
             <div className="w-full aspect-square rounded-xl bg-muted-foreground/40 border overflow-hidden relative mb-2">
                 {thumbnailUrl ? (
-                    <img 
-                        src={thumbnailUrl} 
+                    <img
+                        src={thumbnailUrl}
                         alt={model.name}
                         className="w-full h-full object-cover rounded-md overflow-hidden"/>
                 ) : isFolder ? (
