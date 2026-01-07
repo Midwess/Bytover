@@ -20,6 +20,12 @@ pub enum TransferType {
     Receive
 }
 
+impl TransferType {
+    pub fn send_any() -> Self {
+        TransferType::Send { from_shelf_id: 0 }
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferSessionStatus {
     Initializing {

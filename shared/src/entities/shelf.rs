@@ -30,7 +30,7 @@ impl Shelf {
         self.resources.iter().any(|resource| resource.path.eq(path))
     }
 
-    pub fn get_resources(&mut self, resources: Vec<LocalResource>) {
+    pub fn add_resources(&mut self, resources: Vec<LocalResource>) {
         for resource in resources {
             self.resources.push(resource);
         }

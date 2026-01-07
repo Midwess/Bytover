@@ -446,7 +446,7 @@ impl AppModule<BitBridge> for TransferModule {
             } => {
                 let session_id = TransferSessionId {
                     order_id: Some(order_id.to_string()),
-                    transfer_type: Some(TransferType::Send { from_shelf_id: 0 })
+                    transfer_type: Some(TransferType::send_any())
                 };
 
                 let session = model.transfer.sessions.lookup(&session_id).cloned();
@@ -489,7 +489,7 @@ impl AppModule<BitBridge> for TransferModule {
             } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
-                    transfer_type: Some(TransferType::Send { from_shelf_id: 0 })
+                    transfer_type: Some(TransferType::send_any())
                 };
 
                 let resource = model

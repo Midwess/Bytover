@@ -67,6 +67,12 @@ impl DbId for LocalResourceId {
             }
         }
 
+        if let Some(shelf_id) = self.shelf_id {
+            if shelf_id != table.shelf_id {
+                return false;
+            }
+        }
+
         true
     }
 }

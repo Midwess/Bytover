@@ -50,7 +50,7 @@ async fn cancel_send(app_handle: AppHandle, session_id: String) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
     process_event(TransferEvent::CancelTransfer {
         session_id,
-        transfer_type: TransferType::Send { from_shelf_id: 0 },
+        transfer_type: TransferType::send_any(),
     }, app_handle).await;
 }
 
