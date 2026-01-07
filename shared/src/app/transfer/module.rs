@@ -41,10 +41,10 @@ impl TransferModel {
         })
     }
 
-    pub fn get_active_p2p_send_session(&self) -> Option<&TransferSession> {
+    pub fn get_active_p2p_send_session(&self, shelf_id: u64) -> Option<&TransferSession> {
         self.sessions
             .iter()
-            .find(|s| matches!(s.transfer_type, TransferType::Send { .. }) && !s.is_completed())
+            .find(|s| matches!(s.transfer_type, TransferType::Send { from_shelf_id } if from_shelf_id == shelf_id) && !s.is_completed())
     }
 }
 
@@ -53,7 +53,7 @@ pub struct TransferViewModel {
     transfer_method: TransferMethodSelection,
     received_sessions: Vec<ReceiveSessionViewModel>,
     received_cloud_sessions: Vec<ReceiveSessionViewModel>,
-    cloud_session: Option<CloudSession>,
+    cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
     selected_session: Option<ReceiveSessionViewModel>,
     pub is_resource_remove_allowed: bool
@@ -283,22 +283,14 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::NewTransferResource { shelf_id, resource } => {
-                let Some(active_session) = model.transfer.get_active_p2p_send_session() else {
+                let Some(active_session) = model.transfer.get_active_p2p_send_session(shelf_id) else {
                     return Command::done()
                 };
-
-                let TransferType::Send { from_shelf_id } = active_session.transfer_type else {
-                    return Command::done()
-                };
-
-                if shelf_id != from_shelf_id {
-                    return Command::done()
-                }
 
                 let active_session_id = active_session.order_id;
                 let id = TransferSessionId {
                     order_id: Some(active_session_id.to_string()),
-                    transfer_type: Some(TransferType::Send { from_shelf_id })
+                    transfer_type: Some(TransferType::Send { from_shelf_id: shelf_id })
                 };
 
                 let res = resource.clone();
@@ -817,13 +809,13 @@ impl AppModule<BitBridge> for TransferModule {
             received_sessions,
             received_cloud_sessions,
             selected_session,
-            cloud_session: model
+            cloud_sessions: model
                 .transfer
                 .sessions
                 .iter()
                 .filter(|it| matches!(it.transfer_type, TransferType::Send { .. }))
                 .filter(|it| it.target.is_public())
-                .find_map(|it| match &it.target {
+                .filter_map(|it| match &it.target {
                     TransferTarget::Internet { .. } => {
                         let access_url = if !it.access_url.is_empty() {
                             Some(it.access_url.clone())
@@ -831,7 +823,12 @@ impl AppModule<BitBridge> for TransferModule {
                             None
                         };
                         let status = it.status();
+                        let shelf_id = match it.transfer_type {
+                            TransferType::Send { from_shelf_id } => Some(from_shelf_id.to_string()),
+                            _ => None
+                        };
                         Some(CloudSession {
+                            shelf_id,
                             display_download_speed: match access_url.is_none() {
                                 true => "Initializing...".to_owned(),
                                 false => status.to_string()
@@ -845,7 +842,8 @@ impl AppModule<BitBridge> for TransferModule {
                         })
                     }
                     _ => None
-                }),
+                })
+                .collect(),
             p2p_sessions: model
                 .transfer
                 .sessions
@@ -859,7 +857,12 @@ impl AppModule<BitBridge> for TransferModule {
                         None
                     };
                     let status = it.status();
+                    let shelf_id = match it.transfer_type {
+                        TransferType::Send { from_shelf_id } => Some(from_shelf_id.to_string()),
+                        _ => None
+                    };
                     Some(CloudSession {
+                        shelf_id,
                         display_download_speed: status.to_string(),
                         password: it.password.clone(),
                         session_id: it.order_id.to_string(),

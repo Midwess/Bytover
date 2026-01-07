@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CloudSession {
+    pub shelf_id: Option<String>,
     pub access_url: Option<String>,
     pub password: Option<String>,
     pub session_id: String,

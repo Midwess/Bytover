@@ -195,18 +195,36 @@ export class WasmCore {
         const [state, setState] = useState<SelectedResourceViewModel[]>([])
 
         useEffect(() => {
-            return this.shelfState.subscribe((transferState) => {
-                if (transferState?.selected_resources.length != state.length) {
-                    setState(transferState?.selected_resources || [])
+            return this.shelfState.subscribe((shelfState) => {
+                const defaultShelf = shelfState?.shelves?.[0]
+                const resources = defaultShelf?.resources || []
+
+                if (resources.length != state.length) {
+                    setState(resources)
                 }
 
-                if (!isEqual(state, transferState?.selected_resources)) {
-                    setState(transferState?.selected_resources || [])
+                if (!isEqual(state, resources)) {
+                    setState(resources)
                 }
             })
         }, [state.length])
 
         return state
+    }
+
+    public useDefaultShelfId(): string | undefined {
+        const [shelfId, setShelfId] = useState<string | undefined>()
+
+        useEffect(() => {
+            return this.shelfState.subscribe((shelfState) => {
+                const defaultShelf = shelfState?.shelves?.[0]
+                if (defaultShelf?.id !== shelfId) {
+                    setShelfId(defaultShelf?.id)
+                }
+            })
+        }, [shelfId])
+
+        return shelfId
     }
 
     public useCloudSessionsList() {
@@ -222,16 +240,38 @@ export class WasmCore {
         return clouds
     }
 
-    public useP2PSession() {
-        const [session, setSession] = useState(this.transferState.get()?.p2p_sessions?.[0]);
+    public useP2PSession(shelfId: string | undefined) {
+        const [session, setSession] = useState(() => {
+            const sessions = this.transferState.get()?.p2p_sessions ?? [];
+            return shelfId ? sessions.find(s => s.shelf_id === shelfId) : undefined;
+        });
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const p2pSession = transferState?.p2p_sessions?.[0];
+                const sessions = transferState?.p2p_sessions ?? [];
+                const p2pSession = shelfId ? sessions.find(s => s.shelf_id === shelfId) : undefined;
                 if (!isEqual(session, p2pSession)) {
                     setSession(p2pSession);
                 }
             })
-        }, [session]);
+        }, [session, shelfId]);
+
+        return session;
+    }
+
+    public useCloudSession(shelfId: string | undefined) {
+        const [session, setSession] = useState(() => {
+            const sessions = this.transferState.get()?.cloud_sessions ?? [];
+            return shelfId ? sessions.find(s => s.shelf_id === shelfId) : undefined;
+        });
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const sessions = transferState?.cloud_sessions ?? [];
+                const cloudSession = shelfId ? sessions.find(s => s.shelf_id === shelfId) : undefined;
+                if (!isEqual(session, cloudSession)) {
+                    setSession(cloudSession);
+                }
+            })
+        }, [session, shelfId]);
 
         return session;
     }

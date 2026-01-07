@@ -23,12 +23,13 @@ use shared::app::operations::persistent::{
     LocalResourcePersistentOperation,
     PersistentOperation,
     SessionPersistentOperation,
+    ShelfPersistentOperation,
     TransferSessionPersistentOperation
 };
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
-use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfViewModel};
+use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfItemViewModel, ShelfViewModel};
 use shared::app::transfer::module::{TransferEvent, TransferModel};
 use shared::app::BitBridge;
 use shared::app::view_models::receive_session::ReceiveResourceViewModel;
@@ -93,6 +94,7 @@ fn main() {
     gen.register_type::<TransferOperationOutput>().unwrap();
     gen.register_type::<LocalResourcePersistentOperation>().unwrap();
     gen.register_type::<TransferSessionPersistentOperation>().unwrap();
+    gen.register_type::<ShelfPersistentOperation>().unwrap();
     gen.register_type::<TransferSession>().unwrap();
     gen.register_type::<InternetOperation>().unwrap();
     gen.register_type::<DeviceOperation>().unwrap();
@@ -117,6 +119,7 @@ fn main() {
     gen.register_type::<TransferSessionId>().unwrap();
     gen.register_type::<ShelfEvent>().unwrap();
     gen.register_type::<ShelfViewModel>().unwrap();
+    gen.register_type::<ShelfItemViewModel>().unwrap();
     gen.register_type::<ViewSessionDetailResponseResult>().unwrap();
     gen.register_type::<PeerErrorsMessage>().unwrap();
     gen.register_type::<P2POperationOutput>().unwrap();
