@@ -127,6 +127,7 @@ function FileSelections() {
 
     const selectedResources = core.useSelectedResources()
     const defaultShelfId = core.useDefaultShelfId()
+    console.log('tiendang-debug', defaultShelfId)
     const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
 
     useEffect(() => {

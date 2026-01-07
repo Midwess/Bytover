@@ -248,6 +248,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::render()
             }
             Self::Event::ShelfLoaded(shelf) => {
+                log::info!("Shelf loaded: {:?}", shelf.resources.len());
                 model.shelf.shelves.push(shelf);
                 Command::done()
             }

@@ -5,6 +5,7 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::{LocalResourcePersistentOperation, ShelfPersistentOperation};
 use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
+use crate::CoreOperation;
 use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
@@ -15,11 +16,18 @@ impl AppCommand {
         shelves.sort_by(|a, b| b.id.cmp(&a.id));
         log::info!("Loaded {} shelves", shelves.len());
 
+        // Ensure there's always at least one shelf
+        if shelves.is_empty() {
+            log::info!("No shelves found, creating default shelf");
+            let default_shelf = self.create_shelf("Default".to_string()).await?;
+            shelves.push(default_shelf);
+        }
+
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
         log::info!("Loaded {} resources", resources.len());
 
         for shelf in shelves {
-            self.notify_event(ShelfEvent::ShelfLoaded(shelf));
+            self.update_model(ShelfEvent::ShelfLoaded(shelf));
         }
 
         for resource in resources {
@@ -29,6 +37,8 @@ impl AppCommand {
                 resource
             });
         }
+
+        self.notify_shell(CoreOperation::Render);
 
         Ok(())
     }
