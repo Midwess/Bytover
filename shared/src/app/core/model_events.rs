@@ -43,7 +43,7 @@ pub enum LocalResourceUpdateEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourceEvent {
-    Add { shelf_id: Option<u64>, resource: LocalResource },
+    Add { shelf_id: u64, resource: LocalResource },
     Remove(LocalResourceId),
     Update(LocalResourceId, LocalResourceUpdateEvent)
 }

@@ -71,12 +71,12 @@ pub enum TransferEvent {
         session_id: u64
     },
     StartPublicTransfer {
-        shelf_id: Option<u64>,
+        shelf_id: u64,
         password: Option<String>,
         to_emails: Vec<String>
     },
     StartP2PTransfer {
-        shelf_id: Option<u64>,
+        shelf_id: u64,
         nearby_available: bool,
         password: Option<String>
     },
@@ -137,7 +137,7 @@ pub enum TransferEvent {
         session_order_id: u64
     },
     NewTransferResource {
-        shelf_id: Option<u64>,
+        shelf_id: u64,
         resource: LocalResource
     },
 
@@ -234,10 +234,11 @@ impl AppModule<BitBridge> for TransferModule {
             }
             TransferEvent::StartPublicTransfer { shelf_id, password, to_emails } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
                 let selected_resources = shelf.resources.clone();
-                let from_shelf_id = shelf.id;
                 let Some(user) = model.authentication.user.clone() else {
                     log::info!("User is not login, open login page");
                     return Command::handle_result(|it| async move {
@@ -247,16 +248,17 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::handle_result(move |it| async move {
-                    let session = TransferSession::public(user, password, selected_resources, to_emails, from_shelf_id);
+                    let session = TransferSession::public(user, password, selected_resources, to_emails, shelf_id);
                     it.app().upload(session).await
                 })
             }
             TransferEvent::StartP2PTransfer { shelf_id, nearby_available: _, password } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
                 let selected_resources = shelf.resources.clone();
-                let from_shelf_id = shelf.id;
                 if selected_resources.is_empty() {
                     return Command::new(|it| async move {
                         let _ = DialogOperation::toast("No resources selected".to_string()).into_future(it.clone()).await;
@@ -277,7 +279,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::handle_result(move |it| async move {
-                    it.app().start_p2p_transfer(selected_resources, password, user, from_shelf_id).await
+                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id).await
                 })
             }
             TransferEvent::NewTransferResource { shelf_id, resource } => {
@@ -289,7 +291,7 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done()
                 };
 
-                if shelf_id.is_some() && shelf_id != Some(from_shelf_id) {
+                if shelf_id != from_shelf_id {
                     return Command::done()
                 }
 

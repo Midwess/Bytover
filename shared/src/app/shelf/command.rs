@@ -23,8 +23,9 @@ impl AppCommand {
         }
 
         for resource in resources {
+            let shelf_id = resource.shelf_id;
             self.update_model(LocalResourceEvent::Add {
-                shelf_id: Some(resource.shelf_id),
+                shelf_id,
                 resource
             });
         }
@@ -91,11 +92,11 @@ impl AppCommand {
             };
 
             self.update_model(LocalResourceEvent::Add {
-                shelf_id: Some(target_shelf_id),
+                shelf_id: target_shelf_id,
                 resource: new_resource.clone()
             });
             self.notify_event(TransferEvent::NewTransferResource {
-                shelf_id: Some(target_shelf_id),
+                shelf_id: target_shelf_id,
                 resource: new_resource
             });
         }

@@ -64,23 +64,26 @@ async fn cancel_receive(app_handle: AppHandle, session_id: String) {
 }
 
 #[tauri::command]
-async fn clear_shelf(app_handle: AppHandle) {
-    process_event(ShelfEvent::Clear { shelf_id: None }, app_handle).await;
+async fn clear_shelf(shelf_id: String, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
+    process_event(ShelfEvent::Clear { shelf_id }, app_handle).await;
 }
 
 #[tauri::command]
-async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
+async fn public_transfer(shelf_id: String, password: Option<String>, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
     process_event(TransferEvent::StartPublicTransfer {
-        shelf_id: None,
+        shelf_id,
         password,
         to_emails: vec![]
     }, app_handle).await;
 }
 
 #[tauri::command]
-async fn p2p_transfer(app_handle: AppHandle, password: Option<String>) {
+async fn p2p_transfer(shelf_id: String, password: Option<String>, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
     process_event(TransferEvent::StartP2PTransfer {
-        shelf_id: None,
+        shelf_id,
         nearby_available: false,
         password,
     }, app_handle).await;
@@ -92,9 +95,10 @@ async fn ui_launched(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-async fn remove_resource(resource_id: String, app_handle: AppHandle) {
+async fn remove_resource(shelf_id: String, resource_id: String, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
     let resource_id = resource_id.parse::<u64>().unwrap_or_default();
-    process_event(ShelfEvent::RemoveResource { shelf_id: None, resource_id }, app_handle).await;
+    process_event(ShelfEvent::RemoveResource { shelf_id, resource_id }, app_handle).await;
 }
 
 #[tauri::command]
@@ -140,14 +144,15 @@ async fn authenticate(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
+async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHandle) {
     notify_user_did_drop();
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
     let selections = paths.into_iter().map(|path| ResourceSelection {
         path: LocalResourcePath::AbsolutePath(path),
         r#type: None
     }).collect::<Vec<_>>();
 
-    process_event(ShelfEvent::AddResources { shelf_id: None, selections }, app_handle).await;
+    process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
 }
 
 async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {

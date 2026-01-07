@@ -15,49 +15,39 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default)]
 pub struct ShelfModel {
     pub shelves: Vec<Shelf>,
-    pub active_shelf_id: Option<u64>,
     pub is_loading: bool
 }
 
 impl ShelfModel {
-    pub fn get_active_shelf(&self) -> Option<&Shelf> {
-        match self.active_shelf_id {
-            Some(id) => self.shelves.iter().find(|s| s.id == id),
-            None => self.shelves.first()
-        }
+    pub fn get_shelf(&self, shelf_id: u64) -> Option<&Shelf> {
+        self.shelves.iter().find(|s| s.id == shelf_id)
     }
 
-    pub fn get_active_shelf_mut(&mut self) -> Option<&mut Shelf> {
-        match self.active_shelf_id {
-            Some(id) => self.shelves.iter_mut().find(|s| s.id == id),
-            None => self.shelves.first_mut()
-        }
+    pub fn get_shelf_mut(&mut self, shelf_id: u64) -> Option<&mut Shelf> {
+        self.shelves.iter_mut().find(|s| s.id == shelf_id)
     }
+}
 
-    pub fn get_shelf(&self, shelf_id: Option<u64>) -> Option<&Shelf> {
-        match shelf_id {
-            Some(id) => self.shelves.iter().find(|s| s.id == id),
-            None => self.get_active_shelf()
-        }
-    }
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShelfItemViewModel {
+    pub id: String,
+    pub name: String,
+    pub resources: Vec<SelectedResourceViewModel>
+}
 
-    pub fn get_shelf_mut(&mut self, shelf_id: Option<u64>) -> Option<&mut Shelf> {
-        match shelf_id {
-            Some(id) => self.shelves.iter_mut().find(|s| s.id == id),
-            None => self.get_active_shelf_mut()
-        }
-    }
-
-    pub fn ensure_shelf_exists(&mut self) {
-        if self.shelves.is_empty() {
-            self.shelves.push(Shelf::new("Default"));
+impl From<&Shelf> for ShelfItemViewModel {
+    fn from(shelf: &Shelf) -> Self {
+        Self {
+            id: shelf.id.to_string(),
+            name: shelf.name.clone(),
+            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
         }
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
-    pub selected_resources: Vec<SelectedResourceViewModel>,
+    pub shelves: Vec<ShelfItemViewModel>,
     pub is_loading: bool
 }
 
@@ -66,13 +56,12 @@ pub enum ShelfEvent {
     Launch,
     BeginLoadingResources,
     EndLoadingResources,
-    OpenResource(u64),
-    AddResources { shelf_id: Option<u64>, selections: Vec<ResourceSelection> },
-    RemoveResource { shelf_id: Option<u64>, resource_id: u64 },
-    Clear { shelf_id: Option<u64> },
+    OpenResource { shelf_id: u64, resource_id: u64 },
+    AddResources { shelf_id: u64, selections: Vec<ResourceSelection> },
+    RemoveResource { shelf_id: u64, resource_id: u64 },
+    Clear { shelf_id: u64 },
     CreateShelf(String),
     DeleteShelf(u64),
-    SwitchShelf(u64),
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
@@ -109,9 +98,10 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::render()
             }
             Self::Event::AddResources { shelf_id, selections } => {
-                model.shelf.ensure_shelf_exists();
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
 
                 let mut commands = vec![];
@@ -126,11 +116,10 @@ impl AppModule<BitBridge> for ShelfModule {
                     }
                 }
 
-                let target_shelf_id = shelf.id;
                 commands.push(Command::handle_result(move |it| async move {
                     let app = it.app();
                     app.notify_event(ShelfEvent::BeginLoadingResources);
-                    app.new_resources(target_shelf_id, filtered_selections).await?;
+                    app.new_resources(shelf_id, filtered_selections).await?;
                     app.notify_event(ShelfEvent::EndLoadingResources);
 
                     Ok(())
@@ -146,17 +135,23 @@ impl AppModule<BitBridge> for ShelfModule {
                 }
 
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
 
                 let Some(resource) = shelf.get(&LocalResourceId {
                     order_id: Some(resource_id),
+                    shelf_id: Some(shelf_id),
                     ..Default::default()
                 }) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Resource not found.".to_owned()
+                    ));
                 };
 
-                let id = resource.id();
+                let mut id = resource.id();
+                id.shelf_id = Some(shelf_id);
                 Command::handle_result(move |it| async move { it.app().remove_resource(id).await })
             }
             Self::Event::ModelEvent(event) => {
@@ -167,8 +162,10 @@ impl AppModule<BitBridge> for ShelfModule {
                         }
                     }
                     LocalResourceEvent::Remove(id) => {
-                        if let Some(shelf) = model.shelf.get_shelf_mut(id.shelf_id) {
-                            shelf.remove_resource(&id);
+                        if let Some(shelf_id) = id.shelf_id {
+                            if let Some(shelf) = model.shelf.get_shelf_mut(shelf_id) {
+                                shelf.remove_resource(&id);
+                            }
                         }
                     }
                     _ => {}
@@ -176,15 +173,23 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::done()
             }
-            Self::Event::OpenResource(id) => {
+            Self::Event::OpenResource { shelf_id, resource_id } => {
                 let id = LocalResourceId {
-                    order_id: Some(id),
+                    order_id: Some(resource_id),
+                    shelf_id: Some(shelf_id),
                     ..Default::default()
                 };
 
-                let shelf = model.shelf.get_active_shelf();
-                let Some(resource) = shelf.and_then(|s| s.get(&id)) else {
-                    return Command::done();
+                let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
+                };
+
+                let Some(resource) = shelf.get(&id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Resource not found.".to_owned()
+                    ));
                 };
 
                 let resource_path = resource.path.clone();
@@ -194,7 +199,9 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::Clear { shelf_id } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::done();
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
 
                 let commands = shelf
@@ -202,7 +209,7 @@ impl AppModule<BitBridge> for ShelfModule {
                     .iter()
                     .map(|it| {
                         let mut id = it.id();
-                        id.shelf_id = shelf_id;
+                        id.shelf_id = Some(shelf_id);
                         Command::handle_result(move |it| async move {
                             let _ = it.app().remove_resource(id).await;
                             Ok(())
@@ -238,15 +245,6 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::ShelfDeleted(shelf_id) => {
                 model.shelf.shelves.retain(|s| s.id != shelf_id);
-                if model.shelf.active_shelf_id == Some(shelf_id) {
-                    model.shelf.active_shelf_id = None;
-                }
-                Command::render()
-            }
-            Self::Event::SwitchShelf(shelf_id) => {
-                if model.shelf.shelves.iter().any(|s| s.id == shelf_id) {
-                    model.shelf.active_shelf_id = Some(shelf_id);
-                }
                 Command::render()
             }
             Self::Event::ShelfLoaded(shelf) => {
@@ -257,14 +255,15 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        let resources = model
+        let shelves = model
             .shelf
-            .get_active_shelf()
-            .map(|s| s.resources.iter().map(SelectedResourceViewModel::from).collect())
-            .unwrap_or_default();
+            .shelves
+            .iter()
+            .map(ShelfItemViewModel::from)
+            .collect();
 
         ShelfViewModel {
-            selected_resources: resources,
+            shelves,
             is_loading: model.shelf.is_loading
         }
     }
