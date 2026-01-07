@@ -127,7 +127,6 @@ function FileSelections() {
 
     const selectedResources = core.useSelectedResources()
     const defaultShelfId = core.useDefaultShelfId()
-    console.log('tiendang-debug', defaultShelfId)
     const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
 
     useEffect(() => {
@@ -697,14 +696,14 @@ function PublicSend() {
                     isInProgress &&
                     <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend(BigInt(0)))))
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend(BigInt(defaultShelfId || 0)))))
                         }
                     }}>Cancel</Button>
                 }
                 {
                     !cloudSession && defaultShelfId &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(BigInt(defaultShelfId), password || null, emails)))
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(BigInt(defaultShelfId || 0), password || null, emails)))
                     }}>
                         {emails.length > 0
                             ? `Send to ${emails.length} recipient${emails.length > 1 ? 's' : ''}`
@@ -716,7 +715,7 @@ function PublicSend() {
                     <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
                             BigInt(cloudSession?.session_id),
-                            new TransferTypeVariantSend(BigInt(0))
+                            new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
                         )))
                     }}>Continue</Button>
                 }
@@ -805,7 +804,7 @@ function P2PSend() {
             core.update(new AppEventVariantTransfer(
                 new TransferEventVariantCancelTransfer(
                     BigInt(p2pSession.session_id),
-                    new TransferTypeVariantSend(BigInt(0))
+                    new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
                 )
             ))
         }
