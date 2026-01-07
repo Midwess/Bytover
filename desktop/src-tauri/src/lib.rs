@@ -50,7 +50,7 @@ async fn cancel_send(app_handle: AppHandle, session_id: String) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
     process_event(TransferEvent::CancelTransfer {
         session_id,
-        transfer_type: TransferType::Send,
+        transfer_type: TransferType::Send { from_shelf_id: 0 },
     }, app_handle).await;
 }
 
@@ -65,12 +65,13 @@ async fn cancel_receive(app_handle: AppHandle, session_id: String) {
 
 #[tauri::command]
 async fn clear_shelf(app_handle: AppHandle) {
-    process_event(ShelfEvent::Clear, app_handle).await;
+    process_event(ShelfEvent::Clear { shelf_id: None }, app_handle).await;
 }
 
 #[tauri::command]
 async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
     process_event(TransferEvent::StartPublicTransfer {
+        shelf_id: None,
         password,
         to_emails: vec![]
     }, app_handle).await;
@@ -79,6 +80,7 @@ async fn public_transfer(app_handle: AppHandle, password: Option<String>) {
 #[tauri::command]
 async fn p2p_transfer(app_handle: AppHandle, password: Option<String>) {
     process_event(TransferEvent::StartP2PTransfer {
+        shelf_id: None,
         nearby_available: false,
         password,
     }, app_handle).await;
@@ -92,7 +94,7 @@ async fn ui_launched(app_handle: AppHandle) {
 #[tauri::command]
 async fn remove_resource(resource_id: String, app_handle: AppHandle) {
     let resource_id = resource_id.parse::<u64>().unwrap_or_default();
-    process_event(ShelfEvent::RemoveResource(resource_id), app_handle).await;
+    process_event(ShelfEvent::RemoveResource { shelf_id: None, resource_id }, app_handle).await;
 }
 
 #[tauri::command]
@@ -145,7 +147,7 @@ async fn add_resources(paths: Vec<String>, app_handle: AppHandle) {
         r#type: None
     }).collect::<Vec<_>>();
 
-    process_event(ShelfEvent::AddResources(selections), app_handle).await;
+    process_event(ShelfEvent::AddResources { shelf_id: None, selections }, app_handle).await;
 }
 
 async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {

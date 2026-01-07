@@ -107,7 +107,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 size,
                 path,
                 thumbnail_path: None,
-                r#type: ResourceType::Folder
+                r#type: ResourceType::Folder,
+                shelf_id: 0
             };
 
             return Ok(Some(resource))
@@ -125,7 +126,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             size: file.size,
             path,
             thumbnail_path: None,
-            r#type: ResourceType::File
+            r#type: ResourceType::File,
+            shelf_id: 0
         };
 
         Ok(Some(resource))
@@ -273,7 +275,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
         let from_id = LocalResourceId {
             path: Some(path),
-            order_id: None
+            order_id: None,
+            shelf_id: None
         };
 
         let items =

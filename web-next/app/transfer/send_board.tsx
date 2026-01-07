@@ -133,6 +133,7 @@ function FileSelections() {
             core.addFiles(files.map(file => file.file))
                 .then((selections) => {
                     core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
+                        null,
                         selections
                     )))
                 })
@@ -143,6 +144,7 @@ function FileSelections() {
             core.addFolders(folders)
                 .then((selections) => {
                     core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
+                        null,
                         selections
                     )))
                 })
@@ -324,7 +326,7 @@ function FileView(props: {
 
     const handleRemove = async () => {
         if (!isRemoveAllowed) return;
-        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(null, BigInt(model.order_id))))
     }
 
     if (isMobile) {
@@ -444,7 +446,7 @@ function MediaView(props: {
 
     const handleRemove = () => {
         if (!isRemoveAllowed) return;
-        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(null, BigInt(model.order_id))))
     }
 
     if (isMobile) {
@@ -687,14 +689,14 @@ function PublicSend() {
                     isInProgress &&
                     <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend(BigInt(0)))))
                         }
                     }}>Cancel</Button>
                 }
                 {
                     !cloudSession &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password || null, emails)))
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(null, password || null, emails)))
                     }}>
                         {emails.length > 0
                             ? `Send to ${emails.length} recipient${emails.length > 1 ? 's' : ''}`
@@ -706,7 +708,7 @@ function PublicSend() {
                     <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
                             BigInt(cloudSession?.session_id),
-                            new TransferTypeVariantSend()
+                            new TransferTypeVariantSend(BigInt(0))
                         )))
                     }}>Continue</Button>
                 }
@@ -784,7 +786,7 @@ function P2PSend() {
 
     const handleStartTransfer = () => {
         const pwd = password || null
-        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(false, pwd)))
+        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(null, false, pwd)))
         setPassword('')
     }
 
@@ -793,7 +795,7 @@ function P2PSend() {
             core.update(new AppEventVariantTransfer(
                 new TransferEventVariantCancelTransfer(
                     BigInt(p2pSession.session_id),
-                    new TransferTypeVariantSend()
+                    new TransferTypeVariantSend(BigInt(0))
                 )
             ))
         }

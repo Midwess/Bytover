@@ -46,7 +46,8 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
 
         Ok(IdbIdWrapper(LocalResourceId {
             path: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
-            order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
+            order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok())),
+            shelf_id: None
         }))
     }
 }
@@ -200,7 +201,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
         let from_id = LocalResourceId {
             path: Some(path),
-            order_id: None
+            order_id: None,
+            shelf_id: None
         };
 
         let items = IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(

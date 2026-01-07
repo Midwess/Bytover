@@ -2,6 +2,7 @@ use crate::app::operations::persistent::{
     LocalResourcePersistentOperation,
     PersistentOperation,
     SessionPersistentOperation,
+    ShelfPersistentOperation,
     TransferSessionPersistentOperation
 };
 use crate::app::operations::CoreOperationOutput;
@@ -9,6 +10,7 @@ use crate::entities::session::{Session, SessionType};
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::local_resource::LocalResourceRepository;
+use crate::repository::shelf::ShelfRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
 use core_services::db::repository::abstraction::table::Table;
 
@@ -18,6 +20,7 @@ pub trait NativePersistent: Send + Sync {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
+    fn shelf_repository(&self) -> &dyn ShelfRepository;
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
         Self::default_handle(self, effect).await
@@ -170,7 +173,19 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::Bool(true))
             }
-            PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string()))
+            PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string())),
+            PersistentOperation::Shelf(ShelfPersistentOperation::Add(shelf)) => {
+                let shelf = self.shelf_repository().add(shelf).await?;
+                Ok(CoreOperationOutput::Shelf(shelf))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::Remove(id)) => {
+                let removed = self.shelf_repository().remove(id).await?;
+                Ok(CoreOperationOutput::Bool(removed))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::FindAll) => {
+                let shelves = self.shelf_repository().load_all().await?;
+                Ok(CoreOperationOutput::Shelves(shelves))
+            }
         }
     }
 }

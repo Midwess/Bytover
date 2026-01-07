@@ -6,6 +6,7 @@ use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams};
 pub mod auth_session;
 pub mod id;
 pub mod local_resource;
+pub mod shelf;
 pub mod transfer_session;
 
 pub mod user;
@@ -32,6 +33,7 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
             database.create_object_store("authSession", store_params.clone()).unwrap();
             database.create_object_store("transferSession", store_params.clone()).unwrap();
             database.create_object_store("localResource", store_params.clone()).unwrap();
+            database.create_object_store("shelf", store_params.clone()).unwrap();
         });
 
         NeverSend(open_request.await.unwrap())

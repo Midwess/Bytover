@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
-    Send,
+    Send { from_shelf_id: u64 },
     Receive
 }
 
@@ -232,19 +232,21 @@ impl TransferSession {
         scope: String,
         alias: String,
         access_url: String,
-        id: u64
+        id: u64,
+        from_shelf_id: u64
     ) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
+        let transfer_type = TransferType::Send { from_shelf_id };
         Self {
             order_id: id,
             access_url,
             alias,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone())).collect(),
             resources,
             session_resource: None,
             description: None,
-            transfer_type: TransferType::Send,
+            transfer_type,
             target: TransferTarget::P2P {
                 from_peer: None,
                 scope: FindingScope::new(&signalling_key),
@@ -263,17 +265,18 @@ impl TransferSession {
         }
     }
 
-    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>) -> Self {
+    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>, from_shelf_id: u64) -> Self {
         let is_required_password = password.is_some();
+        let transfer_type = TransferType::Send { from_shelf_id };
         Self {
             alias: "".to_owned(),
             access_url: "".to_owned(),
             order_id: 0,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, TransferType::Send)).collect(),
+            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone())).collect(),
             cancellation_token: CancellationToken::new(),
             resources,
             session_resource: None,
-            transfer_type: TransferType::Send,
+            transfer_type,
             target: TransferTarget::Internet { to_emails },
             description: None,
             from_user: current_user,

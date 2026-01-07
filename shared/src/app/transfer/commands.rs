@@ -21,6 +21,7 @@ use schema::devlog::bitbridge::PeerErrorsMessage;
 use std::collections::HashMap;
 use crate::app::operations::rpc::RpcOperation;
 use crate::entities::finding_scope::FindingScope;
+use crate::entities::user::User;
 
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
@@ -480,7 +481,7 @@ impl AppCommand {
         }
 
         match session.transfer_type {
-            TransferType::Send => {
+            TransferType::Send { .. } => {
                 log::info!("Broadcasting cancel for session {} to all receivers", session.order_id);
                 self.run(P2POperation::broadcast_cancel_session(session.order_id, resource_id)).await?;
             }
@@ -542,7 +543,8 @@ impl AppCommand {
             size: total_size,
             path: zip_paths.session_path.clone(),
             r#type: ResourceType::File,
-            thumbnail_path: None
+            thumbnail_path: None,
+            shelf_id: 0
         };
 
         let mut aggregate_progress = TransferProgress::new(u64::MAX, total_size, TransferType::Receive);
@@ -659,7 +661,8 @@ impl AppCommand {
         &self,
         selected_resources: Vec<LocalResource>,
         password: Option<String>,
-        user: crate::entities::user::User
+        user: User,
+        from_shelf_id: u64
     ) -> Result<(), CoreError> {
         let p2p_session = self.run(RpcOperation::create_p2p_session()).await?;
 
@@ -670,7 +673,8 @@ impl AppCommand {
             p2p_session.signalling_scope.clone(),
             p2p_session.alias.clone(),
             p2p_session.access_url.clone(),
-            p2p_session.session_id
+            p2p_session.session_id,
+            from_shelf_id
         );
 
         let scope = FindingScope::new(&p2p_session.signalling_room_id);

@@ -33,7 +33,8 @@ impl From<CloudResourceMessage> for LocalResource {
             thumbnail_path: value.thumbnail_download_url.map(LocalResourcePath::AbsolutePath),
             r#type: cloud_resource_message::ResourceType::try_from(value.r#type)
                 .unwrap_or(cloud_resource_message::ResourceType::File)
-                .into()
+                .into(),
+            shelf_id: 0
         }
     }
 }

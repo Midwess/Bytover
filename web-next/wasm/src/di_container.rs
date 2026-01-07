@@ -9,6 +9,7 @@ use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::network::net_stream::NetStreamImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
+use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::IdbPoolProvider;
 use core_services::utils::never_send::NeverSend;
@@ -24,6 +25,7 @@ use shared::protocol::rpc::cloud_server::CloudServer;
 use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
+use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
@@ -134,6 +136,15 @@ impl DiContainer {
         repo
     }
 
+    pub fn get_shelf_repository(&self) -> impl ShelfRepository {
+        ShelfRepositoryImpl {
+            db: PoolRequestBuilder::new()
+                .retrieving_timeout(Duration::from_secs(30))
+                .pool(self.db.get().unwrap().clone())
+                .build()
+        }
+    }
+
     pub fn get_cloud_server(&'static self) -> &'static CloudServer<Client> {
         if let Some(server) = self.cloud_server.get() {
             return server;
@@ -173,7 +184,8 @@ impl DiContainer {
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
                 local_resource_repository: self.get_local_resource_repository().await,
-                transfer_session_repository: self.get_transfer_session_repository()
+                transfer_session_repository: self.get_transfer_session_repository(),
+                shelf_repository: Box::new(self.get_shelf_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
                 web_rtc: web_rtc.clone(),

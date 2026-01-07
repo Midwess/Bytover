@@ -16,6 +16,7 @@ use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::session::Session;
+use crate::entities::shelf::Shelf;
 use crate::entities::token::Token;
 use crate::entities::transfer_session::TransferSession;
 use crate::entities::user::User;
@@ -75,6 +76,8 @@ pub enum CoreOperationOutput {
     TransferSessions(Vec<TransferSession>),
     LocalResources(Vec<LocalResource>),
     LocalResource(LocalResource),
+    Shelf(Shelf),
+    Shelves(Vec<Shelf>),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
 

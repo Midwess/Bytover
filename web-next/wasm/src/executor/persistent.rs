@@ -3,6 +3,7 @@ use shared::app::operations::CoreOperationOutput;
 use shared::errors::CoreError;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
+use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::executor::persistent::NativePersistent;
 use std::sync::Arc;
@@ -10,7 +11,8 @@ use std::sync::Arc;
 pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,
     pub local_resource_repository: Arc<dyn LocalResourceRepository>,
-    pub transfer_session_repository: Arc<dyn TransferSessionRepository>
+    pub transfer_session_repository: Arc<dyn TransferSessionRepository>,
+    pub shelf_repository: Box<dyn ShelfRepository>
 }
 
 #[async_trait::async_trait(?Send)]
@@ -25,6 +27,10 @@ impl NativePersistent for NativePersistentImpl {
 
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository {
         &*self.transfer_session_repository
+    }
+
+    fn shelf_repository(&self) -> &dyn ShelfRepository {
+        &*self.shelf_repository
     }
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {

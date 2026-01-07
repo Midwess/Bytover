@@ -10,7 +10,8 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct LocalResourceId {
     pub path: Option<LocalResourcePath>,
-    pub order_id: Option<u64>
+    pub order_id: Option<u64>,
+    pub shelf_id: Option<u64>
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -44,7 +45,8 @@ impl Table<LocalResourceId> for LocalResource {
     fn id(&self) -> LocalResourceId {
         LocalResourceId {
             path: Some(self.path.clone()),
-            order_id: Some(self.order_id)
+            order_id: Some(self.order_id),
+            shelf_id: None
         }
     }
 }

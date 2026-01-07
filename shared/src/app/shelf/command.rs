@@ -2,26 +2,48 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::LocalResourcePersistentOperation;
-use crate::app::shelf::module::ResourceSelection;
+use crate::app::operations::persistent::{LocalResourcePersistentOperation, ShelfPersistentOperation};
+use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
-use crate::app::AppEvent;
+use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 
 impl AppCommand {
-    pub async fn load_resources(&self) -> Result<(), CoreError> {
+    pub async fn load_shelves(&self) -> Result<(), CoreError> {
+        let mut shelves = ShelfPersistentOperation::find_all().into_future(self.ctx()).await?;
+        shelves.sort_by(|a, b| b.id.cmp(&a.id));
+        log::info!("Loaded {} shelves", shelves.len());
+
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
-        log::info!("Loaded resources: {:?}", resources);
-        let model_events = resources
-            .into_iter()
-            .map(|it| Into::<AppEvent>::into(LocalResourceEvent::Add(it)))
-            .collect::<Vec<_>>();
-        self.update_model_series(model_events);
+        log::info!("Loaded {} resources", resources.len());
+
+        for shelf in shelves {
+            self.notify_event(ShelfEvent::ShelfLoaded(shelf));
+        }
+
+        for resource in resources {
+            self.update_model(LocalResourceEvent::Add {
+                shelf_id: Some(resource.shelf_id),
+                resource
+            });
+        }
+
         Ok(())
     }
 
-    pub async fn new_resources(&self, mut selections: Vec<ResourceSelection>) -> Result<(), CoreError> {
+    pub async fn create_shelf(&self, name: String) -> Result<Shelf, CoreError> {
+        let shelf = Shelf::new(name);
+        let saved_shelf = ShelfPersistentOperation::add(shelf).into_future(self.ctx()).await?;
+        Ok(saved_shelf)
+    }
+
+    pub async fn delete_shelf(&self, shelf_id: u64) -> Result<bool, CoreError> {
+        let removed = ShelfPersistentOperation::remove(shelf_id).into_future(self.ctx()).await?;
+        Ok(removed)
+    }
+
+    pub async fn new_resources(&self, target_shelf_id: u64, mut selections: Vec<ResourceSelection>) -> Result<(), CoreError> {
         while let Some(selection) = selections.pop() {
             let Some(mut local_resource) = self.run(LocalResourcePersistentOperation::load_from_disk(selection.path.clone())).await?
             else {
@@ -30,6 +52,7 @@ impl AppCommand {
             };
 
             local_resource.path = selection.path.clone();
+            local_resource.shelf_id = target_shelf_id;
             local_resource.r#type = match selection.r#type.clone() {
                 Some(r#type) => r#type,
                 None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?
@@ -67,8 +90,14 @@ impl AppCommand {
                 continue;
             };
 
-            self.update_model(LocalResourceEvent::Add(new_resource.clone()));
-            self.notify_event(TransferEvent::NewTransferResource { resource: new_resource });
+            self.update_model(LocalResourceEvent::Add {
+                shelf_id: Some(target_shelf_id),
+                resource: new_resource.clone()
+            });
+            self.notify_event(TransferEvent::NewTransferResource {
+                shelf_id: Some(target_shelf_id),
+                resource: new_resource
+            });
         }
 
         Ok(())

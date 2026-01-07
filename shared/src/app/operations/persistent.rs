@@ -8,6 +8,7 @@ use crate::app::core::command::AppCommand;
 use crate::app::AppRequestBuilder;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::session::Session;
+use crate::entities::shelf::Shelf;
 use crate::entities::token::Token;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
@@ -19,7 +20,8 @@ pub enum PersistentOperation {
     Session(SessionPersistentOperation),
     User(UserPersistentOperation),
     LocalResource(LocalResourcePersistentOperation),
-    TransferSession(TransferSessionPersistentOperation)
+    TransferSession(TransferSessionPersistentOperation),
+    Shelf(ShelfPersistentOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -68,6 +70,13 @@ pub enum TransferSessionPersistentOperation {
         session_order_id: u64,
         resource_names: HashMap<u64, String>
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ShelfPersistentOperation {
+    Add(Shelf),
+    Remove(u64),
+    FindAll
 }
 
 impl Operation for PersistentOperation {
@@ -221,5 +230,22 @@ impl TransferSessionPersistentOperation {
             }
         ))
         .map(|it| it.result())
+    }
+}
+
+impl ShelfPersistentOperation {
+    pub fn add(shelf: Shelf) -> AppRequestBuilder<impl Future<Output = Result<Shelf, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::Add(shelf)))
+            .map(|it| it.result())
+    }
+
+    pub fn remove(id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::Remove(id)))
+            .map(|it| it.result())
+    }
+
+    pub fn find_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<Shelf>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::FindAll))
+            .map(|it| it.result())
     }
 }

@@ -1,13 +1,16 @@
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::repository::local_resource::LocalResourceId;
+use chrono::{DateTime, Utc};
 use core_services::db::repository::abstraction::id::DbId;
-use devlog_sdk::distributed_id::gen_id_sync;
+use devlog_sdk::distributed_id::{gen_id_sync, id_to_datetime};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Shelf {
     pub id: u64,
-    pub resources: Vec<LocalResource>,
-    pub name: String
+    pub name: String,
+    #[serde(skip)]
+    pub resources: Vec<LocalResource>
 }
 
 impl Shelf {
@@ -17,6 +20,10 @@ impl Shelf {
             resources: Vec::new(),
             name: name.into()
         }
+    }
+
+    pub fn created_at(&self) -> DateTime<Utc> {
+        id_to_datetime(self.id)
     }
 
     pub fn is_exists(&self, path: &LocalResourcePath) -> bool {
