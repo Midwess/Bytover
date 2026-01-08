@@ -167,7 +167,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             </div>
 
             <div
-                className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-3">
+                className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-2">
                 {!!selectedResources.length &&
                     <Button
                         disabled={!isResourceRemoveAllowed}
@@ -176,13 +176,13 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                         }}
                         className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed">
                         <div
-                            className="overflow-hidden text-foreground bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1 border border-border">
-                            <p>
+                            className="overflow-hidden text-foreground text-xs bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1 border border-border">
+                            <p className={"text-xs"}>
                                 Clear all
                             </p>
                         </div>
                         <X
-                            className="h-8 w-8 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out group-hover:rotate-95 bg-muted/90 rounded-full"/>
+                            className="h-6 w-6 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out group-hover:rotate-95 bg-muted/90 rounded-full"/>
                     </Button>
                 }
             </div>
