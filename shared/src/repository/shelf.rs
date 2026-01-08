@@ -13,7 +13,7 @@ pub struct ShelfId {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait ShelfRepository: Repository<Shelf, ShelfId> {
-    async fn load_all(&self) -> Result<Vec<Shelf>, PersistenceError>;
+    async fn load_all(&self, limit: Option<usize>) -> Result<Vec<Shelf>, PersistenceError>;
     async fn add(&self, shelf: Shelf) -> Result<Shelf, PersistenceError>;
     async fn remove(&self, id: u64) -> Result<bool, PersistenceError>;
 }

@@ -1,7 +1,9 @@
 use std::env::var;
 use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, Mutex};
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
+use chrono::Local;
 use core_services::logger;
 use crux_core::Core;
 use native::di_container::DiContainer;
@@ -13,13 +15,14 @@ use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::DialogOperation;
 use shared::app::operations::webview::WebViewOperation;
 use shared::app::operations::CoreOperationOutput;
+use shared::app::shelf::module::ShelfItemViewModel;
 use shared::app::{AppEvent, AppOperation, AppViewModel, BitBridge};
 use shared::entities::device::DeviceInfo;
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
-use std::sync::{Arc, LazyLock};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
 use tokio::{fs, spawn};
@@ -39,6 +42,7 @@ mod thumbnail;
 mod mouse_tracking;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
+static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 
 #[tauri::command]
 async fn quit(app_handle: AppHandle) {
@@ -134,6 +138,13 @@ async fn open_shelf(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn get_or_create_shelf(shelf_id: String, app_handle: AppHandle) {
+    log::info!("get_or_create_shelf called with shelf_id: {}", shelf_id);
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
+    process_event(ShelfEvent::GetOrCreateShelf { shelf_id }, app_handle).await;
+}
+
+#[tauri::command]
 async fn sign_out(app_handle: AppHandle) {
     process_event(AuthenticationEvent::SignOut, app_handle).await;
 }
@@ -169,7 +180,41 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.hide_auth();
     }
 
+    if let Some(shelf_view) = &view.shelf {
+        update_tray_menu(&app_handle, &shelf_view.shelves);
+    }
+
     let _ = app_handle.emit("Render", view);
+}
+
+fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
+    let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
+    let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
+    let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
+
+    let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
+    for shelf in shelves.iter().take(10) {
+        let shelf_id = format!("shelf_{}", shelf.id);
+        if let Ok(item) = MenuItemBuilder::with_id(&shelf_id, &shelf.name).build(app_handle) {
+            recent_submenu_builder = recent_submenu_builder.item(&item);
+        }
+    }
+
+    let Ok(recent_submenu) = recent_submenu_builder.build() else { return };
+
+    let Ok(menu) = MenuBuilder::new(app_handle)
+        .item(&new_shelf_item)
+        .item(&recent_submenu)
+        .separator()
+        .item(&settings_item)
+        .item(&quit_item)
+        .build() else { return };
+
+    if let Ok(guard) = TRAY_ICON.lock() {
+        if let Some(tray) = guard.as_ref() {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
 }
 
 async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) {
@@ -309,47 +354,54 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer, p2p_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
-            clear_shelf, sign_out, quit
+            clear_shelf, sign_out, quit, get_or_create_shelf
         ])
         .setup(|app| {
-            use tauri::menu::{MenuBuilder, MenuItemBuilder};
-
-            let sign_out_item = MenuItemBuilder::with_id("sign_out", "Sign Out").build(app)?;
+            let new_shelf_item = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app)?;
+            let recent_submenu = SubmenuBuilder::with_id(app, "recent_shelves", "Recent Shelves").build()?;
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
-                .item(&sign_out_item)
+                .item(&new_shelf_item)
+                .item(&recent_submenu)
+                .separator()
+                .item(&settings_item)
                 .item(&quit_item)
                 .build()?;
 
-            let _ = TrayIconBuilder::new()
+            let tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
-                    match event.id().as_ref() {
-                        "sign_out" => {
-                            let handle = app.clone();
-                            spawn(async move {
-                                process_event(AuthenticationEvent::SignOut, handle).await;
-                            });
+                    let event_id = event.id().as_ref();
+                    match event_id {
+                        "new_shelf" => {
+                            notify_user_did_drop();
+                            app.open_new_shelf_window();
                         },
+                        "settings" => {},
                         "quit" => {
                             app.close_all_windows(vec![]);
+                        },
+                        id if id.starts_with("shelf_") => {
+                            if let Some(shelf_id_str) = id.strip_prefix("shelf_") {
+                                if let Ok(shelf_id) = shelf_id_str.parse::<u64>() {
+                                    app.show_shelf(shelf_id);
+                                }
+                            }
                         },
                         _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event {
-                        tray.app_handle().show_send();
-                    }
                 })
                 .build(app)?;
+
+            if let Ok(mut guard) = TRAY_ICON.lock() {
+                *guard = Some(tray);
+            }
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
 

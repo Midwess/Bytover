@@ -22,6 +22,14 @@ impl Shelf {
         }
     }
 
+    pub fn with_id(id: u64, name: impl Into<String>) -> Self {
+        Self {
+            id,
+            resources: Vec::new(),
+            name: name.into()
+        }
+    }
+
     pub fn created_at(&self) -> DateTime<Utc> {
         id_to_datetime(self.id)
     }

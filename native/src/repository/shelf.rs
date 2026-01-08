@@ -7,7 +7,6 @@ use core_services::db::repository::abstraction::repository::Repository;
 use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use devlog_sdk::distributed_id::gen_id;
 use redb::Database;
 use shared::entities::shelf::Shelf;
 use shared::repository::errors::PersistenceError;
@@ -78,13 +77,12 @@ impl Repository<Shelf, ShelfId> for ShelfRepositoryImpl {
 
 #[async_trait::async_trait]
 impl ShelfRepository for ShelfRepositoryImpl {
-    async fn load_all(&self) -> Result<Vec<Shelf>, PersistenceError> {
-        let shelves = RedbRepository::find_all(self, None, None, None).await?;
+    async fn load_all(&self, limit: Option<usize>) -> Result<Vec<Shelf>, PersistenceError> {
+        let shelves = RedbRepository::find_all(self, None, None, limit).await?;
         Ok(shelves)
     }
 
-    async fn add(&self, mut shelf: Shelf) -> Result<Shelf, PersistenceError> {
-        shelf.id = gen_id().await;
+    async fn add(&self, shelf: Shelf) -> Result<Shelf, PersistenceError> {
         let shelf = Repository::<Shelf, ShelfId>::create(self, shelf).await?;
         Ok(shelf)
     }

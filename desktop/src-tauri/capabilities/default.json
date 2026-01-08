@@ -4,17 +4,21 @@
   "description": "Capability for the main window",
   "windows": [
     "send",
+    "send-*",
     "auth",
     "receive"
   ],
   "permissions": [
     "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:event:default",
     "core:default",
     "opener:default",
     "core:webview:allow-create-webview-window",
     "deep-link:default",
-    "core:window:allow-start-dragging",
-    "drag:default",
-    "core:window:allow-set-size"
+    "drag:default"
   ]
 }

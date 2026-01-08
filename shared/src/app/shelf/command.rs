@@ -1,3 +1,4 @@
+use chrono::Local;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::LocalResourceEvent;
@@ -5,22 +6,20 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::{LocalResourcePersistentOperation, ShelfPersistentOperation};
 use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
-use crate::CoreOperation;
+use crate::{gen_shelf_id, CoreOperation};
 use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 
 impl AppCommand {
     pub async fn load_shelves(&self) -> Result<(), CoreError> {
-        let mut shelves = ShelfPersistentOperation::find_all().into_future(self.ctx()).await?;
-        shelves.sort_by(|a, b| b.id.cmp(&a.id));
+        let shelves = ShelfPersistentOperation::find_all(Some(10)).into_future(self.ctx()).await?;
         log::info!("Loaded {} shelves", shelves.len());
 
         // Ensure there's always at least one shelf
         if shelves.is_empty() {
             log::info!("No shelves found, creating default shelf");
-            let default_shelf = self.create_shelf("Default".to_string()).await?;
-            shelves.push(default_shelf);
+            self.create_shelf(gen_shelf_id()).await?;
         }
 
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
@@ -43,10 +42,13 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn create_shelf(&self, name: String) -> Result<Shelf, CoreError> {
-        let shelf = Shelf::new(name);
+    pub async fn create_shelf(&self, id: u64) -> Result<(), CoreError> {
+        let name = Local::now().format("%b %d, %H:%M").to_string();
+        log::info!("Creating shelf {id}; {name}");
+        let shelf = Shelf::with_id(id, name);
         let saved_shelf = ShelfPersistentOperation::add(shelf).into_future(self.ctx()).await?;
-        Ok(saved_shelf)
+        self.update_model(ShelfEvent::ShelfCreated(saved_shelf));
+        Ok(())
     }
 
     pub async fn delete_shelf(&self, shelf_id: u64) -> Result<bool, CoreError> {

@@ -60,8 +60,8 @@ pub enum ShelfEvent {
     AddResources { shelf_id: u64, selections: Vec<ResourceSelection> },
     RemoveResource { shelf_id: u64, resource_id: u64 },
     Clear { shelf_id: u64 },
-    CreateShelf(String),
     DeleteShelf(u64),
+    GetOrCreateShelf { shelf_id: u64 },
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
@@ -100,7 +100,7 @@ impl AppModule<BitBridge> for ShelfModule {
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
                     return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
+                        format!("Shelf not found {shelf_id:?}")
                     ));
                 };
 
@@ -111,7 +111,8 @@ impl AppModule<BitBridge> for ShelfModule {
                         commands.push(Command::operate(DialogOperation::Toast(
                             "Resource was already added before.".to_owned()
                         )))
-                    } else {
+                    }
+                    else {
                         filtered_selections.push(selection);
                     }
                 }
@@ -219,16 +220,18 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
-            Self::Event::CreateShelf(name) => {
-                Command::handle_result(move |it| async move {
-                    let shelf = it.app().create_shelf(name).await?;
-                    it.app().notify_event(ShelfEvent::ShelfCreated(shelf));
-                    Ok(())
-                })
-            }
             Self::Event::ShelfCreated(shelf) => {
                 model.shelf.shelves.insert(0, shelf);
                 Command::render()
+            }
+            Self::Event::GetOrCreateShelf { shelf_id } => {
+                if model.shelf.get_shelf(shelf_id).is_some() {
+                    return Command::done();
+                }
+
+                Command::handle_result(move |it| async move {
+                    it.app().create_shelf(shelf_id).await
+                })
             }
             Self::Event::DeleteShelf(shelf_id) => {
                 if model.shelf.shelves.len() <= 1 {
@@ -256,12 +259,15 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        let shelves = model
+        let mut shelves: Vec<ShelfItemViewModel> = model
             .shelf
             .shelves
             .iter()
             .map(ShelfItemViewModel::from)
             .collect();
+
+        // Sort by id descending (latest first)
+        shelves.sort_by(|a, b| b.id.cmp(&a.id));
 
         ShelfViewModel {
             shelves,

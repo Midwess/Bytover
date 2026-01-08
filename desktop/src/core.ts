@@ -6,7 +6,7 @@ import {
     EnvironmentViewModel,
     P2PViewModel, PeerViewModel,
     ReceiveSessionViewModel, ReceiveResourceViewModel, SelectedResourceViewModel,
-    ShelfViewModel,
+    ShelfViewModel, ShelfItemViewModel,
     TransferViewModel
 } from 'shared_types/types/shared_types'
 import { listen } from '@tauri-apps/api/event'
@@ -129,6 +129,85 @@ export class Core {
         }, [state.length])
 
         return state
+    }
+
+    public useShelves() {
+        const [shelves, setShelves] = useState<ShelfItemViewModel[]>(this.shelfState.get()?.shelves ?? [])
+
+        useEffect(() => {
+            return this.shelfState.subscribe((shelfState) => {
+                if (!isEqual(shelves, shelfState?.shelves)) {
+                    setShelves(shelfState?.shelves ?? [])
+                }
+            })
+        }, [shelves])
+
+        return shelves
+    }
+
+    public useCurrentShelf(shelfId: string | undefined) {
+        const [shelf, setShelf] = useState<ShelfItemViewModel | undefined>(() => {
+            return this.shelfState.get()?.shelves?.find(s => s.id === shelfId)
+        })
+
+        useEffect(() => {
+            return this.shelfState.subscribe((shelfState) => {
+                const found = shelfState?.shelves?.find(s => s.id === shelfId)
+                if (!isEqual(shelf, found)) {
+                    setShelf(found)
+                }
+            })
+        }, [shelfId, shelf])
+
+        return shelf
+    }
+
+    public useSelectedResourcesForShelf(shelfId: string | undefined) {
+        const [resources, setResources] = useState<SelectedResourceViewModel[]>([])
+
+        useEffect(() => {
+            return this.shelfState.subscribe((shelfState) => {
+                const shelf = shelfState?.shelves?.find(s => s.id === shelfId)
+                const shelfResources = shelf?.resources ?? []
+                if (!isEqual(resources, shelfResources)) {
+                    setResources(shelfResources)
+                }
+            })
+        }, [shelfId, resources])
+
+        return resources
+    }
+
+    public useP2PSessionForShelf(shelfId: string | undefined) {
+        const [session, setSession] = useState<CloudSession | undefined>()
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const found = transferState?.p2p_sessions?.find(s => s.shelf_id === shelfId)
+                if (!isEqual(session, found)) {
+                    setSession(found)
+                }
+            })
+        }, [shelfId, session])
+
+        return session
+    }
+
+    public useCloudSessionForShelf(shelfId: string | undefined) {
+        const [session, setSession] = useState<CloudSession | undefined>()
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const found = transferState?.cloud_session
+                if (found?.shelf_id === shelfId && !isEqual(session, found)) {
+                    setSession(found)
+                } else if (found?.shelf_id !== shelfId && session !== undefined) {
+                    setSession(undefined)
+                }
+            })
+        }, [shelfId, session])
+
+        return session
     }
 
     public useReceiveResource(id: bigint) {

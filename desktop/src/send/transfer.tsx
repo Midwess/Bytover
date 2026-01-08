@@ -33,7 +33,7 @@ import {
     TooltipTrigger,
 } from "@/components/animate-ui/primitives/animate/tooltip"
 
-export function Transfer() {
+export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
         <div className="flex w-full flex-col gap-6 h-full overflow-hidden ml-0.5">
             <Slide
@@ -51,12 +51,12 @@ export function Transfer() {
                         <TabsPanels className="flex-1 flex flex-col min-h-0 overflow-hidden">
                             <TabsPanel value="p2p" className="flex flex-col h-full overflow-hidden">
                                 <CardContent className={"p-0 flex flex-col gap-1.5 h-full overflow-hidden"}>
-                                    <P2PSend/>
+                                    <P2PSend shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="public" className="flex flex-col gap-2">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
-                                    <PublicTransfer/>
+                                    <PublicTransfer shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
                         </TabsPanels>
@@ -67,8 +67,8 @@ export function Transfer() {
     );
 }
 
-function P2PSend() {
-    const p2pSession = core.useP2PSession()
+function P2PSend({ shelfId }: { shelfId: string | undefined }) {
+    const p2pSession = core.useP2PSessionForShelf(shelfId)
     const [password, setPassword] = useState(p2pSession?.password || '')
     const isInProgress = p2pSession?.is_in_progress ?? false
 
@@ -79,8 +79,9 @@ function P2PSend() {
     }, [p2pSession?.password, password])
 
     const handleStartTransfer = () => {
+        if (!shelfId) return
         const pwd = password || null
-        invoke("p2p_transfer", {password: pwd}).then(noop)
+        invoke("p2p_transfer", { shelfId, password: pwd }).then(noop)
         setPassword('')
     }
 
@@ -94,7 +95,7 @@ function P2PSend() {
         <Card shadowSize={0.5} className="flex flex-col gap-3 px-2 py-1 justify-center items-center bg-card/95">
             <MyPeerInfo/>
         </Card>
-        <Card shadowSize={0.5} className="flex flex-row gap-1 p-1">
+        <Card shadowSize={0.5} className="flex flex-row gap-1 pb-1.5 px-1 pt-1">
             <div
                 className={"flex flex-row items-center gap-1 w-fit rounded-lg"}>
                 <PasswordInput
@@ -116,7 +117,7 @@ function P2PSend() {
                 </div>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-2 items-center">
+        <Card className="flex flex-row gap-2 p-1 items-center">
             {
                 isInProgress ? (
                     <Button onClick={handleStopTransfer}
@@ -174,9 +175,9 @@ function MyPeerInfo() {
     )
 }
 
-function PublicTransfer() {
+function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
-    const cloudSession = core.useTransferState()?.cloud_session
+    const cloudSession = core.useCloudSessionForShelf(shelfId)
     const progress = (cloudSession?.progress ?? 0) * 100
 
     return <>
@@ -209,7 +210,8 @@ function PublicTransfer() {
                             className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
                     <Button onClick={() => {
-                        invoke("public_transfer", {password: pwd}).then(noop)
+                        if (!shelfId) return
+                        invoke("public_transfer", { shelfId, password: pwd }).then(noop)
                     }}
                             className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
                 )

@@ -182,8 +182,8 @@ pub trait NativePersistent: Send + Sync {
                 let removed = self.shelf_repository().remove(id).await?;
                 Ok(CoreOperationOutput::Bool(removed))
             }
-            PersistentOperation::Shelf(ShelfPersistentOperation::FindAll) => {
-                let shelves = self.shelf_repository().load_all().await?;
+            PersistentOperation::Shelf(ShelfPersistentOperation::FindAll { limit }) => {
+                let shelves = self.shelf_repository().load_all(limit).await?;
                 Ok(CoreOperationOutput::Shelves(shelves))
             }
         }

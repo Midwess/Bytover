@@ -76,7 +76,7 @@ pub enum TransferSessionPersistentOperation {
 pub enum ShelfPersistentOperation {
     Add(Shelf),
     Remove(u64),
-    FindAll
+    FindAll { limit: Option<usize> }
 }
 
 impl Operation for PersistentOperation {
@@ -244,8 +244,8 @@ impl ShelfPersistentOperation {
             .map(|it| it.result())
     }
 
-    pub fn find_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<Shelf>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::FindAll))
+    pub fn find_all(limit: Option<usize>) -> AppRequestBuilder<impl Future<Output = Result<Vec<Shelf>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::FindAll { limit }))
             .map(|it| it.result())
     }
 }
