@@ -8,6 +8,7 @@ pub struct LocalResource {
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
+    #[serde(default)]
     pub shelf_id: u64
 }
 

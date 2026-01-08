@@ -52,6 +52,18 @@ impl AppCommand {
     }
 
     pub async fn delete_shelf(&self, shelf_id: u64) -> Result<bool, CoreError> {
+        let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
+        for resource in resources {
+            if resource.shelf_id == shelf_id {
+                let id = LocalResourceId {
+                    order_id: Some(resource.order_id),
+                    path: Some(resource.path.clone()),
+                    shelf_id: Some(shelf_id)
+                };
+                let _ = self.remove_resource(id).await;
+            }
+        }
+
         let removed = ShelfPersistentOperation::remove(shelf_id).into_future(self.ctx()).await?;
         Ok(removed)
     }
@@ -121,7 +133,11 @@ impl AppCommand {
             return Ok(());
         };
 
-        let removed = self.run(LocalResourcePersistentOperation::remove(path)).await?;
+        let Some(shelf_id) = local_resource_id.shelf_id else {
+            return Ok(());
+        };
+
+        let removed = self.run(LocalResourcePersistentOperation::remove(path, shelf_id)).await?;
         if removed {
             self.update_model(LocalResourceEvent::Remove(local_resource_id));
         }

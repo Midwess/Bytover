@@ -34,7 +34,7 @@ impl NativePersistent for NativePersistentImpl {
     }
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
-        if let PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(_)) = effect {
+        if let PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove { .. }) = effect {
             return Ok(CoreOperationOutput::Bool(true));
         };
 

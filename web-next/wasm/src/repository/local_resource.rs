@@ -198,11 +198,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(reader.entry().await?.size)
     }
 
-    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
+    async fn remove(&self, path: LocalResourcePath, shelf_id: u64) -> Result<Vec<LocalResource>, PersistenceError> {
         let from_id = LocalResourceId {
             path: Some(path),
             order_id: None,
-            shelf_id: None
+            shelf_id: Some(shelf_id)
         };
 
         let items = IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(
@@ -214,6 +214,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         let mut removed_items = vec![];
         for item in items.iter() {
+            if item.shelf_id != shelf_id {
+                continue;
+            }
             let id: LocalResourceId = Table::<LocalResourceId>::id(item);
             let removed = Repository::<LocalResource, LocalResourceId>::delete_one(self, &id).await;
             if let Ok(item) = removed {

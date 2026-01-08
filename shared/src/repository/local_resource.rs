@@ -34,7 +34,7 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
         session_id: Option<u64>,
         resource_ids: Vec<u64>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
-    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError>;
+    async fn remove(&self, path: LocalResourcePath, shelf_id: u64) -> Result<Vec<LocalResource>, PersistenceError>;
 }
 
 impl Table<LocalResourceId> for LocalResource {

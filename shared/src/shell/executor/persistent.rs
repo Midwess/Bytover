@@ -90,8 +90,8 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
-                self.local_resource_repository().remove(path).await?;
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove { path, shelf_id }) => {
+                self.local_resource_repository().remove(path, shelf_id).await?;
 
                 Ok(CoreOperationOutput::Bool(true))
             }

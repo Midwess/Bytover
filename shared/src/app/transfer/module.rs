@@ -44,7 +44,11 @@ impl TransferModel {
     pub fn get_active_p2p_send_session(&self, shelf_id: u64) -> Option<&TransferSession> {
         self.sessions
             .iter()
-            .find(|s| matches!(s.transfer_type, TransferType::Send { from_shelf_id } if from_shelf_id == shelf_id) && !s.is_completed())
+            .find(|s| {
+                matches!(s.transfer_type, TransferType::Send { from_shelf_id } if from_shelf_id == shelf_id)
+                    && s.target.is_peer()
+                    && !s.is_completed()
+            })
     }
 }
 
