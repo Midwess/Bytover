@@ -4,6 +4,7 @@ use core_services::utils::pool::allocator::PoolResourceProvider;
 use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams};
 
 pub mod auth_session;
+pub mod device_alias;
 pub mod id;
 pub mod local_resource;
 pub mod shelf;
@@ -34,6 +35,7 @@ impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
             database.create_object_store("transferSession", store_params.clone()).unwrap();
             database.create_object_store("localResource", store_params.clone()).unwrap();
             database.create_object_store("shelf", store_params.clone()).unwrap();
+            database.create_object_store("device_alias", store_params.clone()).unwrap();
         });
 
         NeverSend(open_request.await.unwrap())

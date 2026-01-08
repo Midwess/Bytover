@@ -1,4 +1,5 @@
 pub mod auth_session;
+pub mod device_alias;
 pub mod errors;
 pub mod local_resource;
 pub mod path_resolver;

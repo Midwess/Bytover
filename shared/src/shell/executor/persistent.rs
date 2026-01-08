@@ -1,4 +1,5 @@
 use crate::app::operations::persistent::{
+    DeviceAliasPersistentOperation,
     LocalResourcePersistentOperation,
     PersistentOperation,
     SessionPersistentOperation,
@@ -9,6 +10,7 @@ use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
+use crate::repository::device_alias::DeviceAliasRepository;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::shelf::ShelfRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
@@ -21,6 +23,7 @@ pub trait NativePersistent: Send + Sync {
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
     fn shelf_repository(&self) -> &dyn ShelfRepository;
+    fn device_alias_repository(&self) -> &dyn DeviceAliasRepository;
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
         Self::default_handle(self, effect).await
@@ -185,6 +188,22 @@ pub trait NativePersistent: Send + Sync {
             PersistentOperation::Shelf(ShelfPersistentOperation::FindAll { limit }) => {
                 let shelves = self.shelf_repository().load_all(limit).await?;
                 Ok(CoreOperationOutput::Shelves(shelves))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::ClearAll) => {
+                self.shelf_repository().clear_all().await?;
+                Ok(CoreOperationOutput::None)
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::SaveAll(aliases)) => {
+                self.device_alias_repository().save_aliases(aliases).await?;
+                Ok(CoreOperationOutput::None)
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::GetAll) => {
+                let aliases = self.device_alias_repository().get_all_aliases().await?;
+                Ok(CoreOperationOutput::Aliases(aliases))
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::ClearAll) => {
+                self.device_alias_repository().clear_all().await?;
+                Ok(CoreOperationOutput::None)
             }
         }
     }

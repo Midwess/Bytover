@@ -50,6 +50,13 @@ impl TransferModel {
                     && !s.is_completed()
             })
     }
+
+    pub fn count_active_p2p_sessions(&self) -> usize {
+        self.sessions
+            .iter()
+            .filter(|s| s.target.is_peer() && !s.is_completed())
+            .count()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -257,15 +264,28 @@ impl AppModule<BitBridge> for TransferModule {
                 })
             }
             TransferEvent::StartP2PTransfer { shelf_id, nearby_available: _, password } => {
+                use crate::app::transfer::commands::MAX_CONCURRENT_P2P_SESSIONS;
+
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
                     return Command::operate(DialogOperation::Toast(
                         "Shelf not found.".to_owned()
                     ));
                 };
                 let selected_resources = shelf.resources.clone();
+                let shelf_name = shelf.name.clone();
                 if selected_resources.is_empty() {
                     return Command::new(|it| async move {
                         let _ = DialogOperation::toast("No resources selected".to_string()).into_future(it.clone()).await;
+                    });
+                }
+
+                let active_p2p_count = model.transfer.count_active_p2p_sessions();
+                if active_p2p_count >= MAX_CONCURRENT_P2P_SESSIONS {
+                    return Command::new(|it| async move {
+                        let _ = DialogOperation::toast(format!(
+                            "Maximum {} P2P sessions reached. Please complete or cancel an existing session first.",
+                            MAX_CONCURRENT_P2P_SESSIONS
+                        )).into_future(it.clone()).await;
                     });
                 }
 
@@ -283,7 +303,7 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::handle_result(move |it| async move {
-                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id).await
+                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name).await
                 })
             }
             TransferEvent::NewTransferResource { shelf_id, resource } => {

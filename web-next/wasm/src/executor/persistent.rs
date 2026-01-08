@@ -2,6 +2,7 @@ use shared::app::operations::persistent::{LocalResourcePersistentOperation, Pers
 use shared::app::operations::CoreOperationOutput;
 use shared::errors::CoreError;
 use shared::repository::auth_session::AuthSessionRepository;
+use shared::repository::device_alias::DeviceAliasRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
@@ -12,7 +13,8 @@ pub struct NativePersistentImpl {
     pub auth_session_repository: Box<dyn AuthSessionRepository>,
     pub local_resource_repository: Arc<dyn LocalResourceRepository>,
     pub transfer_session_repository: Arc<dyn TransferSessionRepository>,
-    pub shelf_repository: Box<dyn ShelfRepository>
+    pub shelf_repository: Box<dyn ShelfRepository>,
+    pub device_alias_repository: Box<dyn DeviceAliasRepository>
 }
 
 #[async_trait::async_trait(?Send)]
@@ -31,6 +33,10 @@ impl NativePersistent for NativePersistentImpl {
 
     fn shelf_repository(&self) -> &dyn ShelfRepository {
         &*self.shelf_repository
+    }
+
+    fn device_alias_repository(&self) -> &dyn DeviceAliasRepository {
+        &*self.device_alias_repository
     }
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {

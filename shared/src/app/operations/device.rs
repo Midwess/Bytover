@@ -25,7 +25,8 @@ pub enum DeviceOperation {
         resource_type: ResourceType,
         path: LocalResourcePath,
         id: u64
-    }
+    },
+    CloseShelf(u64)
 }
 
 impl DeviceOperation {
@@ -60,5 +61,9 @@ impl DeviceOperation {
 
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
         AppCommand::request_from_shell(DeviceOperation::Open(path)).map(|_it| ())
+    }
+
+    pub fn close_shelf(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
+        AppCommand::request_from_shell(DeviceOperation::CloseShelf(shelf_id)).map(|_it| ())
     }
 }

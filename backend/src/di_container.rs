@@ -6,10 +6,12 @@ use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::grpc::p2p_service::P2PGrpcService;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
+use crate::infrastructure::postgres::device_alias::DeviceAliasPostgresRepository;
 use crate::infrastructure::postgres::p2p_session::P2PSessionPostgresRepository;
 use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::mail::service::EmailService;
+use crate::repositories::device_alias::DeviceAliasRepository;
 use crate::repositories::p2p_session::P2PSessionRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
 use crate::transfer::p2p_transfer_service::P2PTransferService;
@@ -184,15 +186,22 @@ impl DiContainer {
 
     pub async fn get_p2p_session_repository(&'static self) -> impl P2PSessionRepository {
         P2PSessionPostgresRepository {
-            db: self.get_db_connection()
+            db: self.get_db_connection(),
+        }
+    }
+
+    pub async fn get_device_alias_repository(&'static self) -> impl DeviceAliasRepository {
+        DeviceAliasPostgresRepository {
+            db: self.get_db_connection(),
         }
     }
 
     pub async fn get_p2p_transfer_service(&'static self) -> P2PTransferService {
         P2PTransferService {
             p2p_repository: std::sync::Arc::new(self.get_p2p_session_repository().await),
+            device_alias_repository: std::sync::Arc::new(self.get_device_alias_repository().await),
             app_service: Box::new(self.get_app_service().await),
-            markov_generator: Box::new(self.markov_generator())
+            markov_generator: Box::new(self.markov_generator()),
         }
     }
 

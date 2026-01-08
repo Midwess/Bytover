@@ -78,6 +78,7 @@ pub enum CoreOperationOutput {
     LocalResource(LocalResource),
     Shelf(Shelf),
     Shelves(Vec<Shelf>),
+    Aliases(Vec<String>),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
 

@@ -1117,6 +1117,7 @@ dependencies = [
  "futures",
  "log",
  "migration",
+ "rand 0.8.5",
  "schema",
  "sea-orm",
  "serde",

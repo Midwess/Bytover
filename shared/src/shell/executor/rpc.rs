@@ -40,9 +40,13 @@ where
                 let avatar = self.app_server().random_avatar().await?;
                 Ok(CoreOperationOutput::String(avatar))
             }
-            RpcOperation::CreateP2PSession => {
-                let p2p_session = self.app_server().create_device_session().await?;
+            RpcOperation::CreateP2PSession { alias } => {
+                let p2p_session = self.app_server().create_device_session(alias).await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))
+            }
+            RpcOperation::GetDeviceAliases => {
+                let aliases = self.app_server().get_device_aliases().await?;
+                Ok(CoreOperationOutput::Aliases(aliases))
             }
         }
     }

@@ -1,15 +1,17 @@
-use chrono::Local;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::{LocalResourcePersistentOperation, ShelfPersistentOperation};
+use crate::app::operations::persistent::{DeviceAliasPersistentOperation, LocalResourcePersistentOperation, ShelfPersistentOperation};
+use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
 use crate::{gen_shelf_id, CoreOperation};
 use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
+
+pub const MAX_SHELVES: usize = 10;
 
 impl AppCommand {
     pub async fn load_shelves(&self) -> Result<(), CoreError> {
@@ -43,11 +45,63 @@ impl AppCommand {
     }
 
     pub async fn create_shelf(&self, id: u64) -> Result<(), CoreError> {
-        let name = Local::now().format("%b %d, %H:%M").to_string();
+        let name = self.get_next_shelf_alias().await;
         log::info!("Creating shelf {id}; {name}");
         let shelf = Shelf::with_id(id, name);
         let saved_shelf = ShelfPersistentOperation::add(shelf).into_future(self.ctx()).await?;
         self.update_model(ShelfEvent::ShelfCreated(saved_shelf));
+        Ok(())
+    }
+
+    async fn get_next_shelf_alias(&self) -> String {
+        let mut aliases = DeviceAliasPersistentOperation::get_all().into_future(self.ctx()).await.unwrap_or_default();
+
+        if aliases.is_empty() {
+            if let Ok(fetched_aliases) = RpcOperation::get_device_aliases().into_future(self.ctx()).await {
+                if !fetched_aliases.is_empty() {
+                    let _ = DeviceAliasPersistentOperation::save_all(fetched_aliases.clone()).into_future(self.ctx()).await;
+                    aliases = fetched_aliases;
+                }
+            }
+        }
+
+        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES)).into_future(self.ctx()).await.unwrap_or_default();
+        let used_names: Vec<&str> = shelves.iter().map(|s| s.name.as_str()).collect();
+
+        for alias in &aliases {
+            if !used_names.contains(&alias.as_str()) {
+                return alias.clone();
+            }
+        }
+
+        uuid::Uuid::new_v4().to_string()
+    }
+
+    pub async fn ensure_shelf_limit(&self, sessions: &[(u64, Option<u64>)]) -> Result<(), CoreError> {
+        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES + 1)).into_future(self.ctx()).await?;
+
+        if shelves.len() < MAX_SHELVES {
+            return Ok(());
+        }
+
+        let active_shelf_ids: Vec<u64> = sessions
+            .iter()
+            .filter_map(|(_, shelf_id)| *shelf_id)
+            .collect();
+
+        let mut sorted_shelves = shelves;
+        sorted_shelves.sort_by_key(|s| s.id);
+
+        for shelf in sorted_shelves {
+            if !active_shelf_ids.contains(&shelf.id) {
+                log::info!("Auto-removing shelf {} to make room for new shelf", shelf.id);
+                self.delete_shelf(shelf.id).await?;
+                self.notify_event(ShelfEvent::ShelfDeleted(shelf.id));
+                DeviceOperation::close_shelf(shelf.id).into_future(self.ctx()).await;
+                return Ok(());
+            }
+        }
+
         Ok(())
     }
 

@@ -21,7 +21,8 @@ pub enum PersistentOperation {
     User(UserPersistentOperation),
     LocalResource(LocalResourcePersistentOperation),
     TransferSession(TransferSessionPersistentOperation),
-    Shelf(ShelfPersistentOperation)
+    Shelf(ShelfPersistentOperation),
+    DeviceAlias(DeviceAliasPersistentOperation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -76,7 +77,15 @@ pub enum TransferSessionPersistentOperation {
 pub enum ShelfPersistentOperation {
     Add(Shelf),
     Remove(u64),
-    FindAll { limit: Option<usize> }
+    FindAll { limit: Option<usize> },
+    ClearAll
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum DeviceAliasPersistentOperation {
+    SaveAll(Vec<String>),
+    GetAll,
+    ClearAll
 }
 
 impl Operation for PersistentOperation {
@@ -247,6 +256,28 @@ impl ShelfPersistentOperation {
 
     pub fn find_all(limit: Option<usize>) -> AppRequestBuilder<impl Future<Output = Result<Vec<Shelf>, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::FindAll { limit }))
+            .map(|it| it.result())
+    }
+
+    pub fn clear_all() -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::Shelf(ShelfPersistentOperation::ClearAll))
+            .map(|it| it.result())
+    }
+}
+
+impl DeviceAliasPersistentOperation {
+    pub fn save_all(aliases: Vec<String>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::SaveAll(aliases)))
+            .map(|it| it.result())
+    }
+
+    pub fn get_all() -> AppRequestBuilder<impl Future<Output = Result<Vec<String>, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::GetAll))
+            .map(|it| it.result())
+    }
+
+    pub fn clear_all() -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::ClearAll))
             .map(|it| it.result())
     }
 }

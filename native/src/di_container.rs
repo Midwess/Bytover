@@ -7,6 +7,7 @@ use crate::native::rpc::NativeRpcImpl;
 use crate::native::transfer::TransferNativeImpl;
 use crate::network::grpc::RpcNetworkModuleImpl;
 use crate::repository::auth_session::AuthSessionRepositoryImpl;
+use crate::repository::device_alias::DeviceAliasRepositoryImpl;
 use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
@@ -139,6 +140,15 @@ impl DiContainer {
         }
     }
 
+    pub fn get_device_alias_repository(&self) -> DeviceAliasRepositoryImpl {
+        DeviceAliasRepositoryImpl {
+            db: PoolRequestBuilder::new()
+                .retrieving_timeout(Duration::from_secs(30))
+                .pool(self.db.get().unwrap().clone())
+                .build()
+        }
+    }
+
     pub fn get_cloud_server(&'static self) -> &'static CloudServer<Channel> {
         if let Some(server) = self.cloud_server.get() {
             return server
@@ -181,7 +191,8 @@ impl DiContainer {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
                 local_resource_repository: Box::new(self.get_local_resource_repository()),
                 transfer_session_repository: Box::new(self.get_transfer_session_repository()),
-                shelf_repository: Box::new(self.get_shelf_repository())
+                shelf_repository: Box::new(self.get_shelf_repository()),
+                device_alias_repository: Box::new(self.get_device_alias_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
                 web_rtc: web_rtc.clone(),

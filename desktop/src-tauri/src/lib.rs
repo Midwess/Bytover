@@ -297,6 +297,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                         CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                     }
                 }
+                DeviceOperation::CloseShelf(shelf_id) => {
+                    let label = format!("send-{}", shelf_id);
+                    if let Some(window) = app_handle.get_webview_window(&label) {
+                        let _ = window.close();
+                    }
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
                 let _ = app_handle.opener().open_url(url, Option::<&str>::None);

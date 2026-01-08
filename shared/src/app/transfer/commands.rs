@@ -23,6 +23,8 @@ use crate::app::operations::rpc::RpcOperation;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::user::User;
 
+pub const MAX_CONCURRENT_P2P_SESSIONS: usize = 5;
+
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
         let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
@@ -662,9 +664,10 @@ impl AppCommand {
         selected_resources: Vec<LocalResource>,
         password: Option<String>,
         user: User,
-        from_shelf_id: u64
+        from_shelf_id: u64,
+        shelf_name: String,
     ) -> Result<(), CoreError> {
-        let p2p_session = self.run(RpcOperation::create_p2p_session()).await?;
+        let p2p_session = self.run(RpcOperation::create_p2p_session(shelf_name)).await?;
 
         let mut session = TransferSession::p2p(
             selected_resources,
@@ -674,7 +677,7 @@ impl AppCommand {
             p2p_session.alias.clone(),
             p2p_session.access_url.clone(),
             p2p_session.session_id,
-            from_shelf_id
+            from_shelf_id,
         );
 
         let scope = FindingScope::new(&p2p_session.signalling_room_id);

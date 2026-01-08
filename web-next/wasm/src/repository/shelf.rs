@@ -111,4 +111,12 @@ impl ShelfRepository for ShelfRepositoryImpl {
         let deleted = Repository::<Shelf, ShelfId>::delete_one(self, &shelf_id).await?;
         Ok(deleted.id == id)
     }
+
+    async fn clear_all(&self) -> Result<(), PersistenceError> {
+        let shelves = self.load_all(None).await?;
+        for shelf in shelves {
+            self.remove(shelf.id).await?;
+        }
+        Ok(())
+    }
 }

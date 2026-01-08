@@ -7,6 +7,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
+use crate::entities::transfer_session::TransferType;
 use crate::repository::local_resource::LocalResourceId;
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
@@ -229,7 +230,19 @@ impl AppModule<BitBridge> for ShelfModule {
                     return Command::done();
                 }
 
+                let active_sessions: Vec<(u64, Option<u64>)> = model
+                    .transfer
+                    .sessions
+                    .iter()
+                    .filter(|s| !s.is_completed() && s.target.is_peer())
+                    .map(|s| match s.transfer_type {
+                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
+                        _ => (s.order_id, None)
+                    })
+                    .collect();
+
                 Command::handle_result(move |it| async move {
+                    it.app().ensure_shelf_limit(&active_sessions).await?;
                     it.app().create_shelf(shelf_id).await
                 })
             }
