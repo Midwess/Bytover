@@ -37,6 +37,10 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
     isDraggingOver?: boolean,
     shelfName?: string
 }) {
+    const handleClose = () => {
+        getCurrentWindow()?.close()
+    }
+
     return (
         <Card
             shadowSize={0.0}
@@ -57,13 +61,18 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             <div
                 className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
-                 onDoubleClick={() => {
-                     getCurrentWindow()?.close()
-                 }}
-                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group flex-col"}>
+                 onDoubleClick={handleClose}
+                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
                <Minus
                     className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
+            {/* Close button - rotated rectangle with X at center-left, visible on header hover */}
+            <button
+                onClick={handleClose}
+                className="absolute -top-0 -right-6 w-18 h-7 bg-destructive/35 rounded-xl z-100 rotate-45 flex items-center justify-start pl-6 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100"
+            >
+                <span className="w-3.5 h-3.5 scale-y-80 text-lg font-bold text-destructive -rotate-45">x</span>
+            </button>
             {children}
         </Card>
     )
