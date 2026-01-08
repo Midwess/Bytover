@@ -4,7 +4,7 @@ import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { noop } from "motion";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, ReactNode } from "react";
 import core from "@/core.ts";
 import {
     Play,
@@ -13,7 +13,9 @@ import {
     MoreVertical,
     Trash2,
     Minus,
-    Plus, X, XCircle,
+    Plus,
+    X,
+    Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -29,16 +31,49 @@ import {
 import useWindow from "@/hooks/use-window.ts";
 import { throttle } from "lodash";
 
-export function Shelf() {
+function ShelfWrapper({ children, isDraggingOver = false }: { children: ReactNode, isDraggingOver?: boolean }) {
+    return (
+        <Card
+            shadowSize={0.0}
+            className={`
+                rounded-[30px]
+                bg-card
+                flex flex-col
+                justify-center
+                items-center
+                px-0
+                w-full h-full border-2
+                transition-all duration-200 relative overflow-hidden
+                ${isDraggingOver
+                    ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
+                    : 'border-white/20'
+                }
+            `}>
+            <div
+                className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20" />
+            <div data-tauri-drag-region
+                onDoubleClick={() => {
+                    getCurrentWindow()?.close()
+                }}
+                className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
+                <Minus
+                    className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"} />
+            </div>
+            {children}
+        </Card>
+    )
+}
+
+export function Shelf({ shelfId }: { shelfId: string | undefined }) {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
-    const selectedResources = core.useSelectedResources()
+    const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
 
     useEffect(() => {
-        if (effectRan.current) return;
+        if (effectRan.current || !shelfId) return;
 
         effectRan.current = true;
         let unlisten: (() => void) | undefined;
@@ -49,21 +84,18 @@ export function Shelf() {
                 console.log(eventPosition)
                 const isLeftSide = eventPosition?.x && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
-                    // Show drag feedback when hovering over the left side (shelf area)
                     if (isLeftSide) {
                         setIsDraggingOver(true);
                     } else {
                         setIsDraggingOver(false);
                     }
                 } else if (payload.type === "leave") {
-                    // Hide drag feedback when leaving
                     setIsDraggingOver(false);
                 } else if (payload.type === "drop") {
-                    // Hide drag feedback and handle drop
                     setIsDraggingOver(false);
 
                     if (isLeftSide) {
-                        invoke("add_resources", payload).then(noop);
+                        invoke("add_resources", { shelfId, paths: payload.paths }).then(noop);
                     }
                 }
             }, 120, { leading: true, trailing: true }));
@@ -76,40 +108,22 @@ export function Shelf() {
                 unlisten();
             }
         };
-    }, [windowInfo]);
+    }, [windowInfo, shelfId]);
 
-    return <>
-        <Card
-            shadowSize={0.0}
-            className={`
-            rounded-[30px]
-            bg-card
-            flex flex-col
-            justify-center
-            items-center
-            px-0
-            w-full h-full border-2
-            transition-all duration-200 relative overflow-hidden
-            ${isDraggingOver
-                    ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
-                    : 'border-white/20'
-                }
-        }
-        `}>
-            <div
-                className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20" />
-            <div data-tauri-drag-region
-                onDoubleClick={() => {
-                    getCurrentWindow()?.hide()
-                }}
-                className={"w-full py-1 absolute top-0 flex justify-center items-center z-30 group"}>
-                <Minus
-                    className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"} />
-            </div>
+    if (!shelfId) {
+        return (
+            <ShelfWrapper>
+                <Loader2 className="h-6 w-6 text-foreground animate-spin" />
+            </ShelfWrapper>
+        )
+    }
+
+    return (
+        <ShelfWrapper isDraggingOver={isDraggingOver}>
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
-                    <Plus className="h-12 w-12 text-bluePrimary" />
+                    <Plus className="h-10 w-10 text-bluePrimary" />
                 </div>
             </div>
             {/* Resources List */}
@@ -123,7 +137,14 @@ export function Shelf() {
                 ) : (
                     <div className="flex flex-col gap-2">
                         {selectedResources.map((resource, index) => (
-                            <ResourceView key={index} model={resource} isRemoveAllowed={isResourceRemoveAllowed} />
+                            <ResourceView
+                                key={index}
+                                model={resource}
+                                isRemoveAllowed={isResourceRemoveAllowed}
+                                onRemove={(resourceId) => {
+                                    invoke("remove_resource", { shelfId, resourceId })
+                                }}
+                            />
                         ))}
                         <div className={"h-5"}></div>
                     </div>
@@ -136,7 +157,7 @@ export function Shelf() {
                     <Button
                         disabled={!isResourceRemoveAllowed}
                         onClick={() => {
-                            invoke("clear_shelf")
+                            invoke("clear_shelf", { shelfId })
                         }}
                         className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed">
                         <div
@@ -150,12 +171,12 @@ export function Shelf() {
                     </Button>
                 }
             </div>
-        </Card>
-    </>
+        </ShelfWrapper>
+    )
 }
 
-function ResourceView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
-    const { model, isRemoveAllowed } = props;
+function ResourceView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean, onRemove: (resourceId: string) => void }) {
+    const { model, isRemoveAllowed, onRemove } = props;
     let filePath = (model.path as any).AbsolutePath;
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
@@ -172,14 +193,14 @@ function ResourceView(props: { model: SelectedResourceViewModel, isRemoveAllowed
         }}>
         {
             isFile
-                ? <FileView model={model} isRemoveAllowed={isRemoveAllowed} />
-                : <MediaView model={model} isRemoveAllowed={isRemoveAllowed} />
+                ? <FileView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove} />
+                : <MediaView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove} />
         }
     </div>
 }
 
-function FileView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
-    const { model, isRemoveAllowed } = props;
+function FileView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean, onRemove: (resourceId: string) => void }) {
+    const { model, isRemoveAllowed, onRemove } = props;
 
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
@@ -226,9 +247,7 @@ function FileView(props: { model: SelectedResourceViewModel, isRemoveAllowed: bo
                     <DropdownMenuItem
                         variant="destructive"
                         disabled={!isRemoveAllowed}
-                        onClick={() => {
-                            invoke("remove_resource", { resourceId: model.order_id })
-                        }}>
+                        onClick={() => onRemove(model.order_id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Remove
                     </DropdownMenuItem>
@@ -238,8 +257,8 @@ function FileView(props: { model: SelectedResourceViewModel, isRemoveAllowed: bo
     );
 }
 
-function MediaView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean }) {
-    const { model, isRemoveAllowed } = props;
+function MediaView(props: { model: SelectedResourceViewModel, isRemoveAllowed: boolean, onRemove: (resourceId: string) => void }) {
+    const { model, isRemoveAllowed, onRemove } = props;
 
     const isVideo = (model.type as any) === 'Video';
     const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
@@ -289,9 +308,7 @@ function MediaView(props: { model: SelectedResourceViewModel, isRemoveAllowed: b
                     <DropdownMenuItem
                         variant="destructive"
                         disabled={!isRemoveAllowed}
-                        onClick={() => {
-                            invoke("remove_resource", { resourceId: String(model.order_id) })
-                        }}>
+                        onClick={() => onRemove(model.order_id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Remove
                     </DropdownMenuItem>

@@ -18,13 +18,14 @@ pub enum RpcOperation {
     GetUserById(u64),
     Feedback { email: String, message: String },
     RandomAvatar,
-    CreateP2PSession
+    CreateP2PSession { alias: String },
+    GetDeviceAliases,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     GetMe(User),
-    GetUserById(User)
+    GetUserById(User),
 }
 
 impl Operation for RpcOperation {
@@ -72,11 +73,19 @@ impl RpcOperation {
         })
     }
 
-    pub fn create_p2p_session() -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession)).map(|res| match res {
+    pub fn create_p2p_session(alias: String) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession { alias })).map(|res| match res {
             CoreOperationOutput::P2PSession(session) => Ok(session),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::CreateP2PSession")
+        })
+    }
+
+    pub fn get_device_aliases() -> AppRequestBuilder<impl Future<Output = Result<Vec<String>, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetDeviceAliases)).map(|res| match res {
+            CoreOperationOutput::Aliases(aliases) => Ok(aliases),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::GetDeviceAliases")
         })
     }
 }

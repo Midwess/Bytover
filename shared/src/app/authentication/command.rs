@@ -1,8 +1,9 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::{SessionPersistentOperation, TransferSessionPersistentOperation};
+use crate::app::operations::persistent::{DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
+use crate::app::shelf::module::ShelfEvent;
 use crate::app::AppEvent;
 use crate::entities::token::Token;
 use crate::errors::CoreError;
@@ -36,7 +37,10 @@ impl AppCommand {
     pub async fn sign_out(&self) -> Result<(), CoreError> {
         self.run(SessionPersistentOperation::remove_session()).await?;
         self.run(TransferSessionPersistentOperation::clear_all()).await?;
+        self.run(ShelfPersistentOperation::clear_all()).await?;
+        self.run(DeviceAliasPersistentOperation::clear_all()).await?;
         self.notify_event(TransferEvent::Clear);
+        self.notify_event(ShelfEvent::Launch);
         self.re_authorize().await?;
         Ok(())
     }

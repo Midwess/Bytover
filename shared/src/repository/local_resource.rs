@@ -10,7 +10,8 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct LocalResourceId {
     pub path: Option<LocalResourcePath>,
-    pub order_id: Option<u64>
+    pub order_id: Option<u64>,
+    pub shelf_id: Option<u64>
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -33,7 +34,7 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
         session_id: Option<u64>,
         resource_ids: Vec<u64>
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
-    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError>;
+    async fn remove(&self, path: LocalResourcePath, shelf_id: u64) -> Result<Vec<LocalResource>, PersistenceError>;
 }
 
 impl Table<LocalResourceId> for LocalResource {
@@ -44,7 +45,8 @@ impl Table<LocalResourceId> for LocalResource {
     fn id(&self) -> LocalResourceId {
         LocalResourceId {
             path: Some(self.path.clone()),
-            order_id: Some(self.order_id)
+            order_id: Some(self.order_id),
+            shelf_id: None
         }
     }
 }
@@ -61,6 +63,12 @@ impl DbId for LocalResourceId {
 
         if let Some(path) = &self.path {
             if path != &table.path {
+                return false;
+            }
+        }
+
+        if let Some(shelf_id) = self.shelf_id {
+            if shelf_id != table.shelf_id {
                 return false;
             }
         }

@@ -7,6 +7,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
+use crate::entities::transfer_session::TransferType;
 use crate::repository::local_resource::LocalResourceId;
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
@@ -14,13 +15,40 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default)]
 pub struct ShelfModel {
-    pub shelf: Shelf,
+    pub shelves: Vec<Shelf>,
     pub is_loading: bool
+}
+
+impl ShelfModel {
+    pub fn get_shelf(&self, shelf_id: u64) -> Option<&Shelf> {
+        self.shelves.iter().find(|s| s.id == shelf_id)
+    }
+
+    pub fn get_shelf_mut(&mut self, shelf_id: u64) -> Option<&mut Shelf> {
+        self.shelves.iter_mut().find(|s| s.id == shelf_id)
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShelfItemViewModel {
+    pub id: String,
+    pub name: String,
+    pub resources: Vec<SelectedResourceViewModel>
+}
+
+impl From<&Shelf> for ShelfItemViewModel {
+    fn from(shelf: &Shelf) -> Self {
+        Self {
+            id: shelf.id.to_string(),
+            name: shelf.name.clone(),
+            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
-    pub selected_resources: Vec<SelectedResourceViewModel>,
+    pub shelves: Vec<ShelfItemViewModel>,
     pub is_loading: bool
 }
 
@@ -29,11 +57,19 @@ pub enum ShelfEvent {
     Launch,
     BeginLoadingResources,
     EndLoadingResources,
-    OpenResource(u64),
-    AddResources(Vec<ResourceSelection>),
-    RemoveResource(u64),
-    Clear,
+    OpenResource { shelf_id: u64, resource_id: u64 },
+    AddResources { shelf_id: u64, selections: Vec<ResourceSelection> },
+    RemoveResource { shelf_id: u64, resource_id: u64 },
+    Clear { shelf_id: u64 },
+    DeleteShelf(u64),
+    GetOrCreateShelf { shelf_id: u64 },
 
+    #[serde(skip)]
+    ShelfLoaded(Shelf),
+    #[serde(skip)]
+    ShelfCreated(Shelf),
+    #[serde(skip)]
+    ShelfDeleted(u64),
     #[serde(skip)]
     ModelEvent(LocalResourceEvent)
 }
@@ -51,7 +87,9 @@ impl AppModule<BitBridge> for ShelfModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            Self::Event::Launch => Command::handle_result(|it| async move { it.app().load_resources().await }),
+            Self::Event::Launch => {
+                Command::handle_result(|it| async move { it.app().load_shelves().await })
+            }
             Self::Event::BeginLoadingResources => {
                 model.shelf.is_loading = true;
                 Command::render()
@@ -60,23 +98,30 @@ impl AppModule<BitBridge> for ShelfModule {
                 model.shelf.is_loading = false;
                 Command::render()
             }
-            Self::Event::AddResources(selections) => {
+            Self::Event::AddResources { shelf_id, selections } => {
+                let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        format!("Shelf not found {shelf_id:?}")
+                    ));
+                };
+
                 let mut commands = vec![];
                 let mut filtered_selections = vec![];
                 for selection in selections {
-                    if model.shelf.shelf.is_exists(&selection.path) {
+                    if shelf.is_exists(&selection.path) {
                         commands.push(Command::operate(DialogOperation::Toast(
                             "Resource was already added before.".to_owned()
                         )))
-                    } else {
+                    }
+                    else {
                         filtered_selections.push(selection);
                     }
                 }
 
-                commands.push(Command::handle_result(|it| async move {
+                commands.push(Command::handle_result(move |it| async move {
                     let app = it.app();
                     app.notify_event(ShelfEvent::BeginLoadingResources);
-                    app.new_resources(filtered_selections).await?;
+                    app.new_resources(shelf_id, filtered_selections).await?;
                     app.notify_event(ShelfEvent::EndLoadingResources);
 
                     Ok(())
@@ -84,44 +129,69 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
-            Self::Event::RemoveResource(id) => {
+            Self::Event::RemoveResource { shelf_id, resource_id } => {
                 if model.transfer.has_active_send_session() {
                     return Command::operate(DialogOperation::Toast(
                         "Cannot remove resource during active transfer.".to_owned()
                     ));
                 }
 
-                let Some(resource) = model.shelf.shelf.get(&LocalResourceId {
-                    order_id: Some(id),
-                    ..Default::default()
-                }) else {
-                    return Command::done();
+                let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
                 };
 
-                let id = resource.id();
+                let Some(resource) = shelf.get(&LocalResourceId {
+                    order_id: Some(resource_id),
+                    shelf_id: Some(shelf_id),
+                    ..Default::default()
+                }) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Resource not found.".to_owned()
+                    ));
+                };
+
+                let mut id = resource.id();
+                id.shelf_id = Some(shelf_id);
                 Command::handle_result(move |it| async move { it.app().remove_resource(id).await })
             }
             Self::Event::ModelEvent(event) => {
                 match event {
-                    LocalResourceEvent::Add(resource) => {
-                        model.shelf.shelf.add_resource(resource.clone());
+                    LocalResourceEvent::Add { shelf_id, resource } => {
+                        if let Some(shelf) = model.shelf.get_shelf_mut(shelf_id) {
+                            shelf.add_resource(resource.clone());
+                        }
                     }
                     LocalResourceEvent::Remove(id) => {
-                        model.shelf.shelf.remove_resource(&id);
+                        if let Some(shelf_id) = id.shelf_id {
+                            if let Some(shelf) = model.shelf.get_shelf_mut(shelf_id) {
+                                shelf.remove_resource(&id);
+                            }
+                        }
                     }
                     _ => {}
                 }
 
                 Command::done()
             }
-            Self::Event::OpenResource(id) => {
+            Self::Event::OpenResource { shelf_id, resource_id } => {
                 let id = LocalResourceId {
-                    order_id: Some(id),
+                    order_id: Some(resource_id),
+                    shelf_id: Some(shelf_id),
                     ..Default::default()
                 };
 
-                let Some(resource) = model.shelf.shelf.get(&id) else {
-                    return Command::done();
+                let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
+                };
+
+                let Some(resource) = shelf.get(&id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Resource not found.".to_owned()
+                    ));
                 };
 
                 let resource_path = resource.path.clone();
@@ -129,14 +199,19 @@ impl AppModule<BitBridge> for ShelfModule {
                     let _ = DeviceOperation::open(resource_path).into_future(it.clone()).await;
                 })
             }
-            Self::Event::Clear => {
-                let commands = model
-                    .shelf
-                    .shelf
+            Self::Event::Clear { shelf_id } => {
+                let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
+                    return Command::operate(DialogOperation::Toast(
+                        "Shelf not found.".to_owned()
+                    ));
+                };
+
+                let commands = shelf
                     .resources
                     .iter()
                     .map(|it| {
-                        let id = it.id();
+                        let mut id = it.id();
+                        id.shelf_id = Some(shelf_id);
                         Command::handle_result(move |it| async move {
                             let _ = it.app().remove_resource(id).await;
                             Ok(())
@@ -146,12 +221,69 @@ impl AppModule<BitBridge> for ShelfModule {
 
                 Command::all(commands)
             }
+            Self::Event::ShelfCreated(shelf) => {
+                model.shelf.shelves.insert(0, shelf);
+                Command::render()
+            }
+            Self::Event::GetOrCreateShelf { shelf_id } => {
+                if model.shelf.get_shelf(shelf_id).is_some() {
+                    return Command::done();
+                }
+
+                let active_sessions: Vec<(u64, Option<u64>)> = model
+                    .transfer
+                    .sessions
+                    .iter()
+                    .filter(|s| !s.is_completed() && s.target.is_peer())
+                    .map(|s| match s.transfer_type {
+                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
+                        _ => (s.order_id, None)
+                    })
+                    .collect();
+
+                Command::handle_result(move |it| async move {
+                    it.app().ensure_shelf_limit(&active_sessions).await?;
+                    it.app().create_shelf(shelf_id).await
+                })
+            }
+            Self::Event::DeleteShelf(shelf_id) => {
+                if model.shelf.shelves.len() <= 1 {
+                    return Command::operate(DialogOperation::Toast(
+                        "Cannot delete the last shelf.".to_owned()
+                    ));
+                }
+
+                Command::handle_result(move |it| async move {
+                    it.app().delete_shelf(shelf_id).await?;
+                    it.app().notify_event(ShelfEvent::ShelfDeleted(shelf_id));
+                    Ok(())
+                })
+            }
+            Self::Event::ShelfDeleted(shelf_id) => {
+                model.shelf.shelves.retain(|s| s.id != shelf_id);
+                Command::render()
+            }
+            Self::Event::ShelfLoaded(shelf) => {
+                log::info!("Shelf loaded: {:?}", shelf.resources.len());
+                model.shelf.shelves.push(shelf);
+                Command::done()
+            }
         }
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
+        let mut shelves: Vec<ShelfItemViewModel> = model
+            .shelf
+            .shelves
+            .iter()
+            .map(ShelfItemViewModel::from)
+            .collect();
+
+        // Sort by id descending (latest first)
+        shelves.sort_by(|a, b| b.id.cmp(&a.id));
+
         ShelfViewModel {
-            selected_resources: model.shelf.shelf.resources.iter().map(SelectedResourceViewModel::from).collect(),
+            shelves,
             is_loading: model.shelf.is_loading
         }
     }

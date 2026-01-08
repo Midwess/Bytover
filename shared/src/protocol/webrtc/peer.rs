@@ -252,7 +252,8 @@ impl WebRtcPeer {
                         thumbnail_path: None,
                         r#type: (ResourceTypeMessage::try_from(resource_proto.r#type).unwrap_or_default())
                             .try_into()
-                            .unwrap_or(ResourceType::File)
+                            .unwrap_or(ResourceType::File),
+                        shelf_id: 0
                     };
 
                     if let Some(thumbnail_bytes) = resource_proto.thumbnail_png {

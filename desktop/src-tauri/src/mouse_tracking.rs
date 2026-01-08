@@ -274,17 +274,16 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                         }
 
                         if shake_count >= config.required_shakes {
-                            log::info!("Shaking detected, showing send window");
-                            let win = app_handle.show_send();
-                            // Temporary hide it to avoid flickering
-                            let _ = win.hide();
+                            log::info!("Shaking detected, creating new shelf window");
+                            let start_pos = start_mouse_position.clone();
+                            let win = app_handle.open_new_shelf_window();
 
                             if let Ok(window_size) = win.outer_size() {
                                 let window_physical_size: PhysicalSize<u32> = window_size.into();
 
-                                if let Some(monitor) = get_monitor_at_position(&start_mouse_position, &app_handle) {
+                                if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
                                     let final_pos = calculate_window_position(
-                                        &start_mouse_position,
+                                        &start_pos,
                                         &window_physical_size,
                                         &monitor,
                                     );
@@ -293,11 +292,9 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 }
                                 else {
                                     log::warn!("Could not find monitor at position, using logical fallback");
-                                    let _ = win.set_position(start_mouse_position.clone());
+                                    let _ = win.set_position(start_pos);
                                 }
                             }
-
-                            let _ = win.show();
                             let _ = win.set_focus();
                             is_handled_shown = true;
 

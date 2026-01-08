@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cacao",
+ "chrono",
  "cocoa",
  "core-services",
  "crux_core",
@@ -1116,6 +1117,7 @@ dependencies = [
  "futures",
  "log",
  "migration",
+ "rand 0.8.5",
  "schema",
  "sea-orm",
  "serde",

@@ -107,7 +107,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 size,
                 path,
                 thumbnail_path: None,
-                r#type: ResourceType::Folder
+                r#type: ResourceType::Folder,
+                shelf_id: 0
             };
 
             return Ok(Some(resource))
@@ -125,7 +126,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             size: file.size,
             path,
             thumbnail_path: None,
-            r#type: ResourceType::File
+            r#type: ResourceType::File,
+            shelf_id: 0
         };
 
         Ok(Some(resource))
@@ -270,10 +272,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(cursor.entry().await?.size)
     }
 
-    async fn remove(&self, path: LocalResourcePath) -> Result<Vec<LocalResource>, PersistenceError> {
+    async fn remove(&self, path: LocalResourcePath, shelf_id: u64) -> Result<Vec<LocalResource>, PersistenceError> {
         let from_id = LocalResourceId {
             path: Some(path),
-            order_id: None
+            order_id: None,
+            shelf_id: Some(shelf_id)
         };
 
         let items =
@@ -282,6 +285,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
 
         let mut removed_items = vec![];
         for item in items.iter() {
+            if item.shelf_id != shelf_id {
+                continue;
+            }
             let id: LocalResourceId = Table::<LocalResourceId>::id(item);
             let removed = Repository::<LocalResource, LocalResourceId>::delete_one(self, &id).await;
             if let Ok(item) = removed {

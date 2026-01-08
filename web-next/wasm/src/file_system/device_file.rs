@@ -85,7 +85,8 @@ impl DeviceFolder {
             order_id: local_resource_path.device_file_id().unwrap(),
             path: local_resource_path,
             thumbnail_path: None,
-            r#type: ResourceType::Folder
+            r#type: ResourceType::Folder,
+            shelf_id: 0
         };
 
         Self {
@@ -146,7 +147,8 @@ impl DeviceFile {
             path: LocalResourcePath::device_file(order_id),
             thumbnail_path: None,
             r#type: resource_type,
-            order_id
+            order_id,
+            shelf_id: 0
         };
 
         let resource = serialize(&resource_instance);

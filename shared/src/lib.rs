@@ -11,3 +11,7 @@ pub mod shell;
 pub mod utils;
 
 pub use app::CoreOperation;
+
+pub fn gen_shelf_id() -> u64 {
+    devlog_sdk::distributed_id::gen_id_sync()
+}

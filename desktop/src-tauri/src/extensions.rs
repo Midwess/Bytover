@@ -8,6 +8,8 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_auth(&self) -> WebviewWindow<R>;
     fn create_receive(&self) -> WebviewWindow<R>;
     fn show_send(&self) -> WebviewWindow<R>;
+    fn show_shelf(&self, shelf_id: u64) -> WebviewWindow<R>;
+    fn open_new_shelf_window(&self) -> WebviewWindow<R>;
     fn hide_auth(&self);
     fn toggle_receive(&self);
     fn is_send_window_open(&self) -> bool;
@@ -117,7 +119,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             None => {
                 WebviewWindowBuilder::new(
                     self,
-                    "send", // window label
+                    "send",
                     WebviewUrl::App("send.html".into())
                 )
                     .title("send")
@@ -138,6 +140,65 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let _ = window.show();
         let _ = window.emit("window-shown", {});
         window
+    }
+
+    fn show_shelf(&self, shelf_id: u64) -> WebviewWindow<R> {
+        let label = format!("send-{}", shelf_id);
+        let window = match self.get_webview_window(&label) {
+            Some(window) => window,
+            None => {
+                WebviewWindowBuilder::new(
+                    self,
+                    &label,
+                    WebviewUrl::App("send.html".into())
+                )
+                    .title(&label)
+                    .inner_size(250.0, 260.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .transparent(true)
+                    .visible_on_all_workspaces(true)
+                    .always_on_top(true)
+                    .skip_taskbar(false)
+                    .shadow(false)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create shelf window")
+            }
+        };
+
+        let _ = window.show();
+
+        if let Some(monitor) = window.current_monitor().ok().flatten() {
+            let screen_size = monitor.size();
+            let scale = monitor.scale_factor();
+
+            const WIN_WIDTH: f64 = 250.0;
+            const WIN_HEIGHT: f64 = 260.0;
+            let max_offset_x = WIN_WIDTH * 1.5;
+            let max_offset_y = WIN_HEIGHT * 1.5;
+
+            let hash_x = ((shelf_id.wrapping_mul(2654435761)) & 0xFFFF) as f64 / 65535.0;
+            let hash_y = ((shelf_id.wrapping_mul(2654435761).wrapping_shr(16)) & 0xFFFF) as f64 / 65535.0;
+
+            let offset_x = (hash_x * 2.0 - 1.0) * max_offset_x;
+            let offset_y = (hash_y * 2.0 - 1.0) * max_offset_y;
+
+            let center_x = (screen_size.width as f64 / scale - WIN_WIDTH) / 2.0;
+            let center_y = (screen_size.height as f64 / scale - WIN_HEIGHT) / 2.0;
+
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                x: center_x + offset_x,
+                y: center_y + offset_y,
+            }));
+        }
+
+        window
+    }
+
+    fn open_new_shelf_window(&self) -> WebviewWindow<R> {
+        let shelf_id = shared::gen_shelf_id();
+        self.show_shelf(shelf_id)
     }
 
     fn hide_auth(&self) {

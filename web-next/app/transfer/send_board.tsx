@@ -126,13 +126,17 @@ function FileSelections() {
     })
 
     const selectedResources = core.useSelectedResources()
+    const defaultShelfId = core.useDefaultShelfId()
     const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
 
     useEffect(() => {
+        if (!defaultShelfId) return
+
         if (files.length) {
             core.addFiles(files.map(file => file.file))
                 .then((selections) => {
                     core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
+                        BigInt(defaultShelfId),
                         selections
                     )))
                 })
@@ -143,12 +147,13 @@ function FileSelections() {
             core.addFolders(folders)
                 .then((selections) => {
                     core.update(new AppEventVariantShelf(new ShelfEventVariantAddResources(
+                        BigInt(defaultShelfId),
                         selections
                     )))
                 })
             clearFolders()
         }
-    }, [files, folders]);
+    }, [files, folders, defaultShelfId]);
 
     const isMobile = useIsMobile();
 
@@ -276,7 +281,7 @@ function FileSelections() {
                     <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 p-2 md:px-1">
                         {selectedResources.map((resource) => (
                             <div className="md:h-[230px] flex items-start flex-row" key={resource.order_id}>
-                                <ResourceView model={resource} isRemoveAllowed={isResourceRemoveAllowed} />
+                                <ResourceView model={resource} shelfId={defaultShelfId} isRemoveAllowed={isResourceRemoveAllowed} />
                             </div>
                         ))}
                     </div>
@@ -290,25 +295,27 @@ function FileSelections() {
 
 function ResourceView(props: {
     model: SelectedResourceViewModel,
+    shelfId: string | undefined,
     isRemoveAllowed: boolean
 }) {
-    const { model, isRemoveAllowed } = props;
+    const { model, shelfId, isRemoveAllowed } = props;
 
     const isFile = model.type.constructor == ResourceTypeVariantFile ||
         model.type.constructor == ResourceTypeVariantFolder
 
     if (isFile) {
-        return <FileView model={model} isRemoveAllowed={isRemoveAllowed} />
+        return <FileView model={model} shelfId={shelfId} isRemoveAllowed={isRemoveAllowed} />
     } else {
-        return <MediaView model={model} isRemoveAllowed={isRemoveAllowed} />
+        return <MediaView model={model} shelfId={shelfId} isRemoveAllowed={isRemoveAllowed} />
     }
 }
 
 function FileView(props: {
     model: SelectedResourceViewModel,
+    shelfId: string | undefined,
     isRemoveAllowed: boolean
 }) {
-    const { model, isRemoveAllowed } = props;
+    const { model, shelfId, isRemoveAllowed } = props;
     const isMobile = useIsMobile();
 
     let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
@@ -323,8 +330,8 @@ function FileView(props: {
     }
 
     const handleRemove = async () => {
-        if (!isRemoveAllowed) return;
-        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+        if (!isRemoveAllowed || !shelfId) return;
+        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(shelfId), BigInt(model.order_id))))
     }
 
     if (isMobile) {
@@ -417,9 +424,10 @@ function FileView(props: {
 
 function MediaView(props: {
     model: SelectedResourceViewModel,
+    shelfId: string | undefined,
     isRemoveAllowed: boolean
 }) {
-    const { model, isRemoveAllowed } = props;
+    const { model, shelfId, isRemoveAllowed } = props;
 
     const isMobile = useIsMobile()
     const isVideo = model.type.constructor == ResourceTypeVariantVideo
@@ -443,8 +451,8 @@ function MediaView(props: {
     }
 
     const handleRemove = () => {
-        if (!isRemoveAllowed) return;
-        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(model.order_id))))
+        if (!isRemoveAllowed || !shelfId) return;
+        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(shelfId), BigInt(model.order_id))))
     }
 
     if (isMobile) {
@@ -623,7 +631,8 @@ function TransferForm({ activeMethod }: { activeMethod: typeof activeMethods[0] 
 function PublicSend() {
     const [password, setPassword] = useState('')
     const [emails, setEmails] = React.useState<string[]>([])
-    const cloudSession = core.useTransferState()?.cloud_session
+    const defaultShelfId = core.useDefaultShelfId()
+    const cloudSession = core.useCloudSession(defaultShelfId)
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const [isInProgress, setIsInProgress] = useState(false)
     const progress = (cloudSession?.progress ?? 0) * 100
@@ -687,14 +696,14 @@ function PublicSend() {
                     isInProgress &&
                     <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
                         if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend())))
+                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend(BigInt(defaultShelfId || 0)))))
                         }
                     }}>Cancel</Button>
                 }
                 {
-                    !cloudSession &&
+                    !cloudSession && defaultShelfId &&
                     <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(password || null, emails)))
+                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(BigInt(defaultShelfId || 0), password || null, emails)))
                     }}>
                         {emails.length > 0
                             ? `Send to ${emails.length} recipient${emails.length > 1 ? 's' : ''}`
@@ -706,7 +715,7 @@ function PublicSend() {
                     <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
                         core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
                             BigInt(cloudSession?.session_id),
-                            new TransferTypeVariantSend()
+                            new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
                         )))
                     }}>Continue</Button>
                 }
@@ -772,7 +781,8 @@ function UrlInputWithCopy({ url }: { url: string }) {
 }
 
 function P2PSend() {
-    const p2pSession = core.useP2PSession()
+    const defaultShelfId = core.useDefaultShelfId()
+    const p2pSession = core.useP2PSession(defaultShelfId)
     const [password, setPassword] = useState(p2pSession?.password || '')
     const isInProgress = p2pSession?.is_in_progress ?? false
 
@@ -783,8 +793,9 @@ function P2PSend() {
     }, [p2pSession?.password, password])
 
     const handleStartTransfer = () => {
+        if (!defaultShelfId) return
         const pwd = password || null
-        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(false, pwd)))
+        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(BigInt(defaultShelfId), false, pwd)))
         setPassword('')
     }
 
@@ -793,7 +804,7 @@ function P2PSend() {
             core.update(new AppEventVariantTransfer(
                 new TransferEventVariantCancelTransfer(
                     BigInt(p2pSession.session_id),
-                    new TransferTypeVariantSend()
+                    new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
                 )
             ))
         }

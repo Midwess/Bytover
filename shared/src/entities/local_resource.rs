@@ -7,7 +7,9 @@ pub struct LocalResource {
     pub size: u64,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType
+    pub r#type: ResourceType,
+    #[serde(default)]
+    pub shelf_id: u64
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]

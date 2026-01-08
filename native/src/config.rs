@@ -26,8 +26,8 @@ pub fn get_signalling_server_ws_url() -> String {
         .unwrap_or(GATEWAY_PORT.map(|it| format!(":{it}")).unwrap_or("".to_owned()));
 
     if WITH_SSL == Some("1") {
-        format!("wss://{gateway_host}{}/rpc-signalling", format!(":{gateway_port}"))
+        format!("wss://{gateway_host}{}/rpc-signalling", format!("{gateway_port}"))
     } else {
-        format!("ws://{gateway_host}{}/rpc-signalling", format!(":{gateway_port}"))
+        format!("ws://{gateway_host}{}/rpc-signalling", format!("{gateway_port}"))
     }
 }

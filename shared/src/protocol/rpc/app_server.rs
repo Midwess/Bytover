@@ -18,7 +18,7 @@ use schema::devlog::app_gateway::rpc::{
     MeRequest
 };
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
-use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest};
+use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GetDeviceAliasesRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
@@ -153,17 +153,28 @@ where
         Ok(())
     }
 
-    pub async fn create_device_session(&self) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+    pub async fn create_device_session(&self, alias: String) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
-        let req = CreateDeviceSessionRequest {};
+        let req = CreateDeviceSessionRequest { alias };
         let mut request = Request::new(req);
 
-        // Add auth (User + Device extensions)
         self.auth_provider.with_auth(&mut request).await?;
 
         let mut client = P2pOrchestrationServiceClient::new(channel);
         let response = client.create_device_session(request).await?;
         Ok(response.into_inner().session)
+    }
+
+    pub async fn get_device_aliases(&self) -> Result<Vec<String>, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let req = GetDeviceAliasesRequest {};
+        let mut request = Request::new(req);
+
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.get_device_aliases(request).await?;
+        Ok(response.into_inner().aliases)
     }
 
     pub async fn find_p2p_session_by_alias(&self, alias: String) -> Result<Option<schema::devlog::bitbridge::P2pSession>, RpcErrors> {

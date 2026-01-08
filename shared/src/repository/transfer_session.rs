@@ -85,7 +85,7 @@ impl DbId for TransferSessionId {
 
     fn is_represent(&self, table: &Self::Table) -> bool {
         if let Some(transfer_type) = &self.transfer_type {
-            if transfer_type != &table.transfer_type {
+            if std::mem::discriminant(transfer_type) != std::mem::discriminant(&table.transfer_type) {
                 return false;
             }
         }

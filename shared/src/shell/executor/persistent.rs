@@ -1,14 +1,18 @@
 use crate::app::operations::persistent::{
+    DeviceAliasPersistentOperation,
     LocalResourcePersistentOperation,
     PersistentOperation,
     SessionPersistentOperation,
+    ShelfPersistentOperation,
     TransferSessionPersistentOperation
 };
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
 use crate::errors::CoreError;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
+use crate::repository::device_alias::DeviceAliasRepository;
 use crate::repository::local_resource::LocalResourceRepository;
+use crate::repository::shelf::ShelfRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
 use core_services::db::repository::abstraction::table::Table;
 
@@ -18,6 +22,8 @@ pub trait NativePersistent: Send + Sync {
     fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
+    fn shelf_repository(&self) -> &dyn ShelfRepository;
+    fn device_alias_repository(&self) -> &dyn DeviceAliasRepository;
 
     async fn handle(&self, effect: PersistentOperation) -> Result<CoreOperationOutput, CoreError> {
         Self::default_handle(self, effect).await
@@ -87,8 +93,8 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
-            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove(path)) => {
-                self.local_resource_repository().remove(path).await?;
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove { path, shelf_id }) => {
+                self.local_resource_repository().remove(path, shelf_id).await?;
 
                 Ok(CoreOperationOutput::Bool(true))
             }
@@ -170,7 +176,35 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::Bool(true))
             }
-            PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string()))
+            PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string())),
+            PersistentOperation::Shelf(ShelfPersistentOperation::Add(shelf)) => {
+                let shelf = self.shelf_repository().add(shelf).await?;
+                Ok(CoreOperationOutput::Shelf(shelf))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::Remove(id)) => {
+                let removed = self.shelf_repository().remove(id).await?;
+                Ok(CoreOperationOutput::Bool(removed))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::FindAll { limit }) => {
+                let shelves = self.shelf_repository().load_all(limit).await?;
+                Ok(CoreOperationOutput::Shelves(shelves))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::ClearAll) => {
+                self.shelf_repository().clear_all().await?;
+                Ok(CoreOperationOutput::None)
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::SaveAll(aliases)) => {
+                self.device_alias_repository().save_aliases(aliases).await?;
+                Ok(CoreOperationOutput::None)
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::GetAll) => {
+                let aliases = self.device_alias_repository().get_all_aliases().await?;
+                Ok(CoreOperationOutput::Aliases(aliases))
+            }
+            PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::ClearAll) => {
+                self.device_alias_repository().clear_all().await?;
+                Ok(CoreOperationOutput::None)
+            }
         }
     }
 }
