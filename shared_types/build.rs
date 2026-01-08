@@ -20,6 +20,7 @@ use shared::app::operations::dialog::{AlertDialog, DialogOperation, MessageReaso
 use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::persistent::{
+    DeviceAliasPersistentOperation,
     LocalResourcePersistentOperation,
     PersistentOperation,
     SessionPersistentOperation,
@@ -95,6 +96,7 @@ fn main() {
     gen.register_type::<LocalResourcePersistentOperation>().unwrap();
     gen.register_type::<TransferSessionPersistentOperation>().unwrap();
     gen.register_type::<ShelfPersistentOperation>().unwrap();
+    gen.register_type::<DeviceAliasPersistentOperation>().unwrap();
     gen.register_type::<TransferSession>().unwrap();
     gen.register_type::<InternetOperation>().unwrap();
     gen.register_type::<DeviceOperation>().unwrap();
