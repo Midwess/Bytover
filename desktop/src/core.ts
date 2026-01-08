@@ -198,11 +198,9 @@ export class Core {
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const found = transferState?.cloud_session
-                if (found?.shelf_id === shelfId && !isEqual(session, found)) {
+                const found = transferState?.cloud_sessions?.find(s => s.shelf_id === shelfId)
+                if (!isEqual(session, found)) {
                     setSession(found)
-                } else if (found?.shelf_id !== shelfId && session !== undefined) {
-                    setSession(undefined)
                 }
             })
         }, [shelfId, session])

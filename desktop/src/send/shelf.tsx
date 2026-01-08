@@ -246,7 +246,13 @@ function FileView(props: {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-primaryText truncate">{model.name}</p>
+                <UnlimitedLineText
+                    text={model.name}
+                    className="text-sm font-medium text-primaryText"
+                    startChars={8}
+                    endChars={6}
+                    speed={30}
+                />
                 <p className="text-xs text-primaryText/70">{displaySize}</p>
             </div>
 
@@ -311,7 +317,13 @@ function MediaView(props: {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-primaryText truncate">{model.name}</p>
+                <UnlimitedLineText
+                    text={model.name}
+                    className="text-xs font-medium text-primaryText"
+                    startChars={8}
+                    endChars={6}
+                    speed={30}
+                />
                 <p className="text-xs text-primaryText/70">{displaySize}</p>
             </div>
 

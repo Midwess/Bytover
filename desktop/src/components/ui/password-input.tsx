@@ -24,8 +24,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
                 <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={props.disabled}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 pt-0.5 px-1 rounded-md transition-colors focus:outline-none focus:ring-1 focus:ring-ring hover:bg-muted"
                 >
                     {showPassword ? (
                         <EyeOff className="h-4 w-4 text-muted-foreground"/>

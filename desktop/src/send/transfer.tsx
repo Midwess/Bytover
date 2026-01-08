@@ -155,7 +155,7 @@ function MyPeerInfo() {
                         <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
                     </div>
                     <div
-                        className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-1 rounded-2xl">
+                        className="relative aspect-square justify-center items-center text-primaryText flex h-[38px] w-[38px] border-greenSecondary p-3 border-1 rounded-2xl">
                         <Avatar className="p-1 rounded-xl" style={{backgroundColor: color}}>
                             <AvatarImage src={myPeer.avatar.url}/>
                         </Avatar>

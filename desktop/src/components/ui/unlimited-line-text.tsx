@@ -10,6 +10,8 @@ export interface UnlimitedLineTextProps
   endChars?: number
   /** Animation speed in pixels per second */
   speed?: number
+  /** Delay in ms before animation starts on hover (default: 500) */
+  hoverDelay?: number
 }
 
 const UnlimitedLineText = React.forwardRef<HTMLDivElement, UnlimitedLineTextProps>(
@@ -19,10 +21,12 @@ const UnlimitedLineText = React.forwardRef<HTMLDivElement, UnlimitedLineTextProp
     startChars = 12,
     endChars = 12,
     speed = 50,
+    hoverDelay = 500,
     ...props
   }, ref) => {
     const containerRef = React.useRef<HTMLDivElement>(null)
     const measureRef = React.useRef<HTMLSpanElement>(null)
+    const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
     const [isOverflowing, setIsOverflowing] = React.useState(false)
     const [isHovered, setIsHovered] = React.useState(false)
     const [animationDuration, setAnimationDuration] = React.useState(5)
@@ -55,6 +59,15 @@ const UnlimitedLineText = React.forwardRef<HTMLDivElement, UnlimitedLineTextProp
       return () => resizeObserver.disconnect()
     }, [text, speed])
 
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+      return () => {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current)
+        }
+      }
+    }, [])
+
     // Create middle-truncated text
     const truncatedText = React.useMemo(() => {
       if (!isOverflowing || text.length <= startChars + endChars + 3) {
@@ -72,8 +85,21 @@ const UnlimitedLineText = React.forwardRef<HTMLDivElement, UnlimitedLineTextProp
           "relative overflow-hidden whitespace-nowrap",
           className
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current)
+          }
+          hoverTimeoutRef.current = setTimeout(() => {
+            setIsHovered(true)
+          }, hoverDelay)
+        }}
+        onMouseLeave={() => {
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current)
+            hoverTimeoutRef.current = null
+          }
+          setIsHovered(false)
+        }}
         {...props}
       >
         {/* Hidden element to measure full text width */}
