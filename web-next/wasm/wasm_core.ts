@@ -87,7 +87,17 @@ export class WasmCore {
 
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
+    private autoDownloadedResources: Set<string> = new Set()
+
     constructor() { }
+
+    public hasAutoDownloaded(sessionId: string, orderId: string): boolean {
+        return this.autoDownloadedResources.has(`${sessionId}_${orderId}`)
+    }
+
+    public markAutoDownloaded(sessionId: string, orderId: string): void {
+        this.autoDownloadedResources.add(`${sessionId}_${orderId}`)
+    }
 
     public useSelectedSession() {
         const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | undefined>()

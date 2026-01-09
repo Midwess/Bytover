@@ -73,9 +73,12 @@ export function useDownloadResource({
 
     useEffect(() => {
         if (session?.is_scope_online && resource?.is_success && resource?.model.path) {
-            core.downloadFile(resource.model.path, resource.model.name);
+            if (!core.hasAutoDownloaded(session.id, resource.model.order_id)) {
+                core.downloadFile(resource.model.path, resource.model.name);
+                core.markAutoDownloaded(session.id, resource.model.order_id);
+            }
         }
-    }, [resource?.is_success, session?.is_scope_online]);
+    }, [resource?.is_success, session?.is_scope_online, session?.id, resource?.model.order_id]);
 
     return {
         handleDownload,
