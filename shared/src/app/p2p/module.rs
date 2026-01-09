@@ -39,7 +39,7 @@ pub enum P2PEvent {
     RemoveFindingScope(FindingScope),
     PeerUpdated { peer: Peer },
     PeerDisconnected { peer_id: String },
-    ScopeStateUpdated { scope_id: String, state: ScopeState }
+    ScopeStateUpdated { scope_id: String, state: ScopeState, owner_id: Option<String> }
 }
 
 impl AppModule<BitBridge> for P2PModule {
@@ -85,56 +85,47 @@ impl AppModule<BitBridge> for P2PModule {
                 let scopes = model.p2p.finding_scopes.clone();
                 Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
             }
-            P2PEvent::PeerUpdated { peer } => {
+            P2PEvent::PeerUpdated { mut peer } => {
+                for scope in model.p2p.finding_scopes.iter() {
+                    if scope.owner_peer_id() == Some(peer.id.as_str()) {
+                        peer.add_scope(scope.clone());
+                    }
+                }
+
                 if let Some(existing_peer) = model.p2p.peers.iter_mut().find(|p| p.id == peer.id) {
                     *existing_peer = peer.clone();
                 } else {
                     model.p2p.peers.push(peer.clone());
                 }
 
-                let mut peer_just_connected = false;
+                let mut owner_just_connected = false;
                 let mut session_order_id = 0;
-                let mut _peer_lost_ownership = false;
+                let owner_peer_id = peer.id.clone();
 
-                let owned_scopes = peer.owned_scopes();
                 for session in model.transfer.sessions.iter_mut() {
                     if session.transfer_type != TransferType::Receive {
                         continue;
                     }
 
-                    if let TransferTarget::P2P {
-                        ref mut from_peer,
-                        ref scope,
-                        ..
-                    } = session.target
-                    {
-                        let is_peer_owned = owned_scopes.iter().any(|s| s.scope_id() == scope.scope_id());
+                    if let TransferTarget::P2P { scope, ref from_peer, .. } = &session.target {
+                        if from_peer.is_some() {
+                            continue;
+                        }
 
-                        if from_peer.is_none() && is_peer_owned {
+                        if scope.owner_peer_id() == Some(peer.id.as_str()) {
                             session.owner_connected(peer.clone());
-
                             let is_selected = model.transfer.selected_receive_session_id == Some(session.order_id);
                             if is_selected {
-                                peer_just_connected = true;
+                                owner_just_connected = true;
                                 session_order_id = session.order_id;
-                            }
-
-                            break;
-                        } else if let Some(ref connected_peer) = from_peer {
-                            if connected_peer.id == peer.id && !is_peer_owned {
-                                *from_peer = None;
-                                session.owner_disconnected();
-                                _peer_lost_ownership = true;
-
-                                break;
                             }
                         }
                     }
                 }
 
-                if peer_just_connected {
+                if owner_just_connected {
                     return Command::event(AppEvent::Transfer(TransferEvent::RequestSessionDetail {
-                        peer_id: peer.id,
+                        peer_id: owner_peer_id,
                         order_id: session_order_id,
                         password: None
                     }))
@@ -162,15 +153,49 @@ impl AppModule<BitBridge> for P2PModule {
 
                 Command::render()
             }
-            P2PEvent::ScopeStateUpdated { scope_id, state } => {
+            P2PEvent::ScopeStateUpdated { scope_id, state, owner_id } => {
                 if let Some(scope) = model.p2p.finding_scopes.iter_mut().find(|s| s.scope_id() == scope_id) {
                     scope.update_state(state);
+                    scope.set_owner_peer_id(owner_id.clone());
+                }
+
+                if let Some(oid) = &owner_id {
+                    if let Some(peer) = model.p2p.peers.iter_mut().find(|p| p.id == *oid) {
+                        if let Some(scope) = model.p2p.finding_scopes.iter().find(|s| s.scope_id() == scope_id) {
+                            peer.update_scope(scope.clone());
+                        }
+                    }
                 }
 
                 for session in model.transfer.sessions.iter_mut() {
-                    if let TransferTarget::P2P { scope, .. } = &mut session.target {
-                        if scope.scope_id() == scope_id {
-                            scope.update_state(state);
+                    if session.transfer_type != TransferType::Receive {
+                        continue;
+                    }
+
+                    if let TransferTarget::P2P { scope, ref mut from_peer, .. } = &mut session.target {
+                        if scope.scope_id() != scope_id {
+                            continue;
+                        }
+
+                        scope.update_state(state);
+                        scope.set_owner_peer_id(owner_id.clone());
+
+                        match (&owner_id, &from_peer) {
+                            (Some(oid), None) => {
+                                if let Some(peer) = model.p2p.peers.iter().find(|p| p.id == *oid) {
+                                    session.owner_connected(peer.clone());
+                                }
+                            }
+                            (None, Some(_)) => {
+                                session.owner_disconnected();
+                            }
+                            (Some(new_oid), Some(old_peer)) if *new_oid != old_peer.id => {
+                                session.owner_disconnected();
+                                if let Some(peer) = model.p2p.peers.iter().find(|p| p.id == *new_oid) {
+                                    session.owner_connected(peer.clone());
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }

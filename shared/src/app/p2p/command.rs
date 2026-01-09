@@ -11,7 +11,6 @@ use crate::app::operations::CoreOperationOutput;
 use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 use crate::entities::user::User;
 use crate::errors::CoreError;
@@ -67,7 +66,6 @@ impl AppCommand {
         let peer = self.gen_peer(user, device).await;
 
         self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
-        self.notify_event(P2PEvent::AddFindingScope(FindingScope::direct_owned(&peer.id)));
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
@@ -82,8 +80,6 @@ impl AppCommand {
                         new_peer: vec![peer.clone()],
                         removed: vec![]
                     });
-
-                    self.notify_event(P2PEvent::AddFindingScope(FindingScope::direct_member(&peer.id)));
 
                     self.update_p2p_sessions_with_peer(peer.clone());
 
@@ -109,9 +105,9 @@ impl AppCommand {
                     self.notify_event(P2PEvent::ClearNearbyPeers);
                     break;
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
-                    log::info!(target: "nearby", "Scope state changed: {} -> {:?}", scope_id, state);
-                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state });
+                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state, owner_id }) => {
+                    log::info!(target: "nearby", "Scope state changed: {} -> {:?}, owner: {:?}", scope_id, state, owner_id);
+                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state, owner_id });
                 }
                 CoreOperationOutput::None => {}
                 _ => {
@@ -145,14 +141,8 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
-                    self.notify_event(P2PEvent::RemoveFindingScope(FindingScope::new(&peer.id)));
                     self.notify_event(P2PEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(scopes)) => {
-                    let mut updated_peer = peer.clone();
-                    updated_peer.scopes = scopes;
-                    self.notify_event(P2PEvent::PeerUpdated { peer: updated_peer });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
@@ -188,7 +178,8 @@ impl AppCommand {
                     resource,
                     peer_id
                 }) => {
-                    self.notify_event(TransferEvent::ResourceNotification {
+                    log::info!(target: "nearby", "Received resource notification: {resource:?}");
+                    self.update_model(TransferEvent::ResourceNotification {
                         session_order_id,
                         resource,
                         peer_id
@@ -198,8 +189,8 @@ impl AppCommand {
                     log::info!("Nearby server stopped, stop peer connection");
                     break;
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state }) => {
-                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state });
+                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state, owner_id }) => {
+                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state, owner_id });
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");

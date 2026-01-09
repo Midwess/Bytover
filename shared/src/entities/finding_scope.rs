@@ -7,8 +7,8 @@ pub struct FindingScope {
     scope_id: String,
     is_direct: bool,
     is_owner: bool,
-    is_watcher: bool,
-    state: ScopeState
+    state: ScopeState,
+    owner_peer_id: Option<String>
 }
 
 impl PartialEq for FindingScope {
@@ -18,14 +18,6 @@ impl PartialEq for FindingScope {
 }
 
 impl FindingScope {
-    pub fn direct_member(scope_id: &str) -> Self {
-        Self::new(&format!("direct://{};member", scope_id))
-    }
-
-    pub fn direct_owned(scope_id: &str) -> Self {
-        Self::new(&format!("direct://{};owner", scope_id))
-    }
-
     pub fn new(request_scope: &str) -> Self {
         let (protocol, scope) = {
             let it = request_scope.split("://").collect::<Vec<_>>();
@@ -39,14 +31,13 @@ impl FindingScope {
         let is_direct = protocol.contains("direct");
         let scope_id = scope.split(";").next().unwrap_or(&scope).to_owned();
         let is_owner = request_scope.split(";").any(|s| s.starts_with("owner"));
-        let is_watcher = request_scope.split(";").any(|s| s.starts_with("watcher"));
 
         Self {
             scope_id,
             is_direct,
             is_owner,
-            is_watcher,
-            state: ScopeState::Offline
+            state: ScopeState::Offline,
+            owner_peer_id: None
         }
     }
 
@@ -62,14 +53,6 @@ impl FindingScope {
         self.is_owner
     }
 
-    pub fn is_watcher(&self) -> bool {
-        self.is_watcher
-    }
-
-    pub fn set_watcher(&mut self, is_watcher: bool) {
-        self.is_watcher = is_watcher;
-    }
-
     pub fn is_online(&self) -> bool {
         self.state == ScopeState::Online
     }
@@ -80,6 +63,18 @@ impl FindingScope {
 
     pub fn update_state(&mut self, state: ScopeState) {
         self.state = state;
+    }
+
+    pub fn owner_peer_id(&self) -> Option<&str> {
+        self.owner_peer_id.as_deref()
+    }
+
+    pub fn set_owner_peer_id(&mut self, peer_id: Option<String>) {
+        self.owner_peer_id = peer_id;
+    }
+
+    pub fn has_owner(&self) -> bool {
+        self.owner_peer_id.is_some()
     }
 
     pub fn from_string(s: String) -> Option<Self> {
@@ -95,14 +90,7 @@ impl FindingScope {
         };
 
         if self.is_direct {
-            let role = if self.is_watcher {
-                "watcher"
-            } else if self.is_owner {
-                "owner"
-            } else {
-                "member"
-            };
-
+            let role = if self.is_owner { "owner" } else { "member" };
             format!("{};{}", base, role)
         } else {
             base

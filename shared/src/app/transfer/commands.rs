@@ -38,9 +38,7 @@ impl AppCommand {
 
         for session in &receive_sessions {
             if let TransferTarget::P2P { ref scope, .. } = session.target {
-                let mut scope = scope.clone();
-                scope.set_watcher(true);
-                self.update_model(P2PEvent::AddFindingScope(scope));
+                self.update_model(P2PEvent::AddFindingScope(scope.clone()));
             }
         }
 
@@ -188,9 +186,7 @@ impl AppCommand {
         };
 
         if let TransferTarget::P2P { ref scope, .. } = session.target {
-            let mut scope = scope.clone();
-            scope.set_watcher(true);
-            self.update_model(P2PEvent::AddFindingScope(scope));
+            self.update_model(P2PEvent::AddFindingScope(scope.clone()));
         }
 
         self.update_model(TransferSessionModelEvent::Add(session));
@@ -635,15 +631,11 @@ impl AppCommand {
 
     pub async fn view_session(
         &self,
-        mut session: TransferSession,
+        session: TransferSession,
         session_id: TransferSessionId,
         password: Option<String>
     ) -> Result<(), CoreError> {
         use crate::app::AppEvent;
-
-        if let TransferTarget::P2P { scope, .. } = &mut session.target {
-            scope.set_watcher(false);
-        };
 
         match &session.target {
             TransferTarget::P2P {
