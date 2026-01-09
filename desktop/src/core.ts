@@ -113,24 +113,6 @@ export class Core {
         return session
     }
 
-    public useSelectedResources() {
-        const [state, setState] = useState<SelectedResourceViewModel[]>([])
-
-        useEffect(() => {
-            return this.shelfState.subscribe((transferState) => {
-                if (transferState?.selected_resources.length != state.length) {
-                    setState(transferState?.selected_resources || [])
-                }
-
-                if (!isEqual(state, transferState?.selected_resources)) {
-                    setState(transferState?.selected_resources || [])
-                }
-            })
-        }, [state.length])
-
-        return state
-    }
-
     public useShelves() {
         const [shelves, setShelves] = useState<ShelfItemViewModel[]>(this.shelfState.get()?.shelves ?? [])
 

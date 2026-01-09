@@ -376,8 +376,12 @@ pub async fn run() {
                 .item(&quit_item)
                 .build()?;
 
+            let Some(icon) = app.default_window_icon().cloned() else {
+                log::error!("Failed to load tray icon");
+                return Ok(());
+            };
             let tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(icon)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
