@@ -5,11 +5,10 @@ use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
-use crate::app::p2p::module::P2PEvent;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
-use crate::app::{AppEvent, AppModel, BitBridge};
+use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_method::TransferMethodSelection;
@@ -446,8 +445,10 @@ impl AppModule<BitBridge> for TransferModule {
 
                 model.transfer.selected_receive_session_id = Some(session.order_id);
 
-                Command::handle_result(move |it| async move { it.app().view_session(session, session_id, password).await })
-                    .then_render()
+                Command::handle_result(move |it| async move {
+                    it.app().view_session(session, session_id, password).await
+                })
+                .then_render()
             }
             TransferEvent::ReceivedViewSessionRequest {
                 peer_id,
@@ -475,18 +476,6 @@ impl AppModule<BitBridge> for TransferModule {
                     order_id: Some(order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
                 };
-
-                if let Some(session) = model.transfer.sessions.lookup(&session_id) {
-                    if let TransferTarget::P2P { ref scope, .. } = session.target {
-                        let mut scope = scope.clone();
-                        scope.set_watcher(false);
-                        model.p2p.finding_scopes.retain(|s| s.scope_id() != scope.scope_id());
-                        model.p2p.finding_scopes.push(scope.clone());
-                        return Command::event(AppEvent::P2P(P2PEvent::AddFindingScope(scope))).then(Command::handle_result(
-                            move |it| async move { it.app().request_session_detail(peer_id, session_id, order_id, password).await }
-                        ));
-                    }
-                }
 
                 Command::handle_result(move |it| async move {
                     it.app().request_session_detail(peer_id, session_id, order_id, password).await
@@ -535,9 +524,10 @@ impl AppModule<BitBridge> for TransferModule {
 
                 if !peer.is_owned(session) {
                     log::warn!(
-                        "Peer {} is not owner of session {}, ignoring resource notification",
+                        "Peer {} is not owner of session {}, ignoring resource notification; current owner: {:?}",
                         peer_id,
-                        session_order_id
+                        session_order_id,
+                        session.target
                     );
                     return Command::done();
                 }

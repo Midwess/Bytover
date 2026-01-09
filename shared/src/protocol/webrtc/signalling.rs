@@ -221,9 +221,9 @@ impl SharedContext {
         self.peers.lock().await.get(peer_id).and_then(|it| it.get()).is_some()
     }
 
-    pub async fn send_scope_state(&self, scope_id: String, state: ScopeState) {
+    pub async fn send_scope_state(&self, scope_id: String, state: ScopeState, owner_id: Option<String>) {
         if let Some(core_request) = self.core_request.lock().await.as_ref() {
-            let _ = core_request.response(P2POperationOutput::ScopeStateChanged { scope_id, state }).await;
+            let _ = core_request.response(P2POperationOutput::ScopeStateChanged { scope_id, state, owner_id }).await;
         }
     }
 }
@@ -393,22 +393,15 @@ impl Signaller for WebSignaller {
             if let Some(scope_state_msg) = message.scope_state_changed {
                 let scope_id = scope_state_msg.scope_id.clone();
                 let state = scope_state_msg.state();
-                log::info!("Received scope state changed: {:?} -> {:?}", scope_id, state);
-                self.shared_context.send_scope_state(scope_id, state).await;
+                let owner_id = scope_state_msg.owner_id.clone();
+                log::info!("Received scope state changed: {:?} -> {:?}, owner: {:?}", scope_id, state, owner_id);
+                self.shared_context.send_scope_state(scope_id, state, owner_id).await;
                 continue;
             }
-
-            let scopes = message.scopes.clone();
 
             let response = SignallingPeerResponse(message);
             let peer_event = response.try_into().map_err(Into::<SignalingError>::into)?;
             if let PeerEvent::NewPeer { ref id, .. } = peer_event {
-                if let Some(peer_weak) = self.shared_context.get_peer(id).await {
-                    if let Some(peer_arc) = peer_weak.upgrade() {
-                        peer_arc.update_scopes(scopes).await;
-                    }
-                }
-
                 if id.0 <= self.peer_id.0 {
                     continue;
                 }

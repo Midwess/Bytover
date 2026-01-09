@@ -42,6 +42,10 @@ impl Peer {
             return false;
         };
 
+        if scope.owner_peer_id() == Some(self.id.as_str()) {
+            return true;
+        }
+
         self.owned_scopes().iter().any(|it| it.scope_id().eq(scope.scope_id()))
     }
 
@@ -51,6 +55,24 @@ impl Peer {
         };
 
         self.member_scopes().iter().any(|it| it.scope_id().eq(scope.scope_id()))
+    }
+
+    pub fn add_scope(&mut self, scope: FindingScope) {
+        if !self.scopes.iter().any(|s| s.scope_id() == scope.scope_id()) {
+            self.scopes.push(scope);
+        }
+    }
+
+    pub fn has_scope(&self, scope_id: &str) -> bool {
+        self.scopes.iter().any(|s| s.scope_id() == scope_id)
+    }
+
+    pub fn update_scope(&mut self, scope: FindingScope) {
+        if let Some(existing) = self.scopes.iter_mut().find(|s| s.scope_id() == scope.scope_id()) {
+            *existing = scope;
+        } else {
+            self.scopes.push(scope);
+        }
     }
 }
 

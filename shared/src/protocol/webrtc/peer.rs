@@ -1,7 +1,6 @@
 use crate::app::operations::p2p::P2POperationOutput;
 use crate::app::operations::transfer::TransferOperationOutput;
 use crate::app::operations::CoreOperationOutput;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer as PeerEntity;
 use crate::entities::transfer_session::TransferProgress;
@@ -296,14 +295,6 @@ impl WebRtcPeer {
         log::info!("Peer disconnected, will cancel all transfers");
         self.transfers_context.cancel_all_transfers().await;
         let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
-        if let Some(core_request) = self.core_request() {
-            core_request.response(response).await;
-        }
-    }
-
-    pub async fn update_scopes(&self, scopes: Vec<String>) {
-        let finding_scopes = scopes.iter().map(|s| FindingScope::new(s)).collect();
-        let response = CoreOperationOutput::P2P(P2POperationOutput::PeerScopesUpdated(finding_scopes));
         if let Some(core_request) = self.core_request() {
             core_request.response(response).await;
         }

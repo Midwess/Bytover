@@ -327,7 +327,6 @@ impl TransferSession {
         {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
-            scope.set_watcher(true);
             scope.update_state(ScopeState::Offline);
             self.is_required_password = false;
         }
