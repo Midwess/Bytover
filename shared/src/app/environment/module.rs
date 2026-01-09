@@ -62,7 +62,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     }
 
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    ctx.app().notify_event(ShelfEvent::Launch).await;
+                    ctx.app().notify_event(ShelfEvent::Launch);
                     ctx.app().notify_event(TransferEvent::Launch);
                     ctx.app().re_authorize().await?;
 
