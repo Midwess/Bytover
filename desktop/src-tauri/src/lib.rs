@@ -43,6 +43,7 @@ mod mouse_tracking;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
+static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 
 #[tauri::command]
 async fn quit(app_handle: AppHandle) {
@@ -166,6 +167,21 @@ async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHand
     process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
 }
 
+#[tauri::command]
+fn get_toast_message() -> Option<String> {
+    TOAST_MESSAGE.lock().ok().and_then(|guard| guard.clone())
+}
+
+#[tauri::command]
+fn close_toast(app_handle: AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("toast") {
+        let _ = window.close();
+    }
+    if let Ok(mut guard) = TOAST_MESSAGE.lock() {
+        *guard = None;
+    }
+}
+
 async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
@@ -195,7 +211,9 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
     for shelf in shelves.iter().take(10) {
         let shelf_id = format!("shelf_{}", shelf.id);
-        if let Ok(item) = MenuItemBuilder::with_id(&shelf_id, &shelf.name).build(app_handle) {
+        let online_indicator = if shelf.is_online { "🟢 " } else { "" };
+        let menu_text = format!("{}{} - {}", online_indicator, shelf.name, shelf.description);
+        if let Ok(item) = MenuItemBuilder::with_id(&shelf_id, &menu_text).build(app_handle) {
             recent_submenu_builder = recent_submenu_builder.item(&item);
         }
     }
@@ -312,6 +330,11 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
             CoreOperation::Dialog(dialog) => match dialog {
                 DialogOperation::Toast(msg) => {
                     log::info!(target: "toast", "{msg:?}");
+                    if let Ok(mut guard) = TOAST_MESSAGE.lock() {
+                        *guard = Some(msg.clone());
+                    }
+
+                    app_handle.show_toast(&msg);
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 },
                 DialogOperation::Alert(alert) => {
@@ -361,7 +384,8 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer, p2p_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
-            clear_shelf, sign_out, quit, get_or_create_shelf
+            clear_shelf, sign_out, quit, get_or_create_shelf,
+            get_toast_message, close_toast
         ])
         .setup(|app| {
             let new_shelf_item = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app)?;

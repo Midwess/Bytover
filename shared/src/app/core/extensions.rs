@@ -68,9 +68,14 @@ impl CoreCommandUtils for AppCommand {
             let result = create_task(ctx.clone()).await;
             if let Err(e) = result {
                 log::info!("{e:?}");
-                let display_msg = e.to_string();
+                let mut display_msg = e.to_string();
+                if display_msg.len() > 50 {
+                    display_msg.truncate(50);
+                    display_msg.push_str("...");
+                }
+
                 if !display_msg.is_empty() {
-                    ctx.app().run(DialogOperation::toast(e.to_string())).await;
+                    ctx.app().run(DialogOperation::toast(display_msg)).await;
                 }
             }
         })

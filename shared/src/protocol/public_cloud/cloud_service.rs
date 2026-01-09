@@ -25,13 +25,13 @@ use std::sync::{Arc, Weak};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudTransferErrors {
-    #[error("{0}")]
+    #[error("")]
     GrpcErrors(#[from] RpcErrors),
     #[error("Invalid session target")]
     InvalidSessionTarget,
-    #[error("Failed to open file: {0}")]
+    #[error("")]
     FileError(String),
-    #[error("Upload process error: {0}")]
+    #[error("")]
     UploadProcessError(String),
     #[error("Only one session is allowed")]
     OnlyOneSessionAllowed,
@@ -43,11 +43,11 @@ pub enum CloudTransferErrors {
     ResourceError(String),
     #[error("Unsupported transfer target")]
     UnsupportedTransferTarget,
-    #[error("Internal error {0}")]
+    #[error("")]
     InternalError(#[from] anyhow::Error),
-    #[error("IO Error {0}")]
+    #[error("")]
     IOError(#[from] PersistenceError),
-    #[error("{0}")]
+    #[error("")]
     TonicStatus(#[from] tonic::Status),
     #[error("Task cancelled")]
     TaskCancelled(#[from] TaskErrors)
