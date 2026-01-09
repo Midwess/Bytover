@@ -1,6 +1,7 @@
 use crate::file_system::device_file::{DeviceFile, DeviceFolder, WebFile};
 use crate::file_system::io::IOReaderBlobImpl;
 use crate::file_system::opfs::FileSystemDirectoryHandleExt;
+use crate::file_system::zip_writer::OpfsZipWriter;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use crate::{get_directory, serialize};
 use chrono::Utc;
@@ -11,18 +12,24 @@ use devlog_sdk::distributed_id::init_scoped_id_generator;
 use futures::lock::Mutex;
 use gloo_worker::{HandlerId, Worker, WorkerScope};
 use js_sys::Uint8Array;
+use lz4_flex::{compress_prepend_size, decompress_size_prepended};
+use n0_future::time::Instant;
 use serde::{Deserialize, Serialize};
 use shared::entities::local_resource::LocalResourcePath;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use lz4_flex::{compress_prepend_size, decompress_size_prepended};
-use n0_future::time::Instant;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle};
-use crate::file_system::zip_writer::OpfsZipWriter;
+use web_sys::{
+    Blob,
+    File,
+    FileSystemDirectoryHandle,
+    FileSystemReadWriteOptions,
+    FileSystemRemoveOptions,
+    FileSystemSyncAccessHandle
+};
 
 /// Web worker that support file system on browser
 /// There are two reasons that we use web worker for file system:
@@ -91,7 +98,7 @@ pub enum OpfsOperationOutput {
         raw_size: usize,
         is_compressed_failed: bool,
         compression_time_in_micros: u64,
-        read_time_in_micros: u64,
+        read_time_in_micros: u64
     },
     Written(usize),
     File(#[serde(with = "serde_wasm_bindgen::preserve")] File),
@@ -129,7 +136,7 @@ impl OpfsWorker {
                     Err(e) => {
                         log::error!("Failed to get root directory: {:?}", e);
                         return OpfsOperationOutput::Error(JsValue::from(format!("Opfs failed to get root dir {e:?}")));
-                    },
+                    }
                     Ok(it) => it
                 };
 
@@ -161,7 +168,9 @@ impl OpfsWorker {
 
                                 if let Some(writer) = zip_writer {
                                     let mut guard = writer.lock().await;
-                                    guard.new_entry(entry_name).await
+                                    guard
+                                        .new_entry(entry_name)
+                                        .await
                                         .map_err(|e| JsValue::from(format!("Failed to create zip entry: {}", e)))?;
                                     return Ok::<(), JsValue>(());
                                 } else {
@@ -220,7 +229,7 @@ impl OpfsWorker {
                     }
                 }
                 OpfsOperationOutput::Void
-            },
+            }
             FileOperation::Cursor { buffer_size } => {
                 // Check if this is a zip_entry:// path and create entry if needed
                 if file_path.contains("zip_entry://") {
@@ -238,7 +247,10 @@ impl OpfsWorker {
                                     return OpfsOperationOutput::Error(JsValue::from(format!("Failed to create zip entry: {}", e)));
                                 }
                             } else {
-                                return OpfsOperationOutput::Error(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                                return OpfsOperationOutput::Error(JsValue::from(format!(
+                                    "Zip writer not found for: {}",
+                                    zip_filename
+                                )));
                             }
                         }
                     }
@@ -266,7 +278,11 @@ impl OpfsWorker {
                 self.cursors.lock().await.insert(id, Arc::new(Mutex::new(cursor)));
                 OpfsOperationOutput::Cursor(id)
             }
-            FileOperation::CursorNext { instance_id, max, compressed } => {
+            FileOperation::CursorNext {
+                instance_id,
+                max,
+                compressed
+            } => {
                 let disk_tick = Instant::now();
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
                     return OpfsOperationOutput::Error("Cursor not found".into());
@@ -274,7 +290,7 @@ impl OpfsWorker {
 
                 let mut guard = cursor.lock().await;
                 let Ok(Some(data)) = guard.next(max).await else {
-                    return OpfsOperationOutput::Binary{
+                    return OpfsOperationOutput::Binary {
                         data: Uint8Array::new_with_length(0),
                         raw_size: 0,
                         is_compressed_failed: false,
@@ -284,7 +300,7 @@ impl OpfsWorker {
                 };
 
                 let disk_elapsed = disk_tick.elapsed();
-                if data.len() == 0 {
+                if data.is_empty() {
                     return OpfsOperationOutput::Binary {
                         data: Uint8Array::new_with_length(0),
                         raw_size: 0,
@@ -298,7 +314,7 @@ impl OpfsWorker {
                 let (data, elapsed, failed) = match compressed {
                     true => {
                         let instant = Instant::now();
-                        let buf = compress_prepend_size(&data);
+                        let buf = compress_prepend_size(data);
                         let is_failed = buf.len() > raw_size;
                         let out = match is_failed {
                             true => Uint8Array::new_from_slice(data),
@@ -307,7 +323,7 @@ impl OpfsWorker {
 
                         let elapsed = instant.elapsed();
                         (out, elapsed.as_micros() as u64, is_failed)
-                    },
+                    }
                     false => (Uint8Array::new_from_slice(data), 0, false)
                 };
 
@@ -356,7 +372,11 @@ impl OpfsWorker {
 
                 OpfsOperationOutput::Error("No file selected".into())
             }
-            FileOperation::Write { data, position, decompress } => {
+            FileOperation::Write {
+                data,
+                position,
+                decompress
+            } => {
                 if file_path.contains("zip_entry://") {
                     if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
                         if let Some((zip_filename, _entry_name)) = path_after_prefix.split_once('/') {
@@ -369,21 +389,24 @@ impl OpfsWorker {
                                 let mut guard = writer.lock().await;
 
                                 let data_vec = match decompress {
-                                    true => {
-                                        match decompress_size_prepended(data.to_vec().as_slice()) {
-                                            Ok(out) => out,
-                                            Err(e) => return OpfsOperationOutput::Error(JsValue::from(format!("Failed to decompress: {}", e)))
+                                    true => match decompress_size_prepended(data.to_vec().as_slice()) {
+                                        Ok(out) => out,
+                                        Err(e) => {
+                                            return OpfsOperationOutput::Error(JsValue::from(format!("Failed to decompress: {}", e)))
                                         }
                                     },
                                     false => data.to_vec()
                                 };
 
-                               return match guard.write(&data_vec).await {
+                                return match guard.write(&data_vec).await {
                                     Ok(_) => OpfsOperationOutput::Written(data_vec.len()),
                                     Err(e) => OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e)))
                                 }
                             } else {
-                                return OpfsOperationOutput::Error(JsValue::from(format!("Zip writer not found for: {}", zip_filename)));
+                                return OpfsOperationOutput::Error(JsValue::from(format!(
+                                    "Zip writer not found for: {}",
+                                    zip_filename
+                                )));
                             }
                         }
                     }
@@ -401,7 +424,7 @@ impl OpfsWorker {
                     true => {
                         let out = decompress_size_prepended(data.to_vec().as_slice()).unwrap();
                         Uint8Array::new_from_slice(&out)
-                    },
+                    }
                     false => data
                 };
 
@@ -525,9 +548,7 @@ impl OpfsWorker {
 
                     if let Some(writer) = existing_writer {
                         log::warn!("Cleaning up existing zip writer for: {}", zip_filename);
-                        let mut writer = Arc::try_unwrap(writer)
-                            .map_err(|_| JsValue::from("Failed to unwrap zip writer"))?
-                            .into_inner();
+                        let writer = Arc::try_unwrap(writer).map_err(|_| JsValue::from("Failed to unwrap zip writer"))?.into_inner();
                         if let Err(e) = writer.finalize().await {
                             log::error!("Failed to finalize existing zip writer: {}", e);
                         }
@@ -558,13 +579,9 @@ impl OpfsWorker {
                     };
 
                     if let Some(writer) = zip_writer {
-                        let writer = Arc::try_unwrap(writer)
-                            .map_err(|_| JsValue::from("Failed to unwrap zip writer"))?
-                            .into_inner();
-                        writer.finalize().await
-                            .map_err(|e| JsValue::from(e.to_string()))?;
-                    }
-                    else {
+                        let writer = Arc::try_unwrap(writer).map_err(|_| JsValue::from("Failed to unwrap zip writer"))?.into_inner();
+                        writer.finalize().await.map_err(|e| JsValue::from(e.to_string()))?;
+                    } else {
                         return Err(JsValue::from(format!("Zip writer not found: {}", zip_filename)));
                     }
 

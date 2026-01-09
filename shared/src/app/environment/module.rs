@@ -2,7 +2,6 @@ use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::CoreOperation;
-use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
@@ -62,7 +61,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     }
 
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    ctx.app().notify_event(ShelfEvent::Launch);
+                    ctx.app().load_shelves().await?;
                     ctx.app().notify_event(TransferEvent::Launch);
                     ctx.app().re_authorize().await?;
 

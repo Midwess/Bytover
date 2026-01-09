@@ -99,7 +99,8 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
     }
 
     async fn delete_one(&self, id: &TransferSessionId) -> Resolve<TransferSession> {
-        let returned = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(id.clone())).await?;
+        let returned =
+            IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(id.clone())).await?;
         Ok(returned)
     }
 
@@ -206,10 +207,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         log::info!("Starting download session for zip: {}", zip_path.as_string());
 
         let path_str = zip_path.as_string();
-        let zip_filename = path_str
-            .strip_prefix("opfs://")
-            .unwrap_or(&path_str)
-            .to_string();
+        let zip_filename = path_str.strip_prefix("opfs://").unwrap_or(&path_str).to_string();
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: String::new(),
@@ -219,9 +217,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         match OPFS_WORKER.send(msg).await {
             Some(response) => match response.message {
                 OpfsOperationOutput::Void => Ok(()),
-                OpfsOperationOutput::Error(e) => {
-                    Err(PersistenceError::IOError(format!("Failed to create zip writer: {:?}", e)))
-                }
+                OpfsOperationOutput::Error(e) => Err(PersistenceError::IOError(format!("Failed to create zip writer: {:?}", e))),
                 _ => Err(PersistenceError::IOError("Unexpected response from OPFS worker".to_string()))
             },
             None => Err(PersistenceError::IOError("Failed to communicate with OPFS worker".to_string()))
@@ -232,10 +228,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         log::info!("Stopping download session for zip: {}", zip_path.as_string());
 
         let path_str = zip_path.as_string();
-        let zip_filename = path_str
-            .strip_prefix("opfs://")
-            .unwrap_or(&path_str)
-            .to_string();
+        let zip_filename = path_str.strip_prefix("opfs://").unwrap_or(&path_str).to_string();
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: String::new(),
@@ -245,9 +238,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         match OPFS_WORKER.send(msg).await {
             Some(response) => match response.message {
                 OpfsOperationOutput::Void => Ok(()),
-                OpfsOperationOutput::Error(e) => {
-                    Err(PersistenceError::IOError(format!("Failed to finalize zip: {:?}", e)))
-                }
+                OpfsOperationOutput::Error(e) => Err(PersistenceError::IOError(format!("Failed to finalize zip: {:?}", e))),
                 _ => Err(PersistenceError::IOError("Unexpected response from OPFS worker".to_string()))
             },
             None => Err(PersistenceError::IOError("Failed to communicate with OPFS worker".to_string()))

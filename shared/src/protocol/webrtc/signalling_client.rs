@@ -12,7 +12,7 @@ use n0_future::task::{spawn, JoinHandle};
 use n0_future::StreamExt;
 use once_cell::sync::OnceCell;
 use prost::Message as prost_message;
-use schema::devlog::rpc_signalling::server::{LeftMessage, Message};
+use schema::devlog::rpc_signalling::server::Message;
 use std::sync::Arc;
 use std::time::Duration;
 

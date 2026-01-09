@@ -109,6 +109,7 @@ impl FindingScope {
         }
     }
 
+    #[allow(dead_code)]
     fn get_gmt_offset() -> i32 {
         let local_time = Local::now();
         let offset_seconds = local_time.offset().local_minus_utc();

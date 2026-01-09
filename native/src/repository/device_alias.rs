@@ -41,8 +41,8 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
 
         match table.get(ALIASES_KEY) {
             Ok(Some(data)) => {
-                let aliases: Vec<String> = bincode::deserialize(data.value().as_slice())
-                    .map_err(|e| PersistenceError::IOError(e.to_string()))?;
+                let aliases: Vec<String> =
+                    bincode::deserialize(data.value().as_slice()).map_err(|e| PersistenceError::IOError(e.to_string()))?;
                 Ok(aliases)
             }
             Ok(None) => Ok(vec![]),

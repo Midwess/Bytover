@@ -9,13 +9,13 @@ use core_services::local_storage::stream::IOCursor;
 use core_services::utils::never_send::NeverSend;
 use js_sys::Uint8Array;
 use shared::shell::api::{CIOCursor, DIOWriter, IOReader, IOWriter};
+use shared::utils::compression::CompressStats;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::{Duration, SystemTime};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File, FileSystemFileHandle};
-use shared::utils::compression::CompressStats;
 
 pub static OPFS_WORKER: LazyLock<NeverSend<WebWorkerBridge<OpfsWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::<OpfsWorker>::spawn("opfs-worker")));
@@ -93,7 +93,7 @@ pub struct IOReaderOpfsImpl {
     path: PathBuf,
     buffer: BytesMut,
     instance_id: u32,
-    compression_stats: CompressStats,
+    compression_stats: CompressStats
 }
 
 impl IOReaderOpfsImpl {
@@ -112,7 +112,12 @@ impl IOReaderOpfsImpl {
                 let mut buffer = BytesMut::with_capacity(buffer_size + 1);
                 let compression_stats = CompressStats::new(compressed);
                 buffer.resize(buffer_size + 1, 0);
-                Ok(Self { path, buffer, instance_id, compression_stats })
+                Ok(Self {
+                    path,
+                    buffer,
+                    instance_id,
+                    compression_stats
+                })
             }
             r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))
         }
@@ -153,19 +158,28 @@ impl CIOCursor for IOReaderOpfsImpl {
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
         match response.message {
-            OpfsOperationOutput::Binary { data, raw_size, compression_time_in_micros, read_time_in_micros, .. } => {
+            OpfsOperationOutput::Binary {
+                data,
+                raw_size,
+                compression_time_in_micros,
+                read_time_in_micros,
+                ..
+            } => {
                 if data.length() == 0 {
                     Ok(None)
-                }
-                else {
+                } else {
                     // Update stats for future compression decisions (affects NEXT chunk)
-                    self.compression_stats.add_chunk_stats(raw_size, compression_time_in_micros, data.length() as usize, read_time_in_micros);
+                    self.compression_stats.add_chunk_stats(
+                        raw_size,
+                        compression_time_in_micros,
+                        data.length() as usize,
+                        read_time_in_micros
+                    );
 
                     // Flag reflects what we asked the worker to do for THIS chunk
                     if should_compress_current {
                         self.buffer[0] = 1u8;
-                    }
-                    else {
+                    } else {
                         self.buffer[0] = 0u8;
                     }
 
@@ -203,11 +217,10 @@ impl IOReader for IOReaderOpfsImpl {
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
 
         match response.message {
-            OpfsOperationOutput::Binary {data, ..} => {
+            OpfsOperationOutput::Binary { data, .. } => {
                 if data.length() == 0 {
                     Ok(None)
-                }
-                else {
+                } else {
                     if self.buffer.len() < data.length() as usize {
                         self.buffer.resize(data.length() as usize, 0);
                     }
@@ -250,7 +263,7 @@ impl Drop for IOReaderOpfsImpl {
 pub struct IOWriterOpfsImpl {
     path: PathBuf,
     position: usize,
-    compression_support: bool,
+    compression_support: bool
 }
 
 impl IOWriterOpfsImpl {
@@ -265,7 +278,11 @@ impl IOWriterOpfsImpl {
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file for writing"))?;
 
         match response.message {
-            OpfsOperationOutput::Void => Ok(Self { path, position: 0, compression_support }),
+            OpfsOperationOutput::Void => Ok(Self {
+                path,
+                position: 0,
+                compression_support
+            }),
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file for writing: {:?}", e)),
             _ => Err(anyhow::anyhow!("Unexpected response"))
         }
@@ -324,16 +341,18 @@ impl IOWriter for IOWriterOpfsImpl {
 impl DIOWriter for IOWriterOpfsImpl {
     async fn d_write(&mut self, data: Bytes) -> Result<Option<usize>> {
         if self.compression_support {
-            if data.len() < 1 {
-                return Err(anyhow::anyhow!("Data too short for compression flag (expected at least 1 byte, got {})", data.len()));
+            if data.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Data too short for compression flag (expected at least 1 byte, got {})",
+                    data.len()
+                ));
             }
 
             let compressed = data[0] == 1;
 
-            self.opfs_write(&data[1..], compressed).await.map(|s| Some(s))
-        }
-        else {
-            self.write(data).await.map(|it| Some(it))
+            self.opfs_write(&data[1..], compressed).await.map(Some)
+        } else {
+            self.write(data).await.map(Some)
         }
     }
 }

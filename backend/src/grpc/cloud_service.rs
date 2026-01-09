@@ -81,7 +81,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             }),
             access_url: session.access_url(app.unwrap().web_url().to_string()),
             is_required_password: session.password().is_some(),
-            alias: session.alias(),
+            alias: session.alias()
         };
 
         Ok(Response::new(response))

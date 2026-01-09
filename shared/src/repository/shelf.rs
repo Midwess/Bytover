@@ -15,6 +15,7 @@ pub struct ShelfId {
 pub trait ShelfRepository: Repository<Shelf, ShelfId> {
     async fn load_all(&self, limit: Option<usize>) -> Result<Vec<Shelf>, PersistenceError>;
     async fn add(&self, shelf: Shelf) -> Result<Shelf, PersistenceError>;
+    async fn update(&self, shelf: Shelf) -> Result<Shelf, PersistenceError>;
     async fn remove(&self, id: u64) -> Result<bool, PersistenceError>;
     async fn clear_all(&self) -> Result<(), PersistenceError>;
 }

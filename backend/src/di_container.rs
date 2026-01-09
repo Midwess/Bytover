@@ -186,13 +186,13 @@ impl DiContainer {
 
     pub async fn get_p2p_session_repository(&'static self) -> impl P2PSessionRepository {
         P2PSessionPostgresRepository {
-            db: self.get_db_connection(),
+            db: self.get_db_connection()
         }
     }
 
     pub async fn get_device_alias_repository(&'static self) -> impl DeviceAliasRepository {
         DeviceAliasPostgresRepository {
-            db: self.get_db_connection(),
+            db: self.get_db_connection()
         }
     }
 
@@ -201,7 +201,7 @@ impl DiContainer {
             p2p_repository: std::sync::Arc::new(self.get_p2p_session_repository().await),
             device_alias_repository: std::sync::Arc::new(self.get_device_alias_repository().await),
             app_service: Box::new(self.get_app_service().await),
-            markov_generator: Box::new(self.markov_generator()),
+            markov_generator: Box::new(self.markov_generator())
         }
     }
 

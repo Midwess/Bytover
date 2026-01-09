@@ -35,7 +35,7 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn end(session_id: u64, resource_id: u64, compressed: bool) -> Self {
+    pub fn end(session_id: u64, resource_id: u64, _compressed: bool) -> Self {
         Self::End { session_id, resource_id }
     }
 

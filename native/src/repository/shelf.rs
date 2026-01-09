@@ -87,6 +87,11 @@ impl ShelfRepository for ShelfRepositoryImpl {
         Ok(shelf)
     }
 
+    async fn update(&self, shelf: Shelf) -> Result<Shelf, PersistenceError> {
+        let shelf = Repository::<Shelf, ShelfId>::update_one(self, shelf).await?;
+        Ok(shelf)
+    }
+
     async fn remove(&self, id: u64) -> Result<bool, PersistenceError> {
         let shelf_id = ShelfId { id: Some(id) };
         let deleted = Repository::<Shelf, ShelfId>::delete_one(self, &shelf_id).await?;

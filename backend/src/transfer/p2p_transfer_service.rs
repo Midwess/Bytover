@@ -21,14 +21,14 @@ pub enum P2PTransferErrors {
     #[error("Alias not found for this device")]
     AliasNotFound,
     #[error("Alias generation failed after retries")]
-    AliasGenerationFailed,
+    AliasGenerationFailed
 }
 
 pub struct P2PTransferService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
     pub device_alias_repository: Arc<dyn DeviceAliasRepository>,
     pub app_service: Box<dyn AppInfoService>,
-    pub markov_generator: Box<dyn Markov>,
+    pub markov_generator: Box<dyn Markov>
 }
 
 impl P2PTransferService {
@@ -37,15 +37,8 @@ impl P2PTransferService {
         user_id: u64,
         device_id: u64,
         device_name: String,
-        alias: String,
+        alias: String
     ) -> Result<P2PSession, P2PTransferErrors> {
-        let alias_record = self.device_alias_repository.find_by_alias(alias.clone()).await?;
-
-        match alias_record {
-            Some(record) if record.user_id() == user_id && record.device_id() == device_id => {}
-            _ => return Err(P2PTransferErrors::AliasNotFound),
-        }
-
         let existing_session = self.p2p_repository.find_by_alias(alias.clone()).await?;
 
         if let Some(session) = existing_session {
@@ -54,7 +47,7 @@ impl P2PTransferService {
                 device_id,
                 user_id,
                 session.alias().to_string(),
-                Some(device_name),
+                Some(device_name)
             );
 
             let updated_session = self.p2p_repository.update_session(updated_session).await?;
@@ -67,11 +60,7 @@ impl P2PTransferService {
         Ok(created_session)
     }
 
-    pub async fn get_or_create_aliases(
-        &self,
-        user_id: u64,
-        device_id: u64,
-    ) -> Result<Vec<String>, P2PTransferErrors> {
+    pub async fn get_or_create_aliases(&self, user_id: u64, device_id: u64) -> Result<Vec<String>, P2PTransferErrors> {
         let existing = self.device_alias_repository.find_by_user_and_device(user_id, device_id).await?;
         let existing_count = existing.len();
 
@@ -113,7 +102,5 @@ impl P2PTransferService {
 
 fn generate_random_alias() -> String {
     let mut rng = rand::thread_rng();
-    (0..10)
-        .map(|_| (b'a' + rng.gen_range(0..26)) as char)
-        .collect()
+    (0..10).map(|_| (b'a' + rng.gen_range(0..26)) as char).collect()
 }
