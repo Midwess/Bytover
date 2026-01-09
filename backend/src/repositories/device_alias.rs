@@ -6,7 +6,7 @@ use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Default)]
 pub struct DeviceAliasId {
-    pub alias: Option<String>,
+    pub alias: Option<String>
 }
 
 impl Table<DeviceAliasId> for DeviceAlias {
@@ -16,7 +16,7 @@ impl Table<DeviceAliasId> for DeviceAlias {
 
     fn id(&self) -> DeviceAliasId {
         DeviceAliasId {
-            alias: Some(self.alias().to_string()),
+            alias: Some(self.alias().to_string())
         }
     }
 }
@@ -27,21 +27,13 @@ impl DbId for DeviceAliasId {
 
 #[async_trait::async_trait]
 pub trait DeviceAliasRepository: Repository<DeviceAlias, DeviceAliasId> {
-    async fn find_by_user_and_device(
-        &self,
-        user_id: u64,
-        device_id: u64,
-    ) -> Result<Vec<DeviceAlias>, RepositoryError>;
+    async fn find_by_user_and_device(&self, user_id: u64, device_id: u64) -> Result<Vec<DeviceAlias>, RepositoryError>;
 
     async fn find_by_alias(&self, alias: String) -> Result<Option<DeviceAlias>, RepositoryError>;
 
     async fn create_alias(&self, alias: DeviceAlias) -> Result<DeviceAlias, RepositoryError>;
 
-    async fn count_by_user_and_device(
-        &self,
-        user_id: u64,
-        device_id: u64,
-    ) -> Result<usize, RepositoryError>;
+    async fn count_by_user_and_device(&self, user_id: u64, device_id: u64) -> Result<usize, RepositoryError>;
 
     async fn alias_exists(&self, alias: &str) -> Result<bool, RepositoryError>;
 }

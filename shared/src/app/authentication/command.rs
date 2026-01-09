@@ -1,20 +1,24 @@
 use crate::app::authentication::module::AuthenticationEvent;
+use crate::app::core::command::AppCommand;
+use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
-use crate::app::operations::persistent::{DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation};
+use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::persistent::{
+    DeviceAliasPersistentOperation,
+    SessionPersistentOperation,
+    ShelfPersistentOperation,
+    TransferSessionPersistentOperation
+};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
 use crate::app::shelf::module::ShelfEvent;
+use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
 use crate::entities::token::Token;
 use crate::errors::CoreError;
-use url::Url;
-
-use crate::app::core::command::AppCommand;
-use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::operations::dialog::DialogOperation;
-use crate::app::transfer::module::TransferEvent;
 use crate::CoreOperation;
 use devlog_sdk::distributed_id::gen_id;
+use url::Url;
 
 impl AppCommand {
     pub async fn authenticate(&self) {
@@ -47,7 +51,6 @@ impl AppCommand {
 
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let Ok(user) = RpcOperation::get_me().into_future(self.ctx()).await else {
-            // User is not logged in is fine, some flow not require user to be logged in
             self.notify_event(AuthenticationEvent::UnAuthorized);
             return Ok(())
         };
@@ -55,6 +58,9 @@ impl AppCommand {
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
         self.notify_shell(CoreOperation::Render);
+
+        self.fetch_and_assign_aliases().await;
+
         Ok(())
     }
 
@@ -87,6 +93,43 @@ impl AppCommand {
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
 
+        self.fetch_and_assign_aliases().await;
+
         Ok(())
+    }
+
+    async fn fetch_and_assign_aliases(&self) {
+        let aliases = match RpcOperation::get_device_aliases().into_future(self.ctx()).await {
+            Ok(aliases) => aliases,
+            Err(e) => {
+                log::error!(target: "auth", "Failed to fetch device aliases: {e:?}");
+                return;
+            }
+        };
+
+        if let Err(e) = DeviceAliasPersistentOperation::save_all(aliases.clone()).into_future(self.ctx()).await {
+            log::error!(target: "auth", "Failed to save device aliases: {e:?}");
+        }
+
+        let mut shelves = match ShelfPersistentOperation::find_all(None).into_future(self.ctx()).await {
+            Ok(shelves) => shelves,
+            Err(e) => {
+                log::error!(target: "auth", "Failed to load shelves: {e:?}");
+                return;
+            }
+        };
+
+        let mut alias_iter = aliases.iter();
+
+        for shelf in shelves.iter_mut() {
+            if let Some(alias) = alias_iter.next() {
+                shelf.update_name(alias);
+                log::info!("Updated shelf {} with alias {}", shelf.id, shelf.name);
+                match ShelfPersistentOperation::update(shelf.clone()).into_future(self.ctx()).await {
+                    Ok(_) => self.update_model(ShelfEvent::ShelfUpdated(shelf.clone())),
+                    Err(e) => log::error!(target: "auth", "Failed to update shelf alias: {e:?}")
+                }
+            }
+        }
     }
 }

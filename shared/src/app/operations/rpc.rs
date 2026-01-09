@@ -19,13 +19,13 @@ pub enum RpcOperation {
     Feedback { email: String, message: String },
     RandomAvatar,
     CreateP2PSession { alias: String },
-    GetDeviceAliases,
+    GetDeviceAliases
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     GetMe(User),
-    GetUserById(User),
+    GetUserById(User)
 }
 
 impl Operation for RpcOperation {
@@ -73,7 +73,9 @@ impl RpcOperation {
         })
     }
 
-    pub fn create_p2p_session(alias: String) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
+    pub fn create_p2p_session(
+        alias: String
+    ) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession { alias })).map(|res| match res {
             CoreOperationOutput::P2PSession(session) => Ok(session),
             CoreOperationOutput::Error(error) => Err(error),

@@ -6,10 +6,10 @@ use crate::app::operations::persistent::{DeviceAliasPersistentOperation, LocalRe
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
-use crate::{gen_shelf_id, CoreOperation};
 use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
+use crate::{gen_shelf_id, CoreOperation};
 
 pub const MAX_SHELVES: usize = 10;
 
@@ -33,10 +33,7 @@ impl AppCommand {
 
         for resource in resources {
             let shelf_id = resource.shelf_id;
-            self.update_model(LocalResourceEvent::Add {
-                shelf_id,
-                resource
-            });
+            self.update_model(LocalResourceEvent::Add { shelf_id, resource });
         }
 
         self.notify_shell(CoreOperation::Render);
@@ -65,7 +62,10 @@ impl AppCommand {
             }
         }
 
-        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES)).into_future(self.ctx()).await.unwrap_or_default();
+        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES))
+            .into_future(self.ctx())
+            .await
+            .unwrap_or_default();
         let used_names: Vec<&str> = shelves.iter().map(|s| s.name.as_str()).collect();
 
         for alias in &aliases {
@@ -84,10 +84,7 @@ impl AppCommand {
             return Ok(());
         }
 
-        let active_shelf_ids: Vec<u64> = sessions
-            .iter()
-            .filter_map(|(_, shelf_id)| *shelf_id)
-            .collect();
+        let active_shelf_ids: Vec<u64> = sessions.iter().filter_map(|(_, shelf_id)| *shelf_id).collect();
 
         let mut sorted_shelves = shelves;
         sorted_shelves.sort_by_key(|s| s.id);

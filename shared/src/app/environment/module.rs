@@ -2,12 +2,12 @@ use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::CoreOperation;
-use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::device::DeviceInfo;
 use crux_core::{App, Command};
 use serde::{Deserialize, Serialize};
+use crate::app::shelf::module::ShelfEvent;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
@@ -62,7 +62,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
                     }
 
                     ctx.request_from_shell(CoreOperation::InitNativeExecutor).await;
-                    ctx.app().notify_event(ShelfEvent::Launch);
+                    ctx.app().notify_event(ShelfEvent::Launch).await;
                     ctx.app().notify_event(TransferEvent::Launch);
                     ctx.app().re_authorize().await?;
 

@@ -164,7 +164,10 @@ pub trait NativePersistent: Send + Sync {
                 session_order_id,
                 resource_names
             }) => {
-                let result = self.transfer_session_repository().generate_zip_download_paths(session_order_id, resource_names).await?;
+                let result = self
+                    .transfer_session_repository()
+                    .generate_zip_download_paths(session_order_id, resource_names)
+                    .await?;
                 Ok(CoreOperationOutput::ZipDownloadPaths(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
@@ -179,6 +182,10 @@ pub trait NativePersistent: Send + Sync {
             PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string())),
             PersistentOperation::Shelf(ShelfPersistentOperation::Add(shelf)) => {
                 let shelf = self.shelf_repository().add(shelf).await?;
+                Ok(CoreOperationOutput::Shelf(shelf))
+            }
+            PersistentOperation::Shelf(ShelfPersistentOperation::Update(shelf)) => {
+                let shelf = self.shelf_repository().update(shelf).await?;
                 Ok(CoreOperationOutput::Shelf(shelf))
             }
             PersistentOperation::Shelf(ShelfPersistentOperation::Remove(id)) => {

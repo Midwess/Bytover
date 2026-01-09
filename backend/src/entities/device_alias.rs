@@ -4,24 +4,16 @@ use serde::{Deserialize, Serialize};
 pub struct DeviceAlias {
     alias: String,
     user_id: u64,
-    device_id: u64,
+    device_id: u64
 }
 
 impl DeviceAlias {
     pub fn new(alias: String, user_id: u64, device_id: u64) -> Self {
-        Self {
-            alias,
-            user_id,
-            device_id,
-        }
+        Self { alias, user_id, device_id }
     }
 
     pub fn from_db(alias: String, user_id: u64, device_id: u64) -> Self {
-        Self {
-            alias,
-            user_id,
-            device_id,
-        }
+        Self { alias, user_id, device_id }
     }
 
     pub fn alias(&self) -> &str {

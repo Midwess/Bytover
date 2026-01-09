@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicU8, Ordering};
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use crate::shell::api::BufferExt;
 use futures::channel::mpsc;
 use matchbox_protocol::PeerId;
 use matchbox_socket::{Packet, PeerBuffered};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
 pub struct QuadUnreliableChannel {

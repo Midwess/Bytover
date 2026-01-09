@@ -1,4 +1,3 @@
-use bytemuck::bytes_of;
 use core_services::utils::time::epoch_micro;
 use matchbox_protocol::PeerId;
 use matchbox_socket::Packet;
@@ -45,6 +44,7 @@ impl From<reed_solomon_erasure::Error> for FecError {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct FrameEntry {
     pub block_id: u32,
@@ -186,6 +186,7 @@ impl Frame {
     }
 }
 
+#[allow(dead_code)]
 impl FrameEntry {
     pub fn serialize(&self) -> Box<[u8]> {
         let header_len = size_of::<u32>() * 2 + size_of::<u64>() + size_of::<u16>() + 4;
@@ -257,6 +258,7 @@ impl FrameEntry {
 
 /// RingBuffer using Vec and modulo arithmetic for O(1) indexing
 /// block_id maps to index (block_id % window_size)
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RingBuffer<T> {
     entries: Vec<Option<(u32, T)>>,
@@ -316,11 +318,13 @@ impl<T> RingBuffer<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.entries.iter().filter(|e| e.is_some()).count()
     }
 }
 
+#[allow(dead_code)]
 pub struct FecSender {
     pub peer_id: PeerId,
     pub block_id: u32,
@@ -384,8 +388,8 @@ impl FecSender {
 
     pub fn send(&mut self, prefix: u16, packet: Box<[u8]>) -> Result<FecAction, FecError> {
         let mut offset = 0usize;
-        let estimated_frames = (packet.len() / (CHUNK_SIZE * self.data_shards)).saturating_add(1)
-            * (self.data_shards + MAX_PARITY_SHARDS);
+        let estimated_frames =
+            (packet.len() / (CHUNK_SIZE * self.data_shards)).saturating_add(1) * (self.data_shards + MAX_PARITY_SHARDS);
         let mut frames_to_send: Vec<Frame> = Vec::with_capacity(estimated_frames);
 
         while offset < packet.len() {
@@ -543,7 +547,6 @@ impl FecSender {
                     FecAction::Retransmit(all_frames)
                 }
             }
-            _ => FecAction::Noop
         }
     }
 
@@ -747,12 +750,7 @@ impl ReceiverBlock {
         }
     }
 
-    fn insert_frame(
-        &mut self,
-        idx: usize,
-        payload: Box<[u8]>,
-        false_retransmit_counter: &mut u64
-    ) -> Result<bool, FecError> {
+    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>, false_retransmit_counter: &mut u64) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
                 idx: idx as u8,
@@ -928,7 +926,16 @@ impl FecReceiver {
             }
 
             if frame.block_id < self.next_block_id {
-                log::warn!("Received frame for old block {} (current block is {}) false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}", frame.block_id, self.next_block_id, self.false_retransmit, self.retransmit_count, self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us);
+                log::warn!(
+                    "Received frame for old block {} (current block is {}) \
+                    false_retransmit = {}, total_retransmit = {}, srtt = {}, rttvar = {}",
+                    frame.block_id,
+                    self.next_block_id,
+                    self.false_retransmit,
+                    self.retransmit_count,
+                    self.rtt_estimator.srtt_us,
+                    self.rtt_estimator.rttvar_us
+                );
                 self.false_retransmit = self.false_retransmit.saturating_add(1);
                 continue;
             }
@@ -1008,7 +1015,12 @@ impl FecReceiver {
         // Emit completed blocks
         if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
             if let Some(block) = self.blocks.remove(self.next_block_id) {
-                log::debug!("Block {} constructed with pefix {}, size {} bytes", self.next_block_id, block.prefix, block.total_size);
+                log::debug!(
+                    "Block {} constructed with pefix {}, size {} bytes",
+                    self.next_block_id,
+                    block.prefix,
+                    block.total_size
+                );
                 let mut completed_blocks = vec![block];
 
                 loop {
@@ -1027,7 +1039,10 @@ impl FecReceiver {
                             if evicted_block.is_constructed() {
                                 log::error!(
                                     "CRITICAL: Placeholder evicted COMPLETED block {} (next_block_id={}, received={}/{})",
-                                    evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
+                                    evicted_id,
+                                    self.next_block_id,
+                                    evicted_block.received,
+                                    evicted_block.data_shards
                                 );
 
                                 return Ok(FecAction::Terminated);
@@ -1035,7 +1050,10 @@ impl FecReceiver {
 
                             log::warn!(
                                 "Placeholder evicted IN-PROGRESS block {} (next_block_id={}, received={}/{})",
-                                evicted_id, self.next_block_id, evicted_block.received, evicted_block.data_shards
+                                evicted_id,
+                                self.next_block_id,
+                                evicted_block.received,
+                                evicted_block.data_shards
                             );
                         }
 
@@ -1046,10 +1064,14 @@ impl FecReceiver {
 
                     if is_completed {
                         let block = self.blocks.remove(self.next_block_id).unwrap();
-                        log::debug!("Block {} constructed with prefix {}, size {} bytes", self.next_block_id, block.prefix, block.total_size);
+                        log::debug!(
+                            "Block {} constructed with prefix {}, size {} bytes",
+                            self.next_block_id,
+                            block.prefix,
+                            block.total_size
+                        );
                         completed_blocks.push(block);
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }

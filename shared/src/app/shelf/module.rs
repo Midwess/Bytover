@@ -71,17 +71,32 @@ pub enum ShelfEvent {
     Launch,
     BeginLoadingResources,
     EndLoadingResources,
-    OpenResource { shelf_id: u64, resource_id: u64 },
-    AddResources { shelf_id: u64, selections: Vec<ResourceSelection> },
-    RemoveResource { shelf_id: u64, resource_id: u64 },
-    Clear { shelf_id: u64 },
+    OpenResource {
+        shelf_id: u64,
+        resource_id: u64
+    },
+    AddResources {
+        shelf_id: u64,
+        selections: Vec<ResourceSelection>
+    },
+    RemoveResource {
+        shelf_id: u64,
+        resource_id: u64
+    },
+    Clear {
+        shelf_id: u64
+    },
     DeleteShelf(u64),
-    GetOrCreateShelf { shelf_id: u64 },
+    GetOrCreateShelf {
+        shelf_id: u64
+    },
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
     #[serde(skip)]
     ShelfCreated(Shelf),
+    #[serde(skip)]
+    ShelfUpdated(Shelf),
     #[serde(skip)]
     ShelfDeleted(u64),
     #[serde(skip)]
@@ -101,9 +116,7 @@ impl AppModule<BitBridge> for ShelfModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            Self::Event::Launch => {
-                Command::handle_result(|it| async move { it.app().load_shelves().await })
-            }
+            Self::Event::Launch => Command::handle_result(|it| async move { it.app().load_shelves().await }),
             Self::Event::BeginLoadingResources => {
                 model.shelf.is_loading = true;
                 Command::render()
@@ -114,9 +127,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        format!("Shelf not found {shelf_id:?}")
-                    ));
+                    return Command::operate(DialogOperation::Toast(format!("Shelf not found {shelf_id:?}")));
                 };
 
                 let mut commands = vec![];
@@ -126,8 +137,7 @@ impl AppModule<BitBridge> for ShelfModule {
                         commands.push(Command::operate(DialogOperation::Toast(
                             "Resource was already added before.".to_owned()
                         )))
-                    }
-                    else {
+                    } else {
                         filtered_selections.push(selection);
                     }
                 }
@@ -151,9 +161,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 }
 
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Shelf not found.".to_owned()));
                 };
 
                 let Some(resource) = shelf.get(&LocalResourceId {
@@ -161,9 +169,7 @@ impl AppModule<BitBridge> for ShelfModule {
                     shelf_id: Some(shelf_id),
                     ..Default::default()
                 }) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Resource not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Resource not found.".to_owned()));
                 };
 
                 let mut id = resource.id();
@@ -197,15 +203,11 @@ impl AppModule<BitBridge> for ShelfModule {
                 };
 
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Shelf not found.".to_owned()));
                 };
 
                 let Some(resource) = shelf.get(&id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Resource not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Resource not found.".to_owned()));
                 };
 
                 let resource_path = resource.path.clone();
@@ -215,9 +217,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::Clear { shelf_id } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Shelf not found.".to_owned()));
                 };
 
                 let commands = shelf
@@ -262,9 +262,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::DeleteShelf(shelf_id) => {
                 if model.shelf.shelves.len() <= 1 {
-                    return Command::operate(DialogOperation::Toast(
-                        "Cannot delete the last shelf.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Cannot delete the last shelf.".to_owned()));
                 }
 
                 Command::handle_result(move |it| async move {
@@ -281,6 +279,13 @@ impl AppModule<BitBridge> for ShelfModule {
                 log::info!("Shelf loaded: {:?}", shelf.resources.len());
                 model.shelf.shelves.push(shelf);
                 Command::done()
+            }
+            Self::Event::ShelfUpdated(shelf) => {
+                if let Some(existing) = model.shelf.get_shelf_mut(shelf.id) {
+                    existing.name = shelf.name;
+                }
+
+                Command::render()
             }
         }
     }

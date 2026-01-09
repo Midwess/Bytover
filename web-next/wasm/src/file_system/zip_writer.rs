@@ -19,7 +19,9 @@ impl OpfsZipWriter {
     pub fn new(handle: FileSystemSyncAccessHandle) -> Self {
         let writer = SyncAccessHandleWriter::new(handle);
         let zip_writer = ZipFileWriter::new(writer);
-        Self { state: WriterState::Writer(zip_writer) }
+        Self {
+            state: WriterState::Writer(zip_writer)
+        }
     }
 
     pub async fn new_entry(&mut self, name: &str) -> Result<()> {

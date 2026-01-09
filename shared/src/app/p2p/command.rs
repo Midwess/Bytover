@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::CoreOperationOutput;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;

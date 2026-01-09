@@ -30,6 +30,10 @@ impl Shelf {
         }
     }
 
+    pub fn update_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
     pub fn created_at(&self) -> DateTime<Utc> {
         id_to_datetime(self.id)
     }

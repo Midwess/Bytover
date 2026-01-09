@@ -235,7 +235,7 @@ impl TransferSession {
         mut resources: Vec<LocalResource>,
         password: Option<String>,
         signalling_key: String,
-        scope: String,
+        _scope: String,
         alias: String,
         access_url: String,
         id: u64,
@@ -248,7 +248,10 @@ impl TransferSession {
             order_id: id,
             access_url,
             alias,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone())).collect(),
+            progress: resources
+                .iter()
+                .map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone()))
+                .collect(),
             resources,
             session_resource: None,
             description: None,
@@ -271,14 +274,23 @@ impl TransferSession {
         }
     }
 
-    pub fn public(current_user: User, password: Option<String>, resources: Vec<LocalResource>, to_emails: Vec<String>, from_shelf_id: u64) -> Self {
+    pub fn public(
+        current_user: User,
+        password: Option<String>,
+        resources: Vec<LocalResource>,
+        to_emails: Vec<String>,
+        from_shelf_id: u64
+    ) -> Self {
         let is_required_password = password.is_some();
         let transfer_type = TransferType::Send { from_shelf_id };
         Self {
             alias: "".to_owned(),
             access_url: "".to_owned(),
             order_id: 0,
-            progress: resources.iter().map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone())).collect(),
+            progress: resources
+                .iter()
+                .map(|it| TransferProgress::new(it.order_id, it.size, transfer_type.clone()))
+                .collect(),
             cancellation_token: CancellationToken::new(),
             resources,
             session_resource: None,
@@ -455,7 +467,7 @@ impl TransferSession {
         self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
     }
 
-    pub fn update_progress(&mut self, mut progress: TransferProgress) {
+    pub fn update_progress(&mut self, progress: TransferProgress) {
         if let Some(index) = self.progress.iter().position(|it| it.resource_order_id == progress.resource_order_id) {
             self.progress[index] = progress;
         } else {

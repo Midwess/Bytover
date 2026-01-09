@@ -29,19 +29,9 @@ pub fn get_host_info(http1: bool) -> Result<HostInfo, JsValue> {
         false => "http"
     };
 
-    let port = if http1 {
-        GATEWAY_HTTP1_PORT
-    }
-    else {
-        GATEWAY_PORT
-    };
+    let port = if http1 { GATEWAY_HTTP1_PORT } else { GATEWAY_PORT };
 
-    let host = if http1 {
-        GATEWAY_HTTP1_HOST
-    }
-    else {
-        GATEWAY_HOST
-    };
+    let host = if http1 { GATEWAY_HTTP1_HOST } else { GATEWAY_HOST };
 
     let env_url = Url::parse(&format!(
         "{env_scheme}://{}{}",

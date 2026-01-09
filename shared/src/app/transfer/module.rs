@@ -1,19 +1,15 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::core::model_events::{TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
 use crate::app::modules::AppModule;
-use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
+use crate::app::p2p::module::P2PEvent;
 use crate::app::view_models::cloud_session::CloudSession;
-use crate::app::view_models::receive_session::{
-    ReceiveResourceViewModel,
-    ReceiveSessionViewModel
-};
+use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppEvent, AppModel, BitBridge};
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_method::TransferMethodSelection;
@@ -36,26 +32,21 @@ pub struct TransferModel {
 
 impl TransferModel {
     pub fn has_active_send_session(&self) -> bool {
-        self.sessions.iter().any(|s| {
-            matches!(s.transfer_type, TransferType::Send { .. }) && !s.is_completed()
-        })
+        self.sessions
+            .iter()
+            .any(|s| matches!(s.transfer_type, TransferType::Send { .. }) && !s.is_completed())
     }
 
     pub fn get_active_p2p_send_session(&self, shelf_id: u64) -> Option<&TransferSession> {
-        self.sessions
-            .iter()
-            .find(|s| {
-                matches!(s.transfer_type, TransferType::Send { from_shelf_id } if from_shelf_id == shelf_id)
-                    && s.target.is_peer()
-                    && !s.is_completed()
-            })
+        self.sessions.iter().find(|s| {
+            matches!(s.transfer_type, TransferType::Send { from_shelf_id } if from_shelf_id == shelf_id) &&
+                s.target.is_peer() &&
+                !s.is_completed()
+        })
     }
 
     pub fn count_active_p2p_sessions(&self) -> usize {
-        self.sessions
-            .iter()
-            .filter(|s| s.target.is_peer() && !s.is_completed())
-            .count()
+        self.sessions.iter().filter(|s| s.target.is_peer() && !s.is_completed()).count()
     }
 }
 
@@ -243,11 +234,13 @@ impl AppModule<BitBridge> for TransferModule {
                 let session = session.clone();
                 Command::handle_result(|it| async move { it.app().delete_session(&session).await })
             }
-            TransferEvent::StartPublicTransfer { shelf_id, password, to_emails } => {
+            TransferEvent::StartPublicTransfer {
+                shelf_id,
+                password,
+                to_emails
+            } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Shelf not found.".to_owned()));
                 };
                 let selected_resources = shelf.resources.clone();
                 let Some(user) = model.authentication.user.clone() else {
@@ -263,14 +256,18 @@ impl AppModule<BitBridge> for TransferModule {
                     it.app().upload(session).await
                 })
             }
-            TransferEvent::StartP2PTransfer { shelf_id, nearby_available: _, password } => {
+            TransferEvent::StartP2PTransfer {
+                shelf_id,
+                nearby_available: _,
+                password
+            } => {
                 use crate::app::transfer::commands::MAX_CONCURRENT_P2P_SESSIONS;
 
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(
-                        "Shelf not found.".to_owned()
-                    ));
+                    return Command::operate(DialogOperation::Toast("Shelf not found.".to_owned()));
                 };
+
+                log::info!("Start P2P transfer for {shelf_id} with alias {}", shelf.name);
                 let selected_resources = shelf.resources.clone();
                 let shelf_name = shelf.name.clone();
                 if selected_resources.is_empty() {
@@ -285,7 +282,9 @@ impl AppModule<BitBridge> for TransferModule {
                         let _ = DialogOperation::toast(format!(
                             "Maximum {} P2P sessions reached. Please complete or cancel an existing session first.",
                             MAX_CONCURRENT_P2P_SESSIONS
-                        )).into_future(it.clone()).await;
+                        ))
+                        .into_future(it.clone())
+                        .await;
                     });
                 }
 
@@ -320,10 +319,9 @@ impl AppModule<BitBridge> for TransferModule {
                 let res = resource.clone();
 
                 let mut commands = vec![];
-                commands.push(Command::event(TransferSessionModelEvent::Update(
-                    id,
-                    TransferSessionUpdateEvent::ResourceUpdate(res)
-                ).into()));
+                commands.push(Command::event(
+                    TransferSessionModelEvent::Update(id, TransferSessionUpdateEvent::ResourceUpdate(res)).into()
+                ));
 
                 for peer in model.p2p.peers.iter() {
                     log::info!("Sending new resource notification to peer {}", peer.id);
@@ -339,10 +337,7 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
-                        let should_persist = matches!(
-                            action,
-                            TransferSessionUpdateEvent::SessionDetailUpdated(_)
-                        );
+                        let should_persist = matches!(action, TransferSessionUpdateEvent::SessionDetailUpdated(_));
 
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
                             action.update(session);
@@ -451,10 +446,8 @@ impl AppModule<BitBridge> for TransferModule {
 
                 model.transfer.selected_receive_session_id = Some(session.order_id);
 
-                Command::handle_result(move |it| async move {
-                    it.app().view_session(session, session_id, password).await
-                })
-                .then_render()
+                Command::handle_result(move |it| async move { it.app().view_session(session, session_id, password).await })
+                    .then_render()
             }
             TransferEvent::ReceivedViewSessionRequest {
                 peer_id,
@@ -628,10 +621,7 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(move |it| async move { it.app().cancel_resource_transfer(&session, resource_id).await })
             }
-            TransferEvent::RequestDownloadAllResources {
-                peer_id,
-                session_order_id
-            } => {
+            TransferEvent::RequestDownloadAllResources { peer_id, session_order_id } => {
                 let id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
                     transfer_type: Some(TransferType::Receive)
@@ -704,10 +694,7 @@ impl AppModule<BitBridge> for TransferModule {
                                 None
                             };
                             let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
-                            let name = match &alias {
-                                Some(a) => format!("{}", from_user.name),
-                                None => from_user.name.to_string()
-                            };
+                            let name = from_user.name.to_string();
                             (
                                 from_user.id.to_string(),
                                 from_user.avatar.clone(),
@@ -752,9 +739,12 @@ impl AppModule<BitBridge> for TransferModule {
                             size_gb: 0.0,
                             size_mb: 0.0,
                             display_path: String::new(),
-                            path: LocalResourcePath::RelativePath { path: String::new(), is_private: false },
+                            path: LocalResourcePath::RelativePath {
+                                path: String::new(),
+                                is_private: false
+                            },
                             thumbnail_path: None,
-                            r#type: ResourceType::File,
+                            r#type: ResourceType::File
                         }
                     };
 

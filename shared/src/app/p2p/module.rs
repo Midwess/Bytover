@@ -94,7 +94,7 @@ impl AppModule<BitBridge> for P2PModule {
 
                 let mut peer_just_connected = false;
                 let mut session_order_id = 0;
-                let mut peer_lost_ownership = false;
+                let mut _peer_lost_ownership = false;
 
                 let owned_scopes = peer.owned_scopes();
                 for session in model.transfer.sessions.iter_mut() {
@@ -120,12 +120,11 @@ impl AppModule<BitBridge> for P2PModule {
                             }
 
                             break;
-                        }
-                        else if let Some(ref connected_peer) = from_peer {
+                        } else if let Some(ref connected_peer) = from_peer {
                             if connected_peer.id == peer.id && !is_peer_owned {
                                 *from_peer = None;
                                 session.owner_disconnected();
-                                peer_lost_ownership = true;
+                                _peer_lost_ownership = true;
 
                                 break;
                             }

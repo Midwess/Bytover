@@ -94,7 +94,9 @@ pub trait P2PNativeExecutor: Send + Sync {
                 resources,
                 aggregate_progress
             } => {
-                self.web_rtc().download_all_resources(peer_id, request, session_id, session_path, resources, aggregate_progress).await?;
+                self.web_rtc()
+                    .download_all_resources(peer_id, request, session_id, session_path, resources, aggregate_progress)
+                    .await?;
                 Ok(CoreOperationOutput::None)
             }
             P2POperation::SendResourceNotification {

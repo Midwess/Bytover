@@ -31,8 +31,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
             .object_store(DEVICE_ALIAS_STORE)
             .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
 
-        let value = serde_wasm_bindgen::to_value(&aliases)
-            .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
+        let value = serde_wasm_bindgen::to_value(&aliases).map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
 
         store
             .put(&value, Some(&JsValue::from_str(ALIASES_KEY)))
@@ -40,9 +39,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
             .await
             .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
 
-        transaction
-            .commit()
-            .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
+        transaction.commit().map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
 
         Ok(())
     }
@@ -65,8 +62,8 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
 
         match result {
             Some(value) => {
-                let aliases: Vec<String> = serde_wasm_bindgen::from_value(value)
-                    .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
+                let aliases: Vec<String> =
+                    serde_wasm_bindgen::from_value(value).map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
                 Ok(aliases)
             }
             None => Ok(vec![])
@@ -88,9 +85,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
             .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?
             .await;
 
-        transaction
-            .commit()
-            .map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
+        transaction.commit().map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
 
         Ok(())
     }

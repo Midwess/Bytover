@@ -161,7 +161,12 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         Ok(vec![])
     }
 
-    async fn read(&self, path: LocalResourcePath, buffer_size: usize, compressed: bool) -> Result<Box<dyn CIOCursor>, PersistenceError> {
+    async fn read(
+        &self,
+        path: LocalResourcePath,
+        buffer_size: usize,
+        compressed: bool
+    ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
             let reader = IOReaderOpfsImpl::new(path.into(), buffer_size, compressed).await?;
             return Ok(Box::new(reader))
@@ -205,12 +210,9 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             shelf_id: Some(shelf_id)
         };
 
-        let items = IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(
-            self,
-            Some(&IdbIdWrapper(from_id)),
-            None,
-            None
-        ).await?;
+        let items =
+            IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(self, Some(&IdbIdWrapper(from_id)), None, None)
+                .await?;
 
         let mut removed_items = vec![];
         for item in items.iter() {

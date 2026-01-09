@@ -1,17 +1,27 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{SessionLoadError, TransferSessionModelEvent, UpdateAction};
-use crate::app::p2p::module::P2PEvent;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
+use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
+use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
+use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
-use crate::entities::transfer_session::{SessionResourceUpdate, TransferProgress, TransferSession, TransferSessionStatus, TransferStatus, TransferType};
+use crate::entities::transfer_session::{
+    SessionResourceUpdate,
+    TransferProgress,
+    TransferSession,
+    TransferSessionStatus,
+    TransferStatus,
+    TransferType
+};
+use crate::entities::user::User;
 use crate::errors::CoreError;
 use crate::repository::transfer_session::TransferSessionId;
 use core_services::db::repository::abstraction::table::Table;
@@ -19,9 +29,6 @@ use core_services::utils::string::StringExt;
 use n0_future::StreamExt;
 use schema::devlog::bitbridge::PeerErrorsMessage;
 use std::collections::HashMap;
-use crate::app::operations::rpc::RpcOperation;
-use crate::entities::finding_scope::FindingScope;
-use crate::entities::user::User;
 
 pub const MAX_CONCURRENT_P2P_SESSIONS: usize = 5;
 
@@ -499,8 +506,7 @@ impl AppCommand {
                 if let Some(resource_id) = resource_id {
                     log::info!("Cancelling resource {} for session {}", resource_id, session.order_id);
                     self.run(P2POperation::cancel_resource(peer_id, session.order_id, resource_id)).await?;
-                }
-                else {
+                } else {
                     log::info!("Cancelling session {} from receiver", session.order_id);
                     self.run(TransferOperation::cancel_session(Some(peer_id), session.order_id)).await?;
                 }
@@ -516,14 +522,10 @@ impl AppCommand {
         session_id: TransferSessionId,
         mut session: TransferSession
     ) -> Result<(), CoreError> {
-        use crate::repository::transfer_session::ZipDownloadPaths;
         use crate::entities::local_resource::ResourceType;
+        use crate::repository::transfer_session::ZipDownloadPaths;
 
-        let resource_names: HashMap<u64, String> = session
-            .resources
-            .iter()
-            .map(|r| (r.order_id, r.name.clone()))
-            .collect();
+        let resource_names: HashMap<u64, String> = session.resources.iter().map(|r| (r.order_id, r.name.clone())).collect();
 
         let zip_paths: ZipDownloadPaths = self
             .run(TransferSessionPersistentOperation::generate_zip_download_paths(
@@ -558,7 +560,10 @@ impl AppCommand {
             SessionResourceUpdate(session_resource.clone()).into()
         ));
 
-        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+        self.update_model(TransferSessionModelEvent::Update(
+            session_id.clone(),
+            aggregate_progress.clone().into()
+        ));
 
         let mut stream = self.stream_from_shell(
             P2POperation::DownloadAllResources {
@@ -579,24 +584,33 @@ impl AppCommand {
                     if progress.is_failed() {
                         log::warn!("Resource {} failed, cancelling download all", progress.resource_order_id);
                         aggregate_progress.fail(format!("Resource {} failed", progress.resource_order_id));
-                        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                        self.update_model(TransferSessionModelEvent::Update(
+                            session_id.clone(),
+                            aggregate_progress.clone().into()
+                        ));
                         break;
                     }
 
                     if progress.is_canceled() {
                         log::warn!("Resource {} cancelled, cancelling download all", progress.resource_order_id);
                         aggregate_progress.status = TransferStatus::Canceled;
-                        self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                        self.update_model(TransferSessionModelEvent::Update(
+                            session_id.clone(),
+                            aggregate_progress.clone().into()
+                        ));
                         break;
                     }
 
-                    let mut current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
+                    let current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
                     *current = (*current).max(progress.total_bytes());
 
                     let total_downloaded: u64 = resource_progress_map.values().sum();
                     let bytes_delta = total_downloaded.saturating_sub(aggregate_progress.total_bytes());
                     aggregate_progress.update_progress(bytes_delta);
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                    self.update_model(TransferSessionModelEvent::Update(
+                        session_id.clone(),
+                        aggregate_progress.clone().into()
+                    ));
 
                     if aggregate_progress.is_completed() {
                         log::info!("All resources download completed");
@@ -606,7 +620,10 @@ impl AppCommand {
                 CoreOperationOutput::Error(e) => {
                     log::info!("Download all resources error: {e:?}");
                     aggregate_progress.fail(e.to_string());
-                    self.update_model(TransferSessionModelEvent::Update(session_id.clone(), aggregate_progress.clone().into()));
+                    self.update_model(TransferSessionModelEvent::Update(
+                        session_id.clone(),
+                        aggregate_progress.clone().into()
+                    ));
                     break;
                 }
                 _ => continue
@@ -653,9 +670,7 @@ impl AppCommand {
                 let peer_id = from_peer.as_ref().unwrap().id().to_string();
                 self.request_session_detail(peer_id, session_id, session.order_id, password).await
             }
-            TransferTarget::Internet { .. } => {
-                self.view_public_session(session, password).await
-            }
+            TransferTarget::Internet { .. } => self.view_public_session(session, password).await
         }
     }
 
@@ -665,7 +680,7 @@ impl AppCommand {
         password: Option<String>,
         user: User,
         from_shelf_id: u64,
-        shelf_name: String,
+        shelf_name: String
     ) -> Result<(), CoreError> {
         let p2p_session = self.run(RpcOperation::create_p2p_session(shelf_name)).await?;
 
@@ -677,7 +692,7 @@ impl AppCommand {
             p2p_session.alias.clone(),
             p2p_session.access_url.clone(),
             p2p_session.session_id,
-            from_shelf_id,
+            from_shelf_id
         );
 
         let scope = FindingScope::new(&p2p_session.signalling_room_id);

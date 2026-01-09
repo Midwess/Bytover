@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::selected_resource::SelectedResourceViewModel;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReceiveResourceViewModel {
