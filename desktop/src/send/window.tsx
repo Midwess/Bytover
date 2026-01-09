@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import { Shelf } from "./shelf";
 import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
@@ -21,11 +21,13 @@ function Window() {
     const [isExpanded, setIsExpanded] = useState(false)
     const [showAnimation, setShowAnimation] = useState(false)
     const [shelfId, setShelfId] = useState<string | undefined>(undefined)
+    const shelfInitializedRef = useRef(false)
 
     // Extract shelf ID from window label on mount (label format: "send-{shelf_id}")
     const label = window.label
     useEffect(() => {
-        if (label.startsWith("send-")) {
+        if (label.startsWith("send-") && !shelfInitializedRef.current) {
+            shelfInitializedRef.current = true
             const id = label.substring(5) // Remove "send-" prefix
             setShelfId(id)
             invoke("get_or_create_shelf", { shelfId: id })

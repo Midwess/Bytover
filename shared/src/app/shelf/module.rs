@@ -33,16 +33,30 @@ impl ShelfModel {
 pub struct ShelfItemViewModel {
     pub id: String,
     pub name: String,
+    pub description: String,
+    pub is_online: bool,
     pub resources: Vec<SelectedResourceViewModel>
+}
+
+impl ShelfItemViewModel {
+    pub fn from_shelf(shelf: &Shelf, is_online: bool) -> Self {
+        use chrono::Local;
+        let created_date = shelf.created_at().with_timezone(&Local);
+        let description = created_date.format("%b %d, %Y %I:%M %p").to_string();
+
+        Self {
+            id: shelf.id.to_string(),
+            name: shelf.name.clone(),
+            description,
+            is_online,
+            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
+        }
+    }
 }
 
 impl From<&Shelf> for ShelfItemViewModel {
     fn from(shelf: &Shelf) -> Self {
-        Self {
-            id: shelf.id.to_string(),
-            name: shelf.name.clone(),
-            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
-        }
+        Self::from_shelf(shelf, false)
     }
 }
 
@@ -276,10 +290,12 @@ impl AppModule<BitBridge> for ShelfModule {
             .shelf
             .shelves
             .iter()
-            .map(ShelfItemViewModel::from)
+            .map(|shelf| {
+                let is_online = model.transfer.get_active_p2p_send_session(shelf.id).is_some();
+                ShelfItemViewModel::from_shelf(shelf, is_online)
+            })
             .collect();
 
-        // Sort by id descending (latest first)
         shelves.sort_by(|a, b| b.id.cmp(&a.id));
 
         ShelfViewModel {

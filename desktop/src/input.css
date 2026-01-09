@@ -19,6 +19,8 @@
 
     --animate-popup: popup 0.3s ease-out;
 
+    --animate-marquee: marquee 5s linear infinite;
+
     --color-background: var(--background);
 
     --color-foreground: var(--foreground);
@@ -283,5 +285,14 @@
     100% {
         opacity: 1;
         transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes marquee {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
     }
 }

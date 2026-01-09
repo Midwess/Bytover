@@ -113,24 +113,6 @@ export class Core {
         return session
     }
 
-    public useSelectedResources() {
-        const [state, setState] = useState<SelectedResourceViewModel[]>([])
-
-        useEffect(() => {
-            return this.shelfState.subscribe((transferState) => {
-                if (transferState?.selected_resources.length != state.length) {
-                    setState(transferState?.selected_resources || [])
-                }
-
-                if (!isEqual(state, transferState?.selected_resources)) {
-                    setState(transferState?.selected_resources || [])
-                }
-            })
-        }, [state.length])
-
-        return state
-    }
-
     public useShelves() {
         const [shelves, setShelves] = useState<ShelfItemViewModel[]>(this.shelfState.get()?.shelves ?? [])
 
@@ -198,11 +180,9 @@ export class Core {
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const found = transferState?.cloud_session
-                if (found?.shelf_id === shelfId && !isEqual(session, found)) {
+                const found = transferState?.cloud_sessions?.find(s => s.shelf_id === shelfId)
+                if (!isEqual(session, found)) {
                     setSession(found)
-                } else if (found?.shelf_id !== shelfId && session !== undefined) {
-                    setSession(undefined)
                 }
             })
         }, [shelfId, session])

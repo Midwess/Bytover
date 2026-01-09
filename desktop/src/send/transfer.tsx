@@ -10,7 +10,6 @@ import {
     Card,
     CardContent,
 } from "@/components/ui/card"
-import {Input} from "@/components/ui/input"
 import {PasswordInput} from "@/components/ui/password-input"
 import {
     Copy,
@@ -26,12 +25,7 @@ import {Slide} from "@/components/animate-ui/primitives/effects/slide.tsx"
 import {useEffect, useState} from "react"
 import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/animate-ui/primitives/animate/tooltip"
+import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
 
 export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
@@ -95,11 +89,11 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         <Card shadowSize={0.5} className="flex flex-col gap-3 px-2 py-1 justify-center items-center bg-card/95">
             <MyPeerInfo/>
         </Card>
-        <Card shadowSize={0.5} className="flex flex-row gap-1 pb-1.5 px-1 pt-1">
+        <Card shadowSize={0.5} className="flex flex-row gap-1 pb-1.5 px-1 pt-1 h-12">
             <div
                 className={"flex flex-row items-center gap-1 w-fit rounded-lg"}>
                 <PasswordInput
-                    className={"bg-secondary shadow-background"}
+                    className={"bg-secondary shadow-background mt-0.5"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     maxLength={20}
@@ -110,9 +104,9 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         </Card>
         {
             p2pSession?.access_url &&
-            <Card shadowSize={0.5} className="flex flex-col gap-3 p-1 bg-card/95">
+            <Card shadowSize={0.5} className="flex flex-col gap-3 p-1 bg-card/95 h-12">
                 <div
-                    className={"flex flex-row items-center gap-2 w-fit rounded-lg"}>
+                    className={"flex flex-row items-center gap-2 w-fit rounded-lg h-full"}>
                     <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
                 </div>
             </Card>
@@ -161,7 +155,7 @@ function MyPeerInfo() {
                         <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
                     </div>
                     <div
-                        className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-1 rounded-2xl">
+                        className="relative aspect-square justify-center items-center text-primaryText flex h-[38px] w-[38px] border-greenSecondary p-3 border-1 rounded-2xl">
                         <Avatar className="p-1 rounded-xl" style={{backgroundColor: color}}>
                             <AvatarImage src={myPeer.avatar.url}/>
                         </Avatar>
@@ -179,6 +173,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const cloudSession = core.useCloudSessionForShelf(shelfId)
     const progress = (cloudSession?.progress ?? 0) * 100
+    console.log('cloud', progress)
 
     return <>
         <Card shadowSize={0} className="flex flex-col gap-2 p-1">
@@ -197,7 +192,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-2 items-center">
+        <Card className="flex flex-row gap-2 p-1 items-center">
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
@@ -247,45 +242,28 @@ function UrlInputWithCopy({url}: { url: string }) {
         }
     }
 
-    // Function to trim from the center
-    const getTrimmedUrl = (url: string, maxLength: number = 40) => {
-        if (url.length <= maxLength) return url
-
-        const ellipsis = '...'
-        const availableLength = maxLength - ellipsis.length
-        const frontLength = Math.ceil(availableLength / 2)
-        const backLength = Math.floor(availableLength / 2)
-
-        return url.slice(0, frontLength) + ellipsis + url.slice(-backLength)
-    }
-
     return (
-        <TooltipProvider>
-            <div className="relative">
-                <Tooltip side="top">
-                    <TooltipTrigger asChild>
-                        <Input
-                            value={getTrimmedUrl(url)}
-                            disabled={true}
-                            className="pr-12 disabled:opacity-100 cursor-default bg-secondary shadow-background"
-                        />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs break-all">
-                        {url}
-                    </TooltipContent>
-                </Tooltip>
-                <button
-                    onClick={handleCopy}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    title={isCopied ? "Copied!" : "Copy to clipboard"}
-                >
-                    {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500"/>
-                    ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
-                    )}
-                </button>
+        <div className="flex items-center w-full bg-secondary rounded-lg h-full">
+            <div className="w-44 px-2">
+                <UnlimitedLineText
+                    text={url}
+                    className="text-xs text-foreground"
+                    startChars={8}
+                    endChars={14}
+                    speed={20}
+                />
             </div>
-        </TooltipProvider>
+            <button
+                onClick={handleCopy}
+                className="w-fit p-1.5 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                title={isCopied ? "Copied!" : "Copy to clipboard"}
+            >
+                {isCopied ? (
+                    <Check className="h-4 w-4 text-green-500"/>
+                ) : (
+                    <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground"/>
+                )}
+            </button>
+        </div>
     )
 }

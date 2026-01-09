@@ -14,6 +14,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn toggle_receive(&self);
     fn is_send_window_open(&self) -> bool;
     fn hide_send(&self);
+    fn show_toast(&self, message: &str) -> WebviewWindow<R>;
 }
 
 impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
@@ -215,5 +216,60 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         if let Some(window) = self.get_webview_window("send") {
             let _ = window.hide();
         }
+    }
+
+    fn show_toast(&self, message: &str) -> WebviewWindow<R> {
+        let window = match self.get_webview_window("toast") {
+            Some(window) => window,
+            None => {
+                let window = WebviewWindowBuilder::new(
+                    self,
+                    "toast",
+                    WebviewUrl::App("toast.html".into())
+                )
+                    .title("toast")
+                    .inner_size(300.0, 44.0)
+                    .decorations(false)
+                    .transparent(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .resizable(false)
+                    .shadow(false)
+                    .focused(false)
+                    .build()
+                    .expect("failed to create toast window");
+
+                let _ = window.set_effects(
+                    EffectsBuilder::new()
+                        .effect(Effect::HudWindow)
+                        .effect(Effect::Blur)
+                        .state(EffectState::Active)
+                        .radius(22.0)
+                        .color(Color(0, 0, 0, 0))
+                        .build()
+                );
+
+                window
+            }
+        };
+
+        if let Some(monitor) = window.current_monitor().ok().flatten() {
+            let screen_size = monitor.size();
+            let screen_position = monitor.position();
+            let window_width = 300i32;
+            let window_height = 44i32;
+            let padding_bottom = window_height + 20i32;
+
+            let x = screen_position.x + (screen_size.width as i32 - window_width) / 2;
+            let y = screen_position.y + screen_size.height as i32 - window_height - padding_bottom;
+
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("toast-message", message.to_string());
+
+        window
     }
 }
