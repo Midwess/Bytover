@@ -162,9 +162,9 @@ export default function TransferBoard() {
                         <div className="absolute left-0 right-0 top-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
                         {/* Bottom dashed border */}
                         <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                        {/* Left dot strip */}
+                        {/* Left dot strip - desktop only */}
                         <div
-                            className="relative flex-shrink-0 w-8 sm:w-16 md:w-24 lg:w-32 xl:w-[120px]"
+                            className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
                             style={{ backgroundImage: DOT_PATTERN }}
                         >
                             <div className="absolute left-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
@@ -193,9 +193,9 @@ export default function TransferBoard() {
                             <TransferBoardTabs />
                         </div>
 
-                        {/* Right dot strip */}
+                        {/* Right dot strip - desktop only */}
                         <div
-                            className="relative flex-shrink-0 w-8 sm:w-16 md:w-24 lg:w-32 xl:w-[120px]"
+                            className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
                             style={{ backgroundImage: DOT_PATTERN }}
                         >
                             <div className="absolute left-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
