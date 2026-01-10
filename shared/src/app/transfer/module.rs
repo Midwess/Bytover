@@ -1,5 +1,5 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
-use crate::app::core::model_events::{TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
+use crate::app::core::model_events::{ConnectionRecovered, TransferSessionModelEvent, TransferSessionUpdateEvent, UpdateAction};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
@@ -57,7 +57,8 @@ pub struct TransferViewModel {
     cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
     selected_session: Option<ReceiveSessionViewModel>,
-    pub is_resource_remove_allowed: bool
+    pub is_resource_remove_allowed: bool,
+    pub total_p2p_receive_progress: Option<f64>
 }
 
 pub struct TransferModule;
@@ -532,11 +533,19 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done();
                 }
 
+                let needs_recovery = session.connection_error.is_some() || session.target.is_connection_failed();
                 let resource_order_id = resource.order_id;
                 let resource_name = resource.name.clone();
                 let resource_type = resource.r#type.clone();
 
                 Command::handle_result(move |it| async move {
+                    if needs_recovery {
+                        log::info!("Session {} recovered from timeout, received resource notification", session_order_id);
+                        it.update_model(TransferSessionModelEvent::Update(
+                            session_id.clone(),
+                            ConnectionRecovered.into()
+                        ));
+                    }
                     let mut generate_file_paths_request = HashMap::new();
                     generate_file_paths_request.insert(resource_order_id, (resource_name, resource_type));
 
@@ -808,6 +817,20 @@ impl AppModule<BitBridge> for TransferModule {
                 .cloned()
         });
 
+        let total_p2p_receive_progress = {
+            let active_sessions: Vec<_> = received_sessions
+                .iter()
+                .filter(|s| s.progress > 0.0 && !s.is_completed)
+                .collect();
+
+            if active_sessions.is_empty() {
+                None
+            } else {
+                let sum: f64 = active_sessions.iter().map(|s| s.progress).sum();
+                Some(sum / active_sessions.len() as f64)
+            }
+        };
+
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
             received_sessions,
@@ -877,7 +900,8 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            is_resource_remove_allowed: !model.transfer.has_active_send_session()
+            is_resource_remove_allowed: !model.transfer.has_active_send_session(),
+            total_p2p_receive_progress
         }
     }
 }

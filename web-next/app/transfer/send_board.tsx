@@ -732,13 +732,12 @@ function UrlInputWithCopy({ url }: { url: string }) {
         try {
             await navigator.clipboard.writeText(url)
             setIsCopied(true)
-            setTimeout(() => setIsCopied(false), 2000) // Reset after 2 seconds
+            setTimeout(() => setIsCopied(false), 2000)
         } catch (err) {
             console.error('Failed to copy text: ', err)
         }
     }
 
-    // Scroll to the end of the input to show the last part of the URL
     useEffect(() => {
         if (inputRef.current) {
             inputRef.current.scrollLeft = inputRef.current.scrollWidth
@@ -747,34 +746,40 @@ function UrlInputWithCopy({ url }: { url: string }) {
 
     return (
         <TooltipProvider>
-            <div className="relative">
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Input
-                            ref={inputRef}
-                            value={url}
-                            disabled={true}
-                            className="pr-12 cursor-default" // Add padding for the button and cursor
-                        />
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="top"
-                        className="max-w-xs break-all"
+            <div className="relative animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div
+                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-bluePrimary via-greenSecondary to-bluePrimary opacity-60 animate-pulse"
+                    style={{ animationDuration: '4s', padding: '1px' }}
+                />
+                <div className="relative z-10 m-[1px]">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Input
+                                ref={inputRef}
+                                value={url}
+                                disabled={true}
+                                className="pr-12 cursor-default bg-slate-900 text-white border-0 rounded-[5px]"
+                            />
+                        </TooltipTrigger>
+                        <TooltipContent
+                            side="top"
+                            className="max-w-xs break-all"
+                        >
+                            {url}
+                        </TooltipContent>
+                    </Tooltip>
+                    <button
+                        onClick={handleCopy}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                        title={isCopied ? "Copied!" : "Copy to clipboard"}
                     >
-                        {url}
-                    </TooltipContent>
-                </Tooltip>
-                <button
-                    onClick={handleCopy}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    title={isCopied ? "Copied!" : "Copy to clipboard"}
-                >
-                    {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                    )}
-                </button>
+                        {isCopied ? (
+                            <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                            <Copy className="h-4 w-4 text-white/80 hover:text-white" />
+                        )}
+                    </button>
+                </div>
             </div>
         </TooltipProvider>
     )

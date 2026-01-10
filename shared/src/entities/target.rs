@@ -24,6 +24,18 @@ pub enum TransferTarget {
 }
 
 impl TransferTarget {
+    pub fn is_connection_failed(&self) -> bool {
+        let TransferTarget::P2P { connection_state, .. } = self else {
+            return false
+        };
+
+        if matches!(connection_state, P2PConnectionState::Failed(_)) {
+            return true
+        }
+
+        false
+    }
+
     pub fn is_public(&self) -> bool {
         matches!(self, Self::Internet { .. })
     }

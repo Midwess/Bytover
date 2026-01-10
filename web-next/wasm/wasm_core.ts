@@ -328,6 +328,19 @@ export class WasmCore {
         return isCompatible
     }
 
+    public useTotalP2PProgress(): number | null {
+        const [progress, setProgress] = useState<number | null>(null);
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                const newProgress = transferState?.total_p2p_receive_progress ?? null;
+                setProgress(prev => prev !== newProgress ? newProgress : prev);
+            });
+        }, []);
+
+        return progress;
+    }
+
     public async launch() {
         const isTransferPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/transfer')
         this.isNearbyEnabled.set(isTransferPage)

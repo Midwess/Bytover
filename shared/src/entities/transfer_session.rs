@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::app::core::model_events::{SessionLoadError, UpdateAction};
+use crate::app::core::model_events::{ConnectionRecovered, SessionLoadError, UpdateAction};
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::Peer;
@@ -723,5 +723,16 @@ impl UpdateAction<TransferSession> for P2pTransferSessionMessage {
 impl UpdateAction<TransferSession> for SessionLoadError {
     fn update(self, data: &mut TransferSession) {
         data.connection_error = Some(self);
+    }
+}
+
+impl UpdateAction<TransferSession> for ConnectionRecovered {
+    fn update(self, data: &mut TransferSession) {
+        data.connection_error = None;
+        if let TransferTarget::P2P { connection_state, .. } = &mut data.target {
+            if matches!(connection_state, P2PConnectionState::Failed(_)) {
+                *connection_state = P2PConnectionState::Connected;
+            }
+        }
     }
 }
