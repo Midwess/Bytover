@@ -50,12 +50,12 @@ export function DownloadPlatforms({ className }: DownloadPlatformsProps) {
                 height={20}
                 className="hidden md:block w-4 h-4 md:w-5 md:h-5 shrink-0"
               />
-              <span className="text-xs md:text-sm font-medium whitespace-nowrap">
+              <span className="text-xs md:text-sm font-medium whitespace-nowrap text-gray-700">
                 {platform.label}
               </span>
             </Button>
             {index < PLATFORMS.length - 1 && (
-              <div className="h-5 md:h-6 w-px bg-gray-200 mx-0.5 md:mx-1 shrink-0" />
+              <div className="h-5 md:h-6 w-px bg-gray-300/50 mx-0.5 md:mx-1 shrink-0" />
             )}
           </div>
         ))}
@@ -68,7 +68,7 @@ export function DownloadPlatforms({ className }: DownloadPlatformsProps) {
             exit={{ opacity: 0, height: 0 }}
             transition={{
               duration: 0.4,
-              ease: [0.4, 0, 0.6, 1], // A common cubic bezier for ease-in-out
+              ease: [0.4, 0, 0.6, 1],
               height: { duration: 0.4, ease: [0.4, 0, 0.6, 1] },
               opacity: { duration: 0.4, ease: [0.4, 0, 0.6, 1] },
             }}
@@ -95,5 +95,3 @@ export function DownloadPlatforms({ className }: DownloadPlatformsProps) {
     </div>
   );
 }
-
-

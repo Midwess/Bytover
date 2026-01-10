@@ -846,7 +846,7 @@ function P2PSend() {
                         className="w-fit h-[35px] bg-bluePrimary text-primary"
                         onClick={handleStartTransfer}
                     >
-                        Start Transfer
+                        Share
                     </Button>
                 )}
             </div>
