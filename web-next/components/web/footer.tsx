@@ -1,8 +1,9 @@
 'use client'
 import Image from "next/image";
 import Link from "next/link";
+import {cn} from "@/lib/utils.ts";
 
-export default function Footer() {
+export default function Footer(props: {className: string | undefined}) {
     const scrollToSection = (href: string) => {
         const element = document.querySelector(href);
         if (element) {
@@ -11,7 +12,7 @@ export default function Footer() {
     };
 
     return (
-        <footer className="w-full bg-black border-t border-zinc-800">
+        <footer className={cn("w-full bg-black border-t border-zinc-800", props.className)}>
             <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16">
                 {/* Main Footer Content */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">

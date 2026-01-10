@@ -13,7 +13,11 @@ import ReceiveBoard from "@/app/transfer/receive_board";
 import { useUrlState } from "@/hooks/use-url";
 import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
+import Footer from "@/components/web/footer";
 import { DownloadPlatforms } from "@/components/download-platforms";
+import { DesktopSection } from "@/components/desktop-section";
+import { JoinWaitList } from "@/components/join-waitlist";
+import { GridSectionWrapper } from "./components/grid-section-wrapper";
 
 const DOT_PATTERN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1' fill='rgba(255,255,255,0.08)'/%3E%3C/svg%3E\")";
 const DOT_PATTERN_LIGHT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1' fill='rgba(255,255,255,0.04)'/%3E%3C/svg%3E\")";
@@ -87,7 +91,6 @@ function TransferBoardTabs() {
             }}
             className="w-full"
         >
-            {/* Tabs positioned on top edge using negative margin */}
             <div className="flex justify-center -mt-[22px] relative z-10">
                 <TabsList className="bg-muted border border-primaryText/10 rounded-lg p-[3px]">
                     <TabsTrigger value="Send" className="rounded-sm w-20 px-5 py-1.5 text-sm data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
@@ -99,7 +102,6 @@ function TransferBoardTabs() {
                 </TabsList>
             </div>
 
-            {/* Content */}
             <div className="container mx-auto pt-6 pb-12 px-3">
                 {renderContent()}
             </div>
@@ -114,7 +116,6 @@ export default function TransferBoard() {
 
             <main className="pb-20">
                 <div className="max-w-[1400px] mx-auto px-3">
-                    {/* Hero section with gradient background */}
                     <div className="relative overflow-hidden">
                         <div
                             className="absolute inset-0 bg-cover bg-center"
@@ -124,7 +125,6 @@ export default function TransferBoard() {
                         <section className="relative">
                             <div className="container mx-auto py-12 md:py-16 px-4 md:px-8">
                                 <div className="pt-16 flex flex-col items-center text-center gap-8">
-                                    {/* Title */}
                                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight">
                                         The new standard of file transfer
                                         <span className="inline-block w-3 h-3 md:w-4 md:h-4 rounded-full bg-greenSecondary animate-pulse ml-2 align-middle" />
@@ -156,13 +156,9 @@ export default function TransferBoard() {
                         </section>
                     </div>
 
-                    {/* Body section with dot-filled side strips */}
                     <div className="relative flex mt-8">
-                        {/* Top dashed border */}
                         <div className="absolute left-0 right-0 top-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                        {/* Bottom dashed border */}
                         <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                        {/* Left dot strip - desktop only */}
                         <div
                             className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
                             style={{ backgroundImage: DOT_PATTERN }}
@@ -171,25 +167,20 @@ export default function TransferBoard() {
                             <div className="absolute right-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
                         </div>
 
-                        {/* Muted background layer - full width between strips */}
                         <div
                             className="flex-1 bg-bluePrimary/2 relative min-w-0"
                             style={{ backgroundImage: DOT_PATTERN_LIGHT }}
                         >
-                            {/* Corner markers */}
                             <div className="absolute -top-1 -left-1 w-3 h-3 border-l border-t border-primaryText/30" />
                             <div className="absolute -top-1 -right-1 w-3 h-3 border-r border-t border-primaryText/30" />
                             <div className="absolute -bottom-1 -left-1 w-3 h-3 border-l border-b border-primaryText/30" />
                             <div className="absolute -bottom-1 -right-1 w-3 h-3 border-r border-b border-primaryText/30" />
 
-                            {/* Top border - split into left and right segments around tabs */}
                             <div className="absolute left-0 top-0 h-px w-[calc(50%-100px)]" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
                             <div className="absolute right-0 top-0 h-px w-[calc(50%-100px)]" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
 
-                            {/* Bottom border */}
                             <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
 
-                            {/* Tabs and Content */}
                             <Suspense fallback={
                                 <div className="flex items-center justify-center w-full h-[40vh]">
                                     <div className="flex flex-col items-center gap-4">
@@ -202,7 +193,6 @@ export default function TransferBoard() {
                             </Suspense>
                         </div>
 
-                        {/* Right dot strip - desktop only */}
                         <div
                             className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
                             style={{ backgroundImage: DOT_PATTERN }}
@@ -211,8 +201,22 @@ export default function TransferBoard() {
                             <div className="absolute right-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
                         </div>
                     </div>
+
+                <GridSectionWrapper>
+                    <div className={"pt-8"}>
+                        <DesktopSection />
+                    </div>
+                </GridSectionWrapper>
+
+                <GridSectionWrapper>
+                    <div id="waitlist" className="py-12">
+                        <JoinWaitList />
+                    </div>
+                </GridSectionWrapper>
                 </div>
             </main>
+
+            <Footer />
         </div>
     );
 }

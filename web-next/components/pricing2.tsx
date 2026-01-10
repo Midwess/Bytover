@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, X } from "lucide-react";
+import { CircleCheck, X, PartyPopper } from "lucide-react";
 
 import {
   Card,
@@ -76,17 +76,33 @@ const Pricing2 = ({
   ],
 }: Pricing2Props) => {
   return (
-    <section className="w-full flex justify-center bg-black">
-      <div className="w-full p-8 md:p-12 lg:p-16">
+    <section
+      className="w-full flex justify-center bg-black relative"
+      style={{
+        backgroundImage: "url('/gradient-bg1.jpeg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="w-full p-8 md:p-12 lg:p-16 relative z-10">
         <div className="flex flex-col items-center gap-12 text-center">
           <div className="flex flex-col items-center gap-4">
             <h2 className="text-4xl font-bold lg:text-6xl text-primaryText">
               {heading}
             </h2>
             <p className="text-primaryText/70 text-lg max-w-2xl">{description}</p>
+            <div className="flex items-center gap-3 mt-4 bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
+              <PartyPopper className="size-6 text-yellow-400 animate-bounce" />
+              <p className="text-primaryText font-medium">
+                We&apos;re planning our pricing! All features are <span className="text-greenSecondary font-bold">FREE</span> for now!
+              </p>
+              <PartyPopper className="size-6 text-yellow-400 animate-bounce" />
+            </div>
           </div>
 
-          <div className="flex flex-col items-stretch gap-6 md:flex-row lg:gap-8 w-full justify-center pt-4">
+          <div className="hidden flex flex-col items-stretch gap-6 md:flex-row lg:gap-8 w-full justify-center pt-4">
             {plans.map((plan) => (
               <Card
                 key={plan.id}
