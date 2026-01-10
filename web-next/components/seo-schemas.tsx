@@ -16,7 +16,7 @@ export function SEOSchemas() {
         "@type": "WebSite",
         "name": "Bytover",
         "url": baseUrl,
-        "description": "File sharing, including Peer to peer, Nearby transfer, creating Public file transfer with Password protected, or sending To email."
+        "description": "File sharing with instant direct transfers, public sharing with password protection, and email delivery."
     };
 
     const homepageSchema = {
@@ -24,7 +24,7 @@ export function SEOSchemas() {
         "@type": "WebPage",
         "name": "Bytover Home",
         "url": baseUrl,
-        "description": "File sharing, including Peer to peer, Nearby transfer, creating Public file transfer with Password protected, or sending To email.",
+        "description": "File sharing with instant direct transfers, public sharing with password protection, and email delivery.",
         "publisher": {
             "@type": "Organization",
             "name": "Midwess",
@@ -37,7 +37,7 @@ export function SEOSchemas() {
         "@type": "Service",
         "name": "Bytover File Sharing",
         "url": baseUrl,
-        "description": "Secure file sharing platform, including Peer to peer, Nearby transfer, Public file transfer with Password protected, and sending To email.",
+        "description": "Secure file sharing platform with instant direct transfers, public sharing with password protection, and email delivery.",
         "provider": {
             "@type": "Organization",
             "name": "Midwess",

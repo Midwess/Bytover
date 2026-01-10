@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import {
     Tabs,
     TabsList,
@@ -126,7 +126,7 @@ export default function TransferBoard() {
                                 <div className="pt-16 flex flex-col items-center text-center gap-8">
                                     {/* Title */}
                                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight">
-                                        Seamless file transfer, redefined
+                                        The new standard of file transfer
                                         <span className="inline-block w-3 h-3 md:w-4 md:h-4 rounded-full bg-greenSecondary animate-pulse ml-2 align-middle" />
                                     </h1>
 
@@ -139,13 +139,13 @@ export default function TransferBoard() {
 
                                     <div className="flex flex-wrap justify-center gap-2">
                                         <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
+                                            No upload required
+                                        </span>
+                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
                                             Instant URL generation
                                         </span>
                                         <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
                                             No ZIP required
-                                        </span>
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            No intermediary server
                                         </span>
                                         <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
                                             End-to-end encrypted
@@ -190,7 +190,16 @@ export default function TransferBoard() {
                             <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
 
                             {/* Tabs and Content */}
-                            <TransferBoardTabs />
+                            <Suspense fallback={
+                                <div className="flex items-center justify-center w-full h-[40vh]">
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                        <p className="text-sm text-muted-foreground">Loading...</p>
+                                    </div>
+                                </div>
+                            }>
+                                <TransferBoardTabs />
+                            </Suspense>
                         </div>
 
                         {/* Right dot strip - desktop only */}

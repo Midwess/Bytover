@@ -2,14 +2,14 @@ import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 
 import { Suspense } from "react";
-import { Pricing2 } from "@/components/pricing2";
 import MagicBento from "@/components/MagicBento";
 import Introduction from "@/app/home/introduction.tsx";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
+import { DownloadPlatforms } from "@/components/download-platforms";
 import { getAssetUrl } from "@/utils/asset-url";
 
-function FeaturesSection() {
+function DesktopSection() {
     const features = [
         {
             id: "shelf",
@@ -27,8 +27,8 @@ function FeaturesSection() {
         },
         {
             id: "nearby-share",
-            heading: "Nearby transfer & Peer to peer",
-            description: "Transfer files directly to any device instantly with Peer to peer connection. And automatically matching nearby users.",
+            heading: "Instant Transfer",
+            description: "Share files instantly with anyone using a simple link. No upload needed - files transfer directly to the receiver.",
             video: getAssetUrl("/demo/desktop-share-nearby.mp4"),
             color: '#060010',
         },
@@ -42,16 +42,23 @@ function FeaturesSection() {
     ];
 
     return (
-        <section className="py-32">
+        <section className="py-20 md:py-32">
             <div className="w-full lg:h-[1400px] flex flex-col items-center px-0">
-                <div className="mb-12 flex flex-col items-center text-center max-w-3xl">
-                    <h2 className="mb-4 text-4xl font-bold text-primaryText md:text-5xl lg:text-6xl">
-                        Powerful Features
+                {/* Desktop Introduction */}
+                <div className="mb-16 flex flex-col items-center text-center max-w-2xl px-6">
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold bg-bluePrimary/20 text-blue border border-bluePrimary/30 mb-6">
+                        Desktop App
+                    </span>
+                    <h2 className="mb-4 text-3xl font-bold text-white md:text-4xl lg:text-5xl">
+                        Even better on desktop
                     </h2>
-                    <p className="text-primaryText/70 text-lg lg:text-xl">
-                        Experience seamless file transfer with our intuitive interface. Share files publicly, transfer Peer to peer, organize everything in your personal shelf.
+                    <p className="text-primaryText/60 text-base md:text-lg mb-8">
+                        Get the full experience with our native desktop app. Faster transfers, system integration, and seamless file management.
                     </p>
+                    <DownloadPlatforms />
                 </div>
+
+                {/* Feature Cards */}
                 <MagicBento
                     textAutoHide={true}
                     enableStars={true}
@@ -71,49 +78,12 @@ function FeaturesSection() {
 }
 
 function PricingPlans() {
-    const plans = [
-        {
-            id: "free",
-            name: "Free",
-            description: "Perfect for basic users who need simple Peer to peer file transfers",
-            price: "Free",
-            features: [
-                { text: "Peer to peer transfers with limited bandwidth", included: true },
-                { text: "Transfer to your own devices", included: true },
-                { text: "Public file transfer", included: false },
-                { text: "To email", included: false },
-            ],
-            button: {
-                text: "Get Started",
-                url: "/transfer",
-            },
-        },
-        {
-            id: "pro",
-            name: "Pro",
-            description: "Advanced features for Peer to peer transfers across the internet and Public file transfer.",
-            price: "Coming soon",
-            features: [
-                { text: "Peer to peer transfers with unlimited bandwidth", included: true },
-                { text: "Transfer to your own devices", included: true },
-                { text: "Public file transfer with Password protected", included: true },
-                { text: "Public cloud storage up to 500GB / month", included: true },
-                { text: "Send files To email", included: true },
-            ],
-            button: {
-                text: "Join waiting list",
-                url: "#waitlist",
-            },
-        },
-    ];
-
     return (
-        <Pricing2
-            heading="Simple, Transparent Pricing"
-            description="Choose the plan that fits your needs. Free for basic transfers, Pro for advanced features."
-            showOneTime={false}
-            plans={plans}
-        />
+        <section className="py-16 text-center container">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primaryText mb-4">Pricing</h2>
+            <p className="text-primaryText/70 text-lg mb-2">Free for now</p>
+            <p className="text-muted-foreground">We&apos;re working on pricing plans.</p>
+        </section>
     );
 }
 
@@ -129,10 +99,10 @@ export default function Home() {
             <Introduction />
         </div>
 
-        {/* Features Section */}
-        <div id="features" className={"w-full bg-zinc-900"}>
+        {/* Desktop Section */}
+        <div id="desktop" className={"w-full bg-zinc-900"}>
             <div className="w-full container">
-                <FeaturesSection />
+                <DesktopSection />
             </div>
         </div>
 

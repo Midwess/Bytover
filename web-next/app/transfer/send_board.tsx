@@ -64,7 +64,7 @@ enum TransferType {
 
 const activeMethods = [
     {
-        name: 'People',
+        name: 'P2P',
         icon: Users,
         type: TransferType.People
     },
@@ -813,7 +813,7 @@ function P2PSend() {
     return <>
         <div className="flex flex-col w-full gap-3">
             <p className="text-start w-full text-primaryText/70 text-sm pb-1">
-                Securely share with P2P network
+                Share instantly via link - no upload needed
             </p>
             <MyPeerInfo />
             <div className="flex flex-col w-full gap-3">

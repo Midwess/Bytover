@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Bytover – Peer-to-Peer, Public & Email File Transfer",
-  description: "Transfer files effortlessly. Share directly via peer-to-peer, with nearby peers, or create a public link with optional password protection or send via email.",
+  title: "Bytover – Instant, Public & Email File Transfer",
+  description: "Transfer files effortlessly. Share instantly via link with no upload needed, create public links with password protection, or send via email.",
   icons: {
     icon: [
       { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
