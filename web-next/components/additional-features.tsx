@@ -2,14 +2,12 @@
 
 import { MotionEffect } from '@/components/animate-ui/effects/motion-effect';
 import {
-    Network,
-    Infinity,
-    Laptop,
+    Zap,
     FolderOpen,
-    MapPin,
+    Shield,
+    Cloud,
     Mail,
     Lock,
-    Zap,
     type LucideIcon
 } from 'lucide-react';
 
@@ -21,45 +19,35 @@ interface Feature {
 
 const features: Feature[] = [
     {
-        title: "Secure Peer to peer File Transfer with Relay Backup",
-        description: "Fast and private P2P transfers with an automatic relay fallback. Ensures reliable file delivery even behind NATs or firewalls.",
-        icon: Network,
+        title: "No Upload Required",
+        description: "Files transfer directly from sender to receiver. No waiting for uploads to complete - sharing starts instantly.",
+        icon: Zap,
     },
     {
-        title: "No File Size Limits — Transfer Anything",
-        description: "Send large files, videos, backups, and archives with zero size restrictions. Share without compression or quality loss.",
-        icon: Infinity,
-    },
-    {
-        title: "Cross-Platform Sharing on Any Device",
-        description: "Effortlessly transfer files across Windows, macOS, Linux, iPhone, iPad, and Android devices with full compatibility.",
-        icon: Laptop,
-    },
-    {
-        title: "Transfer Entire Folders Easily",
-        description: "Share complete folders while preserving structure. No need to zip—send full directories in one simple action.",
+        title: "Folders Without Any Zip",
+        description: "Share complete folders while preserving structure. No need to compress - send full directories in one simple action.",
         icon: FolderOpen,
     },
     {
-        title: "Auto-Detect Nearby Devices on Local Network",
-        description: "Instantly find and send files to nearby devices on the same Wi-Fi or LAN. Perfect for quick office or home transfers.",
-        icon: MapPin,
+        title: "Secure & Private",
+        description: "Your data stays between you and your friends. End-to-end encrypted transfers with no intermediary access.",
+        icon: Shield,
     },
     {
-        title: "Share Files To email",
-        description: "Send files directly to one or many email addresses at once. Ideal for teams, clients, and group sharing.",
+        title: "Permanent Cloud Links",
+        description: "Need a link that lasts? Upload to cloud storage for permanent sharing. Available anytime, even when you're offline.",
+        icon: Cloud,
+    },
+    {
+        title: "Send to Email",
+        description: "Send files directly to one or many email addresses at once. Perfect for teams, clients, and group sharing.",
         icon: Mail,
     },
     {
-        title: "Password protected Sharing Links",
-        description: "Create secure public links with optional passwords. Control who can access your shared files at all times.",
+        title: "Password Protected",
+        description: "Add an extra layer of security with optional passwords. Control who can access your shared files.",
         icon: Lock,
     },
-    {
-        title: "Instant Share Links After Upload",
-        description: "Get a ready-to-use share link immediately after upload. Start sharing right away—no waiting or extra processing.",
-        icon: Zap,
-    }
 ];
 
 export function AdditionalFeatures() {
@@ -78,11 +66,11 @@ export function AdditionalFeatures() {
                     inViewOnce
                 >
                     <div className="text-center mb-16 md:mb-20">
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primaryText mb-4">
-                            There&apos;s more
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
+                            We know what you expect
                         </h2>
                         <p className="text-primaryText/60 text-lg max-w-2xl mx-auto">
-                            Discover even more ways to effortlessly manage and share your files.
+                            Simple, fast, and secure file sharing - exactly how it should be.
                         </p>
                     </div>
                 </MotionEffect>

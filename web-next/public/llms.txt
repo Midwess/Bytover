@@ -1,37 +1,36 @@
 Bytover
 
-Bytover is a free peer to peer file transfer platform available on all major devices. It supports file transfers across Windows, macOS, Linux, iOS, and Android using secure direct connections with optional public sharing.
+Bytover is a free file transfer platform available on all major devices. It supports file transfers across Windows, macOS, Linux, iOS, and Android using secure direct connections with optional public sharing.
 
-Bytover uses peer to peer technology with automatic relay server fallback. This ensures private transfers even behind NAT or firewall restrictions. Users can transfer files between their own devices, send to nearby devices on the same network, or create public share links with optional Password protected.
+Bytover uses instant direct transfer technology with automatic relay server fallback. This ensures private transfers even behind NAT or firewall restrictions. Users can share files instantly via link with no upload needed, or create public share links with optional password protection.
 
 Core Features
 
--   Secure Peer to peer File Transfer — Direct P2P connections with automatic relay fallback.
+-   Secure Direct Transfer — Instant transfers with automatic relay fallback. No upload needed.
 -   Unlimited File Size — Transfer files of any size without compression or limits.
 -   Cross-Platform Support — Works on Windows, macOS, Linux, iOS, and Android.
 -   Folder Transfer — Send complete folders while preserving directory structure.
--   Local Device Detection — Discover and transfer to devices on the same network.
+-   Instant Share via Link — Generate a shareable link and transfer files instantly.
 -   Email Sharing — Send files directly to multiple email addresses.
 -   Password-Protected Sharing — Create secure public links with optional passwords.
--   Instant Share Links — Generate shareable URLs immediately after upload.
+-   Instant Public Share Links — Generate shareable URLs immediately for public sharing.
 
 Pricing
 
--   Free Plan — Peer-to-peer transfers with basic bandwidth, transfer between your own devices.
--   Pro Plan (Coming Soon) — Unlimited P2P bandwidth, 500GB/month public cloud storage, email sharing, password-protected public links.
+-   Free for now — We're working on pricing plans.
 
 Getting Started
 
 -   Web App — Transfer files directly in the browser with no installation.
 -   Mobile and Desktop Apps — Native apps for Android, iOS, Windows, and macOS (coming later this year).
--   Waitlist — Join to get early access to high-bandwidth transfers and native apps.
+-   Feature Request — Submit feature ideas and feedback.
 
 Navigation
 
 -   Home — Overview of the platform.
 -   Features — Detailed feature descriptions.
--   Pricing — Plan comparison and details.
--   Waitlist — Early-access sign-up.
+-   Pricing — Free for now.
+-   Feature Request — Submit feature ideas.
 
 Support & Resources
 

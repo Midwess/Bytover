@@ -44,10 +44,10 @@ export function JoinWaitList() {
             className="relative z-20 w-full max-w-md flex flex-col items-center"
           >
             <h2 className="relative z-20 text-center font-sans text-4xl font-semibold tracking-tighter md:py-5 lg:text-6xl">
-              Join the Waitlist
+              Feature Request
             </h2>
             <p className="text-md text-muted-foreground mx-auto max-w-xl text-center lg:text-lg px-8">
-              Get early access to high-bandwidth transfers and the full native apps experience.
+              Have a feature in mind? Let us know what you&apos;d like to see in Bytover.
             </p>
             <div className="relative z-20 mt-10 flex w-full flex-col gap-3">
               <input
@@ -85,7 +85,7 @@ export function JoinWaitList() {
                     Sending...
                   </span>
                 ) : (
-                  "Join the Waitlist"
+                  "Submit Request"
                 )}
               </Button>
             </div>

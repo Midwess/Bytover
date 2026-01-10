@@ -2,7 +2,6 @@
 
 import { getAssetUrl } from "@/utils/asset-url";
 import Aurora from "@/components/Aurora";
-import { DownloadPlatforms } from "@/components/download-platforms";
 import Link from "next/link";
 import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,46 +15,58 @@ interface IntroductionProps {
 export default function Introduction({
     disableBackground = false,
     hidePrimaryButton = false,
-    header = "Easy Peer to peer and Public file transfer",
+    header = "File transfer, made truly seamless",
 }: IntroductionProps) {
     const containerClassName = disableBackground
         ? "w-full flex flex-col items-center justify-center"
         : "w-screen h-screen flex flex-col items-center justify-center";
 
-    return <>
+    return (
         <div className={containerClassName}>
             {!disableBackground && (
-                <div className={"w-full h-screen absolute"}>
+                <div className="w-full h-screen absolute">
                     <GravityBackground />
                 </div>
             )}
-            <div className={'relative flex flex-col w-full items-center gap-4 md:gap-10 pb-8 md:pb-16 pt-20 md:pt-32 justify-center px-4'}>
-                <div className={'flex flex-col items-center justify-center gap-12 md:gap-32 container z-2 w-full'}>
-                    <div className={"flex flex-col items-center gap-8 md:gap-20"}>
-                        <div className={"flex flex-col items-center gap-2 md:gap-4"}>
-                            <div className={"flex bg-muted-foreground/10 py-1 px-2 rounded-lg flex-row gap-1 md:gap-2 text-2xl md:text-3xl lg:text-5xl font-black text-center items-center"}>
-                                <Image src={getAssetUrl("/logo-color.svg")} alt={"logo"} width={40} height={40} className={"w-5 h-5 md:w-8 md:h-8"} />
-                                <span className="whitespace-nowrap text-sm sm:text-md">Bytover</span>
-                            </div>
-                            <h1
-                                className="text-4xl md:text-5xl lg:text-7xl font-black text-center h1 pointer-events-none px-2"
-                            >{header}
-                            </h1>
-                        </div>
-                        <div className={"flex flex-col gap-2 md:gap-3 items-center w-full px-4 md:px-0"}>
-                            {!hidePrimaryButton && (
-                                <Link href="/transfer" className={"rounded-lg flex flex-row gap-2 md:gap-3 bg-bluePrimary text-white font-bold text-sm md:text-base px-4 md:px-6 py-2 md:py-3"}>
-                                    Try it now on web
-                                </Link>
-                            )}
-                            <h2 className={"text-sm md:text-lg text-foreground/90"}>Available on many other platforms</h2>
-                            <DownloadPlatforms />
-                        </div>
-                    </div>
+            <div className="relative z-20 flex flex-col w-full items-center justify-center px-6">
+                <div className="flex flex-col items-center gap-6 md:gap-8 max-w-2xl text-center">
+                    {/* Logo */}
+                    <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20 backdrop-blur-sm">
+                        <Image
+                            src={getAssetUrl("/logo-color.svg")}
+                            alt="Bytover"
+                            width={20}
+                            height={20}
+                        />
+                        Bytover
+                    </span>
+
+                    {/* Headline */}
+                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white">
+                        {header}
+                    </h1>
+
+                    {/* Description */}
+                    <p className="text-lg md:text-xl text-foreground/60 max-w-md">
+                        No upload required. Share directly between you and your friends.
+                    </p>
+
+                    {/* CTA */}
+                    {!hidePrimaryButton && (
+                        <Link
+                            href="/transfer"
+                            className="mt-4 inline-flex items-center gap-2 bg-bluePrimary hover:bg-bluePrimary/90 text-white font-semibold px-8 py-3 rounded-full transition-colors"
+                        >
+                            Start Sharing
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>
-    </>
+    );
 }
 
 export function GravityBackground() {
