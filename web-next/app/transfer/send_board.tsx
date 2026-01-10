@@ -11,6 +11,7 @@ import {
 import {Button} from "@/components/ui/button";
 import {ChevronsUpDown} from "lucide-react";
 import * as React from "react";
+import Link from "next/link";
 import {Input} from "@/components/ui/input";
 import {MultiEmailInput} from "@/components/ui/multi-email-input";
 import {Label} from "@/components/ui/label";
@@ -877,12 +878,12 @@ function P2PSend() {
                         <p className="text-sm text-gray-700">
                             Keep this tab active for transfers to work.
                         </p>
-                        <a
+                        <Link
                             href="/#desktop"
                             className="w-fit px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-bluePrimary to-greenSecondary rounded-lg hover:opacity-90 transition-opacity"
                         >
                             Download Desktop App
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>

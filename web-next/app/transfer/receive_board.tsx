@@ -658,6 +658,7 @@ function FileView(props: {
         <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
             {/* Thumbnail */}
             <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                     className="w-6 h-6 object-contain opacity-70"
                     alt={model.name}
@@ -728,6 +729,7 @@ function MediaView(props: {
                 {/* Thumbnail */}
                 <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
                     {thumbnailSource ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img className="w-full h-full object-cover" src={thumbnailSource} alt={model.name} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -771,6 +773,7 @@ function MediaView(props: {
             {/* Thumbnail */}
             <div className="relative bg-muted/30 h-[calc(100%-76px)]">
                 {thumbnailSource ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                         className="w-full h-full object-cover"
                         alt={model.name}
