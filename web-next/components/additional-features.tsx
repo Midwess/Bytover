@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { MotionEffect } from '@/components/animate-ui/effects/motion-effect';
 import {
     Zap,
@@ -8,6 +10,7 @@ import {
     Cloud,
     Mail,
     Lock,
+    ChevronDown,
     type LucideIcon
 } from 'lucide-react';
 
@@ -51,13 +54,23 @@ const features: Feature[] = [
 ];
 
 export function AdditionalFeatures() {
-    return (
-        <section className="w-full py-20 md:py-32 relative overflow-hidden">
-            {/* Background gradient accents */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/5 to-transparent pointer-events-none" />
+    const [expandedFeatures, setExpandedFeatures] = useState<Set<number>>(new Set());
 
-            <div className="container mx-auto px-4 md:px-6 relative">
-                {/* Heading */}
+    const handleFeatureClick = (index: number) => {
+        setExpandedFeatures(prev => {
+            const next = new Set(prev);
+            if (next.has(index)) {
+                next.delete(index);
+            } else {
+                next.add(index);
+            }
+            return next;
+        });
+    };
+
+    return (
+        <section className="w-full py-20 md:py-32 bg-zinc-900">
+            <div className="container mx-auto px-4 md:px-6">
                 <MotionEffect
                     slide={{ direction: 'up', offset: 30 }}
                     fade
@@ -75,10 +88,11 @@ export function AdditionalFeatures() {
                     </div>
                 </MotionEffect>
 
-                {/* Features Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
+                <div className="flex flex-col max-w-3xl mx-auto">
                     {features.map((feature, index) => {
                         const Icon = feature.icon;
+                        const isExpanded = expandedFeatures.has(index);
+
                         return (
                             <MotionEffect
                                 key={index}
@@ -88,39 +102,40 @@ export function AdditionalFeatures() {
                                 inView
                                 inViewOnce
                             >
-                                <div className="group relative h-full">
-                                    {/* Card */}
-                                    <div className="relative h-full p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 
-                                                    transition-all duration-300 ease-out
-                                                    hover:bg-white/10 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10
-                                                    hover:-translate-y-1">
-                                        {/* Icon */}
-                                        <div className="mb-4 relative w-fit">
-                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 
-                                                          flex items-center justify-center
-                                                          group-hover:from-indigo-500/30 group-hover:to-purple-500/30
-                                                          transition-all duration-300 relative z-10">
-                                                <Icon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300 transition-colors duration-300" />
-                                            </div>
-                                            {/* Glow effect on hover - only around icon */}
-                                            <div className="absolute inset-0 w-12 h-12 rounded-xl bg-indigo-500/30 blur-xl opacity-0 
-                                                          group-hover:opacity-100 transition-opacity duration-300 -z-10" />
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="space-y-2">
-                                            <h3 className="text-lg md:text-xl font-bold text-primaryText group-hover:text-white transition-colors duration-300">
+                                <div className="border-b border-white/10">
+                                    <button
+                                        onClick={() => handleFeatureClick(index)}
+                                        className="w-full py-4 text-left"
+                                        aria-expanded={isExpanded}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Icon className="w-6 h-6 text-bluePrimary bg-bluePrimary/30 p-1 rounded-sm flex-shrink-0" />
+                                            <h3 className="text-sm md:text-base font-semibold text-primaryText flex-1">
                                                 {feature.title}
                                             </h3>
-                                            <p className="text-primaryText/70 text-base leading-relaxed group-hover:text-primaryText/80 transition-colors duration-300">
-                                                {feature.description}
-                                            </p>
+                                            <ChevronDown
+                                                className={`w-4 h-4 text-primaryText/50 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                                            />
                                         </div>
+                                    </button>
 
-                                        {/* Bottom gradient accent */}
-                                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500/0 via-indigo-500/50 to-indigo-500/0 
-                                                      opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-b-2xl" />
-                                    </div>
+                                    <AnimatePresence>
+                                        {isExpanded && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                transition={{ duration: 0.4, ease: [0.4, 0, 0.6, 1] }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="pb-4 pl-8">
+                                                    <p className="text-primaryText/70 text-sm leading-relaxed">
+                                                        {feature.description}
+                                                    </p>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </MotionEffect>
                         );

@@ -33,10 +33,10 @@ export default function Home() {
             <AdditionalFeatures />
         </div>
 
-        <div id="waitlist" className={"w-full bg-zinc-900 h-[60vh] py-5 min-h-fit items-center flex"}>
+        <div id="waitlist" className={"w-full bg-black h-[60vh] py-5 min-h-fit items-center flex"}>
             <JoinWaitList />
         </div>
 
-        <Footer />
+        <Footer className={"bg-zinc-900"} />
     </div>
 }
