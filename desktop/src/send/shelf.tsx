@@ -61,7 +61,6 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             <div
                 className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
             <div data-tauri-drag-region
-                 onDoubleClick={handleClose}
                  className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
                <Minus
                     className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
@@ -97,7 +96,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             unlisten = await window.onDragDropEvent(throttle(({payload}) => {
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 console.log(eventPosition)
-                const isLeftSide = eventPosition?.x && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
+                const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
                     if (isLeftSide) {
                         setIsDraggingOver(true);
@@ -151,9 +150,9 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">
-                        {selectedResources.map((resource, index) => (
+                        {selectedResources.map((resource) => (
                             <ResourceView
-                                key={index}
+                                key={resource.order_id}
                                 model={resource}
                                 isRemoveAllowed={isResourceRemoveAllowed}
                                 onRemove={(resourceId) => {

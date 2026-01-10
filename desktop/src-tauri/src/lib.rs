@@ -190,22 +190,40 @@ async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_h
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
     if !is_authorized {
+        #[cfg(target_os = "macos")]
+        let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Regular);
         app_handle.show_auth();
+        update_tray_menu_signed_out(&app_handle);
     }
     else {
+        #[cfg(target_os = "macos")]
+        let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
         app_handle.hide_auth();
-    }
-
-    if let Some(shelf_view) = &view.shelf {
-        update_tray_menu(&app_handle, &shelf_view.shelves);
+        if let Some(shelf_view) = &view.shelf {
+            update_tray_menu(&app_handle, &shelf_view.shelves);
+        }
     }
 
     let _ = app_handle.emit("Render", view);
 }
 
+fn update_tray_menu_signed_out(app_handle: &AppHandle) {
+    let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
+
+    let Ok(menu) = MenuBuilder::new(app_handle)
+        .item(&quit_item)
+        .build() else { return };
+
+    if let Ok(guard) = TRAY_ICON.lock() {
+        if let Some(tray) = guard.as_ref() {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+}
+
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
-    let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
+    let Ok(sign_out_item) = MenuItemBuilder::with_id("sign_out", "Sign out").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
@@ -224,7 +242,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         .item(&new_shelf_item)
         .item(&recent_submenu)
         .separator()
-        .item(&settings_item)
+        .item(&sign_out_item)
         .item(&quit_item)
         .build() else { return };
 
@@ -388,22 +406,13 @@ pub async fn run() {
             get_toast_message, close_toast
         ])
         .setup(|app| {
-            let new_shelf_item = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app)?;
-            let recent_submenu = SubmenuBuilder::with_id(app, "recent_shelves", "Recent Shelves").build()?;
-            let settings_item = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
-                .item(&new_shelf_item)
-                .item(&recent_submenu)
-                .separator()
-                .item(&settings_item)
                 .item(&quit_item)
                 .build()?;
 
-            let Some(icon) = app.default_window_icon().cloned() else {
-                log::error!("Failed to load tray icon");
-                return Ok(());
-            };
+            let tray_icon = include_bytes!("../icons/tray/icon.png");
+            let icon = tauri::image::Image::from_bytes(tray_icon).expect("Failed to load tray icon");
             let tray = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
@@ -415,7 +424,12 @@ pub async fn run() {
                             notify_user_did_drop();
                             app.open_new_shelf_window();
                         },
-                        "settings" => {},
+                        "sign_out" => {
+                            let app_handle = app.clone();
+                            spawn(async move {
+                                process_event(AuthenticationEvent::SignOut, app_handle).await;
+                            });
+                        },
                         "quit" => {
                             app.close_all_windows(vec![]);
                         },

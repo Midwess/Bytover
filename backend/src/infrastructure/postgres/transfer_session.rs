@@ -3,7 +3,7 @@ use crate::entities::transfer_progress::TransferProgressStatus;
 use crate::entities::transfer_resource::TransferResource;
 use crate::entities::transfer_session::TransferSession;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
-use chrono::{Days, Months, Utc};
+use chrono::{Days, Utc};
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
 use devlog_sdk::distributed_id::{gen_id, EPOCH_SINCE};
@@ -136,14 +136,11 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
     async fn delete_stale_sessions(&self, cloud_storage: &dyn CloudStorage) -> Result<(), RepositoryError> {
         let epoch_ms = EPOCH_SINCE as i64;
 
-        let one_month_ago = Utc::now() - Months::new(1);
-        let one_month_ago_ms = one_month_ago.timestamp_millis();
-
-        let cutoff_order_id = (one_month_ago_ms - epoch_ms) << 23;
-
         let seven_days_ago = Utc::now() - Days::new(7);
         let seven_days_ago_ms = seven_days_ago.timestamp_millis();
-        let seven_days_cutoff = (seven_days_ago_ms - epoch_ms) << 23;
+
+        let cutoff_order_id = (seven_days_ago_ms - epoch_ms) << 23;
+        let seven_days_cutoff = cutoff_order_id;
 
         let txn = self
             .db

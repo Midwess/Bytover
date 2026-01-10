@@ -33,7 +33,7 @@ export default function Introduction({
                     {/* Logo */}
                     <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20 backdrop-blur-sm">
                         <Image
-                            src={getAssetUrl("/logo-color.svg")}
+                            src={getAssetUrl("/logo.png")}
                             alt="Bytover"
                             width={20}
                             height={20}

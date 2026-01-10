@@ -33,6 +33,24 @@ use std::collections::HashMap;
 pub const MAX_CONCURRENT_P2P_SESSIONS: usize = 5;
 
 impl AppCommand {
+    pub fn maybe_auto_view_p2p_session(&self, sessions: &[TransferSession]) -> Option<TransferEvent> {
+        let p2p_receive_sessions: Vec<_> = sessions
+            .iter()
+            .filter(|s| matches!(s.transfer_type, TransferType::Receive) && s.target.is_peer())
+            .collect();
+
+        if p2p_receive_sessions.len() == 1 {
+            let session = p2p_receive_sessions[0];
+            Some(TransferEvent::ViewSession {
+                password: session.password.clone(),
+                session_id: session.order_id,
+                transfer_type: TransferType::Receive
+            })
+        } else {
+            None
+        }
+    }
+
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
         let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
 
@@ -40,6 +58,10 @@ impl AppCommand {
             if let TransferTarget::P2P { ref scope, .. } = session.target {
                 self.update_model(P2PEvent::AddFindingScope(scope.clone()));
             }
+        }
+
+        if let Some(auto_view_event) = self.maybe_auto_view_p2p_session(&receive_sessions) {
+            self.update_model(auto_view_event);
         }
 
         let events = receive_sessions
@@ -189,7 +211,23 @@ impl AppCommand {
             self.update_model(P2PEvent::AddFindingScope(scope.clone()));
         }
 
+        let should_auto_view = session.target.is_peer() && matches!(session.transfer_type, TransferType::Receive);
+        let auto_view_event = if should_auto_view {
+            Some(TransferEvent::ViewSession {
+                password: session.password.clone(),
+                session_id: session.order_id,
+                transfer_type: TransferType::Receive
+            })
+        } else {
+            None
+        };
+
         self.update_model(TransferSessionModelEvent::Add(session));
+
+        if let Some(event) = auto_view_event {
+            self.update_model(event);
+        }
+
         Ok(())
     }
 

@@ -20,13 +20,12 @@ import {
     Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import BPromise from 'bluebird'
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/animate-ui/radix/collapsible';
-import {ReactElement, useCallback, useEffect, useRef, useState} from "react";
+import {ReactElement, useCallback, useEffect, useState} from "react";
 import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
@@ -63,7 +62,7 @@ export default function ReceiveBoard() {
                     <SidebarContentWrapper />
                     <SidebarRail />
                 </Sidebar>
-                <SidebarInset className="flex flex-col h-[100%] min-h-0">
+                <SidebarInset className="flex flex-col h-[100%] min-h-0 gap-2">
                     <header className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-2 w-full">
                             <SidebarTrigger className="-ml-1" />
@@ -295,6 +294,7 @@ function ContentBoard() {
     return (
         <div className="w-full h-full flex flex-col gap-4 pb-4">
             <Collapsible
+                defaultOpen={true}
                 className={`w-full ${images.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
                     title={`${images.length} Image${images.length !== 1 ? 's' : ''}`}/>
@@ -313,6 +313,7 @@ function ContentBoard() {
                 </CollapsibleContent>
             </Collapsible>
             <Collapsible
+                defaultOpen={true}
                 className={`w-full ${videos.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
                     title={`${videos.length} Video${videos.length !== 1 ? 's' : ''}`}/>
@@ -331,6 +332,7 @@ function ContentBoard() {
                 </CollapsibleContent>
             </Collapsible>
             <Collapsible
+                defaultOpen={true}
                 className={`w-full h-fit ${files.length ? 'visible' : 'hidden'}`}>
                 <ReceiveCategory
                     title={`${files.length} File${files.length !== 1 ? 's' : ''}`}/>
@@ -377,9 +379,6 @@ function FindSessionSection() {
     const [url, setUrl] = useUrlState(['session'])
     const message = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
     const [keywords, setKeywords] = useState<string>(url.session || '')
-    const publicSessions = core.useCloudSessionsList()
-    const selectedId = useRef<string | null>(null)
-    const p2pSessions = core.useNearbySessionsList()
 
     useEffect(() => {
         if (url.session) {
@@ -397,21 +396,6 @@ function FindSessionSection() {
         message?.resolveMessage()
         core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(searchTerms || '')))
     }, [keywords, message, setUrl])
-
-    useEffect(() => {
-        const all = [...publicSessions, ...p2pSessions]
-        if (all.length === 1) {
-            const selected = all[0]
-            if (selectedId.current === selected.id) {
-                return
-            }
-
-            selectedId.current = selected.id
-            BPromise.delay(100).then(() => {
-                core.update(new AppEventVariantTransfer(new TransferEventVariantViewSession(null, BigInt(selected.id), new TransferTypeVariantReceive())))
-            })
-        }
-    }, [publicSessions?.length, p2pSessions?.length]);
 
     return (
         <div className={"flex flex-col justify-start text-primaryText gap-3"}>
@@ -762,7 +746,7 @@ function MediaView(props: {
                     <p className="text-sm font-medium truncate text-foreground">
                         {model.name}
                     </p>
-                    <div className="flex flex-col items-center gap-2 mt-0.5">
+                    <div className="flex flex-col md:items-center gap-2 mt-0.5">
                         <p className="text-xs text-muted-foreground">
                             {displaySize}
                         </p>
