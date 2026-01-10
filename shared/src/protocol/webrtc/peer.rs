@@ -378,7 +378,7 @@ impl WebRtcPeer {
             let (packet, feedback) = {
                 if hold_counter >= ON_HOLD_STOP_THRESHOLD {
                     log::debug!("Stopped {}", fec_sender.block_id);
-                    let timeout_fut = sleep(Duration::from_secs(60 * 10)).fuse();
+                    let timeout_fut = sleep(Duration::from_secs(60 * 100)).fuse();
                     let fb_fut = feedback_receiver.next().fuse();
 
                     futures::pin_mut!(timeout_fut);
@@ -522,7 +522,7 @@ impl WebRtcPeer {
 
         let request = ViewSessionDetailRequest { order_id, password };
 
-        let timeout_token = CancellationToken::timeout(Duration::from_secs(6));
+        let timeout_token = CancellationToken::timeout(Duration::from_secs(60));
 
         let response_result = self
             .msg_channel

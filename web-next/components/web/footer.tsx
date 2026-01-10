@@ -22,7 +22,7 @@ export default function Footer(props: {className?: string | undefined} = { class
                             <Image
                                 width={40}
                                 height={40}
-                                src="/logo.svg"
+                                src="/logo.png"
                                 alt="Bytover Logo"
                                 className="rounded-lg aspect-square w-10 h-10"
                             />

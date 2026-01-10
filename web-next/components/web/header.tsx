@@ -78,7 +78,7 @@ export default function Header({ className }: { className?: string }) {
                             <Image
                                 width={35}
                                 height={35}
-                                src="logo.svg"
+                                src="/logo.png"
                                 alt="Logo"
                                 className="rounded-lg aspect-square w-10 h-10 md:w-[45px] md:h-[45px]"
                             />

@@ -103,7 +103,7 @@ function Intro() {
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant={"ghost"} className={"px-2"}>
-                            <Settings size={15} className={"text-muted-foreground"}/>
+                            <LogOut size={15} className={"text-muted-foreground"}/>
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36 dark items-center justify-center">

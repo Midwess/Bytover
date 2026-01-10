@@ -71,12 +71,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .decorations(false)
                     .transparent(true)
                     .always_on_top(true)
-                    .skip_taskbar(false)
+                    .skip_taskbar(true)
                     .resizable(false)
                     .shadow(true)
                     .devtools(true)
                     .build()
-                    .expect("failed to create auth window");
+                    .expect("failed to create receive window");
 
                 let _ = window.set_effects(
                     EffectsBuilder::new()
@@ -130,7 +130,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .transparent(true)
                     .visible_on_all_workspaces(true)
                     .always_on_top(true)
-                    .skip_taskbar(false)
+                    .skip_taskbar(true)
                     .shadow(false)
                     .devtools(true)
                     .build()
@@ -160,7 +160,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .transparent(true)
                     .visible_on_all_workspaces(true)
                     .always_on_top(true)
-                    .skip_taskbar(false)
+                    .skip_taskbar(true)
                     .shadow(false)
                     .devtools(true)
                     .build()

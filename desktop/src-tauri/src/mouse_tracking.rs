@@ -36,7 +36,7 @@ pub fn detect_drag(start: &PhysicalPosition<f64>, current: &PhysicalPosition<f64
         use windows::Win32::UI::Input::Mouse::DragDetect;
         use windows::Win32::Foundation::{HWND, POINT};
 
-        let pt = POINT { x: start.x, y: start.y };
+        let pt = POINT { x: start.x as i32, y: start.y as i32 };
         return unsafe { DragDetect(HWND(0), pt).as_bool() };
     }
 

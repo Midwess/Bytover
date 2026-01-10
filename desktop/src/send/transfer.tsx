@@ -38,7 +38,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                 <Tabs defaultValue="p2p" className="w-full items-start flex flex-col h-full">
                     <TabsList className={"ml-2 border-2 shadow-background shadow-sm flex-shrink-0"}>
                         <TabsTab value="p2p"><Users/> P2P</TabsTab>
-                        <TabsTab value="public"><Globe/>Link</TabsTab>
+                        <TabsTab value="public"><Globe/>Cloud</TabsTab>
                     </TabsList>
                     <div
                         className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -68,9 +68,9 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
 
     useEffect(() => {
         if (p2pSession?.password) {
-            setPassword(p2pSession?.password || password)
+            setPassword(p2pSession.password)
         }
-    }, [p2pSession?.password, password])
+    }, [p2pSession?.password])
 
     const handleStartTransfer = () => {
         if (!shelfId) return
@@ -176,6 +176,11 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     console.log('cloud', progress)
 
     return <>
+        <Card shadowSize={0} className="flex flex-col gap-2 p-2 bg-card/50">
+            <p className="text-xs text-muted-foreground">
+                Create a sharable link. Files are stored for 7 days.
+            </p>
+        </Card>
         <Card shadowSize={0} className="flex flex-col gap-2 p-1">
             <div className="grid gap-3">
                 <PasswordInput className={"bg-secondary shadow-background"}
