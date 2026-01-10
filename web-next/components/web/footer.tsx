@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {cn} from "@/lib/utils.ts";
 
-export default function Footer(props: {className: string | undefined}) {
+export default function Footer(props: {className?: string | undefined} = { className: '' }) {
     const scrollToSection = (href: string) => {
         const element = document.querySelector(href);
         if (element) {
