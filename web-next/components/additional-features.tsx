@@ -109,7 +109,7 @@ export function AdditionalFeatures() {
                                         aria-expanded={isExpanded}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <Icon className="w-6 h-6 text-bluePrimary bg-bluePrimary/30 p-1 rounded-sm flex-shrink-0" />
+                                            <Icon className="w-6 h-6 text-bluePrimary bg-bluePrimary/10 p-1 rounded-sm flex-shrink-0" />
                                             <h3 className="text-sm md:text-base font-semibold text-primaryText flex-1">
                                                 {feature.title}
                                             </h3>
