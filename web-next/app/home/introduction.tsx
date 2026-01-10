@@ -47,7 +47,7 @@ export default function Introduction({
                     </h1>
 
                     {/* Description */}
-                    <p className="text-lg md:text-xl text-foreground/60 max-w-md">
+                    <p className="text-sm md:text-lg text-muted-foreground max-w-md">
                         No upload required. Share directly between you and your friends.
                     </p>
 

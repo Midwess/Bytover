@@ -33,7 +33,7 @@ export function JoinWaitList() {
   };
 
   return (
-    <section className="relative flex h-[50vh] md:h-[60vh] lg:h-[70vh] w-screen items-center justify-center overflow-hidden py-16 container">
+    <section className="relative flex w-full items-center justify-center overflow-hidden py-16">
       <AnimatePresence mode="wait">
         {!isSubmitted ? (
           <motion.div
