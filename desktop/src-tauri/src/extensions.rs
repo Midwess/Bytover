@@ -40,7 +40,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("auth.html".into())
                 )
                     .title("auth")
-                    .inner_size(270.0, 420.0)
+                    .inner_size(240.0, 390.0)
                     .decorations(false)
                     .transparent(true)
                     .focused(true)
