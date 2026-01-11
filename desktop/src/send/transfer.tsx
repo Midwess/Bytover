@@ -173,10 +173,9 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const cloudSession = core.useCloudSessionForShelf(shelfId)
     const progress = (cloudSession?.progress ?? 0) * 100
-    console.log('cloud', progress)
 
     return <>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-2 bg-card/50">
+        <Card shadowSize={0} className="flex flex-col gap-2 p-2 rounded-xl">
             <p className="text-xs text-muted-foreground">
                 Create a sharable link. Files are stored for 7 days.
             </p>
@@ -193,11 +192,11 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
         </Card>
         {
             cloudSession?.access_url &&
-            <Card shadowSize={0} className="flex flex-col gap-2 p-1">
+            <Card shadowSize={0} className="flex flex-col gap-2 p-1 h-12">
                 <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-1 items-center">
+        <Card className="flex flex-row gap-2 p-1 items-center px-2">
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
@@ -213,12 +212,12 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                         if (!shelfId) return
                         invoke("public_transfer", { shelfId, password: pwd }).then(noop)
                     }}
-                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Send</Button>
+                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Share</Button>
                 )
             }
             {
                 !!cloudSession?.progress && (
-                    <div className="flex flex-col w-full gap-2 pb-2">
+                    <div className="flex flex-col w-full gap-2 pb-2 flex-1/2">
                         <div className="flex items-center justify-between gap-1">
                             <span className="text-sm">
                                 {cloudSession?.display_download_speed}
@@ -241,7 +240,7 @@ function UrlInputWithCopy({url}: { url: string }) {
         try {
             await navigator.clipboard.writeText(url)
             setIsCopied(true)
-            setTimeout(() => setIsCopied(false), 2000) // Reset after 2 seconds
+            setTimeout(() => setIsCopied(false), 2000)
         } catch (err) {
             console.error('Failed to copy text: ', err)
         }

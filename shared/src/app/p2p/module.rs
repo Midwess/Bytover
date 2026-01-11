@@ -184,6 +184,11 @@ impl AppModule<BitBridge> for P2PModule {
                             (Some(oid), None) => {
                                 if let Some(peer) = model.p2p.peers.iter().find(|p| p.id == *oid) {
                                     session.owner_connected(peer.clone());
+                                    return Command::event(AppEvent::Transfer(TransferEvent::RequestSessionDetail {
+                                        peer_id: oid.to_string(),
+                                        order_id: session.order_id,
+                                        password: None
+                                    })).then(Command::render());
                                 }
                             }
                             (None, Some(_)) => {
@@ -193,6 +198,11 @@ impl AppModule<BitBridge> for P2PModule {
                                 session.owner_disconnected();
                                 if let Some(peer) = model.p2p.peers.iter().find(|p| p.id == *new_oid) {
                                     session.owner_connected(peer.clone());
+                                    return Command::event(AppEvent::Transfer(TransferEvent::RequestSessionDetail {
+                                        peer_id: new_oid.to_string(),
+                                        order_id: session.order_id,
+                                        password: None
+                                    })).then(Command::render());
                                 }
                             }
                             _ => {}

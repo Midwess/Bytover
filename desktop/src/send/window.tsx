@@ -19,7 +19,6 @@ function Window() {
     useOverlayScrollbars()
     const window = getCurrentWindow()
     const [isExpanded, setIsExpanded] = useState(false)
-    const [showAnimation, setShowAnimation] = useState(false)
     const [shelfId, setShelfId] = useState<string | undefined>(undefined)
     const shelfInitializedRef = useRef(false)
 
@@ -33,30 +32,8 @@ function Window() {
             invoke("get_or_create_shelf", { shelfId: id })
                 .then(() => console.log('get_or_create_shelf success'))
                 .catch((err) => console.error('get_or_create_shelf error:', err))
-
-            // Trigger popup animation on mount
-            setTimeout(() => {
-                setShowAnimation(true)
-                setTimeout(() => setShowAnimation(false), 300)
-            }, 50)
         }
     }, [label]);
-
-    useEffect(() => {
-        let unlistenShow: () => void;
-
-        window.listen("window-shown", () => {
-            setIsExpanded(false)
-            setTimeout(() => {
-                setShowAnimation(true)
-                setTimeout(() => setShowAnimation(false), 300)
-            }, 50)
-        }).then(unlisten => { unlistenShow = unlisten });
-
-        return () => {
-            if (unlistenShow) unlistenShow();
-        };
-    }, [window]);
 
     useEffect(() => {
         core.launch()
@@ -68,8 +45,8 @@ function Window() {
     }, [isExpanded, window])
 
     return (
-        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300 ${showAnimation ? 'animate-popup' : ''}`}>
-            <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0"}>
+        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300`}>
+            <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup"}>
                 <div className={`h-[220px] bg-transparent relative min-w-[195px] w-[190px]`}>
                    <Shelf shelfId={shelfId} />
                    <Button

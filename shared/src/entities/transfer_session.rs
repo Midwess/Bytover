@@ -307,12 +307,14 @@ impl TransferSession {
     pub fn owner_connected(&mut self, peer: Peer) {
         if let TransferTarget::P2P {
             from_peer,
+            scope,
             connection_state,
             ..
         } = &mut self.target
         {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
+            scope.update_state(ScopeState::Online);
         }
 
         self.connection_error = None;

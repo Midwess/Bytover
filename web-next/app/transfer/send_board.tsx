@@ -30,13 +30,11 @@ import {
     SelectedResourceViewModel,
     TransferEventVariantStartPublicTransfer,
     TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    TransferEventVariantStartP2PTransfer,
     ResourceTypeVariantFolder,
     ShelfEventVariantAddResources,
     AppEventVariantShelf,
     ShelfEventVariantRemoveResource
 } from 'shared_types/types/shared_types'
-import {Avatar, AvatarImage} from "@/components/ui/avatar";
 import {useFileUpload} from "@/hooks/use-file-upload";
 import {useEffect, useRef, useState} from "react";
 import core from "@/wasm/wasm_core";
@@ -57,6 +55,7 @@ import {
     useSidebar,
 } from '@/components/animate-ui/components/radix/sidebar';
 import {Separator} from '@/components/ui/separator';
+import {Card} from "@/components/ui/card.tsx";
 
 enum TransferType {
     Public,
@@ -65,14 +64,14 @@ enum TransferType {
 
 const activeMethods = [
     {
+        name: 'Cloud',
+        icon: Globe,
+        type: TransferType.Public
+    },
+    {
         name: 'P2P',
         icon: Users,
         type: TransferType.People
-    },
-    {
-        name: 'Public',
-        icon: Globe,
-        type: TransferType.Public
     },
 ]
 
@@ -636,7 +635,7 @@ function TransferForm({activeMethod}: { activeMethod: typeof activeMethods[0] })
         : <P2PSend/>
 
     return (
-        <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit"}>
+        <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit h-full items-start justify-start"}>
             {content}
         </div>
     )
@@ -667,11 +666,10 @@ function PublicSend() {
         }
     }, [cloudSession?.is_in_progress])
 
-    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-center mt-1"}>
-        <div className={"flex flex-col w-full gap-3"}>
+    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-between mt-1"}>
+        <div className={"flex flex-col w-full gap-3 justify-between h-fit"}>
             <p className="text-start w-full text-primaryText/70 text-sm">
-                Create a sharable URL or send files directly to email addresses. Files are stored for 7 days. Optionally
-                protect with a password.
+                Create a shareable link or send files by email. Stored for 7 days, with optional password protection.
             </p>
 
             <div className={"flex flex-col w-full gap-3"}>
@@ -736,6 +734,19 @@ function PublicSend() {
                 }
             </div>
         </div>
+        <div className="w-full h-fit mb-4">
+            <div className="bg-card flex flex-col gap-2 px-2 items-center text-center">
+                <p className="text-sm text-primaryText/80">
+                    2× faster. No upload. Instant URL generation.
+                </p>
+                <Link
+                    href="#desktop"
+                    className="text-blue-300 text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                >
+                    Download Desktop App
+                </Link>
+            </div>
+        </div>
     </div>
 }
 
@@ -762,177 +773,66 @@ function UrlInputWithCopy({url}: { url: string }) {
     return (
         <TooltipProvider>
             <div className="relative animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div
-                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-bluePrimary via-greenSecondary to-bluePrimary opacity-60 animate-pulse"
-                    style={{animationDuration: '4s', padding: '1px'}}
-                />
-                <div className="relative z-10 m-[1px]">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Input
-                                ref={inputRef}
-                                value={url}
-                                disabled={true}
-                                className="pr-12 cursor-default bg-slate-900 text-white border-0 rounded-[5px]"
-                            />
-                        </TooltipTrigger>
-                        <TooltipContent
-                            side="top"
-                            className="max-w-xs break-all"
-                        >
-                            {url}
-                        </TooltipContent>
-                    </Tooltip>
-                    <button
-                        onClick={handleCopy}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        title={isCopied ? "Copied!" : "Copy to clipboard"}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Input
+                            ref={inputRef}
+                            value={url}
+                            disabled={true}
+                            className="pr-12 cursor-default bg-slate-900 text-white border-3 border-indigo-400 rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                        />
+                    </TooltipTrigger>
+                    <TooltipContent
+                        side="top"
+                        className="max-w-xs break-all"
                     >
-                        {isCopied ? (
-                            <Check className="h-4 w-4 text-green-500"/>
-                        ) : (
-                            <Copy className="h-4 w-4 text-white/80 hover:text-white"/>
-                        )}
-                    </button>
-                </div>
+                        {url}
+                    </TooltipContent>
+                </Tooltip>
+                <button
+                    onClick={handleCopy}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    title={isCopied ? "Copied!" : "Copy to clipboard"}
+                >
+                    {isCopied ? (
+                        <Check className="h-4 w-4 text-green-500"/>
+                    ) : (
+                        <Copy className="h-4 w-4 text-white/80 hover:text-white"/>
+                    )}
+                </button>
             </div>
         </TooltipProvider>
     )
 }
 
 function P2PSend() {
-    const defaultShelfId = core.useDefaultShelfId()
-    const p2pSession = core.useP2PSession(defaultShelfId)
-    const [password, setPassword] = useState(p2pSession?.password || '')
-    const isInProgress = p2pSession?.is_in_progress ?? false
-
-    useEffect(() => {
-        if (p2pSession?.password) {
-            setPassword(p2pSession.password)
-        }
-    }, [p2pSession?.password])
-
-    const handleStartTransfer = () => {
-        if (!defaultShelfId) return
-        const pwd = password || null
-        core.update(new AppEventVariantTransfer(new TransferEventVariantStartP2PTransfer(BigInt(defaultShelfId), false, pwd)))
-        setPassword('')
-    }
-
-    const handleStopTransfer = () => {
-        if (p2pSession?.session_id) {
-            core.update(new AppEventVariantTransfer(
-                new TransferEventVariantCancelTransfer(
-                    BigInt(p2pSession.session_id),
-                    new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
-                )
-            ))
-        }
-    }
-
-    return <>
-        <div className="flex flex-col w-full h-full gap-3 h-full justify-between">
-            <div className={"flex flex-col w-full gap-3 h-fit"}>
-                <p className="text-start w-full text-primaryText/70 text-sm pb-1">
-                    Share instantly via link - no upload needed
-                </p>
-                <MyPeerInfo/>
-                <div className="flex flex-col w-full gap-3">
-                    <Label htmlFor="password">Password (optional)</Label>
-                    <Input
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        type="password"
-                        maxLength={20}
-                        placeholder="pwd@123"
-                        disabled={isInProgress}
-                    />
-                    {
-                        p2pSession?.access_url &&
-                        <>
-                            <Label>Generated url</Label>
-                            <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
-                        </>
-                    }
-                    {isInProgress ? (
-                        <Button
-                            className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary"
-                            onClick={handleStopTransfer}
-                        >
-                            Cancel
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-fit h-[35px] bg-bluePrimary text-primary"
-                            onClick={handleStartTransfer}
-                        >
-                            Share
-                        </Button>
-                    )}
-                </div>
-            </div>
-            <div className={"flex-1 flex items-end"}>
-                <div className="w-full p-[2px] rounded-xl bg-gradient-to-r from-bluePrimary via-greenSecondary to-bluePrimary shadow-lg">
-                    <div className="p-4 bg-white/95 rounded-[10px] flex flex-col gap-3">
-                        <p className="text-sm text-gray-700">
-                            Keep this tab active for transfers to work.
-                        </p>
-                        <Link
-                            href="/#desktop"
-                            className="w-fit px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-bluePrimary to-greenSecondary rounded-lg hover:opacity-90 transition-opacity"
-                        >
-                            Download Desktop App
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </>
-}
-
-function MyPeerInfo() {
-    const myPeer = core.useMyPeer()
-
-    if (!myPeer) {
-        return (
-            <div className="w-full mb-6">
-                <div className="relative overflow-hidden rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center justify-center gap-3 py-2">
-                        <div
-                            className="h-4 w-4 animate-spin rounded-full border-1 border-white/20 border-t-white"></div>
-                        <span className="text-sm font-medium text-muted-foreground animate-pulse">Initializing...</span>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    const color = `rgb(${myPeer.avatar.dominant_color_r}, ${myPeer.avatar.dominant_color_g}, ${myPeer.avatar.dominant_color_b})`
-
     return (
-        <div className="flex flex-col w-full gap-3">
-            <div className="flex flex-row rounded-2xl items-center w-full">
-                <div className="flex flex-row items-center gap-5 justify-between flex-1 rounded-xl">
-                    <div className="flex flex-col gap-[0.5] items-start">
-                        <p className="text-start w-full text-primaryText/70 text-xs">
-                            You&apos;re online as
-                        </p>
-                        <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
-                    </div>
-                    <div
-                        className="relative aspect-square justify-center items-center text-primaryText flex h-[40px] w-[40px] border-greenSecondary p-3 border-1 rounded-2xl">
-                        <Avatar className="p-1 rounded-xl" style={{backgroundColor: color}}>
-                            <AvatarImage src={myPeer.avatar.url}/>
-                        </Avatar>
-                        {/* Online status indicator */}
-                        <div
-                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-greenSecondary rounded-full border-1 border-background"/>
+        <div className="flex flex-col w-full h-full gap-6 justify-center items-center">
+            <div className="flex flex-col gap-4 text-center">
+                <div className="flex justify-center">
+                    <div className="p-4 rounded-full bg-bluePrimary/10">
+                        <Users className="w-8 h-8 text-bluePrimary"/>
                     </div>
                 </div>
+                <h3 className="text-lg font-semibold text-primaryText">
+                    P2P Transfer
+                </h3>
+                <p className="text-sm text-primaryText/70 max-w-[280px]">
+                    Transfer files directly without uploading to any cloud. Fast, private, and secure.
+                </p>
             </div>
-
-            <div className="flex items-center justify-between py-2 border-t border-white/10">
+            <div className="w-full rounded-xl shadow-lg">
+                <Card className="p-3 bg-card rounded-[10px] flex flex-col gap-4 items-center text-center">
+                    <p className="text-sm text-primaryText/80">
+                        P2P transfer is currently available on Desktop only.
+                    </p>
+                    <Link
+                        href="#desktop"
+                        className="py-2 w-full items-center bg-bluePrimary text-sm font-medium text-white rounded-lg hover:opacity-90 transition-opacity text-center"
+                    >
+                        Download Desktop App
+                    </Link>
+                </Card>
             </div>
         </div>
     )

@@ -154,6 +154,9 @@ export default function TransferBoard() {
                                         <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
                                             End-to-end encrypted
                                         </span>
+                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
+                                            P-to-P data transfer
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -207,7 +210,7 @@ export default function TransferBoard() {
                     </div>
 
                 <GridSectionWrapper>
-                    <div className={"pt-8"}>
+                    <div id={"desktop"} className={"pt-8"}>
                         <DesktopSection />
                     </div>
                 </GridSectionWrapper>

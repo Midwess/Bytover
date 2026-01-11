@@ -69,8 +69,8 @@ impl CoreCommandUtils for AppCommand {
             if let Err(e) = result {
                 log::info!("{e:?}");
                 let mut display_msg = e.to_string();
-                if display_msg.len() > 50 {
-                    display_msg.truncate(50);
+                if display_msg.len() > 100 {
+                    display_msg.truncate(100);
                     display_msg.push_str("...");
                 }
 

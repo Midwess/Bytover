@@ -3,6 +3,8 @@ use crate::file_system::path_extension::WebExtLocalResourcePath;
 use crate::web_worker::bridge::WorkerMessage;
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput};
 use anyhow::{anyhow, Result};
+use futures_timer::Delay;
+use std::time::Duration;
 use bytes::BytesMut;
 use core_services::local_storage::stream::IOCursor;
 use core_services::wasm::{Body, HttpClient, XhrEvent};
@@ -20,7 +22,8 @@ use std::sync::Arc;
 use tonic_web_wasm_client::Client;
 use web_sys::Blob;
 
-const EVENT_QUEUE_SIZE: usize = 8;
+const EVENT_QUEUE_SIZE: usize = 16;
+const MAX_UPLOAD_SPEED_BYTES_PER_SEC: u64 = 5 * 1024 * 1024;
 
 pub struct NetStreamImpl {
     pub resource_repo: Arc<dyn LocalResourceRepository>,
@@ -182,8 +185,16 @@ async fn upload_multipart_blob(
 
     let mut uploaded = 0u64;
     let total_size = blob.size() as u64;
+    let start_time = js_sys::Date::now();
 
     while uploaded < total_size {
+        let expected_time_ms = (uploaded * 1000) / MAX_UPLOAD_SPEED_BYTES_PER_SEC;
+        let elapsed_ms = (js_sys::Date::now() - start_time) as u64;
+        if elapsed_ms < expected_time_ms {
+            let delay_ms = expected_time_ms - elapsed_ms;
+            Delay::new(Duration::from_millis(delay_ms)).await;
+        }
+
         let chunk_size = (total_size - uploaded).min(request.x_content_length as u64);
         let end_position = uploaded + chunk_size;
 
@@ -221,21 +232,27 @@ async fn upload_multipart_stream(
 
     let mut bytes = BytesMut::with_capacity(request.x_content_length as usize);
     let mut pending_upload: Option<JoinHandle<Result<Option<String>>>> = None;
+    let start_time = js_sys::Date::now();
 
     loop {
+        let expected_time_ms = (uploaded * 1000) / MAX_UPLOAD_SPEED_BYTES_PER_SEC;
+        let elapsed_ms = (js_sys::Date::now() - start_time) as u64;
+        if elapsed_ms < expected_time_ms {
+            let delay_ms = expected_time_ms - elapsed_ms;
+            Delay::new(Duration::from_millis(delay_ms)).await;
+        }
+
         bytes.resize(request.x_content_length as usize, 0);
         let content_length = cursor.read_exact(&mut bytes).await?;
         if content_length == 0 {
             break;
         }
 
-        // Wait for previous upload to complete
         if let Some(fut) = pending_upload.take() {
             let etag = fut.await.unwrap()?.ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
             completion.e_tags.push(etag);
         }
 
-        // Start new upload
         let upload_data = bytes[..content_length].to_vec();
         pending_upload = Some({
             let url = request.upload_url.clone();
@@ -251,7 +268,6 @@ async fn upload_multipart_stream(
         request = next_request;
     }
 
-    // Wait for final upload
     if let Some(fut) = pending_upload {
         let etag = fut.await.unwrap()?.ok_or_else(|| anyhow!("Failed to upload chunk, missing etag"))?;
         completion.e_tags.push(etag);

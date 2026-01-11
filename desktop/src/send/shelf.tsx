@@ -68,9 +68,9 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             {/* Close button - rotated rectangle with X at center-left, visible on header hover */}
             <button
                 onClick={handleClose}
-                className="absolute -top-0 -right-6 w-18 h-7 bg-destructive/35 rounded-xl z-100 rotate-45 flex items-center justify-start pl-6 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100"
+                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-amber-500/50 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
             >
-                <span className="w-3.5 h-3.5 scale-y-80 text-lg font-bold text-destructive -rotate-45">x</span>
+                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-amber-200 -rotate-45">-</Minus>
             </button>
             {children}
         </Card>
@@ -95,7 +95,6 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         const setup = async () => {
             unlisten = await window.onDragDropEvent(throttle(({payload}) => {
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
-                console.log(eventPosition)
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
                     if (isLeftSide) {
@@ -180,8 +179,8 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                                 Clear all
                             </p>
                         </div>
-                        <X
-                            className="h-6 w-6 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out group-hover:rotate-95 bg-muted/90 rounded-full"/>
+                        <Trash2
+                            className="h-6 w-6 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out bg-muted/90 rounded-full"/>
                     </Button>
                 }
             </div>
