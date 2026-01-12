@@ -12,7 +12,7 @@ import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progre
 export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const [emails, setEmails] = useState<string[]>([]);
-    const cloudSession = core.useCloudSessionForShelf(shelfId)
+    const cloudSession = core.useCloudSessionForShelf(shelfId, true)
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleEmailTransfer = () => {
@@ -25,25 +25,25 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     }
 
     return <>
-        <Card shadowSize={0} className="flex flex-col p-1 w-[200px]">
+        <Card shadowSize={0} className="flex flex-col p-1 w-full">
             <MultiEmailInput
                 onEmailsChange={(emails) => {
                     setEmails(emails)
                 }}
                 placeholder="Enter recipient emails"
-                className="min-h-11 bg-secondary shadow-background max-h-[90px] overflow-y-auto"
-                disabled={cloudSession?.is_in_progress ?? false}
+                className="min-h-9 bg-secondary shadow-background max-h-[90px] overflow-y-auto"
+                disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
         <Card shadowSize={0} className="flex flex-col p-1">
             <PasswordInput
-                className={"h-11 bg-secondary shadow-background"}
+                className={"h-9 bg-secondary shadow-background"}
                 value={pwd}
                 onChange={(e) => {
                     setPwd(e.target.value)
                 }}
                 placeholder={"Password (Optional)"}
-                disabled={cloudSession?.is_in_progress ?? false}
+                disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
         <Card className="flex flex-row gap-2 p-1 items-center">

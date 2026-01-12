@@ -30,10 +30,20 @@ pub struct TransferModel {
 }
 
 impl TransferModel {
-    pub fn has_active_send_session(&self) -> bool {
+    pub fn has_active_send_session(&self, shelf_id: u64) -> bool {
         self.sessions
             .iter()
-            .any(|s| matches!(s.transfer_type, TransferType::Send { .. }) && !s.is_completed())
+            .any(|s| {
+                if s.is_completed() {
+                    return false
+                }
+
+                if let TransferType::Send { from_shelf_id } = &s.transfer_type {
+                    return from_shelf_id == &shelf_id;
+                }
+
+                return false;
+            })
     }
 
     pub fn get_active_p2p_send_session(&self, shelf_id: u64) -> Option<&TransferSession> {
@@ -57,7 +67,6 @@ pub struct TransferViewModel {
     cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
     selected_session: Option<ReceiveSessionViewModel>,
-    pub is_resource_remove_allowed: bool,
     pub total_p2p_receive_progress: Option<f64>
 }
 
@@ -208,6 +217,7 @@ impl AppModule<BitBridge> for TransferModule {
                     order_id: Some(session_id.to_string()),
                     ..Default::default()
                 };
+
                 let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
                     return Command::done();
                 };
@@ -439,15 +449,19 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(session) = model.transfer.sessions.lookup(&session_id).cloned() else {
+                let Some(mut session) = model.transfer.sessions.lookup(&session_id) else {
                     log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
 
                 model.transfer.selected_receive_session_id = Some(session.order_id);
 
+                if session.target.is_connection_failed() {
+                    session.owner_disconnected();
+                }
+
                 Command::handle_result(move |it| async move {
-                    it.app().view_session(session, session_id, password).await
+                    it.app().view_session(session.cloned(), session_id, password).await
                 })
                 .then_render()
             }
@@ -845,7 +859,7 @@ impl AppModule<BitBridge> for TransferModule {
                 .filter(|it| matches!(it.transfer_type, TransferType::Send { .. }))
                 .filter(|it| it.target.is_public())
                 .filter_map(|it| match &it.target {
-                    TransferTarget::Internet { .. } => {
+                    TransferTarget::Internet { to_emails } => {
                         let access_url = if !it.access_url.is_empty() {
                             Some(it.access_url.clone())
                         } else {
@@ -856,12 +870,14 @@ impl AppModule<BitBridge> for TransferModule {
                             TransferType::Send { from_shelf_id } => Some(from_shelf_id.to_string()),
                             _ => None
                         };
+
                         Some(CloudSession {
                             shelf_id,
                             display_download_speed: match access_url.is_none() {
                                 true => "Initializing...".to_owned(),
                                 false => status.to_string()
                             },
+                            is_email: !to_emails.is_empty(),
                             password: it.password.clone(),
                             session_id: it.order_id.to_string(),
                             is_completed: it.is_completed(),
@@ -893,6 +909,7 @@ impl AppModule<BitBridge> for TransferModule {
                     Some(CloudSession {
                         shelf_id,
                         display_download_speed: status.to_string(),
+                        is_email: false,
                         password: it.password.clone(),
                         session_id: it.order_id.to_string(),
                         is_completed: it.is_completed(),
@@ -902,7 +919,6 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            is_resource_remove_allowed: !model.transfer.has_active_send_session(),
             total_p2p_receive_progress
         }
     }

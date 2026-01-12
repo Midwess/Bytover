@@ -279,7 +279,7 @@
 
     60% {
         opacity: 1;
-        transform: scale(1.05) translateY(0);
+        transform: scale(1.01) translateY(0);
     }
 
     100% {

@@ -191,7 +191,9 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let mut current_mouse_position = PhysicalPosition::default();
         let mut start_mouse_position = PhysicalPosition::default();
         let mut last_shake_time = Instant::now();
-        let mut is_already_current_shown = app_handle.is_send_window_open();
+        // Track the shelf window opened during current drag gesture
+        let mut opened_shelf_label: Option<String> = None;
+
         // During the drag gesture, if the user shake the second time, we will ignored.
         let mut is_handled_shown = false;
         let _ = rdev::listen(move |event| {
@@ -199,12 +201,17 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                 EventType::ButtonPress(Button::Left) => {
                     USER_DID_DROP.store(false, Ordering::SeqCst);
                     is_handled_shown = false;
+                    opened_shelf_label = None;
                     start_mouse_position = current_mouse_position.clone();
-                    is_already_current_shown = app_handle.is_send_window_open();
-                    if is_already_current_shown || is_handled_shown {
-                        if let (Some(monitor), Some(send_monitor)) = (get_monitor_at_position(&current_mouse_position, &app_handle), app_handle.get_webview_window("send").and_then(|it| it.current_monitor().ok().flatten())) {
-                            if monitor.position() != send_monitor.position() {
-                                is_already_current_shown = false;
+                    if is_handled_shown {
+                        // Check if any visible shelf window is on the current monitor
+                        if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
+                            let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
+                                window.current_monitor().ok().flatten()
+                                    .map(|m| m.position() == current_monitor.position())
+                                    .unwrap_or(false)
+                            });
+                            if !shelf_on_same_monitor {
                                 is_handled_shown = false;
                             }
                         }
@@ -214,11 +221,15 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                 }
                 EventType::ButtonRelease(Button::Left) => {
                     sleep(Duration::from_millis(400));
-                    let is_dropped =  USER_DID_DROP.load(Ordering::SeqCst);
-                    if !is_dropped && app_handle.is_send_window_open() && !is_already_current_shown {
-                        let _ = app_handle.hide_send();
-                        return;
+                    let is_dropped = USER_DID_DROP.load(Ordering::SeqCst);
+                    if !is_dropped {
+                        if let Some(label) = opened_shelf_label.take() {
+                            if let Some(window) = app_handle.get_webview_window(&label) {
+                                let _ = window.close();
+                            }
+                        }
                     }
+                    opened_shelf_label = None;
 
                     drag_end_gesture();
                     shake_count = 0;
@@ -226,10 +237,6 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                 }
                 EventType::MouseMove { x, y } => {
                     if is_handled_shown {
-                        return;
-                    }
-
-                    if is_already_current_shown {
                         return;
                     }
 
@@ -278,6 +285,9 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             let start_pos = start_mouse_position.clone();
                             let win = app_handle.open_new_shelf_window();
 
+                            // Store the label of the opened shelf
+                            opened_shelf_label = Some(win.label().to_string());
+
                             if let Ok(window_size) = win.outer_size() {
                                 let window_physical_size: PhysicalSize<u32> = window_size.into();
 
@@ -295,6 +305,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                     let _ = win.set_position(start_pos);
                                 }
                             }
+
                             let _ = win.set_focus();
                             is_handled_shown = true;
 

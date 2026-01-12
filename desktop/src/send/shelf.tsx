@@ -83,7 +83,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const windowInfo = useWindow(window)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const currentShelf = core.useCurrentShelf(shelfId)
-    const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
+    const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -137,7 +137,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
-                    <Plus className="h-10 w-10 text-bluePrimary"/>
+                    <Plus className="h-9 w-10 text-bluePrimary"/>
                 </div>
             </div>
             {/* Resources List */}

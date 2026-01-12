@@ -211,7 +211,7 @@ impl AppCommand {
             self.update_model(P2PEvent::AddFindingScope(scope.clone()));
         }
 
-        let should_auto_view = session.target.is_peer() && matches!(session.transfer_type, TransferType::Receive);
+        let should_auto_view = matches!(session.transfer_type, TransferType::Receive);
         let auto_view_event = if should_auto_view {
             Some(TransferEvent::ViewSession {
                 password: session.password.clone(),

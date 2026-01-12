@@ -31,14 +31,14 @@ import {EmailTransfer} from "@/send/email-transfer"
 
 export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
-        <div className="flex w-full flex-col gap-6 h-full overflow-hidden">
+        <div className="flex w-[200px] flex-col gap-6 h-full overflow-hidden">
             <Slide
                 delay={240}
                 direction={"left"}
                 offset={380}
                 className="h-full flex">
-                <Tabs defaultValue="p2p" className="w-fit items-start flex flex-col h-full">
-                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm max-w-full"}>
+                <Tabs defaultValue="p2p" className="w-[200px] items-start flex flex-col h-full">
+                    <TabsList className={"ml-1 border-2 shadow-background shadow-sm w-[195px]"}>
                         <TabsTab value="p2p"><Users/> P2P</TabsTab>
                         <TabsTab value="public"><Globe/>Cloud</TabsTab>
                         <TabsTab value="email"><Mail/>Email</TabsTab>
@@ -99,7 +99,7 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         </Card>
         <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95">
             <PasswordInput
-                className={"bg-secondary shadow-background h-10"}
+                className={"bg-secondary shadow-background h-9"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 maxLength={20}
@@ -183,7 +183,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
             </p>
         </Card>
         <Card shadowSize={0} className="flex flex-col p-1">
-            <PasswordInput className={"h-10 bg-secondary shadow-background"}
+            <PasswordInput className={"h-9 bg-secondary shadow-background"}
                    value={pwd}
                    onChange={(e) => {
                        setPwd(e.target.value)
@@ -247,7 +247,7 @@ function UrlInputWithCopy({url}: { url: string }) {
     }
 
     return (
-        <div className="flex items-center w-full bg-secondary rounded-lg h-10">
+        <div className="flex items-center w-full bg-secondary rounded-lg h-9">
             <div className="w-44 px-2">
                 <UnlimitedLineText
                     text={url}

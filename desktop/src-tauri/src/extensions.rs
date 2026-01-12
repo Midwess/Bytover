@@ -12,8 +12,11 @@ pub trait AppHandleExt<R: Runtime> {
     fn open_new_shelf_window(&self) -> WebviewWindow<R>;
     fn hide_auth(&self);
     fn toggle_receive(&self);
-    fn is_send_window_open(&self) -> bool;
+    fn is_shelf_window_open(&self, id: u64) -> bool;
+    fn is_any_shelf_window_open(&self) -> bool;
+    fn get_visible_shelf_windows(&self) -> Vec<WebviewWindow<R>>;
     fn hide_send(&self);
+    fn hide_all_shelves(&self);
     fn show_toast(&self, message: &str) -> WebviewWindow<R>;
 }
 
@@ -208,13 +211,39 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
     }
 
-    fn is_send_window_open(&self) -> bool {
-        self.get_webview_window("send").map(|it| it.is_visible().unwrap_or_default()).unwrap_or_default()
+    fn is_shelf_window_open(&self, id: u64) -> bool {
+        self.get_webview_window(&format!("send-{id}")).map(|it| it.is_visible().unwrap_or_default()).unwrap_or_default()
+    }
+
+    fn is_any_shelf_window_open(&self) -> bool {
+        self.webview_windows()
+            .iter()
+            .any(|(label, window)| {
+                label.starts_with("send-") && window.is_visible().unwrap_or_default()
+            })
+    }
+
+    fn get_visible_shelf_windows(&self) -> Vec<WebviewWindow<R>> {
+        self.webview_windows()
+            .into_iter()
+            .filter(|(label, window)| {
+                label.starts_with("send-") && window.is_visible().unwrap_or_default()
+            })
+            .map(|(_, window)| window)
+            .collect()
     }
 
     fn hide_send(&self) {
         if let Some(window) = self.get_webview_window("send") {
             let _ = window.hide();
+        }
+    }
+
+    fn hide_all_shelves(&self) {
+        for (label, window) in self.webview_windows() {
+            if label.starts_with("send-") {
+                let _ = window.hide();
+            }
         }
     }
 

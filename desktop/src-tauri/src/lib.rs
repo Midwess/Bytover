@@ -435,7 +435,7 @@ pub async fn run() {
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Regular);
 
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)

@@ -175,12 +175,12 @@ export class Core {
         return session
     }
 
-    public useCloudSessionForShelf(shelfId: string | undefined) {
+    public useCloudSessionForShelf(shelfId: string | undefined, isEmail: boolean = false) {
         const [session, setSession] = useState<CloudSession | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const found = transferState?.cloud_sessions?.find(s => s.shelf_id === shelfId)
+                const found = transferState?.cloud_sessions?.find(s => s.shelf_id === shelfId && s.is_email === isEmail)
                 if (!isEqual(session, found)) {
                     setSession(found)
                 }

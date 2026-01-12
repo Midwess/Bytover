@@ -35,7 +35,8 @@ pub struct ShelfItemViewModel {
     pub name: String,
     pub description: String,
     pub is_online: bool,
-    pub resources: Vec<SelectedResourceViewModel>
+    pub is_resource_remove_allowed: bool,
+    pub resources: Vec<SelectedResourceViewModel>,
 }
 
 impl ShelfItemViewModel {
@@ -49,6 +50,7 @@ impl ShelfItemViewModel {
             name: shelf.name.clone(),
             description,
             is_online,
+            is_resource_remove_allowed: true,
             resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
         }
     }
@@ -63,7 +65,7 @@ impl From<&Shelf> for ShelfItemViewModel {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
     pub shelves: Vec<ShelfItemViewModel>,
-    pub is_loading: bool
+    pub is_loading: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -154,7 +156,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::all(commands)
             }
             Self::Event::RemoveResource { shelf_id, resource_id } => {
-                if model.transfer.has_active_send_session() {
+                if model.transfer.has_active_send_session(shelf_id) {
                     return Command::operate(DialogOperation::Toast(
                         "Cannot remove resource during active transfer.".to_owned()
                     ));
@@ -297,7 +299,9 @@ impl AppModule<BitBridge> for ShelfModule {
             .iter()
             .map(|shelf| {
                 let is_online = model.transfer.get_active_p2p_send_session(shelf.id).is_some();
-                ShelfItemViewModel::from_shelf(shelf, is_online)
+                let mut view_model = ShelfItemViewModel::from_shelf(shelf, is_online);
+                view_model.is_resource_remove_allowed = !model.transfer.has_active_send_session(shelf.id);
+                view_model
             })
             .collect();
 
@@ -305,7 +309,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
         ShelfViewModel {
             shelves,
-            is_loading: model.shelf.is_loading
+            is_loading: model.shelf.is_loading,
         }
     }
 }
