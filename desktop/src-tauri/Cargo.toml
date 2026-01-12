@@ -36,6 +36,7 @@ machine-uid.workspace = true
 file_icon_provider = "0.4.0"
 uuid.workspace = true
 tauri-plugin-deep-link = "2"
+tauri-plugin-autostart = "2"
 thiserror.workspace = true
 image.workspace = true
 tauri-plugin-drag = "2.1.0"

@@ -1,7 +1,6 @@
 import ReactDOM from "react-dom/client"
 import React, {useEffect, useState} from "react"
 import core from "@/core.ts"
-import Aurora from "@/components/aurora"
 import {motion} from "motion/react"
 import {LayoutTextFlip} from "@/components/ui/layout-text-flip.tsx";
 import {Button} from "@/components/ui/button.tsx";

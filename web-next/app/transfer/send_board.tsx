@@ -56,6 +56,7 @@ import {
 } from '@/components/animate-ui/components/radix/sidebar';
 import {Separator} from '@/components/ui/separator';
 import {Card} from "@/components/ui/card.tsx";
+import {formatFileSize} from "@/utils/format-file-size";
 
 enum TransferType {
     Public,
@@ -329,10 +330,7 @@ function FileView(props: {
         thumbnailPath = isFolder ? "/folder.svg" : "/file.svg";
     }
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     const handleRemove = async () => {
         if (!isRemoveAllowed || !shelfId) return;
@@ -452,10 +450,7 @@ function MediaView(props: {
         }
     }, []);
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     const handleRemove = () => {
         if (!isRemoveAllowed || !shelfId) return;

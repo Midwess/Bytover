@@ -40,7 +40,7 @@ function Window() {
     }, [])
 
     useEffect(() => {
-        const width = isExpanded ? 400 : 220
+        const width = isExpanded ? 410 : 220
         window.setSize(new LogicalSize(width, 260))
     }, [isExpanded, window])
 
@@ -58,7 +58,7 @@ function Window() {
                        />
                    </Button>
                 </div>
-                <div className={`w-full h-[100%] overflow-hidden bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
+                <div className={`flex-1 h-[100%] overflow-hidden bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
                     <Transfer shelfId={shelfId} key={isExpanded ? 'expanded' : 'collapsed'}/>
                 </div>
            </div>

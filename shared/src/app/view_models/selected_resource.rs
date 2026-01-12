@@ -8,6 +8,8 @@ pub struct SelectedResourceViewModel {
     pub name: String,
     pub size_gb: f64,
     pub size_mb: f64,
+    pub size_kb: f64,
+    pub size_bytes: u64,
     pub display_path: String,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
@@ -21,6 +23,8 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             name: resource.name.clone(),
             size_gb: (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0),
             size_mb: 0.0,
+            size_kb: 0.0,
+            size_bytes: 0,
             display_path: {
                 let path_string = resource.path.as_string();
                 if path_string.contains("://") {
@@ -37,6 +41,16 @@ impl From<&LocalResource> for SelectedResourceViewModel {
         if view_model.size_gb < 0.1 {
             view_model.size_gb = 0.0;
             view_model.size_mb = (format!("{:.2}", resource.size as f64 / 1024.0 / 1024.0)).parse::<f64>().unwrap_or(0.0);
+        }
+
+        if view_model.size_mb < 0.1 {
+            view_model.size_mb = 0.0;
+            view_model.size_kb = (format!("{:.2}", resource.size as f64 / 1024.0)).parse::<f64>().unwrap_or(0.0);
+        }
+
+        if view_model.size_kb < 0.1 {
+            view_model.size_kb = 0.0;
+            view_model.size_bytes = resource.size;
         }
 
         view_model

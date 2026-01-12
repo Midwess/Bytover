@@ -50,6 +50,7 @@ import {
 } from '@/components/animate-ui/components/radix/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Label } from "@/components/ui/label";
+import {formatFileSize} from "@/utils/format-file-size";
 
 export default function ReceiveBoard() {
     return (
@@ -404,6 +405,7 @@ function FindSessionSection() {
                 <div className={"relative"}>
                     <Input id="session-name" value={keywords || ''} className={"rounded-md pr-8 min-h-10 h-fit"}
                         placeholder={"Session name or url"}
+                        autoCapitalize="none"
                         onChange={(it) => setKeywords(it.target.value.replace(/\s/g, ''))}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -649,10 +651,7 @@ function FileView(props: {
 
     if (!file || !model || !session) return null;
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     return (
         <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
@@ -718,10 +717,7 @@ function MediaView(props: {
 
     if (!media || !model || !session) return null;
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     if (isMobile) {
         return (

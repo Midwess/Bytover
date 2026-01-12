@@ -20,6 +20,7 @@ import {
     LogOut, ArrowRight, DoorClosed, CircleX
 } from "lucide-react";
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+import {formatFileSize} from "@/utils/format-file-size";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -255,10 +256,7 @@ function ResourceItem({resource, sessionId}: {resource: ReceiveResourceViewModel
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     return (
         <Card

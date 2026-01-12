@@ -62,11 +62,15 @@ impl Display for TransferSessionStatus {
             } => write!(f, "Error: {text}"),
             TransferSessionStatus::Initializing { .. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
-                let kb_per_second = *bytes_per_second as f64 / 1000.0;
-                if kb_per_second < 100.0 {
-                    write!(f, "{kb_per_second:.1} KB/s")
+                if *bytes_per_second == 0 {
+                    write!(f, "Preparing...")
                 } else {
-                    write!(f, "{:.1} MB/s", kb_per_second / 1024.0)
+                    let kb_per_second = *bytes_per_second as f64 / 1000.0;
+                    if kb_per_second < 100.0 {
+                        write!(f, "{kb_per_second:.1} KB/s")
+                    } else {
+                        write!(f, "{:.1} MB/s", kb_per_second / 1024.0)
+                    }
                 }
             }
             TransferSessionStatus::Success => write!(f, "Done ☺️!"),

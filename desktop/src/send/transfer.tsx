@@ -16,6 +16,7 @@ import {
     Check,
     Users,
     Globe,
+    Mail,
 } from "lucide-react"
 import core from "@/core.ts"
 import {Avatar, AvatarImage} from "@/components/ui/avatar"
@@ -26,19 +27,21 @@ import {useEffect, useState} from "react"
 import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
+import {EmailTransfer} from "@/send/email-transfer"
 
 export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
-        <div className="flex w-full flex-col gap-6 h-full overflow-hidden ml-0.5">
+        <div className="flex w-full flex-col gap-6 h-full overflow-hidden">
             <Slide
                 delay={240}
                 direction={"left"}
                 offset={380}
                 className="h-full flex">
-                <Tabs defaultValue="p2p" className="w-full items-start flex flex-col h-full">
-                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm flex-shrink-0"}>
+                <Tabs defaultValue="p2p" className="w-fit items-start flex flex-col h-full">
+                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm flex-shrink-0 w-full"}>
                         <TabsTab value="p2p"><Users/> P2P</TabsTab>
                         <TabsTab value="public"><Globe/>Cloud</TabsTab>
+                        <TabsTab value="email"><Mail/>Email</TabsTab>
                     </TabsList>
                     <div
                         className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -51,6 +54,11 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                             <TabsPanel value="public" className="flex flex-col gap-2">
                                 <CardContent className={"p-0 flex flex-col gap-2"}>
                                     <PublicTransfer shelfId={shelfId} />
+                                </CardContent>
+                            </TabsPanel>
+                            <TabsPanel value="email" className="flex flex-col gap-2">
+                                <CardContent className={"p-0 flex flex-col gap-2"}>
+                                    <EmailTransfer shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
                         </TabsPanels>

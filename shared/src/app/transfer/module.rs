@@ -737,6 +737,8 @@ impl AppModule<BitBridge> for TransferModule {
                             name: format!("all-resources-{}.zip", it.alias),
                             size_gb: 0.0,
                             size_mb: 0.0,
+                            size_kb: 0.0,
+                            size_bytes: 0,
                             display_path: String::new(),
                             path: LocalResourcePath::RelativePath {
                                 path: String::new(),

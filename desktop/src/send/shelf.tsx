@@ -28,6 +28,7 @@ import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
 } from "shared_types/types/shared_types";
+import {formatFileSize} from "@/utils/format-file-size";
 import useWindow from "@/hooks/use-window.ts";
 import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
@@ -229,10 +230,7 @@ function FileView(props: {
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     return (
         <Card
@@ -297,10 +295,7 @@ function MediaView(props: {
     // Convert absolute path to Tauri asset URL
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
 
-    let displaySize = `${model.size_mb} MB`;
-    if (model.size_gb > 0) {
-        displaySize = `${model.size_gb} GB`;
-    }
+    const displaySize = formatFileSize(model);
 
     return (
         <Card

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
-use chrono::Local;
 use core_services::logger;
+use tauri_plugin_autostart::ManagerExt;
 use crux_core::Core;
 use native::di_container::DiContainer;
 use schema::value::device::DeviceType;
@@ -81,6 +81,16 @@ async fn public_transfer(shelf_id: String, password: Option<String>, app_handle:
         shelf_id,
         password,
         to_emails: vec![]
+    }, app_handle).await;
+}
+
+#[tauri::command]
+async fn email_transfer(shelf_id: String, password: Option<String>, to_emails: Vec<String>, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
+    process_event(TransferEvent::StartPublicTransfer {
+        shelf_id,
+        password,
+        to_emails
     }, app_handle).await;
 }
 
@@ -180,6 +190,22 @@ fn close_toast(app_handle: AppHandle) {
     if let Ok(mut guard) = TOAST_MESSAGE.lock() {
         *guard = None;
     }
+}
+
+#[tauri::command]
+async fn set_autostart(enabled: bool, app_handle: AppHandle) -> Result<(), String> {
+    let autostart_manager = app_handle.autolaunch();
+    if enabled {
+        autostart_manager.enable().map_err(|e: tauri_plugin_autostart::Error| e.to_string())
+    } else {
+        autostart_manager.disable().map_err(|e: tauri_plugin_autostart::Error| e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn is_autostart_enabled(app_handle: AppHandle) -> Result<bool, String> {
+    let autostart_manager = app_handle.autolaunch();
+    autostart_manager.is_enabled().map_err(|e: tauri_plugin_autostart::Error| e.to_string())
 }
 
 async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
@@ -397,15 +423,20 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .invoke_handler(tauri::generate_handler![
             authenticate, add_resources,
-            remove_resource, ui_launched, public_transfer, p2p_transfer,
+            remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf,
             clear_shelf, sign_out, quit, get_or_create_shelf,
-            get_toast_message, close_toast
+            get_toast_message, close_toast,
+            set_autostart, is_autostart_enabled
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Regular);
+
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&quit_item)
