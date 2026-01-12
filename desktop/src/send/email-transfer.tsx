@@ -25,21 +25,19 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     }
 
     return <>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-1">
-            <div className="grid gap-3">
-                <MultiEmailInput
-                    emails={emails}
-                    onEmailsChange={setEmails}
-                    placeholder="Enter recipient emails"
-                    className="bg-secondary shadow-background max-h-[100px] overflow-y-auto"
-                    disabled={cloudSession?.is_in_progress ?? false}
-                />
-
-            </div>
+        <Card shadowSize={0} className="flex flex-col p-1 w-[200px]">
+            <MultiEmailInput
+                onEmailsChange={(emails) => {
+                    setEmails(emails)
+                }}
+                placeholder="Enter recipient emails"
+                className="min-h-11 bg-secondary shadow-background max-h-[90px] overflow-y-auto"
+                disabled={cloudSession?.is_in_progress ?? false}
+            />
         </Card>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-1">
+        <Card shadowSize={0} className="flex flex-col p-1">
             <PasswordInput
-                className={"h-10 bg-secondary shadow-background"}
+                className={"h-11 bg-secondary shadow-background"}
                 value={pwd}
                 onChange={(e) => {
                     setPwd(e.target.value)

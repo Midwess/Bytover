@@ -38,7 +38,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                 offset={380}
                 className="h-full flex">
                 <Tabs defaultValue="p2p" className="w-fit items-start flex flex-col h-full">
-                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm flex-shrink-0 w-full"}>
+                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm max-w-full"}>
                         <TabsTab value="p2p"><Users/> P2P</TabsTab>
                         <TabsTab value="public"><Globe/>Cloud</TabsTab>
                         <TabsTab value="email"><Mail/>Email</TabsTab>
@@ -52,12 +52,12 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="public" className="flex flex-col gap-2">
-                                <CardContent className={"p-0 flex flex-col gap-2"}>
+                                <CardContent className={"p-0 flex flex-col gap-1.5"}>
                                     <PublicTransfer shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="email" className="flex flex-col gap-2">
-                                <CardContent className={"p-0 flex flex-col gap-2"}>
+                                <CardContent className={"p-0 flex flex-col gap-1.5"}>
                                     <EmailTransfer shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
@@ -94,29 +94,23 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
     }
 
     return <>
-        <Card shadowSize={0.5} className="flex flex-col gap-3 px-2 py-1 justify-center items-center bg-card/95">
+        <Card shadowSize={0.5} className="flex flex-col px-2 py-1 justify-center items-center bg-card/95">
             <MyPeerInfo/>
         </Card>
-        <Card shadowSize={0.5} className="flex flex-row gap-1 pb-1.5 px-1 pt-1 h-12">
-            <div
-                className={"flex flex-row items-center gap-1 w-fit rounded-lg"}>
-                <PasswordInput
-                    className={"bg-secondary shadow-background mt-0.5"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    maxLength={20}
-                    placeholder="Password (Optional)"
-                    disabled={isInProgress}
-                />
-            </div>
+        <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95">
+            <PasswordInput
+                className={"bg-secondary shadow-background h-10"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                maxLength={20}
+                placeholder="Password (Optional)"
+                disabled={isInProgress}
+            />
         </Card>
         {
             p2pSession?.access_url &&
-            <Card shadowSize={0.5} className="flex flex-col gap-3 p-1 bg-card/95 h-12">
-                <div
-                    className={"flex flex-row items-center gap-2 w-fit rounded-lg h-full"}>
-                    <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
-                </div>
+            <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95">
+                <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
         <Card className="flex flex-row gap-2 p-1 items-center">
@@ -188,19 +182,17 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                 Create a sharable link. Files are stored for 7 days.
             </p>
         </Card>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-1">
-            <div className="grid gap-3">
-                <PasswordInput className={"bg-secondary shadow-background"}
-                       value={pwd}
-                       onChange={(e) => {
-                           setPwd(e.target.value)
-                       }}
-                       placeholder={"Password (Optional)"}/>
-            </div>
+        <Card shadowSize={0} className="flex flex-col p-1">
+            <PasswordInput className={"h-10 bg-secondary shadow-background"}
+                   value={pwd}
+                   onChange={(e) => {
+                       setPwd(e.target.value)
+                   }}
+                   placeholder={"Password (Optional)"}/>
         </Card>
         {
             cloudSession?.access_url &&
-            <Card shadowSize={0} className="flex flex-col gap-2 p-1 h-12">
+            <Card shadowSize={0} className="flex flex-col p-1">
                 <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
             </Card>
         }
@@ -220,7 +212,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                         if (!shelfId) return
                         invoke("public_transfer", { shelfId, password: pwd }).then(noop)
                     }}
-                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Share</Button>
+                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Upload</Button>
                 )
             }
             {
@@ -255,7 +247,7 @@ function UrlInputWithCopy({url}: { url: string }) {
     }
 
     return (
-        <div className="flex items-center w-full bg-secondary rounded-lg h-full">
+        <div className="flex items-center w-full bg-secondary rounded-lg h-10">
             <div className="w-44 px-2">
                 <UnlimitedLineText
                     text={url}

@@ -49,8 +49,8 @@ export const useOverlayScrollbars = () => {
             ].filter(Boolean) as HTMLElement[];
 
             scrollableElements.forEach((element) => {
-                // Only initialize if not already tracked and still in DOM
-                if (!instances.has(element) && document.contains(element) && !isCleaningUpRef.current) {
+                // Only initialize if not already tracked, still in DOM, and not excluded
+                if (!instances.has(element) && document.contains(element) && !isCleaningUpRef.current && !element.hasAttribute('data-no-scrollbar')) {
                     try {
                         const instance = OverlayScrollbars(element, {
                             scrollbars: {
