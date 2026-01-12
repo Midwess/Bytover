@@ -98,7 +98,7 @@ where
                 };
 
                 let Some(user) = self.app_server().find_user(session_key.user_id).await? else {
-                    return Err(CoreError::BadRequest("Not found session".to_owned()));
+                    return Err(CoreError::BadRequest(format!("Not found owner {} for this session", session_key.user_id)));
                 };
 
                 let transfer_session = TransferSession::from_public_overview(
