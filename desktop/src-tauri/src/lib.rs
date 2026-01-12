@@ -33,7 +33,11 @@ use shared::app::transfer::module::TransferEvent;
 use shared::entities::local_resource::LocalResourcePath;
 use shared::entities::transfer_session::TransferType;
 use crate::extensions::AppHandleExt;
-use crate::mouse_tracking::{notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig};
+use crate::mouse_tracking::{
+    notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig,
+    check_accessibility_permission, check_input_monitoring_permission,
+    open_accessibility_preferences, open_input_monitoring_preferences,
+};
 use crate::thumbnail::generate_thumbnail;
 
 pub mod api;
@@ -528,11 +532,12 @@ pub async fn run() {
                 }
             });
 
-            start_mouse_monitor(MouseMonitorConfig::default(), handle);
+            let _ = check_accessibility_permission(true);
+            let _ = check_input_monitoring_permission(true);
+
+            start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
             #[cfg(target_os = "macos")]
             mouse_tracking::start_macos_drag_pasteboard_monitor();
-
-            Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

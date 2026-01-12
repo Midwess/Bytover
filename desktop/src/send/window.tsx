@@ -45,7 +45,7 @@ function Window() {
     }, [isExpanded, window])
 
     return (
-        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300`}>
+        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300 data-no-scrollbar`}>
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup"}>
                 <div className={`h-[210px] bg-transparent relative min-w-[190px] w-[190px]`}>
                    <Shelf shelfId={shelfId} />

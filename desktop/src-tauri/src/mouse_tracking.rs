@@ -7,6 +7,143 @@ use rdev::{set_is_main_thread, Button, EventType};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
+/// Check if the app has accessibility permission on macOS.
+/// If `prompt` is true, it will show the system dialog asking user to grant permission.
+/// Returns true if permission is granted, false otherwise.
+#[cfg(target_os = "macos")]
+pub fn check_accessibility_permission(prompt: bool) -> bool {
+    use std::ptr;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFDictionaryCreate(
+            allocator: *const std::ffi::c_void,
+            keys: *const *const std::ffi::c_void,
+            values: *const *const std::ffi::c_void,
+            num_values: isize,
+            key_callbacks: *const std::ffi::c_void,
+            value_callbacks: *const std::ffi::c_void,
+        ) -> *const std::ffi::c_void;
+        fn CFRelease(cf: *const std::ffi::c_void);
+
+        static kCFBooleanTrue: *const std::ffi::c_void;
+        static kCFBooleanFalse: *const std::ffi::c_void;
+        static kCFTypeDictionaryKeyCallBacks: *const std::ffi::c_void;
+        static kCFTypeDictionaryValueCallBacks: *const std::ffi::c_void;
+    }
+
+    // kAXTrustedCheckOptionPrompt key
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        static kAXTrustedCheckOptionPrompt: *const std::ffi::c_void;
+    }
+
+    unsafe {
+        let prompt_value = if prompt { kCFBooleanTrue } else { kCFBooleanFalse };
+
+        let keys: [*const std::ffi::c_void; 1] = [kAXTrustedCheckOptionPrompt];
+        let values: [*const std::ffi::c_void; 1] = [prompt_value];
+
+        let options = CFDictionaryCreate(
+            ptr::null(),
+            keys.as_ptr(),
+            values.as_ptr(),
+            1,
+            kCFTypeDictionaryKeyCallBacks,
+            kCFTypeDictionaryValueCallBacks,
+        );
+
+        let is_trusted = AXIsProcessTrustedWithOptions(options);
+
+        if !options.is_null() {
+            CFRelease(options);
+        }
+
+        is_trusted
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_accessibility_permission(_prompt: bool) -> bool {
+    true // No accessibility permission needed on other platforms
+}
+
+/// Check if the app has Input Monitoring permission on macOS.
+/// This is required for CGEventTap (used by rdev) on macOS 10.15+.
+/// If `prompt` is true, it will request access and show the system dialog.
+/// Returns true if permission is granted, false otherwise.
+#[cfg(target_os = "macos")]
+pub fn check_input_monitoring_permission(prompt: bool) -> bool {
+    #[repr(u32)]
+    #[allow(dead_code)]
+    enum IOHIDRequestType {
+        ListenEvent = 1,
+        PostEvent = 2,
+    }
+
+    #[link(name = "IOKit", kind = "framework")]
+    extern "C" {
+        fn IOHIDCheckAccess(request_type: u32) -> u32;
+        fn IOHIDRequestAccess(request_type: u32) -> bool;
+    }
+
+    // IOHIDAccessType values from IOKit
+    const KIOHID_ACCESS_TYPE_GRANTED: u32 = 0;
+    // const KIOHID_ACCESS_TYPE_DENIED: u32 = 1;
+    // const KIOHID_ACCESS_TYPE_UNKNOWN: u32 = 2;
+
+    unsafe {
+        let access_status = IOHIDCheckAccess(IOHIDRequestType::ListenEvent as u32);
+
+        if access_status == KIOHID_ACCESS_TYPE_GRANTED {
+            return true;
+        }
+
+        if prompt {
+            // This will show the system dialog if permission hasn't been requested before
+            IOHIDRequestAccess(IOHIDRequestType::ListenEvent as u32);
+            // Check again after requesting
+            IOHIDCheckAccess(IOHIDRequestType::ListenEvent as u32) == KIOHID_ACCESS_TYPE_GRANTED
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_input_monitoring_permission(_prompt: bool) -> bool {
+    true // No input monitoring permission needed on other platforms
+}
+
+/// Opens System Preferences to the Accessibility privacy pane on macOS.
+#[cfg(target_os = "macos")]
+pub fn open_accessibility_preferences() {
+    use std::process::Command;
+    let _ = Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        .spawn();
+}
+
+/// Opens System Preferences to the Input Monitoring privacy pane on macOS.
+#[cfg(target_os = "macos")]
+pub fn open_input_monitoring_preferences() {
+    use std::process::Command;
+    let _ = Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+        .spawn();
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_accessibility_preferences() {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_input_monitoring_preferences() {}
+
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "macos")]

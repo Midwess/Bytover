@@ -1,4 +1,5 @@
 import { OverlayScrollbars } from "overlayscrollbars";
+import "overlayscrollbars/overlayscrollbars.css";
 import { useEffect, useRef } from "react";
 
 export const useOverlayScrollbars = () => {
