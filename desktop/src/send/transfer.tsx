@@ -38,7 +38,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                 offset={380}
                 className="h-full flex">
                 <Tabs defaultValue="p2p" className="w-[200px] items-start flex flex-col h-full">
-                    <TabsList className={"ml-1 border-2 shadow-background shadow-sm w-[195px]"}>
+                    <TabsList className={"ml-2 border-2 shadow-background shadow-sm w-[193px]"}>
                         <TabsTab value="p2p"><Users/> P2P</TabsTab>
                         <TabsTab value="public"><Globe/>Cloud</TabsTab>
                         <TabsTab value="email"><Mail/>Email</TabsTab>
