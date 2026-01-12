@@ -41,7 +41,7 @@ function Window() {
 
     useEffect(() => {
         const width = isExpanded ? 395 : 220
-        window.setSize(new LogicalSize(width, 240))
+        window.setSize(new LogicalSize(width, 245))
     }, [isExpanded, window])
 
     return (

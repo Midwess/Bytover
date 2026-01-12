@@ -16,7 +16,7 @@ import {
     Check,
     Users,
     Globe,
-    Mail,
+    Mail, SendHorizonal, ChevronRight, Upload,
 } from "lucide-react"
 import core from "@/core.ts"
 import {Avatar, AvatarImage} from "@/components/ui/avatar"
@@ -93,8 +93,8 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         }
     }
 
-    return <>
-        <Card shadowSize={0.5} className="flex flex-col px-2 py-1 justify-center items-center bg-card/95">
+    return <div className={"flex flex-col items-start w-full gap-2"}>
+        <Card shadowSize={0.5} className="flex flex-col px-2 py-1 justify-center items-center bg-card/95 w-full">
             <MyPeerInfo/>
         </Card>
         <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95">
@@ -109,22 +109,22 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         </Card>
         {
             p2pSession?.access_url &&
-            <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95">
+            <Card shadowSize={0.5} className="flex flex-col p-1 bg-card/95 w-full">
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-1 items-center">
+        <Card className="flex flex-row gap-2 p-1 items-center w-[100px]">
             {
                 isInProgress ? (
                     <Button onClick={handleStopTransfer}
-                            className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
+                            className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
                 ) : (
                     <Button onClick={handleStartTransfer}
-                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Start</Button>
+                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 w-full"}>Start <ChevronRight className={"scale-x-120"}/> </Button>
                 )
             }
         </Card>
-    </>
+    </div>
 }
 
 function MyPeerInfo() {
@@ -196,28 +196,28 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-1 items-center px-2">
+        <Card className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
-                    }} className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
+                    }} className={"bg-muted-foreground/30 text-primary w-[100px] h-full shadow-lg"}>Cancel</Button>
                 ) : cloudSession?.is_completed ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }}
-                            className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                            className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
                     <Button onClick={() => {
                         if (!shelfId) return
                         invoke("public_transfer", { shelfId, password: pwd }).then(noop)
                     }}
-                            className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60"}>Upload</Button>
+                            className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60"}>Upload <Upload/> </Button>
                 )
             }
             {
                 !!cloudSession?.progress && (
-                    <div className="flex flex-col w-full gap-2 pb-2 flex-1/2">
+                    <div className="flex flex-col gap-2 pb-2 flex-3/5">
                         <div className="flex items-center justify-between gap-1">
                             <span className="text-sm">
                                 {cloudSession?.display_download_speed}

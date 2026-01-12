@@ -201,6 +201,18 @@ export class WasmCore {
         return state
     }
 
+    public useShelfRemoveResourceAllow() {
+        const [allow, setAllow] = useState(true);
+        useEffect(() => {
+            return this.shelfState.subscribe((shelfState) => {
+                const defaultShelf = shelfState?.shelves?.[0]
+                setAllow(defaultShelf?.is_resource_remove_allowed ?? true)
+            })
+        }, [])
+
+        return allow
+    }
+
     public useSelectedResources() {
         const [state, setState] = useState<SelectedResourceViewModel[]>([])
 

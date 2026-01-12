@@ -130,7 +130,7 @@ function FileSelections() {
 
     const selectedResources = core.useSelectedResources()
     const defaultShelfId = core.useDefaultShelfId()
-    const isResourceRemoveAllowed = core.useTransferState()?.is_resource_remove_allowed ?? true
+    const isResourceRemoveAllowed = core.useShelfRemoveResourceAllow()
 
     useEffect(() => {
         if (!defaultShelfId) return

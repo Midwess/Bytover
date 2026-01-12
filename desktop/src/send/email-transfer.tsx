@@ -8,6 +8,7 @@ import {noop} from "motion"
 import {useState} from "react"
 import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
+import {Send} from "lucide-react"
 
 export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
@@ -31,7 +32,7 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                     setEmails(emails)
                 }}
                 placeholder="Enter recipient emails"
-                className="min-h-9 bg-secondary shadow-background max-h-[90px] overflow-y-auto"
+                className="min-h-8 bg-secondary shadow-background max-h-[70px] overflow-y-auto"
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
@@ -46,28 +47,28 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
-        <Card className="flex flex-row gap-2 p-1 items-center">
+        <Card className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
-                    }} className={"bg-muted-foreground/30 text-primary w-[70px] h-full shadow-lg"}>Cancel</Button>
+                    }} className={"bg-muted-foreground/30 text-primary w-[100px] h-full shadow-lg"}>Cancel</Button>
                 ) : cloudSession?.is_completed ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }}
-                            className={"bg-greenSecondary/40 text-primary w-[70px] shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                            className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
                     <Button
                         onClick={handleEmailTransfer}
-                        className={"bg-bluePrimary text-foreground w-[70px] shadow-lg hover:bg-bluePrimary/60 disabled:opacity-50"}>
-                        Send
+                        className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60 disabled:opacity-50"}>
+                        Send <Send/>
                     </Button>
                 )
             }
             {
                 !!cloudSession?.progress && (
-                    <div className="flex flex-col w-full gap-2 pb-2 flex-1/2">
+                    <div className="flex flex-col gap-2 pb-2 flex-3/5">
                         <div className="flex items-center justify-between gap-1">
                             <span className="text-sm">
                                 {cloudSession?.display_download_speed}

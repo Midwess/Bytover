@@ -6,7 +6,8 @@
     "send",
     "send-*",
     "auth",
-    "receive"
+    "receive",
+    "toast"
   ],
   "permissions": [
     "core:window:allow-hide",
@@ -14,10 +15,15 @@
     "core:window:allow-set-size",
     "core:window:allow-start-dragging",
     "core:window:allow-show",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-current-monitor",
     "core:event:default",
     "core:default",
     "opener:default",
+    "core:webview:default",
     "core:webview:allow-create-webview-window",
+    "core:webview:allow-webview-close",
     "deep-link:default",
     "drag:default"
   ]

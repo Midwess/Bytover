@@ -449,7 +449,7 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(mut session) = model.transfer.sessions.lookup(&session_id) else {
+                let Some(mut session) = model.transfer.sessions.lookup_mut(&session_id) else {
                     log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
@@ -460,8 +460,9 @@ impl AppModule<BitBridge> for TransferModule {
                     session.owner_disconnected();
                 }
 
+                let session = session.clone();
                 Command::handle_result(move |it| async move {
-                    it.app().view_session(session.cloned(), session_id, password).await
+                    it.app().view_session(session, session_id, password).await
                 })
                 .then_render()
             }

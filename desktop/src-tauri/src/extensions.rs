@@ -42,10 +42,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     "auth",
                     WebviewUrl::App("auth.html".into())
                 )
-                    .title("auth")
+                    .title("Bytover")
                     .inner_size(240.0, 390.0)
-                    .decorations(false)
-                    .transparent(true)
+                    .decorations(true)
+                    .transparent(false)
                     .focused(true)
                     .skip_taskbar(false)
                     .resizable(false)
