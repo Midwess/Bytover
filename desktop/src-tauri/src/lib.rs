@@ -538,6 +538,7 @@ pub async fn run() {
             start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
             #[cfg(target_os = "macos")]
             mouse_tracking::start_macos_drag_pasteboard_monitor();
+            Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

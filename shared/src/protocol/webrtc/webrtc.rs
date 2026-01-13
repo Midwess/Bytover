@@ -261,7 +261,7 @@ impl WebRtc {
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .signaling_keep_alive_interval(Some(Duration::from_millis(6000)))
             .reconnect_attempts(Some(u16::MAX))
-            .handshake_timeout(Duration::from_secs(10))
+            .handshake_timeout(Duration::from_secs(30))
             .build();
 
         let loop_fut = loop_fut.fuse();
