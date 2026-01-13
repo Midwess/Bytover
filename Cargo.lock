@@ -5262,7 +5262,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#020e48f3ecd3eb16daada9348b389bc7a4886120"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#6de1e19c2e31e9cd3dfa443495574ed0c0b6956e"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if",
@@ -5274,7 +5274,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#020e48f3ecd3eb16daada9348b389bc7a4886120"
+source = "git+https://github.com/dev-logs/matchbox.git?branch=main#6de1e19c2e31e9cd3dfa443495574ed0c0b6956e"
 dependencies = [
  "async-compat",
  "async-trait",

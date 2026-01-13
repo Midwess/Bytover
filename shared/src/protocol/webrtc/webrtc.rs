@@ -261,6 +261,7 @@ impl WebRtc {
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .signaling_keep_alive_interval(Some(Duration::from_millis(5000)))
             .reconnect_attempts(Some(u16::MAX))
+            .ensure_relay_candidates(true)
             .handshake_timeout(Duration::from_secs(20))
             .build();
 
