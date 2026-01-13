@@ -449,7 +449,8 @@ impl WebRtcPeer {
                         buff_counter += packet.len();
                         if reliable {
                             let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), packet));
-                        } else {
+                        }
+                        else {
                             let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), packet);
                         }
                     }
@@ -934,6 +935,7 @@ impl WebRtcPeer {
         let mut fec_receiver = FecReceiver::new();
         let mut data_rx = self.inbound_data_stream_receiver.retrieve().await?;
         let mut next_check_time: Option<Instant> = None;
+        let mut last_packet_time: Instant = Instant::now();
 
         loop {
             let frames = {
@@ -955,12 +957,14 @@ impl WebRtcPeer {
                 };
 
                 if let Some(packet) = packet_result {
+                    last_packet_time = Instant::now();
                     if let Some(frame) = Frame::deserialize(&packet) {
                         frames.push(frame);
                     }
                 }
 
                 while let Some(packet) = data_rx.try_next().ok().flatten() {
+                    last_packet_time = Instant::now();
                     if let Some(frame) = Frame::deserialize(&packet) {
                         frames.push(frame);
                     }
@@ -978,6 +982,27 @@ impl WebRtcPeer {
             } else {
                 fec_receiver.receive(frames)?
             };
+
+            if last_packet_time.elapsed() >= Duration::from_secs(5) {
+                let loss_rate = fec_receiver.calculate_loss_rate();
+                let current_block_id = fec_receiver.current_block_id();
+                let rtt = self.buffer.rtt().await.unwrap_or(0.0);
+
+                let network_stats = NetworkStats {
+                    current_block_id: Some(current_block_id),
+                    rtt: Some(rtt as u32),
+                    loss_rate,
+                    hold_counter: None
+                };
+
+                let feedback = FecFeedback {
+                    feedback: Some(Feedback::Network(network_stats))
+                };
+
+                log::info!("Sending idle heartbeat with block_id {}", current_block_id);
+                let _ = self.unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
+                last_packet_time = Instant::now();
+            }
 
             match action {
                 FecAction::Constructed(packets_with_prefix, next_check) => {
