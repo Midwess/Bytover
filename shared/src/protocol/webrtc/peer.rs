@@ -983,7 +983,7 @@ impl WebRtcPeer {
                 fec_receiver.receive(frames)?
             };
 
-            if last_packet_time.elapsed() >= Duration::from_secs(5) {
+            if last_packet_time.elapsed() >= Duration::from_millis((fec_receiver.rtt() * 12).min(6000).max(1500)) {
                 let loss_rate = fec_receiver.calculate_loss_rate();
                 let current_block_id = fec_receiver.current_block_id();
                 let rtt = self.buffer.rtt().await.unwrap_or(0.0);
