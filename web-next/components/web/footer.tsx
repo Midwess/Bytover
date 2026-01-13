@@ -1,7 +1,7 @@
 'use client'
-import Image from "next/image";
 import Link from "next/link";
 import {cn} from "@/lib/utils.ts";
+import { getAssetUrl } from '@/utils/asset-url';
 
 export default function Footer(props: {className?: string | undefined} = { className: '' }) {
     const scrollToSection = (href: string) => {
@@ -19,10 +19,10 @@ export default function Footer(props: {className?: string | undefined} = { class
                     {/* Brand Section - Full width on mobile, spans 2 cols on tablet+ */}
                     <div className="flex flex-col gap-4 sm:col-span-2 lg:col-span-1">
                         <div className="flex items-center gap-3">
-                            <Image
+                            <img
                                 width={40}
                                 height={40}
-                                src="/logo.png"
+                                src={getAssetUrl('/logo.png')}
                                 alt="Bytover Logo"
                                 className="rounded-lg aspect-square w-10 h-10"
                             />

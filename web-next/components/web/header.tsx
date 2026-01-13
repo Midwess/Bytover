@@ -1,7 +1,7 @@
 'use client'
 import React from 'react';
 import { GitHubStarsButton } from '@/components/animate-ui/buttons/github-stars'
-import Image from "next/image";
+import { getAssetUrl } from '@/utils/asset-url';
 import { Loader2 } from "lucide-react";
 import {
     AppEventVariantAuthentication,
@@ -75,10 +75,10 @@ export default function Header({ className }: { className?: string }) {
                 <div className={cn("flex justify-between items-center w-full container px-3", className)}>
                     <div className="flex flex-row gap-2 items-center">
                         <Link href="/" className="flex items-center">
-                            <Image
+                            <img
                                 width={35}
                                 height={35}
-                                src="/logo.png"
+                                src={getAssetUrl('/logo.png')}
                                 alt="Logo"
                                 className="rounded-lg aspect-square w-10 h-10 md:w-[45px] md:h-[45px]"
                             />

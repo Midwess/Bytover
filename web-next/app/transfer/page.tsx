@@ -37,6 +37,15 @@ function TransferBoardTabs() {
         }
     }, [coreReady, coreCompatible]);
 
+    useEffect(() => {
+        if (coreReady && url.session) {
+            const boardElement = document.querySelector('#transfer-board');
+            if (boardElement) {
+                boardElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }, [coreReady, url.session]);
+
     const renderContent = () => {
         if (!coreCompatible) {
             return (
@@ -163,7 +172,7 @@ export default function TransferBoard() {
                         </section>
                     </div>
 
-                    <div className="relative flex mt-8">
+                    <div id="transfer-board" className="relative flex mt-8">
                         <div className="absolute left-0 right-0 top-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
                         <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
                         <div
