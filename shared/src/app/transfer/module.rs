@@ -572,7 +572,6 @@ impl AppModule<BitBridge> for TransferModule {
                         ))
                         .await?;
 
-                    log::info!("Generated saved paths: {:?}", generated_saved_paths);
                     let Some(generated_path) = generated_saved_paths.remove(&resource_order_id) else {
                         log::warn!("Failed to generate path for resource {}", resource_order_id);
                         return Ok(());

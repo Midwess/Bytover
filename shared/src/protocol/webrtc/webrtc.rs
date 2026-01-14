@@ -262,8 +262,8 @@ impl WebRtc {
             .signaling_keep_alive_interval(Some(Duration::from_millis(5000)))
             .reconnect_attempts(Some(u16::MAX))
             .ensure_relay_candidates(true)
-            .relay_fallback_on_timeout(true)
-            .handshake_timeout(Duration::from_secs(6))
+            .relay_fallback_on_timeout(false)
+            .handshake_timeout(Duration::from_secs(60))
             .build();
 
         let loop_fut = loop_fut.fuse();

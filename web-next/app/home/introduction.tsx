@@ -3,7 +3,6 @@
 import { getAssetUrl } from "@/utils/asset-url";
 import Aurora from "@/components/Aurora";
 import Link from "next/link";
-import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface IntroductionProps {
@@ -32,7 +31,7 @@ export default function Introduction({
                 <div className="flex flex-col items-center gap-6 md:gap-8 max-w-2xl text-center">
                     {/* Logo */}
                     <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20 backdrop-blur-sm">
-                        <Image
+                        <img
                             src={getAssetUrl("/logo.png")}
                             alt="Bytover"
                             width={20}
