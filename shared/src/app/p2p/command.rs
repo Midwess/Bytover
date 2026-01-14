@@ -178,7 +178,6 @@ impl AppCommand {
                     resource,
                     peer_id
                 }) => {
-                    log::info!(target: "nearby", "Received resource notification: {resource:?}");
                     self.update_model(TransferEvent::ResourceNotification {
                         session_order_id,
                         resource,
