@@ -91,7 +91,7 @@ export default function Header({ className }: { className?: string }) {
                             {[
                                 { label: "Transfer", href: "/transfer" },
                                 { label: "Pricing", href: "#pricing" },
-                                { label: "Features", href: "#features" }
+                                { label: "Features", href: "#more-features" }
                             ].map((item) => (
                                 <Link
                                     key={item.label}

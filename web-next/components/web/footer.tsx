@@ -31,9 +31,6 @@ export default function Footer(props: {className?: string | undefined} = { class
                         <h2 className="text-muted-foreground text-sm max-w-xs">
                             A seamless file transfer that you can trust.
                         </h2>
-                        <address className="text-muted-foreground text-sm not-italic">
-                            Đồng Tháp, Việt Nam
-                        </address>
                     </div>
 
                     {/* Sections Links */}
@@ -54,10 +51,10 @@ export default function Footer(props: {className?: string | undefined} = { class
                             </li>
                             <li>
                                 <a
-                                    href="#features"
+                                    href="#more-features"
                                     onClick={(e) => {
                                         e.preventDefault();
-                                        scrollToSection('#features');
+                                        scrollToSection('#more-features');
                                     }}
                                     className="text-muted-foreground hover:text-primaryText transition-colors text-sm inline-block"
                                 >
@@ -113,7 +110,7 @@ export default function Footer(props: {className?: string | undefined} = { class
                             </li>
                             <li>
                                 <Link
-                                    href="#"
+                                    href="/policy"
                                     className="text-muted-foreground hover:text-primaryText transition-colors text-sm inline-block"
                                 >
                                     Privacy Policy

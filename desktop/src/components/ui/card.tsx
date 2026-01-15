@@ -9,11 +9,11 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, style, shadowSize = 1, ...props }, ref) => {
     const shadowOpacity = {
-      inset: 0.02 * shadowSize,
-      shadow1: 0.15 * shadowSize,
-      shadow2: 0.16 * shadowSize,
-      shadow3: 0.16 * shadowSize,
-      shadow4: 0.19 * shadowSize,
+      highlight: 0.05 * shadowSize,
+      layer1: 0.12 * shadowSize,
+      layer2: 0.08 * shadowSize,
+      layer3: 0.06 * shadowSize,
+      layer4: 0.04 * shadowSize,
     };
 
     return (
@@ -26,7 +26,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         )}
         style={{
           transform: 'translateZ(0.5px)',
-          boxShadow: `1px 1px 16px 0px rgba(253, 253, 253, ${shadowOpacity.inset}) inset, 0px 26px 48px -10px rgba(8, 8, 8, ${shadowOpacity.shadow1}), 0px 12px 28px 0px rgba(8, 8, 8, ${shadowOpacity.shadow2}), 0px 4px 8px -2px rgba(8, 8, 8, ${shadowOpacity.shadow3}), 0px 4px 2px -1px rgba(0, 0, 0, ${shadowOpacity.shadow4})`,
+          boxShadow: `0px 0.5px 0px 0px rgba(255, 255, 255, ${shadowOpacity.highlight}) inset, 0px 0.5px 1px 0px rgba(0, 0, 0, ${shadowOpacity.layer1}), 0px 2px 4px 0px rgba(0, 0, 0, ${shadowOpacity.layer2}), 0px 4px 8px -2px rgba(0, 0, 0, ${shadowOpacity.layer3}), 0px 8px 16px -4px rgba(0, 0, 0, ${shadowOpacity.layer4})`,
           ...style,
         }}
         {...props}
