@@ -123,6 +123,20 @@ pub async fn init() {
     log::info!("Initializing");
     let di_container = DiContainer::get_instance();
     di_container.init().await;
+
+    log::info!("Clearing OPFS storage");
+    let cleanup_msg = WorkerMessage::new(OpfsOperation {
+        file_path: "/".to_owned(),
+        operation: FileOperation::ClearAll
+    });
+    match OPFS_WORKER.send(cleanup_msg).await {
+        Some(response) => match response.message {
+            OpfsOperationOutput::Void => log::info!("OPFS storage cleared successfully"),
+            OpfsOperationOutput::Error(e) => log::error!("Failed to clear OPFS storage: {:?}", e),
+            _ => log::warn!("Unexpected response from OPFS cleanup")
+        },
+        None => log::error!("Failed to send OPFS cleanup message")
+    }
 }
 
 /// Add device files to opfs

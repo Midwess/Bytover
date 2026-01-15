@@ -957,14 +957,12 @@ impl WebRtcPeer {
                 };
 
                 if let Some(packet) = packet_result {
-                    last_packet_time = Instant::now();
                     if let Some(frame) = Frame::deserialize(&packet) {
                         frames.push(frame);
                     }
                 }
 
                 while let Some(packet) = data_rx.try_next().ok().flatten() {
-                    last_packet_time = Instant::now();
                     if let Some(frame) = Frame::deserialize(&packet) {
                         frames.push(frame);
                     }
@@ -980,6 +978,7 @@ impl WebRtcPeer {
             let action = if frames.is_empty() {
                 fec_receiver.ping()?
             } else {
+                last_packet_time = Instant::now();
                 fec_receiver.receive(frames)?
             };
 
