@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   description: "Transfer files effortlessly. Share instantly via link with no upload needed, create public links with password protection, or send via email.",
   icons: {
     icon: [
-      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon-light.png", sizes: "96x96", type: "image/png", media: "(prefers-color-scheme: light)" },
     ],
     shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
