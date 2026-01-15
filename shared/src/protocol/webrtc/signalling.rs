@@ -259,9 +259,6 @@ impl TryFrom<SignallingPeerRequest> for Message {
                         });
                     }
                     PeerSignal::Answer(sdp) => msg.answer = Some(AnswerMessage { sdp }),
-                    PeerSignal::RetryWithRelay => {
-                        msg.peer_request_relay_only = Some(Default::default());
-                    }
                 };
 
                 Ok(msg)
@@ -321,13 +318,6 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
         } else if let Some(left_msg) = value.left_message {
             let peer_id = PeerId(left_msg.id.parse()?);
             return Ok(Self::PeerLeft(peer_id))
-        }
-        else if let Some(_) = value.peer_request_relay_only {
-            let signal = PeerSignal::RetryWithRelay;
-            return Ok(Self::Signal {
-                sender: sender_id,
-                data: signal
-            })
         }
 
         Err(WebRtcErrors::UnSupportedEventFromSignallingServer)
