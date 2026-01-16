@@ -20,6 +20,7 @@ dependencies = [
  "machine-uid",
  "n0-future 0.3.1",
  "native",
+ "objc",
  "rdev",
  "schema",
  "serde",

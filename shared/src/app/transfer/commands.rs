@@ -683,7 +683,7 @@ impl AppCommand {
                 ..
             } => {
                 let should_request = match connection_state {
-                    P2PConnectionState::NotConnected | P2PConnectionState::Failed(_) => true,
+                    P2PConnectionState::NotConnected | P2PConnectionState::Failed(_) => false,
                     P2PConnectionState::Connected => session.resources.is_empty(),
                     P2PConnectionState::Connecting => false
                 };

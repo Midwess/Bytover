@@ -185,10 +185,6 @@ impl TransferProgress {
             self.status = TransferStatus::InProgress;
         }
 
-        if self.status != TransferStatus::InProgress {
-            return;
-        }
-
         let elapsed = self.elapsed();
 
         self.total_bytes_counter += bytes_count;
@@ -201,6 +197,10 @@ impl TransferProgress {
             self.bytes_sec_counter = bytes_count;
         }
 
+        if self.status != TransferStatus::InProgress {
+            return;
+        }
+
         if self.percentage() == 1.0 {
             self.bytes_per_second = self.bytes_sec_counter;
             self.complete();
@@ -208,8 +208,12 @@ impl TransferProgress {
     }
 
     pub fn speed(&self) -> u64 {
-        if self.elapsed() >= 1000 {
+        if self.elapsed() >= 3000 {
             return 0;
+        }
+
+        if self.elapsed() >= 1000 {
+            return self.bytes_sec_counter / (self.elapsed() / 1000);
         }
 
         self.bytes_per_second
@@ -728,7 +732,10 @@ impl UpdateAction<TransferSession> for P2pTransferSessionMessage {
 
 impl UpdateAction<TransferSession> for SessionLoadError {
     fn update(self, data: &mut TransferSession) {
-        data.connection_error = Some(self);
+        if !data.target.is_connected() {
+            data.connection_error = Some(self);
+            data.resources.clear();
+        }
     }
 }
 

@@ -44,6 +44,7 @@ pub mod api;
 pub mod extensions;
 mod thumbnail;
 mod mouse_tracking;
+mod theme;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
@@ -446,7 +447,8 @@ pub async fn run() {
                 .item(&quit_item)
                 .build()?;
 
-            let tray_icon = include_bytes!("../icons/tray/icon.png");
+            let current_theme = theme::get_system_theme();
+            let tray_icon = theme::get_icon_for_theme(current_theme);
             let icon = tauri::image::Image::from_bytes(tray_icon).expect("Failed to load tray icon");
             let tray = TrayIconBuilder::new()
                 .icon(icon)
@@ -486,6 +488,9 @@ pub async fn run() {
             if let Ok(mut guard) = TRAY_ICON.lock() {
                 *guard = Some(tray);
             }
+
+            theme::start_theme_monitor(app.handle().clone());
+
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
 
