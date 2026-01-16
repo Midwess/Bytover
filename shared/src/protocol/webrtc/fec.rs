@@ -340,7 +340,10 @@ pub struct FecSender {
     rtt_ms: u64,
 
     pub rtt_estimator: RttEstimator,
-    shard_buffer_pool: Vec<Vec<u8>>
+    shard_buffer_pool: Vec<Vec<u8>>,
+
+    /// Highest acknowledged block ID from receiver - used to filter stale retransmit requests
+    highest_ack: u32
 }
 
 impl FecSender {
@@ -360,7 +363,8 @@ impl FecSender {
             last_loss_rate: 0.0,
             buffer: RingBuffer::new(window_size),
             rtt_ms: 50,
-            shard_buffer_pool
+            shard_buffer_pool,
+            highest_ack: 0
         }
     }
 
@@ -498,6 +502,8 @@ impl FecSender {
                 let rtt = net.rtt.map(|it| it.max(self.rtt_ms as u32)).unwrap_or(self.rtt_ms as u32);
                 self.set_rtt(rtt as u64);
                 if let Some(ack) = net.current_block_id {
+                    // Track highest acknowledged block to filter stale retransmit requests
+                    self.highest_ack = self.highest_ack.max(ack);
                     for i in (0..ack).rev() {
                         self.buffer.remove(i);
                     }
@@ -510,7 +516,19 @@ impl FecSender {
                 let mut all_frames = Vec::new();
 
                 for missing_block in missing_blocks.blocks {
-                    // Ignore retransmit block that we did not sent yet
+                    // Ignore retransmit for blocks already acknowledged by receiver
+                    // This handles the race condition where Missing feedback arrives
+                    // after a Network ack due to network reordering
+                    if missing_block.block_id < self.highest_ack {
+                        log::debug!(
+                            "Ignoring stale retransmit request for block {} (highest_ack={})",
+                            missing_block.block_id,
+                            self.highest_ack
+                        );
+                        continue;
+                    }
+
+                    // Ignore retransmit block that we did not send yet
                     if missing_block.block_id > self.block_id {
                         continue;
                     }
@@ -1106,7 +1124,9 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if *block_id > self.next_block_id {
+                // Only process the current blocking block - skip completed blocks
+                // and future blocks that aren't blocking yet
+                if *block_id != self.next_block_id {
                     continue;
                 }
 
