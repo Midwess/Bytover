@@ -416,12 +416,13 @@ impl WebRtcPeer {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
                     if let Feedback::Network(stats) = fb {
                         if let Some(peer_block_id) = stats.current_block_id {
-                            if block_holding_id <= peer_block_id {
+                            if block_holding_id <= peer_block_id + 1 {
                                 let diff = peer_block_id.abs_diff(fec_sender.block_id);
                                 log::debug!("Received network report {diff}");
                                 if diff == 0 {
                                     hold_counter = 0;
-                                } else {
+                                }
+                                else {
                                     hold_counter = hold_counter.saturating_sub(1);
                                 }
 

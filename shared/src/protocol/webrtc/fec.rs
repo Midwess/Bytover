@@ -640,7 +640,7 @@ impl LossDetector {
         time_threshold_us: u64,
         quick_loss_threshold: usize
     ) -> Vec<u8> {
-        if since < now.saturating_sub(time_threshold_us) {
+        if since.saturating_add(time_threshold_us) > now {
             let time_lost: Vec<u8> = received_frames
                 .iter()
                 .enumerate()
@@ -660,7 +660,7 @@ impl LossDetector {
             return time_lost
         }
 
-        if since < now.saturating_sub(time_threshold_us / 2) {
+        if since.saturating_add(time_threshold_us / 2) > now {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
@@ -909,7 +909,7 @@ impl FecReceiver {
     }
 
     pub fn calculate_next_check_time(&self) -> Instant {
-        let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, None).min(100_000);
+        let timeout_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, None).min(100_000) / 2;
 
         Instant::now() + Duration::from_micros(timeout_us)
     }
@@ -1103,7 +1103,7 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if *block_id >= self.next_block_id + 1 {
+                if *block_id > self.next_block_id {
                     continue;
                 }
 
