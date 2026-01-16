@@ -20,9 +20,13 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 50 * 1_000;
-const QUICK_LOSS_THRESHOLD: usize = 5;
+// Increased from 9/8 (1.125) to reduce false loss detection
+// Higher value = wait longer before declaring packet lost
+const K_TIME_THRESHOLD: f64 = 2.0;
+// Increased from 50ms to give more time for delayed packets
+const MIN_LOSS_DELAY_US: u64 = 100 * 1_000;
+// Increased from 5 to require more evidence before quick loss detection
+const QUICK_LOSS_THRESHOLD: usize = 8;
 
 #[derive(Debug, Error)]
 pub enum FecError {
