@@ -499,6 +499,10 @@ impl TransferSession {
             return 1.0;
         }
 
+        if self.is_canceled() {
+            return 0.0;
+        }
+
         let total_bytes_sent = self
             .progress
             .iter()

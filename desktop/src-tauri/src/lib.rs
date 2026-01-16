@@ -447,13 +447,19 @@ pub async fn run() {
                 .item(&quit_item)
                 .build()?;
 
-            let current_theme = theme::get_system_theme();
-            let tray_icon = theme::get_icon_for_theme(current_theme);
-            let icon = tauri::image::Image::from_bytes(tray_icon).expect("Failed to load tray icon");
-            let tray = TrayIconBuilder::new()
+            let icon = tauri::image::Image::from_bytes(theme::TRAY_ICON_BYTES)
+                .expect("Failed to load tray icon");
+            let mut tray_builder = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
-                .show_menu_on_left_click(true)
+                .show_menu_on_left_click(true);
+
+            #[cfg(target_os = "macos")]
+            {
+                tray_builder = tray_builder.icon_as_template(true);
+            }
+
+            let tray = tray_builder
                 .on_menu_event(|app, event| {
                     let event_id = event.id().as_ref();
                     match event_id {
@@ -488,8 +494,6 @@ pub async fn run() {
             if let Ok(mut guard) = TRAY_ICON.lock() {
                 *guard = Some(tray);
             }
-
-            theme::start_theme_monitor(app.handle().clone());
 
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
