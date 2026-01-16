@@ -1093,7 +1093,7 @@ impl FecReceiver {
     pub fn ping(&mut self) -> Result<FecAction, FecError> {
         let now = now_micros();
         let ratio = if self.retransmit_count > 0 {
-            (self.retransmit_count as f64 + (self.false_retransmit as f64 * 2.0)) / self.retransmit_count as f64
+            (self.retransmit_count as f64 + (self.false_retransmit as f64 * 3.0)) / self.retransmit_count as f64
         } else {
             1.0
         };
