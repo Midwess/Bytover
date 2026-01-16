@@ -21,7 +21,7 @@ const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
 const RTT_THRESHOLD_MS: u64 = 250;
 
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
-const MIN_LOSS_DELAY_US: u64 = 20 * 1_000;
+const MIN_LOSS_DELAY_US: u64 = 50 * 1_000;
 const QUICK_LOSS_THRESHOLD: usize = 4;
 
 #[derive(Debug, Error)]

@@ -1059,7 +1059,6 @@ impl WebRtcPeer {
                 }
                 FecAction::Feedback(fb, next_check) => {
                     next_check_time = Some(next_check);
-                    log::info!("Sending FEC feedback from receiver: {:?}", fb);
                     let _ = self.unordered_msg_channel.notify(Request::FecFeedback(fb)).await;
                 }
                 FecAction::Terminated => {
