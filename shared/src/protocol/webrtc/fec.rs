@@ -640,7 +640,8 @@ impl LossDetector {
         time_threshold_us: u64,
         quick_loss_threshold: usize
     ) -> Vec<u8> {
-        if since.saturating_add(time_threshold_us) > now {
+        // Only detect time-based losses after full threshold has expired
+        if since.saturating_add(time_threshold_us) <= now {
             let time_lost: Vec<u8> = received_frames
                 .iter()
                 .enumerate()
@@ -660,10 +661,12 @@ impl LossDetector {
             return time_lost
         }
 
-        if since.saturating_add(time_threshold_us / 2) > now {
+        // Quick loss detection after half threshold (detect gaps with consecutive frames after)
+        if since.saturating_add(time_threshold_us / 2) <= now {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
+        // Still within waiting period, don't request retransmissions yet
         Vec::new()
     }
 }
