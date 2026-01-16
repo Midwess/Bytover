@@ -22,7 +22,7 @@ const RTT_THRESHOLD_MS: u64 = 250;
 
 const K_TIME_THRESHOLD: f64 = 9.0 / 8.0;
 const MIN_LOSS_DELAY_US: u64 = 50 * 1_000;
-const QUICK_LOSS_THRESHOLD: usize = 4;
+const QUICK_LOSS_THRESHOLD: usize = 5;
 
 #[derive(Debug, Error)]
 pub enum FecError {
@@ -375,8 +375,8 @@ impl FecSender {
             return;
         }
 
-        self.rtt_estimator.update(self.rtt_ms);
         self.rtt_ms = rtt_ms;
+        self.rtt_estimator.update(self.rtt_ms * 1000);
         if rtt_ms <= RTT_THRESHOLD_MS {
             self.parity_ratio = 0.0;
             self.parity_ewma = 0.0;
@@ -660,7 +660,7 @@ impl LossDetector {
             return time_lost
         }
 
-        if since < now.saturating_sub(time_threshold_us / 4) {
+        if since < now.saturating_sub(time_threshold_us / 2) {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
@@ -1097,13 +1097,13 @@ impl FecReceiver {
         } else {
             1.0
         };
-        let time_threshold_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, Some(ratio));
 
+        let time_threshold_us = loss_delay_us(self.rtt_estimator.srtt_us, self.rtt_estimator.rttvar_us, Some(ratio));
         let mut all_missing_blocks = Vec::new();
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                if *block_id >= self.next_block_id + 2 {
+                if *block_id >= self.next_block_id + 1 {
                     continue;
                 }
 
@@ -1191,7 +1191,7 @@ const BETA_DEN: u64 = 4;
 pub struct RttEstimator {
     pub srtt_us: u64,
     pub rttvar_us: u64,
-    initialized: bool
+    initialized: bool,
 }
 
 impl RttEstimator {
@@ -1199,27 +1199,61 @@ impl RttEstimator {
         Self {
             srtt_us: 0,
             rttvar_us: 0,
-            initialized: false
+            initialized: false,
         }
     }
 
     #[inline]
     pub fn update(&mut self, latest_rtt_us: u64) {
         if !self.initialized {
+            // RFC 6298: Initial values
             self.srtt_us = latest_rtt_us;
             self.rttvar_us = latest_rtt_us / 2;
             self.initialized = true;
             return;
         }
 
+        // RFC 6298 formulas:
+        // RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R'|
+        // SRTT = (1 - alpha) * SRTT + alpha * R'
+        //
+        // Where:
+        // - alpha = 1/8
+        // - beta = 1/4
+        // - R' = latest RTT measurement
+
         let srtt = self.srtt_us as i64;
         let latest = latest_rtt_us as i64;
 
-        let abs_diff = (srtt - latest).unsigned_abs();
+        // Calculate absolute difference with OLD SRTT for RTTVAR
+        let abs_diff_old = (srtt - latest).unsigned_abs();
 
-        self.rttvar_us = ((self.rttvar_us * (BETA_DEN - BETA_NUM)) + (abs_diff * BETA_NUM)) / BETA_DEN;
+        // Update RTTVAR first using OLD SRTT
+        // RTTVAR = (1 - 1/4) * RTTVAR + 1/4 * |SRTT - R'|
+        self.rttvar_us = ((self.rttvar_us * (BETA_DEN - BETA_NUM))
+            + (abs_diff_old * BETA_NUM)) / BETA_DEN;
 
-        self.srtt_us = ((self.srtt_us * (ALPHA_DEN - ALPHA_NUM)) + (latest_rtt_us * ALPHA_NUM)) / ALPHA_DEN;
+        // Update SRTT
+        // SRTT = (1 - 1/8) * SRTT + 1/8 * R'
+        self.srtt_us = ((self.srtt_us * (ALPHA_DEN - ALPHA_NUM))
+            + (latest_rtt_us * ALPHA_NUM)) / ALPHA_DEN;
+    }
+
+    #[inline]
+    pub fn rto_us(&self) -> u64 {
+        if !self.initialized {
+            return 1_000_000; // 1 second default
+        }
+
+        // RFC 6298: RTO = SRTT + max(G, K * RTTVAR)
+        // Where G is clock granularity (we'll use 0 for simplicity)
+        let rto = self.srtt_us + (4 * self.rttvar_us);
+
+        // Clamp to reasonable bounds
+        const MIN_RTO_US: u64 = 200_000;  // 200ms
+        const MAX_RTO_US: u64 = 60_000_000; // 60s
+
+        rto.clamp(MIN_RTO_US, MAX_RTO_US)
     }
 }
 
@@ -1228,6 +1262,6 @@ pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<f64>) -> u64 {
     let rttvar_clamped = rttvar_us.max(1);
     let base = (srtt_clamped * rttvar_clamped) << 2;
 
-    let delay = ((base as f64) * K_TIME_THRESHOLD * mul.unwrap_or(1.0)) as u64;
-    delay.clamp(MIN_LOSS_DELAY_US, MAX_BLOCK_TIMEOUT_MS * 1000)
+    let delay = ((base as f64) * K_TIME_THRESHOLD) as u64;
+    delay.clamp(MIN_LOSS_DELAY_US, MAX_BLOCK_TIMEOUT_MS * 1000) * mul.unwrap_or(1.0).min(5.0) as u64
 }
