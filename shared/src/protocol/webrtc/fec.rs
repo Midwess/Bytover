@@ -1256,7 +1256,7 @@ impl RttEstimator {
 pub fn loss_delay_us(srtt_us: u64, rttvar_us: u64, mul: Option<f64>) -> u64 {
     let srtt_clamped = srtt_us.max(1);
     let rttvar_clamped = rttvar_us.max(1);
-    let base = (srtt_clamped * rttvar_clamped) << 2;
+    let base = srtt_clamped + (rttvar_clamped << 2);
 
     let delay = ((base as f64) * K_TIME_THRESHOLD) as u64;
     delay.clamp(MIN_LOSS_DELAY_US, MAX_BLOCK_TIMEOUT_MS * 1000) * mul.unwrap_or(1.0).min(5.0) as u64
