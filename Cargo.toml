@@ -37,6 +37,7 @@ chrono = { version = "0.4.42", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
 reed-solomon-erasure = { version = "6.0.0", default-features = false }
 raptorq = "2.0.0"
+rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 ringbuf = "0.4.8"
 tonic-middleware = { version = "0.3.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }

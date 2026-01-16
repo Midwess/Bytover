@@ -603,6 +603,11 @@ impl LossDetector {
         (frame_idx as usize) < self.requested_frames.len() && self.requested_frames[frame_idx as usize]
     }
 
+    /// Clear all requested flags to allow re-requesting frames after a timeout
+    fn clear_requested(&mut self) {
+        self.requested_frames.fill(false);
+    }
+
     fn detect_quick_loss(&self, received_frames: &[Option<Vec<u8>>], threshold: usize) -> Vec<u8> {
         let mut lost = Vec::new();
         let mut i = 0;
@@ -698,6 +703,7 @@ struct ReceiverBlock {
     shards: Vec<Option<Vec<u8>>>,
     frame_send_times: Vec<u64>,
     received: usize,
+    data_received: usize, // Count of data shards (not parity) received
     first_ts: u64,
     last_frame_ts: u64,
     last_ping_ts: u64,
@@ -719,6 +725,7 @@ impl ReceiverBlock {
             parity_shards: MIN_PARITY_SHARDS,
             total_shards: DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS,
             received: 0,
+            data_received: 0,
             first_ts: now,
             last_frame_ts: now,
             last_ping_ts: now,
@@ -741,6 +748,7 @@ impl ReceiverBlock {
             shards: vec![None; total],
             frame_send_times: vec![0; total],
             received: 0,
+            data_received: 0,
             first_ts: now,
             last_frame_ts: now,
             last_ping_ts: now,
@@ -762,6 +770,7 @@ impl ReceiverBlock {
             self.frame_send_times = vec![0; total];
             self.is_placeholder = false;
             self.received = 0;
+            self.data_received = 0;
             self.first_ts = now;
             self.last_frame_ts = now;
             self.prefix = prefix;
@@ -783,16 +792,22 @@ impl ReceiverBlock {
             self.shards[idx] = Some(Vec::from(payload));
             self.frame_send_times[idx] = now_micros(); // Record when frame arrived
             self.received += 1;
+            // Track data shards separately from parity shards
+            if idx < self.data_shards {
+                self.data_received += 1;
+            }
         } else {
             *false_retransmit_counter = false_retransmit_counter.saturating_add(1);
         }
 
-        let now = now_micros();
-        self.last_frame_ts = now;
-        self.last_ping_ts = now;
-        self.is_complete = self.received >= self.data_shards;
+        self.last_frame_ts = now_micros();
+        // Note: last_ping_ts is NOT updated here - it tracks when we last checked for loss,
+        // not when frames arrive. Updating it here would prevent time-based loss detection.
+        // is_complete only when ALL data shards are present (no reconstruction needed)
+        self.is_complete = self.data_received >= self.data_shards;
 
-        Ok(self.is_complete)
+        // Return whether we can attempt reconstruction (enough total frames)
+        Ok(self.received >= self.data_shards)
     }
 
     fn try_reconstruct(&mut self, decoders: &mut HashMap<(usize, usize), ReedSolomon>) -> Result<bool, FecError> {
@@ -912,6 +927,11 @@ impl FecReceiver {
             return 0.0;
         }
         (self.total_lost_frames as f32) / (self.total_frames_received as f32)
+    }
+
+    /// Returns (total_frames_received, total_lost_frames, retransmit_count, false_retransmit)
+    pub fn stats(&self) -> (u64, u64, u64, u64) {
+        (self.total_frames_received, self.total_lost_frames, self.retransmit_count, self.false_retransmit)
     }
 
     #[inline]
@@ -1136,7 +1156,11 @@ impl FecReceiver {
 
                 let present_count = block.shards.iter().filter(|s| s.is_some()).count();
                 if present_count >= block.data_shards {
-                    continue; // Can reconstruct
+                    // Try reconstruction - if it succeeds, skip retransmission request
+                    if block.try_reconstruct(&mut self.decoders)? {
+                        continue;
+                    }
+                    // Reconstruction failed despite having enough shards - continue to request missing frames
                 }
 
                 if let Some(ref mut detector) = &mut block.loss_detector {
