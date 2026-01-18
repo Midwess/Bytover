@@ -3,11 +3,11 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-const DEFAULT_WORDS = [
-    "Signalling",
-    "Connecting",
-    "Negotiating",
-    "Establishing",
+export const DEFAULT_WORDS = [
+    "Signalling...",
+    "Connecting...",
+    "Negotiating...",
+    "Establishing...",
 ]
 
 interface SignallingAnimationProps {
@@ -44,7 +44,7 @@ function SignallingAnimation({
                 className
             )}
         >
-            {words[currentIndex]}...
+            {words[currentIndex]}
         </span>
     )
 }

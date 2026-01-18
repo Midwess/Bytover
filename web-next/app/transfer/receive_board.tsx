@@ -30,7 +30,7 @@ import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import CircleProgress from "@/components/ui/progress";
-import { SignallingAnimation } from "@/components/ui/signalling-animation";
+import {DEFAULT_WORDS, SignallingAnimation} from "@/components/ui/signalling-animation";
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { useUrlState } from "@/hooks/use-url";
@@ -257,7 +257,7 @@ function ContentBoard() {
 
             {selectedSession.loading_status && (
                 <p className="text-muted-foreground">
-                    <SignallingAnimation />
+                    <SignallingAnimation words={[selectedSession.loading_status, ...DEFAULT_WORDS]} />
                 </p>
             )}
 

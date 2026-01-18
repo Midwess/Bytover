@@ -40,14 +40,14 @@ function Window() {
     }, [])
 
     useEffect(() => {
-        const width = isExpanded ? 400 : 220
-        window.setSize(new LogicalSize(width, 245))
+        const width = isExpanded ? 410 : 230
+        window.setSize(new LogicalSize(width, 255))
     }, [isExpanded, window])
 
     return (
         <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300 data-no-scrollbar`}>
             <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup"}>
-                <div className={`h-[210px] bg-transparent relative min-w-[190px] w-[190px]`}>
+                <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
                    <Shelf shelfId={shelfId} />
                    <Button
                        onClick={() => setIsExpanded(!isExpanded)}

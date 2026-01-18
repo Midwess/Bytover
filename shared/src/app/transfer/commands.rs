@@ -635,12 +635,21 @@ impl AppCommand {
                         break;
                     }
 
-                    let current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
-                    *current = (*current).max(progress.total_bytes());
+                    if progress.resource_order_id == aggregate_progress.resource_order_id {
+                        log::info!("Received session progress {:?}", progress);
+                        if progress.is_completed() {
+                            aggregate_progress = progress;
+                        }
+                    }
+                    else {
+                        let current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
+                        *current = (*current).max(progress.total_bytes());
 
-                    let total_downloaded: u64 = resource_progress_map.values().sum();
-                    let bytes_delta = total_downloaded.saturating_sub(aggregate_progress.total_bytes());
-                    aggregate_progress.update_progress(bytes_delta);
+                        let total_downloaded: u64 = resource_progress_map.values().sum();
+                        let bytes_delta = total_downloaded.saturating_sub(aggregate_progress.total_bytes());
+                        aggregate_progress.update_progress(bytes_delta);
+                    }
+
                     self.update_model(TransferSessionModelEvent::Update(
                         session_id.clone(),
                         aggregate_progress.clone().into()

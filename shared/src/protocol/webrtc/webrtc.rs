@@ -175,7 +175,7 @@ impl WebRtc {
         session_order_id: u64,
         resource: LocalResource,
         progress: TransferProgress
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferProgress, WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
             peer.request_resource_download(request, session_order_id, resource, progress).await
@@ -192,7 +192,7 @@ impl WebRtc {
         session_resource: LocalResource,
         resources: Vec<LocalResource>,
         _aggregate_progress: TransferProgress
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferProgress, WebRtcErrors> {
         let peer_id = PeerId(peer_id.parse()?);
         if let Some(peer) = self.shared_context.get_peer(&peer_id).await.and_then(|p| p.upgrade()) {
             peer.download_all_resources(request, session_order_id, session_resource, resources).await

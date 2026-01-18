@@ -36,6 +36,7 @@ pub enum TransferSessionStatus {
         bytes_per_second: u64,
         percentage: f64
     },
+    Saving,
     Success,
     Failed(String),
     Canceled
@@ -73,6 +74,7 @@ impl Display for TransferSessionStatus {
                     }
                 }
             }
+            TransferSessionStatus::Saving => write!(f, "Saving..."),
             TransferSessionStatus::Success => write!(f, "Done ☺️!"),
             TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
             TransferSessionStatus::Canceled => write!(f, "Canceled")
@@ -127,26 +129,12 @@ impl TransferProgress {
         }
     }
 
-    pub fn complete(&mut self) {
-        if self.percentage() == 1.0 {
-            self.status = TransferStatus::Success
-        } else {
-            self.status = TransferStatus::Fail(format!(
-                "Data corrupted transfer for resource {} received {}/1.0",
-                self.resource_order_id,
-                self.percentage()
-            ))
-        };
-    }
-
     pub fn success(&mut self) {
-        self.complete();
         self.total_bytes_counter = self.file_size;
         self.status = TransferStatus::Success;
     }
 
     pub fn fail(&mut self, msg: String) {
-        self.complete();
         self.status = TransferStatus::Fail(msg);
     }
 
@@ -174,6 +162,10 @@ impl TransferProgress {
         matches!(self.status, TransferStatus::Canceled)
     }
 
+    pub fn is_saving(&self) -> bool {
+        matches!(self.status, TransferStatus::Saving)
+    }
+
     pub fn elapsed(&self) -> u64 {
         Utc::now().timestamp_millis() as u64 - self.start_time_utc_ms
     }
@@ -197,14 +189,6 @@ impl TransferProgress {
             self.bytes_sec_counter = bytes_count;
         }
 
-        if self.status != TransferStatus::InProgress {
-            return;
-        }
-
-        if self.percentage() == 1.0 {
-            self.bytes_per_second = self.bytes_sec_counter;
-            self.complete();
-        }
     }
 
     pub fn speed(&self) -> u64 {
@@ -224,6 +208,7 @@ impl TransferProgress {
 pub enum TransferStatus {
     Pending,
     InProgress,
+    Saving,
     Fail(String),
     Success,
     Canceled
@@ -235,6 +220,10 @@ impl TransferStatus {
             self,
             TransferStatus::Success | TransferStatus::Fail(_) | TransferStatus::Canceled
         )
+    }
+
+    pub fn is_saving(&self) -> bool {
+        matches!(self, TransferStatus::Saving)
     }
 }
 
@@ -637,6 +626,11 @@ impl TransferSession {
         let is_success = self.progress.iter().all(|it| it.is_success());
         if is_success {
             return TransferSessionStatus::Success;
+        }
+
+        let is_saving = self.progress.iter().any(|it| it.is_saving());
+        if is_saving {
+            return TransferSessionStatus::Saving;
         }
 
         if self.cancellation_token.is_cancelled() {

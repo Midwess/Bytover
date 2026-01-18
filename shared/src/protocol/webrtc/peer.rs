@@ -663,7 +663,7 @@ impl WebRtcPeer {
         session_order_id: u64,
         resource: LocalResource,
         mut progress: TransferProgress
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferProgress, WebRtcErrors> {
         static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
 
         let resource_order_id = resource.order_id;
@@ -775,7 +775,7 @@ impl WebRtcPeer {
 
         log::info!("Completed download for resource {}", resource_id);
 
-        Ok(())
+        Ok(progress)
     }
 
     pub async fn download_all_resources(
@@ -784,7 +784,7 @@ impl WebRtcPeer {
         session_order_id: u64,
         session_resource: LocalResource,
         resources: Vec<LocalResource>
-    ) -> Result<(), WebRtcErrors> {
+    ) -> Result<TransferProgress, WebRtcErrors> {
         use crate::entities::transfer_session::TransferType;
 
         log::info!("Starting download all resources for session {}", session_order_id);
@@ -836,19 +836,42 @@ impl WebRtcPeer {
             }
         }
 
-        if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
-            log::error!("Failed to stop download session: {:?}", e);
-        }
-
         if download_failed {
             log::info!("Download all resources failed for session {}", session_order_id);
+            if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
+                log::error!("Failed to stop download session: {:?}", e);
+            }
             self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
             return Err(WebRtcErrors::InvalidDelimiter("Download all failed".into()));
         }
 
+        // Emit saving status before finalizing the session
+        let mut session_progress = TransferProgress::new(session_resource.order_id, session_resource.size, TransferType::Receive);
+        session_progress.update_progress(session_resource.size);
+        log::info!("Emitting saving status for session resource {}", session_resource.order_id);
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .await;
+
+        if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
+            log::error!("Failed to stop download session: {:?}", e);
+            session_progress.fail(format!("Failed to save: {:?}", e));
+            core_request
+                .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress))
+                .await;
+            return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to stop download session: {:?}", e)));
+        }
+
+        // Emit success status after session is finalized
+        session_progress.success();
+        log::info!("Emitting success status for session resource {}", session_resource.order_id);
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .await;
+
         log::info!("Completed download all resources for session {}", session_order_id);
 
-        Ok(())
+        Ok(session_progress)
     }
 
     pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcErrors> {
@@ -999,7 +1022,6 @@ impl WebRtcPeer {
                     feedback: Some(Feedback::Network(network_stats))
                 };
 
-                log::info!("Sending idle heartbeat with block_id {}", current_block_id);
                 let _ = self.unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                 last_packet_time = Instant::now();
             }
@@ -1042,7 +1064,7 @@ impl WebRtcPeer {
                                     prefix,
                                     e
                                 );
-                                // Receiver was dropped (download canceled/errored), clean up the channel
+                                
                                 self.prefix_channels.lock().await.remove(&prefix);
                             } else {
                                 log::debug!("Successfully sent packet to prefix {}", prefix);
