@@ -16,7 +16,9 @@ import {
     Check,
     Users,
     Globe,
-    Mail, SendHorizonal, ChevronRight, Upload,
+    Mail,
+    ChevronRight,
+    Upload,
 } from "lucide-react"
 import core from "@/core.ts"
 import {Avatar, AvatarImage} from "@/components/ui/avatar"
@@ -72,6 +74,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
 function P2PSend({ shelfId }: { shelfId: string | undefined }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const [password, setPassword] = useState(p2pSession?.password || '')
+    const [isLoading, setIsLoading] = useState(false)
     const isInProgress = p2pSession?.is_in_progress ?? false
 
     useEffect(() => {
@@ -80,11 +83,19 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         }
     }, [p2pSession?.password])
 
+    useEffect(() => {
+        if (p2pSession?.access_url) {
+            setIsLoading(false)
+        }
+    }, [p2pSession?.access_url]);
+
     const handleStartTransfer = () => {
-        if (!shelfId) return
+        if (!shelfId || isLoading) return
+        setIsLoading(true)
         const pwd = password || null
         invoke("p2p_transfer", { shelfId, password: pwd }).then(noop)
         setPassword('')
+        setTimeout(() => setIsLoading(false), 6000)
     }
 
     const handleStopTransfer = () => {
@@ -120,7 +131,14 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
                             className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
                 ) : (
                     <Button onClick={handleStartTransfer}
-                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 w-full"}>Start <ChevronRight className={"scale-x-120"}/> </Button>
+                            disabled={isLoading}
+                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 w-full disabled:opacity-70"}>
+                        {isLoading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        ) : (
+                            <>Start <ChevronRight className={"scale-x-120"}/></>
+                        )}
+                    </Button>
                 )
             }
         </Card>
@@ -173,8 +191,17 @@ function MyPeerInfo() {
 
 function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
+    const [isLoading, setIsLoading] = useState(false)
     const cloudSession = core.useCloudSessionForShelf(shelfId)
     const progress = (cloudSession?.progress ?? 0) * 100
+
+    const handleUpload = () => {
+        if (!shelfId || isLoading) return
+        setIsLoading(true)
+        invoke("public_transfer", { shelfId, password: pwd }).then(noop)
+        const delay = Math.random() * 2000 + 2000
+        setTimeout(() => setIsLoading(false), delay)
+    }
 
     return <>
         <Card shadowSize={0} className="flex flex-col gap-2 p-2 rounded-xl">
@@ -208,11 +235,15 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                     }}
                             className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : (
-                    <Button onClick={() => {
-                        if (!shelfId) return
-                        invoke("public_transfer", { shelfId, password: pwd }).then(noop)
-                    }}
-                            className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60"}>Upload <Upload/> </Button>
+                    <Button onClick={handleUpload}
+                            disabled={isLoading}
+                            className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60 disabled:opacity-70"}>
+                        {isLoading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        ) : (
+                            <>Upload <Upload/></>
+                        )}
+                    </Button>
                 )
             }
             {

@@ -13,16 +13,20 @@ import {Send} from "lucide-react"
 export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const [emails, setEmails] = useState<string[]>([]);
+    const [isLoading, setIsLoading] = useState(false)
     const cloudSession = core.useCloudSessionForShelf(shelfId, true)
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleEmailTransfer = () => {
-        if (!shelfId || emails.length === 0) return
+        if (!shelfId || emails.length === 0 || isLoading) return
+        setIsLoading(true)
         invoke("email_transfer", {
             shelfId,
             password: pwd || null,
             toEmails: emails
         }).then(noop)
+        const delay = Math.random() * 2000 + 2000
+        setTimeout(() => setIsLoading(false), delay)
     }
 
     return <>
@@ -61,8 +65,13 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                 ) : (
                     <Button
                         onClick={handleEmailTransfer}
-                        className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60 disabled:opacity-50"}>
-                        Send <Send/>
+                        disabled={isLoading}
+                        className={"bg-bluePrimary text-foreground w-[100px] shadow-lg hover:bg-bluePrimary/60 disabled:opacity-70"}>
+                        {isLoading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                        ) : (
+                            <>Send <Send/></>
+                        )}
                     </Button>
                 )
             }
