@@ -12,7 +12,8 @@ pub enum PathResolverMessage {
     GetLocalResourcePath { absolute_path: String },
     GetThumbnailDirPath,
     GetSessionDirPath { session_id: u64 },
-    GetSystemDirPath
+    GetSystemDirPath,
+    GetDroppedContentDirPath,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -21,7 +22,8 @@ pub enum PathResolverResponseMessage {
     GetLocalResourcePath { path: LocalResourcePath },
     GetThumbnailDirPath { path: String },
     GetSessionDirPath { path: String },
-    GetSystemDirPath { path: String }
+    GetSystemDirPath { path: String },
+    GetDroppedContentDirPath { path: String },
 }
 
 pub struct PathResolverImpl {
@@ -94,5 +96,15 @@ impl PathResolver for PathResolverImpl {
         let system_dir = self.get_system_dir_path().await;
         let db_path = PathBuf::from(system_dir).join("database.redb");
         db_path.to_str().unwrap().to_string()
+    }
+
+    async fn get_dropped_content_dir_path(&self) -> String {
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetDroppedContentDirPath { path }) =
+            self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetDroppedContentDirPath)).await
+        else {
+            panic!("Failed to get dropped content dir path");
+        };
+
+        path
     }
 }

@@ -117,22 +117,6 @@ impl AppCommand {
         }
     }
 
-    pub async fn start_locator_monitor(&self) {
-        loop {
-            let geo_location = self.run(DeviceOperation::get_geo_location()).await;
-            let delay = match geo_location {
-                Some(_) => Duration::from_secs(15),
-                None => Duration::from_secs(5)
-            };
-            let scopes = self.run(InternetOperation::locate(geo_location)).await;
-            if let Ok(scopes) = scopes {
-                let _ = self.run(P2POperation::update_finding_scopes(scopes)).await;
-            }
-
-            self.request(delay).await;
-        }
-    }
-
     pub async fn handle_peer_connection(&self, peer: Peer) {
         let request = P2POperation::PeerEvents(peer.id.clone());
         let mut stream = self.stream_from_shell(request.into());

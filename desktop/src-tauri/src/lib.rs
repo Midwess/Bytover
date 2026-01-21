@@ -43,8 +43,9 @@ use crate::thumbnail::generate_thumbnail;
 pub mod api;
 pub mod extensions;
 mod thumbnail;
-mod mouse_tracking;
+pub(crate) mod mouse_tracking;
 mod theme;
+mod content_handlers;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
@@ -213,7 +214,7 @@ async fn is_autostart_enabled(app_handle: AppHandle) -> Result<bool, String> {
     autostart_manager.is_enabled().map_err(|e: tauri_plugin_autostart::Error| e.to_string())
 }
 
-async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
+pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
 }
@@ -428,6 +429,7 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_clipboard::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .invoke_handler(tauri::generate_handler![
             authenticate, add_resources,
@@ -436,7 +438,11 @@ pub async fn run() {
             open_received_resource, open_session, open_shelf,
             clear_shelf, sign_out, quit, get_or_create_shelf,
             get_toast_message, close_toast,
-            set_autostart, is_autostart_enabled
+            set_autostart, is_autostart_enabled,
+            content_handlers::add_url_resource,
+            content_handlers::add_text_resource,
+            content_handlers::add_html_resource,
+            content_handlers::paste_from_clipboard
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]

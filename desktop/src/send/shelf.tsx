@@ -5,17 +5,20 @@ import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
+import {useShelfClipboard} from "@/hooks/use-shelf-clipboard.ts";
 import core from "@/core.ts";
 import {
     Play,
     FolderIcon,
     FileIcon,
+    MoreHorizontal,
     MoreVertical,
     Trash2,
     Minus,
     Plus,
     X,
     Loader2,
+    ClipboardPaste,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -86,6 +89,9 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useShelfClipboard({shelfId, containerRef});
 
     useEffect(() => {
         if (effectRan.current || !shelfId) return;
@@ -94,7 +100,8 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         let unlisten: (() => void) | undefined;
 
         const setup = async () => {
-            unlisten = await window.onDragDropEvent(throttle(({payload}) => {
+            unlisten = await window.onDragDropEvent(throttle((event) => {
+                const {payload} = event
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
@@ -108,11 +115,11 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 } else if (payload.type === "drop") {
                     setIsDraggingOver(false);
 
-                    if (isLeftSide) {
+                    if (isLeftSide && payload.paths.length > 0) {
                         invoke("add_resources", {shelfId, paths: payload.paths}).then(noop);
                     }
                 }
-            }, 120, {leading: true, trailing: true}));
+            }, 50, {leading: true, trailing: true}));
         };
 
         setup();
@@ -135,6 +142,11 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     return (
         <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
             <div
+                ref={containerRef}
+                tabIndex={0}
+                className="w-full h-full outline-none"
+            >
+            <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
                     <Plus className="h-9 w-10 text-bluePrimary"/>
@@ -146,7 +158,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 {selectedResources.length === 0 ? (
                     <div
                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
-                        <p className="text-md text-muted-foreground animate-pulse duration-1500">Drop files here</p>
+                        <p className="text-md text-muted-foreground animate-pulse duration-1500">Drop or paste files here</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">
@@ -167,23 +179,32 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
 
             <div
                 className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-2">
-                {!!selectedResources.length &&
-                    <Button
-                        disabled={!isResourceRemoveAllowed}
-                        onClick={() => {
-                            invoke("clear_shelf", {shelfId})
-                        }}
-                        className="group z-20 flex-col items-center justify-between border-none overflow-hidden w-fit border rounded-full bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:h-18 hover:py-2 hover:rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed">
-                        <div
-                            className="overflow-hidden text-foreground text-xs bg-muted px-1 rounded-md opacity-0 transition-all duration-100 ease-out group-hover:opacity-100 group-hover:mt-1 border border-border">
-                            <p className={"text-xs"}>
-                                Clear all
-                            </p>
-                        </div>
-                        <Trash2
-                            className="h-6 w-6 scale-125 flex-shrink-0 transition-transform text-foreground border border-foreground/80 p-[2px] duration-500 ease-out bg-muted/90 rounded-full"/>
-                    </Button>
-                }
+                <div className="group z-20 flex flex-col items-center justify-end bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:pb-2 gap-2">
+                    <div className="flex flex-col gap-1.5 overflow-hidden max-h-0 opacity-0 transition-all duration-300 ease-out group-hover:max-h-24 group-hover:opacity-100 group-hover:mb-1">
+                        {!!selectedResources.length && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={!isResourceRemoveAllowed}
+                                onClick={() => invoke("clear_shelf", {shelfId})}
+                                className="w-24 flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted px-2 py-1 h-auto rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Trash2 className="h-3.5 w-3.5"/>
+                                <span>Clear all</span>
+                            </Button>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => invoke('paste_from_clipboard', {shelfId})}
+                            className="flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted px-2 py-1 h-auto w-24 rounded-lg border">
+                            <ClipboardPaste className="h-3.5 w-3.5"/>
+                            <span>Paste</span>
+                        </Button>
+                    </div>
+                    <MoreHorizontal
+                        className="h-7 w-7 flex-shrink-0 transition-transform text-foreground p-[2px] duration-500 ease-out bg-muted/90 rounded-full cursor-pointer"/>
+                </div>
+            </div>
             </div>
         </ShelfWrapper>
     )

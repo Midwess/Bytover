@@ -44,7 +44,9 @@ rdev = { git = "https://github.com/Narsil/rdev.git", branch = "main" }
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
 dispatch = "0.2.0"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+tauri-plugin-clipboard = "2"
 chrono = { workspace = true, features = ["std", "clock"] }
+reqwest = { version = "0.12", features = ["rustls-tls"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }

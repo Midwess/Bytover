@@ -6,7 +6,8 @@ use tokio::fs::create_dir_all;
 pub struct PathResolverImpl {
     private_dir_path: PathBuf,
     user_dir_path: PathBuf,
-    thumbnails_dir_path: PathBuf
+    thumbnails_dir_path: PathBuf,
+    dropped_content_dir_path: PathBuf,
 }
 
 impl PathResolverImpl {
@@ -14,6 +15,7 @@ impl PathResolverImpl {
         let private_dir_path = workdir_path.join("private");
         let user_dir_path = workdir_path.join("user");
         let thumbnails_dir_path = private_dir_path.join("thumbnails");
+        let dropped_content_dir_path = private_dir_path.join("dropped_content");
 
         if !thumbnails_dir_path.exists() {
             let _ = create_dir_all(&thumbnails_dir_path).await;
@@ -27,10 +29,15 @@ impl PathResolverImpl {
             let _ = create_dir_all(&user_dir_path).await;
         }
 
+        if !dropped_content_dir_path.exists() {
+            let _ = create_dir_all(&dropped_content_dir_path).await;
+        }
+
         Self {
             private_dir_path,
             user_dir_path,
-            thumbnails_dir_path
+            thumbnails_dir_path,
+            dropped_content_dir_path,
         }
     }
 }
@@ -73,5 +80,9 @@ impl PathResolver for PathResolverImpl {
         let system_dir = self.get_system_dir_path().await;
         let db_path = PathBuf::from(system_dir).join("database.redb");
         db_path.to_str().unwrap().to_string()
+    }
+
+    async fn get_dropped_content_dir_path(&self) -> String {
+        self.dropped_content_dir_path.to_str().unwrap().to_string()
     }
 }

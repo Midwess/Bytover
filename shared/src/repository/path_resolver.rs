@@ -20,4 +20,6 @@ pub trait PathResolver: Send + Sync {
         let path = PathBuf::from(self.get_thumbnail_dir_path().await).join(format!("{resource_id}.png"));
         path.to_string_lossy().to_string()
     }
+
+    async fn get_dropped_content_dir_path(&self) -> String;
 }
