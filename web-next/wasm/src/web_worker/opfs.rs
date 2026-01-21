@@ -75,7 +75,12 @@ pub enum FileOperation {
     LocalResourceInstance,
     GenerateSource,
     Blob,
-    ClearAll,
+    Init {
+        storage_session_id: String
+    },
+    CleanUp {
+        paths: Vec<String>
+    },
     CreateZipWriter {
         zip_filename: String
     },
@@ -116,34 +121,70 @@ pub type AMutex<T> = Arc<Mutex<T>>;
 
 #[derive(Clone)]
 pub struct OpfsWorker {
-    root: OnceCell<Arc<FileSystemDirectoryHandle>>,
+    root: Arc<OnceCell<Arc<FileSystemDirectoryHandle>>>,
+    storage_session_id: Arc<OnceCell<String>>,
     device_files: AMutex<HashMap<String, AMutex<DeviceFile>>>,
     file_handles: AMutex<HashMap<String, AMutex<FileSystemSyncAccessHandle>>>,
     cursors: AMutex<HashMap<u32, AMutex<Box<dyn IOCursor>>>>,
     device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
-    zip_writers: AMutex<HashMap<String, AMutex<crate::file_system::zip_writer::OpfsZipWriter>>>,
+    zip_writers: AMutex<HashMap<String, AMutex<OpfsZipWriter>>>,
     id_gen: Arc<AtomicU32>
 }
 
 impl OpfsWorker {
+    async fn get_opfs_root(&self) -> Result<FileSystemDirectoryHandle, JsValue> {
+        let root_future = JsFuture::from(get_directory());
+        root_future.await.map(|it| it.into())
+    }
+
     async fn handle_operation(&self, operation: OpfsOperation) -> OpfsOperationOutput {
         let OpfsOperation { file_path, operation } = operation;
-        let root = match self.root.get() {
-            Some(r) => r.clone(),
-            None => {
-                let root_future = JsFuture::from(get_directory());
-                let root: FileSystemDirectoryHandle = match root_future.await.map(|it| it.into()) {
-                    Err(e) => {
-                        log::error!("Failed to get root directory: {:?}", e);
-                        return OpfsOperationOutput::Error(JsValue::from(format!("Opfs failed to get root dir {e:?}")));
-                    }
-                    Ok(it) => it
-                };
 
-                let root = Arc::new(root);
-                let _ = self.root.set(root.clone());
-                root
+        if let FileOperation::Init { storage_session_id } = operation {
+            let opfs_root = match self.get_opfs_root().await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("Failed to get OPFS root: {:?}", e);
+                    return OpfsOperationOutput::Error(e);
+                }
+            };
+
+            let session_dir_name = format!("session-{}", storage_session_id);
+            let session_root = match opfs_root.get_or_create_directory(&session_dir_name).await {
+                Ok(dir) => dir,
+                Err(e) => {
+                    log::error!("Failed to create session directory: {:?}", e);
+                    return OpfsOperationOutput::Error(e);
+                }
+            };
+
+            let _ = self.storage_session_id.set(storage_session_id.clone());
+            let _ = self.root.set(Arc::new(session_root));
+            log::info!("OPFS session root initialized: {}", session_dir_name);
+            return OpfsOperationOutput::Void;
+        }
+
+        if let FileOperation::CleanUp { paths } = operation {
+            let opfs_root = match self.get_opfs_root().await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("Failed to get OPFS root for cleanup: {:?}", e);
+                    return OpfsOperationOutput::Error(e);
+                }
+            };
+
+            let options = FileSystemRemoveOptions::new();
+            options.set_recursive(true);
+            for path in paths {
+                let fut = opfs_root.remove_entry_with_options(&path, &options);
+                let _ = JsFuture::from(fut).await;
             }
+            return OpfsOperationOutput::Void;
+        }
+
+        let Some(root) = self.root.get().cloned() else {
+            log::error!("OPFS root not initialized, call Init first");
+            return OpfsOperationOutput::Error(JsValue::from("OPFS root not initialized"));
         };
 
         let id_gen = self.id_gen.clone();
@@ -191,44 +232,8 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e)
                 }
             }
-            FileOperation::ClearAll => {
-                let remove_options = FileSystemRemoveOptions::new();
-                remove_options.set_recursive(true);
-                let entries = root.entries();
-                let options = FileSystemRemoveOptions::new();
-                options.set_recursive(true);
-                loop {
-                    let Ok(fut) = entries.next() else {
-                        break;
-                    };
-                    let val = JsFuture::from(fut).await;
-                    match val {
-                        Ok(val) => {
-                            let entry: js_sys::Object = val.into();
-                            let Ok(done) = js_sys::Reflect::get(&entry, &JsValue::from_str("done")) else {
-                                continue;
-                            };
-
-                            if done.as_bool().unwrap_or(false) {
-                                break;
-                            }
-
-                            let Ok(value) = js_sys::Reflect::get(&entry, &JsValue::from_str("value")) else {
-                                continue;
-                            };
-
-                            let array: js_sys::Array = value.into();
-                            let name = array.get(0);
-                            let fut = root.remove_entry_with_options(name.as_string().unwrap_or_default().as_str(), &options);
-                            let _ = JsFuture::from(fut).await;
-                        }
-                        Err(e) => {
-                            log::error!("Failed to get next entry: {:?}", e);
-                            break;
-                        }
-                    }
-                }
-                OpfsOperationOutput::Void
+            FileOperation::Init { .. } | FileOperation::CleanUp { .. } => {
+                unreachable!()
             }
             FileOperation::Cursor { buffer_size } => {
                 // Check if this is a zip_entry:// path and create entry if needed
@@ -607,7 +612,8 @@ impl Worker for OpfsWorker {
         init_scoped_id_generator("Bitbridge".to_owned());
 
         Self {
-            root: Default::default(),
+            root: Arc::new(OnceCell::new()),
+            storage_session_id: Arc::new(OnceCell::new()),
             file_handles: Default::default(),
             device_files: Default::default(),
             cursors: Default::default(),

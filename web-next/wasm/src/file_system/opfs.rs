@@ -48,8 +48,7 @@ impl HandleType {
 pub trait FileSystemDirectoryHandleExt {
     async fn open_file(&self, path: &str) -> Result<FileSystemSyncAccessHandle, JsValue>;
     async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue>;
-    // Return either FileSystemAccessHandle
-    // or FileSystemDirectoryHandle if it is a folder
+    async fn get_or_create_directory(&self, name: &str) -> Result<FileSystemDirectoryHandle, JsValue>;
     async fn access(&self, path: &str, kind: Option<HandleType>, auto_create: bool) -> Result<JsValue, JsValue>;
     fn file_stream(&self) -> FileStream;
     async fn cursor(&self, path: &str, buffer_size: usize) -> Result<Box<dyn IOCursor>, JsValue>;
@@ -68,6 +67,13 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
     async fn open_file_async(&self, path: &str) -> Result<FileSystemFileHandle, JsValue> {
         let file_async_handle: FileSystemFileHandle = self.access(path, Some(HandleType::File), true).await?.dyn_into()?;
         Ok(file_async_handle)
+    }
+
+    async fn get_or_create_directory(&self, name: &str) -> Result<FileSystemDirectoryHandle, JsValue> {
+        let options = FileSystemGetDirectoryOptions::new();
+        options.set_create(true);
+        let dir_future = JsFuture::from(self.get_directory_handle_with_options(name, &options));
+        dir_future.await.map(|it| it.into())
     }
 
     async fn access(&self, path: &str, kind: Option<HandleType>, auto_create: bool) -> Result<JsValue, JsValue> {

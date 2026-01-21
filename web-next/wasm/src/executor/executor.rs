@@ -1,9 +1,5 @@
-use crate::file_system::io::OPFS_WORKER;
-use crate::web_worker::bridge::WorkerMessage;
-use crate::web_worker::opfs::{FileOperation, OpfsOperation};
 use futures_timer::Delay;
 use shared::app::operations::internet::InternetOperation;
-use shared::app::operations::persistent::{PersistentOperation, TransferSessionPersistentOperation};
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
 use shared::shell::api::network::InternetConnection;
 use shared::shell::api::CoreRequest;
@@ -30,18 +26,7 @@ impl NativeExecutor {
                 let response = self.rpc.handle(rpc_effect).await;
                 response.into()
             }
-            CoreOperation::Persistent(database) => match &database {
-                PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
-                    let msg = WorkerMessage::new(OpfsOperation {
-                        file_path: "/".to_owned(),
-                        operation: FileOperation::ClearAll
-                    });
-
-                    let _ = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"));
-                    self.persistent.handle(database).await.into()
-                }
-                _ => self.persistent.handle(database).await.into()
-            },
+            CoreOperation::Persistent(database) => self.persistent.handle(database).await.into(),
             CoreOperation::Transfer(transfer) => self.transfer.handle(request, transfer).await.into(),
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
                 match self.internet_connection.locate(geo_location).await {

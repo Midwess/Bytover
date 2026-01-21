@@ -28,18 +28,82 @@ pub use crux_core::{Core, Request};
 use devlog_sdk::distributed_id::gen_id;
 use erased_serde::Serialize;
 use js_sys::{Array, Promise};
+use n0_future::{task, time};
 use serde::Deserialize;
 use shared::app::shelf::module::ResourceSelection;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
+use std::cell::OnceCell;
 use std::sync::LazyLock;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
 use web_sys::{window, File};
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
+
+thread_local! {
+    static STORAGE_SESSION_ID: OnceCell<String> = const { OnceCell::new() };
+}
+
+fn get_storage_session_id() -> Option<String> {
+    STORAGE_SESSION_ID.with(|cell| cell.get().cloned())
+}
+
+const STALE_THRESHOLD_MS: f64 = 300_000.0;
+
+fn scan_and_get_stale_paths() -> Vec<String> {
+    let mut stale_paths = Vec::new();
+    let now = js_sys::Date::now();
+
+    let Some(w) = window() else {
+        return stale_paths;
+    };
+
+    let Ok(Some(storage)) = w.local_storage() else {
+        return stale_paths;
+    };
+
+    let current_session = get_storage_session_id();
+    let len = storage.length().unwrap_or(0);
+
+    for i in 0..len {
+        let Ok(Some(key)) = storage.key(i) else {
+            continue;
+        };
+
+        if !key.starts_with("bitbridge_storage_session_") {
+            continue;
+        }
+
+        let session_id = key.trim_start_matches("bitbridge_storage_session_");
+
+        if current_session.as_deref() == Some(session_id) {
+            continue;
+        }
+
+        let Ok(Some(value)) = storage.get_item(&key) else {
+            continue;
+        };
+
+        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&value) else {
+            continue;
+        };
+
+        let Some(last_ping) = parsed.get("lastPing").and_then(|v| v.as_f64()) else {
+            continue;
+        };
+
+        if now - last_ping > STALE_THRESHOLD_MS {
+            stale_paths.push(format!("session-{}", session_id));
+            let _ = storage.remove_item(&key);
+        }
+    }
+
+    stale_paths
+}
 
 #[wasm_bindgen]
 extern "C" {
@@ -120,23 +184,49 @@ pub async fn is_compatible() -> bool {
 #[wasm_bindgen]
 pub async fn init() {
     logger::setup();
-    log::info!("Initializing");
+
+    let session_id = uuid::Uuid::new_v4().to_string();
+    STORAGE_SESSION_ID.with(|cell| {
+        let _ = cell.set(session_id.clone());
+    });
+    log::info!("Storage session initialized: {}", session_id);
+
     let di_container = DiContainer::get_instance();
     di_container.init().await;
 
-    log::info!("Clearing OPFS storage");
-    let cleanup_msg = WorkerMessage::new(OpfsOperation {
+    let init_msg = WorkerMessage::new(OpfsOperation {
         file_path: "/".to_owned(),
-        operation: FileOperation::ClearAll
+        operation: FileOperation::Init {
+            storage_session_id: session_id.clone()
+        }
     });
-    match OPFS_WORKER.send(cleanup_msg).await {
-        Some(response) => match response.message {
-            OpfsOperationOutput::Void => log::info!("OPFS storage cleared successfully"),
-            OpfsOperationOutput::Error(e) => log::error!("Failed to clear OPFS storage: {:?}", e),
-            _ => log::warn!("Unexpected response from OPFS cleanup")
-        },
-        None => log::error!("Failed to send OPFS cleanup message")
-    }
+    OPFS_WORKER.send(init_msg).await;
+
+    let heartbeat_session_id = session_id.clone();
+    task::spawn(async move {
+        let key = format!("bitbridge_storage_session_{}", heartbeat_session_id);
+        loop {
+            if let Some(w) = window() {
+                if let Ok(Some(storage)) = w.local_storage() {
+                    let now = js_sys::Date::now() as u64;
+                    let _ = storage.set_item(&key, &format!(r#"{{"lastPing":{}}}"#, now));
+                }
+            }
+            time::sleep(Duration::from_secs(60)).await;
+        }
+    });
+
+    task::spawn(async move {
+        let stale_paths = scan_and_get_stale_paths();
+        if !stale_paths.is_empty() {
+            log::info!("Cleaning {} stale paths in background", stale_paths.len());
+            let cleanup_msg = WorkerMessage::new(OpfsOperation {
+                file_path: "/".to_owned(),
+                operation: FileOperation::CleanUp { paths: stale_paths }
+            });
+            OPFS_WORKER.send(cleanup_msg).await;
+        }
+    });
 }
 
 /// Add device files to opfs

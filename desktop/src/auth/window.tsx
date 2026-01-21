@@ -1,7 +1,7 @@
 import ReactDOM from "react-dom/client"
-import React, {useEffect} from "react"
+import React, {useEffect, useState} from "react"
 import core from "@/core.ts"
-import {motion} from "motion/react"
+import {motion, noop} from "motion/react"
 import {LayoutTextFlip} from "@/components/ui/layout-text-flip.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import {ArrowRight} from "lucide-react";
@@ -15,9 +15,18 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 function Window() {
+    const [isLoading, setIsLoading] = useState(false)
+
     useEffect(() => {
         core.launch()
     }, [])
+
+    const handleLogin = () => {
+        if (isLoading) return
+        setIsLoading(true)
+        invoke("authenticate").then(noop)
+        setTimeout(() => setIsLoading(false), 10000)
+    }
 
     return (
         <main className="relative w-screen flex flex-col h-screen dark rounded-b-lg bg-background overflow-hidden">
@@ -38,9 +47,14 @@ function Window() {
             <div
                 className={"absolute z-20 bottom-0 flex-1/4 w-full h-[20vh] flex flex-col justify-center items-center bg-black/50 backdrop-blur-2xl gap-2"}>
                 <Button
-                    onClick={() => invoke("authenticate")}
-                    className={"px-8 py-4 bg-bluePrimary text-white"}>
-                    Get started <ArrowRight className={"scale-y-120 scale-x-120"}/>
+                    onClick={handleLogin}
+                    disabled={isLoading}
+                    className={"px-8 py-4 bg-bluePrimary text-white disabled:opacity-70"}>
+                    {isLoading ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                    ) : (
+                        <>Get started <ArrowRight className={"scale-y-120 scale-x-120"}/></>
+                    )}
                 </Button>
             </div>
         </main>
