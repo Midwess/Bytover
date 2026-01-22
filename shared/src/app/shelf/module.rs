@@ -92,6 +92,9 @@ pub enum ShelfEvent {
     GetOrCreateShelf {
         shelf_id: u64
     },
+    CreateAndPasteFromClipboard {
+        shelf_id: u64
+    },
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
@@ -260,6 +263,31 @@ impl AppModule<BitBridge> for ShelfModule {
                 Command::handle_result(move |it| async move {
                     it.app().ensure_shelf_limit(&active_sessions).await?;
                     it.app().create_shelf(shelf_id).await
+                })
+            }
+            Self::Event::CreateAndPasteFromClipboard { shelf_id } => {
+                let shelf_exists = model.shelf.get_shelf(shelf_id).is_some();
+
+                let active_sessions: Vec<(u64, Option<u64>)> = model
+                    .transfer
+                    .sessions
+                    .iter()
+                    .filter(|s| !s.is_completed() && s.target.is_peer())
+                    .map(|s| match s.transfer_type {
+                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
+                        _ => (s.order_id, None)
+                    })
+                    .collect();
+
+                Command::new(move |it| async move {
+                    if !shelf_exists {
+                        let _ = it.app().ensure_shelf_limit(&active_sessions).await;
+                        let _ = it.app().create_shelf(shelf_id).await;
+                    }
+                    let selections = DeviceOperation::paste_clipboard(shelf_id).into_future(it.clone()).await;
+                    if !selections.is_empty() {
+                        it.app().notify_event(ShelfEvent::AddResources { shelf_id, selections });
+                    }
                 })
             }
             Self::Event::DeleteShelf(shelf_id) => {
