@@ -14,19 +14,22 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const [emails, setEmails] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false)
+    const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const cloudSession = core.useCloudSessionForShelf(shelfId, true)
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleEmailTransfer = () => {
         if (!shelfId || emails.length === 0 || isLoading) return
-        setIsLoading(true)
+        if (selectedResources.length > 0) {
+            setIsLoading(true)
+            const delay = Math.random() * 2000 + 2000
+            setTimeout(() => setIsLoading(false), delay)
+        }
         invoke("email_transfer", {
             shelfId,
             password: pwd || null,
             toEmails: emails
         }).then(noop)
-        const delay = Math.random() * 2000 + 2000
-        setTimeout(() => setIsLoading(false), delay)
     }
 
     return <>
