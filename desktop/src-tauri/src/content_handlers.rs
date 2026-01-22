@@ -2,11 +2,14 @@ use native::di_container::DiContainer;
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
 use shared::entities::local_resource::LocalResourcePath;
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard::Clipboard;
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+
+const HTTP_TIMEOUT_SECS: u64 = 30;
 
 use crate::process_event;
 use crate::mouse_tracking::notify_user_did_drop;
@@ -23,6 +26,19 @@ async fn get_dropped_content_path(filename: &str) -> PathBuf {
         .get_dropped_content_dir_path()
         .await;
     PathBuf::from(dir).join(filename)
+}
+
+async fn fetch_url_with_timeout(url: &str) -> Result<reqwest::Response, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download: {}", e))
 }
 
 async fn stream_response_to_file(
@@ -75,9 +91,7 @@ pub async fn add_url_resource(
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| format!("Failed to download: {}", e))?;
+    let response = fetch_url_with_timeout(&url).await?;
 
     let content_type = response
         .headers()
@@ -203,9 +217,7 @@ pub async fn read_clipboard_selections(
         }
 
         if text.starts_with("http://") || text.starts_with("https://") {
-            let response = reqwest::get(&text)
-                .await
-                .map_err(|e| format!("Failed to download: {}", e))?;
+            let response = fetch_url_with_timeout(&text).await?;
 
             let content_type = response
                 .headers()
