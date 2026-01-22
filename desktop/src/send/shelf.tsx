@@ -256,9 +256,9 @@ function FileView(props: {
     return (
         <Card
             shadowSize={0.35}
-            className="w-full border-1 bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
+            className="w-full border bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
+            <div className="w-12 h-12 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
                     <img
                         src={thumbnailUrl} alt={model.name}

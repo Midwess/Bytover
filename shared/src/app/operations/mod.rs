@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use crate::app::operations::device::GeoLocation;
+use crate::app::shelf::module::ResourceSelection;
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
@@ -81,10 +82,11 @@ pub enum CoreOperationOutput {
     Aliases(Vec<String>),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
+    ResourceSelections(Vec<ResourceSelection>),
 
     Error(CoreError),
 
-    None // or Void
+    None
 }
 
 impl Operation for CoreOperation {

@@ -2,10 +2,14 @@ use native::di_container::DiContainer;
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent};
 use shared::entities::local_resource::LocalResourcePath;
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard::Clipboard;
-use tokio::fs;
+use tokio::fs::{self, File};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+
+const HTTP_TIMEOUT_SECS: u64 = 30;
 
 use crate::process_event;
 use crate::mouse_tracking::notify_user_did_drop;
@@ -22,6 +26,44 @@ async fn get_dropped_content_path(filename: &str) -> PathBuf {
         .get_dropped_content_dir_path()
         .await;
     PathBuf::from(dir).join(filename)
+}
+
+async fn fetch_url_with_timeout(url: &str) -> Result<reqwest::Response, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download: {}", e))
+}
+
+async fn stream_response_to_file(
+    mut response: reqwest::Response,
+    file_path: &PathBuf,
+) -> Result<(), String> {
+    let mut file = File::create(file_path)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("Failed to read chunk: {}", e))?
+    {
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Failed to write chunk: {}", e))?;
+    }
+
+    file.flush()
+        .await
+        .map_err(|e| format!("Failed to flush file: {}", e))?;
+
+    Ok(())
 }
 
 async fn add_resource_from_path(shelf_id: u64, path: String, app_handle: AppHandle) {
@@ -49,9 +91,7 @@ pub async fn add_url_resource(
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| format!("Failed to download: {}", e))?;
+    let response = fetch_url_with_timeout(&url).await?;
 
     let content_type = response
         .headers()
@@ -80,14 +120,7 @@ pub async fn add_url_resource(
     let filename = generate_filename(extension);
     let file_path = get_dropped_content_path(&filename).await;
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    fs::write(&file_path, &bytes)
-        .await
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    stream_response_to_file(response, &file_path).await?;
 
     let path_str = file_path.to_string_lossy().to_string();
     add_resource_from_path(shelf_id, path_str, app_handle).await;
@@ -141,42 +174,25 @@ pub async fn add_html_resource(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn paste_from_clipboard(
-    shelf_id: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
-    log::info!("[content_handlers] paste_from_clipboard called - shelf_id: {}", shelf_id);
-    notify_user_did_drop();
-    let shelf_id_u64 = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
+pub async fn read_clipboard_selections(
+    app_handle: &AppHandle,
+) -> Result<Vec<ResourceSelection>, String> {
+    log::info!("[content_handlers] read_clipboard_selections called");
 
     let clipboard = app_handle.state::<Clipboard>();
 
     if let Ok(files) = clipboard.read_files() {
         log::info!("[content_handlers] clipboard.read_files() returned {} files", files.len());
         if !files.is_empty() {
-            let paths: Vec<String> = files
+            let selections = files
                 .into_iter()
-                .map(|f| f.replace("file://", ""))
-                .collect();
-
-            let selections = paths
-                .into_iter()
-                .map(|path| ResourceSelection {
-                    path: LocalResourcePath::AbsolutePath(path),
+                .map(|f| ResourceSelection {
+                    path: LocalResourcePath::AbsolutePath(f.replace("file://", "")),
                     r#type: None,
                 })
                 .collect::<Vec<_>>();
 
-            process_event(
-                ShelfEvent::AddResources {
-                    shelf_id: shelf_id_u64,
-                    selections,
-                },
-                app_handle,
-            )
-            .await;
-            return Ok(());
+            return Ok(selections);
         }
     }
 
@@ -189,17 +205,54 @@ pub async fn paste_from_clipboard(
             .map_err(|e| format!("Failed to write image: {}", e))?;
 
         let path_str = file_path.to_string_lossy().to_string();
-        add_resource_from_path(shelf_id_u64, path_str, app_handle).await;
-        return Ok(());
+        return Ok(vec![ResourceSelection {
+            path: LocalResourcePath::AbsolutePath(path_str),
+            r#type: None,
+        }]);
     }
 
     if let Ok(text) = clipboard.read_text() {
         if text.trim().is_empty() {
-            return Ok(());
+            return Ok(vec![]);
         }
 
         if text.starts_with("http://") || text.starts_with("https://") {
-            return add_url_resource(shelf_id, text, app_handle).await;
+            let response = fetch_url_with_timeout(&text).await?;
+
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/octet-stream");
+
+            let extension = match content_type {
+                t if t.starts_with("image/png") => "png",
+                t if t.starts_with("image/jpeg") => "jpg",
+                t if t.starts_with("image/gif") => "gif",
+                t if t.starts_with("image/webp") => "webp",
+                t if t.starts_with("image/svg") => "svg",
+                t if t.starts_with("text/html") => "html",
+                t if t.starts_with("text/plain") => "txt",
+                t if t.starts_with("application/pdf") => "pdf",
+                _ => {
+                    text.split('/')
+                        .last()
+                        .and_then(|s| s.split('.').last())
+                        .filter(|ext| ext.len() <= 5 && ext.chars().all(|c| c.is_alphanumeric()))
+                        .unwrap_or("bin")
+                }
+            };
+
+            let filename = generate_filename(extension);
+            let file_path = get_dropped_content_path(&filename).await;
+
+            stream_response_to_file(response, &file_path).await?;
+
+            let path_str = file_path.to_string_lossy().to_string();
+            return Ok(vec![ResourceSelection {
+                path: LocalResourcePath::AbsolutePath(path_str),
+                r#type: None,
+            }]);
         }
 
         let filename = generate_filename("txt");
@@ -210,9 +263,33 @@ pub async fn paste_from_clipboard(
             .map_err(|e| format!("Failed to write text: {}", e))?;
 
         let path_str = file_path.to_string_lossy().to_string();
-        add_resource_from_path(shelf_id_u64, path_str, app_handle).await;
-        return Ok(());
+        return Ok(vec![ResourceSelection {
+            path: LocalResourcePath::AbsolutePath(path_str),
+            r#type: None,
+        }]);
     }
 
+    Ok(vec![])
+}
+
+#[tauri::command]
+pub async fn paste_from_clipboard(
+    shelf_id: String,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    notify_user_did_drop();
+    let shelf_id_u64 = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
+
+    let selections = read_clipboard_selections(&app_handle).await?;
+    if !selections.is_empty() {
+        process_event(
+            ShelfEvent::AddResources {
+                shelf_id: shelf_id_u64,
+                selections,
+            },
+            app_handle,
+        )
+        .await;
+    }
     Ok(())
 }

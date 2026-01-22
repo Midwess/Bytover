@@ -159,8 +159,8 @@ class Core: NSObject, ObservableObject, ShellRuntime, @preconcurrency CLLocation
             return handleResponse(request.id, Data(try! CoreOperationOutput.none.bincodeSerialize()))
         case .device(.getGeoLocation):
             if let lastKnownLocation {
-                let longitude = lastKnownLocation.longitude.magnitude
-                let latitude = lastKnownLocation.latitude.magnitude
+                let longitude = lastKnownLocation.longitude
+                let latitude = lastKnownLocation.latitude
                 return handleResponse(request.id, Data(try! CoreOperationOutput.geoLocation(GeoLocation(latitude: latitude, longitude: longitude)).bincodeSerialize()))
             }
 

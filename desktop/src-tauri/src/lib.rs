@@ -255,6 +255,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
+    let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
     let Ok(sign_out_item) = MenuItemBuilder::with_id("sign_out", "Sign out").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
@@ -272,6 +273,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
 
     let Ok(menu) = MenuBuilder::new(app_handle)
         .item(&new_shelf_item)
+        .item(&new_shelf_clipboard_item)
         .item(&recent_submenu)
         .separator()
         .item(&sign_out_item)
@@ -371,6 +373,12 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                         let _ = window.close();
                     }
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
+                DeviceOperation::PasteClipboard(_shelf_id) => {
+                    let selections = content_handlers::read_clipboard_selections(&app_handle)
+                        .await
+                        .unwrap_or_default();
+                    CORE.resolve(&mut handle, CoreOperationOutput::ResourceSelections(selections)).unwrap_or_default()
                 }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
@@ -472,6 +480,15 @@ pub async fn run() {
                         "new_shelf" => {
                             notify_user_did_drop();
                             app.open_new_shelf_window();
+                        },
+                        "new_shelf_from_clipboard" => {
+                            notify_user_did_drop();
+                            let shelf_id = shared::gen_shelf_id();
+                            app.show_shelf(shelf_id);
+                            let app_handle = app.clone();
+                            spawn(async move {
+                                process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
+                            });
                         },
                         "sign_out" => {
                             let app_handle = app.clone();
