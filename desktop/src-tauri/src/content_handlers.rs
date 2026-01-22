@@ -4,7 +4,8 @@ use shared::entities::local_resource::LocalResourcePath;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard::Clipboard;
-use tokio::fs;
+use tokio::fs::{self, File};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::process_event;
@@ -22,6 +23,31 @@ async fn get_dropped_content_path(filename: &str) -> PathBuf {
         .get_dropped_content_dir_path()
         .await;
     PathBuf::from(dir).join(filename)
+}
+
+async fn stream_response_to_file(
+    mut response: reqwest::Response,
+    file_path: &PathBuf,
+) -> Result<(), String> {
+    let mut file = File::create(file_path)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("Failed to read chunk: {}", e))?
+    {
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Failed to write chunk: {}", e))?;
+    }
+
+    file.flush()
+        .await
+        .map_err(|e| format!("Failed to flush file: {}", e))?;
+
+    Ok(())
 }
 
 async fn add_resource_from_path(shelf_id: u64, path: String, app_handle: AppHandle) {
@@ -80,14 +106,7 @@ pub async fn add_url_resource(
     let filename = generate_filename(extension);
     let file_path = get_dropped_content_path(&filename).await;
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    fs::write(&file_path, &bytes)
-        .await
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    stream_response_to_file(response, &file_path).await?;
 
     let path_str = file_path.to_string_lossy().to_string();
     add_resource_from_path(shelf_id, path_str, app_handle).await;
@@ -215,14 +234,7 @@ pub async fn read_clipboard_selections(
             let filename = generate_filename(extension);
             let file_path = get_dropped_content_path(&filename).await;
 
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| format!("Failed to read response: {}", e))?;
-
-            fs::write(&file_path, &bytes)
-                .await
-                .map_err(|e| format!("Failed to write file: {}", e))?;
+            stream_response_to_file(response, &file_path).await?;
 
             let path_str = file_path.to_string_lossy().to_string();
             return Ok(vec![ResourceSelection {
