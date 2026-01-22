@@ -73,6 +73,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
 
 function P2PSend({ shelfId }: { shelfId: string | undefined }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
+    const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const [password, setPassword] = useState(p2pSession?.password || '')
     const [isLoading, setIsLoading] = useState(false)
     const isInProgress = p2pSession?.is_in_progress ?? false
@@ -91,11 +92,13 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
 
     const handleStartTransfer = () => {
         if (!shelfId || isLoading) return
-        setIsLoading(true)
+        if (selectedResources.length > 0) {
+            setIsLoading(true)
+            setTimeout(() => setIsLoading(false), 6000)
+        }
         const pwd = password || null
         invoke("p2p_transfer", { shelfId, password: pwd }).then(noop)
         setPassword('')
-        setTimeout(() => setIsLoading(false), 6000)
     }
 
     const handleStopTransfer = () => {
@@ -192,15 +195,18 @@ function MyPeerInfo() {
 function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     const [pwd, setPwd] = useState("");
     const [isLoading, setIsLoading] = useState(false)
+    const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const cloudSession = core.useCloudSessionForShelf(shelfId)
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleUpload = () => {
         if (!shelfId || isLoading) return
-        setIsLoading(true)
+        if (selectedResources.length > 0) {
+            setIsLoading(true)
+            const delay = Math.random() * 2000 + 2000
+            setTimeout(() => setIsLoading(false), delay)
+        }
         invoke("public_transfer", { shelfId, password: pwd }).then(noop)
-        const delay = Math.random() * 2000 + 2000
-        setTimeout(() => setIsLoading(false), delay)
     }
 
     return <>

@@ -285,14 +285,21 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         if let Some(monitor) = window.current_monitor().ok().flatten() {
             let screen_size = monitor.size();
             let screen_position = monitor.position();
-            let window_width = 300i32;
-            let window_height = 44i32;
-            let padding_bottom = window_height + 20i32;
+            let scale = monitor.scale_factor();
 
-            let x = screen_position.x + (screen_size.width as i32 - window_width) / 2;
-            let y = screen_position.y + screen_size.height as i32 - window_height - padding_bottom;
+            // Logical dimensions
+            let window_width = 300.0;
+            let window_height = 44.0;
+            // Position above taskbar (macOS Dock ~70px, Windows taskbar ~48px) + 20px buffer
+            let padding_bottom = 90.0;
 
-            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+            let x = (screen_size.width as f64 - window_width * scale) / 2.0;
+            let y = screen_size.height as f64 - (window_height + padding_bottom) * scale;
+
+            let _ = window.set_position(tauri::PhysicalPosition::new(
+                screen_position.x + x as i32,
+                screen_position.y + y as i32
+            ));
         }
 
         let _ = window.show();
