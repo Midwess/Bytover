@@ -32,6 +32,7 @@ export default defineConfig(async () => ({
         auth: resolve(__dirname, "auth.html"),
         receive: resolve(__dirname, "receive.html"),
         toast: resolve(__dirname, "toast.html"),
+        settings: resolve(__dirname, "settings.html"),
       },
     },
   },

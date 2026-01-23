@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use rdev::{set_is_main_thread, Button, EventType};
+use rdev::{set_is_main_thread, Button, EventType, Key};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
@@ -333,6 +333,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
 
         // During the drag gesture, if the user shake the second time, we will ignored.
         let mut is_handled_shown = false;
+        let mut shift_pressed = false;
         let _ = rdev::listen(move |event| {
             match event.event_type {
                 EventType::ButtonPress(Button::Left) => {
@@ -401,6 +402,36 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     }
 
                     if detect_drag(&start_mouse_position, &current_mouse_position) {
+                        if shift_pressed && !is_handled_shown {
+                            log::info!("Shift+drag detected, creating new shelf window");
+                            let start_pos = start_mouse_position.clone();
+                            let win = app_handle.open_new_shelf_window();
+
+                            opened_shelf_label = Some(win.label().to_string());
+
+                            if let Ok(window_size) = win.outer_size() {
+                                let window_physical_size: PhysicalSize<u32> = window_size.into();
+
+                                if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
+                                    let final_pos = calculate_window_position(
+                                        &start_pos,
+                                        &window_physical_size,
+                                        &monitor,
+                                    );
+
+                                    let _ = win.set_position(final_pos);
+                                }
+                                else {
+                                    log::warn!("Could not find monitor at position, using logical fallback");
+                                    let _ = win.set_position(start_pos);
+                                }
+                            }
+
+                            let _ = win.set_focus();
+                            is_handled_shown = true;
+                            return;
+                        }
+
                         let dx = current_mouse_position.x - previous_mouse.x;
                         if dx.abs() < config.min_changed {
                             return;
@@ -453,6 +484,16 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             last_shake_time = Instant::now();
                             shake_count = 0;
                         }
+                    }
+                }
+                EventType::KeyPress(key) => {
+                    if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                        shift_pressed = true;
+                    }
+                }
+                EventType::KeyRelease(key) => {
+                    if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                        shift_pressed = false;
                     }
                 }
                 _ => {}

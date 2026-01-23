@@ -52,7 +52,7 @@ function SettingsWindow() {
     return (
         <main className="w-screen h-screen dark bg-black/70 overflow-hidden">
             <div className="w-full h-full flex">
-                <div className="w-[160px] bg-white/5 border-r border-white/10 flex flex-col pt-8 pb-2 px-2 gap-0.5">
+                <div className="w-[160px] bg-white/5 border-r border-white/10 flex flex-col pt-2 pb-2 px-2 gap-0.5">
                     <SidebarItem
                         icon={<Info className="w-4 h-4"/>}
                         label="About"
@@ -74,7 +74,7 @@ function SettingsWindow() {
                 </div>
 
                 <div className="flex-1 flex flex-col">
-                    <div className="flex-1 p-4 pt-8 overflow-y-auto">
+                    <div className="flex-1 p-4 overflow-y-auto">
                         {activeTab === "about" && <AboutContent version={version}/>}
                         {activeTab === "updates" && (
                             <UpdatesContent
