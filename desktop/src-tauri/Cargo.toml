@@ -45,6 +45,8 @@ tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
 dispatch = "0.2.0"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-clipboard = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-global-shortcut = "2"
 chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 
