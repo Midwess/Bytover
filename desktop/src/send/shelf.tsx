@@ -20,6 +20,7 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
+    Settings,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -46,6 +47,10 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
         getCurrentWindow()?.close()
     }
 
+    const handleOpenSettings = () => {
+        invoke("open_settings")
+    }
+
     return (
         <Card
             shadowSize={0.0}
@@ -70,7 +75,12 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
                <Minus
                     className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
             </div>
-            {/* Close button - rotated rectangle with X at center-left, visible on header hover */}
+            <button
+                onClick={handleOpenSettings}
+                className="hover:cursor-pointer absolute top-1 left-2 p-1 rounded-md z-50 opacity-0 peer-hover:opacity-100 hover:opacity-100 hover:bg-white/10 transition-all"
+            >
+                <Settings className="w-4 h-4 text-muted-foreground"/>
+            </button>
             <button
                 onClick={handleClose}
                 className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-amber-500/50 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"

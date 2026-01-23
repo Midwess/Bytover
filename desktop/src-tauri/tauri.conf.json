@@ -18,7 +18,11 @@
       }
     },
     "opener": {},
-    "autostart": null
+    "autostart": null,
+    "updater": {
+      "endpoints": ["https://releases.bytover.com/{{target}}/{{arch}}/{{current_version}}"],
+      "pubkey": ""
+    }
   },
   "app": {
     "withGlobalTauri": true,

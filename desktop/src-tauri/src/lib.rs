@@ -25,6 +25,8 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
+use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
@@ -224,6 +226,37 @@ async fn is_autostart_enabled(app_handle: AppHandle) -> Result<bool, String> {
     autostart_manager.is_enabled().map_err(|e: tauri_plugin_autostart::Error| e.to_string())
 }
 
+#[tauri::command]
+async fn open_settings(app_handle: AppHandle) {
+    app_handle.show_settings();
+}
+
+#[derive(serde::Serialize)]
+struct UpdateStatus {
+    available: bool,
+    version: Option<String>,
+    release_notes: Option<String>,
+}
+
+#[tauri::command]
+async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
+    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+
+    match updater.check().await {
+        Ok(Some(update)) => Ok(UpdateStatus {
+            available: true,
+            version: Some(update.version.clone()),
+            release_notes: update.body.clone(),
+        }),
+        Ok(None) => Ok(UpdateStatus {
+            available: false,
+            version: None,
+            release_notes: None,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
@@ -266,6 +299,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
+    let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
     let Ok(sign_out_item) = MenuItemBuilder::with_id("sign_out", "Sign out").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
@@ -286,6 +320,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         .item(&new_shelf_clipboard_item)
         .item(&recent_submenu)
         .separator()
+        .item(&settings_item)
         .item(&sign_out_item)
         .item(&quit_item)
         .build() else { return };
@@ -449,11 +484,14 @@ pub async fn run() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_clipboard::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             authenticate, add_resources,
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,
+            open_settings, check_for_update,
             clear_shelf, sign_out, quit, get_or_create_shelf,
             get_toast_message, close_toast,
             set_autostart, is_autostart_enabled,
@@ -499,6 +537,9 @@ pub async fn run() {
                             spawn(async move {
                                 process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
                             });
+                        },
+                        "settings" => {
+                            app.show_settings();
                         },
                         "sign_out" => {
                             let app_handle = app.clone();
@@ -580,6 +621,18 @@ pub async fn run() {
             start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
             #[cfg(target_os = "macos")]
             mouse_tracking::start_macos_drag_pasteboard_monitor();
+
+            #[cfg(target_os = "macos")]
+            {
+                let shortcut: Shortcut = "CommandOrControl+,".parse().unwrap();
+                let handle_for_shortcut = handle.clone();
+                let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        handle_for_shortcut.show_settings();
+                    }
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
