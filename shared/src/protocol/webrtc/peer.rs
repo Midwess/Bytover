@@ -876,6 +876,19 @@ impl WebRtcPeer {
 
     pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcErrors> {
         let resource_id = resource.order_id;
+
+        let result = self.stream_resource_inner(session_id, transfer_id, resource).await;
+
+        if let Err(ref e) = result {
+            log::warn!("stream_resource failed for resource {}, sending cancel: {:?}", resource_id, e);
+            self.cancel_resource_transfer(session_id, resource_id).await;
+        }
+
+        result
+    }
+
+    async fn stream_resource_inner(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcErrors> {
+        let resource_id = resource.order_id;
         let prefix = transfer_id;
 
         let resource_token = self.transfers_context.get_or_create_resource_token(session_id, resource_id).await;
