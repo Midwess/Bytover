@@ -149,6 +149,16 @@ async fn open_received_resource(session_id: String, resource_id: String, app_han
 }
 
 #[tauri::command]
+async fn open_shelf_resource(shelf_id: String, resource_id: String, app_handle: AppHandle) {
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
+    let resource_id = resource_id.parse::<u64>().unwrap_or_default();
+    process_event(ShelfEvent::OpenResource {
+        shelf_id,
+        resource_id
+    }, app_handle).await;
+}
+
+#[tauri::command]
 async fn open_shelf(app_handle: AppHandle) {
     notify_user_did_drop();
     app_handle.show_send();
@@ -443,7 +453,7 @@ pub async fn run() {
             authenticate, add_resources,
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
-            open_received_resource, open_session, open_shelf,
+            open_received_resource, open_session, open_shelf, open_shelf_resource,
             clear_shelf, sign_out, quit, get_or_create_shelf,
             get_toast_message, close_toast,
             set_autostart, is_autostart_enabled,

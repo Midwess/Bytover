@@ -20,6 +20,18 @@ fn generate_filename(extension: &str) -> String {
     format!("dropped_{}_{}.{}", timestamp, short_uuid, extension)
 }
 
+fn generate_redirect_html(url: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0; url={}">
+</head>
+</html>"#,
+        url
+    )
+}
+
 async fn get_dropped_content_path(filename: &str) -> PathBuf {
     let dir = DiContainer::get_instance()
         .path_resolver()
@@ -217,36 +229,13 @@ pub async fn read_clipboard_selections(
         }
 
         if text.starts_with("http://") || text.starts_with("https://") {
-            let response = fetch_url_with_timeout(&text).await?;
-
-            let content_type = response
-                .headers()
-                .get("content-type")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("application/octet-stream");
-
-            let extension = match content_type {
-                t if t.starts_with("image/png") => "png",
-                t if t.starts_with("image/jpeg") => "jpg",
-                t if t.starts_with("image/gif") => "gif",
-                t if t.starts_with("image/webp") => "webp",
-                t if t.starts_with("image/svg") => "svg",
-                t if t.starts_with("text/html") => "html",
-                t if t.starts_with("text/plain") => "txt",
-                t if t.starts_with("application/pdf") => "pdf",
-                _ => {
-                    text.split('/')
-                        .last()
-                        .and_then(|s| s.split('.').last())
-                        .filter(|ext| ext.len() <= 5 && ext.chars().all(|c| c.is_alphanumeric()))
-                        .unwrap_or("bin")
-                }
-            };
-
-            let filename = generate_filename(extension);
+            let html_content = generate_redirect_html(&text);
+            let filename = generate_filename("html");
             let file_path = get_dropped_content_path(&filename).await;
 
-            stream_response_to_file(response, &file_path).await?;
+            fs::write(&file_path, &html_content)
+                .await
+                .map_err(|e| format!("Failed to write redirect HTML: {}", e))?;
 
             let path_str = file_path.to_string_lossy().to_string();
             return Ok(vec![ResourceSelection {

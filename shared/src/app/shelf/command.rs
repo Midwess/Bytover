@@ -170,6 +170,7 @@ impl AppCommand {
                 shelf_id: target_shelf_id,
                 resource: new_resource.clone()
             });
+
             self.notify_event(TransferEvent::NewTransferResource {
                 shelf_id: target_shelf_id,
                 resource: new_resource

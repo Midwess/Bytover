@@ -19,6 +19,7 @@ import {
     X,
     Loader2,
     ClipboardPaste,
+    ExternalLink,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -170,6 +171,9 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                                 onRemove={(resourceId) => {
                                     invoke("remove_resource", {shelfId, resourceId})
                                 }}
+                                onOpen={(resourceId) => {
+                                    invoke("open_shelf_resource", {shelfId, resourceId})
+                                }}
                             />
                         ))}
                         <div className={"h-5"}></div>
@@ -213,9 +217,10 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
 function ResourceView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
-    onRemove: (resourceId: string) => void
+    onRemove: (resourceId: string) => void,
+    onOpen: (resourceId: string) => void
 }) {
-    const {model, isRemoveAllowed, onRemove} = props;
+    const {model, isRemoveAllowed, onRemove, onOpen} = props;
     let filePath = (model.path as any).AbsolutePath;
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
 
@@ -232,8 +237,8 @@ function ResourceView(props: {
         }}>
         {
             isFile
-                ? <FileView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove}/>
-                : <MediaView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove}/>
+                ? <FileView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove} onOpen={onOpen}/>
+                : <MediaView model={model} isRemoveAllowed={isRemoveAllowed} onRemove={onRemove} onOpen={onOpen}/>
         }
     </div>
 }
@@ -241,9 +246,10 @@ function ResourceView(props: {
 function FileView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
-    onRemove: (resourceId: string) => void
+    onRemove: (resourceId: string) => void,
+    onOpen: (resourceId: string) => void
 }) {
-    const {model, isRemoveAllowed, onRemove} = props;
+    const {model, isRemoveAllowed, onRemove, onOpen} = props;
 
     let thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
@@ -256,7 +262,8 @@ function FileView(props: {
     return (
         <Card
             shadowSize={0.35}
-            className="w-full border bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors">
+            onDoubleClick={() => onOpen(model.order_id)}
+            className="w-full border bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors cursor-pointer">
             {/* Thumbnail */}
             <div className="w-12 h-12 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -290,6 +297,10 @@ function FileView(props: {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="dark">
+                    <DropdownMenuItem onClick={() => onOpen(model.order_id)}>
+                        <ExternalLink className="w-4 h-4 mr-2"/>
+                        Open
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                         variant="destructive"
                         disabled={!isRemoveAllowed}
@@ -306,9 +317,10 @@ function FileView(props: {
 function MediaView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
-    onRemove: (resourceId: string) => void
+    onRemove: (resourceId: string) => void,
+    onOpen: (resourceId: string) => void
 }) {
-    const {model, isRemoveAllowed, onRemove} = props;
+    const {model, isRemoveAllowed, onRemove, onOpen} = props;
 
     const isVideo = (model.type as any) === 'Video';
     const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
@@ -321,7 +333,8 @@ function MediaView(props: {
     return (
         <Card
             shadowSize={0.35}
-            className="border-1 w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors">
+            onDoubleClick={() => onOpen(model.order_id)}
+            className="border-1 w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors cursor-pointer">
             {/* Thumbnail */}
             <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
                 {thumbnailUrl ? (
@@ -358,6 +371,10 @@ function MediaView(props: {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className={"dark"}>
+                    <DropdownMenuItem onClick={() => onOpen(model.order_id)}>
+                        <ExternalLink className="w-4 h-4 mr-2"/>
+                        Open
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                         variant="destructive"
                         disabled={!isRemoveAllowed}

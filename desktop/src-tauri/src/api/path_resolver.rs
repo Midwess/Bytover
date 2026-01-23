@@ -15,7 +15,7 @@ impl PathResolverImpl {
         let private_dir_path = workdir_path.join("private");
         let user_dir_path = workdir_path.join("user");
         let thumbnails_dir_path = private_dir_path.join("thumbnails");
-        let dropped_content_dir_path = private_dir_path.join("dropped_content");
+        let dropped_content_dir_path = private_dir_path.join("bytover");
 
         if !thumbnails_dir_path.exists() {
             let _ = create_dir_all(&thumbnails_dir_path).await;
