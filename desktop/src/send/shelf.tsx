@@ -102,7 +102,6 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
 
         const setup = async () => {
             unlisten = await window.onDragDropEvent(throttle((event) => {
-                console.log('on drag event', event)
                 const {payload} = event
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
