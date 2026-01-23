@@ -300,7 +300,6 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
     let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
-    let Ok(sign_out_item) = MenuItemBuilder::with_id("sign_out", "Sign out").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
@@ -321,7 +320,6 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         .item(&recent_submenu)
         .separator()
         .item(&settings_item)
-        .item(&sign_out_item)
         .item(&quit_item)
         .build() else { return };
 
@@ -540,12 +538,6 @@ pub async fn run() {
                         },
                         "settings" => {
                             app.show_settings();
-                        },
-                        "sign_out" => {
-                            let app_handle = app.clone();
-                            spawn(async move {
-                                process_event(AuthenticationEvent::SignOut, app_handle).await;
-                            });
                         },
                         "quit" => {
                             app.close_all_windows(vec![]);

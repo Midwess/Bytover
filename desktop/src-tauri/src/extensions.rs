@@ -221,8 +221,6 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .transparent(true)
                     .resizable(false)
                     .shadow(true)
-                    .hidden_title(true)
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .devtools(true)
                     .build()
                     .expect("failed to create settings window");
