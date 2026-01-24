@@ -622,6 +622,7 @@ impl WebRtcPeer {
             if !resources.is_empty() {
                 let session_order_id = proto_session.order_id;
                 for resource in resources {
+                    log::info!("Sending resource with order_id={}", resource.order_id);
                     self.send_resource_notification(session_order_id, resource).await?;
                     sleep(Duration::from_millis(20)).await;
                 }
