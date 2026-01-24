@@ -238,6 +238,7 @@ impl WebRtcPeer {
             }
             Request::ResourceNotification(notification) => {
                 let session_order_id = notification.session_order_id;
+                log::info!("Received resource notification for session order_id {} resource_id {:?}", session_order_id, notification.resource.as_ref().map(|it| it.order_id));
                 if let Some(resource_proto) = notification.resource {
                     let mut resource = LocalResource {
                         order_id: resource_proto.order_id,

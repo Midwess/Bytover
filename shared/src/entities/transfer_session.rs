@@ -407,6 +407,7 @@ impl TransferSession {
         }
 
         if self.resources.iter().any(|it| it.order_id == resource.order_id) {
+            log::info!("Resource {} already exists", resource.order_id);
             return
         }
 
