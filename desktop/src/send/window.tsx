@@ -43,7 +43,7 @@ function Window() {
 
     useEffect(() => {
         const contentWidth = isExpanded ? 405 : 230
-        const contentHeight = 240
+        const contentHeight = 242
         window.setSize(new LogicalSize(contentWidth + ANIMATION_PADDING, contentHeight + ANIMATION_PADDING))
     }, [isExpanded, window])
 
