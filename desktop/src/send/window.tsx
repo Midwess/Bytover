@@ -39,14 +39,17 @@ function Window() {
         core.launch()
     }, [])
 
+    const ANIMATION_PADDING = 14
+
     useEffect(() => {
-        const width = isExpanded ? 410 : 230
-        window.setSize(new LogicalSize(width, 255))
+        const contentWidth = isExpanded ? 425 : 230
+        const contentHeight = 240
+        window.setSize(new LogicalSize(contentWidth + ANIMATION_PADDING, contentHeight + ANIMATION_PADDING))
     }, [isExpanded, window])
 
     return (
-        <main className={`w-screen h-screen dark bg-transparent rounded-2xl flex flex-col p-1 overflow-clip transition-all duration-300 data-no-scrollbar`}>
-            <div className={"w-full h-full flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup"}>
+        <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5`}>
+            <div className={`${isExpanded ? 'w-[425px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
                    <Shelf shelfId={shelfId} />
                    <Button
@@ -58,7 +61,7 @@ function Window() {
                        />
                    </Button>
                 </div>
-                <div className={`flex-1 overflow-hidden bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
+                <div className={`h-full overflow-hidden bg-transparent ${isExpanded ? 'flex' : 'hidden'}`}>
                     <Transfer shelfId={shelfId} key={isExpanded ? 'expanded' : 'collapsed'}/>
                 </div>
            </div>

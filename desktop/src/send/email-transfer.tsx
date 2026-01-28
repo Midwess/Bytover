@@ -32,20 +32,20 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
         }).then(noop)
     }
 
-    return <>
+    return <div className="flex flex-col gap-2 w-full overflow-hidden">
         <Card shadowSize={0} className="flex flex-col p-1 w-full">
             <MultiEmailInput
                 onEmailsChange={(emails) => {
                     setEmails(emails)
                 }}
                 placeholder="Enter recipient emails"
-                className="min-h-8 bg-secondary shadow-background max-h-[70px] overflow-y-auto"
+                className="min-h-8 bg-secondary shadow-background max-h-[70px] overflow-y-auto w-full"
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
-        <Card shadowSize={0} className="flex flex-col p-1">
+        <Card shadowSize={0} className="flex flex-col p-1 w-full">
             <PasswordInput
-                className={"h-9 bg-secondary shadow-background"}
+                className={"h-9 bg-secondary shadow-background w-full"}
                 value={pwd}
                 onChange={(e) => {
                     setPwd(e.target.value)
@@ -93,5 +93,5 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                 )
             }
         </Card>
-    </>
+    </div>
 }
