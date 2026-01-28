@@ -16,7 +16,6 @@ import {
     Trash2,
     Minus,
     Plus,
-    X,
     Loader2,
     ClipboardPaste,
     ExternalLink,
@@ -48,15 +47,12 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
 
     return (
         <Card
-            shadowSize={0.0}
             className={`
                 rounded-[30px]
-                bg-card
-                flex flex-col
                 justify-center
                 items-center
                 px-0
-                w-full h-full border-2
+                w-full h-full
                 transition-all duration-200 relative overflow-hidden
                 ${isDraggingOver
                 ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
