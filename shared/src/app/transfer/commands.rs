@@ -1,6 +1,6 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::{SessionLoadError, TransferSessionModelEvent, UpdateAction};
+use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent, UpdateAction};
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
@@ -460,16 +460,34 @@ impl AppCommand {
             return Ok(());
         };
 
-        if let Err(e) = self
+        let resource_order_id = resource.order_id;
+        let result = self
             .run(P2POperation::stream_resource_to_peer(
-                peer_id,
+                peer_id.clone(),
                 session_id,
                 transfer_id,
                 resource
             ))
-            .await
-        {
-            log::error!("Failed to stream resource to peer: {e:?}");
+            .await;
+
+        match result {
+            Ok(()) => {
+                let session_id_obj = TransferSessionId {
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(TransferType::send_any())
+                };
+                self.update_model(TransferSessionModelEvent::Update(
+                    session_id_obj,
+                    PeerReceivedEvent {
+                        resource_order_id,
+                        peer_id
+                    }
+                    .into()
+                ));
+            }
+            Err(e) => {
+                log::error!("Failed to stream resource to peer: {e:?}");
+            }
         }
 
         Ok(())

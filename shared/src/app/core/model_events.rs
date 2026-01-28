@@ -28,6 +28,20 @@ pub trait UpdateAction<Data> {
     fn update(self, data: &mut Data);
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PeerReceivedEvent {
+    pub resource_order_id: u64,
+    pub peer_id: String
+}
+
+impl UpdateAction<TransferSession> for PeerReceivedEvent {
+    fn update(self, data: &mut TransferSession) {
+        if let Some(progress) = data.resource_mut_progress(self.resource_order_id) {
+            progress.mark_received_by_peer(self.peer_id);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Delegate, From)]
 #[delegate(UpdateAction<TransferSession>)]
 pub enum TransferSessionUpdateEvent {
@@ -37,7 +51,8 @@ pub enum TransferSessionUpdateEvent {
     SessionResourceUpdate(SessionResourceUpdate),
     SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage),
     SessionLoadError(SessionLoadError),
-    ConnectionRecovered(ConnectionRecovered)
+    ConnectionRecovered(ConnectionRecovered),
+    PeerReceived(PeerReceivedEvent)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]

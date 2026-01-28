@@ -759,7 +759,8 @@ impl AppModule<BitBridge> for TransferModule {
                                 is_private: false
                             },
                             thumbnail_path: None,
-                            r#type: ResourceType::File
+                            r#type: ResourceType::File,
+                            received_by_peers: Vec::new()
                         }
                     };
 

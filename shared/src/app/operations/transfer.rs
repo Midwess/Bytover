@@ -31,7 +31,12 @@ pub enum TransferOperationOutput {
     PublicTransferSessionUpdated((Vec<LocalResource>, Vec<TransferProgress>)),
     SubscribeSessionEnded,
     ThumbnailUpdated(ThumbnailUpdatedEvent),
-    SessionDetailReceived(schema::devlog::bitbridge::P2pTransferSessionMessage)
+    SessionDetailReceived(schema::devlog::bitbridge::P2pTransferSessionMessage),
+    ResourceSentToPeer {
+        session_id: u64,
+        resource_order_id: u64,
+        peer_id: String
+    }
 }
 
 impl Operation for TransferOperation {

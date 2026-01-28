@@ -111,7 +111,9 @@ pub struct TransferProgress {
     bytes_sec_counter: u64,
     last_update_time_ms: u64,
     pub transfer_type: TransferType,
-    pub status: TransferStatus
+    pub status: TransferStatus,
+    #[serde(default)]
+    pub received_by_peers: Vec<String>
 }
 
 impl TransferProgress {
@@ -125,7 +127,8 @@ impl TransferProgress {
             last_update_time_ms: Utc::now().timestamp_millis() as u64,
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
-            status: TransferStatus::Pending
+            status: TransferStatus::Pending,
+            received_by_peers: Vec::new()
         }
     }
 
@@ -201,6 +204,20 @@ impl TransferProgress {
         }
 
         self.bytes_per_second
+    }
+
+    pub fn mark_received_by_peer(&mut self, peer_id: String) {
+        if !self.received_by_peers.contains(&peer_id) {
+            self.received_by_peers.push(peer_id);
+        }
+    }
+
+    pub fn received_by_peers(&self) -> &Vec<String> {
+        &self.received_by_peers
+    }
+
+    pub fn has_been_received_by(&self, peer_id: &str) -> bool {
+        self.received_by_peers.iter().any(|id| id == peer_id)
     }
 }
 

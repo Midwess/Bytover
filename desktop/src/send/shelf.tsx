@@ -35,6 +35,7 @@ import {formatFileSize} from "@/utils/format-file-size";
 import useWindow from "@/hooks/use-window.ts";
 import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
+import {PeerAvatarGroup} from "@/send/peer-avatar-group";
 
 function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
     children: ReactNode,
@@ -254,13 +255,15 @@ function FileView(props: {
 
     const displaySize = formatFileSize(model);
 
+    const hasReceivers = model.received_by_peers?.length > 0;
+
     return (
         <Card
             shadowSize={0.35}
             onDoubleClick={() => onOpen(model.order_id)}
-            className="w-full border bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 items-center gap-3 p-1 relative group transition-colors cursor-pointer">
+            className="w-full border bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 p-1 relative group transition-colors cursor-pointer gap-2">
             {/* Thumbnail */}
-            <div className="w-12 h-12 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
+            <div className={`${hasReceivers ? 'w-14 h-14' : 'w-12 h-12'} shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all`}>
                 {thumbnailUrl ? (
                     <img
                         src={thumbnailUrl} alt={model.name}
@@ -272,8 +275,8 @@ function FileView(props: {
                 )}
             </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
+            {/* Info + Receivers */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <UnlimitedLineText
                     text={model.name}
                     className="text-sm font-medium text-primaryText"
@@ -282,6 +285,7 @@ function FileView(props: {
                     speed={30}
                 />
                 <p className="text-xs text-primaryText/70">{displaySize}</p>
+                <PeerAvatarGroup peers={model.received_by_peers}/>
             </div>
 
             {/* Dropdown Menu */}
@@ -325,19 +329,21 @@ function MediaView(props: {
 
     const displaySize = formatFileSize(model);
 
+    const hasReceivers = model.received_by_peers?.length > 0;
+
     return (
         <Card
             shadowSize={0.35}
             onDoubleClick={() => onOpen(model.order_id)}
-            className="border-1 w-full bg-muted rounded-xl flex hover:bg-muted-foreground/30 flex-row items-center gap-3 p-1 relative group transition-colors cursor-pointer">
+            className="border-1 w-full bg-muted rounded-xl flex flex-row hover:bg-muted-foreground/30 p-1 relative group transition-colors cursor-pointer gap-2">
             {/* Thumbnail */}
-            <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative">
+            <div className={`${hasReceivers ? 'w-14 h-14' : 'w-12 h-12'} flex-shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden relative flex items-center justify-center transition-all`}>
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt={model.name}
                          className="w-full h-full object-cover rounded-md overflow-clip"/>
                 ) : (
                     <FileIcon
-                        className="w-6 h-6 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"/>
+                        className="w-6 h-6 text-primary"/>
                 )}
                 {isVideo && (
                     <div className="absolute top-1.5 right-1.5">
@@ -346,8 +352,8 @@ function MediaView(props: {
                 )}
             </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
+            {/* Info + Receivers */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <UnlimitedLineText
                     text={model.name}
                     className="text-xs font-medium text-primaryText"
@@ -356,6 +362,7 @@ function MediaView(props: {
                     speed={30}
                 />
                 <p className="text-xs text-primaryText/70">{displaySize}</p>
+                <PeerAvatarGroup peers={model.received_by_peers}/>
             </div>
 
             {/* Dropdown Menu */}

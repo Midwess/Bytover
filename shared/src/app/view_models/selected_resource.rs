@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 
+use super::peer_avatar::PeerAvatarViewModel;
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct SelectedResourceViewModel {
     pub order_id: String,
@@ -13,7 +15,9 @@ pub struct SelectedResourceViewModel {
     pub display_path: String,
     pub path: LocalResourcePath,
     pub thumbnail_path: Option<LocalResourcePath>,
-    pub r#type: ResourceType
+    pub r#type: ResourceType,
+    #[serde(default)]
+    pub received_by_peers: Vec<PeerAvatarViewModel>
 }
 
 impl From<&LocalResource> for SelectedResourceViewModel {
@@ -35,7 +39,8 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             },
             path: resource.path.clone(),
             thumbnail_path: resource.thumbnail_path.clone(),
-            r#type: resource.r#type.clone()
+            r#type: resource.r#type.clone(),
+            received_by_peers: Vec::new()
         };
 
         if view_model.size_gb < 0.1 {

@@ -3,6 +3,7 @@ use crate::app::core::model_events::LocalResourceEvent;
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::view_models::peer_avatar::PeerAvatarViewModel;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResourcePath, ResourceType};
@@ -326,9 +327,28 @@ impl AppModule<BitBridge> for ShelfModule {
             .shelves
             .iter()
             .map(|shelf| {
-                let is_online = model.transfer.get_active_p2p_send_session(shelf.id).is_some();
+                let active_session = model.transfer.get_active_p2p_send_session(shelf.id);
+                let is_online = active_session.is_some();
                 let mut view_model = ShelfItemViewModel::from_shelf(shelf, is_online);
                 view_model.is_resource_remove_allowed = !model.transfer.has_active_send_session(shelf.id);
+
+                if let Some(session) = active_session {
+                    for resource_vm in &mut view_model.resources {
+                        if let Ok(order_id) = resource_vm.order_id.parse::<u64>() {
+                            if let Some(progress) = session.resource_progress(order_id) {
+                                resource_vm.received_by_peers = progress
+                                    .received_by_peers()
+                                    .iter()
+                                    .filter_map(|peer_id| {
+                                        model.p2p.peers.iter().find(|p| &p.id == peer_id)
+                                    })
+                                    .map(PeerAvatarViewModel::from)
+                                    .collect();
+                            }
+                        }
+                    }
+                }
+
                 view_model
             })
             .collect();
