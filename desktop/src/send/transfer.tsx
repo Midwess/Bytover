@@ -33,7 +33,7 @@ import {EmailTransfer} from "@/send/email-transfer"
 
 export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
-        <div className="flex w-[202px] flex-col gap-6 h-full overflow-hidden">
+        <div className="flex w-[198px] flex-col gap-6 h-full overflow-hidden">
             <Slide
                 delay={240}
                 direction={"left"}
@@ -58,7 +58,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                                     <PublicTransfer shelfId={shelfId} />
                                 </CardContent>
                             </TabsPanel>
-                            <TabsPanel value="email" className="flex flex-col gap-2 w-[192px]">
+                            <TabsPanel value="email" className="flex flex-col gap-2 w-[190px]">
                                 <CardContent className={"p-0 flex flex-col gap-1.5"}>
                                     <EmailTransfer shelfId={shelfId} />
                                 </CardContent>
@@ -127,7 +127,7 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className="flex flex-row gap-2 p-1 items-center w-[100px]">
+        <Card shadowSize={0.5} className="flex flex-row gap-2 p-1 items-center w-[100px]">
             {
                 isInProgress ? (
                     <Button onClick={handleStopTransfer}
@@ -210,12 +210,12 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
     }
 
     return <>
-        <Card shadowSize={0} className="flex flex-col gap-2 p-2 rounded-xl">
+        <Card shadowSize={0.5} className="flex flex-col gap-2 p-2 rounded-xl">
             <p className="text-xs text-muted-foreground">
                 Create a sharable link. Files are stored for 7 days.
             </p>
         </Card>
-        <Card shadowSize={0} className="flex flex-col p-1">
+        <Card shadowSize={0.5} className="flex flex-col p-1">
             <PasswordInput className={"h-9 bg-secondary shadow-background"}
                    value={pwd}
                    onChange={(e) => {
@@ -229,7 +229,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
+        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {

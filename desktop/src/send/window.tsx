@@ -42,14 +42,14 @@ function Window() {
     const ANIMATION_PADDING = 14
 
     useEffect(() => {
-        const contentWidth = isExpanded ? 425 : 230
+        const contentWidth = isExpanded ? 405 : 230
         const contentHeight = 240
         window.setSize(new LogicalSize(contentWidth + ANIMATION_PADDING, contentHeight + ANIMATION_PADDING))
     }, [isExpanded, window])
 
     return (
         <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5`}>
-            <div className={`${isExpanded ? 'w-[425px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
+            <div className={`${isExpanded ? 'w-[405px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
                    <Shelf shelfId={shelfId} />
                    <Button

@@ -33,7 +33,7 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
     }
 
     return <div className="flex flex-col gap-2 w-full overflow-hidden">
-        <Card shadowSize={0} className="flex flex-col p-1 w-full">
+        <Card shadowSize={0.5} className="flex flex-col p-1 w-full">
             <MultiEmailInput
                 onEmailsChange={(emails) => {
                     setEmails(emails)
@@ -43,7 +43,7 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
-        <Card shadowSize={0} className="flex flex-col p-1 w-full">
+        <Card shadowSize={0.5} className="flex flex-col p-1 w-full">
             <PasswordInput
                 className={"h-9 bg-secondary shadow-background w-full"}
                 value={pwd}
@@ -54,7 +54,7 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>
-        <Card className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
+        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
                 cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
