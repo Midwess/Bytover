@@ -31,7 +31,7 @@
       "csp": "default-src 'self' ipc: http://ipc.localhost tauri:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://midwess.sgp1.cdn.digitaloceanspaces.com tauri:",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**"]
+        "scope": ["$APPDATA/**", "$RESOURCE/**"]
       }
     },
     "windows": []
@@ -39,6 +39,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": {
+      "icons/*": "icons/"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

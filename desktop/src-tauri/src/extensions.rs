@@ -11,6 +11,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_shelf(&self, shelf_id: u64) -> WebviewWindow<R>;
     fn open_new_shelf_window(&self) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
+    fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
     fn toggle_receive(&self);
     fn is_shelf_window_open(&self, id: u64) -> bool;
@@ -204,6 +205,43 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     fn open_new_shelf_window(&self) -> WebviewWindow<R> {
         let shelf_id = shared::gen_shelf_id();
         self.show_shelf(shelf_id)
+    }
+
+    fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R> {
+        let window = match self.get_webview_window("settings") {
+            Some(window) => window,
+            None => {
+                let window = WebviewWindowBuilder::new(
+                    self,
+                    "settings",
+                    WebviewUrl::App(format!("settings.html?tab={}", tab).into())
+                )
+                    .title("Settings")
+                    .inner_size(500.0, 340.0)
+                    .decorations(true)
+                    .transparent(true)
+                    .resizable(false)
+                    .shadow(true)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create settings window");
+
+                let _ = window.set_effects(
+                    EffectsBuilder::new()
+                        .effect(Effect::HudWindow)
+                        .state(EffectState::Active)
+                        .radius(10.0)
+                        .color(Color(30, 30, 30, 220))
+                        .build()
+                );
+
+                window
+            }
+        };
+
+        let _ = window.show();
+        let _ = window.set_focus();
+        window
     }
 
     fn show_settings(&self) -> WebviewWindow<R> {

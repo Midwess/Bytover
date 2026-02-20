@@ -26,7 +26,7 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
 use tauri_plugin_updater::UpdaterExt;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
@@ -500,19 +500,65 @@ pub async fn run() {
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem};
+
+                let about_item = MenuItemBuilder::with_id("about", "About Bytover").build(app)?;
+                let settings_item = MenuItemBuilder::with_id("settings", "Settings...").build(app)?;
+                let separator = PredefinedMenuItem::separator(app)?;
+                let quit_item = MenuItemBuilder::with_id("quit", "Quit Bytover").build(app)?;
+
+                let app_menu = SubmenuBuilder::with_id(app, "app_menu", "Bytover")
+                    .item(&about_item)
+                    .item(&separator)
+                    .item(&settings_item)
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+
+                app.on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "about" => {
+                            app.show_settings_with_tab("about");
+                        },
+                        "settings" => {
+                            app.show_settings();
+                        },
+                        "quit" => {
+                            app.close_all_windows(vec![]);
+                        },
+                        _ => {}
+                    }
+                });
+            }
+
+            #[cfg(target_os = "macos")]
             let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Regular);
 
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-            let menu = MenuBuilder::new(app)
-                .item(&quit_item)
-                .build()?;
+            #[cfg(not(target_os = "macos"))]
+            {
+                let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+                let menu = MenuBuilder::new(app)
+                    .item(&quit_item)
+                    .build()?;
+            }
 
             let icon = tauri::image::Image::from_bytes(theme::TRAY_ICON_BYTES)
                 .expect("Failed to load tray icon");
             let mut tray_builder = TrayIconBuilder::new()
                 .icon(icon)
-                .menu(&menu)
                 .show_menu_on_left_click(true);
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                tray_builder = tray_builder.menu(&menu);
+            }
 
             #[cfg(target_os = "macos")]
             {
@@ -613,17 +659,6 @@ pub async fn run() {
             start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
             #[cfg(target_os = "macos")]
             mouse_tracking::start_macos_drag_pasteboard_monitor();
-
-            #[cfg(target_os = "macos")]
-            {
-                let shortcut: Shortcut = "CommandOrControl+,".parse().unwrap();
-                let handle_for_shortcut = handle.clone();
-                let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        handle_for_shortcut.show_settings();
-                    }
-                });
-            }
 
             Ok(())
         })
