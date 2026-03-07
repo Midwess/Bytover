@@ -10,7 +10,7 @@ use crate::protocol::webrtc::fec::{FecAction, FecReceiver, FecSender, Frame, CHU
 use crate::protocol::webrtc::message_channel::DirectMessageChannel;
 use crate::protocol::webrtc::quad_channel::QuadUnreliableChannel;
 use crate::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
-use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MAX_NUM_BLOCK, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
+use crate::protocol::webrtc::webrtc::{MAX_BUFFER_SIZE, MIN_BUFFER_SIZE, TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID};
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
 use crate::shell::api::CoreRequest;
@@ -41,18 +41,14 @@ use schema::devlog::bitbridge::{
     ResourceTypeMessage,
     ViewSessionDetailRequest,
     ViewSessionDetailResponse,
-    VoidResponseMessage
+    VoidResponseMessage,
+    FecFeedback,
+    NetworkStats
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-
-// This configuration is what I found the best
-// Increasing these number could cause randomly hang
-// Maybe the NAT got overloaded
-// We need to figure out why.
-const ON_HOLD_STOP_THRESHOLD: u8 = 3;
 
 pub struct WebRtcPeer {
     pub peer: PeerEntity,
@@ -368,8 +364,8 @@ impl WebRtcPeer {
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;
         let mut packet_rx = self.outbound_packet_receiver.retrieve().await?;
         let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
-        let mut hold_counter: u8 = 0;
-        let mut block_holding_id = fec_sender.block_id;
+        let mut last_peer_block_id = 0;
+        const WINDOW_SIZE: u32 = 128;
 
         loop {
             if let Some(rtt) = self.buffer.rtt().await {
@@ -377,26 +373,11 @@ impl WebRtcPeer {
             }
 
             let (packet, feedback) = {
-                if hold_counter >= ON_HOLD_STOP_THRESHOLD {
-                    log::debug!("Stopped {}", fec_sender.block_id);
-                    let timeout_fut = sleep(Duration::from_secs(60 * 100)).fuse();
-                    let fb_fut = feedback_receiver.next().fuse();
+                let can_send = fec_sender.block_id.wrapping_sub(last_peer_block_id) < WINDOW_SIZE;
+                let fb_fut = feedback_receiver.next().fuse();
 
-                    futures::pin_mut!(timeout_fut);
-                    futures::pin_mut!(fb_fut);
-                    select_biased! {
-                        _ = timeout_fut => {
-                            return Err(anyhow!("Timeout waiting for end acknowledgment").into());
-                        },
-                        fb = fb_fut => {
-                            let fb = fb;
-                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
-                        },
-                    }
-                } else {
+                if can_send {
                     let reader_fut = packet_rx.next().fuse();
-                    let fb_fut = feedback_receiver.next().fuse();
-
                     futures::pin_mut!(fb_fut);
                     futures::pin_mut!(reader_fut);
                     select_biased! {
@@ -408,6 +389,17 @@ impl WebRtcPeer {
                             fb.map(|f| (None, Some(f))).unwrap_or((None, None))
                         },
                     }
+                } else {
+                    futures::pin_mut!(fb_fut);
+                    select_biased! {
+                        fb = fb_fut => {
+                            let fb = fb;
+                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
+                        },
+                        _ = sleep(Duration::from_millis(5)).fuse() => {
+                            (None, None)
+                        }
+                    }
                 }
             };
 
@@ -415,33 +407,22 @@ impl WebRtcPeer {
                 (Some((prefix, packet, reliable)), _) => (reliable, fec_sender.send(prefix, packet)?),
                 (_, Some(fb)) => {
                     use schema::devlog::bitbridge::fec_feedback::Feedback;
-                    if let Feedback::Network(stats) = fb {
-                        if let Some(peer_block_id) = stats.current_block_id {
-                            if block_holding_id <= peer_block_id + 1 {
-                                let diff = peer_block_id.abs_diff(fec_sender.block_id);
-                                log::debug!("Received network report {diff}");
-                                if diff == 0 {
-                                    hold_counter = 0;
-                                }
-                                else {
-                                    hold_counter = hold_counter.saturating_sub(1);
-                                }
-
-                                if diff >= ON_HOLD_STOP_THRESHOLD as u32 * MAX_NUM_BLOCK as u32 {
-                                    hold_counter = ON_HOLD_STOP_THRESHOLD;
-                                    buff_counter = MAX_BUFFER_SIZE;
-                                }
+                    match &fb {
+                        Feedback::Network(stats) => {
+                            if let Some(peer_block_id) = stats.current_block_id {
+                                last_peer_block_id = last_peer_block_id.max(peer_block_id);
                             }
                         }
-
-                        if hold_counter == 0 {
-                            block_holding_id = fec_sender.block_id;
+                        Feedback::Missing(missing) => {
+                            if let Some(first_block) = missing.blocks.first() {
+                                last_peer_block_id = last_peer_block_id.max(first_block.block_id);
+                            }
                         }
                     }
 
                     (true, fec_sender.feedback(fb))
                 }
-                _ => break
+                _ => continue
             };
 
             match action {
@@ -487,18 +468,11 @@ impl WebRtcPeer {
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
                 buff_counter = MIN_BUFFER_SIZE;
 
-                hold_counter += 1;
-                hold_counter = hold_counter.min(ON_HOLD_STOP_THRESHOLD);
-                let hold_delimiter = TransferDelimiterShema::hold(hold_counter).as_bytes()?;
-                let FecAction::Framed(frames) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice())? else {
-                    return Err(anyhow!("Failed to build hold delimiter").into());
-                };
-
-                for frame in frames {
-                    if hold_counter >= ON_HOLD_STOP_THRESHOLD {
+                // Send a Hold sync probe reliably when transport buffer is overwhelmed
+                let hold_delimiter = TransferDelimiterShema::hold(1).as_bytes()?;
+                if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice()) {
+                    for frame in frames {
                         let _ = self.reliable_data_channel.unbounded_send((self.peer.peer_id(), frame.serialize()));
-                    } else {
-                        let _ = self.quad_unreliable_channel.send(self.peer.peer_id(), frame.serialize());
                     }
                 }
 
@@ -968,13 +942,9 @@ impl WebRtcPeer {
     }
 
     pub async fn receiving_loop(&self) -> Result<(), WebRtcErrors> {
-        use schema::devlog::bitbridge::fec_feedback::Feedback;
-        use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
-
         let mut fec_receiver = FecReceiver::new();
         let mut data_rx = self.inbound_data_stream_receiver.retrieve().await?;
         let mut next_check_time: Option<Instant> = None;
-        let mut last_packet_time: Instant = Instant::now();
 
         loop {
             let frames = {
@@ -1017,44 +987,20 @@ impl WebRtcPeer {
             let action = if frames.is_empty() {
                 fec_receiver.ping()?
             } else {
-                last_packet_time = Instant::now();
                 fec_receiver.receive(frames)?
             };
-
-            if last_packet_time.elapsed() >= Duration::from_millis((fec_receiver.rtt() * 12).min(6000).max(1500)) && fec_receiver.current_block_id() > 0 {
-                let loss_rate = fec_receiver.calculate_loss_rate();
-                let current_block_id = fec_receiver.current_block_id();
-                let rtt = self.buffer.rtt().await.unwrap_or(0.0);
-
-                let network_stats = NetworkStats {
-                    current_block_id: Some(current_block_id),
-                    rtt: Some(rtt as u32),
-                    loss_rate,
-                    hold_counter: None
-                };
-
-                let feedback = FecFeedback {
-                    feedback: Some(Feedback::Network(network_stats))
-                };
-
-                let _ = self.unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
-                last_packet_time = Instant::now();
-            }
 
             match action {
                 FecAction::Constructed(packets_with_prefix, next_check) => {
                     next_check_time = Some(next_check);
 
+                    let mut should_ack = false;
                     for (prefix, packet) in packets_with_prefix {
                         if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
-                            let loss_rate = fec_receiver.calculate_loss_rate();
-                            let current_block_id = fec_receiver.current_block_id();
-                            let rtt = self.buffer.rtt().await.unwrap_or(0.0);
-
                             let network_stats = NetworkStats {
-                                current_block_id: Some(current_block_id),
-                                rtt: Some(rtt as u32),
-                                loss_rate,
+                                current_block_id: Some(fec_receiver.current_block_id()),
+                                rtt: Some(self.buffer.rtt().await.unwrap_or(0.0) as u32),
+                                loss_rate: fec_receiver.calculate_loss_rate(),
                                 hold_counter: hold.hold_counter().map(|it| it as u32)
                             };
 
@@ -1072,27 +1018,25 @@ impl WebRtcPeer {
                         };
 
                         if let Some(mut sender) = sender {
-                            log::debug!("Routing packet (size={}) to prefix {} channel", packet.len(), prefix);
                             if let Err(e) = sender.send(packet).await {
-                                log::warn!(
-                                    "Failed to send packet to prefix {} channel (receiver dropped): {:?}. Removing channel.",
-                                    prefix,
-                                    e
-                                );
-                                
+                                log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
                                 self.prefix_channels.lock().await.remove(&prefix);
                             } else {
-                                log::debug!("Successfully sent packet to prefix {}", prefix);
+                                should_ack = true;
                             }
-                        } else {
-                            let registered_prefixes: Vec<u16> = self.prefix_channels.lock().await.keys().copied().collect();
-                            log::warn!(
-                                "No channel registered for prefix {}. Registered prefixes: {:?}, packet_size={}. Packet dropped.",
-                                prefix,
-                                registered_prefixes,
-                                packet.len()
-                            );
                         }
+                    }
+
+                    if should_ack {
+                        let feedback = FecFeedback {
+                            feedback: Some(Feedback::Network(NetworkStats {
+                                current_block_id: Some(fec_receiver.current_block_id()),
+                                rtt: Some(self.buffer.rtt().await.unwrap_or(0.0) as u32),
+                                loss_rate: fec_receiver.calculate_loss_rate(),
+                                hold_counter: None
+                            }))
+                        };
+                        let _ = self.unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                     }
                 }
                 FecAction::Feedback(fb, next_check) => {

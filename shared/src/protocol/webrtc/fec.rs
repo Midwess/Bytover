@@ -4,7 +4,7 @@ use matchbox_socket::Packet;
 use n0_future::time::Instant;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
-use schema::devlog::bitbridge::{FecFeedback, MissingBlocks, MissingFrames};
+use schema::devlog::bitbridge::{FecFeedback, MissingBlocks, MissingFrames, NetworkStats};
 use std::collections::HashMap;
 use std::fmt;
 use std::mem::size_of;

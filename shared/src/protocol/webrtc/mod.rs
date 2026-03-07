@@ -9,4 +9,7 @@ pub mod transfer;
 pub mod webrtc;
 
 #[cfg(test)]
+mod protocol_sync_test;
+
+#[cfg(test)]
 mod fec_transfer_test;
