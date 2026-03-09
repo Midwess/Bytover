@@ -90,7 +90,7 @@ where
 
         let response = self.server.create_public_transfer_session(session.password.clone(), to_emails).await?;
 
-        session.order_id = response.order_id as u64;
+        session.order_id = response.order_id;
         session.access_url = response.access_url;
         session.target = TransferTarget::Internet {
             to_emails: response.to_emails

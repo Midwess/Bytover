@@ -547,7 +547,7 @@ impl TransferSession {
     }
 
     pub fn is_success(&self) -> bool {
-        self.progress.iter().any(|it| it.is_success())
+        self.progress.iter().all(|it| it.is_success())
     }
 
     pub fn cancel(&mut self) {

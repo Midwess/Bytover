@@ -140,7 +140,7 @@ impl AppCommand {
                             );
                         }
 
-                        progress.clone().update(&mut transfer_session);
+                        transfer_session.update_progress(progress.clone());
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), progress.into()));
                     }
                     TransferOperationOutput::TransferCompleted(status) => {
@@ -435,10 +435,18 @@ impl AppCommand {
                     };
 
                     log::error!("Error receiving session detail: {:?}", e);
-                    self.update_model(TransferSessionModelEvent::Update(
-                        session_id.clone(),
-                        SessionLoadError(msg).into()
-                    ));
+
+                    if matches!(e, CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)) {
+                        log::info!("Deleting session {} from database as it was not found", session_id);
+                        let _ = self.run(TransferSessionPersistentOperation::remove(session_id.clone())).await;
+                        self.update_model(TransferSessionModelEvent::Remove(session_id.clone()));
+                    } else {
+                        self.update_model(TransferSessionModelEvent::Update(
+                            session_id.clone(),
+                            SessionLoadError(msg).into()
+                        ));
+                    }
+
                     return Err(e);
                 }
                 _ => continue
