@@ -257,6 +257,48 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
     }
 }
 
+#[derive(serde::Serialize, Clone)]
+struct UpdateProgress {
+    downloaded: u64,
+    total: u64,
+}
+
+#[tauri::command]
+async fn install_update(app_handle: AppHandle) -> Result<(), String> {
+    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+
+    let update = updater.check().await.map_err(|e| e.to_string())?
+        .ok_or("No update available")?;
+
+    let total_size = update.downloaded_size.unwrap_or(0);
+
+    let mut downloaded: u64 = 0;
+
+    let downloaded_size = update.downloaded_size.clone();
+    let total = update.total_size.clone();
+
+    let download = updater.download();
+
+    if let Some(download) = download {
+        download.on(move |chunk_length, content_length| {
+            downloaded += chunk_length as u64;
+            let progress = UpdateProgress {
+                downloaded,
+                total: total_size,
+            };
+            let _ = app_handle.emit("update-progress", progress);
+        });
+    }
+
+    download.and_then(|downloaded| {
+        std::future::ready(downloaded.download_and_install())
+    }).await.map_err(|e| e.to_string())?;
+
+    let _ = app_handle.emit("update-finished", ());
+
+    Ok(())
+}
+
 pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
     let effects = CORE.process_event(event.into());
     process_effects(effects, app_handle).await;
@@ -489,7 +531,7 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,
-            open_settings, check_for_update,
+            open_settings, check_for_update, install_update,
             clear_shelf, sign_out, quit, get_or_create_shelf,
             get_toast_message, close_toast,
             set_autostart, is_autostart_enabled,

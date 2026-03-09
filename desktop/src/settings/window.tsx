@@ -4,7 +4,8 @@ import {invoke} from "@tauri-apps/api/core"
 import {getVersion} from "@tauri-apps/api/app"
 import {getCurrentWindow} from "@tauri-apps/api/window"
 import {Button} from "@/components/ui/button"
-import {Info, RefreshCw, LogOut, Loader2, Check, Settings} from "lucide-react"
+import {Info, RefreshCw, LogOut, Loader2, Check, Settings, Download, CircleCheck} from "lucide-react"
+import {checkForUpdate, installUpdate, onUpdateProgress, onUpdateFinished, UpdateStatus as UpdaterUpdateStatus} from "@/lib/updater"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -29,11 +30,19 @@ function SettingsWindow() {
     const [version, setVersion] = useState<string>("")
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+    const [isInstalling, setIsInstalling] = useState(false)
+    const [installProgress, setInstallProgress] = useState(0)
     const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false)
     const [isLoadingAutoLaunch, setIsLoadingAutoLaunch] = useState(true)
 
     useEffect(() => {
         getVersion().then(setVersion)
+    }, [])
+
+    useEffect(() => {
+        checkForUpdate()
+            .then(setUpdateStatus)
+            .catch(console.error)
     }, [])
 
     useEffect(() => {
@@ -47,13 +56,34 @@ function SettingsWindow() {
         setIsCheckingUpdate(true)
         setUpdateStatus(null)
         try {
-            const status = await invoke<UpdateStatus>("check_for_update")
+            const status = await checkForUpdate()
             setUpdateStatus(status)
         } catch (error) {
             console.error("Failed to check for update:", error)
             setUpdateStatus({available: false, version: null, release_notes: null})
         } finally {
             setIsCheckingUpdate(false)
+        }
+    }
+
+    const handleInstallUpdate = async () => {
+        setIsInstalling(true)
+        setInstallProgress(0)
+        try {
+            const unlistenProgress = await onUpdateProgress((progress) => {
+                if (progress.total > 0) {
+                    setInstallProgress(Math.round((progress.downloaded / progress.total) * 100))
+                }
+            })
+            const unlistenFinished = await onUpdateFinished(() => {
+                setIsInstalling(false)
+            })
+            await installUpdate()
+            unlistenProgress()
+            unlistenFinished()
+        } catch (error) {
+            console.error("Failed to install update:", error)
+            setIsInstalling(false)
         }
     }
 
@@ -119,6 +149,9 @@ function SettingsWindow() {
                                 isChecking={isCheckingUpdate}
                                 status={updateStatus}
                                 onCheck={handleCheckUpdate}
+                                isInstalling={isInstalling}
+                                installProgress={installProgress}
+                                onInstall={handleInstallUpdate}
                             />
                         )}
                         {activeTab === "account" && <AccountContent onSignOut={handleSignOut}/>}
@@ -171,10 +204,13 @@ function AboutContent({version}: {version: string}) {
     )
 }
 
-function UpdatesContent({isChecking, status, onCheck}: {
+function UpdatesContent({isChecking, status, onCheck, isInstalling, installProgress, onInstall}: {
     isChecking: boolean
     status: UpdateStatus | null
     onCheck: () => void
+    isInstalling: boolean
+    installProgress: number
+    onInstall: () => void
 }) {
     return (
         <div className="flex flex-col gap-4">
@@ -182,7 +218,7 @@ function UpdatesContent({isChecking, status, onCheck}: {
                 variant="outline"
                 size="sm"
                 onClick={onCheck}
-                disabled={isChecking}
+                disabled={isChecking || isInstalling}
                 className="w-fit gap-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
             >
                 {isChecking ? (
@@ -200,13 +236,40 @@ function UpdatesContent({isChecking, status, onCheck}: {
             {status && (
                 <div className="text-sm text-white/60">
                     {status.available ? (
-                        <span>Update available: v{status.version}</span>
+                        <div className="flex flex-col gap-2">
+                            <span>Update available: v{status.version}</span>
+                            {!isInstalling && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onInstall}
+                                    className="w-fit gap-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                                >
+                                    <Download className="w-4 h-4"/>
+                                    Install Update
+                                </Button>
+                            )}
+                        </div>
                     ) : (
                         <span className="flex items-center gap-1">
                             <Check className="w-4 h-4"/>
                             You're up to date
                         </span>
                     )}
+                </div>
+            )}
+            {isInstalling && (
+                <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-sm text-white/60">
+                        <Loader2 className="w-4 h-4 animate-spin"/>
+                        Downloading update... {installProgress}%
+                    </div>
+                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-green-500 transition-all duration-300"
+                            style={{width: `${installProgress}%`}}
+                        />
+                    </div>
                 </div>
             )}
         </div>

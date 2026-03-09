@@ -2,7 +2,7 @@ use core_services::logger;
 use devlog_sdk::api_gateway::client::ApiGatewayClient;
 use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
 use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
-use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
+use devlog_sdk::tcp::listener::{find_grpc_listener, find_tcp_listener, GrpcConnection, TcpConnection};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudServiceServer;
 use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationServiceServer;
 use tonic::transport::Server;
@@ -14,6 +14,7 @@ pub mod di_container;
 pub mod entities;
 pub mod errors;
 pub mod grpc;
+pub mod http;
 pub mod infrastructure;
 pub mod mail;
 pub mod repositories;
@@ -34,11 +35,28 @@ enum MainErrors {
 async fn main() -> Result<(), MainErrors> {
     logger::setup();
     let grpc_connection = find_grpc_listener(None).await?;
+    let http_connection = find_tcp_listener(None).await?;
 
     let di = di_container::DiContainer::instance().await;
     di.start_cron_jobs().await?;
 
     setup_grpc_gateway(&grpc_connection).await?;
+    setup_http_gateway(&http_connection).await?;
+
+    let http_port = http_connection.port;
+    tokio::spawn(async move {
+        log::info!("Starting HTTP server on port {}", http_port);
+        actix_web::HttpServer::new(|| {
+            actix_web::App::new()
+                .configure(http::config)
+        })
+        .bind(("0.0.0.0", http_port))
+        .expect("Failed to bind HTTP server")
+        .run()
+        .await
+        .expect("Failed to start HTTP server");
+    });
+
     start_grpc_server(grpc_connection).await?;
 
     Ok(())
@@ -85,6 +103,33 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         .build();
 
     log::info!("Register service {service:?}");
+    api_gateway.register(service).await?;
+
+    Ok(())
+}
+
+async fn setup_http_gateway(tcp: &TcpConnection) -> Result<(), MainErrors> {
+    log::info!("Registering HTTP gateway");
+    let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
+
+    let service = GatewayServiceBuilder::new()
+        .http(tcp.public_host.clone(), tcp.port)
+        .name("bitbridge-http-server")
+        .enable_cors(true)
+        .routes(vec![
+            GatewayRouteBuilder::new()
+                .http()
+                .path(GatewayRouteExpression::start_with("/bitbridge/api/v1"))
+                .priority(20)
+                .strip_path(false)
+                .public(true)
+                .preserve_host(false)
+                .name("bitbridge-http-server-path")
+                .build(),
+        ])
+        .build();
+
+    log::info!("Register HTTP service {service:?}");
     api_gateway.register(service).await?;
 
     Ok(())

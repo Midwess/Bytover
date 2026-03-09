@@ -24,3 +24,5 @@ futures.workspace = true
 tokio-cron-scheduler = { workspace = true }
 chrono = { workspace = true }
 rand = "0.8"
+actix-web = "4"
+actix-rt = "2"

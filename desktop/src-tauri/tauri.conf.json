@@ -20,8 +20,8 @@
     "opener": {},
     "autostart": null,
     "updater": {
-      "endpoints": ["https://releases.bytover.com/{{target}}/{{arch}}/{{current_version}}"],
-      "pubkey": ""
+      "endpoints": ["https://api.bytover.com/bitbridge/api/v1/update/{{target}}/{{arch}}/{{current_version}}"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ3MjU3MjkxQzdBMkI2NEEKUldSS3RxTEhrWElsUnpoRDQ4eFI3UTgzUmw4R0FqcEFqYllSTG9aTVNEQkZYN0FFNnl5ckgvMnoK"
     }
   },
   "app": {
