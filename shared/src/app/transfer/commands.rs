@@ -437,7 +437,7 @@ impl AppCommand {
                     log::error!("Error receiving session detail: {:?}", e);
 
                     if matches!(e, CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)) {
-                        log::info!("Deleting session {} from database as it was not found", session_id);
+                        log::info!("Deleting session {:?} from database as it was not found", session_id);
                         let _ = self.run(TransferSessionPersistentOperation::remove(session_id.clone())).await;
                         self.update_model(TransferSessionModelEvent::Remove(session_id.clone()));
                     } else {
