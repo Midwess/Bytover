@@ -302,11 +302,7 @@ export class WasmCore {
         const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (transferState?.received_sessions?.length != sessions.length) {
-                    setSessions(
-                        transferState?.received_sessions ?? []
-                    )
-                }
+                setSessions(transferState?.received_sessions ?? [])
             })
         }, [])
 
@@ -317,11 +313,7 @@ export class WasmCore {
         const [sessions, setSessions] = useState(this.transferState.get()?.all_sessions ?? []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (transferState?.all_sessions?.length != sessions.length) {
-                    setSessions(
-                        transferState?.all_sessions ?? []
-                    )
-                }
+                setSessions(transferState?.all_sessions ?? [])
             })
         }, [])
 
@@ -332,11 +324,7 @@ export class WasmCore {
         const [sessions, setSessions] = useState(this.transferState.get()?.search_sessions ?? []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (transferState?.search_sessions?.length != sessions.length) {
-                    setSessions(
-                        transferState?.search_sessions ?? []
-                    )
-                }
+                setSessions(transferState?.search_sessions ?? [])
             })
         }, [])
 
