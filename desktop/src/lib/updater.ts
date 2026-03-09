@@ -5,6 +5,7 @@ export interface UpdateStatus {
   available: boolean;
   version: string | null;
   release_notes: string | null;
+  is_critical: boolean;
 }
 
 export interface UpdateProgress {

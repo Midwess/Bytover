@@ -19,6 +19,7 @@ interface UpdateStatus {
     available: boolean
     version: string | null
     release_notes: string | null
+    is_critical: boolean
 }
 
 function SettingsWindow() {
@@ -60,7 +61,7 @@ function SettingsWindow() {
             setUpdateStatus(status)
         } catch (error) {
             console.error("Failed to check for update:", error)
-            setUpdateStatus({available: false, version: null, release_notes: null})
+            setUpdateStatus({available: false, version: null, release_notes: null, is_critical: false})
         } finally {
             setIsCheckingUpdate(false)
         }

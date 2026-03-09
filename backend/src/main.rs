@@ -44,20 +44,48 @@ async fn main() -> Result<(), MainErrors> {
     setup_http_gateway(&http_connection).await?;
 
     let http_port = http_connection.port;
-    tokio::spawn(async move {
+    let http_listener = http_connection.listener;
+
+    // Spawn HTTP server - run() blocks but we handle ctrl+c in main
+    let http_handle = tokio::spawn(async move {
         log::info!("Starting HTTP server on port {}", http_port);
+        let std_listener = http_listener.into_std().expect("Failed to convert listener");
         actix_web::HttpServer::new(|| {
             actix_web::App::new()
                 .configure(http::config)
         })
-        .bind(("0.0.0.0", http_port))
+        .listen(std_listener)
         .expect("Failed to bind HTTP server")
         .run()
         .await
-        .expect("Failed to start HTTP server");
     });
 
-    start_grpc_server(grpc_connection).await?;
+    // Wait for either gRPC server or Ctrl+C
+    tokio::select! {
+        result = start_grpc_server(grpc_connection) => {
+            if let Err(e) = result {
+                log::error!("gRPC server error: {}", e);
+            }
+        }
+        result = tokio::signal::ctrl_c() => {
+            match result {
+                Ok(()) => {
+                    log::info!("Received Ctrl+C, shutting down...");
+                }
+                Err(e) => {
+                    log::error!("Failed to listen for Ctrl+C: {}", e);
+                }
+            }
+        }
+    }
+
+    // Wait for HTTP server to stop (it will stop when runtime shuts down)
+    log::info!("Waiting for HTTP server to stop...");
+    if let Err(e) = http_handle.await {
+        log::error!("HTTP server error: {}", e);
+    }
+
+    log::info!("Backend shutdown complete");
 
     Ok(())
 }

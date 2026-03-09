@@ -9,7 +9,7 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(AppRelease::Table)
+                    .table(Alias::new("app_releases"))
                     .if_not_exists()
                     .col(
                         ColumnDef::new(AppRelease::Id)
@@ -68,7 +68,7 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .name("idx_app_releases_version")
-                    .table(AppRelease::Table)
+                    .table(Alias::new("app_releases"))
                     .col(AppRelease::Version)
                     .to_owned(),
             )
@@ -78,7 +78,7 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .name("idx_app_releases_platform_arch")
-                    .table(AppRelease::Table)
+                    .table(Alias::new("app_releases"))
                     .col(AppRelease::Platform)
                     .col(AppRelease::Architecture)
                     .to_owned(),
@@ -93,7 +93,7 @@ impl MigrationTrait for Migration {
             .drop_index(
                 Index::drop()
                     .name("idx_app_releases_platform_arch")
-                    .table(AppRelease::Table)
+                    .table(Alias::new("app_releases"))
                     .to_owned(),
             )
             .await?;
@@ -102,13 +102,13 @@ impl MigrationTrait for Migration {
             .drop_index(
                 Index::drop()
                     .name("idx_app_releases_version")
-                    .table(AppRelease::Table)
+                    .table(Alias::new("app_releases"))
                     .to_owned(),
             )
             .await?;
 
         manager
-            .drop_table(Table::drop().table(AppRelease::Table).to_owned())
+            .drop_table(Table::drop().table(Alias::new("app_releases")).to_owned())
             .await
     }
 }

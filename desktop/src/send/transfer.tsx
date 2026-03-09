@@ -127,11 +127,6 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card shadowSize={0.5} className="flex flex-col gap-2 p-2 rounded-xl">
-            <p className="text-xs text-muted-foreground">
-                No waiting for upload, files stream directly to the recipient in real-time.
-            </p>
-        </Card>
         <Card shadowSize={0.5} className="flex flex-row gap-2 p-1 items-center w-[100px]">
             {
                 isInProgress ? (

@@ -231,30 +231,74 @@ async fn open_settings(app_handle: AppHandle) {
     app_handle.show_settings();
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Deserialize)]
 struct UpdateStatus {
     available: bool,
     version: Option<String>,
     release_notes: Option<String>,
+    is_critical: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct UpdateManifest {
+    version: String,
+    notes: Option<String>,
+    is_critical: bool,
+    platforms: std::collections::HashMap<String, PlatformInfo>,
+}
+
+#[derive(serde::Deserialize)]
+struct PlatformInfo {
+    signature: String,
+    url: String,
 }
 
 #[tauri::command]
 async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+    let config = app_handle.config().map_err(|e| e.to_string())?;
+    let updater_config = config.plugins.get("updater")
+        .and_then(|v| v.as_object())
+        .ok_or("Updater not configured")?;
 
-    match updater.check().await {
-        Ok(Some(update)) => Ok(UpdateStatus {
-            available: true,
-            version: Some(update.version.clone()),
-            release_notes: update.body.clone(),
-        }),
-        Ok(None) => Ok(UpdateStatus {
+    let endpoints = updater_config.get("endpoints")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.as_str())
+        .ok_or("No endpoint configured")?;
+
+    let version = app_handle.package_info().version.to_string();
+    let target = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+
+    let url = endpoints
+        .replace("{{target}}", target)
+        .replace("{{arch}}", arch)
+        .replace("{{current_version}}", &version);
+
+    let client = reqwest::Client::new();
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+    if response.status() == 404 {
+        return Ok(UpdateStatus {
             available: false,
             version: None,
             release_notes: None,
-        }),
-        Err(e) => Err(e.to_string()),
+            is_critical: false,
+        });
     }
+
+    if !response.status().is_success() {
+        return Err(format!("Update check failed: {}", response.status()));
+    }
+
+    let manifest: UpdateManifest = response.json().await.map_err(|e| e.to_string())?;
+
+    Ok(UpdateStatus {
+        available: true,
+        version: Some(manifest.version),
+        release_notes: manifest.notes,
+        is_critical: manifest.is_critical,
+    })
 }
 
 #[derive(serde::Serialize, Clone)]
