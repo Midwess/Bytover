@@ -1,12 +1,12 @@
 use crate::cloud_storage::storage::CloudStorage;
-use crate::entities::transfer_progress::TransferProgress;
+use crate::entities::transfer_progress::{TransferProgress, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::TransferSession;
 use schema::devlog::app_gateway::models::Application;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, ProgressUpdated, ResourceUpdated, SessionUpdated};
-use schema::devlog::bitbridge::{CloudResourceMessage, PublicTransferSessionMessage, ResourceTypeMessage};
+use schema::devlog::bitbridge::{CloudResourceMessage, ProgressStatusMessage, PublicTransferSessionMessage, ResourceTypeMessage};
 use std::sync::Arc;
 
 impl From<&CloudResourceType> for TransferResourceType {
@@ -26,7 +26,28 @@ impl From<TransferProgress> for Progress {
             resource_order_id: value.resource_id(),
             total_size: value.size(),
             transfered_amount: value.transfered_amount(),
-            error_message: value.error_message().map(|it| it.to_owned())
+            error_message: value.error_message().map(|it| it.to_owned()),
+            status: Some(Into::<ProgressStatusMessage>::into(value.status()).into())
+        }
+    }
+}
+
+impl From<TransferProgressStatus> for ProgressStatusMessage {
+    fn from(value: TransferProgressStatus) -> Self {
+        match value {
+            TransferProgressStatus::Success => ProgressStatusMessage::ProgressStatusSuccess,
+            TransferProgressStatus::Failed(_) => ProgressStatusMessage::ProgressStatusFailed,
+            TransferProgressStatus::InProgress(_) => ProgressStatusMessage::ProgressStatusUnspecified
+        }
+    }
+}
+
+impl From<&TransferProgressStatus> for ProgressStatusMessage {
+    fn from(value: &TransferProgressStatus) -> Self {
+        match value {
+            TransferProgressStatus::Success => ProgressStatusMessage::ProgressStatusSuccess,
+            TransferProgressStatus::Failed(_) => ProgressStatusMessage::ProgressStatusFailed,
+            TransferProgressStatus::InProgress(_) => ProgressStatusMessage::ProgressStatusUnspecified
         }
     }
 }

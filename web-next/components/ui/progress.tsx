@@ -3,6 +3,8 @@ import clsx from "clsx";
 
 type Props = {
     center?: ReactElement;
+    /** Render center icon without background wrapper */
+    centerIconOnly?: boolean;
     /** Progress value from 0 to 1 */
     progress: number;
     /** Whether the task is in progress */
@@ -30,7 +32,8 @@ export default function CircleProgress({
     strokeWidth = 2,
     duration = 300,
     onClick = () => { },
-    center
+    center,
+    centerIconOnly = false
 }: Props) {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -107,7 +110,7 @@ export default function CircleProgress({
         <div
             onClick={isInProgress ? onClick : undefined}
             className={clsx(
-                "relative flex items-center justify-center transition-all duration-500",
+                "relative flex items-center justify-center transition-all duration-500 pointer-events-none",
                 showGreen && "scale-110",
                 isInProgress && "cursor-pointer hover:scale-105"
             )}
@@ -169,12 +172,18 @@ export default function CircleProgress({
                         </svg>
                     </div>
                 ) : center ? (
-                    <div className={clsx(
-                        "absolute flex items-center justify-center",
-                        "m-3",
-                        showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
-                        "transition-colors duration-500"
-                    )}>{center}</div>
+                    centerIconOnly ? (
+                        <div className="absolute flex items-center justify-center">
+                            {center}
+                        </div>
+                    ) : (
+                        <div className={clsx(
+                            "absolute flex items-center justify-center",
+                            "m-3",
+                            showGreen ? "bg-greenSecondary" : "bg-bluePrimary",
+                            "transition-colors duration-500"
+                        )}>{center}</div>
+                    )
                 ) : (
                     <div
                         className={clsx(

@@ -1,5 +1,5 @@
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
-use crate::entities::transfer_session::{TransferProgress, TransferType};
+use crate::entities::transfer_session::{TransferProgress, TransferStatus, TransferType};
 use schema::devlog::bitbridge::public_transfer_session_message::Progress;
 use schema::devlog::bitbridge::{cloud_resource_message, CloudResourceMessage, ResourceMessage, ResourceTypeMessage};
 
@@ -7,8 +7,32 @@ impl From<Progress> for TransferProgress {
     fn from(value: Progress) -> Self {
         let mut this = Self::new(value.resource_order_id, value.total_size, TransferType::Receive);
 
+        if let Some(status) = value.status {
+            this.status = match status {
+                1 => TransferStatus::Success,
+                2 => TransferStatus::Fail(value.error_message.unwrap_or_default()),
+                3 => TransferStatus::Canceled,
+                _ => infer_status_from_legacy_fields(&value)
+            };
+        } else {
+            this.status = infer_status_from_legacy_fields(&value);
+        }
+
         this.update_progress(value.transfered_amount);
         this
+    }
+}
+
+fn infer_status_from_legacy_fields(progress: &Progress) -> TransferStatus {
+    if let Some(ref error) = progress.error_message {
+        if !error.is_empty() {
+            return TransferStatus::Fail(error.clone());
+        }
+    }
+    if progress.transfered_amount >= progress.total_size && progress.total_size > 0 {
+        TransferStatus::Success
+    } else {
+        TransferStatus::InProgress
     }
 }
 

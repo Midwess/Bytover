@@ -91,6 +91,7 @@ where
 
                 // Fallback to public session search
                 let response = self.cloud_server().find_public_session(alias).await?;
+                log::info!(target: "executor", "Found public session: {response:?}");
                 let is_required_password = response.is_required_password;
                 let access_url = response.access_url;
                 let Some(session_key) = response.session else {

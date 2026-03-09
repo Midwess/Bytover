@@ -17,7 +17,7 @@ import {
 import {
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
+    Globe, ImageUpIcon, LoaderCircle, Play, Wifi, ArrowDown
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -556,7 +556,7 @@ function TransferSession(props: {
     return <>
         <button
             onClick={onPress}
-            className={"w-full bg-muted/50 rounded-xl p-2.5 h-fit border border-white/10 hover:bg-muted hover:border-white/20 hover:cursor-pointer"}>
+            className={"w-full bg-muted/50 rounded-xl p-2.5 h-fit border border-white/10 hover:bg-muted hover:border-white/20 hover:cursor-pointer pointer-events-auto"}>
             <div className={"flex flex-row items-start gap-3"}>
                 {/* Avatar Section */}
                 <div className={"relative flex-shrink-0"}>
@@ -619,6 +619,12 @@ function TransferSession(props: {
                         progress={progress}
                         size={28}
                         strokeWidth={3}
+                        centerIconOnly={is_public}
+                        center={
+                            is_public ? (
+                                <ArrowDown className={"text-bluePrimary"} size={12} strokeWidth={3} />
+                            ) : undefined
+                        }
                     />
                 </div>
             </div>
@@ -657,7 +663,7 @@ function FileView(props: {
     const displaySize = formatFileSize(model);
 
     return (
-        <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
+        <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors pointer-events-auto">
             {/* Thumbnail */}
             <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -724,7 +730,7 @@ function MediaView(props: {
 
     if (isMobile) {
         return (
-            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors">
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors pointer-events-auto">
                 {/* Thumbnail */}
                 <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
                     {thumbnailSource ? (
@@ -768,7 +774,7 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
+        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors pointer-events-auto">
             {/* Thumbnail */}
             <div className="relative bg-muted/30 h-[calc(100%-76px)]">
                 {thumbnailSource ? (

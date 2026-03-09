@@ -64,7 +64,7 @@ impl Display for TransferSessionStatus {
             TransferSessionStatus::Initializing { .. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 if *bytes_per_second == 0 {
-                    write!(f, "Preparing...")
+                    write!(f, "Waiting...")
                 } else {
                     let kb_per_second = *bytes_per_second as f64 / 1000.0;
                     if kb_per_second < 100.0 {
@@ -480,7 +480,7 @@ impl TransferSession {
     }
 
     fn is_initializing(&self) -> bool {
-        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0)
+        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0 && it.percentage() == 0f64)
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
@@ -623,7 +623,7 @@ impl TransferSession {
             }
         } else if self.is_initializing() {
             return TransferSessionStatus::Initializing {
-                loading_state: Some("Initialzing...".to_owned()),
+                loading_state: Some("Initializing...".to_owned()),
                 loading_error: None
             };
         }
@@ -661,9 +661,14 @@ impl TransferSession {
             return TransferSessionStatus::Canceled;
         }
 
-        TransferSessionStatus::InProgress {
-            bytes_per_second: self.speed(1000),
-            percentage: self.total_progress()
+        if self.is_success() {
+            TransferSessionStatus::Success
+        }
+        else {
+            TransferSessionStatus::InProgress {
+                bytes_per_second: self.speed(1000),
+                percentage: self.total_progress()
+            }
         }
     }
 

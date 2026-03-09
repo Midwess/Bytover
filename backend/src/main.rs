@@ -64,9 +64,7 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
 
 async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
     log::info!("Registering with gateway");
-    let api_gateway = KongGatewayAdminClient {
-        url: devlog_sdk::config::CONFIGS.kong.admin_url.clone()
-    };
+    let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
 
     let service = GatewayServiceBuilder::new()
         .grpc(tcp.public_host.clone(), tcp.port)
