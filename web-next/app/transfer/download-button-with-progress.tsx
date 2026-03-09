@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Check, Square } from 'lucide-react'
+import { Download, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useRef } from 'react'
 

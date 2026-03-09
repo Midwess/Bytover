@@ -434,24 +434,6 @@ function FindSessionSection() {
     )
 }
 
-const SessionListWrapper = ({ title, children }: { title: string, children: React.ReactNode }) => {
-    return (
-        <Collapsible className={"flex flex-col w-full gap-3"} defaultOpen={true}>
-            <CollapsibleTrigger asChild className={"flex flex-row items-start"}>
-                <Button variant="secondary"
-                    className="w-full justify-between items-center text-start flex flex-row cursor-pointer rounded-lg">
-                    {title}
-                    <ChevronsUpDown className="h-4 w-4" />
-                    <span className="sr-only">Toggle</span>
-                </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className={"flex flex-col gap-3"}>
-                {children}
-            </CollapsibleContent>
-        </Collapsible>
-    )
-}
-
 const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] }) => {
     const { isMobile, setOpenMobile } = useSidebar();
 
@@ -481,32 +463,6 @@ const SessionItemsList = ({ sessions }: { sessions: (ReceiveSessionViewModel)[] 
                 }
             </div>
         </>
-    )
-}
-
-const PublicSessionItems = () => {
-    const publicSessions = core.useCloudSessionsList()
-    return <SessionItemsList sessions={publicSessions} />
-}
-
-const PublicSessionList = () => {
-    return (
-        <SessionListWrapper title="Public">
-            <PublicSessionItems />
-        </SessionListWrapper>
-    )
-}
-
-const NearbySessionItems = () => {
-    const nearbySessions = core.useNearbySessionsList()
-    return <SessionItemsList sessions={nearbySessions} />
-}
-
-const NearbySessionList = () => {
-    return (
-        <SessionListWrapper title="P2P">
-            <NearbySessionItems />
-        </SessionListWrapper>
     )
 }
 
