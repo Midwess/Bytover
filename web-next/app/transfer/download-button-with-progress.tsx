@@ -113,10 +113,10 @@ export default function DownloadButtonWithProgress({
             {/* Downloading State - Progress Bar with Cancel */}
             {state === 'downloading' && (
                 <button
-                    onClick={isCloud ? undefined : onCancelClick}
-                    className="relative flex flex-col items-center justify-center h-full w-full rounded-lg bg-primary/10 border border-border transition-colors group overflow-hidden"
+                    onClick={onCancelClick}
+                    className="relative flex flex-col items-center justify-center h-full w-full rounded-lg bg-primary/10 hover:bg-destructive/20 border border-border transition-colors group overflow-hidden"
                     style={{ width: size, height: size }}
-                    title={isCloud ? "Cloud download cannot be cancelled" : "Cancel download"}
+                    title="Cancel download"
                 >
                     {/* Progress Bar - Bottom to Top */}
                     <div
@@ -124,14 +124,11 @@ export default function DownloadButtonWithProgress({
                         style={{ height: `${progress * 100}%` }}
                     />
 
-                    {/* Center content - Percentage or Stop icon on hover */}
+                    {/* Center content - Percentage */}
                     <div className="relative flex items-center justify-center z-10">
                         <span className="text-[10px] font-medium text-foreground tabular-nums">
                             {Math.round(progress * 100)}%
                         </span>
-                        {!isCloud && (
-                            <Square className="h-[35%] w-[35%] text-destructive fill-destructive hidden group-hover:block absolute" />
-                        )}
                     </div>
                 </button>
             )}

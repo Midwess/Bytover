@@ -195,7 +195,7 @@ impl TransferProgress {
         // Some file has actual size larger than expected file size
         // in that case, we try to guess the actual file size
         if self.total_bytes_counter > self.file_size {
-            self.file_size = self.total_bytes_counter + (self.total_bytes_counter - self.file_size);
+            self.file_size = self.total_bytes_counter + ((self.total_bytes_counter as f64 * 0.05) as u64);
         }
     }
 
@@ -506,7 +506,7 @@ impl TransferSession {
 
     pub fn total_progress(&self) -> f64 {
         let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
-        let total_size = self.resources.iter().map(|it| it.size).sum::<u64>();
+        let total_size = self.progress.iter().map(|it| it.file_size).sum::<u64>();
         if total_size == 0 {
             return 1.0;
         }
