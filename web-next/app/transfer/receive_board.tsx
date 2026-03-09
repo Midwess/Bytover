@@ -17,7 +17,7 @@ import {
 import {
     Book,
     ChevronsUpDown,
-    Globe, ImageUpIcon, LoaderCircle, Play, Wifi, ArrowDown
+    Globe, ImageUpIcon, LoaderCircle, Play, Wifi
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -642,21 +642,17 @@ function TransferSession(props: {
                 </div>
 
                 {/* Right Section - Progress (Vertically Centered) */}
-                <div className={"flex items-center h-full flex-shrink-0"}>
-                    <CircleProgress
-                        isCompleted={is_completed}
-                        isInProgress={is_in_progress}
-                        progress={progress}
-                        size={28}
-                        strokeWidth={3}
-                        centerIconOnly={is_public}
-                        center={
-                            is_public ? (
-                                <ArrowDown className={"text-bluePrimary"} size={12} strokeWidth={3} />
-                            ) : undefined
-                        }
-                    />
-                </div>
+                {!is_public && (
+                    <div className={"flex items-center h-full flex-shrink-0"}>
+                        <CircleProgress
+                            isCompleted={is_completed}
+                            isInProgress={is_in_progress}
+                            progress={progress}
+                            size={28}
+                            strokeWidth={3}
+                        />
+                    </div>
+                )}
             </div>
         </button>
     </>
