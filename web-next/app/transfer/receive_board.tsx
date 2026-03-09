@@ -510,12 +510,40 @@ const NearbySessionList = () => {
     )
 }
 
+const SearchResultsItems = () => {
+    const searchSessions = core.useSearchSessionsList()
+    if (searchSessions.length === 0) return null
+    return <SessionItemsList sessions={searchSessions} />
+}
+
+const SearchResultsList = () => {
+    return (
+        <div className="flex flex-col gap-3">
+            <SearchResultsItems />
+        </div>
+    )
+}
+
+const HistoriesItems = () => {
+    const allSessions = core.useAllSessionsList()
+    return <SessionItemsList sessions={allSessions} />
+}
+
+const HistoriesList = () => {
+    return (
+        <div className="flex flex-col gap-3">
+            <div className="text-sm text-muted-foreground font-medium">Histories</div>
+            <HistoriesItems />
+        </div>
+    )
+}
+
 function Board() {
     return (
         <div className="flex flex-col gap-6 h-full overflow-y-auto px-2 pb-4">
             <FindSessionSection />
-            <NearbySessionList />
-            <PublicSessionList />
+            <SearchResultsList />
+            <HistoriesList />
         </div>
     );
 }
@@ -580,6 +608,17 @@ function TransferSession(props: {
                 <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
                     {/* Alias tag and password */}
                     <div className={"flex flex-row items-center gap-1.5"}>
+                        {session.alias && (
+                            <span className={`px-1 py-0.3 rounded-sm text-xs font-medium border w-fit ${
+                                is_public
+                                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                    : is_scope_online
+                                        ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                        : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                            }`}>
+                                {session.alias}
+                            </span>
+                        )}
                         {is_required_password && (
                             <div className={"bg-muted-foreground/20 rounded-md p-0.5 border border-white/10"}>
                                 <Image

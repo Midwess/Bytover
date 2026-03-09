@@ -313,6 +313,36 @@ export class WasmCore {
         return sessions
     }
 
+    public useAllSessionsList() {
+        const [sessions, setSessions] = useState(this.transferState.get()?.all_sessions ?? []);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.all_sessions?.length != sessions.length) {
+                    setSessions(
+                        transferState?.all_sessions ?? []
+                    )
+                }
+            })
+        }, [])
+
+        return sessions
+    }
+
+    public useSearchSessionsList() {
+        const [sessions, setSessions] = useState(this.transferState.get()?.search_sessions ?? []);
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (transferState?.search_sessions?.length != sessions.length) {
+                    setSessions(
+                        transferState?.search_sessions ?? []
+                    )
+                }
+            })
+        }, [])
+
+        return sessions
+    }
+
     public useNearbyState() {
         const [state, setState] = useState(this.nearbyState.get());
         useEffect(() => {

@@ -67,7 +67,9 @@ pub struct TransferViewModel {
     cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
     selected_session: Option<ReceiveSessionViewModel>,
-    pub total_p2p_receive_progress: Option<f64>
+    pub total_p2p_receive_progress: Option<f64>,
+    pub search_sessions: Vec<ReceiveSessionViewModel>,
+    pub all_sessions: Vec<ReceiveSessionViewModel>
 }
 
 pub struct TransferModule;
@@ -816,6 +818,187 @@ impl AppModule<BitBridge> for TransferModule {
             })
             .collect::<Vec<_>>();
 
+        let keywords = &model.transfer.keywords;
+        let all_sessions: Vec<_> = model
+            .transfer
+            .sessions
+            .iter()
+            .filter(|it| it.transfer_type == TransferType::Receive)
+            .filter_map(|it| {
+                let from_user = &it.from_user;
+                let is_p2p = it.is_p2p_connected();
+
+                let status = it.status();
+                let is_loading = matches!(status, TransferSessionStatus::Initializing { .. });
+                let loading_status = if let TransferSessionStatus::Initializing {
+                    loading_state: Some(text), ..
+                } = &status
+                {
+                    Some(text.clone())
+                } else {
+                    None
+                };
+
+                let error_message = if let TransferSessionStatus::Failed(msg) = &status {
+                    Some(msg.clone())
+                } else if let TransferSessionStatus::Initializing {
+                    loading_error: Some(error),
+                    ..
+                } = &status
+                {
+                    Some(error.clone())
+                } else {
+                    None
+                };
+
+                let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password) =
+                    match &it.target {
+                        TransferTarget::P2P { from_peer, .. } => {
+                            let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
+                            let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
+                            (
+                                sender_id,
+                                from_user.avatar.clone(),
+                                from_user.name.clone(),
+                                it.description.clone().unwrap_or_default(),
+                                alias,
+                                None,
+                                None,
+                                it.is_required_password
+                            )
+                        }
+                        TransferTarget::Internet { .. } => {
+                            let access_url_ref = if !it.access_url.is_empty() {
+                                Some(it.access_url.clone())
+                            } else {
+                                None
+                            };
+                            let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
+                            let name = from_user.name.to_string();
+                            (
+                                from_user.id.to_string(),
+                                from_user.avatar.clone(),
+                                name,
+                                "Public".to_string(),
+                                alias,
+                                access_url_ref,
+                                it.password.clone(),
+                                it.is_required_password
+                            )
+                        }
+                    };
+
+                let resources = it
+                    .resources
+                    .iter()
+                    .filter_map(|resource| {
+                        let progress = it.progress.iter().find(|p| p.resource_order_id == resource.order_id)?;
+
+                        Some(ReceiveResourceViewModel {
+                            model: SelectedResourceViewModel::from(resource),
+                            completion: progress.percentage() as f32,
+                            is_ready: is_p2p || progress.status.is_completed(),
+                            is_completed: progress.status.is_completed(),
+                            is_success: progress.is_success()
+                        })
+                    })
+                    .collect();
+
+                let download_all_resource = if is_p2p && !it.resources.is_empty() {
+                    let download_all_progress = it.progress.iter().find(|p| p.resource_order_id == u64::MAX);
+
+                    let model = if let Some(resource_all) = it.session_resource.as_ref() {
+                        let mut m = SelectedResourceViewModel::from(resource_all);
+                        m.name = format!("all-resources-{}.zip", it.alias);
+                        m.order_id = u64::MAX.to_string();
+                        m
+                    } else {
+                        SelectedResourceViewModel {
+                            order_id: u64::MAX.to_string(),
+                            name: format!("all-resources-{}.zip", it.alias),
+                            size_gb: 0.0,
+                            size_mb: 0.0,
+                            size_kb: 0.0,
+                            size_bytes: 0,
+                            display_path: String::new(),
+                            path: LocalResourcePath::RelativePath {
+                                path: String::new(),
+                                is_private: false
+                            },
+                            thumbnail_path: None,
+                            r#type: ResourceType::File,
+                            received_by_peers: Vec::new()
+                        }
+                    };
+
+                    Some(if let Some(progress) = download_all_progress {
+                        ReceiveResourceViewModel {
+                            model,
+                            completion: progress.percentage() as f32,
+                            is_ready: progress.status.is_completed(),
+                            is_completed: progress.status.is_completed(),
+                            is_success: progress.is_success()
+                        }
+                    } else {
+                        ReceiveResourceViewModel {
+                            model,
+                            completion: 0.0,
+                            is_ready: true,
+                            is_completed: false,
+                            is_success: false
+                        }
+                    })
+                } else {
+                    None
+                };
+
+                Some(ReceiveSessionViewModel {
+                    is_cloud: it.target.is_public(),
+                    is_scope_online: match &it.target {
+                        TransferTarget::P2P { scope, .. } => scope.is_online(),
+                        _ => false
+                    },
+                    id: it.order_id.to_string(),
+                    sender_id,
+                    sender_avatar,
+                    sender_name,
+                    sender_description,
+                    alias,
+                    access_url,
+                    password,
+                    password_required: is_required_password,
+                    is_authenticated: !it.resources.is_empty(),
+                    has_details: !it.resources.is_empty(),
+                    is_loading,
+                    loading_status,
+                    error_message,
+                    resources,
+                    is_completed: it.is_completed(),
+                    is_in_progress: matches!(status, TransferSessionStatus::InProgress { .. }),
+                    display_download_speed: it.status().to_string(),
+                    progress: it.total_progress(),
+                    display_datetime: id_to_datetime(it.order_id).with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+                    download_all_resource
+                })
+            })
+            .collect();
+
+        // Sort all_sessions: online P2P first, then by descending ID
+        let mut all_sessions = all_sessions;
+        all_sessions.sort_by(|a, b| {
+            match (a.is_scope_online, b.is_scope_online) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => b.id.cmp(&a.id)
+            }
+        });
+
+        let search_sessions: Vec<_> = if keywords.trim().is_empty() {
+            vec![]
+        } else {
+            received_sessions.clone()
+        };
+
         let (received_cloud_sessions, mut received_sessions): (Vec<_>, Vec<_>) =
             received_sessions.into_iter().partition(|it| it.is_cloud);
 
@@ -876,7 +1059,10 @@ impl AppModule<BitBridge> for TransferModule {
                             shelf_id,
                             display_download_speed: match access_url.is_none() {
                                 true => "Initializing...".to_owned(),
-                                false => "".to_owned()
+                                false => match it.transfer_type {
+                                    TransferType::Receive { .. } => "".to_owned(),
+                                    TransferType::Send { .. } => status.to_string()
+                                }
                             },
                             is_email: !to_emails.is_empty(),
                             password: it.password.clone(),
@@ -920,7 +1106,9 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            total_p2p_receive_progress
+            total_p2p_receive_progress,
+            search_sessions,
+            all_sessions
         }
     }
 }
