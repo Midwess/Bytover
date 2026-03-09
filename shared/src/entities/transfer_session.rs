@@ -192,6 +192,11 @@ impl TransferProgress {
             self.bytes_sec_counter = bytes_count;
         }
 
+        // Some file has actual size larger than expected file size
+        // in that case, we try to guess the actual file size
+        if self.total_bytes_counter > self.file_size {
+            self.file_size = self.total_bytes_counter + (self.total_bytes_counter - self.file_size);
+        }
     }
 
     pub fn speed(&self) -> u64 {

@@ -41,6 +41,7 @@ export function ResourceDownload({
             isReady={resource.is_ready}
             isCompleted={resource.is_completed}
             isInProgress={resource.completion > 0 && !resource.is_completed}
+            isCloud={session.is_cloud}
             onDownloadClick={handleDownload}
             onCancelClick={handleCancel}
             size={size}

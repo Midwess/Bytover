@@ -557,7 +557,7 @@ function TransferSession(props: {
         <button
             onClick={onPress}
             className={"w-full bg-muted/50 rounded-xl p-2.5 h-fit border border-white/10 hover:bg-muted hover:border-white/20 hover:cursor-pointer pointer-events-auto"}>
-            <div className={"flex flex-row items-start gap-3"}>
+            <div className={"flex flex-row items-center gap-3"}>
                 {/* Avatar Section */}
                 <div className={"relative flex-shrink-0"}>
                     <div className={"bg-gradient-to-br from-bluePrimary to-bluePrimary/80 rounded-xl p-1 w-11 h-11"}>
@@ -580,15 +580,6 @@ function TransferSession(props: {
                 <div className={"flex justify-start flex-col gap-0.5 flex-1 min-w-0"}>
                     {/* Alias tag and password */}
                     <div className={"flex flex-row items-center gap-1.5"}>
-                        <span className={`px-1 py-0.3 rounded-sm text-xs font-medium border w-fit ${
-                            is_public
-                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                : is_scope_online
-                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                        }`}>
-                            {session.alias}
-                        </span>
                         {is_required_password && (
                             <div className={"bg-muted-foreground/20 rounded-md p-0.5 border border-white/10"}>
                                 <Image
@@ -611,8 +602,8 @@ function TransferSession(props: {
                     )}
                 </div>
 
-                {/* Right Section - Progress */}
-                <div className={"flex flex-col items-end gap-1 flex-shrink-0"}>
+                {/* Right Section - Progress (Vertically Centered) */}
+                <div className={"flex items-center h-full flex-shrink-0"}>
                     <CircleProgress
                         isCompleted={is_completed}
                         isInProgress={is_in_progress}

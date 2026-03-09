@@ -876,7 +876,7 @@ impl AppModule<BitBridge> for TransferModule {
                             shelf_id,
                             display_download_speed: match access_url.is_none() {
                                 true => "Initializing...".to_owned(),
-                                false => status.to_string()
+                                false => "".to_owned()
                             },
                             is_email: !to_emails.is_empty(),
                             password: it.password.clone(),
