@@ -31,10 +31,12 @@ use sqlx::postgres::PgListener;
 use sqlx::PgPool;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
 use tonic::{Request, Response, Status};
+use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
@@ -155,12 +157,12 @@ impl BitBridgeCloudService for CloudGrpcService {
             };
 
             loop {
-                let _ = match listener.recv().await {
-                    Ok(notification) => notification,
-                    Err(err) => {
+                let _ = match listener.recv().with_cancel(&CancellationToken::timeout(Duration::from_secs(5))).await {
+                    Ok(Err(err)) => {
                         log::error!("Failed to receive notification: {err}");
                         break;
-                    }
+                    },
+                    _ => {}
                 };
 
                 let session = match session_repository.find_one(&session_id).await {
