@@ -90,6 +90,17 @@ impl AppCommand {
         }
 
         SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
+
+        // Clear all data on fresh sign in (user signs in after signing out)
+        let session = SessionPersistentOperation::get_session().into_future(self.ctx()).await?;
+        if session.is_none() {
+            self.run(TransferSessionPersistentOperation::clear_all()).await?;
+            self.run(ShelfPersistentOperation::clear_all()).await?;
+            self.run(DeviceAliasPersistentOperation::clear_all()).await?;
+            self.notify_event(TransferEvent::Clear);
+            self.notify_event(ShelfEvent::Launch);
+        }
+
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
 
