@@ -13,6 +13,8 @@ interface DownloadButtonWithProgressProps {
     isCompleted?: boolean
     /** Whether download is in progress */
     isInProgress?: boolean
+    /** Whether this is a cloud session (cannot cancel, shows waiting) */
+    isCloud?: boolean
     /** Callback when download button is clicked */
     onDownloadClick?: () => void
     /** Callback when cancel is clicked during download */
@@ -36,6 +38,7 @@ export default function DownloadButtonWithProgress({
     isReady = true,
     isCompleted = false,
     isInProgress = false,
+    isCloud = false,
     onDownloadClick = () => {},
     onCancelClick = () => {},
     size = 40,
@@ -71,6 +74,7 @@ export default function DownloadButtonWithProgress({
     const getButtonState = () => {
         if (showCompleted) return 'completed'
         if (isInProgress) return 'downloading'
+        if (isCloud && progress === 0 && !isCompleted) return 'waiting'
         return 'idle'
     }
 
@@ -120,14 +124,23 @@ export default function DownloadButtonWithProgress({
                         style={{ height: `${progress * 100}%` }}
                     />
 
-                    {/* Center content - Percentage or Stop icon on hover */}
+                    {/* Center content - Percentage */}
                     <div className="relative flex items-center justify-center z-10">
-                        <span className="text-[10px] font-medium text-foreground group-hover:hidden tabular-nums">
+                        <span className="text-[10px] font-medium text-foreground tabular-nums">
                             {Math.round(progress * 100)}%
                         </span>
-                        <Square className="h-[35%] w-[35%] text-destructive fill-destructive hidden group-hover:block absolute" />
                     </div>
                 </button>
+            )}
+
+            {/* Waiting State - Cloud session waiting for download to start */}
+            {state === 'waiting' && (
+                <div
+                    className="flex items-center justify-center h-full w-full rounded-lg bg-primary/10 hover:bg-primary/20 border border-border transition-colors"
+                    style={{ width: size, height: size }}
+                >
+                    <span className="text-[10px] font-medium text-foreground">0%</span>
+                </div>
             )}
 
             {/* Completed State - Checkmark (persists) */}

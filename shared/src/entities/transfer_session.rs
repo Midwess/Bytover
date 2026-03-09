@@ -64,7 +64,7 @@ impl Display for TransferSessionStatus {
             TransferSessionStatus::Initializing { .. } => write!(f, "Initializing..."),
             TransferSessionStatus::InProgress { bytes_per_second, .. } => {
                 if *bytes_per_second == 0 {
-                    write!(f, "Waiting...")
+                    write!(f, "...")
                 } else {
                     let kb_per_second = *bytes_per_second as f64 / 1000.0;
                     if kb_per_second < 100.0 {
@@ -192,6 +192,11 @@ impl TransferProgress {
             self.bytes_sec_counter = bytes_count;
         }
 
+        // Some file has actual size larger than expected file size
+        // in that case, we try to guess the actual file size
+        if self.total_bytes_counter > self.file_size {
+            self.file_size = self.total_bytes_counter + ((self.total_bytes_counter as f64 * 0.05) as u64);
+        }
     }
 
     pub fn speed(&self) -> u64 {
@@ -501,7 +506,7 @@ impl TransferSession {
 
     pub fn total_progress(&self) -> f64 {
         let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
-        let total_size = self.resources.iter().map(|it| it.size).sum::<u64>();
+        let total_size = self.progress.iter().map(|it| it.file_size).sum::<u64>();
         if total_size == 0 {
             return 1.0;
         }

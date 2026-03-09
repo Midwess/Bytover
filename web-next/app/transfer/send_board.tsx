@@ -214,7 +214,7 @@ function FileSelections() {
                     >
                         <input {...getInputProps()} className="sr-only" aria-label="Upload files"/>
                         <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                        <p className="text-sm font-medium">Drop files or click</p>
+                        <p className="text-sm font-medium">Drop files or browse</p>
                     </div>
 
                     {supportsDirectories && (
@@ -226,7 +226,7 @@ function FileSelections() {
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
                             data-dragging={isDragging || undefined}
-                            className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
+                            className="w-1/3 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
                         >
                             <input
                                 {...getDirectoryInputProps()}
@@ -234,7 +234,7 @@ function FileSelections() {
                                 aria-label="Upload folder"
                             />
                             <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                            <p className="text-sm font-medium">Drop folders or click</p>
+                            <p className="text-sm font-medium">Drop folders or browse</p>
                         </div>
                     )}
                 </div>
