@@ -318,28 +318,6 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
 
         active.update(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
 
-        self.notify(&data).await?;
-
         Ok(data)
-    }
-}
-
-impl TransferSessionPostgresRepository {
-    async fn notify(&self, session: &TransferSession) -> Result<(), RepositoryError> {
-        let channel = format!("transfer_session_{}_{}", session.user_order_id(), session.order_id());
-        let payload = session.order_id().to_string();
-
-        let statement = Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT pg_notify($1, $2)",
-            vec![
-                SeaValue::from(channel),
-                SeaValue::from(payload),
-            ]
-        );
-
-        self.db.execute(statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
-
-        Ok(())
     }
 }

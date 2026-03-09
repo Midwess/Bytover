@@ -27,22 +27,19 @@ use schema::devlog::bitbridge::{
     UpdateTransferProgressRequest,
     UpdateTransferProgressResponse
 };
-use sqlx::postgres::PgListener;
-use sqlx::PgPool;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream;
 use tonic::{Request, Response, Status};
-use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Arc<dyn TransferSessionRepository>,
     pub app_service: Box<dyn AppInfoService>,
-    pub pg_pool: PgPool
 }
 
 type SubscribeSessionResponseStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<SubscribeSessionInfoResponse, Status>> + Send>>;
@@ -132,18 +129,6 @@ impl BitBridgeCloudService for CloudGrpcService {
         let order_id = order_id.ok_or_else(|| Status::invalid_argument("Session id must be defined"))?;
         let user_order_id = user_order_id.ok_or_else(|| Status::invalid_argument("Session id must be defined"))?;
 
-        let channel_name = format!("transfer_session_{}_{}", user_order_id, order_id);
-
-        let mut listener = PgListener::connect_with(&self.pg_pool).await.map_err(|err| {
-            log::error!("Failed to connect PgListener: {err}");
-            Status::internal("Unable to connect to session notifications")
-        })?;
-
-        if let Err(err) = listener.listen(&channel_name).await {
-            log::error!("Failed to listen on channel {channel_name}: {err}");
-            return Err(Status::internal("Unable to subscribe to session updates"));
-        }
-
         let cloud_storage = self.cloud_storage.clone();
         let app = app.clone();
         let tx_updates = tx.clone();
@@ -156,28 +141,40 @@ impl BitBridgeCloudService for CloudGrpcService {
                 user_order_id: Some(user_order_id)
             };
 
+            let mut interval = time::interval(Duration::from_secs(5));
+
             loop {
-                let _ = match listener.recv().with_cancel(&CancellationToken::timeout(Duration::from_secs(5))).await {
-                    Ok(Err(err)) => {
-                        log::error!("Failed to receive notification: {err}");
-                        break;
-                    },
-                    _ => {}
-                };
+                tokio::select! {
+                    _ = interval.tick() => {}
+                    _ = tx_updates.closed() => {
+                        log::info!("Client disconnected from session info stream");
+                        return;
+                    }
+                }
+
+                if tx_updates.is_closed() {
+                    log::info!("Client disconnected from session info stream");
+                    return;
+                }
 
                 let session = match session_repository.find_one(&session_id).await {
                     Ok(Some(session)) => session,
                     Ok(None) => {
-                        log::warn!("Session not found after notification");
+                        log::warn!("Session not found during polling");
                         continue;
                     }
                     Err(err) => {
-                        log::error!("Failed to fetch session: {err}");
+                        log::error!("Failed to fetch session during polling: {err}");
                         continue;
                     }
                 };
 
                 let events = current_session.get_change_events(&session, &cloud_storage, &app).await;
+                if events.is_empty() {
+                    current_session = session;
+                    continue;
+                }
+
                 for event in events {
                     if tx_updates.send(Ok(SubscribeSessionInfoResponse { event: Some(event) })).await.is_err() {
                         log::info!("Client disconnected from session info stream");

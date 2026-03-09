@@ -77,7 +77,6 @@ impl DiContainer {
             .unwrap_or_else(|_| "postgresql://bitbridge:bitbridgepass@localhost:5432/bitbridge".to_string());
         let pg_pool = PgPoolOptions::new()
             .min_connections(5)
-            .max_connections(10)
             .connect(&database_url)
             .await
             .unwrap_or_else(|e| panic!("Failed to create SQLx pool: {e}"));
@@ -150,7 +149,6 @@ impl DiContainer {
             cloud_storage: Arc::new(self.get_cloud_storage()),
             session_repository: Arc::new(self.get_transfer_session_repository().await),
             app_service: Box::new(self.get_app_service().await),
-            pg_pool: self.pg_pool.clone()
         }
     }
 
