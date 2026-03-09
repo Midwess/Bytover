@@ -344,7 +344,6 @@ where
                 NetStreamEvent::Progress { uploaded_bytes } => {
                     progress.update_progress(uploaded_bytes - total_sent);
                     total_sent = uploaded_bytes;
-                    log::info!("Current progress {progress:?}");
                     if ticker.elapsed() > progress_update_interval {
                         ticker = Instant::now();
                         self.server
