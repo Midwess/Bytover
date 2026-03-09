@@ -12,6 +12,7 @@ use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
+use crate::entities::peer::Peer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_session::{
     SessionResourceUpdate,
@@ -458,7 +459,7 @@ impl AppCommand {
 
     pub async fn handle_download_request(
         &self,
-        peer_id: String,
+        peer: Option<Peer>,
         session_id: u64,
         transfer_id: u16,
         resource: Option<LocalResource>
@@ -468,7 +469,13 @@ impl AppCommand {
             return Ok(());
         };
 
+        let Some(peer) = peer else {
+            log::error!("Peer not found for download request");
+            return Ok(());
+        };
+
         let resource_order_id = resource.order_id;
+        let peer_id = peer.id.clone();
         let result = self
             .run(P2POperation::stream_resource_to_peer(
                 peer_id.clone(),
@@ -488,7 +495,7 @@ impl AppCommand {
                     session_id_obj,
                     PeerReceivedEvent {
                         resource_order_id,
-                        peer_id
+                        peer
                     }
                     .into()
                 ));

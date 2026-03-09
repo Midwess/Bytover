@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::app::core::model_events::{ConnectionRecovered, SessionLoadError, UpdateAction};
 use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
-use crate::entities::peer::Peer;
+use crate::entities::peer::{Peer, ResourceReceivedPeer};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::user::User;
 use crate::repository::local_resource::LocalResourceId;
@@ -113,7 +113,7 @@ pub struct TransferProgress {
     pub transfer_type: TransferType,
     pub status: TransferStatus,
     #[serde(default)]
-    pub received_by_peers: Vec<String>
+    pub received_by_peers: Vec<ResourceReceivedPeer>
 }
 
 impl TransferProgress {
@@ -211,18 +211,18 @@ impl TransferProgress {
         self.bytes_per_second
     }
 
-    pub fn mark_received_by_peer(&mut self, peer_id: String) {
-        if !self.received_by_peers.contains(&peer_id) {
-            self.received_by_peers.push(peer_id);
+    pub fn mark_received_by_peer(&mut self, peer: Peer) {
+        if !self.received_by_peers.iter().any(|p| p.id == peer.id) {
+            self.received_by_peers.push(ResourceReceivedPeer::from(&peer));
         }
     }
 
-    pub fn received_by_peers(&self) -> &Vec<String> {
+    pub fn received_by_peers(&self) -> &Vec<ResourceReceivedPeer> {
         &self.received_by_peers
     }
 
     pub fn has_been_received_by(&self, peer_id: &str) -> bool {
-        self.received_by_peers.iter().any(|id| id == peer_id)
+        self.received_by_peers.iter().any(|p| p.id == peer_id)
     }
 }
 

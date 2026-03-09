@@ -516,8 +516,10 @@ impl AppModule<BitBridge> for TransferModule {
                     .lookup(&session_id)
                     .and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned());
 
+                let peer = model.p2p.peers.iter().find(|p| p.id == peer_id).cloned();
+
                 Command::handle_result(move |it| async move {
-                    it.app().handle_download_request(peer_id, session_order_id, transfer_id, resource).await
+                    it.app().handle_download_request(peer, session_order_id, transfer_id, resource).await
                 })
             }
             TransferEvent::ResourceNotification {

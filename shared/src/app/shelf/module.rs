@@ -339,9 +339,6 @@ impl AppModule<BitBridge> for ShelfModule {
                                 resource_vm.received_by_peers = progress
                                     .received_by_peers()
                                     .iter()
-                                    .filter_map(|peer_id| {
-                                        model.p2p.peers.iter().find(|p| &p.id == peer_id)
-                                    })
                                     .map(PeerAvatarViewModel::from)
                                     .collect();
                             }

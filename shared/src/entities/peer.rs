@@ -7,6 +7,21 @@ use crate::entities::finding_scope::FindingScope;
 use crate::entities::target::TransferTarget;
 use crate::entities::transfer_session::TransferSession;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ResourceReceivedPeer {
+    pub id: String,
+    pub avatar_url: String
+}
+
+impl From<&Peer> for ResourceReceivedPeer {
+    fn from(peer: &Peer) -> Self {
+        Self {
+            id: peer.id.clone(),
+            avatar_url: peer.avatar_url.clone()
+        }
+    }
+}
+
 // Peer is represent for the information that you want other
 // people to know about
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
