@@ -354,15 +354,6 @@ function GeneralContent({enabled, isLoading, onToggle}: {
                     <Switch enabled={enabled} onToggle={onToggle} disabled={isLoading} />
                 </SettingsRow>
             </SettingsSection>
-
-            <SettingsSection title="Appearance">
-                <SettingsRow label="Theme" description="Choose how Bytover looks on your device.">
-                    <div className="flex items-center gap-2 px-2 py-1 bg-white/5 rounded-md text-[11px] text-white/60">
-                        System Default
-                        <ChevronRight className="w-3 h-3" />
-                    </div>
-                </SettingsRow>
-            </SettingsSection>
         </div>
     )
 }
