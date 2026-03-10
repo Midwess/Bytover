@@ -238,14 +238,16 @@ struct UpdateStatus {
     release_notes: Option<String>,
     is_critical: bool,
 }
-
 #[derive(serde::Deserialize, Debug)]
 struct UpdateManifest {
     version: String,
     notes: Option<String>,
+    #[serde(default)]
     is_critical: bool,
+    #[allow(dead_code)]
     platforms: std::collections::HashMap<String, PlatformInfo>,
 }
+
 
 #[derive(serde::Deserialize, Debug)]
 struct PlatformInfo {
@@ -270,6 +272,7 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
     let response = client
         .get(&url)
         .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, "Bytover-Desktop")
         .send()
         .await.map_err(|e| e.to_string())?;
 
@@ -316,6 +319,8 @@ async fn install_update(app_handle: AppHandle) -> Result<(), String> {
 
     let updater = app_handle.updater_builder()
         .endpoints(vec![url]).map_err(|e: tauri_plugin_updater::Error| e.to_string())?
+        .header(reqwest::header::ACCEPT, "application/json").map_err(|e| e.to_string())?
+        .header(reqwest::header::USER_AGENT, "Bytover-Desktop").map_err(|e| e.to_string())?
         .build()
         .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
 

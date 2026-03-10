@@ -23,6 +23,7 @@ import {
     onUpdateFinished
 } from "@/lib/updater"
 import {motion, AnimatePresence} from "motion/react"
+import { openUrl } from "@tauri-apps/plugin-opener"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -364,7 +365,7 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
             <SettingsSection title="Current Session">
                 <SettingsRow 
                     label="Sign Out" 
-                    description="Disconnect your account from this device. You will need to sign in again to use cloud features."
+                    description="Disconnect your account from this device. And clear all data."
                 >
                     <Button
                         variant="ghost"
@@ -375,12 +376,6 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
                         <LogOut className="w-3.5 h-3.5 mr-2" />
                         Sign Out
                     </Button>
-                </SettingsRow>
-            </SettingsSection>
-            
-            <SettingsSection title="Security">
-                <SettingsRow label="Two-Factor Authentication" description="Add an extra layer of security to your account.">
-                    <span className="text-[11px] text-white/30 italic">Coming soon</span>
                 </SettingsRow>
             </SettingsSection>
         </div>
@@ -494,20 +489,20 @@ function AboutContent({version}: {version: string}) {
             </p>
             
             <div className="flex flex-col gap-3 w-full max-w-[300px] mt-2">
-                <a 
-                    href="#" 
-                    className="flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
+                <button 
+                    onClick={() => openUrl("https://bytover.com")}
+                    className="flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group cursor-pointer"
                 >
                     <span className="text-[13px] font-medium text-white/80 group-hover:text-white">Website</span>
                     <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50" />
-                </a>
-                <a 
-                    href="#" 
-                    className="flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
+                </button>
+                <button 
+                    onClick={() => openUrl("https://bytover.com/policy")}
+                    className="flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group cursor-pointer"
                 >
                     <span className="text-[13px] font-medium text-white/80 group-hover:text-white">Privacy Policy</span>
                     <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50" />
-                </a>
+                </button>
             </div>
 
             <div className="flex flex-col items-center gap-1 mt-8">
