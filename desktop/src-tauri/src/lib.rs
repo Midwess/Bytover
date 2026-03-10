@@ -1,6 +1,7 @@
 use std::env::var;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
+use serde::{Deserialize, Serialize};
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
 use core_services::logger;
@@ -255,30 +256,19 @@ struct PlatformInfo {
 
 #[tauri::command]
 async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
-    let config = app_handle.config().map_err(|e| e.to_string())?;
-    let updater_config = config.plugins.get("updater")
-        .and_then(|v| v.as_object())
-        .ok_or("Updater not configured")?;
-
-    let endpoints = updater_config.get("endpoints")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|v| v.as_str())
-        .ok_or("No endpoint configured")?;
-
     let version = app_handle.package_info().version.to_string();
     let target = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
-    let url = endpoints
-        .replace("{{target}}", target)
-        .replace("{{arch}}", arch)
-        .replace("{{current_version}}", &version);
+    // Build the update URL - endpoint is configured in tauri.conf.json
+    // Format: https://api.bytover.com/bitbridge/api/v1/update/{target}/{arch}/{current_version}
+    let base_url = "https://api.bytover.com/bitbridge/api/v1/update";
+    let url = format!("{}/{}/{}/{}", base_url, target, arch, version);
 
     let client = reqwest::Client::new();
     let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
-    if response.status() == 404 {
+    if response.status() == 204 || response.status() == 404 {
         return Ok(UpdateStatus {
             available: false,
             version: None,
@@ -314,31 +304,23 @@ async fn install_update(app_handle: AppHandle) -> Result<(), String> {
     let update = updater.check().await.map_err(|e| e.to_string())?
         .ok_or("No update available")?;
 
-    let total_size = update.downloaded_size.unwrap_or(0);
+    // Emit that update is starting
+    let _ = app_handle.emit("update-started", ());
 
-    let mut downloaded: u64 = 0;
-
-    let downloaded_size = update.downloaded_size.clone();
-    let total = update.total_size.clone();
-
-    let download = updater.download();
-
-    if let Some(download) = download {
-        download.on(move |chunk_length, content_length| {
-            downloaded += chunk_length as u64;
+    // Download and install the update with callbacks
+    // Callback types: FnMut(usize, Option<u64>) for progress, FnOnce() for finished
+    update.download_and_install(
+        |downloaded: usize, total: Option<u64>| {
             let progress = UpdateProgress {
-                downloaded,
-                total: total_size,
+                downloaded: downloaded as u64,
+                total: total.unwrap_or(0) as u64,
             };
             let _ = app_handle.emit("update-progress", progress);
-        });
-    }
-
-    download.and_then(|downloaded| {
-        std::future::ready(downloaded.download_and_install())
-    }).await.map_err(|e| e.to_string())?;
-
-    let _ = app_handle.emit("update-finished", ());
+        },
+        || {
+            let _ = app_handle.emit("update-finished", ());
+        }
+    ).await.map_err(|e| e.to_string())?;
 
     Ok(())
 }
