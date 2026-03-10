@@ -1,11 +1,13 @@
 use std::env::var;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
+use serde::Deserialize;
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
 use core_services::logger;
 use tauri_plugin_autostart::ManagerExt;
 use crux_core::Core;
+use native::config::get_updater_url;
 use native::di_container::DiContainer;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
@@ -26,7 +28,6 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
 use tauri_plugin_updater::UpdaterExt;
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
@@ -38,7 +39,6 @@ use crate::extensions::AppHandleExt;
 use crate::mouse_tracking::{
     notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig,
     check_accessibility_permission, check_input_monitoring_permission,
-    open_accessibility_preferences, open_input_monitoring_preferences,
 };
 use crate::thumbnail::generate_thumbnail;
 
@@ -231,30 +231,124 @@ async fn open_settings(app_handle: AppHandle) {
     app_handle.show_settings();
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Deserialize, Debug)]
 struct UpdateStatus {
     available: bool,
     version: Option<String>,
     release_notes: Option<String>,
+    is_critical: bool,
+}
+#[derive(serde::Deserialize, Debug)]
+struct UpdateManifest {
+    version: String,
+    notes: Option<String>,
+    #[serde(default)]
+    is_critical: bool,
+    #[allow(dead_code)]
+    platforms: std::collections::HashMap<String, PlatformInfo>,
+}
+
+
+#[derive(serde::Deserialize, Debug)]
+struct PlatformInfo {
+    signature: String,
+    url: String,
 }
 
 #[tauri::command]
 async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+    let version = app_handle.package_info().version.to_string();
+    let target = match std::env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    };
+    let arch = std::env::consts::ARCH;
 
-    match updater.check().await {
-        Ok(Some(update)) => Ok(UpdateStatus {
-            available: true,
-            version: Some(update.version.clone()),
-            release_notes: update.body.clone(),
-        }),
-        Ok(None) => Ok(UpdateStatus {
+    let base_url = get_updater_url();
+    let url = format!("{}/{}/{}/{}", base_url, target, arch, version);
+    log::info!("Checking for update at: {}", url);
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, "Bytover-Desktop")
+        .send()
+        .await.map_err(|e| e.to_string())?;
+
+    if response.status() == 204 || response.status() == 404 {
+        let status = UpdateStatus {
             available: false,
             version: None,
             release_notes: None,
-        }),
-        Err(e) => Err(e.to_string()),
+            is_critical: false,
+        };
+        log::info!("Update check result: {:?}", status);
+        return Ok(status);
     }
+
+    if !response.status().is_success() {
+        log::error!("Update check failed with status: {}", response.status());
+        return Err(format!("Update check failed: {}", response.status()));
+    }
+
+    let manifest: UpdateManifest = response.json().await.map_err(|e| e.to_string())?;
+    log::info!("Update manifest received: {:?}", manifest);
+
+    let status = UpdateStatus {
+        available: true,
+        version: Some(manifest.version),
+        release_notes: manifest.notes,
+        is_critical: manifest.is_critical,
+    };
+    log::info!("Update check result: {:?}", status);
+    Ok(status)
+}
+
+#[derive(serde::Serialize, Clone)]
+struct UpdateProgress {
+    downloaded: u64,
+    total: u64,
+}
+
+#[tauri::command]
+async fn install_update(app_handle: AppHandle) -> Result<(), String> {
+    let updater_url = get_updater_url();
+    let update_endpoint = format!("{}/{{{{target}}}}/{{{{arch}}}}/{{{{current_version}}}}", updater_url);
+    let url = update_endpoint.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+
+    let updater = app_handle.updater_builder()
+        .endpoints(vec![url]).map_err(|e: tauri_plugin_updater::Error| e.to_string())?
+        .header(reqwest::header::ACCEPT, "application/json").map_err(|e| e.to_string())?
+        .header(reqwest::header::USER_AGENT, "Bytover-Desktop").map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
+
+    let update = updater.check().await.map_err(|e: tauri_plugin_updater::Error| e.to_string())?
+        .ok_or("No update available")?;
+
+    // Emit that update is starting
+    let _ = app_handle.emit("update-started", ());
+
+    let app_handle_progress = app_handle.clone();
+    let app_handle_finished = app_handle.clone();
+
+    // Download and install the update with callbacks
+    // Callback types: FnMut(usize, Option<u64>) for progress, FnOnce() for finished
+    update.download_and_install(
+        move |downloaded: usize, total: Option<u64>| {
+            let progress = UpdateProgress {
+                downloaded: downloaded as u64,
+                total: total.unwrap_or(0) as u64,
+            };
+            let _ = app_handle_progress.emit("update-progress", progress);
+        },
+        move || {
+            let _ = app_handle_finished.emit("update-finished", ());
+        }
+    ).await.map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
+
+    Ok(())
 }
 
 pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
@@ -489,7 +583,7 @@ pub async fn run() {
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,
-            open_settings, check_for_update,
+            open_settings, check_for_update, install_update,
             clear_shelf, sign_out, quit, get_or_create_shelf,
             get_toast_message, close_toast,
             set_autostart, is_autostart_enabled,

@@ -14,7 +14,7 @@ import {PasswordInput} from "@/components/ui/password-input"
 import {
     Copy,
     Check,
-    Users,
+    Zap,
     Globe,
     Mail,
     ChevronRight,
@@ -33,22 +33,22 @@ import {EmailTransfer} from "@/send/email-transfer"
 
 export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     return (
-        <div className="flex w-[198px] flex-col gap-6 h-full overflow-hidden">
+        <div className="flex w-[208px] flex-col gap-6 h-full overflow-hidden">
             <Slide
                 delay={240}
                 direction={"left"}
                 offset={380}
                 className="h-full flex">
-                <Tabs defaultValue="p2p" className="items-start flex flex-col h-full">
+                <Tabs defaultValue="quick" className="items-start flex flex-col h-full">
                     <TabsList className={"ml-2 rounded-xl border-2 shadow-background shadow-sm"}>
-                        <TabsTab value="p2p" className="w-[60px]"><Users/> P2P</TabsTab>
-                        <TabsTab value="public" className="w-[60px]"><Globe/> Cloud</TabsTab>
-                        <TabsTab value="email" className="w-[60px]"><Mail/> Email</TabsTab>
+                        <TabsTab value="quick" className="w-[64px] px-1"><Zap/> Quick</TabsTab>
+                        <TabsTab value="public" className="w-[64px] px-1"><Globe/> Cloud</TabsTab>
+                        <TabsTab value="email" className="w-[64px] px-1"><Mail/> Email</TabsTab>
                     </TabsList>
                     <div
                         className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">
                         <TabsPanels className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                            <TabsPanel value="p2p" className="flex flex-col h-full overflow-hidden">
+                            <TabsPanel value="quick" className="flex flex-col h-full overflow-hidden">
                                 <CardContent className={"p-0 flex flex-col gap-1.5 h-full overflow-hidden"}>
                                     <P2PSend shelfId={shelfId} />
                                 </CardContent>
