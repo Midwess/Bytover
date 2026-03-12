@@ -28,7 +28,7 @@ const mockFiles: MockFile[] = [
 function ResourceView({ file }: { file: MockFile }) {
   const isFolder = file.type === "folder"
   return (
-    <Card className="w-full border bg-[#1A1A1A]/80 backdrop-blur-md rounded-xl flex flex-row items-center p-1 pl-1.5 pr-0 relative group transition-colors cursor-pointer hover:bg-[#1A1A1A] border-white/10 justify-between">
+    <Card className="w-full border bg-[#1A1A1A]/80 backdrop-blur-md rounded-xl flex flex-row items-center p-1 pl-1.5 pr-0 relative group transition-colors cursor-pointer hover:bg-[#1A1A1A] border-white/10 justify-between shadow-lg shadow-black/40">
       <div className="flex flex-row items-center gap-1.5 flex-1 min-w-0">
         <div className="w-9 h-9 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all">
           {file.thumbnailUrl ? (

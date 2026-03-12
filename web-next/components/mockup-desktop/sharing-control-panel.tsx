@@ -30,7 +30,7 @@ function P2PTab() {
 
   return (
     <div className="flex flex-col items-start w-full gap-1.5 text-left">
-      <Card className="flex flex-row px-2 py-1.5 items-center justify-between w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-2xl shadow-sm">
+      <Card className="flex flex-row px-2 py-1.5 items-center justify-between w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-2xl shadow-lg shadow-black/40">
         <div className="flex flex-col items-start text-left">
           <p className="text-[#A1A1AA] text-[9px] leading-tight">You&apos;re online as</p>
           <p className="text-white font-bold text-xs">John Doe</p>
@@ -43,7 +43,7 @@ function P2PTab() {
         </div>
       </Card>
 
-      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
         <input
           className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]"
           placeholder="Password (Optional)"
@@ -55,7 +55,7 @@ function P2PTab() {
       </Card>
 
       {isStarted && (
-        <Card className="flex flex-row items-center px-2 py-1 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+        <Card className="flex flex-row items-center px-2 py-1 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
            <div className="flex-1 truncate text-left">
              <span className="text-[10px] text-white/70">https://bytover.com/transfer?session=abc123</span>
            </div>
@@ -65,7 +65,7 @@ function P2PTab() {
         </Card>
       )}
 
-      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit shadow-lg shadow-black/40">
         <Button 
           onClick={() => setIsStarted(!isStarted)}
           className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1"
@@ -80,16 +80,16 @@ function P2PTab() {
 function CloudTab() {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <Card className="bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 p-2 rounded-xl">
+      <Card className="bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 p-2 rounded-xl shadow-lg shadow-black/40">
         <p className="text-[9px] text-[#A1A1AA] text-left">
           Create a sharable link. Files are stored for 7 days.
         </p>
       </Card>
-      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
         <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
         <Eye className="w-3.5 h-3.5 text-[#3F3F46]" />
       </Card>
-      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit shadow-lg shadow-black/40">
         <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1">
           Upload <ChevronRight className="w-3 h-3" />
         </Button>
@@ -101,14 +101,14 @@ function CloudTab() {
 function EmailTab() {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
         <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Enter recipient emails" />
       </Card>
-      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
         <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
         <Eye className="w-3.5 h-3.5 text-[#3F3F46]" />
       </Card>
-      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit shadow-lg shadow-black/40">
         <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1">
           Send <Send className="w-3 h-3" />
         </Button>

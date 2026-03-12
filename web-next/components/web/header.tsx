@@ -70,9 +70,9 @@ export default function Header({ className }: { className?: string }) {
             <div
                 className={`fixed top-0 left-0 right-0 z-100 flex justify-center w-full transition-all duration-500 pt-4 md:pt-6 px-4 md:px-6`}>
                 <div className={cn(
-                    "flex justify-between items-center w-full container px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-2xl md:rounded-[2rem]",
+                    "flex justify-between items-center w-full container px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-xl md:rounded-2xl",
                     isScrolled 
-                        ? "bg-black/60 backdrop-blur-xl border border-white/10 shadow-2xl" 
+                        ? "bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)]" 
                         : "bg-transparent border border-transparent",
                     className
                 )}>

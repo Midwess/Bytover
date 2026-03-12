@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, Shield, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import { SendingShelf } from "@/components/mockup-desktop";
 import { SharingControlPanel } from "@/components/mockup-desktop";
+import { BitBridgeFlow } from "@/components/bit-bridge-flow";
+import { HighlightFeatures } from "@/components/highlight-features";
 
 export default function Introduction() {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -17,9 +19,9 @@ export default function Introduction() {
     const CONTROL_PANEL_WIDTH = EXPANDED_WIDTH - SHELF_WIDTH; // ~191px
 
     return (
-        <div className="relative w-full min-h-screen pt-24 md:pt-32 pb-10 px-4 md:px-6 bg-black">
+        <div className="relative w-full pt-24 md:pt-32 pb-20 px-4 md:px-6 bg-black">
             {/* Padded, Rounded Container for Hero - Railway Style */}
-            <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-[2.5rem] md:rounded-[4rem] overflow-hidden flex flex-col items-center justify-center border border-white/5 shadow-2xl">
+            <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-between border border-white/10 shadow-2xl">
                 
                 {/* Background - Contained within the rounded box */}
                 <div
@@ -27,9 +29,9 @@ export default function Introduction() {
                     style={{ backgroundImage: 'url(/background2.jpg)' }}
                 />
                 <div className="absolute inset-0 bg-black/40 z-0" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-0 opacity-80" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-0 opacity-60" />
 
-                <div className="container mx-auto px-4 md:px-6 relative z-10 flex flex-col items-center text-center py-20">
+                <div className="container mx-auto px-4 md:px-6 relative z-10 flex flex-col items-center text-center pt-24 pb-20">
                     {/* Badge */}
                     <motion.div 
                         initial={{ opacity: 0, y: 10 }}
@@ -92,13 +94,13 @@ export default function Introduction() {
                                 {/* Expand Toggle Button */}
                                 <motion.div 
                                     onClick={() => setIsExpanded(!isExpanded)}
-                                    className="absolute top-1/2 -right-3 -translate-y-1/2 z-30 w-6 h-6 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
+                                    className="absolute top-1/2 -right-2.5 -translate-y-1/2 z-30 w-5 h-5 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
                                 >
                                     <motion.div
                                         animate={{ rotate: isExpanded ? 180 : 0 }}
                                         transition={{ duration: 0.3 }}
                                     >
-                                        <ArrowRight className="w-2.5 h-2.5 text-white" />
+                                        <ArrowRight className="w-2 h-2 text-white" />
                                     </motion.div>
                                 </motion.div>
                             </div>
@@ -125,19 +127,16 @@ export default function Introduction() {
                         </div>
                     </motion.div>
                 </div>
+
+                {/* Highlight Features Section - Integrated into the bottom of the rounded container */}
+                <div className="relative z-20 w-full">
+                    <HighlightFeatures />
+                </div>
             </div>
 
-            {/* Trust Indicators moved below the rounded section */}
-            <div className="container mx-auto px-4 mt-12 flex items-center justify-center gap-12">
-                {[
-                    { icon: Shield, text: "End-to-End Encrypted" },
-                    { icon: Zap, text: "Direct P2P" }
-                ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2.5 text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-600">
-                        <item.icon className="w-3.5 h-3.5" />
-                        <span>{item.text}</span>
-                    </div>
-                ))}
+            {/* BitBridgeFlow Section */}
+            <div className="mt-20">
+                <BitBridgeFlow />
             </div>
         </div>
     );

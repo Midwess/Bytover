@@ -6,6 +6,7 @@ import Introduction from "@/app/home/introduction.tsx";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
 import { BentoFeatures } from "@/components/bento-features";
+import { BitBridgeFlow } from "@/components/bit-bridge-flow";
 import { Pricing2 } from "@/components/pricing2";
 
 export default function Home() {
