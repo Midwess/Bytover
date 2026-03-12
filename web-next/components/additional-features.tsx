@@ -1,8 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { MotionEffect } from '@/components/animate-ui/effects/motion-effect';
+import { motion } from 'motion/react';
 import {
     Zap,
     FolderOpen,
@@ -10,136 +8,103 @@ import {
     Cloud,
     Mail,
     Lock,
-    ChevronDown,
-    type LucideIcon
 } from 'lucide-react';
 
-interface Feature {
-    title: string;
-    description: string;
-    icon: LucideIcon;
-}
-
-const features: Feature[] = [
+const features = [
     {
-        title: "No Upload Required",
-        description: "Files transfer directly from sender to receiver. No waiting for uploads to complete - sharing starts instantly.",
+        title: "No Uploads",
+        description: "Direct device-to-device transfer. No middleman, no waiting.",
         icon: Zap,
+        color: "text-amber-400"
     },
     {
-        title: "Folders Without Any Zip",
-        description: "Share complete folders while preserving structure. No need to compress - send full directories in one simple action.",
+        title: "Native Folders",
+        description: "Preserve folder structures without ZIP compression.",
         icon: FolderOpen,
+        color: "text-blue-400"
     },
     {
-        title: "Secure & Private",
-        description: "Your data stays between you and your friends. End-to-end encrypted transfers with no intermediary access.",
+        title: "E2E Encryption",
+        description: "Industry standard encryption for total privacy.",
         icon: Shield,
+        color: "text-green-400"
     },
     {
-        title: "Permanent Cloud Links",
-        description: "Need a link that lasts? Upload to cloud storage for permanent sharing. Available anytime, even when you're offline.",
+        title: "Cloud Links",
+        description: "Public links that last. Accessible from any browser.",
         icon: Cloud,
+        color: "text-purple-400"
     },
     {
-        title: "Send to Email",
-        description: "Send files directly to one or many email addresses at once. Perfect for teams, clients, and group sharing.",
+        title: "Multi-Email",
+        description: "Send to multiple recipients simultaneously.",
         icon: Mail,
+        color: "text-rose-400"
     },
     {
-        title: "Password Protected",
-        description: "Add an extra layer of security with optional passwords. Control who can access your shared files.",
+        title: "Security Locks",
+        description: "Optional password protection for shared content.",
         icon: Lock,
+        color: "text-zinc-400"
     },
 ];
 
 export function AdditionalFeatures() {
-    const [expandedFeatures, setExpandedFeatures] = useState<Set<number>>(new Set());
-
-    const handleFeatureClick = (index: number) => {
-        setExpandedFeatures(prev => {
-            const next = new Set(prev);
-            if (next.has(index)) {
-                next.delete(index);
-            } else {
-                next.add(index);
-            }
-            return next;
-        });
-    };
-
     return (
-        <section className="w-full py-20 md:py-32 bg-zinc-900">
+        <section className="w-full py-24 md:py-40 bg-black">
             <div className="container mx-auto px-4 md:px-6">
-                <MotionEffect
-                    slide={{ direction: 'up', offset: 30 }}
-                    fade
-                    delay={0.1}
-                    inView
-                    inViewOnce
-                >
-                    <div className="text-center mb-16 md:mb-20">
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
-                            We know what you expect
-                        </h2>
-                        <p className="text-primaryText/60 text-lg max-w-2xl mx-auto">
-                            Simple, fast, and secure file sharing - exactly how it should be.
-                        </p>
-                    </div>
-                </MotionEffect>
+                <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-20 md:mb-32 space-y-6">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-zinc-900 text-zinc-500 border border-zinc-800"
+                    >
+                        Features
+                    </motion.div>
+                    <motion.h2 
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1]"
+                    >
+                        Everything you need. <br />
+                        <span className="text-zinc-600">Nothing you don't.</span>
+                    </motion.h2>
+                    <motion.p 
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.1 }}
+                        className="text-lg text-zinc-400 max-w-xl font-medium"
+                    >
+                        Built with a focus on simplicity and speed, Bytover provides the essential tools for professional workflows.
+                    </motion.p>
+                </div>
 
-                <div className="flex flex-col max-w-3xl mx-auto">
-                    {features.map((feature, index) => {
-                        const Icon = feature.icon;
-                        const isExpanded = expandedFeatures.has(index);
-
-                        return (
-                            <MotionEffect
-                                key={index}
-                                slide={{ direction: 'up', offset: 20 }}
-                                fade
-                                delay={0.2 + Math.min(index, 8) * 0.05}
-                                inView
-                                inViewOnce
-                            >
-                                <div className="border-b border-white/10">
-                                    <button
-                                        onClick={() => handleFeatureClick(index)}
-                                        className="w-full py-4 text-left"
-                                        aria-expanded={isExpanded}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <Icon className="w-6 h-6 text-bluePrimary bg-bluePrimary/10 p-1 rounded-sm flex-shrink-0" />
-                                            <h3 className="text-sm md:text-base font-semibold text-primaryText flex-1">
-                                                {feature.title}
-                                            </h3>
-                                            <ChevronDown
-                                                className={`w-4 h-4 text-primaryText/50 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                                            />
-                                        </div>
-                                    </button>
-
-                                    <AnimatePresence>
-                                        {isExpanded && (
-                                            <motion.div
-                                                initial={{ opacity: 0, height: 0 }}
-                                                animate={{ opacity: 1, height: 'auto' }}
-                                                exit={{ opacity: 0, height: 0 }}
-                                                transition={{ duration: 0.4, ease: [0.4, 0, 0.6, 1] }}
-                                                className="overflow-hidden"
-                                            >
-                                                <div className="pb-4 pl-8">
-                                                    <p className="text-primaryText/70 text-sm leading-relaxed">
-                                                        {feature.description}
-                                                    </p>
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            </MotionEffect>
-                        );
-                    })}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 md:gap-16 max-w-6xl mx-auto">
+                    {features.map((feature, index) => (
+                        <motion.div
+                            key={index}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: index * 0.05 }}
+                            className="flex flex-col items-center text-center md:items-start md:text-left space-y-4"
+                        >
+                            <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center transition-transform hover:scale-105">
+                                <feature.icon className={`w-5 h-5 ${feature.color}`} />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-bold text-white">
+                                    {feature.title}
+                                </h3>
+                                <p className="text-zinc-500 text-sm leading-relaxed font-medium">
+                                    {feature.description}
+                                </p>
+                            </div>
+                        </motion.div>
+                    ))}
                 </div>
             </div>
         </section>

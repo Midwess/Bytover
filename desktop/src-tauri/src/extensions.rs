@@ -3,6 +3,51 @@ use tauri::webview::Color;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
+const SHELF_WIN_WIDTH: f64 = 250.0;
+const SHELF_WIN_HEIGHT: f64 = 260.0;
+
+fn constrain_window_to_screen<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(Some(monitor)) = window.current_monitor() else { return; };
+    let Ok(window_position) = window.outer_position() else { return; };
+    let Ok(window_size) = window.outer_size() else { return; };
+
+    let screen_size = monitor.size();
+    let screen_position = monitor.position();
+    let scale = monitor.scale_factor();
+
+    let screen_width = screen_size.width as f64 / scale;
+    let screen_height = screen_size.height as f64 / scale;
+    let screen_x = screen_position.x as f64;
+    let screen_y = screen_position.y as f64;
+
+    let win_width = window_size.width as f64;
+    let win_height = window_size.height as f64;
+    let win_x = window_position.x as f64;
+    let win_y = window_position.y as f64;
+
+    let mut new_x = win_x;
+    let mut new_y = win_y;
+
+    if win_x < screen_x {
+        new_x = screen_x;
+    } else if win_x + win_width > screen_x + screen_width {
+        new_x = screen_x + screen_width - win_width;
+    }
+
+    if win_y < screen_y {
+        new_y = screen_y;
+    } else if win_y + win_height > screen_y + screen_height {
+        new_y = screen_y + screen_height - win_height;
+    }
+
+    if new_x != win_x || new_y != win_y {
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: new_x as i32,
+            y: new_y as i32,
+        }));
+    }
+}
+
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self) -> WebviewWindow<R>;
@@ -199,6 +244,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }));
         }
 
+        constrain_window_to_screen(&window);
         window
     }
 
