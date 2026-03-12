@@ -28,26 +28,28 @@ const mockFiles: MockFile[] = [
 function ResourceView({ file }: { file: MockFile }) {
   const isFolder = file.type === "folder"
   return (
-    <Card className="w-full border bg-[#1A1A1A]/80 backdrop-blur-md rounded-xl flex flex-row items-center p-1 relative group transition-colors cursor-pointer gap-1.5 hover:bg-[#1A1A1A] border-white/10">
-      <div className="w-9 h-9 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all">
-        {file.thumbnailUrl ? (
-          <img
-            src={file.thumbnailUrl}
-            alt={file.name}
-            className="w-full h-full object-cover rounded-md"
-          />
-        ) : isFolder ? (
-          <FolderIcon className="w-5 h-5 text-primary fill-primary/20" />
-        ) : (
-          <FileIcon className="w-5 h-5 text-primary" />
-        )}
+    <Card className="w-full border bg-[#1A1A1A]/80 backdrop-blur-md rounded-xl flex flex-row items-center p-1 pl-1.5 pr-0 relative group transition-colors cursor-pointer hover:bg-[#1A1A1A] border-white/10 justify-between">
+      <div className="flex flex-row items-center gap-1.5 flex-1 min-w-0">
+        <div className="w-9 h-9 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all">
+          {file.thumbnailUrl ? (
+            <img
+              src={file.thumbnailUrl}
+              alt={file.name}
+              className="w-full h-full object-cover rounded-md"
+            />
+          ) : isFolder ? (
+            <FolderIcon className="w-5 h-5 text-primary fill-primary/20" />
+          ) : (
+            <FileIcon className="w-5 h-5 text-primary" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center items-start text-left">
+          <p className="text-[11px] font-medium text-white truncate leading-tight w-full text-left">{file.name}</p>
+          <p className="text-[9px] text-white/60 leading-tight w-full text-left">{file.size}</p>
+        </div>
       </div>
-      <div className="flex-1 min-w-0 flex flex-col justify-center items-start text-left">
-        <p className="text-[11px] font-medium text-white truncate leading-tight w-full text-left">{file.name}</p>
-        <p className="text-[9px] text-white/60 leading-tight w-full text-left">{file.size}</p>
-      </div>
-      <Button variant="ghost" className="p-0.5 h-auto w-auto hover:bg-transparent text-white/50">
-        <MoreVertical className="w-3 h-3" />
+      <Button variant="ghost" className="p-0 h-8 w-6 hover:bg-transparent text-white/40 shrink-0 flex items-center justify-center">
+        <MoreVertical className="w-3.5 h-3.5" />
       </Button>
     </Card>
   )

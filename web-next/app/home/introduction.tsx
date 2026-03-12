@@ -92,13 +92,13 @@ export default function Introduction() {
                                 {/* Expand Toggle Button */}
                                 <motion.div 
                                     onClick={() => setIsExpanded(!isExpanded)}
-                                    className="absolute top-1/2 -right-3.5 -translate-y-1/2 z-30 w-7 h-7 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
+                                    className="absolute top-1/2 -right-3 -translate-y-1/2 z-30 w-6 h-6 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
                                 >
                                     <motion.div
                                         animate={{ rotate: isExpanded ? 180 : 0 }}
                                         transition={{ duration: 0.3 }}
                                     >
-                                        <ArrowRight className="w-3 h-3 text-white" />
+                                        <ArrowRight className="w-2.5 h-2.5 text-white" />
                                     </motion.div>
                                 </motion.div>
                             </div>
