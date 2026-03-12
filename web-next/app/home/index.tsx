@@ -4,9 +4,10 @@ import Footer from "@/components/web/footer";
 import { Suspense } from "react";
 import Introduction from "@/app/home/introduction.tsx";
 import { QuickLinkTransfer } from "@/components/quick-link-transfer";
+import { CloudEmailTransfer } from "@/components/cloud-email-transfer";
+import { ShelfManagement } from "@/components/shelf-management";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
-import { BentoFeatures } from "@/components/bento-features";
 import { BitBridgeFlow } from "@/components/bit-bridge-flow";
 import { Pricing2 } from "@/components/pricing2";
 
@@ -26,9 +27,11 @@ export default function Home() {
                 
                 <BitBridgeFlow />
 
-                <div className="space-y-0">
-                    <BentoFeatures />
+                <CloudEmailTransfer />
 
+                <ShelfManagement />
+
+                <div className="space-y-0">
                     <div id="pricing">
                         <Pricing2 />
                     </div>
