@@ -6,7 +6,6 @@ import { ArrowRight } from "lucide-react";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import { SendingShelf } from "@/components/mockup-desktop";
 import { SharingControlPanel } from "@/components/mockup-desktop";
-import { BitBridgeFlow } from "@/components/bit-bridge-flow";
 import { HighlightFeatures } from "@/components/highlight-features";
 
 export default function Introduction() {
@@ -132,11 +131,6 @@ export default function Introduction() {
                 <div className="relative z-20 w-full">
                     <HighlightFeatures />
                 </div>
-            </div>
-
-            {/* BitBridgeFlow Section */}
-            <div className="mt-20">
-                <BitBridgeFlow />
             </div>
         </div>
     );

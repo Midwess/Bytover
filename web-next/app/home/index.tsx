@@ -3,6 +3,7 @@ import Footer from "@/components/web/footer";
 
 import { Suspense } from "react";
 import Introduction from "@/app/home/introduction.tsx";
+import { QuickLinkTransfer } from "@/components/quick-link-transfer";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
 import { BentoFeatures } from "@/components/bento-features";
@@ -20,6 +21,10 @@ export default function Home() {
                 <section id="intro">
                     <Introduction />
                 </section>
+
+                <QuickLinkTransfer />
+                
+                <BitBridgeFlow />
 
                 <div className="space-y-0">
                     <BentoFeatures />
