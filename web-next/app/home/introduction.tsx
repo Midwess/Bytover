@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from "react";
 import { getAssetUrl } from "@/utils/asset-url";
 import Aurora from "@/components/Aurora";
 import Link from "next/link";
@@ -7,6 +8,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { motion } from "motion/react";
 import { ArrowRight, ChevronRight, Share2, Shield, Zap, FolderOpen, MousePointer2 } from "lucide-react";
 import { DownloadPlatforms } from "@/components/download-platforms";
+import { SendingShelf } from "@/components/mockup-desktop";
+import { SharingControlPanel } from "@/components/mockup-desktop";
 
 interface IntroductionProps {
     disableBackground?: boolean;
@@ -18,6 +21,7 @@ export default function Introduction({
     header = "The better way to share files.",
 }: IntroductionProps) {
     const isMobile = useIsMobile();
+    const [isExpanded, setIsExpanded] = useState(true);
 
     return (
         <div className="relative w-full h-screen overflow-hidden flex flex-col justify-center bg-black">
@@ -82,78 +86,46 @@ export default function Introduction({
                         </div>
                     </motion.div>
 
-                    {/* Right Column: Clean Product Mockup */}
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        transition={{ duration: 0.8, delay: 0.2 }}
-                        className="relative hidden lg:flex items-center justify-center"
-                    >
-                        {/* "The Shelf" Mockup - Clean & Native */}
-                        <div className="relative w-[520px] bg-zinc-950 rounded-3xl shadow-[0_0_100px_-20px_rgba(0,0,0,0.8)] p-6 flex flex-col gap-6 overflow-hidden border-0 outline-none">
-                            {/* Header */}
-                            <div className="flex items-center justify-between border-b border-white/5 pb-5">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-bluePrimary/10 border border-bluePrimary/20 flex items-center justify-center">
-                                        <FolderOpen className="w-6 h-6 text-bluePrimary" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="text-base font-bold text-white">Project_Atlas</div>
-                                        <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">12 Files • 2.4 GB</div>
-                                    </div>
-                                </div>
-                                <div className="h-9 px-4 rounded-xl bg-bluePrimary text-white text-[11px] font-bold flex items-center shadow-lg shadow-bluePrimary/20 cursor-default">
-                                    Copy Link
-                                </div>
-                            </div>
-
-                            {/* File Preview Simulation */}
-                            <div className="grid grid-cols-4 gap-4 py-2">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="aspect-square rounded-2xl bg-white/[0.03] border border-white/5 flex flex-col items-center justify-center gap-2 p-3 transition-colors hover:bg-white/[0.05]">
-                                         <img src={getAssetUrl("/file.svg")} alt="File" className="w-10 h-10 opacity-40" />
-                                         <div className="w-12 h-1 bg-white/10 rounded-full" />
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Status Bar */}
-                            <div className="flex justify-between items-center text-[10px] font-bold tracking-widest uppercase text-zinc-600 pt-2 border-t border-white/5">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                    <span>Peer Found</span>
-                                </div>
-                                <span>120 MB/s</span>
-                            </div>
-
-                             {/* Interactive Cursor */}
-                             <motion.div 
-                                animate={{ x: [100, -50, 20, 0], y: [50, -30, 40, 0] }}
-                                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-                                className="absolute -right-4 bottom-1/4 z-20 pointer-events-none"
-                            >
-                                <MousePointer2 className="w-6 h-6 text-white drop-shadow-lg fill-white" />
-                            </motion.div>
-                        </div>
-
-                         {/* Floating Clean Chips */}
-                         <div className="absolute -left-12 bottom-1/4 flex flex-col gap-4">
-                            {[
-                                { icon: Zap, text: "Zero Uploads", color: "text-amber-400" },
-                                { icon: Share2, text: "Direct Link", color: "text-purple-400" }
-                            ].map((tag, i) => (
+                    {/* Right Column: Sending Shelf & Control Panel */}
+                    <div className="hidden lg:flex justify-center items-center">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            className="relative flex items-center h-[260px] w-[424px]"
+                        >
+                            <div className="w-[200px] h-[230px] relative z-20 flex-shrink-0">
+                                <SendingShelf className="h-full" />
                                 <motion.div 
-                                    key={i}
-                                    animate={{ y: [0, -10, 0] }}
-                                    transition={{ duration: 5, delay: i * 0.7, repeat: Infinity }}
-                                    className="px-4 py-2.5 bg-zinc-950/90 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl flex items-center gap-3"
+                                    onClick={() => setIsExpanded(!isExpanded)}
+                                    className="absolute top-1/2 -right-3 -translate-y-1/2 z-30 w-6 h-6 bg-[#1A1A1A] border border-white/20 shadow-lg rounded-full flex items-center justify-center cursor-pointer hover:bg-[#262626] transition-colors"
                                 >
-                                    <tag.icon className={`w-4 h-4 ${tag.color}`} />
-                                    <span className="text-[10px] font-bold tracking-[0.1em] text-white uppercase">{tag.text}</span>
+                                    <motion.div
+                                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <ArrowRight className="w-3 h-3 text-white" />
+                                    </motion.div>
                                 </motion.div>
-                            ))}
-                         </div>
-                    </motion.div>
+                            </div>
+                            
+                            <motion.div 
+                                initial={false}
+                                animate={{ 
+                                    width: isExpanded ? 208 : 0,
+                                    opacity: isExpanded ? 1 : 0,
+                                    x: isExpanded ? 0 : 20, // Slide from right to left
+                                    marginLeft: isExpanded ? 16 : 0
+                                }}
+                                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                                className="h-[260px] overflow-hidden flex-shrink-0"
+                            >
+                                <div className="w-[208px] h-full">
+                                    <SharingControlPanel className="h-full" />
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    </div>
                 </div>
             </div>
         </div>
