@@ -69,7 +69,7 @@ export function AdditionalFeatures() {
                         className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1]"
                     >
                         Everything you need. <br />
-                        <span className="text-zinc-600">Nothing you don't.</span>
+                        <span className="text-zinc-600">Nothing you don&apos;t.</span>
                     </motion.h2>
                     <motion.p 
                         initial={{ opacity: 0, y: 20 }}

@@ -3,14 +3,12 @@ import { Button } from "@/components/ui/button"
 import {
   MoreVertical,
   Plus,
-  Trash2,
-  ClipboardPaste,
   Minus,
-  MoreHorizontal,
   FolderIcon,
   FileIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import React from "react"
 
 export type MockFile = {
   id: string
@@ -30,8 +28,8 @@ const mockFiles: MockFile[] = [
 function ResourceView({ file }: { file: MockFile }) {
   const isFolder = file.type === "folder"
   return (
-    <Card className="w-full border bg-muted/50 rounded-xl flex flex-row items-center p-1 relative group transition-colors cursor-pointer gap-2 hover:bg-muted-foreground/30 border-white/10">
-      <div className="w-12 h-12 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all">
+    <Card className="w-full border bg-[#1A1A1A]/80 backdrop-blur-md rounded-xl flex flex-row items-center p-1 relative group transition-colors cursor-pointer gap-1.5 hover:bg-[#1A1A1A] border-white/10">
+      <div className="w-9 h-9 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center transition-all">
         {file.thumbnailUrl ? (
           <img
             src={file.thumbnailUrl}
@@ -39,17 +37,17 @@ function ResourceView({ file }: { file: MockFile }) {
             className="w-full h-full object-cover rounded-md"
           />
         ) : isFolder ? (
-          <FolderIcon className="w-6 h-6 text-primary fill-primary/20" />
+          <FolderIcon className="w-5 h-5 text-primary fill-primary/20" />
         ) : (
-          <FileIcon className="w-6 h-6 text-primary" />
+          <FileIcon className="w-5 h-5 text-primary" />
         )}
       </div>
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <p className="text-sm font-medium text-white truncate">{file.name}</p>
-        <p className="text-xs text-white/70">{file.size}</p>
+      <div className="flex-1 min-w-0 flex flex-col justify-center items-start text-left">
+        <p className="text-[11px] font-medium text-white truncate leading-tight w-full text-left">{file.name}</p>
+        <p className="text-[9px] text-white/60 leading-tight w-full text-left">{file.size}</p>
       </div>
-      <Button variant="ghost" className="p-0 h-auto w-auto hover:bg-transparent text-white/70">
-        <MoreVertical className="w-4 h-4" />
+      <Button variant="ghost" className="p-0.5 h-auto w-auto hover:bg-transparent text-white/50">
+        <MoreVertical className="w-3 h-3" />
       </Button>
     </Card>
   )
@@ -64,12 +62,12 @@ export function SendingShelf({ className, isDraggingOver = false }: SendingShelf
   return (
     <Card
       className={cn(
-        "rounded-[30px] flex flex-col bg-[#111111] border border-white/20 p-0 w-full h-full relative overflow-hidden",
+        "rounded-[30px] flex flex-col bg-[#111111]/80 backdrop-blur-xl border border-white/10 p-0 w-full h-full relative overflow-hidden",
         isDraggingOver && "border-blue-500 shadow-[0_0_8px_2px_rgba(59,130,246,0.5)_inset]",
         className
       )}
     >
-      <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-[#111111] to-transparent pointer-events-none z-20" />
+      <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-black/20 to-transparent pointer-events-none z-20" />
       
       {/* Drag handle matching desktop/src/send/shelf.tsx */}
       <div
@@ -86,9 +84,12 @@ export function SendingShelf({ className, isDraggingOver = false }: SendingShelf
         </div>
       )}
 
-      {/* Resources List - matching desktop layout */}
-      <div className="w-full h-full overflow-y-auto px-2 z-0 pt-7 no-scrollbar">
-        <div className="flex flex-col gap-1.5">
+      <div 
+        className="w-full h-full overflow-y-auto px-1.5 z-0 pt-6 no-scrollbar"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        style={{ overflowY: 'overlay' } as any}
+      >
+        <div className="flex flex-col gap-1">
           {mockFiles.map((file) => (
             <ResourceView key={file.id} file={file} />
           ))}
@@ -96,30 +97,15 @@ export function SendingShelf({ className, isDraggingOver = false }: SendingShelf
         </div>
       </div>
 
-      {/* Bottom controls - matching desktop layout */}
-      <div className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-[#111111] to-transparent z-20 w-full justify-center flex flex-row pb-2">
-        <div className="group z-20 flex flex-col items-center justify-end bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:pb-2 gap-2">
-          <div className="flex flex-col gap-1.5 overflow-hidden max-h-0 opacity-0 transition-all duration-300 ease-out group-hover:max-h-24 group-hover:opacity-100 group-hover:mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-24 flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted/90 px-2 py-1 h-auto rounded-lg border border-white/10"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span>Clear all</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted/90 px-2 py-1 h-auto w-24 rounded-lg border border-white/10"
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" />
-              <span>Paste</span>
-            </Button>
-          </div>
-          <MoreHorizontal className="h-7 w-7 flex-shrink-0 transition-transform text-white p-[2px] duration-500 ease-out bg-muted/90 rounded-full cursor-pointer" />
-        </div>
-      </div>
+      <style jsx>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </Card>
   )
 }

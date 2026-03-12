@@ -1,104 +1,98 @@
 'use client';
 
 import { useState } from "react";
-import { getAssetUrl } from "@/utils/asset-url";
-import Aurora from "@/components/Aurora";
-import Link from "next/link";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { motion } from "motion/react";
-import { ArrowRight, ChevronRight, Share2, Shield, Zap, FolderOpen, MousePointer2 } from "lucide-react";
+import { ArrowRight, Shield, Zap } from "lucide-react";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import { SendingShelf } from "@/components/mockup-desktop";
 import { SharingControlPanel } from "@/components/mockup-desktop";
 
-interface IntroductionProps {
-    disableBackground?: boolean;
-    header?: string;
-}
-
-export default function Introduction({
-    disableBackground = false,
-    header = "The better way to share files.",
-}: IntroductionProps) {
-    const isMobile = useIsMobile();
+export default function Introduction() {
     const [isExpanded, setIsExpanded] = useState(true);
 
+    // Exact dimensions from desktop/src/send/window.tsx - Adjusted (25% smaller then 20% bigger)
+    const SHELF_WIDTH = 180;
+    const SHELF_HEIGHT = 206;
+    const EXPANDED_WIDTH = 371;
+    const CONTROL_PANEL_WIDTH = EXPANDED_WIDTH - SHELF_WIDTH; // ~191px
+
     return (
-        <div className="relative w-full h-screen overflow-hidden flex flex-col justify-center bg-black">
-            {/* Background - Kept our signature Aurora */}
-            {!disableBackground && (
-                <div className="absolute inset-0 z-0 pointer-events-none">
-                    <GravityBackground />
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/20 to-black" />
-                </div>
-            )}
+        <div className="relative w-full min-h-screen pt-24 md:pt-32 pb-10 px-4 md:px-6 bg-black">
+            {/* Padded, Rounded Container for Hero - Railway Style */}
+            <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-[2.5rem] md:rounded-[4rem] overflow-hidden flex flex-col items-center justify-center border border-white/5 shadow-2xl">
+                
+                {/* Background - Contained within the rounded box */}
+                <div
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url(/background2.jpg)' }}
+                />
+                <div className="absolute inset-0 bg-black/40 z-0" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-0 opacity-80" />
 
-            <div className="container mx-auto px-4 md:px-6 relative z-10">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-                    {/* Left Column: Refined Content */}
+                <div className="container mx-auto px-4 md:px-6 relative z-10 flex flex-col items-center text-center py-20">
+                    {/* Badge */}
                     <motion.div 
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        className="flex flex-col items-center lg:items-start text-center lg:text-left space-y-8"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-white/10 text-white/70 border border-white/10 backdrop-blur-xl mb-10"
                     >
-                        {/* Dropover-style Badge */}
-                        <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-zinc-900/80 text-zinc-400 border border-zinc-800 backdrop-blur-md"
-                        >
-                            <span className="text-bluePrimary">Version 1.0</span>
-                            <div className="w-px h-2 bg-zinc-700 mx-1" />
-                            <span>Available Now</span>
-                        </motion.div>
-
-                        {/* Headline */}
-                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1]">
-                            Drag. Drop. <br />
-                            <span className="text-zinc-500">Share instantly.</span>
-                        </h1>
-
-                        {/* Description */}
-                        <p className="text-base md:text-lg text-zinc-400 max-w-lg leading-relaxed font-medium">
-                            The native file transfer utility for modern teams. 
-                            Peer-to-peer, encrypted, and effortlessly simple.
-                        </p>
-
-                        {/* CTAs */}
-                        <div className="flex flex-col gap-6 w-full sm:w-auto pt-4 items-center lg:items-start">
-                            <div className="opacity-80 scale-95">
-                                <DownloadPlatforms />
-                            </div>
-                        </div>
-
-                        {/* Minimalist Trust Indicators */}
-                        <div className="flex items-center gap-8 pt-6">
-                            {[
-                                { icon: Shield, text: "End-to-End Encrypted" },
-                                { icon: Zap, text: "Direct P2P" }
-                            ].map((item, i) => (
-                                <div key={i} className="flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-zinc-500">
-                                    <item.icon className="w-3.5 h-3.5" />
-                                    <span>{item.text}</span>
-                                </div>
-                            ))}
-                        </div>
+                        <span className="text-blue-300">Version 1.0</span>
+                        <div className="w-px h-2 bg-white/20 mx-1" />
+                        <span>Now in Public Beta</span>
                     </motion.div>
 
-                    {/* Right Column: Sending Shelf & Control Panel */}
-                    <div className="hidden lg:flex justify-center items-center">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ duration: 0.8, delay: 0.2 }}
-                            className="relative flex items-center h-[260px] w-[424px]"
-                        >
-                            <div className="w-[200px] h-[230px] relative z-20 flex-shrink-0">
-                                <SendingShelf className="h-full" />
+                    {/* Headline - 15% smaller */}
+                    <motion.h1 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.1 }}
+                        className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.05] max-w-5xl mb-8"
+                    >
+                        The native way to <br />
+                        <span className="text-white/40">share anything.</span>
+                    </motion.h1>
+
+                    {/* Description */}
+                    <motion.p 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="text-lg md:text-xl text-white/50 max-w-2xl leading-relaxed font-medium mb-12"
+                    >
+                        Bytover is a high-performance file transfer utility for modern teams. 
+                        Peer-to-peer, end-to-end encrypted, and native to your OS.
+                    </motion.p>
+
+                    {/* CTAs */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.3 }}
+                        className="flex flex-col items-center gap-12 mb-16"
+                    >
+                        <DownloadPlatforms />
+                    </motion.div>
+
+                    {/* Central Mockup Visual */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 1, delay: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                        className="relative group mt-8"
+                    >
+                        {/* Mockup Container - Scaled for better visibility while respecting original ratio */}
+                        <div className="relative flex items-center h-[234px] transition-all duration-500 ease-in-out scale-110 md:scale-125 lg:scale-150 origin-center" style={{ width: isExpanded ? EXPANDED_WIDTH : SHELF_WIDTH }}>
+                            
+                            {/* Shelf (Original proportions) */}
+                            <div className="relative z-20 flex-shrink-0 bg-transparent rounded-2xl" style={{ width: SHELF_WIDTH, height: SHELF_HEIGHT }}>
+                                <div className="w-full h-full overflow-hidden rounded-2xl">
+                                    <SendingShelf className="h-full w-full" />
+                                </div>
+                                
+                                {/* Expand Toggle Button */}
                                 <motion.div 
                                     onClick={() => setIsExpanded(!isExpanded)}
-                                    className="absolute top-1/2 -right-3 -translate-y-1/2 z-30 w-6 h-6 bg-[#1A1A1A] border border-white/20 shadow-lg rounded-full flex items-center justify-center cursor-pointer hover:bg-[#262626] transition-colors"
+                                    className="absolute top-1/2 -right-3.5 -translate-y-1/2 z-30 w-7 h-7 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
                                 >
                                     <motion.div
                                         animate={{ rotate: isExpanded ? 180 : 0 }}
@@ -109,45 +103,42 @@ export default function Introduction({
                                 </motion.div>
                             </div>
                             
+                            {/* Control Panel (Original proportions) */}
                             <motion.div 
                                 initial={false}
                                 animate={{ 
-                                    width: isExpanded ? 208 : 0,
+                                    width: isExpanded ? CONTROL_PANEL_WIDTH : 0,
                                     opacity: isExpanded ? 1 : 0,
-                                    x: isExpanded ? 0 : 20, // Slide from right to left
-                                    marginLeft: isExpanded ? 16 : 0
+                                    x: isExpanded ? 0 : -20,
                                 }}
-                                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-                                className="h-[260px] overflow-hidden flex-shrink-0"
+                                transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+                                className="overflow-hidden flex-shrink-0"
+                                style={{ height: SHELF_HEIGHT }}
                             >
-                                <div className="w-[208px] h-full">
-                                    <SharingControlPanel className="h-full" />
+                                <div className="h-full bg-transparent rounded-2xl ml-1 overflow-y-auto no-scrollbar" style={{ width: CONTROL_PANEL_WIDTH - 4 }}>
+                                    <SharingControlPanel className="h-full w-full" />
                                 </div>
                             </motion.div>
-                        </motion.div>
-                    </div>
+
+                            {/* Refined Shadow/Glow under the mockup */}
+                            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[80%] h-10 bg-black/60 blur-[30px] rounded-full -z-10" />
+                        </div>
+                    </motion.div>
                 </div>
             </div>
-        </div>
-    );
-}
 
-export function GravityBackground() {
-    const isMobile = useIsMobile()
-    return (
-        <div className="w-full h-full overflow-hidden absolute top-0 left-0 z-0">
-            <Aurora
-                colorStops={[
-                    "#1a4779", // deep sapphire
-                    "#1a6fc7", // vibrant blue
-                    "#3784ff", // strong vivid blue
-                    "#365ba1", // royal blue
-                    "#243f7f", // very deep blue
-                ]}
-                blend={isMobile ? 0.25 : 0.50}
-                amplitude={isMobile ? 0.20 : 0.15}
-                speed={isMobile ? 1.5 : 1.0}
-            />
+            {/* Trust Indicators moved below the rounded section */}
+            <div className="container mx-auto px-4 mt-12 flex items-center justify-center gap-12">
+                {[
+                    { icon: Shield, text: "End-to-End Encrypted" },
+                    { icon: Zap, text: "Direct P2P" }
+                ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-600">
+                        <item.icon className="w-3.5 h-3.5" />
+                        <span>{item.text}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

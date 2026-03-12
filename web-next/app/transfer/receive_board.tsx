@@ -645,7 +645,7 @@ function FileView(props: {
     const displaySize = formatFileSize(model);
 
     return (
-        <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors pointer-events-auto">
+        <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md hover:bg-zinc-900 transition-colors pointer-events-auto">
             {/* Thumbnail */}
             <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -756,7 +756,7 @@ function MediaView(props: {
     }
 
     return (
-        <div className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors pointer-events-auto">
+        <div className="w-full h-full flex flex-col rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md overflow-hidden group hover:border-white/30 transition-colors pointer-events-auto">
             {/* Thumbnail */}
             <div className="relative bg-muted/30 h-[calc(100%-76px)]">
                 {thumbnailSource ? (

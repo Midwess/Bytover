@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContents, TabsContent } from "@/components/animate-ui/components/tabs"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Zap,
@@ -29,48 +29,48 @@ function P2PTab() {
   }
 
   return (
-    <div className="flex flex-col items-start w-full gap-2">
-      <Card className="flex flex-row px-3 py-2 items-center justify-between w-full bg-[#1A1A1A] border-white/10 rounded-2xl shadow-sm">
-        <div className="flex flex-col">
-          <p className="text-[#A1A1AA] text-[10px] leading-tight">You're online as</p>
-          <p className="text-white font-bold text-sm">Minh Tien Dang</p>
+    <div className="flex flex-col items-start w-full gap-1.5 text-left">
+      <Card className="flex flex-row px-2 py-1.5 items-center justify-between w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-2xl shadow-sm">
+        <div className="flex flex-col items-start text-left">
+          <p className="text-[#A1A1AA] text-[9px] leading-tight">You&apos;re online as</p>
+          <p className="text-white font-bold text-xs">John Doe</p>
         </div>
         <div className="relative">
-          <div className="w-9 h-9 rounded-xl border border-[#BEF264]/50 flex items-center justify-center bg-[#E5D5C5] overflow-hidden">
-             <span className="text-xl">🦁</span>
+          <div className="w-7 h-7 rounded-xl border border-[#BEF264]/50 flex items-center justify-center bg-[#E5D5C5] overflow-hidden">
+             <span className="text-lg">🦁</span>
           </div>
-          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#BEF264] rounded-full border-2 border-[#1A1A1A]" />
+          <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-[#BEF264] rounded-full border-2 border-zinc-900" />
         </div>
       </Card>
 
-      <Card className="flex flex-row items-center px-3 py-2 w-full bg-[#1A1A1A] border-white/10 rounded-xl gap-2">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
         <input
-          className="bg-transparent border-none outline-none text-white text-sm flex-1 placeholder:text-[#3F3F46]"
+          className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]"
           placeholder="Password (Optional)"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <Eye className="w-4 h-4 text-[#3F3F46] cursor-pointer" />
+        <Eye className="w-3.5 h-3.5 text-[#3F3F46] cursor-pointer" />
       </Card>
 
       {isStarted && (
-        <Card className="flex flex-row items-center px-3 py-2 w-full bg-[#1A1A1A] border-white/10 rounded-xl gap-2">
-           <div className="flex-1 truncate">
-             <span className="text-[9px] text-white/70">bytover.com/transfer?session=abc123</span>
+        <Card className="flex flex-row items-center px-2 py-1 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+           <div className="flex-1 truncate text-left">
+             <span className="text-[10px] text-white/70">https://bytover.com/transfer?session=abc123</span>
            </div>
            <button onClick={handleCopy}>
-             {isCopied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-white/50" />}
+             {isCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5 text-white/50" />}
            </button>
         </Card>
       )}
 
-      <Card className="p-1 bg-[#1A1A1A] border-white/10 rounded-xl w-fit">
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
         <Button 
           onClick={() => setIsStarted(!isStarted)}
-          className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-4 py-1.5 h-auto text-sm font-semibold flex items-center gap-1.5"
+          className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1"
         >
-          {isStarted ? "Cancel" : "Start"} <ChevronRight className={cn("w-4 h-4", isStarted && "rotate-180")} />
+          {isStarted ? "Cancel" : "Start"} <ChevronRight className={cn("w-3 h-3", isStarted && "rotate-180")} />
         </Button>
       </Card>
     </div>
@@ -79,19 +79,19 @@ function P2PTab() {
 
 function CloudTab() {
   return (
-    <div className="flex flex-col gap-2 w-full">
-      <Card className="bg-[#1A1A1A] border-white/10 p-3 rounded-xl">
-        <p className="text-[10px] text-[#A1A1AA]">
+    <div className="flex flex-col gap-1.5 w-full">
+      <Card className="bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 p-2 rounded-xl">
+        <p className="text-[9px] text-[#A1A1AA] text-left">
           Create a sharable link. Files are stored for 7 days.
         </p>
       </Card>
-      <Card className="flex flex-row items-center px-3 py-2 w-full bg-[#1A1A1A] border-white/10 rounded-xl gap-2">
-        <input className="bg-transparent border-none outline-none text-white text-sm flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
-        <Eye className="w-4 h-4 text-[#3F3F46]" />
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+        <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
+        <Eye className="w-3.5 h-3.5 text-[#3F3F46]" />
       </Card>
-      <Card className="p-1 bg-[#1A1A1A] border-white/10 rounded-xl w-fit">
-        <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-4 py-1.5 h-auto text-sm font-semibold flex items-center gap-1.5">
-          Upload <ChevronRight className="w-4 h-4" />
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
+        <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1">
+          Upload <ChevronRight className="w-3 h-3" />
         </Button>
       </Card>
     </div>
@@ -100,17 +100,17 @@ function CloudTab() {
 
 function EmailTab() {
   return (
-    <div className="flex flex-col gap-2 w-full">
-      <Card className="flex flex-row items-center px-3 py-2 w-full bg-[#1A1A1A] border-white/10 rounded-xl gap-2">
-        <input className="bg-transparent border-none outline-none text-white text-sm flex-1 placeholder:text-[#3F3F46]" placeholder="Enter recipient emails" />
+    <div className="flex flex-col gap-1.5 w-full">
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+        <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Enter recipient emails" />
       </Card>
-      <Card className="flex flex-row items-center px-3 py-2 w-full bg-[#1A1A1A] border-white/10 rounded-xl gap-2">
-        <input className="bg-transparent border-none outline-none text-white text-sm flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
-        <Eye className="w-4 h-4 text-[#3F3F46]" />
+      <Card className="flex flex-row items-center px-2 py-1.5 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2">
+        <input className="bg-transparent border-none outline-none text-white text-xs flex-1 placeholder:text-[#3F3F46]" placeholder="Password (Optional)" type="password" />
+        <Eye className="w-3.5 h-3.5 text-[#3F3F46]" />
       </Card>
-      <Card className="p-1 bg-[#1A1A1A] border-white/10 rounded-xl w-fit">
-        <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-4 py-1.5 h-auto text-sm font-semibold flex items-center gap-1.5">
-          Send <Send className="w-3.5 h-3.5" />
+      <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit">
+        <Button className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1">
+          Send <Send className="w-3 h-3" />
         </Button>
       </Card>
     </div>
@@ -119,24 +119,24 @@ function EmailTab() {
 
 export function SharingControlPanel({ className }: SharingControlPanelProps) {
   return (
-    <div className={cn("flex w-full flex-col gap-4", className)}>
+    <div className={cn("flex w-full flex-col gap-1.5", className)}>
       <Tabs defaultValue="quick" className="w-full flex flex-col">
-        <TabsList className="bg-[#111111] border border-white/10 p-1 rounded-xl w-full mb-3">
+        <TabsList className="bg-transparent backdrop-blur-md border border-white/10 p-0.5 rounded-xl w-full mb-1">
           <TabsTrigger 
             value="quick" 
-            className="rounded-lg flex-1 px-1 py-1 data-[state=active]:bg-[#1A1A1A] data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
           >
             <Zap className="h-3 w-3" /> Quick
           </TabsTrigger>
           <TabsTrigger 
             value="cloud" 
-            className="rounded-lg flex-1 px-1 py-1 data-[state=active]:bg-[#1A1A1A] data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
           >
             <Globe className="h-3 w-3" /> Cloud
           </TabsTrigger>
           <TabsTrigger 
             value="email" 
-            className="rounded-lg flex-1 px-1 py-1 data-[state=active]:bg-[#1A1A1A] data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
           >
             <Mail className="h-3 w-3" /> Email
           </TabsTrigger>

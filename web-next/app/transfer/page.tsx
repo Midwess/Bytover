@@ -15,7 +15,7 @@ import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 import { DownloadPlatforms } from "@/components/download-platforms";
-import { DesktopSection } from "@/components/desktop-section";
+import { BentoFeatures } from "@/components/bento-features";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { GridSectionWrapper } from "./components/grid-section-wrapper";
 import { useFaviconProgress } from "@/hooks/use-favicon-progress";
@@ -102,17 +102,17 @@ function TransferBoardTabs() {
             className="w-full"
         >
             <div className="flex justify-center -mt-[22px] relative z-10">
-                <TabsList className="bg-muted border border-primaryText/10 rounded-lg p-[3px]">
-                    <TabsTrigger value="Send" className="rounded-sm w-20 px-5 py-1.5 text-sm data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
+                <TabsList className="bg-transparent border border-white/10 rounded-lg p-[2px]">
+                    <TabsTrigger value="Send" className="rounded-md w-16 px-3 py-1.5 text-xs data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
                         Send
                     </TabsTrigger>
-                    <TabsTrigger value="Receive" className="rounded-sm w-20 px-5 py-1.5 text-sm data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
+                    <TabsTrigger value="Receive" className="rounded-md w-16 px-3 py-1.5 text-xs data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
                         Receive
                     </TabsTrigger>
                 </TabsList>
             </div>
 
-            <div className="container mx-auto pt-6 pb-12 px-3">
+            <div className="container mx-auto pt-4 pb-12 px-3">
                 {renderContent()}
             </div>
         </Tabs>
@@ -124,7 +124,7 @@ export default function TransferBoard() {
     useFaviconProgress(totalP2PProgress);
 
     return (
-        <div className="min-h-screen w-screen bg-background relative">
+        <div className="min-h-screen w-screen bg-black relative">
             <Header />
 
             <main className="pb-20">
@@ -132,7 +132,7 @@ export default function TransferBoard() {
                     <div className="relative overflow-hidden">
                         <div
                             className="absolute inset-0 bg-cover bg-center"
-                            style={{ backgroundImage: 'url(/gradient-bg1.jpeg)' }}
+                            style={{ backgroundImage: 'url(/background2.jpg)' }}
                         />
                         <div className="absolute inset-0 bg-black/30" />
                         <section className="relative">
@@ -220,7 +220,7 @@ export default function TransferBoard() {
 
                 <GridSectionWrapper>
                     <div id={"desktop"} className={"pt-8"}>
-                        <DesktopSection />
+                        <BentoFeatures />
                     </div>
                 </GridSectionWrapper>
 
