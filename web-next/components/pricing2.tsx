@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Sparkles, Plus, Loader2 } from "lucide-react";
+import { Check, Plus, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { Button } from "./ui/button";
 import { useState, useEffect } from "react";

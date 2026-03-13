@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, Move, Box, MousePointer2 } from 'lucide-react';
+import { ArrowRight, Box, MousePointer2 } from 'lucide-react';
 
 export function ShelfManagement() {
     return (

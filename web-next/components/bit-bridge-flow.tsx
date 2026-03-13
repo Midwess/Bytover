@@ -5,7 +5,6 @@ import {
     ArrowRight,
     ShieldCheck,
     Zap,
-    Link as LinkIcon,
     Monitor,
     Globe,
     Lock,
@@ -65,7 +64,7 @@ export function BitBridgeFlow() {
                                 transition={{ delay: 0.1 }}
                                 className="text-lg text-zinc-400 font-medium max-w-xl"
                             >
-                                Skip the cloud upload. Bit Bridge establishes a secure tunnel directly between your machine and the receiver's browser.
+                                Skip the cloud upload. Bit Bridge establishes a secure tunnel directly between your machine and the receiver&apos;s browser.
                             </motion.p>
                         </div>
 
