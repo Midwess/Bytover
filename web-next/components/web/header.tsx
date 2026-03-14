@@ -19,12 +19,14 @@ import core from '@/wasm/wasm_core';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-export default function Header({ className }: { className?: string }) {
+export default function Header({ className, isFullWidth, theme = 'dark' }: { className?: string, isFullWidth?: boolean, theme?: 'light' | 'dark' }) {
     const coreReady = core.useCoreReady();
     const authState = core.useAuthenticationState()
     const isSignedIn = coreReady && !!authState?.user;
     const [isScrolled, setIsScrolled] = React.useState(false);
     const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+    const isLight = theme === 'light';
 
     React.useEffect(() => {
         const observer = new IntersectionObserver(
@@ -70,9 +72,12 @@ export default function Header({ className }: { className?: string }) {
             <div
                 className={`fixed top-0 left-0 right-0 z-100 flex justify-center w-full transition-all duration-500 pt-4 md:pt-6 px-4 md:px-6`}>
                 <div className={cn(
-                    "flex justify-between items-center w-full container px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-xl md:rounded-2xl",
+                    "flex justify-between items-center w-full px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-xl md:rounded-2xl",
+                    isFullWidth ? "max-w-[1360px]" : "container",
                     isScrolled 
-                        ? "bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)]" 
+                        ? (isLight 
+                            ? "bg-white/80 backdrop-blur-xl border border-zinc-200 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.1)]" 
+                            : "bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)]")
                         : "bg-transparent border border-transparent",
                     className
                 )}>
@@ -85,7 +90,10 @@ export default function Header({ className }: { className?: string }) {
                                 alt="Logo"
                                 className="rounded-lg aspect-square w-8 h-8 group-hover:opacity-80 transition-opacity"
                             />
-                            <span className="ml-2.5 font-bold text-lg tracking-tight text-white hidden sm:block">Bytover</span>
+                            <span className={cn(
+                                "ml-2.5 font-bold text-lg tracking-tight hidden sm:block",
+                                isLight ? "text-zinc-900" : "text-white"
+                            )}>Bytover</span>
                         </Link>
 
                         <nav className="hidden md:flex items-center gap-6">
@@ -110,7 +118,10 @@ export default function Header({ className }: { className?: string }) {
                                             window.location.href = item.href;
                                         }
                                     }}
-                                    className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                                    className={cn(
+                                        "text-sm font-medium transition-colors",
+                                        isLight ? "text-zinc-500 hover:text-zinc-900" : "text-zinc-400 hover:text-white"
+                                    )}
                                 >
                                     {item.label}
                                 </Link>
@@ -119,25 +130,34 @@ export default function Header({ className }: { className?: string }) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <GitHubStarsButton className="hidden lg:flex bg-zinc-900 border-zinc-800 text-zinc-400 text-xs h-9" username="Dev-log" repo="animate-ui" />
+                        <GitHubStarsButton className={cn(
+                            "hidden lg:flex text-xs h-9",
+                            isLight ? "bg-white border-zinc-200 text-zinc-600" : "bg-zinc-900 border-zinc-800 text-zinc-400"
+                        )} username="Dev-log" repo="animate-ui" />
                         
                         {isSignedIn ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
                                         variant="outline"
-                                        className="h-9 bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-sm px-4"
+                                        className={cn(
+                                            "h-9 text-sm px-4",
+                                            isLight ? "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50" : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                                        )}
                                     >
                                         {authState?.user?.email?.split('@')[0] || 'Account'}
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="!z-[200] bg-zinc-950 border-zinc-800 text-zinc-300">
+                                <DropdownMenuContent align="end" className={cn(
+                                    "!z-[200]",
+                                    isLight ? "bg-white border-zinc-200 text-zinc-700" : "bg-zinc-950 border-zinc-800 text-zinc-300"
+                                )}>
                                     <DropdownMenuItem
                                         onClick={(e) => {
                                             e.preventDefault();
                                             window.location.href = '/transfer';
                                         }}
-                                        className="focus:bg-zinc-900 focus:text-white"
+                                        className={cn(isLight ? "focus:bg-zinc-50 focus:text-zinc-900" : "focus:bg-zinc-900 focus:text-white")}
                                     >
                                         Transfer
                                     </DropdownMenuItem>
@@ -153,7 +173,10 @@ export default function Header({ className }: { className?: string }) {
                             <Button
                                 variant="default"
                                 disabled={!coreReady}
-                                className="h-9 bg-white text-black hover:bg-zinc-200 text-sm font-semibold px-5 transition-all"
+                                className={cn(
+                                    "h-9 text-sm font-semibold px-5 transition-all",
+                                    isLight ? "bg-zinc-900 text-white hover:bg-black" : "bg-white text-black hover:bg-zinc-200"
+                                )}
                                 onClick={() => core.update(new AppEventVariantAuthentication(new AuthenticationEventVariantAuthenticate()))}
                             >
                                 {!coreReady ? (
