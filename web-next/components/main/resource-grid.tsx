@@ -86,31 +86,76 @@ export function ResourceGrid({ session }: ResourceGridProps) {
         const updateProgress = () => {
             if (!active || !containerRef.current) return;
 
-            const rect = containerRef.current.getBoundingClientRect();
+            const container = containerRef.current;
+            const rect = container.getBoundingClientRect();
             const viewportHeight = window.innerHeight;
+
+            // Focus point: 20% from top of screen
+            const focusPoint = viewportHeight * 0.2; 
+
+            // Boundary calculations for the track
+            const firstSectionEl = document.getElementById(sections[0].id);
+            const lastSectionEl = document.getElementById(sections[sections.length - 1].id);
             
-            // 0 when top is at bottom of viewport
-            // 1 when bottom is at top of viewport
-            const start = viewportHeight;
-            const end = -rect.height;
-            const current = rect.top;
+            if (!firstSectionEl || !lastSectionEl) return;
+
+            const firstOffset = firstSectionEl.offsetTop;
+            const lastOffset = lastSectionEl.offsetTop;
             
-            const p = (start - current) / (start - end);
-            progressVal.set(Math.max(0, Math.min(1, p)));
-            
+            // The distance between the first and last checkpoint centers
+            const checkpointTrackLength = Math.max(1, lastOffset - firstOffset);
+
+            // Calculate progress: 0 when center of first checkpoint is at focusPoint
+            // Using 80px midline (top-14 header center)
+            let p = (focusPoint - (rect.top + firstOffset + 80)) / checkpointTrackLength;
+            p = Math.max(0, Math.min(1, p));
+
+
+            // Magnetic snap to sections (rounding) with "Sticky" behavior
+            let snappedP = p;
+
+            for (const section of sections) {
+                const el = document.getElementById(section.id);
+                if (el) {
+                    // snapP is relative to the checkpoint-to-checkpoint track
+                    const snapP = (el.offsetTop - firstOffset) / checkpointTrackLength;
+                    const distance = Math.abs(p - snapP);
+                    
+                    const snapWindow = 0.15; // Range where the dot starts pulling
+                    const deadZone = 0.08;   // "Round" behavior: stay in center when close
+
+                    if (distance < snapWindow) {
+                        if (distance < deadZone) {
+                            snappedP = snapP;
+                        } else {
+                            const t = (distance - deadZone) / (snapWindow - deadZone);
+                            const ease = t * t * (3 - 2 * t);
+                            snappedP = snapP + (p - snapP) * ease;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            progressVal.set(snappedP);
             requestAnimationFrame(updateProgress);
         };
 
         const rafId = requestAnimationFrame(updateProgress);
-        
+
         return () => {
             active = false;
             cancelAnimationFrame(rafId);
         };
-    }, [sections.length]);
+    }, [sections]);
 
-    // Transform scroll progress to dot position on the track (0% to 100%)
-    const dotTop = useTransform(smoothProgress, [0, 1], ["0%", "100%"]);
+    // Transform scroll progress to dot position on the track 
+    // Maps 0-1 progress to the actual pixel positions of the checkpoints (at 80px midline)
+    const firstPointPos = (sections.length > 0 ? (document.getElementById(sections[0].id)?.offsetTop || 0) : 0) + 80;
+    const lastPointPos = (sections.length > 0 ? (document.getElementById(sections[sections.length - 1].id)?.offsetTop || 0) : 0) + 80;
+    
+    // We use a MotionValue for the numeric top position to avoid CSS centering issues
+    const dotTop = useTransform(smoothProgress, [0, 1], [firstPointPos, lastPointPos]);
 
     const hasMultipleSections = sections.length > 1;
 
@@ -118,19 +163,28 @@ export function ResourceGrid({ session }: ResourceGridProps) {
         <div ref={containerRef} className="relative w-full">
             {/* 
                 Vertical Track - Positioned OUTSIDE the container 
-                xl: -24px, 2xl: -48px
+                Starts at top: 0, height goes to the center of the last checkpoint
             */}
             {hasMultipleSections && (
-                <div className="absolute xl:-left-6 2xl:-left-12 top-6 bottom-8 w-px bg-white/10 hidden xl:block">
+                <div 
+                    style={{ 
+                        top: '0px', 
+                        bottom: 'auto',
+                        height: `${lastPointPos}px`
+                    }}
+                    className="absolute xl:-left-6 2xl:-left-12 w-px bg-white/10 hidden xl:block"
+                >
                     {/* The Moving Point - Progress indicator */}
                     <motion.div
                         style={{
                             top: dotTop,
-                            marginLeft: '-4px',
+                            y: -4, // Explicitly center the 8px dot on the pixel coordinate
+                            marginLeft: '-3px', // Shifted slightly to the right for perfect alignment
                         }}
-                        className="absolute w-2 h-2 bg-blue-600 rounded-full shadow-[0_0_12px_rgba(37,99,235,0.6)] z-30 -translate-y-1/2"
+                        className="absolute w-2 h-2 bg-blue-600 rounded-full shadow-[0_0_12px_rgba(37,99,235,0.6)] z-30"
                     />
                 </div>
+
             )}
 
             <div className="flex-1 space-y-32 w-full">
@@ -140,10 +194,10 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                         <div key={section.id} id={section.id} className="scroll-mt-10 relative">
                             {/* Navigation Header on the left of the line */}
                             {hasMultipleSections && (
-                                <div className="absolute hidden xl:block xl:-left-6 2xl:-left-12 top-0 h-12 flex items-center overflow-visible">
+                                <div className="absolute hidden xl:block xl:-left-6 2xl:-left-12 top-14 h-12 flex items-center overflow-visible">
                                     <button 
                                         onClick={() => scrollToId(section.id)}
-                                        className="absolute right-0 flex items-center justify-end group outline-none"
+                                        className="absolute right-0 flex items-center justify-end group outline-none h-full"
                                         style={{ width: '400px' }}
                                     >
                                         <div className="flex flex-col items-end mr-8 transition-all">
@@ -166,7 +220,7 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                                             isActive 
                                                 ? "border-blue-600/50 scale-110" 
                                                 : "border-white/10 group-hover:border-blue-600/30",
-                                            "relative right-[-7.5px]"
+                                            "relative right-[-8px]" // Synchronized with dot's -3px marginLeft
                                         )} />
                                     </button>
                                 </div>
