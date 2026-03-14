@@ -28,10 +28,9 @@ import { Input } from "@/components/ui/input";
 import core from "@/wasm/wasm_core";
 import { useDownloadResource } from "@/app/transfer/hooks/use-download-resource";
 import { formatFileSize } from "@/utils/format-file-size";
-import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
+import StaticHeader from "@/components/web/static-header";
 import { SignallingAnimation, DEFAULT_WORDS } from "@/components/ui/signalling-animation";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { ResourceCard } from "./components/resource-card";
@@ -99,10 +98,13 @@ export default function SessionPage() {
     const files = useMemo(() => session?.resources.filter(r => !(r.model.type instanceof ResourceTypeVariantImage) && !(r.model.type instanceof ResourceTypeVariantVideo)) || [], [session?.resources]);
 
     return (
-        <div className="min-h-screen bg-[#0F0F0F] text-[#E0E0E0] flex flex-col font-sans selection:bg-bluePrimary/30">
-            <Header isFullWidth={true} theme="dark" />
-            
-            <main className="flex-1 flex flex-col pt-40 pb-32 max-w-[1360px] mx-auto px-6 w-full min-h-screen">
+        <div className="min-h-screen bg-[#0F0F0F] text-[#E0E0E0] flex flex-col font-sans selection:bg-bluePrimary/30 relative">
+            {/* Static header - full width, dark bg */}
+            <div className="z-50">
+                <StaticHeader isFullWidth={true} theme="dark" className={"h-20 items-center"}/>
+            </div>
+
+            <main className="flex-1 flex flex-col pt-10 pb-32 max-w-[1360px] mx-auto px-6 w-full min-h-screen">
                 {!coreCompatible ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center max-w-sm mx-auto">
                         <div className="w-16 h-16 rounded-3xl bg-[#1A1A1A] flex items-center justify-center border border-white/5 shadow-2xl">
