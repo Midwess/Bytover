@@ -7,7 +7,7 @@ import {
     ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
-} from '../../../shared_types/generated/typescript/types/shared_types.ts'
+} from 'shared_types/types/shared_types'
 import { Play } from 'lucide-react'
 import core from "@/wasm/wasm_core.ts";
 import { formatFileSize } from "@/utils/format-file-size.ts";

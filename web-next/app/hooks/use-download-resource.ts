@@ -8,7 +8,7 @@ import {
     TransferEventVariantRequestDownloadAllResources,
     TransferEventVariantCancelResourceTransfer,
     TransferTypeVariantReceive,
-} from '../../../shared_types/generated/typescript/types/shared_types.ts';
+} from 'shared_types/types/shared_types';
 
 interface UseDownloadResourceParams {
     resource: ReceiveResourceViewModel | null;

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {Avatar, AvatarImage} from "@/components/ui/avatar.tsx";
-import {ReceiveSessionViewModel} from '../../../shared_types/generated/typescript/types/shared_types.ts';
+import {ReceiveSessionViewModel} from 'shared_types/types/shared_types';
 import {DownloadAllButton} from "@/components/main/download-all-button.tsx";
 import StaticHeader from "@/components/web/static-header.tsx";
 

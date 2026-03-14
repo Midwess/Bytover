@@ -4,14 +4,12 @@ import DownloadButtonWithProgress from './download-button-with-progress.tsx';
 import {
     ReceiveResourceViewModel,
     ReceiveSessionViewModel
-} from '../../../shared_types/generated/typescript/types/shared_types.ts';
+} from 'shared_types/types/shared_types';
 
 interface ResourceDownloadProps {
     resource: ReceiveResourceViewModel;
     session: ReceiveSessionViewModel;
     className?: string;
-    size?: number;
-    strokeWidth?: number;
     buttonText?: string;
     buttonVariant?: 'default' | 'outline' | 'ghost';
     buttonSize?: 'default' | 'sm' | 'lg';
@@ -22,8 +20,6 @@ export function ResourceDownload({
     resource,
     session,
     className,
-    size = 32,
-    strokeWidth = 3,
     buttonText,
     buttonVariant,
     buttonSize,

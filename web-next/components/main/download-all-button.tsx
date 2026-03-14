@@ -3,7 +3,7 @@ import { useDownloadResource } from '@/app/hooks/use-download-resource.ts';
 import DownloadButtonWithProgress from './download-button-with-progress.tsx';
 import {
     ReceiveSessionViewModel
-} from '../../../shared_types/generated/typescript/types/shared_types';
+} from 'shared_types/types/shared_types';
 
 interface DownloadAllButtonProps {
     session: ReceiveSessionViewModel;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ReceiveSessionViewModel, ResourceTypeVariantImage, ResourceTypeVariantVideo } from '../../../shared_types/generated/typescript/types/shared_types.ts';
+import { ReceiveSessionViewModel, ResourceTypeVariantImage, ResourceTypeVariantVideo } from 'shared_types/types/shared_types';
 import { ResourceCard } from "./resource-card.tsx";
 
 interface ResourceGridProps {

@@ -678,8 +678,7 @@ function FileView(props: {
                 <ResourceDownload
                     resource={file}
                     session={session as ReceiveSessionViewModel}
-                    size={40}
-                    strokeWidth={4}
+                    className="w-10 h-10"
                 />
             </div>
         </div>
@@ -747,8 +746,7 @@ function MediaView(props: {
                     <ResourceDownload
                         resource={media}
                         session={session as ReceiveSessionViewModel}
-                        size={32}
-                        strokeWidth={3}
+                        className="w-8 h-8"
                     />
                 </div>
             </div>
@@ -798,8 +796,7 @@ function MediaView(props: {
                     <ResourceDownload
                         resource={media}
                         session={session as ReceiveSessionViewModel}
-                        size={36}
-                        strokeWidth={3}
+                        className="w-9 h-9"
                     />
                 </div>
             </div>
