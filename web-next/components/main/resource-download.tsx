@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { useDownloadResource } from '../hooks/use-download-resource';
-import DownloadButtonWithProgress from '../download-button-with-progress';
+import { useDownloadResource } from '@/app/hooks/use-download-resource.ts';
+import DownloadButtonWithProgress from './download-button-with-progress.tsx';
 import {
     ReceiveResourceViewModel,
     ReceiveSessionViewModel
-} from 'shared_types/types/shared_types';
+} from '../../../shared_types/generated/typescript/types/shared_types.ts';
 
 interface ResourceDownloadProps {
     resource: ReceiveResourceViewModel;
@@ -44,12 +44,11 @@ export function ResourceDownload({
             isCloud={session.is_cloud}
             onDownloadClick={handleDownload}
             onCancelClick={handleCancel}
-            size={size}
-            strokeWidth={strokeWidth}
             buttonText={showButtonText ? buttonText : undefined}
             buttonVariant={buttonVariant}
             buttonSize={buttonSize}
             className={className}
+            containerClass={className}
         />
     );
 }

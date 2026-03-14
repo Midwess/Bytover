@@ -19,7 +19,7 @@ export default function Footer(props: {className?: string | undefined, isFullWid
             isLight ? "bg-white border-zinc-200" : "bg-black border-white/5",
             props.className
         )}>
-            <div className={cn("mx-auto px-4 sm:px-6 py-12 md:py-20", props.isFullWidth ? "max-w-[1360px]" : "container")}>
+            <div className={cn("mx-auto px-4 sm:px-6 py-12 md:py-20", props.isFullWidth ? "container" : "container")}>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
                     {/* Brand Section */}
                     <div className="col-span-1 md:col-span-1 flex flex-col gap-6">

@@ -75,7 +75,7 @@ impl Display for TransferSessionStatus {
                 }
             }
             TransferSessionStatus::Saving => write!(f, "Saving..."),
-            TransferSessionStatus::Success => write!(f, "Done ☺️!"),
+            TransferSessionStatus::Success => write!(f, ""),
             TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
             TransferSessionStatus::Canceled => write!(f, "Canceled")
         }

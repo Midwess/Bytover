@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import core from '@/wasm/wasm_core';
+import core from '@/wasm/wasm_core.ts';
 import {
     AppEventVariantTransfer,
     ReceiveResourceViewModel,
@@ -8,7 +8,7 @@ import {
     TransferEventVariantRequestDownloadAllResources,
     TransferEventVariantCancelResourceTransfer,
     TransferTypeVariantReceive,
-} from 'shared_types/types/shared_types';
+} from '../../../shared_types/generated/typescript/types/shared_types.ts';
 
 interface UseDownloadResourceParams {
     resource: ReceiveResourceViewModel | null;

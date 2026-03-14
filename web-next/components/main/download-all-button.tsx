@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { useDownloadResource } from '../hooks/use-download-resource';
-import DownloadButtonWithProgress from '../download-button-with-progress';
+import { useDownloadResource } from '@/app/hooks/use-download-resource.ts';
+import DownloadButtonWithProgress from './download-button-with-progress.tsx';
 import {
     ReceiveSessionViewModel
-} from 'shared_types/types/shared_types';
+} from '../../../shared_types/generated/typescript/types/shared_types';
 
 interface DownloadAllButtonProps {
     session: ReceiveSessionViewModel;
@@ -34,8 +34,6 @@ export function DownloadAllButton({
             isInProgress={resource.completion > 0 && !resource.is_completed}
             onDownloadClick={handleDownload}
             onCancelClick={handleCancel}
-            size={40}
-            strokeWidth={4}
             buttonText="Download All"
             buttonVariant="outline"
             buttonSize="sm"

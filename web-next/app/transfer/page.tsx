@@ -17,7 +17,7 @@ import Footer from "@/components/web/footer";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import { DesktopSection } from "@/components/desktop-section";
 import { JoinWaitList } from "@/components/join-waitlist";
-import { GridSectionWrapper } from "./components/grid-section-wrapper";
+import { GridSectionWrapper } from "../../components/main/grid-section-wrapper.tsx";
 import { useFaviconProgress } from "@/hooks/use-favicon-progress";
 
 const DOT_PATTERN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1' fill='rgba(255,255,255,0.08)'/%3E%3C/svg%3E\")";

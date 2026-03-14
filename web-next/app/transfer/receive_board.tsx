@@ -34,8 +34,8 @@ import {DEFAULT_WORDS, SignallingAnimation} from "@/components/ui/signalling-ani
 import core from "@/wasm/wasm_core";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { useUrlState } from "@/hooks/use-url";
-import { ResourceDownload } from "./components/resource-download";
-import { DownloadAllButton } from "./components/download-all-button";
+import { ResourceDownload } from "../../components/main/resource-download.tsx";
+import { DownloadAllButton } from "../../components/main/download-all-button.tsx";
 import {
     SidebarProvider,
     SidebarInset,

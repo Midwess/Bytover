@@ -73,7 +73,7 @@ export default function Header({ className, isFullWidth, theme = 'dark' }: { cla
                 className={`fixed top-0 left-0 right-0 z-100 flex justify-center w-full transition-all duration-500 pt-4 md:pt-6 px-4 md:px-6`}>
                 <div className={cn(
                     "flex justify-between items-center w-full px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-xl md:rounded-2xl",
-                    isFullWidth ? "max-w-[1360px]" : "container",
+                    isFullWidth ? "container" : "container",
                     isScrolled 
                         ? (isLight 
                             ? "bg-white/80 backdrop-blur-xl border border-zinc-200 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.1)]" 

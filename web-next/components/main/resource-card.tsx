@@ -7,12 +7,12 @@ import {
     ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
-} from 'shared_types/types/shared_types'
+} from '../../../shared_types/generated/typescript/types/shared_types.ts'
 import { Play } from 'lucide-react'
-import core from "@/wasm/wasm_core";
-import { formatFileSize } from "@/utils/format-file-size";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { ResourceDownload } from "@/app/transfer/components/resource-download";
+import core from "@/wasm/wasm_core.ts";
+import { formatFileSize } from "@/utils/format-file-size.ts";
+import { useIsMobile } from "@/hooks/use-mobile.ts";
+import { ResourceDownload } from "@/components/main/resource-download.tsx";
 
 export function ResourceCard(props: {
     id: string,
@@ -84,8 +84,7 @@ export function ResourceCard(props: {
                     <ResourceDownload
                         resource={resource}
                         session={session as ReceiveSessionViewModel}
-                        size={32}
-                        strokeWidth={3}
+                        className="w-8 h-8"
                     />
                 </div>
             </div>
@@ -139,8 +138,7 @@ export function ResourceCard(props: {
                     <ResourceDownload
                         resource={resource}
                         session={session as ReceiveSessionViewModel}
-                        size={36}
-                        strokeWidth={3}
+                        className="w-8 h-8"
                     />
                 </div>
             </div>
