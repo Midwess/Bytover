@@ -10,12 +10,11 @@ const DASHED_BORDER_H = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 interface GridSectionWrapperProps {
     children: React.ReactNode;
     className?: string;
-    id?: string;
 }
 
-export function GridSectionWrapper({ children, className = '', id }: GridSectionWrapperProps) {
+export function GridSectionWrapper({ children, className = '' }: GridSectionWrapperProps) {
     return (
-        <div id={id} className={`relative flex mt-8 ${className}`}>
+        <div className={`relative flex mt-8 ${className}`}>
             <div className="absolute left-0 right-0 top-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
             <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
 

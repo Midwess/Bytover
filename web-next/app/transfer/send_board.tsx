@@ -340,7 +340,7 @@ function FileView(props: {
     if (isMobile) {
         return (
             <div
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md hover:bg-zinc-900 transition-colors group">
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
                 {/* Thumbnail */}
                 <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
                     <Image
@@ -391,7 +391,7 @@ function FileView(props: {
 
     return (
         <div
-            className="w-full h-full flex flex-col rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md overflow-hidden group hover:border-white/30 transition-colors">
+            className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
             {/* Thumbnail */}
             <div className="flex-1 flex items-center justify-center p-6 bg-muted/30 relative">
                 <Image
@@ -460,7 +460,7 @@ function MediaView(props: {
     if (isMobile) {
         return (
             <div
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md hover:bg-zinc-900 transition-colors group">
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
                 {/* Thumbnail */}
                 <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
                     {thumbnailUrl ? (
@@ -516,7 +516,7 @@ function MediaView(props: {
 
     return (
         <div
-            className="w-full h-full flex flex-col rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md overflow-hidden group hover:border-white/30 transition-colors">
+            className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
             {/* Thumbnail */}
             <div className="flex-1 relative bg-muted/30">
                 {thumbnailUrl ? (

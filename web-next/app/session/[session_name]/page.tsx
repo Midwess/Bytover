@@ -34,6 +34,7 @@ import { SignallingAnimation, DEFAULT_WORDS } from "@/components/ui/signalling-a
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { ResourceCard } from "./components/resource-card";
 
 export default function SessionPage() {
     const params = useParams();
@@ -185,16 +186,34 @@ export default function SessionPage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-12">
-                                {images.map(image => (
-                                    <ResourceCard key={image.model.order_id} id={image.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
-                                ))}
-                                {videos.map(video => (
-                                    <ResourceCard key={video.model.order_id} id={video.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
-                                ))}
-                                {files.map(file => (
-                                    <ResourceCard key={file.model.order_id} id={file.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
-                                ))}
+                            <div className="flex flex-col gap-8">
+                                {images.length > 0 && (
+                                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {images.map(image => (
+                                            <div key={image.model.order_id} className="h-[300px]">
+                                                <ResourceCard id={image.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {videos.length > 0 && (
+                                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {videos.map(video => (
+                                            <div key={video.model.order_id} className="h-[300px]">
+                                                <ResourceCard id={video.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {files.length > 0 && (
+                                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {files.map(file => (
+                                            <div key={file.model.order_id} className="h-[300px]">
+                                                <ResourceCard id={file.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                         
@@ -254,100 +273,3 @@ function CustomDownloadAllButton({ session }: { session: ReceiveSessionViewModel
     )
 }
 
-function ResourceCard({ id, isCloud, sessionId }: { id: string, isCloud: boolean, sessionId: string }) {
-    const resource = core.useReceiveResource(id, isCloud);
-    const session = core.useSession(sessionId);
-    const model = resource?.model;
-    const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
-
-    useEffect(() => {
-        if (model?.thumbnail_path) {
-            core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource);
-        }
-    }, [model?.thumbnail_path]);
-
-    const { handleDownload, handleCancel } = useDownloadResource({
-        resource: resource ?? null,
-        session: session as ReceiveSessionViewModel ?? null
-    });
-
-    if (!resource || !model || !session) return null;
-
-    const isVideo = model.type instanceof ResourceTypeVariantVideo;
-    const isFolder = model.type instanceof ResourceTypeVariantFolder;
-    const displaySize = formatFileSize(model);
-    const isInProgress = resource.completion > 0 && !resource.is_completed;
-
-    return (
-        <div className="group flex flex-col bg-transparent overflow-hidden transition-all duration-500 ease-out hover:-translate-y-1">
-            {/* Thumbnail Area */}
-            <div className="relative aspect-[16/10] bg-[#161616] border border-white/[0.03] rounded-[28px] flex items-center justify-center overflow-hidden transition-all duration-500 group-hover:border-white/[0.08] group-hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]">
-                {thumbnailSource ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img 
-                        src={thumbnailSource} 
-                        alt={model.name} 
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-80 group-hover:opacity-100"
-                    />
-                ) : (
-                    <div className="flex flex-col items-center gap-3 opacity-[0.08] group-hover:opacity-[0.15] transition-opacity duration-500 text-white">
-                        {isFolder ? <Folder className="w-14 h-14 stroke-[1px]" /> : <FileText className="w-14 h-14 stroke-[1px]" />}
-                    </div>
-                )}
-
-                {/* Overlays */}
-                {isVideo && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-14 h-14 rounded-full bg-black/40 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500">
-                            <Play className="w-5 h-5 text-white fill-white ml-0.5" />
-                        </div>
-                    </div>
-                )}
-
-                {/* Progress Overlay */}
-                {isInProgress && (
-                    <div className="absolute inset-x-8 bottom-8 h-1.5 bg-black/40 rounded-full overflow-hidden backdrop-blur-md border border-white/5">
-                        <div className="h-full bg-bluePrimary shadow-[0_0_12px_rgba(59,130,246,0.5)] transition-all duration-300" style={{ width: `${resource.completion * 100}%` }} />
-                    </div>
-                )}
-            </div>
-
-            {/* Info Area */}
-            <div className="py-5 px-2 flex items-center justify-between gap-4">
-                <div className="min-w-0 space-y-1">
-                    <h3 className="text-[15px] font-bold truncate text-zinc-200 group-hover:text-white transition-colors">
-                        {model.name}
-                    </h3>
-                    <div className="flex items-center gap-2.5 text-[10px] font-bold text-zinc-600 uppercase tracking-[0.12em]">
-                        <span>{displaySize}</span>
-                        <span className="w-1 h-1 rounded-full bg-zinc-800" />
-                        <span className="text-zinc-700">{isFolder ? 'Folder' : (isVideo ? 'Video' : 'Asset')}</span>
-                    </div>
-                </div>
-
-                <div className="shrink-0">
-                    <Button
-                        onClick={isInProgress ? handleCancel : handleDownload}
-                        size="icon"
-                        className={cn(
-                            "w-11 h-11 rounded-[16px] transition-all active:scale-90",
-                            isInProgress
-                                ? "bg-[#1F1F1F] text-white hover:bg-[#252525] border border-white/5"
-                                : resource.is_completed
-                                    ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                                    : "bg-bluePrimary text-white hover:bg-bluePrimary/90 shadow-xl shadow-bluePrimary/20"
-                        )}
-                    >
-                        {isInProgress ? (
-                            <span className="text-[10px] font-bold font-mono">{Math.round(resource.completion * 100)}%</span>
-                        ) : resource.is_completed ? (
-                            <Check className="w-5 h-5" />
-                        ) : (
-                            <Download className="w-5 h-5" />
-                        )}
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}

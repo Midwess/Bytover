@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Check } from 'lucide-react'
+import {Download, Check, ArrowDown} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useRef } from 'react'
 
@@ -89,10 +89,10 @@ export default function DownloadButtonWithProgress({
                     variant="ghost"
                     onClick={onDownloadClick}
                     disabled={!isReady}
-                    className="h-full w-full rounded-lg bg-primary/10 hover:bg-primary/20 border border-border transition-colors"
+                    className="h-full w-full rounded-full bg-blue-600 hover:bg-blue-700 transition-colors"
                     style={{ width: size, height: size }}
                 >
-                    <Download className="h-[50%] w-[50%] text-foreground" />
+                    <ArrowDown className="h-[50%] w-[50%] text-white scale-y-110" />
                 </Button>
             )}
 
@@ -105,7 +105,7 @@ export default function DownloadButtonWithProgress({
                     disabled={!isReady}
                     className="h-8 gap-2"
                 >
-                    <Download className="h-4 w-4" />
+                    <ArrowDown className="h-4 w-4 scale-y-110" />
                     {buttonText}
                 </Button>
             )}
@@ -114,19 +114,19 @@ export default function DownloadButtonWithProgress({
             {state === 'downloading' && (
                 <button
                     onClick={onCancelClick}
-                    className="relative flex flex-col items-center justify-center h-full w-full rounded-lg bg-primary/10 hover:bg-destructive/20 border border-border transition-colors group overflow-hidden"
+                    className="relative flex flex-col items-center justify-center h-full w-full rounded-full bg-blue-600 hover:bg-blue-700 transition-colors group overflow-hidden"
                     style={{ width: size, height: size }}
                     title="Cancel download"
                 >
                     {/* Progress Bar - Bottom to Top */}
                     <div
-                        className="absolute bottom-0 left-0 right-0 bg-primary/30 transition-all duration-300 ease-out"
+                        className="absolute bottom-0 left-0 right-0 bg-blue-800 transition-all duration-300 ease-out"
                         style={{ height: `${progress * 100}%` }}
                     />
 
                     {/* Center content - Percentage */}
                     <div className="relative flex items-center justify-center z-10">
-                        <span className="text-[10px] font-medium text-foreground tabular-nums">
+                        <span className="text-[10px] font-medium text-white tabular-nums">
                             {Math.round(progress * 100)}%
                         </span>
                     </div>
@@ -136,17 +136,17 @@ export default function DownloadButtonWithProgress({
             {/* Waiting State - Cloud session waiting for download to start */}
             {state === 'waiting' && (
                 <div
-                    className="flex items-center justify-center h-full w-full rounded-lg bg-primary/10 hover:bg-primary/20 border border-border transition-colors"
+                    className="flex items-center justify-center h-full w-full rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
                     style={{ width: size, height: size }}
                 >
-                    <span className="text-[10px] font-medium text-foreground">0%</span>
+                    <span className="text-[10px] font-medium text-white">0%</span>
                 </div>
             )}
 
             {/* Completed State - Checkmark (persists) */}
             {state === 'completed' && (
                 <button
-                    className="flex items-center justify-center h-full w-full rounded-lg bg-green-500/20 border border-green-500/50 cursor-default"
+                    className="flex items-center justify-center h-full w-full rounded-full bg-green-500/20 border border-green-500/50 cursor-default"
                     style={{ width: size, height: size }}
                     disabled
                 >

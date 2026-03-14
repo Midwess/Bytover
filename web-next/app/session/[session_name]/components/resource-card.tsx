@@ -3,51 +3,61 @@ import * as React from "react";
 import { useEffect, useState } from "react";
 import {
     ReceiveSessionViewModel,
+    ResourceTypeVariantFolder,
+    ResourceTypeVariantImage,
     ResourceTypeVariantVideo,
     SelectedResourceViewModel,
 } from 'shared_types/types/shared_types'
-import { Play, ImageUpIcon } from 'lucide-react'
+import { Play } from 'lucide-react'
 import core from "@/wasm/wasm_core";
 import { formatFileSize } from "@/utils/format-file-size";
-import { ResourceDownload } from "../../../transfer/components/resource-download";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ResourceDownload } from "@/app/transfer/components/resource-download";
 
-export function MediaView(props: {
+export function ResourceCard(props: {
     id: string,
     isCloud: boolean,
     sessionId: string
 }) {
     const { id, isCloud, sessionId } = props;
-    const media = core.useReceiveResource(id, isCloud);
+    const resource = core.useReceiveResource(id, isCloud);
     const session = core.useSession(sessionId);
 
-    const model: SelectedResourceViewModel | undefined = media?.model;
+    const model: SelectedResourceViewModel | undefined = resource?.model;
+    const isFolder = model?.type instanceof ResourceTypeVariantFolder;
+    const isImage = model?.type instanceof ResourceTypeVariantImage;
     const isVideo = model?.type instanceof ResourceTypeVariantVideo;
     const isMobile = useIsMobile();
+
+    const fallbackThumbnail = isFolder ? "/folder.svg" : "/file.svg";
     const [thumbnailSource, setThumbnailSource] = useState<string | undefined>();
 
     useEffect(() => {
-        if (model?.thumbnail_path) {
+        if (!model?.thumbnail_path) {
+            setThumbnailSource(undefined)
+            return
+        }
+
+        if (model.thumbnail_path && !thumbnailSource) {
             core.getDownloadUrl(model.thumbnail_path).then(setThumbnailSource)
         }
-    }, [model?.thumbnail_path]);
+    }, [model, model?.thumbnail_path, thumbnailSource]);
 
-    if (!media || !model || !session) return null;
+    if (!resource || !model || !session) return null;
 
     const displaySize = formatFileSize(model);
 
     if (isMobile) {
         return (
-            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors pointer-events-auto">
-                <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
-                    {thumbnailSource ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img className="w-full h-full object-cover" src={thumbnailSource} alt={model.name} />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-5 h-5 opacity-40" />
-                        </div>
-                    )}
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors pointer-events-auto">
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        className="w-6 h-6 object-contain opacity-70"
+                        alt={model.name}
+                        src={thumbnailSource || fallbackThumbnail}
+                        onError={() => setThumbnailSource(fallbackThumbnail)}
+                    />
                     {isVideo && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <Play className="w-3 h-3 text-white fill-white" />
@@ -56,19 +66,23 @@ export function MediaView(props: {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground">
+                    <p className="text-sm font-bold truncate text-white">
                         {model.name}
                     </p>
-                    <div className="flex flex-col md:items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5">
                         <p className="text-xs text-muted-foreground">
                             {displaySize}
+                        </p>
+                        <span className="text-xs text-muted-foreground/60">•</span>
+                        <p className="text-xs text-muted-foreground">
+                            {isFolder ? "Folder" : isVideo ? "Video" : isImage ? "Image" : "File"}
                         </p>
                     </div>
                 </div>
 
                 <div className="shrink-0">
                     <ResourceDownload
-                        resource={media}
+                        resource={resource}
                         session={session as ReceiveSessionViewModel}
                         size={32}
                         strokeWidth={3}
@@ -78,19 +92,27 @@ export function MediaView(props: {
         );
     }
 
+    const isMedia = isImage || isVideo;
+
     return (
-        <div className="w-full h-full flex flex-col rounded-lg border border-white/10 bg-zinc-900/80 backdrop-blur-md overflow-hidden group hover:border-white/30 transition-colors pointer-events-auto">
-            <div className="relative bg-muted/30 h-[calc(100%-76px)]">
+        <div className="w-full h-full flex flex-col overflow-hidden group hover:border-white/20 transition-colors pointer-events-auto">
+            <div className={`relative bg-muted/30 rounded-xl overflow-clip h-[70%] ${!isMedia ? 'flex items-center justify-center' : ''}`}>
                 {thumbnailSource ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
-                        className="w-full h-full object-cover"
+                        className={isMedia ? "w-full h-full object-cover" : "w-24 h-24 object-contain"}
                         alt={model.name}
                         src={thumbnailSource}
+                        onError={() => setThumbnailSource(fallbackThumbnail)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <ImageUpIcon className="w-12 h-12 opacity-20" />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            className={isMedia ? "w-full h-full object-cover" : "w-16 h-16 object-contain opacity-40"}
+                            alt={model.name}
+                            src={fallbackThumbnail}
+                        />
                     </div>
                 )}
 
@@ -101,9 +123,9 @@ export function MediaView(props: {
                 )}
             </div>
 
-            <div className="p-3 border-t border-border flex items-center gap-3 h-[76px] flex-shrink-0">
+            <div className="flex items-center gap-3 h-fit mt-5 flex-shrink-0">
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground mb-1">
+                    <p className="text-sm font-bold truncate text-white mb-1">
                         {model.name}
                     </p>
                     <div className="flex flex-col items-start gap-0">
@@ -115,7 +137,7 @@ export function MediaView(props: {
 
                 <div className="shrink-0">
                     <ResourceDownload
-                        resource={media}
+                        resource={resource}
                         session={session as ReceiveSessionViewModel}
                         size={36}
                         strokeWidth={3}
@@ -125,3 +147,6 @@ export function MediaView(props: {
         </div>
     );
 }
+
+export const FileView = ResourceCard;
+export const MediaView = ResourceCard;
