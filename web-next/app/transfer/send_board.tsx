@@ -10,10 +10,7 @@ import {
     Settings2,
     Check,
     Copy,
-    Loader2,
     FolderIcon,
-    Folder,
-    ImageUpIcon,
     Play
 } from 'lucide-react';
 import Image from "next/image";
@@ -50,7 +47,6 @@ import {
 import {useFileUpload} from "@/hooks/use-file-upload";
 import core from "@/wasm/wasm_core";
 import {formatFileSize} from "@/utils/format-file-size";
-import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 
 function ResourceView({ resource, onRemove, isRemoveAllowed }: { resource: SelectedResourceViewModel, onRemove: (id: number) => void, isRemoveAllowed: boolean }) {
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -386,58 +382,31 @@ export default function SendBoard() {
                 
                 <AnimatePresence>
                     {(isInProgressDefer || cloudSession?.access_url) && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 20 }}
                             className="w-[320px] md:w-[450px] p-4 rounded-2xl bg-zinc-900 border border-white/10 shadow-2xl backdrop-blur-xl"
                         >
+                            {/* Progress bar - show during upload and after URL generated */}
                             {isInProgressDefer && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-blue-400">
+                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-white/60">
                                         <span>{cloudSession?.display_download_speed || 'Uploading to cloud'}</span>
                                         <span>{Math.round(progress)}%</span>
                                     </div>
-                                    <Progress value={progress} className="h-1.5 bg-white/5">
-                                        <ProgressTrack className="bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                                    </Progress>
-                                    {isInProgress && (
-                                        <Button 
-                                            size="sm"
-                                            variant="ghost"
-                                            className="w-full mt-2 h-8 text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5"
-                                            onClick={() => {
-                                                if (cloudSession?.is_in_progress && defaultShelfId) {
-                                                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                                                        BigInt(cloudSession.session_id), 
-                                                        new TransferTypeVariantSend(BigInt(defaultShelfId))
-                                                    )))
-                                                }
-                                            }}
-                                        >
-                                            Cancel Transfer
-                                        </Button>
-                                    )}
+                                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/20">
+                                        <div
+                                            className="h-full bg-white rounded-full transition-all duration-300"
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
                                 </div>
                             )}
+                            {/* URL - show when available */}
                             {cloudSession?.access_url && (
-                                <div className={`flex items-center gap-3 ${isInProgressDefer ? 'mt-4 border-t border-white/5 pt-4' : ''}`}>
+                                <div className={`flex items-center gap-3 ${isInProgressDefer ? 'mt-4' : ''}`}>
                                     <UrlInputWithCopy url={cloudSession.access_url} />
-                                    <Button 
-                                        size="icon" 
-                                        variant="ghost" 
-                                        onClick={() => {
-                                            if (defaultShelfId) {
-                                                core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                                                    BigInt(cloudSession.session_id),
-                                                    new TransferTypeVariantSend(BigInt(defaultShelfId))
-                                                )))
-                                            }
-                                        }}
-                                        className="h-10 w-10 rounded-xl hover:bg-white/5 text-white/40"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </Button>
                                 </div>
                             )}
                         </motion.div>
@@ -474,10 +443,10 @@ export default function SendBoard() {
                         <span className="text-white font-bold text-sm leading-none">
                             {selectedResources.length} {selectedResources.length === 1 ? 'file' : 'files'}
                         </span>
-                        <button 
+                        <button
                             disabled={selectedResources.length === 0}
                             onClick={scrollToTop}
-                            className="text-[9px] font-bold uppercase tracking-wider mt-1.5 transition-all disabled:text-white/20 text-blue-400 hover:text-blue-300 active:scale-95 underline decoration-blue-400/30 hover:decoration-blue-400 underline-offset-4"
+                            className="text-[9px] font-bold uppercase tracking-wider mt-1.5 transition-all disabled:text-white/20 text-white/60 hover:text-white active:scale-95 underline decoration-white/20 hover:decoration-white underline-offset-4"
                         >
                             {selectedResources.length > 0 ? 'Review' : 'Selected'}
                         </button>
@@ -485,17 +454,34 @@ export default function SendBoard() {
 
                     <div className="w-px h-6 bg-white/10 mx-2" />
 
-                    <Button 
-                        disabled={selectedResources.length === 0 || isInProgress}
-                        onClick={handleUpload}
-                        className="h-12 px-6 rounded-xl bg-white text-zinc-900 hover:bg-zinc-200 font-bold transition-all disabled:opacity-50 disabled:bg-white/20 group"
+                    <Button
+                        disabled={selectedResources.length === 0 && !cloudSession?.access_url}
+                        onClick={() => {
+                            if (isInProgress && cloudSession?.is_in_progress && defaultShelfId) {
+                                core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                                    BigInt(cloudSession.session_id),
+                                    new TransferTypeVariantSend(BigInt(defaultShelfId))
+                                )))
+                            } else if (cloudSession?.access_url) {
+                                // Continue - clear the session to close modal
+                                if (defaultShelfId) {
+                                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                                        BigInt(cloudSession.session_id),
+                                        new TransferTypeVariantSend(BigInt(defaultShelfId))
+                                    )))
+                                }
+                            } else {
+                                handleUpload()
+                            }
+                        }}
+                        className="h-12 px-6 rounded-xl bg-white text-zinc-900 hover:bg-zinc-200 font-bold transition-all disabled:opacity-50 disabled:bg-white/20 group min-w-[140px]"
                     >
-                        {isInProgress ? (
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        {isInProgress ? null : cloudSession?.access_url ? (
+                            <Check className="w-4 h-4 mr-2" />
                         ) : (
                             <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
                         )}
-                        {isInProgress ? 'Transferring...' : 'Send Files'}
+                        {isInProgress ? 'Cancel' : cloudSession?.access_url ? 'Continue' : 'Send Files'}
                     </Button>
                 </motion.div>
 
@@ -505,9 +491,8 @@ export default function SendBoard() {
                             initial={{ opacity: 0, y: 20, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                            className="absolute bottom-[110%] w-[320px] md:w-[400px] p-6 rounded-[32px] bg-card border border-white/10 shadow-3xl overflow-hidden"
+                            className="absolute bottom-[110%] w-[320px] md:w-[400px] p-6 rounded-[32px] bg-zinc-900 border border-white/10 shadow-3xl overflow-hidden"
                         >
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
                             
                             <div className="relative space-y-6">
                                 <div className="flex items-center justify-between">
@@ -536,7 +521,7 @@ export default function SendBoard() {
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder="••••••••"
-                                            className="bg-white/5 border-white/10 rounded-xl h-12 focus:border-blue-500/50"
+                                            className="bg-white/5 border-white/10 rounded-xl h-12 focus:border-white/30"
                                         />
                                     </div>
                                 </div>
