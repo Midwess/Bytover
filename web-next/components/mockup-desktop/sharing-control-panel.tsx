@@ -20,12 +20,6 @@ interface SharingControlPanelProps {
 function P2PTab() {
   const router = useRouter()
   const [password, setPassword] = useState("")
-  const [isCopied, setIsCopied] = useState(false)
-
-  const handleCopy = () => {
-    setIsCopied(true)
-    setTimeout(() => setIsCopied(false), 2000)
-  }
 
   const handleStart = () => {
     const element = document.getElementById('desktop')

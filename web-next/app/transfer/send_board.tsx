@@ -75,7 +75,7 @@ function ResourceView({ resource, onRemove, isRemoveAllowed }: { resource: Selec
         >
             {isRemoveAllowed && (
                 <button 
-                    onClick={() => onRemove(BigInt(resource.order_id))}
+                    onClick={() => onRemove(Number(resource.order_id))}
                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-white/40 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500 transition-all z-10"
                 >
                     <X className="w-3 h-3" />
@@ -138,7 +138,6 @@ export default function SendBoard() {
     const cloudSession = core.useCloudSession(defaultShelfId)
     const [showTransferUI, setShowTransferUI] = useState(false)
     const [persistentCloudSession, setPersistentCloudSession] = useState(cloudSession)
-    const [isInProgress, setIsInProgress] = useState(false)
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const progress = (cloudSession?.progress ?? 0) * 100
     const cloudRef = useRef(cloudSession)
@@ -179,10 +178,8 @@ export default function SendBoard() {
 
     useEffect(() => {
         if (cloudSession?.is_in_progress) {
-            setIsInProgress(true)
             setIsInProgressDefer(true)
         } else {
-            setIsInProgress(false)
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {
                     setIsInProgressDefer(false)
@@ -201,11 +198,11 @@ export default function SendBoard() {
         }
     };
 
-    const handleRemove = async (orderId: bigint) => {
+    const handleRemove = async (orderId: number) => {
         if (!isResourceRemoveAllowed || !defaultShelfId) return;
         await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(
             BigInt(defaultShelfId),
-            orderId
+            BigInt(orderId)
         )));
     };
 
@@ -427,7 +424,7 @@ export default function SendBoard() {
                             {/* URL - always show when available */}
                             {(cloudSession?.access_url || persistentCloudSession?.access_url) && (
                                 <div className={`flex items-center gap-3 ${isInProgressDefer && progress > 0 ? 'mt-4' : ''}`}>
-                                    <UrlInputWithCopy url={cloudSession?.access_url || persistentCloudSession?.access_url} />
+                                    <UrlInputWithCopy url={cloudSession?.access_url ?? persistentCloudSession?.access_url ?? ''} />
                                 </div>
                             )}
                         </motion.div>
@@ -493,7 +490,7 @@ export default function SendBoard() {
                                     )))
                                 }
                                 setShowTransferUI(false)
-                                setPersistentCloudSession(null)
+                                setPersistentCloudSession(undefined)
                                 setIsSettingsOpen(false)
                             } else {
                                 handleUpload()

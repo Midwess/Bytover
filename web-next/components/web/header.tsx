@@ -18,7 +18,7 @@ import core from '@/wasm/wasm_core';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-export default function Header({ className, isFullWidth, theme = 'dark' }: { className?: string, isFullWidth?: boolean, theme?: 'light' | 'dark' }) {
+export default function Header({ className, theme = 'dark' }: { className?: string, theme?: 'light' | 'dark' }) {
     const coreReady = core.useCoreReady();
     const authState = core.useAuthenticationState()
     const isSignedIn = coreReady && !!authState?.user;

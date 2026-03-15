@@ -16,6 +16,7 @@ export function CloudEmailTransfer() {
                         className="w-full h-full object-cover opacity-20"
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-[#031d24]/50 to-[#031d24]" />
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-overlay hidden dark:block" />
                 </div>
 
                 <div className="relative z-10 px-6 md:px-12 py-20 md:py-32">

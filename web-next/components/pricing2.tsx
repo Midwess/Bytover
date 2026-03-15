@@ -114,19 +114,19 @@ export function Pricing2() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative p-8 md:p-10 rounded-[2rem] bg-gradient-to-br from-bluePrimary/10 via-zinc-950 to-zinc-950 border border-bluePrimary/30 flex flex-col justify-between overflow-hidden group shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)]"
+            className="relative p-8 md:p-10 rounded-[2rem] bg-gradient-to-br from-blue-600/10 via-zinc-950 to-zinc-950 border border-blue-600/30 flex flex-col justify-between overflow-hidden group shadow-[0_0_50px_-12px_rgba(37,99,235,0.3)]"
           >
             <div className="space-y-8">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                     <h3 className="text-xl font-bold text-white tracking-tight">Full</h3>
-                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-bluePrimary text-white uppercase tracking-widest">Recommended</span>
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-5xl font-bold text-white">$19</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
-                <p className="text-xs font-medium text-bluePrimary/60">One-time payment. Own it forever.</p>
+                <p className="text-xs font-medium text-blue-600/60">One-time payment. Own it forever.</p>
               </div>
               
               <ul className="space-y-3 border-t border-white/5 pt-8">
@@ -138,14 +138,14 @@ export function Pricing2() {
                     "Priority device discovery"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-100">
-                    <Plus className="w-4 h-4 text-bluePrimary" />
+                    <Plus className="w-4 h-4 text-blue-600" />
                     <span className="text-xs font-bold">{feature}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="mt-12 p-6 rounded-2xl bg-bluePrimary/5 border border-bluePrimary/10 flex flex-col gap-4">
+            <div className="mt-12 p-6 rounded-2xl bg-blue-600/5 border border-blue-600/10 flex flex-col gap-4">
                 <div className="flex items-center gap-3">
                     <p className="text-sm font-bold text-white">Join the Waitlist</p>
                 </div>
@@ -158,14 +158,14 @@ export function Pricing2() {
                         <Input 
                             type="email"
                             placeholder="your@email.com"
-                            className="bg-zinc-950 border-white/10 h-10 text-xs focus-visible:ring-bluePrimary"
+                            className="bg-zinc-950 border-white/10 h-10 text-xs focus-visible:ring-blue-600"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                         />
                         <Button 
                             onClick={handleJoinWaitlist}
                             disabled={isSubmitting || !email}
-                            className="w-full h-10 rounded-xl bg-bluePrimary text-white hover:bg-bluePrimary/90 transition-all font-bold text-xs shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)]"
+                            className="w-full h-10 rounded-xl bg-blue-600 text-white hover:bg-blue-600/90 transition-all font-bold text-xs shadow-[0_0_20px_-5px_rgba(37,99,235,0.3)]"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Join the Waitlist"}
                         </Button>
