@@ -62,14 +62,14 @@ export function Pricing2() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-lg text-zinc-400 max-w-xl font-medium"
+            className="text-xl text-zinc-400 max-w-xl font-medium"
           >
             Experience the full power of Bytover with a single payment. No subscriptions, just seamless file orchestration.
           </motion.p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* Limited Plan */}
+          {/* Free Plan */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -79,25 +79,25 @@ export function Pricing2() {
           >
             <div className="space-y-8">
               <div className="space-y-3">
-                <h3 className="text-xl font-bold text-white tracking-tight">Limited</h3>
+                <h3 className="text-xl font-bold text-white tracking-tight">Free</h3>
                 <div className="flex items-baseline gap-1">
                   <span className="text-5xl font-bold text-white">$0</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
-                <p className="text-xs font-medium text-zinc-500">Essential features with usage limits.</p>
+                <p className="text-sm font-medium text-zinc-500">Essential features for everyday sharing.</p>
               </div>
               
               <ul className="space-y-3 border-t border-white/5 pt-8">
                 {[
-                  "Unlimited P2P transfers",
-                  "Standard upload speeds",
+                  "Cloud-only transfers",
+                  "Capped network speeds",
                   "End-to-end encryption",
-                  "Native Shelf UI",
-                  "No Quick Transfer access"
+                  "Advanced shelf management",
+                  "Manage multiple concurrent shelves"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-400">
                     <Check className="w-4 h-4 text-zinc-800" />
-                    <span className="text-xs font-medium">{feature}</span>
+                    <span className="text-sm font-medium">{feature}</span>
                   </li>
                 ))}
               </ul>
@@ -123,23 +123,23 @@ export function Pricing2() {
                     <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold text-white">$19</span>
+                  <span className="text-5xl font-bold text-white">$12.99</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
-                <p className="text-xs font-medium text-blue-600/60">One-time payment. Own it forever.</p>
+                <p className="text-sm font-medium text-blue-600/60">One-time payment. Own it forever.</p>
               </div>
               
               <ul className="space-y-3 border-t border-white/5 pt-8">
                 {[
-                    "Uncapped upload speeds",
-                    "Full Quick Transfer access",
-                    "Permanent Cloud Storage",
-                    "Password Protected Links",
-                    "Priority device discovery"
+                    "Everything in Free, plus:",
+                    "Direct P2P: Files stay on your local machine",
+                    "Zero upload time: Shareable URLs ready instantly",
+                    "Native folder sharing without zipping",
+                    "Uncapped network transfer speeds"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-100">
                     <Plus className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold">{feature}</span>
+                    <span className="text-sm font-bold">{feature}</span>
                   </li>
                 ))}
               </ul>
