@@ -6,7 +6,7 @@ import { getAssetUrl } from '@/utils/asset-url';
 
 export function CloudEmailTransfer() {
     return (
-        <section className="w-full py-12 md:py-24 bg-black overflow-hidden px-4 md:px-6">
+        <section id="cloud-transfer" className="w-full py-12 md:py-24 bg-black overflow-hidden px-4 md:px-6">
             <div className="w-full max-w-[1400px] mx-auto relative rounded-xl md:rounded-2xl overflow-hidden border border-white/10 bg-[#031d24]">
                 {/* Background Image with Dark Cyan Overlay */}
                 <div className="absolute inset-0 z-0">

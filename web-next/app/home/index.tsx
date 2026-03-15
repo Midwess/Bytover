@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Introduction from "@/app/home/introduction.tsx";
 import { QuickLinkTransfer } from "@/components/quick-link-transfer";
 import { CloudEmailTransfer } from "@/components/cloud-email-transfer";
+import { DownloadSection } from "@/components/download-section";
 import { ShelfManagement } from "@/components/shelf-management";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
@@ -28,6 +29,8 @@ export default function Home() {
                 <BitBridgeFlow />
 
                 <CloudEmailTransfer />
+
+                <DownloadSection />
 
                 <ShelfManagement />
 

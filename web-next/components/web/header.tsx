@@ -97,6 +97,7 @@ export default function Header({ className, isFullWidth, theme = 'dark' }: { cla
                         <nav className="hidden md:flex items-center gap-6">
                             {[
                                 { label: "Transfer", href: "/transfer" },
+                                { label: "Download", href: "#desktop" },
                                 { label: "Pricing", href: "#pricing" },
                                 { label: "Features", href: "#more-features" }
                             ].map((item) => (
