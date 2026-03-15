@@ -3,7 +3,7 @@
 import core from '@/wasm/wasm_core'
 import { Button } from "@/components/ui/button";
 import { AppEventVariantAuthentication, AuthenticationEventVariantFeedback } from "shared_types/types/shared_types"
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check } from "lucide-react";
 import { getAssetUrl } from '@/utils/asset-url';
