@@ -75,7 +75,7 @@ function ResourceView({ resource, onRemove, isRemoveAllowed }: { resource: Selec
         >
             {isRemoveAllowed && (
                 <button 
-                    onClick={() => onRemove(Number(resource.order_id))}
+                    onClick={() => onRemove(BigInt(resource.order_id))}
                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-white/40 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500 transition-all z-10"
                 >
                     <X className="w-3 h-3" />
@@ -137,7 +137,6 @@ export default function SendBoard() {
 
     const cloudSession = core.useCloudSession(defaultShelfId)
     const [isInProgress, setIsInProgress] = useState(false)
-    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const progress = (cloudSession?.progress ?? 0) * 100
     const cloudRef = useRef(cloudSession)
     cloudRef.current = cloudSession
@@ -171,14 +170,8 @@ export default function SendBoard() {
     useEffect(() => {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
-            setIsInProgressDefer(true)
         } else {
             setIsInProgress(false)
-            setTimeout(() => {
-                if (!cloudRef?.current?.is_in_progress) {
-                    setIsInProgressDefer(false)
-                }
-            }, 2000)
         }
     }, [cloudSession?.is_in_progress]);
 
@@ -192,13 +185,12 @@ export default function SendBoard() {
         }
     };
 
-    const handleRemove = async (orderId: number) => {
-        if (defaultShelfId && isResourceRemoveAllowed) {
-            await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(
-                BigInt(defaultShelfId), 
-                BigInt(orderId)
-            )));
-        }
+    const handleRemove = async (orderId: bigint) => {
+        if (!isResourceRemoveAllowed || !defaultShelfId) return;
+        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(
+            BigInt(defaultShelfId),
+            orderId
+        )));
     };
 
     const headerRef = useRef<HTMLDivElement>(null);
@@ -394,15 +386,15 @@ export default function SendBoard() {
             <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[999] flex flex-col items-center gap-4">
                 
                 <AnimatePresence>
-                    {(isInProgressDefer || cloudSession?.access_url) && (
+                    {(isInProgress || cloudSession) && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 20 }}
                             className="w-[320px] md:w-[450px] p-4 rounded-2xl bg-zinc-900 border border-white/10 shadow-2xl backdrop-blur-xl"
                         >
-                            {/* Progress bar - show during upload and after URL generated */}
-                            {isInProgressDefer && (
+                            {/* Progress bar - show only when uploading and progress > 0% */}
+                            {isInProgress && progress > 0 && (
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-white/60">
                                         <span>{cloudSession?.display_download_speed || 'Uploading to cloud'}</span>
@@ -416,9 +408,9 @@ export default function SendBoard() {
                                     </div>
                                 </div>
                             )}
-                            {/* URL - show when available */}
+                            {/* URL - always show when available */}
                             {cloudSession?.access_url && (
-                                <div className={`flex items-center gap-3 ${isInProgressDefer ? 'mt-4' : ''}`}>
+                                <div className={`flex items-center gap-3 ${isInProgress && progress > 0 ? 'mt-4' : ''}`}>
                                     <UrlInputWithCopy url={cloudSession.access_url} />
                                 </div>
                             )}
@@ -468,14 +460,15 @@ export default function SendBoard() {
                     <div className="w-px h-6 bg-white/10 mx-2" />
 
                     <Button
-                        disabled={selectedResources.length === 0 && !cloudSession?.access_url}
+                        disabled={selectedResources.length === 0 && !cloudSession}
                         onClick={() => {
                             if (isInProgress && cloudSession?.is_in_progress && defaultShelfId) {
+                                // Cancel - stop the upload
                                 core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
                                     BigInt(cloudSession.session_id),
                                     new TransferTypeVariantSend(BigInt(defaultShelfId))
                                 )))
-                            } else if (cloudSession?.access_url) {
+                            } else if (cloudSession?.is_completed) {
                                 // Continue - clear the session to close modal
                                 if (defaultShelfId) {
                                     core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
@@ -489,12 +482,12 @@ export default function SendBoard() {
                         }}
                         className="h-12 px-6 rounded-xl bg-white text-zinc-900 hover:bg-zinc-200 font-bold transition-all disabled:opacity-50 disabled:bg-white/20 group min-w-[140px]"
                     >
-                        {isInProgress ? null : cloudSession?.access_url ? (
+                        {isInProgress ? null : cloudSession?.is_completed ? (
                             <Check className="w-4 h-4 mr-2" />
                         ) : (
                             <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
                         )}
-                        {isInProgress ? 'Cancel' : cloudSession?.access_url ? 'Continue' : 'Send Files'}
+                        {isInProgress ? 'Cancel' : cloudSession?.is_completed ? 'Continue' : 'Send Files'}
                     </Button>
                 </motion.div>
 
