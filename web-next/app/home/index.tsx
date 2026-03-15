@@ -3,40 +3,53 @@ import Footer from "@/components/web/footer";
 
 import { Suspense } from "react";
 import Introduction from "@/app/home/introduction.tsx";
+import { QuickLinkTransfer } from "@/components/quick-link-transfer";
+import { CloudEmailTransfer } from "@/components/cloud-email-transfer";
+import { DownloadSection } from "@/components/download-section";
+import { ShelfManagement } from "@/components/shelf-management";
 import { JoinWaitList } from "@/components/join-waitlist";
 import { AdditionalFeatures } from "@/components/additional-features";
-import { DesktopSection } from "@/components/desktop-section";
+import { BitBridgeFlow } from "@/components/bit-bridge-flow";
 import { Pricing2 } from "@/components/pricing2";
 
-
 export default function Home() {
-    return <div className="flex flex-col w-full h-full items-center bg-black">
-        <Suspense fallback={null}>
-            <Header className="px-6 sm:px-4 container" />
-        </Suspense>
+    return (
+        <div className="min-h-screen w-screen bg-black relative overflow-x-hidden selection:bg-blue-500 selection:text-white font-inter">
+            <Suspense fallback={null}>
+                <Header className="px-3" />
+            </Suspense>
 
-        <div id="intro" className={"w-screen h-screen bg-black"}>
-            <Introduction />
+            <main>
+                <section id="intro">
+                    <Introduction />
+                </section>
+
+                <QuickLinkTransfer />
+                
+                <BitBridgeFlow />
+
+                <CloudEmailTransfer />
+
+                <DownloadSection />
+
+                <ShelfManagement />
+
+                <div className="space-y-0">
+                    <div id="pricing">
+                        <Pricing2 />
+                    </div>
+
+                    <div id="more-features">
+                        <AdditionalFeatures />
+                    </div>
+
+                    <div id="waitlist" className="w-full">
+                        <JoinWaitList />
+                    </div>
+                </div>
+            </main>
+
+            <Footer className="bg-black border-t border-white/5" />
         </div>
-
-        <div id="desktop" className={"w-screen bg-zinc-900 pt-8"}>
-            <div className="w-screen">
-                <DesktopSection />
-            </div>
-        </div>
-
-        <div id="pricing" className={"w-full"}>
-            <Pricing2 />
-        </div>
-
-        <div id="more-features" className={"w-full bg-blue-800/10"}>
-            <AdditionalFeatures />
-        </div>
-
-        <div id="waitlist" className={"w-full bg-black h-[60vh] py-5 min-h-fit items-center flex"}>
-            <JoinWaitList />
-        </div>
-
-        <Footer className={"bg-zinc-900"} />
-    </div>
+    );
 }

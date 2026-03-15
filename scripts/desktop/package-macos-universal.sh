@@ -61,3 +61,17 @@ pnpm tauri build --target universal-apple-darwin
 echo "--- Cleaning up unzipped certificates ---"
 cd "$PROJECT_ROOT"
 rm -rf "$CERT_DIR"
+
+# Find and upload the DMG package
+echo "--- Finding DMG package ---"
+DMG_FILE=$(find desktop/src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -n 1)
+if [ -z "$DMG_FILE" ]; then
+  echo "--- Error: No DMG package found ---"
+  exit 1
+fi
+echo "--- Found DMG: $DMG_FILE ---"
+
+# Upload to S3 (fail if upload fails)
+echo "--- Uploading to S3 ---"
+scripts/desktop/upload-package.sh "$DMG_FILE" || exit 1
+echo "--- Upload complete ---"

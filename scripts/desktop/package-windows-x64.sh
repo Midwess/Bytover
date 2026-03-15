@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Change to project root
 cd "$(dirname "$0")/../.."
+PROJECT_ROOT=$(pwd)
 
 # Source production environment variables if they exist
 if [ -f "scripts/desktop/prod-env.env" ]; then
@@ -40,3 +41,18 @@ else
   echo "--- Building for Windows ---"
   pnpm tauri build --target "$TARGET"
 fi
+
+# Find and upload the MSI package
+echo "--- Finding MSI package ---"
+cd "$PROJECT_ROOT"
+MSI_FILE=$(find desktop/src-tauri/target/release/bundle/msi -name "*.msi" 2>/dev/null | head -n 1)
+if [ -z "$MSI_FILE" ]; then
+  echo "--- Error: No MSI package found ---"
+  exit 1
+fi
+echo "--- Found MSI: $MSI_FILE ---"
+
+# Upload to S3 (fail if upload fails)
+echo "--- Uploading to S3 ---"
+scripts/desktop/upload-package.sh "$MSI_FILE" || exit 1
+echo "--- Upload complete ---"

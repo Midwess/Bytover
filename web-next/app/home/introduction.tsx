@@ -1,92 +1,137 @@
 'use client';
 
-import { getAssetUrl } from "@/utils/asset-url";
-import Aurora from "@/components/Aurora";
-import Link from "next/link";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
+import { motion } from "motion/react";
+import { ArrowRight } from "lucide-react";
+import { DownloadPlatforms } from "@/components/download-platforms";
+import { SendingShelf } from "@/components/mockup-desktop";
+import { SharingControlPanel } from "@/components/mockup-desktop";
+import { HighlightFeatures } from "@/components/highlight-features";
 
-interface IntroductionProps {
-    disableBackground?: boolean;
-    hidePrimaryButton?: boolean;
-    header?: string;
-}
+export default function Introduction() {
+    const [isExpanded, setIsExpanded] = useState(true);
 
-export default function Introduction({
-    disableBackground = false,
-    hidePrimaryButton = false,
-    header = "File transfer, made truly seamless",
-}: IntroductionProps) {
-    const containerClassName = disableBackground
-        ? "w-full flex flex-col items-center justify-center"
-        : "w-screen h-screen flex flex-col items-center justify-center";
+    // Exact dimensions from desktop/src/send/window.tsx - Adjusted (25% smaller then 20% bigger)
+    const SHELF_WIDTH = 180;
+    const SHELF_HEIGHT = 206;
+    const EXPANDED_WIDTH = 371;
+    const CONTROL_PANEL_WIDTH = EXPANDED_WIDTH - SHELF_WIDTH; // ~191px
 
     return (
-        <div className={containerClassName}>
-            {!disableBackground && (
-                <div className="w-full h-screen absolute">
-                    <GravityBackground />
-                </div>
-            )}
-            <div className="relative z-20 flex flex-col w-full items-center justify-center px-6">
-                <div className="flex flex-col items-center gap-6 md:gap-8 max-w-2xl text-center">
-                    {/* Logo */}
-                    <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20 backdrop-blur-sm">
-                        <img
-                            src={getAssetUrl("/logo.png")}
-                            alt="Bytover"
-                            width={20}
-                            height={20}
-                        />
-                        Bytover
-                    </span>
+        <div className="relative w-full pt-24 md:pt-32 pb-20 px-4 md:px-6 bg-black">
+            {/* Padded, Rounded Container for Hero - Railway Style */}
+            <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-between border border-white/10 shadow-2xl">
+                
+                {/* Background - Contained within the rounded box */}
+                <div
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url(/background2.jpg)' }}
+                />
+                <div className="absolute inset-0 bg-black/40 z-0" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-0 opacity-60" />
 
-                    {/* Headline */}
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white">
-                        {header}
-                    </h1>
+                <div className="container mx-auto px-4 md:px-6 relative z-10 flex flex-col items-center text-center pt-24 pb-20">
+                    {/* Badge */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-white/10 text-white/70 border border-white/10 backdrop-blur-xl mb-10"
+                    >
+                        <span className="text-blue-300">Version 1.0</span>
+                        <div className="w-px h-2 bg-white/20 mx-1" />
+                        <span>Now in Public Beta</span>
+                    </motion.div>
+
+                    {/* Headline - 15% smaller */}
+                    <motion.h1 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.1 }}
+                        className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.05] max-w-5xl mb-8"
+                    >
+                        The native way to <br />
+                        <span className="text-white/40">share anything.</span>
+                    </motion.h1>
 
                     {/* Description */}
-                    <p className="text-sm md:text-lg text-muted-foreground max-w-md">
-                        No upload required. Share directly between you and your friends.
-                    </p>
+                    <motion.p 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="text-lg md:text-xl text-white/50 max-w-2xl leading-relaxed font-medium mb-12"
+                    >
+                        Bytover is a high-performance file transfer utility for modern teams. 
+                        Peer-to-peer, end-to-end encrypted, and native to your OS.
+                    </motion.p>
 
-                    {/* CTA */}
-                    {!hidePrimaryButton && (
-                        <Link
-                            href="/transfer"
-                            className="mt-4 inline-flex items-center gap-2 bg-bluePrimary hover:bg-bluePrimary/90 text-white font-semibold px-8 py-3 rounded-full transition-colors"
-                        >
-                            Start Sharing
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                        </Link>
-                    )}
+                    {/* CTAs */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.3 }}
+                        className="flex flex-col items-center gap-12 mb-16"
+                    >
+                        <DownloadPlatforms />
+                    </motion.div>
+
+                    {/* Central Mockup Visual */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 1, delay: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                        className="relative group mt-8"
+                    >
+                        {/* Mockup Container - Scaled for better visibility while respecting original ratio */}
+                        <div className="relative flex items-center h-[234px] transition-all duration-500 ease-in-out scale-110 md:scale-125 lg:scale-150 origin-center" style={{ width: isExpanded ? EXPANDED_WIDTH : SHELF_WIDTH }}>
+                            
+                            {/* Shelf (Original proportions) */}
+                            <div className="relative z-20 flex-shrink-0 bg-transparent rounded-2xl" style={{ width: SHELF_WIDTH, height: SHELF_HEIGHT }}>
+                                <div className="w-full h-full overflow-hidden rounded-2xl">
+                                    <SendingShelf className="h-full w-full" />
+                                </div>
+                                
+                                {/* Expand Toggle Button */}
+                                <motion.div 
+                                    onClick={() => setIsExpanded(!isExpanded)}
+                                    className="absolute top-1/2 -right-2.5 -translate-y-1/2 z-30 w-5 h-5 bg-zinc-900 border border-white/20 shadow-xl rounded-full flex items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors"
+                                >
+                                    <motion.div
+                                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <ArrowRight className="w-2 h-2 text-white" />
+                                    </motion.div>
+                                </motion.div>
+                            </div>
+                            
+                            {/* Control Panel (Original proportions) */}
+                            <motion.div 
+                                initial={false}
+                                animate={{ 
+                                    width: isExpanded ? CONTROL_PANEL_WIDTH : 0,
+                                    opacity: isExpanded ? 1 : 0,
+                                    x: isExpanded ? 0 : -20,
+                                }}
+                                transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+                                className="overflow-hidden flex-shrink-0"
+                                style={{ height: SHELF_HEIGHT }}
+                            >
+                                <div className="h-full bg-transparent rounded-2xl ml-1 overflow-y-auto no-scrollbar" style={{ width: CONTROL_PANEL_WIDTH - 4 }}>
+                                    <SharingControlPanel className="h-full w-full" />
+                                </div>
+                            </motion.div>
+
+                            {/* Refined Shadow/Glow under the mockup */}
+                            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[80%] h-10 bg-black/60 blur-[30px] rounded-full -z-10" />
+                        </div>
+                    </motion.div>
+                </div>
+
+                {/* Highlight Features Section - Integrated into the bottom of the rounded container */}
+                <div className="relative z-20 w-full">
+                    <HighlightFeatures />
                 </div>
             </div>
         </div>
-    );
-}
-
-export function GravityBackground() {
-    const isMobile = useIsMobile()
-    return (
-        <>
-            <div className="w-screen md:pb-0 h-[95vh] md:h-[80vh] overflow-hidden absolute top-0 left-0 z-1 pointer-events-none">
-                <Aurora
-                    // Stronger blue palette
-                    colorStops={[
-                        "#1a4779", // deep sapphire, 10% lighter
-                        "#1a6fc7", // vibrant blue, 10% lighter
-                        "#3784ff", // strong vivid blue, 10% lighter
-                        "#365ba1", // royal blue, 10% lighter
-                        "#243f7f", // very deep blue, 10% lighter
-                    ]}
-                    blend={isMobile ? 0.25 : 0.50}
-                    amplitude={isMobile ? 0.20 : 0.15}
-                    speed={isMobile ? 1.5 : 1.0}
-                />
-            </div>
-        </>
     );
 }
