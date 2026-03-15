@@ -197,7 +197,7 @@ impl AppCommand {
         let Some(session) = session_overview else {
             log::info!("No session found");
             self.run(DialogOperation::message(
-                format!("Not found session {keywords}"),
+                "Not found".to_string(),
                 MessageReason::FailedToFindPublicSession
             ))
             .await;
