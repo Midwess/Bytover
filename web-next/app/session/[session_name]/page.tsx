@@ -86,7 +86,7 @@ export default function SessionPage() {
                     <IncompatibleBrowser />
                 </main>
             ) : !session ? (
-                <main className="flex-1 flex flex-col pt-10 pb-32 container mx-auto px-6 w-full min-h-screen">
+                <main className="flex-1 flex flex-col pt-6 md:pt-10 pb-12 md:pb-32 container mx-auto px-4 md:px-6 w-full min-h-screen">
                     <div className="flex-1 flex flex-col items-center justify-center gap-4">
                         {findSessionFailedMessage.message ? (
                             <div className="flex flex-col items-center gap-6">
@@ -105,10 +105,10 @@ export default function SessionPage() {
             ) : (
                 <>
                     <SessionHeader session={session as ReceiveSessionViewModel} sessionName={sessionName} />
-                    <main className="flex-1 flex flex-col pt-10 pb-32 container mx-auto px-6 w-full">
+                    <main className="flex-1 flex flex-col pt-6 md:pt-10 pb-12 md:pb-32 container mx-auto px-4 md:px-6 w-full">
                         <div className="space-y-6 animate-in fade-in duration-700">
                             {isLoading && (!session.resources || session.resources.length === 0) ? (
-                                <div className="py-32 flex flex-col items-center justify-center">
+                                <div className="py-20 md:py-32 flex flex-col items-center justify-center">
                                     {session.password_required && !session.password ? (
                                         <PasswordPrompt
                                             errorMessage={session.error_message ?? undefined}

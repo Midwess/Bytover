@@ -47,13 +47,15 @@ export function ResourceCard(props: {
 
     const displaySize = formatFileSize(model);
 
+    const isMedia = isImage || isVideo;
+
     if (isMobile) {
         return (
             <div className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors pointer-events-auto">
-                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
+                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md relative overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        className="w-6 h-6 object-contain opacity-70"
+                        className={isMedia ? "w-full h-full object-cover" : "w-6 h-6 object-contain opacity-70"}
                         alt={model.name}
                         src={thumbnailSource || fallbackThumbnail}
                         onError={() => setThumbnailSource(fallbackThumbnail)}
@@ -90,8 +92,6 @@ export function ResourceCard(props: {
             </div>
         );
     }
-
-    const isMedia = isImage || isVideo;
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden group hover:border-white/20 transition-colors pointer-events-auto">

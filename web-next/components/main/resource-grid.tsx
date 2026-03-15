@@ -187,7 +187,7 @@ export function ResourceGrid({ session }: ResourceGridProps) {
 
             )}
 
-            <div className="flex-1 space-y-32 w-full">
+            <div className="flex-1 space-y-12 md:space-y-32 w-full">
                 {sections.map((section) => {
                     const isActive = activeSection === section.id;
                     return (
@@ -227,14 +227,14 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                             )}
                             
                             {/* Mobile Header */}
-                            <div className="xl:hidden mb-10 flex flex-col gap-1.5">
+                            <div className="xl:hidden mb-6 flex flex-col gap-1.5">
                                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none">{section.count} Items</span>
                                  <h2 className="text-xl font-bold uppercase tracking-widest text-foreground/80 leading-none">{section.label}</h2>
                             </div>
 
-                            <div className="flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-8 flex">
+                            <div className="flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 flex">
                                 {section.data.map(item => (
-                                    <div key={item.model.order_id} className="h-[300px]">
+                                    <div key={item.model.order_id} className="h-fit md:h-[300px]">
                                         <ResourceCard id={item.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
                                     </div>
                                 ))}
