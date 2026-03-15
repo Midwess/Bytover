@@ -192,12 +192,12 @@ impl AppCommand {
     }
 
     pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
-        let session_overview = self.run(TransferOperation::find_transfer_session(keywords)).await?;
+        let session_overview = self.run(TransferOperation::find_transfer_session(keywords.clone())).await?;
 
         let Some(session) = session_overview else {
             log::info!("No session found");
             self.run(DialogOperation::message(
-                "Not found 🤔".to_owned(),
+                format!("Not found session {keywords}"),
                 MessageReason::FailedToFindPublicSession
             ))
             .await;
