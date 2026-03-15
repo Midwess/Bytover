@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Tabs, TabsList, TabsTrigger, TabsContents, TabsContent } from "@/components/animate-ui/components/tabs"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,13 +20,17 @@ interface SharingControlPanelProps {
 }
 
 function P2PTab() {
+  const router = useRouter()
   const [password, setPassword] = useState("")
   const [isCopied, setIsCopied] = useState(false)
-  const [isStarted, setIsStarted] = useState(false)
 
   const handleCopy = () => {
     setIsCopied(true)
     setTimeout(() => setIsCopied(false), 2000)
+  }
+
+  const handleStart = () => {
+    router.push("/transfer")
   }
 
   return (
@@ -54,23 +59,12 @@ function P2PTab() {
         <Eye className="w-3.5 h-3.5 text-[#3F3F46] cursor-pointer" />
       </Card>
 
-      {isStarted && (
-        <Card className="flex flex-row items-center px-2 py-1 w-full bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl gap-2 shadow-lg shadow-black/40">
-           <div className="flex-1 truncate text-left">
-             <span className="text-[10px] text-white/70">https://bytover.com/transfer?session=abc123</span>
-           </div>
-           <button onClick={handleCopy}>
-             {isCopied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5 text-white/50" />}
-           </button>
-        </Card>
-      )}
-
       <Card className="p-1 bg-[#1A1A1A]/80 backdrop-blur-md border-white/10 rounded-xl w-fit shadow-lg shadow-black/40">
-        <Button 
-          onClick={() => setIsStarted(!isStarted)}
+        <Button
+          onClick={handleStart}
           className="bg-[#1D4ED8] hover:bg-[#1e40af] text-white rounded-lg px-2 py-1 h-auto text-[11px] font-semibold flex items-center gap-1"
         >
-          {isStarted ? "Cancel" : "Start"} <ChevronRight className={cn("w-3 h-3", isStarted && "rotate-180")} />
+          Start <ChevronRight className="w-3 h-3" />
         </Button>
       </Card>
     </div>
