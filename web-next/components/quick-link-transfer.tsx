@@ -34,7 +34,8 @@ export function QuickLinkTransfer() {
                         transition={{ delay: 0.1 }}
                         className="text-base md:text-lg text-zinc-400 font-medium max-w-xl"
                     >
-                        Just select your files and get a secure link instantly. No uploads, no waiting for compression, and absolutely no cloud middleman.
+                        Just select your files and get a secure link instantly. No uploads, no waiting for compression, and absolutely no cloud middleman. 
+                        <span className="block mt-4 text-blue-400/80 text-sm">Download our desktop app for 2× faster direct peer-to-peer transfers.</span>
                     </motion.p>
 
                     <motion.a 

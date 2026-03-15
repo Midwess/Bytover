@@ -1,122 +1,60 @@
 'use client';
 
-import React, { Suspense, useEffect } from "react";
-import {
-    Tabs,
-    TabsList,
-    TabsTrigger,
-    TabsContent,
-    TabsContents,
-} from '@/components/animate-ui/components/tabs';
+import React, { Suspense } from "react";
 import SendBoard from "./send_board";
-import ReceiveBoard from "@/app/transfer/receive_board";
-import { useUrlState } from "@/hooks/use-url";
 import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 import { DownloadPlatforms } from "@/components/download-platforms";
 import { DesktopSection } from "@/components/desktop-section";
-import { JoinWaitList } from "@/components/join-waitlist";
-import { GridSectionWrapper } from "../../components/main/grid-section-wrapper.tsx";
+import { GridSectionWrapper } from "@/components/main/grid-section-wrapper";
+import { HighlightFeatures } from "@/components/highlight-features";
 import { useFaviconProgress } from "@/hooks/use-favicon-progress";
+import { motion } from "motion/react";
 
-const DOT_PATTERN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1' fill='rgba(255,255,255,0.08)'/%3E%3C/svg%3E\")";
-const DOT_PATTERN_LIGHT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1' fill='rgba(255,255,255,0.04)'/%3E%3C/svg%3E\")";
-
-const DASHED_BORDER_V = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='18' viewBox='0 0 1 18'%3E%3Cline x1='0.5' y1='0' x2='0.5' y2='12' stroke='rgba(255,255,255,0.1)' stroke-width='1'/%3E%3C/svg%3E\")";
-const DASHED_BORDER_H = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='1' viewBox='0 0 18 1'%3E%3Cline x1='0' y1='0.5' x2='12' y2='0.5' stroke='rgba(255,255,255,0.1)' stroke-width='1'/%3E%3C/svg%3E\")";
-
-function TransferBoardTabs() {
-    const [url, setUrl] = useUrlState(['session']);
+function TransferBoardContent() {
     const coreReady = core.useCoreReady();
     const coreCompatible = core.useIsCoreCompatible();
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (coreReady && coreCompatible) {
             core.launchNearby()
         }
     }, [coreReady, coreCompatible]);
 
-    useEffect(() => {
-        if (coreReady && url.session) {
-            const boardElement = document.querySelector('#transfer-board');
-            if (boardElement) {
-                boardElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    }, [coreReady, url.session]);
-
-    const renderContent = () => {
-        if (!coreCompatible) {
-            return (
-                <div className="flex items-center justify-center w-full min-h-[400px]">
-                    <div className="flex flex-col items-center gap-6 max-w-md text-center p-8">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                        </div>
-                        <div className="space-y-2">
-                            <h2 className="text-xl font-semibold text-foreground">Browser Not Supported</h2>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                Please use a modern browser with HTTPS for secure file transfers.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        if (!coreReady) {
-            return (
-                <div className="flex items-center justify-center w-full h-[40vh]">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-                        <p className="text-sm text-muted-foreground">Initializing...</p>
-                    </div>
-                </div>
-            );
-        }
-
+    if (!coreCompatible) {
         return (
-            <TabsContents className="w-full">
-                <TabsContent value="Send">
-                    <SendBoard />
-                </TabsContent>
-                <TabsContent value="Receive">
-                    <ReceiveBoard />
-                </TabsContent>
-            </TabsContents>
+            <div className="flex items-center justify-center w-full min-h-[400px]">
+                <div className="flex flex-col items-center gap-6 max-w-md text-center p-8 bg-white/5 backdrop-blur-xl rounded-lg border border-white/5">
+                    <div className="w-16 h-16 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                    </div>
+                    <div className="space-y-2">
+                        <h2 className="text-xl font-semibold text-white">Browser Not Supported</h2>
+                        <p className="text-sm text-white/60 leading-relaxed">
+                            Please use a modern browser with HTTPS for secure file transfers.
+                        </p>
+                    </div>
+                </div>
+            </div>
         );
-    };
+    }
 
-    return (
-        <Tabs
-            defaultValue={url.session ? 'Receive' : 'Send'}
-            onValueChange={(tab: 'Send' | 'Receive') => {
-                if (tab === 'Send') {
-                    setUrl({ session: undefined });
-                }
-            }}
-            className="w-full"
-        >
-            <div className="flex justify-center -mt-[22px] relative z-10">
-                <TabsList className="bg-muted border border-primaryText/10 rounded-lg p-[3px]">
-                    <TabsTrigger value="Send" className="rounded-sm w-20 px-5 py-1.5 text-sm data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
-                        Send
-                    </TabsTrigger>
-                    <TabsTrigger value="Receive" className="rounded-sm w-20 px-5 py-1.5 text-sm data-[state=active]:bg-bluePrimary data-[state=active]:text-white">
-                        Receive
-                    </TabsTrigger>
-                </TabsList>
+    if (!coreReady) {
+        return (
+            <div className="flex items-center justify-center w-full h-full">
+                <div className="flex flex-col items-center gap-4 text-white">
+                    <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                    <p className="text-sm font-medium">Initializing core...</p>
+                </div>
             </div>
+        );
+    }
 
-            <div className="container mx-auto pt-6 pb-12 px-3">
-                {renderContent()}
-            </div>
-        </Tabs>
-    );
+    return <SendBoard />;
 }
 
 export default function TransferBoard() {
@@ -124,115 +62,152 @@ export default function TransferBoard() {
     useFaviconProgress(totalP2PProgress);
 
     return (
-        <div className="min-h-screen w-screen bg-background relative">
-            <Header />
+        <div className="min-h-screen w-screen bg-black relative overflow-x-hidden selection:bg-blue-500 selection:text-white font-inter">
+            <Suspense fallback={null}>
+                <Header className="px-3" theme="dark" />
+            </Suspense>
 
-            <main className="pb-20">
-                <div className="max-w-[1400px] mx-auto px-3">
-                    <div className="relative overflow-hidden">
+            <main className="pb-20 pt-20">
+                
+                {/* 1. The Transfer Stage */}
+                <div id="transfer-stage" className="w-full px-4 md:px-6 mb-24 h-fit">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 1 }}
+                        className="relative w-full rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-center border border-white/10 shadow-2xl min-h-[85vh] md:min-h-[90vh] bg-black"
+                    >
                         <div
-                            className="absolute inset-0 bg-cover bg-center"
-                            style={{ backgroundImage: 'url(/gradient-bg1.jpeg)' }}
+                            className="absolute inset-0 bg-cover bg-center z-0"
+                            style={{ backgroundImage: 'url(/background5.jpg)' }}
                         />
-                        <div className="absolute inset-0 bg-black/30" />
-                        <section className="relative">
-                            <div className="container mx-auto py-12 md:py-16 px-4 md:px-8">
-                                <div className="pt-16 flex flex-col items-center text-center gap-8">
-                                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight">
-                                        The new standard of file transfer
-                                        <span className="inline-block w-3 h-3 md:w-4 md:h-4 rounded-full bg-greenSecondary animate-pulse ml-2 align-middle" />
-                                    </h1>
-
-                                    <div className="max-w-md gap-2 flex flex-col items-center justify-center">
-                                        <p>Even faster and unlock a whole new experience on the desktop version.</p>
-                                        <div className={"w-90"}>
-                                            <DownloadPlatforms />
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap justify-center gap-2">
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            No upload required
-                                        </span>
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            Instant URL generation
-                                        </span>
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            No ZIP required
-                                        </span>
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            End-to-end encrypted
-                                        </span>
-                                        <span className="px-3 py-1.5 text-xs font-medium text-white/90 bg-white/10 border border-white/20 rounded backdrop-blur-sm">
-                                            P-to-P data transfer
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-
-                    <div id="transfer-board" className="relative flex mt-8">
-                        <div className="absolute left-0 right-0 top-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                        <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                        <div
-                            className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
-                            style={{ backgroundImage: DOT_PATTERN }}
-                        >
-                            <div className="absolute left-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
-                            <div className="absolute right-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
-                        </div>
-
-                        <div
-                            className="flex-1 bg-bluePrimary/2 relative min-w-0"
-                            style={{ backgroundImage: DOT_PATTERN_LIGHT }}
-                        >
-                            <div className="absolute -top-1 -left-1 w-3 h-3 border-l border-t border-primaryText/30" />
-                            <div className="absolute -top-1 -right-1 w-3 h-3 border-r border-t border-primaryText/30" />
-                            <div className="absolute -bottom-1 -left-1 w-3 h-3 border-l border-b border-primaryText/30" />
-                            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-r border-b border-primaryText/30" />
-
-                            <div className="absolute left-0 top-0 h-px w-[calc(50%-100px)]" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-                            <div className="absolute right-0 top-0 h-px w-[calc(50%-100px)]" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-
-                            <div className="absolute left-0 right-0 bottom-0 h-px" style={{ backgroundImage: DASHED_BORDER_H, backgroundRepeat: 'repeat-x' }} />
-
-                            <Suspense fallback={
-                                <div className="flex items-center justify-center w-full h-[40vh]">
-                                    <div className="flex flex-col items-center gap-4">
-                                        <div className="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-                                        <p className="text-sm text-muted-foreground">Loading...</p>
-                                    </div>
-                                </div>
-                            }>
-                                <TransferBoardTabs />
+                        <div className="absolute inset-0 bg-black/40 z-0" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-0 opacity-60" />
+                        
+                        <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-6 md:p-12">
+                            <Suspense fallback={null}>
+                                <TransferBoardContent />
                             </Suspense>
                         </div>
+                    </motion.div>
+                </div>
 
-                        <div
-                            className="hidden md:block relative flex-shrink-0 md:w-24 lg:w-32 xl:w-[120px]"
-                            style={{ backgroundImage: DOT_PATTERN }}
+                {/* 2. Performance Edge Section with Video and Grid */}
+                <div className="container mx-auto px-4 md:px-6 mb-32">
+                    <div className="flex flex-col items-center text-center space-y-16">
+                        <div className="space-y-6 max-w-3xl">
+                            <motion.span 
+                                initial={{ opacity: 0, y: 10 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                            >
+                                Performance Edge
+                            </motion.span>
+                            <motion.h2 
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                className="text-3xl md:text-5xl font-bold text-white tracking-tight leading-tight"
+                            >
+                                Better yet, we offer immediate transfers <br />
+                                with <span className="text-blue-400">infinitely faster uploads.</span>
+                            </motion.h2>
+                            <motion.p 
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                className="text-lg text-white/40 font-medium max-w-xl mx-auto leading-relaxed"
+                            >
+                                Ditch the cloud bottleneck. Our direct-stream technology enables instant, zero-wait sharing with absolutely no limits on size or speed.
+                            </motion.p>
+                        </div>
+
+                        {/* Video Visual - Stylized Mockup */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 40 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+                            className="w-full max-w-5xl relative rounded-2xl md:rounded-[2.5rem] overflow-hidden border border-white/10 bg-zinc-950 shadow-2xl"
                         >
-                            <div className="absolute left-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
-                            <div className="absolute right-0 top-0 bottom-0 w-px" style={{ backgroundImage: DASHED_BORDER_V, backgroundRepeat: 'repeat-y' }} />
+                            {/* Chrome-like top bar */}
+                            <div className="h-10 bg-zinc-900/50 border-b border-white/5 flex items-center px-4 gap-2">
+                                <div className="flex gap-1.5">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+                                    <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+                                    <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+                                </div>
+                                <div className="mx-auto w-1/3 h-5 bg-white/5 rounded-md" />
+                            </div>
+
+                            <div className="aspect-video relative bg-black">
+                                <video 
+                                    autoPlay 
+                                    loop 
+                                    muted 
+                                    playsInline
+                                    className="w-full h-full object-cover opacity-90"
+                                >
+                                    <source src="/demo/demo-quick-share.mp4" type="video/mp4" />
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        </motion.div>
+
+                        {/* Features Grid - Styled like Home Highlights */}
+                        <div className="w-full max-w-6xl rounded-2xl md:rounded-[2rem] border border-white/10 overflow-hidden">
+                            <HighlightFeatures className="border-t-0 bg-transparent backdrop-blur-none" />
                         </div>
                     </div>
+                </div>
 
-                <GridSectionWrapper>
-                    <div id={"desktop"} className={"pt-8"}>
-                        <DesktopSection />
-                    </div>
-                </GridSectionWrapper>
-
-                <GridSectionWrapper>
-                    <div id="waitlist" className="py-12">
-                        <JoinWaitList />
-                    </div>
-                </GridSectionWrapper>
+                {/* 4. Download Section with background4.jpg */}
+                <div className="w-full px-4 md:px-6 mt-32 mb-20 relative z-0">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        whileInView={{ opacity: 1 }}
+                        viewport={{ once: true }}
+                        className="relative w-full py-24 md:py-32 rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center text-center border border-white/10 shadow-2xl bg-zinc-950"
+                    >
+                        <div
+                            className="absolute inset-0 bg-cover bg-center z-0 opacity-30 grayscale-[0.3]"
+                            style={{ backgroundImage: 'url(/background4.jpg)' }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 z-0" />
+                        
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.2 }}
+                            className="relative z-10 max-w-3xl space-y-10"
+                        >
+                            <div className="space-y-4">
+                                <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white leading-tight">
+                                    Get the Desktop App
+                                </h2>
+                                <p className="text-xl text-white/50 font-medium max-w-xl mx-auto leading-relaxed">
+                                    The definitive way to share. Unlimited speed, total privacy, and built for your OS.
+                                </p>
+                            </div>
+                            
+                            <div className="flex flex-col items-center gap-8">
+                                <DownloadPlatforms />
+                                <div className="flex flex-wrap justify-center gap-3">
+                                    {["2× Faster Direct P2P", "Native Integration", "Always Encrypted"].map(tag => (
+                                        <span key={tag} className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-white/40 bg-white/5 border border-white/5 rounded-full backdrop-blur-md">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 </div>
             </main>
 
-            <Footer />
+            <Footer className="bg-black border-t border-white/5" />
         </div>
     );
 }

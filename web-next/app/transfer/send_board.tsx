@@ -1,20 +1,32 @@
 'use client'
 
+import React, {useEffect, useRef, useState} from "react";
+import {motion, AnimatePresence} from "motion/react";
 import {
+    Plus,
+    X,
+    Upload,
+    FileIcon,
+    Settings2,
+    Check,
+    Copy,
+    Loader2,
+    FolderIcon,
+    Folder,
+    ImageUpIcon,
+    Play
+} from 'lucide-react';
+import Image from "next/image";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuTrigger,
-    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem
 } from "@/components/animate-ui/radix/dropdown-menu";
-import {
-    Globe, ImageUpIcon, Play,
-    Users, X, Copy, Check, FolderIcon, MoreVertical, Plus,
-} from 'lucide-react'
 import {Button} from "@/components/ui/button";
-import {ChevronsUpDown} from "lucide-react";
-import * as React from "react";
-import Link from "next/link";
 import {Input} from "@/components/ui/input";
-import {MultiEmailInput} from "@/components/ui/multi-email-input";
 import {Label} from "@/components/ui/label";
+import {MultiEmailInput} from "@/components/ui/multi-email-input";
 import {
     Tooltip,
     TooltipContent,
@@ -23,91 +35,83 @@ import {
 } from "@/components/animate-ui/radix/tooltip";
 import {
     AppEventVariantTransfer,
-    LocalResourcePathVariantAbsolutePath,
-    ResourceTypeVariantFile,
-    ResourceTypeVariantImage,
-    ResourceTypeVariantVideo,
-    SelectedResourceViewModel,
     TransferEventVariantStartPublicTransfer,
-    TransferEventVariantCancelTransfer, TransferTypeVariantSend,
-    ResourceTypeVariantFolder,
+    TransferEventVariantCancelTransfer, 
+    TransferTypeVariantSend,
     ShelfEventVariantAddResources,
     AppEventVariantShelf,
-    ShelfEventVariantRemoveResource
-} from 'shared_types/types/shared_types'
+    ShelfEventVariantRemoveResource,
+    ResourceTypeVariantFolder,
+    LocalResourcePathVariantAbsolutePath,
+    ResourceTypeVariantVideo,
+    ResourceTypeVariantImage,
+    SelectedResourceViewModel
+} from 'shared_types/types/shared_types';
 import {useFileUpload} from "@/hooks/use-file-upload";
-import {useEffect, useRef, useState} from "react";
 import core from "@/wasm/wasm_core";
-import {useIsMobile} from "@/hooks/use-mobile";
-import Image from "next/image";
-import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
-import {
-    SidebarProvider,
-    SidebarInset,
-    SidebarTrigger,
-    Sidebar,
-    SidebarHeader,
-    SidebarContent,
-    SidebarRail,
-    SidebarMenu,
-    SidebarMenuItem,
-    SidebarMenuButton,
-    useSidebar,
-} from '@/components/animate-ui/components/radix/sidebar';
-import {Separator} from '@/components/ui/separator';
-import {Card} from "@/components/ui/card.tsx";
 import {formatFileSize} from "@/utils/format-file-size";
+import {Progress, ProgressTrack} from "@/components/animate-ui/base/progress";
 
-enum TransferType {
-    Public,
-    People
-}
+function ResourceView({ resource, onRemove, isRemoveAllowed }: { resource: SelectedResourceViewModel, onRemove: (id: number) => void, isRemoveAllowed: boolean }) {
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+    const isVideo = resource.type instanceof ResourceTypeVariantVideo;
+    const isImage = resource.type instanceof ResourceTypeVariantImage;
+    const isFolder = resource.type instanceof ResourceTypeVariantFolder;
 
-const activeMethods = [
-    {
-        name: 'Cloud',
-        icon: Globe,
-        type: TransferType.Public
-    },
-    {
-        name: 'P2P',
-        icon: Users,
-        type: TransferType.People
-    },
-]
+    useEffect(() => {
+        if ((isVideo || isImage) && resource.thumbnail_path) {
+            core.getDownloadUrl(resource.thumbnail_path).then((url) => {
+                if (url) setThumbnailUrl(url);
+            });
+        } else if (resource.thumbnail_path instanceof LocalResourcePathVariantAbsolutePath) {
+            setThumbnailUrl(resource.thumbnail_path.value);
+        }
+    }, [resource.thumbnail_path, isVideo, isImage]);
 
-export default function SendBoard() {
-    const [activeMethod, setActiveMethod] = React.useState(activeMethods[0])
+    const displayThumbnail = thumbnailUrl || (isFolder ? "/folder.svg" : "/file.svg");
 
     return (
-        <div className="rounded-xl border-1 overflow-hidden max-h-[70vh] sm:max-h-[80vh] min-h-[450px] h-[950px]">
-            <SidebarProvider className="h-[100%]">
-                <Sidebar collapsible="icon"
-                         className="h-full bg-card overflow-hidden border-1 border-muted rounded-xl mb-1">
-                    <SidebarHeader className="rounded-tl-xl">
-                        <TransferMethodSelector activeMethod={activeMethod} onActiveMethodChange={setActiveMethod}/>
-                    </SidebarHeader>
-                    <SidebarContentWrapper activeMethod={activeMethod}/>
-                    <SidebarRail/>
-                </Sidebar>
-                <SidebarInset className="flex flex-col h-[100%] min-h-0">
-                    <header
-                        className="flex h-10 md:h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                        <div className="flex items-center gap-2 px-4">
-                            <SidebarTrigger className="-ml-1"/>
-                            <Separator orientation="vertical" className="mr-2 h-4"/>
-                        </div>
-                    </header>
-                    <div className="flex flex-1 flex-col min-h-0 px-2 pt-0">
-                        <FileSelections/>
+        <motion.div 
+            layout
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="aspect-square rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 flex flex-col items-center justify-center gap-3 relative group overflow-hidden"
+        >
+            {isRemoveAllowed && (
+                <button 
+                    onClick={() => onRemove(Number(resource.order_id))}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-white/40 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500 transition-all z-10"
+                >
+                    <X className="w-3 h-3" />
+                </button>
+            )}
+
+            <div className="w-full h-full absolute inset-0 flex items-center justify-center">
+                <Image 
+                    src={displayThumbnail} 
+                    alt={resource.name} 
+                    fill 
+                    className={`${thumbnailUrl ? 'object-cover' : 'object-contain p-8'} opacity-60 group-hover:opacity-80 transition-opacity`}
+                />
+            </div>
+
+            {isVideo && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                    <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center">
+                        <Play className="w-4 h-4 text-white fill-white" />
                     </div>
-                </SidebarInset>
-            </SidebarProvider>
-        </div>
+                </div>
+            )}
+
+            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                <p className="text-white text-[11px] font-bold truncate">{resource.name}</p>
+                <p className="text-white/40 text-[9px] font-bold">{formatFileSize(resource)}</p>
+            </div>
+        </motion.div>
     );
 }
 
-function FileSelections() {
+export default function SendBoard() {
     const [
         {files, folders, isDragging, supportsDirectories},
         {
@@ -131,6 +135,16 @@ function FileSelections() {
     const selectedResources = core.useSelectedResources()
     const defaultShelfId = core.useDefaultShelfId()
     const isResourceRemoveAllowed = core.useShelfRemoveResourceAllow()
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+    const [password, setPassword] = useState('')
+    const [emails, setEmails] = useState<string[]>([])
+
+    const cloudSession = core.useCloudSession(defaultShelfId)
+    const [isInProgress, setIsInProgress] = useState(false)
+    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
+    const progress = (cloudSession?.progress ?? 0) * 100
+    const cloudRef = useRef(cloudSession)
+    cloudRef.current = cloudSession
 
     useEffect(() => {
         if (!defaultShelfId) return
@@ -158,495 +172,6 @@ function FileSelections() {
         }
     }, [files, folders, defaultShelfId]);
 
-    const isMobile = useIsMobile();
-
-    return (
-        <div className="flex flex-col w-full h-full">
-            {/* Resource Selection Area */}
-            {isMobile ? (
-                // Mobile: Dropdown Button (only show when resources exist)
-                selectedResources.length > 0 && (
-                    <div className="relative w-full flex-shrink-0 h-[50px]">
-                        <input {...getInputProps()} className="sr-only" aria-label="Upload files"/>
-                        <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder"/>
-                        <div className="absolute top-2 right-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        size="sm"
-                                        className="h-8 w-8 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
-                                    >
-                                        <Plus className="h-4 w-4"/>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        onClick={openFileDialog}
-                                    >
-                                        <ImageUpIcon className="w-4 h-4 mr-2"/>
-                                        <span>Select file</span>
-                                    </DropdownMenuItem>
-                                    {supportsDirectories && (
-                                        <DropdownMenuItem
-                                            onClick={openDirectoryDialog}
-                                        >
-                                            <FolderIcon className="w-4 h-4 mr-2"/>
-                                            <span>Select folder</span>
-                                        </DropdownMenuItem>
-                                    )}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-                )
-            ) : (
-                // Desktop: Two separate drop zones
-                <div className="flex gap-2 w-full flex-shrink-0 h-32 md:h-50">
-                    <div
-                        role="button"
-                        onClick={openFileDialog}
-                        onDragEnter={handleDragEnter}
-                        onDragLeave={handleDragLeave}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                        data-dragging={isDragging || undefined}
-                        className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
-                    >
-                        <input {...getInputProps()} className="sr-only" aria-label="Upload files"/>
-                        <ImageUpIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                        <p className="text-sm font-medium">Drop files or browse</p>
-                    </div>
-
-                    {supportsDirectories && (
-                        <div
-                            role="button"
-                            onClick={openDirectoryDialog}
-                            onDragEnter={handleDragEnter}
-                            onDragLeave={handleDragLeave}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                            data-dragging={isDragging || undefined}
-                            className="w-1/3 flex flex-col items-center justify-center border border-dashed rounded-xl transition-colors cursor-pointer hover:bg-muted-foreground/10 data-[dragging=true]:bg-muted-foreground/10 h-full"
-                        >
-                            <input
-                                {...getDirectoryInputProps()}
-                                className="sr-only"
-                                aria-label="Upload folder"
-                            />
-                            <FolderIcon className="size-4 opacity-60 mb-2" aria-hidden="true"/>
-                            <p className="text-sm font-medium">Drop folders or browse</p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            <div className="h-fit max-h-[95%] overflow-y-auto overflow-x-hidden w-full">
-                <div
-                    className="sticky top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"/>
-
-                {/* Resource grid - single column on mobile, grid on desktop */}
-                {selectedResources.length === 0 ? (
-                    <div
-                        className="flex flex-col items-center justify-center min-h-[200px] text-muted-foreground/50 gap-4">
-                        <p className="text-lg font-medium">No selected resources</p>
-                        {isMobile ? (
-                            <>
-                                <input {...getInputProps()} className="sr-only" aria-label="Upload files"/>
-                                <input {...getDirectoryInputProps()} className="sr-only" aria-label="Upload folder"/>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            size="sm"
-                                            className="h-10 w-10 rounded-full bg-bluePrimary text-primaryText hover:bg-bluePrimary/90 p-0"
-                                        >
-                                            <Plus className="h-5 w-5"/>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="center">
-                                        <DropdownMenuItem
-                                            onClick={openFileDialog}
-                                        >
-                                            <ImageUpIcon className="w-4 h-4 mr-2"/>
-                                            <span>Select file</span>
-                                        </DropdownMenuItem>
-                                        {supportsDirectories && (
-                                            <DropdownMenuItem
-                                                onClick={openDirectoryDialog}
-                                            >
-                                                <FolderIcon className="w-4 h-4 mr-2"/>
-                                                <span>Select folder</span>
-                                            </DropdownMenuItem>
-                                        )}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </>
-                        ) : null}
-                    </div>
-                ) : (
-                    <div className="flex flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 p-2 md:px-1">
-                        {selectedResources.map((resource) => (
-                            <div className="md:h-[230px] flex items-start flex-row" key={resource.order_id}>
-                                <ResourceView model={resource} shelfId={defaultShelfId}
-                                              isRemoveAllowed={isResourceRemoveAllowed}/>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {selectedResources.length > 0 && <div className="h-[50px] sm:h-[80px]"></div>}
-            </div>
-        </div>
-    )
-}
-
-
-function ResourceView(props: {
-    model: SelectedResourceViewModel,
-    shelfId: string | undefined,
-    isRemoveAllowed: boolean
-}) {
-    const {model, shelfId, isRemoveAllowed} = props;
-
-    const isFile = model.type.constructor == ResourceTypeVariantFile ||
-        model.type.constructor == ResourceTypeVariantFolder
-
-    if (isFile) {
-        return <FileView model={model} shelfId={shelfId} isRemoveAllowed={isRemoveAllowed}/>
-    } else {
-        return <MediaView model={model} shelfId={shelfId} isRemoveAllowed={isRemoveAllowed}/>
-    }
-}
-
-function FileView(props: {
-    model: SelectedResourceViewModel,
-    shelfId: string | undefined,
-    isRemoveAllowed: boolean
-}) {
-    const {model, shelfId, isRemoveAllowed} = props;
-    const isMobile = useIsMobile();
-
-    let thumbnailPath = (model.thumbnail_path as LocalResourcePathVariantAbsolutePath)?.value;
-    const isFolder = model.type instanceof ResourceTypeVariantFolder;
-    if (!thumbnailPath) {
-        thumbnailPath = isFolder ? "/folder.svg" : "/file.svg";
-    }
-
-    const displaySize = formatFileSize(model);
-
-    const handleRemove = async () => {
-        if (!isRemoveAllowed || !shelfId) return;
-        await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(shelfId), BigInt(model.order_id))))
-    }
-
-    if (isMobile) {
-        return (
-            <div
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
-                {/* Thumbnail */}
-                <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded-md bg-muted">
-                    <Image
-                        className="w-6 h-6 object-contain opacity-70"
-                        width={24}
-                        height={24}
-                        alt={model.name}
-                        src={thumbnailPath}
-                    />
-                </div>
-
-                {/* File info */}
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground">
-                        {model.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        {displaySize}
-                    </p>
-                </div>
-
-                {/* Actions */}
-                {isRemoveAllowed && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 shrink-0">
-                                <MoreVertical className="h-4 w-4"/>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onClick={handleRemove}
-                                variant="destructive"
-                                className="text-destructive"
-                            >
-                                <X className="w-4 h-4"/>
-                                <span>Remove</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-            </div>
-        );
-    }
-
-    return (
-        <div
-            className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
-            {/* Thumbnail */}
-            <div className="flex-1 flex items-center justify-center p-6 bg-muted/30 relative">
-                <Image
-                    className="w-16 h-16 object-contain opacity-70"
-                    width={64}
-                    height={64}
-                    alt={model.name}
-                    src={thumbnailPath}
-                />
-
-                {/* Remove button - shows on hover */}
-                {isRemoveAllowed && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={handleRemove}>
-                        <X className="h-3.5 w-3.5"/>
-                    </Button>
-                )}
-            </div>
-
-            {/* File info */}
-            <div className="p-3 border-t border-border">
-                <p className="text-sm font-medium truncate text-foreground mb-1">
-                    {model.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                    {displaySize}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-function MediaView(props: {
-    model: SelectedResourceViewModel,
-    shelfId: string | undefined,
-    isRemoveAllowed: boolean
-}) {
-    const {model, shelfId, isRemoveAllowed} = props;
-
-    const isMobile = useIsMobile()
-    const isVideo = model.type.constructor == ResourceTypeVariantVideo
-    const isImage = model.type.constructor == ResourceTypeVariantImage
-
-    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
-
-    useEffect(() => {
-        if ((isVideo || isImage) && model.thumbnail_path) {
-            core.getDownloadUrl(model.thumbnail_path).then((it) => {
-                if (it) {
-                    setThumbnailUrl(it)
-                }
-            })
-        }
-    }, []);
-
-    const displaySize = formatFileSize(model);
-
-    const handleRemove = () => {
-        if (!isRemoveAllowed || !shelfId) return;
-        core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(BigInt(shelfId), BigInt(model.order_id))))
-    }
-
-    if (isMobile) {
-        return (
-            <div
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
-                {/* Thumbnail */}
-                <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-muted relative">
-                    {thumbnailUrl ? (
-                        <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <ImageUpIcon className="w-5 h-5 opacity-40"/>
-                        </div>
-                    )}
-                    {isVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                            <Play className="w-3 h-3 text-white fill-white"/>
-                        </div>
-                    )}
-                </div>
-
-                {/* File info */}
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground">
-                        {model.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        {displaySize}
-                    </p>
-                </div>
-
-                {/* Actions */}
-                {isRemoveAllowed && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 shrink-0">
-                                <MoreVertical className="h-4 w-4"/>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onClick={handleRemove}
-                                variant="destructive"
-                                className="text-destructive"
-                            >
-                                <X className="w-4 h-4"/>
-                                <span>Remove</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-            </div>
-        );
-    }
-
-    return (
-        <div
-            className="w-full h-full flex flex-col rounded-lg border border-border bg-card overflow-hidden group hover:border-foreground/20 transition-colors">
-            {/* Thumbnail */}
-            <div className="flex-1 relative bg-muted/30">
-                {thumbnailUrl ? (
-                    <Image className="w-full h-full object-cover" fill src={thumbnailUrl} alt={model.name}/>
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <ImageUpIcon className="w-12 h-12 opacity-20"/>
-                    </div>
-                )}
-
-                {/* Video play icon */}
-                {isVideo && (
-                    <div className="absolute top-2 left-2 bg-black/60 rounded-full p-1.5">
-                        <Play className="w-3 h-3 text-white fill-white"/>
-                    </div>
-                )}
-
-                {/* Remove button - shows on hover */}
-                {isRemoveAllowed && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-destructive rounded-md text-white"
-                        onClick={handleRemove}>
-                        <X className="h-3.5 w-3.5"/>
-                    </Button>
-                )}
-            </div>
-
-            {/* File info */}
-            <div className="p-3 border-t border-border">
-                <p className="text-sm font-medium truncate text-foreground mb-1">
-                    {model.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                    {displaySize}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-function TransferMethodSelector({activeMethod, onActiveMethodChange}: {
-    activeMethod: typeof activeMethods[0],
-    onActiveMethodChange: (method: typeof activeMethods[0]) => void
-}) {
-    const isMobile = useIsMobile();
-
-    return (
-        <SidebarMenu>
-            <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton
-                            size="lg"
-                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                        >
-                            <div
-                                className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                                <activeMethod.icon className="size-4"/>
-                            </div>
-                            <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">
-                                    {activeMethod.name}
-                                </span>
-                            </div>
-                            <ChevronsUpDown className="ml-auto"/>
-                        </SidebarMenuButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                        align="start"
-                        side={isMobile ? 'bottom' : 'right'}
-                        sideOffset={4}
-                    >
-                        {activeMethods.map((method) => (
-                            <DropdownMenuCheckboxItem
-                                key={method.name}
-                                checked={activeMethod === method}
-                                onCheckedChange={() => onActiveMethodChange(method)}
-                                className="gap-2 p-2"
-                            >
-                                <method.icon className="size-4"/>
-                                {method.name}
-                            </DropdownMenuCheckboxItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </SidebarMenuItem>
-        </SidebarMenu>
-    );
-}
-
-function SidebarContentWrapper({activeMethod}: { activeMethod: typeof activeMethods[0] }) {
-    const {state} = useSidebar();
-
-    if (state === 'collapsed') {
-        return null;
-    }
-
-    return (
-        <SidebarContent className="rounded-bl-xl px-1">
-            <TransferForm activeMethod={activeMethod}/>
-        </SidebarContent>
-    );
-}
-
-function TransferForm({activeMethod}: { activeMethod: typeof activeMethods[0] }) {
-    const content = activeMethod.type === TransferType.Public
-        ? <PublicSend/>
-        : <P2PSend/>
-
-    return (
-        <div className={"px-2 flex flex-col items-center justify-center pt-5 h-fit h-full items-start justify-start"}>
-            {content}
-        </div>
-    )
-}
-
-function PublicSend() {
-    const [password, setPassword] = useState('')
-    const [emails, setEmails] = React.useState<string[]>([])
-    const defaultShelfId = core.useDefaultShelfId()
-    const cloudSession = core.useCloudSession(defaultShelfId)
-    const [isInProgressDefer, setIsInProgressDefer] = useState(false)
-    const [isInProgress, setIsInProgress] = useState(false)
-    const progress = (cloudSession?.progress ?? 0) * 100
-    const cloudRef = useRef(cloudSession)
-    cloudRef.current = cloudSession
-
     useEffect(() => {
         if (cloudSession?.is_in_progress) {
             setIsInProgress(true)
@@ -659,90 +184,369 @@ function PublicSend() {
                 }
             }, 2000)
         }
-    }, [cloudSession?.is_in_progress])
+    }, [cloudSession?.is_in_progress]);
 
-    return <div className={"flex flex-col w-full h-full items-center gap-10 justify-between mt-1"}>
-        <div className={"flex flex-col w-full gap-3 justify-between h-fit"}>
-            <p className="text-start w-full text-primaryText/70 text-sm">
-                Create a shareable link or send files by email. Stored for 7 days, with optional password protection.
-            </p>
+    const handleUpload = () => {
+        if (defaultShelfId) {
+            core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(
+                BigInt(defaultShelfId), 
+                password || null, 
+                emails
+            )));
+        }
+    };
 
-            <div className={"flex flex-col w-full gap-3"}>
-                <Label htmlFor={"emails"}>Send to emails (optional)</Label>
-                <MultiEmailInput
-                    emails={emails}
-                    onEmailsChange={setEmails}
-                    placeholder="Enter email addresses..."
-                    maxEmails={10}
-                    disabled={isInProgress}
-                />
-                <Label htmlFor={"password"}>Password (optional)</Label>
-                <Input id={"password"} disabled={isInProgress} value={password}
-                       onChange={(it) => setPassword(it.target.value)}
-                       type={"password"} maxLength={20} placeholder={"pwd@123"}/>
-                {
-                    cloudSession?.access_url &&
-                    <>
-                        <Label>Generated url</Label>
-                        <UrlInputWithCopy url={cloudSession?.access_url ?? ''}/>
-                    </>
-                }
-                {
-                    isInProgressDefer
-                    && <div className={"flex flex-col w-full gap-2"}>
-                        <Progress value={progress} className="w-full space-y-2">
-                            <div className="flex items-center justify-between gap-1">
-                                <span className="text-sm">
-                                    {cloudSession?.display_download_speed}
-                                </span>
+    const handleRemove = async (orderId: number) => {
+        if (defaultShelfId && isResourceRemoveAllowed) {
+            await core.update(new AppEventVariantShelf(new ShelfEventVariantRemoveResource(
+                BigInt(defaultShelfId), 
+                BigInt(orderId)
+            )));
+        }
+    };
+
+    const headerRef = useRef<HTMLDivElement>(null);
+
+    const scrollToTop = (e: React.MouseEvent) => {
+        e.preventDefault();
+        headerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    return (
+        <div 
+            className="w-full h-full flex flex-col items-center justify-between min-h-[60vh] relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            <input {...getInputProps()} className="sr-only" />
+            <input {...getDirectoryInputProps()} className="sr-only" />
+            
+            {/* Drag Overlay - Full Page Blur Integrated Design */}
+            <AnimatePresence>
+                {isDragging && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[2000] bg-black/20 backdrop-blur-2xl flex flex-col items-center justify-center pointer-events-none"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="flex flex-col items-center gap-6"
+                        >
+                            <div className="w-24 h-24 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                <Upload className="w-10 h-10 text-white" />
                             </div>
-                            <ProgressTrack/>
-                        </Progress>
-                    </div>
-                }
-                {
-                    isInProgress &&
-                    <Button className="mt-2 w-fit h-[35px] bg-muted-foreground text-primary" onClick={() => {
-                        if (cloudSession?.is_in_progress) {
-                            core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(BigInt(cloudSession.session_id), new TransferTypeVariantSend(BigInt(defaultShelfId || 0)))))
-                        }
-                    }}>Cancel</Button>
-                }
-                {
-                    !cloudSession && defaultShelfId &&
-                    <Button className="w-fit h-[35px] bg-bluePrimary text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(BigInt(defaultShelfId || 0), password || null, emails)))
-                    }}>
-                        {emails.length > 0
-                            ? `Send to ${emails.length} recipient${emails.length > 1 ? 's' : ''}`
-                            : 'Upload'}
-                    </Button>
-                }
-                {
-                    cloudSession?.is_completed &&
-                    <Button className="w-fit h-[35px] bg-greenSecondary/40 text-primary" onClick={() => {
-                        core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
-                            BigInt(cloudSession?.session_id),
-                            new TransferTypeVariantSend(BigInt(defaultShelfId || 0))
-                        )))
-                    }}>Continue</Button>
-                }
-            </div>
-        </div>
-        <div className="w-full h-fit mb-4">
-            <div className="bg-card flex flex-col gap-2 px-2 items-center text-center">
-                <p className="text-sm text-primaryText/80">
-                    2× faster. No upload. Instant URL generation.
+                            <h2 className="text-white text-3xl font-bold tracking-tight">Drop to transfer</h2>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 1. Header Text */}
+            <motion.div 
+                ref={headerRef}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center space-y-4 mb-8"
+            >
+                <h1 className="text-4xl md:text-7xl font-bold text-white tracking-tight leading-[1.1]">
+                    Big transfers, <br />
+                    <span className="opacity-40">bigger impact.</span>
+                </h1>
+                <p className="text-white/60 text-lg md:text-xl max-w-2xl font-medium">
+                    The simplest way to send big ideas around the world.
                 </p>
-                <Link
-                    href="#desktop"
-                    className="text-blue-300 text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+            </motion.div>
+
+            {/* 2. Central Interaction Area */}
+            <div className="relative w-full flex-1 flex flex-col items-center justify-center mb-24">
+                <AnimatePresence mode="wait">
+                    {selectedResources.length === 0 ? (
+                        /* Empty State: Central Add Files/Folders Button */
+                        <div className="relative aspect-square flex items-center justify-center p-8 md:p-24 max-w-[95vw] max-h-[75vh] group/orbit">
+                            {/* The Satisfy Hexagon Orbit (720° Interior Sum) - Dashed Border Only */}
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                                <svg 
+                                    className="w-full h-full animate-[spin_80s_linear_infinite] overflow-visible opacity-40" 
+                                    viewBox="0 0 100 100"
+                                >
+                                    <polygon 
+                                        points="50 2, 91.5 26, 91.5 74, 50 98, 8.5 74, 8.5 26" 
+                                        fill="none" 
+                                        stroke="white" 
+                                        strokeWidth="0.15" 
+                                        strokeDasharray="0.8 1.2"
+                                        className="group-hover/orbit:stroke-white/60 transition-colors duration-1000"
+                                    />
+                                </svg>
+                            </div>
+                            
+                            {/* Inner Content with Rhythmic Spacing */}
+                            <div className="flex flex-col md:flex-row gap-12 items-center justify-center relative z-10">
+                                <motion.div
+                                    key="empty-files"
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    className="relative group/card cursor-pointer"
+                                    onClick={openFileDialog}
+                                >
+                                    <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-[24px] bg-white/10 backdrop-blur-3xl border border-white/10 flex flex-col items-center justify-center gap-6 transition-all duration-500 group-hover/card:bg-white/15 group-hover/card:scale-105 group-hover/card:border-white/20 shadow-2xl overflow-hidden">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+                                        <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg group-hover/card:rotate-90 transition-transform duration-700">
+                                            <Plus className="w-8 h-8 text-[#555e68]" />
+                                        </div>
+                                        <div className="text-center px-4">
+                                            <p className="text-white font-bold text-lg tracking-tight">Browse or Drop files</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+
+                                {supportsDirectories && (
+                                    <motion.div
+                                        key="empty-folders"
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        transition={{ delay: 0.1 }}
+                                        className="relative group/card cursor-pointer"
+                                        onClick={openDirectoryDialog}
+                                    >
+                                        <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-[24px] bg-white/5 backdrop-blur-2xl border border-white/5 flex flex-col items-center justify-center gap-6 transition-all duration-500 group-hover/card:bg-white/10 group-hover/card:scale-105 group-hover/card:border-white/15 shadow-2xl overflow-hidden">
+                                            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+                                            <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center shadow-lg group-hover/card:scale-110 transition-transform duration-700 border border-white/10">
+                                                <FolderIcon className="w-8 h-8 text-white/60" />
+                                            </div>
+                                            <div className="text-center px-4">
+                                                <p className="text-white/80 font-bold text-lg tracking-tight">Browse or Drop folders</p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        /* Files State: Grid of selected resources */
+                        <motion.div
+                            key="files"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-4 p-4"
+                        >
+                            {selectedResources.map((resource) => (
+                                <ResourceView 
+                                    key={resource.order_id} 
+                                    resource={resource} 
+                                    onRemove={handleRemove} 
+                                    isRemoveAllowed={isResourceRemoveAllowed}
+                                />
+                            ))}
+                            
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        className="aspect-square rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center gap-2 hover:bg-white/5 transition-colors"
+                                    >
+                                        <Plus className="w-6 h-6 text-white/40" />
+                                        <span className="text-white/40 text-[10px] font-bold uppercase">Add more</span>
+                                    </motion.button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center" className="bg-zinc-900 border-white/10 text-white min-w-[160px] p-2 rounded-xl">
+                                    <DropdownMenuItem 
+                                        onClick={openFileDialog}
+                                        className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
+                                    >
+                                        <FileIcon className="w-4 h-4 text-white/60" />
+                                        <span className="font-bold text-xs uppercase tracking-wider">Add Files</span>
+                                    </DropdownMenuItem>
+                                    {supportsDirectories && (
+                                        <DropdownMenuItem 
+                                            onClick={openDirectoryDialog}
+                                            className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
+                                        >
+                                            <FolderIcon className="w-4 h-4 text-white/60" />
+                                            <span className="font-bold text-xs uppercase tracking-wider">Add Folder</span>
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* 3. Floating Control Bar */}
+            <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[999] flex flex-col items-center gap-4">
+                
+                <AnimatePresence>
+                    {(isInProgressDefer || cloudSession?.access_url) && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="w-[320px] md:w-[450px] p-4 rounded-2xl bg-zinc-900 border border-white/10 shadow-2xl backdrop-blur-xl"
+                        >
+                            {isInProgressDefer && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-blue-400">
+                                        <span>{cloudSession?.display_download_speed || 'Uploading to cloud'}</span>
+                                        <span>{Math.round(progress)}%</span>
+                                    </div>
+                                    <Progress value={progress} className="h-1.5 bg-white/5">
+                                        <ProgressTrack className="bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                                    </Progress>
+                                    {isInProgress && (
+                                        <Button 
+                                            size="sm"
+                                            variant="ghost"
+                                            className="w-full mt-2 h-8 text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5"
+                                            onClick={() => {
+                                                if (cloudSession?.is_in_progress && defaultShelfId) {
+                                                    core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                                                        BigInt(cloudSession.session_id), 
+                                                        new TransferTypeVariantSend(BigInt(defaultShelfId))
+                                                    )))
+                                                }
+                                            }}
+                                        >
+                                            Cancel Transfer
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+                            {cloudSession?.access_url && (
+                                <div className={`flex items-center gap-3 ${isInProgressDefer ? 'mt-4 border-t border-white/5 pt-4' : ''}`}>
+                                    <UrlInputWithCopy url={cloudSession.access_url} />
+                                    <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        onClick={() => {
+                                            if (defaultShelfId) {
+                                                core.update(new AppEventVariantTransfer(new TransferEventVariantCancelTransfer(
+                                                    BigInt(cloudSession.session_id),
+                                                    new TransferTypeVariantSend(BigInt(defaultShelfId))
+                                                )))
+                                            }
+                                        }}
+                                        className="h-10 w-10 rounded-xl hover:bg-white/5 text-white/40"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center p-2 rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/20 shadow-2xl"
                 >
-                    Download Desktop App
-                </Link>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                                    className={`h-12 w-12 rounded-xl transition-all ${isSettingsOpen ? 'bg-white text-zinc-900' : 'text-white hover:bg-white/10'}`}
+                                >
+                                    <Settings2 className="w-5 h-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="bg-zinc-900 border-white/10 text-white font-bold text-[10px] uppercase">
+                                More options
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+
+                    {/* Stats with Review Button */}
+                    <div className="px-4 py-2 flex flex-col justify-center items-center">
+                        <span className="text-white font-bold text-sm leading-none">
+                            {selectedResources.length} {selectedResources.length === 1 ? 'file' : 'files'}
+                        </span>
+                        <button 
+                            disabled={selectedResources.length === 0}
+                            onClick={scrollToTop}
+                            className="text-[9px] font-bold uppercase tracking-wider mt-1.5 transition-all disabled:text-white/20 text-blue-400 hover:text-blue-300 active:scale-95 underline decoration-blue-400/30 hover:decoration-blue-400 underline-offset-4"
+                        >
+                            {selectedResources.length > 0 ? 'Review' : 'Selected'}
+                        </button>
+                    </div>
+
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+
+                    <Button 
+                        disabled={selectedResources.length === 0 || isInProgress}
+                        onClick={handleUpload}
+                        className="h-12 px-6 rounded-xl bg-white text-zinc-900 hover:bg-zinc-200 font-bold transition-all disabled:opacity-50 disabled:bg-white/20 group"
+                    >
+                        {isInProgress ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                            <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
+                        )}
+                        {isInProgress ? 'Transferring...' : 'Send Files'}
+                    </Button>
+                </motion.div>
+
+                <AnimatePresence>
+                    {isSettingsOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            className="absolute bottom-[110%] w-[320px] md:w-[400px] p-6 rounded-[32px] bg-card border border-white/10 shadow-3xl overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
+                            
+                            <div className="relative space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-white font-bold tracking-tight">More options</h3>
+                                    <button onClick={() => setIsSettingsOpen(false)} className="text-white/40 hover:text-white transition-colors">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-white/40 ml-1">Send to emails</Label>
+                                        <MultiEmailInput
+                                            emails={emails}
+                                            onEmailsChange={setEmails}
+                                            placeholder="recipient@example.com"
+                                            maxEmails={10}
+                                            className="bg-white/5 border-white/10 rounded-xl"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-white/40 ml-1">Secure Password</Label>
+                                        <Input 
+                                            type="password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="bg-white/5 border-white/10 rounded-xl h-12 focus:border-blue-500/50"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
-    </div>
+    );
 }
 
 function UrlInputWithCopy({url}: { url: string }) {
@@ -766,69 +570,24 @@ function UrlInputWithCopy({url}: { url: string }) {
     }, [url])
 
     return (
-        <TooltipProvider>
-            <div className="relative animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Input
-                            ref={inputRef}
-                            value={url}
-                            disabled={true}
-                            className="pr-12 cursor-default bg-slate-900 text-white border-3 border-indigo-400 rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                        />
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="top"
-                        className="max-w-xs break-all"
-                    >
-                        {url}
-                    </TooltipContent>
-                </Tooltip>
-                <button
-                    onClick={handleCopy}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    title={isCopied ? "Copied!" : "Copy to clipboard"}
-                >
-                    {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500"/>
-                    ) : (
-                        <Copy className="h-4 w-4 text-white/80 hover:text-white"/>
-                    )}
-                </button>
-            </div>
-        </TooltipProvider>
-    )
-}
-
-function P2PSend() {
-    return (
-        <div className="flex flex-col w-full h-full gap-6 justify-center items-center">
-            <div className="flex flex-col gap-4 text-center">
-                <div className="flex justify-center">
-                    <div className="p-4 rounded-full bg-bluePrimary/10">
-                        <Users className="w-8 h-8 text-bluePrimary"/>
-                    </div>
-                </div>
-                <h3 className="text-lg font-semibold text-primaryText">
-                    P2P Transfer
-                </h3>
-                <p className="text-sm text-primaryText/70 max-w-[280px]">
-                    Transfer files directly without uploading to any cloud. Fast, private, and secure.
-                </p>
-            </div>
-            <div className="w-full rounded-xl shadow-lg">
-                <Card className="p-3 bg-card rounded-[10px] flex flex-col gap-4 items-center text-center">
-                    <p className="text-sm text-primaryText/80">
-                        P2P transfer is currently available on Desktop only.
-                    </p>
-                    <Link
-                        href="#desktop"
-                        className="py-2 w-full items-center bg-bluePrimary text-sm font-medium text-white rounded-lg hover:opacity-90 transition-opacity text-center"
-                    >
-                        Download Desktop App
-                    </Link>
-                </Card>
-            </div>
+        <div className="flex-1 relative">
+            <Input
+                ref={inputRef}
+                value={url}
+                readOnly
+                className="pr-12 cursor-default bg-black/40 text-white border-white/10 rounded-xl h-10 shadow-inner text-xs"
+            />
+            <button
+                onClick={handleCopy}
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                title={isCopied ? "Copied!" : "Copy to clipboard"}
+            >
+                {isCopied ? (
+                    <Check className="h-3.5 w-3.5 text-green-400"/>
+                ) : (
+                    <Copy className="h-3.5 w-3.5 text-white/40 hover:text-white"/>
+                )}
+            </button>
         </div>
     )
 }

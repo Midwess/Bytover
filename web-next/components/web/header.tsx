@@ -70,17 +70,16 @@ export default function Header({ className, isFullWidth, theme = 'dark' }: { cla
             <div ref={sentinelRef} className="absolute top-0 left-0 w-full h-px pointer-events-none" />
 
             <div
-                className={`fixed top-0 left-0 right-0 z-100 flex justify-center w-full transition-all duration-500 pt-4 md:pt-6 px-4 md:px-6`}>
-                <div className={cn(
-                    "flex justify-between items-center w-full px-4 md:px-6 h-16 md:h-20 transition-all duration-500 rounded-xl md:rounded-2xl",
-                    isFullWidth ? "container" : "container",
+                className={cn(
+                    "fixed top-0 left-0 right-0 z-[100] w-full transition-all duration-500 border-b",
                     isScrolled 
                         ? (isLight 
-                            ? "bg-white/80 backdrop-blur-xl border border-zinc-200 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.1)]" 
-                            : "bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)]")
-                        : "bg-transparent border border-transparent",
+                            ? "bg-white border-zinc-200 shadow-none" 
+                            : "bg-black border-white/10 shadow-none")
+                        : "bg-transparent border-transparent",
                     className
                 )}>
+                <div className="flex justify-between items-center w-full px-4 md:px-8 h-16 md:h-20">
                     <div className="flex items-center gap-8">
                         <Link href="/" className="flex items-center group">
                             <img
