@@ -1,6 +1,5 @@
 'use client'
 import React from 'react';
-import { GitHubStarsButton } from '@/components/animate-ui/buttons/github-stars'
 import { getAssetUrl } from '@/utils/asset-url';
 import { Loader2 } from "lucide-react";
 import {
@@ -129,11 +128,6 @@ export default function Header({ className, isFullWidth, theme = 'dark' }: { cla
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <GitHubStarsButton className={cn(
-                            "hidden lg:flex text-xs h-9",
-                            isLight ? "bg-white border-zinc-200 text-zinc-600" : "bg-zinc-900 border-zinc-800 text-zinc-400"
-                        )} username="Dev-log" repo="animate-ui" />
-                        
                         {isSignedIn ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
