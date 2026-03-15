@@ -222,13 +222,26 @@ export default function SendBoard() {
             {/* Drag Overlay - Full Page Blur Integrated Design */}
             <AnimatePresence>
                 {isDragging && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[2000] bg-black/20 backdrop-blur-2xl flex flex-col items-center justify-center pointer-events-none"
+                        onDragEnter={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                        }}
+                        onDragOver={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                        }}
+                        onDrop={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleDrop(e)
+                        }}
+                        className="fixed inset-0 z-[2000] bg-black/20 backdrop-blur-2xl flex flex-col items-center justify-center"
                     >
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             className="flex flex-col items-center gap-6"
