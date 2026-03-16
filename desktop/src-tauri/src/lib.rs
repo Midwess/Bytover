@@ -55,6 +55,13 @@ static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::
 static INTRO_SHOWN: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 
 #[tauri::command]
+async fn get_resource_path(app_handle: AppHandle, path: String) -> Result<String, String> {
+    app_handle.path().resolve(&path, tauri::path::BaseDirectory::Resource)
+        .map(|p: std::path::PathBuf| p.to_string_lossy().to_string())
+        .map_err(|e: tauri::Error| e.to_string())
+}
+
+#[tauri::command]
 async fn hide_intro(app_handle: AppHandle) {
     app_handle.hide_intro();
 }
@@ -363,6 +370,14 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 }
 
 fn render(view: AppViewModel, app_handle: AppHandle) {
+    // TODO remove: always show intro first every time application turn on
+    if let Ok(mut intro_shown) = INTRO_SHOWN.lock() {
+        if !*intro_shown {
+            app_handle.show_intro();
+            *intro_shown = true;
+        }
+    }
+
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
     if !is_authorized {
         #[cfg(target_os = "macos")]
@@ -375,13 +390,6 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
         app_handle.hide_auth();
 
-        if let Ok(mut intro_shown) = INTRO_SHOWN.lock() {
-            if !*intro_shown {
-                app_handle.show_intro();
-                *intro_shown = true;
-            }
-        }
-
         if let Some(shelf_view) = &view.shelf {
             update_tray_menu(&app_handle, &shelf_view.shelves);
         }
@@ -391,9 +399,12 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
 }
 
 fn update_tray_menu_signed_out(app_handle: &AppHandle) {
+    let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
     let Ok(menu) = MenuBuilder::new(app_handle)
+        .item(&user_guide_item)
+        .separator()
         .item(&quit_item)
         .build() else { return };
 
@@ -407,6 +418,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
+    let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else { return };
     let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
 
@@ -427,6 +439,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         .item(&new_shelf_clipboard_item)
         .item(&recent_submenu)
         .separator()
+        .item(&user_guide_item)
         .item(&settings_item)
         .item(&quit_item)
         .build() else { return };
@@ -599,7 +612,7 @@ pub async fn run() {
             open_received_resource, open_session, open_shelf, open_shelf_resource,
             open_settings, check_for_update, install_update,
             clear_shelf, sign_out, quit, get_or_create_shelf,
-            get_toast_message, close_toast, hide_intro,
+            get_toast_message, close_toast, hide_intro, get_resource_path,
             set_autostart, is_autostart_enabled,
             content_handlers::add_url_resource,
             content_handlers::add_text_resource,
@@ -677,6 +690,9 @@ pub async fn run() {
                 .on_menu_event(|app, event| {
                     let event_id = event.id().as_ref();
                     match event_id {
+                        "user_guide" => {
+                            app.show_intro();
+                        },
                         "new_shelf" => {
                             notify_user_did_drop();
                             app.open_new_shelf_window();

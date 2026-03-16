@@ -6,6 +6,7 @@
     "send",
     "send-*",
     "auth",
+    "intro",
     "receive",
     "toast",
     "settings"

@@ -81,7 +81,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_auth(&self) -> WebviewWindow<R> {
-        self.close_all_windows(vec!["auth"]);
+        self.close_all_windows(vec!["auth", "intro"]);
 
         let window = match self.get_webview_window("auth") {
             Some(window) => window,
@@ -347,7 +347,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("intro.html".into())
                 )
                     .title("Welcome to Bytover")
-                    .inner_size(600.0, 600.0)
+                    .inner_size(690.0, 690.0)
                     .decorations(true)
                     .transparent(true)
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
