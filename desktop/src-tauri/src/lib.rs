@@ -52,7 +52,7 @@ mod content_handlers;
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
-static INTRO_SHOWN: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+static INTRO_SHOWN_AFTER_AUTH: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 
 #[tauri::command]
 async fn get_resource_path(app_handle: AppHandle, path: String) -> Result<String, String> {
@@ -370,15 +370,18 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 }
 
 fn render(view: AppViewModel, app_handle: AppHandle) {
-    // TODO remove: always show intro first every time application turn on
-    if let Ok(mut intro_shown) = INTRO_SHOWN.lock() {
-        if !*intro_shown {
-            app_handle.show_intro();
-            *intro_shown = true;
+    let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
+
+    // Show intro after first successful sign-in
+    if is_authorized {
+        if let Ok(mut intro_shown) = INTRO_SHOWN_AFTER_AUTH.lock() {
+            if !*intro_shown {
+                app_handle.show_intro();
+                *intro_shown = true;
+            }
         }
     }
 
-    let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
     if !is_authorized {
         #[cfg(target_os = "macos")]
         let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Regular);

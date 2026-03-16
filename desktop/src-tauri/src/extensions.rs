@@ -343,10 +343,14 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_intro(&self) -> WebviewWindow<R> {
-        let window = match self.get_webview_window("intro") {
-            Some(window) => window,
+        match self.get_webview_window("intro") {
+            Some(window) => {
+                let _ = window.show();
+                let _ = window.set_focus();
+                window
+            }
             None => {
-                WebviewWindowBuilder::new(
+                let window = WebviewWindowBuilder::new(
                     self,
                     "intro",
                     WebviewUrl::App("intro.html".into())
@@ -363,12 +367,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .shadow(true)
                     .devtools(true)
                     .build()
-                    .expect("failed to create intro window")
-            }
-        };
+                    .expect("failed to create intro window");
 
-        let _ = window.show();
-        window
+                let _ = window.show();
+                window
+            }
+        }
     }
 
     fn hide_intro(&self) {
