@@ -20,6 +20,7 @@ function Window() {
     const window = getCurrentWindow()
     const [isExpanded, setIsExpanded] = useState(false)
     const [shelfId, setShelfId] = useState<string | undefined>(undefined)
+    const [animationSettled, setAnimationSettled] = useState(false)
     const shelfInitializedRef = useRef(false)
 
     // Extract shelf ID from window label on mount (label format: "send-{shelf_id}")
@@ -37,15 +38,25 @@ function Window() {
 
     useEffect(() => {
         core.launch()
+        // Wait 1s for the CSS animation to finish before settling window size
+        const timer = setTimeout(() => {
+            setAnimationSettled(true)
+        }, 1000)
+        return () => clearTimeout(timer)
     }, [])
 
-    const ANIMATION_PADDING = 14
+    const ANIMATION_PADDING = 15
 
     useEffect(() => {
-        const contentWidth = isExpanded ? 412 : 230
-        const contentHeight = 242
-        window.setSize(new LogicalSize(contentWidth + ANIMATION_PADDING, contentHeight + ANIMATION_PADDING))
-    }, [isExpanded, window])
+        // Initial window size from Rust is 245x270 (collapsed + 15 buffer)
+        // We only call setSize if expanded, or when settling after being expanded.
+        const targetWidth = (isExpanded ? 412 : 230) + ANIMATION_PADDING
+        const targetHeight = 255 + ANIMATION_PADDING
+        
+        if (isExpanded || animationSettled) {
+            window.setSize(new LogicalSize(targetWidth, targetHeight))
+        }
+    }, [isExpanded, animationSettled, window])
 
     return (
         <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5 overflow-clip`} data-no-scrollbar>

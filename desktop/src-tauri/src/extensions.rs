@@ -3,9 +3,6 @@ use tauri::webview::Color;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
-const SHELF_WIN_WIDTH: f64 = 250.0;
-const SHELF_WIN_HEIGHT: f64 = 260.0;
-
 fn constrain_window_to_screen<R: Runtime>(window: &WebviewWindow<R>) {
     let Ok(Some(monitor)) = window.current_monitor() else { return; };
     let Ok(window_position) = window.outer_position() else { return; };
@@ -58,6 +55,8 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
+    fn show_intro(&self) -> WebviewWindow<R>;
+    fn hide_intro(&self);
     fn toggle_receive(&self);
     fn is_shelf_window_open(&self, id: u64) -> bool;
     fn is_any_shelf_window_open(&self) -> bool;
@@ -65,6 +64,11 @@ pub trait AppHandleExt<R: Runtime> {
     fn hide_send(&self);
     fn hide_all_shelves(&self);
     fn show_toast(&self, message: &str) -> WebviewWindow<R>;
+}
+
+fn animate_window<R: Runtime>(window: WebviewWindow<R>) {
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
@@ -79,7 +83,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_auth(&self) -> WebviewWindow<R> {
-        self.close_all_windows(vec!["auth"]);
+        self.close_all_windows(vec!["auth", "intro"]);
 
         let window = match self.get_webview_window("auth") {
             Some(window) => window,
@@ -90,9 +94,11 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("auth.html".into())
                 )
                     .title("Bytover")
-                    .inner_size(240.0, 390.0)
+                    .inner_size(600.0, 600.0)
                     .decorations(true)
-                    .transparent(false)
+                    .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
                     .focused(true)
                     .skip_taskbar(false)
                     .resizable(false)
@@ -174,7 +180,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("send.html".into())
                 )
                     .title("send")
-                    .inner_size(250.0, 260.0)
+                    .inner_size(245.0, 270.0)
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
@@ -188,7 +194,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         };
 
-        let _ = window.show();
+        animate_window(window.clone());
         let _ = window.emit("window-shown", {});
         window
     }
@@ -204,7 +210,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("send.html".into())
                 )
                     .title(&label)
-                    .inner_size(250.0, 260.0)
+                    .inner_size(245.0, 270.0)
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
@@ -218,14 +224,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         };
 
-        let _ = window.show();
-
         if let Some(monitor) = window.current_monitor().ok().flatten() {
             let screen_size = monitor.size();
             let scale = monitor.scale_factor();
 
-            const WIN_WIDTH: f64 = 250.0;
-            const WIN_HEIGHT: f64 = 260.0;
+            const WIN_WIDTH: f64 = 245.0;
+            const WIN_HEIGHT: f64 = 270.0;
             let max_offset_x = WIN_WIDTH * 1.5;
             let max_offset_y = WIN_HEIGHT * 1.5;
 
@@ -245,6 +249,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
 
         constrain_window_to_screen(&window);
+        animate_window(window.clone());
         window
     }
 
@@ -263,9 +268,11 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App(format!("settings.html?tab={}", tab).into())
                 )
                     .title("Settings")
-                    .inner_size(800.0, 450.0)
+                    .inner_size(560.0, 373.0)
                     .decorations(true)
                     .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
                     .resizable(false)
                     .shadow(true)
                     .devtools(true)
@@ -300,9 +307,11 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("settings.html".into())
                 )
                     .title("Settings")
-                    .inner_size(800.0, 450.0)
+                    .inner_size(560.0, 373.0)
                     .decorations(true)
                     .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
                     .resizable(false)
                     .shadow(true)
                     .devtools(true)
@@ -329,7 +338,46 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
     fn hide_auth(&self) {
         if let Some(window) = self.get_webview_window("auth") {
-            let _ = window.hide();
+            let _ = window.close();
+        }
+    }
+
+    fn show_intro(&self) -> WebviewWindow<R> {
+        match self.get_webview_window("intro") {
+            Some(window) => {
+                let _ = window.show();
+                let _ = window.set_focus();
+                window
+            }
+            None => {
+                let window = WebviewWindowBuilder::new(
+                    self,
+                    "intro",
+                    WebviewUrl::App("intro.html".into())
+                )
+                    .title("Welcome to Bytover")
+                    .inner_size(690.0, 690.0)
+                    .decorations(true)
+                    .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
+                    .focused(true)
+                    .skip_taskbar(false)
+                    .resizable(false)
+                    .shadow(true)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create intro window");
+
+                let _ = window.show();
+                window
+            }
+        }
+    }
+
+    fn hide_intro(&self) {
+        if let Some(window) = self.get_webview_window("intro") {
+            let _ = window.close();
         }
     }
 

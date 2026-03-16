@@ -30,6 +30,7 @@ export default defineConfig(async () => ({
         main: resolve(__dirname, "index.html"),
         send: resolve(__dirname, "send.html"),
         auth: resolve(__dirname, "auth.html"),
+        intro: resolve(__dirname, "intro.html"),
         receive: resolve(__dirname, "receive.html"),
         toast: resolve(__dirname, "toast.html"),
         settings: resolve(__dirname, "settings.html"),
