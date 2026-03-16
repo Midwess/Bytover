@@ -52,6 +52,12 @@ mod content_handlers;
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+static INTRO_SHOWN: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+
+#[tauri::command]
+async fn hide_intro(app_handle: AppHandle) {
+    app_handle.hide_intro();
+}
 
 #[tauri::command]
 async fn quit(app_handle: AppHandle) {
@@ -368,6 +374,14 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         #[cfg(target_os = "macos")]
         let _ = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
         app_handle.hide_auth();
+
+        if let Ok(mut intro_shown) = INTRO_SHOWN.lock() {
+            if !*intro_shown {
+                app_handle.show_intro();
+                *intro_shown = true;
+            }
+        }
+
         if let Some(shelf_view) = &view.shelf {
             update_tray_menu(&app_handle, &shelf_view.shelves);
         }
@@ -585,7 +599,7 @@ pub async fn run() {
             open_received_resource, open_session, open_shelf, open_shelf_resource,
             open_settings, check_for_update, install_update,
             clear_shelf, sign_out, quit, get_or_create_shelf,
-            get_toast_message, close_toast,
+            get_toast_message, close_toast, hide_intro,
             set_autostart, is_autostart_enabled,
             content_handlers::add_url_resource,
             content_handlers::add_text_resource,

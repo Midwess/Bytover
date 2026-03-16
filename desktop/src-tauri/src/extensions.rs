@@ -58,6 +58,8 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
+    fn show_intro(&self) -> WebviewWindow<R>;
+    fn hide_intro(&self);
     fn toggle_receive(&self);
     fn is_shelf_window_open(&self, id: u64) -> bool;
     fn is_any_shelf_window_open(&self) -> bool;
@@ -90,9 +92,11 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     WebviewUrl::App("auth.html".into())
                 )
                     .title("Bytover")
-                    .inner_size(240.0, 390.0)
+                    .inner_size(600.0, 600.0)
                     .decorations(true)
-                    .transparent(false)
+                    .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
                     .focused(true)
                     .skip_taskbar(false)
                     .resizable(false)
@@ -329,7 +333,42 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
     fn hide_auth(&self) {
         if let Some(window) = self.get_webview_window("auth") {
-            let _ = window.hide();
+            let _ = window.close();
+        }
+    }
+
+    fn show_intro(&self) -> WebviewWindow<R> {
+        let window = match self.get_webview_window("intro") {
+            Some(window) => window,
+            None => {
+                WebviewWindowBuilder::new(
+                    self,
+                    "intro",
+                    WebviewUrl::App("intro.html".into())
+                )
+                    .title("Welcome to Bytover")
+                    .inner_size(600.0, 600.0)
+                    .decorations(true)
+                    .transparent(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
+                    .focused(true)
+                    .skip_taskbar(false)
+                    .resizable(false)
+                    .shadow(true)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create intro window")
+            }
+        };
+
+        let _ = window.show();
+        window
+    }
+
+    fn hide_intro(&self) {
+        if let Some(window) = self.get_webview_window("intro") {
+            let _ = window.close();
         }
     }
 

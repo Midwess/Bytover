@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
 export const LayoutTextFlip = ({
-  text = "Build Amazing",
-  words = ["Landing Pages", "Component Blocks", "Page Sections", "3D Shaders"],
+  text = "Welcome to",
+  words = ["Bytover", "File shelf", "File transfer", "Peer to Peer"],
   duration = 3000,
 }: {
   text: string;
@@ -23,32 +23,31 @@ export const LayoutTextFlip = ({
   }, []);
 
   return (
-    <>
+    <div className="flex flex-col items-center gap-1">
       <motion.span
         layoutId="subtext"
-        className="text-2xl font-bold tracking-tight drop-shadow-lg md:text-4xl"
+        className="text-sm font-medium tracking-wider uppercase opacity-40 text-white"
       >
         {text}
       </motion.span>
 
-      <motion.span
-        layout
-        className="relative w-fit h-fit overflow-hidden rounded-md border border-transparent bg-white/90 backdrop-blur-sm px-4 py-2 font-sans font-bold tracking-tight text-black shadow-sm ring shadow-black/10 ring-black/10 drop-shadow-lg md:text-4xl" > <AnimatePresence mode="popLayout"> <motion.span key={currentIndex}
-            initial={{ y: -40, filter: "blur(10px)" }}
-            animate={{
-              y: 0,
-              filter: "blur(0px)",
-            }}
-            exit={{ y: 40, filter: "blur(10px)", opacity: 0 }}
+      <div className="relative h-10 flex items-center justify-center overflow-hidden">
+        <AnimatePresence mode="popLayout">
+          <motion.span
+            key={currentIndex}
+            initial={{ y: 20, opacity: 0, filter: "blur(5px)" }}
+            animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
+            exit={{ y: -20, opacity: 0, filter: "blur(5px)" }}
             transition={{
-              duration: 0.5,
+              duration: 0.4,
+              ease: [0.23, 1, 0.32, 1]
             }}
-            className={cn("inline-block whitespace-nowrap")}
+            className={cn("text-3xl font-semibold tracking-tight text-white whitespace-nowrap")}
           >
             {words[currentIndex]}
           </motion.span>
         </AnimatePresence>
-      </motion.span>
-    </>
+      </div>
+    </div>
   );
 };
