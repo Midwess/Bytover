@@ -160,10 +160,9 @@ export function ResourceGrid({ session }: ResourceGridProps) {
     const hasMultipleSections = sections.length > 1;
 
     return (
-        <div ref={containerRef} className="relative w-full">
+        <div ref={containerRef} className="relative w-full max-w-4xl mx-auto px-4 md:px-0">
             {/* 
-                Vertical Track - Positioned OUTSIDE the container 
-                Starts at top: 0, height goes to the center of the last checkpoint
+                Vertical Track - Positioned right next to the list 
             */}
             {hasMultipleSections && (
                 <div 
@@ -172,69 +171,68 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                         bottom: 'auto',
                         height: `${lastPointPos}px`
                     }}
-                    className="absolute xl:-left-6 2xl:-left-12 w-px bg-white/10 hidden xl:block"
+                    className="absolute left-4 md:left-[calc(50%-18.5rem)] w-[1px] bg-white/[0.05] hidden md:block"
                 >
                     {/* The Moving Point - Progress indicator */}
                     <motion.div
                         style={{
                             top: dotTop,
-                            y: -4, // Explicitly center the 8px dot on the pixel coordinate
-                            marginLeft: '-3px', // Shifted slightly to the right for perfect alignment
+                            y: -2,
+                            marginLeft: '-1px',
                         }}
-                        className="absolute w-2 h-2 bg-blue-600 rounded-full shadow-[0_0_12px_rgba(37,99,235,0.6)] z-30"
+                        className="absolute w-1 h-1 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.4)] z-30"
                     />
                 </div>
-
             )}
 
-            <div className="flex-1 space-y-12 md:space-y-32 w-full">
+            <div className="flex-1 space-y-12 w-full">
                 {sections.map((section) => {
                     const isActive = activeSection === section.id;
                     return (
                         <div key={section.id} id={section.id} className="scroll-mt-10 relative">
-                            {/* Navigation Header on the left of the line */}
+                            {/* Navigation Header right on the left edge */}
                             {hasMultipleSections && (
-                                <div className="absolute hidden xl:block xl:-left-6 2xl:-left-12 top-14 h-12 flex items-center overflow-visible">
+                                <div className="absolute hidden md:block left-4 md:left-[calc(50%-18.5rem)] top-14 h-6 flex items-center overflow-visible">
                                     <button 
                                         onClick={() => scrollToId(section.id)}
                                         className="absolute right-0 flex items-center justify-end group outline-none h-full"
-                                        style={{ width: '400px' }}
+                                        style={{ width: '200px' }}
                                     >
-                                        <div className="flex flex-col items-end mr-8 transition-all">
+                                        <div className="flex flex-col items-end mr-4 transition-all opacity-40 group-hover:opacity-100">
                                             <span className={cn(
-                                                "text-[10px] font-bold uppercase tracking-[0.2em] leading-none transition-opacity mb-1",
-                                                isActive ? "text-blue-600 opacity-100" : "text-blue-600 opacity-40 group-hover:opacity-100"
+                                                "text-[8px] font-bold uppercase tracking-[0.2em] leading-none mb-0.5 transition-colors",
+                                                isActive ? "text-white" : "text-zinc-600"
                                             )}>
-                                                {section.count.toString().padStart(2, '0')} Items
+                                                {section.count.toString().padStart(2, '0')}
                                             </span>
                                             <span className={cn(
-                                                "text-xl font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap leading-none",
-                                                isActive ? "text-white scale-105 origin-right" : "text-foreground/80 group-hover:text-white"
+                                                "text-[10px] font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap leading-none",
+                                                isActive ? "text-white" : "text-zinc-600"
                                             )}>
                                                 {section.label}
                                             </span>
                                         </div>
                                         {/* stationary checkpoint circle */}
                                         <div className={cn(
-                                            "w-3.5 h-3.5 rounded-full bg-zinc-900 border-2 transition-all duration-300 z-20 shrink-0 shadow-sm",
+                                            "w-1.5 h-1.5 rounded-full transition-all duration-300 z-20 shrink-0",
                                             isActive 
-                                                ? "border-blue-600/50 scale-110" 
-                                                : "border-white/10 group-hover:border-blue-600/30",
-                                            "relative right-[-8px]" // Synchronized with dot's -3px marginLeft
+                                                ? "bg-white scale-110" 
+                                                : "bg-zinc-800 group-hover:bg-zinc-600",
+                                            "relative right-[-3px]"
                                         )} />
                                     </button>
                                 </div>
                             )}
                             
                             {/* Mobile Header */}
-                            <div className="xl:hidden mb-6 flex flex-col gap-1.5">
-                                 <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none">{section.count} Items</span>
-                                 <h2 className="text-xl font-bold uppercase tracking-widest text-foreground/80 leading-none">{section.label}</h2>
+                            <div className="md:hidden mb-6 flex flex-col gap-1.5 px-2">
+                                 <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest leading-none">{section.count} Items</span>
+                                 <h2 className="text-sm font-bold uppercase tracking-widest text-white leading-none">{section.label}</h2>
                             </div>
 
-                            <div className="flex-col md:grid md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 flex">
+                            <div className="flex flex-col w-full max-w-xl mx-auto divide-y divide-white/[0.02]">
                                 {section.data.map(item => (
-                                    <div key={item.model.order_id} className="h-fit md:h-[300px]">
+                                    <div key={item.model.order_id} className="w-full">
                                         <ResourceCard id={item.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
                                     </div>
                                 ))}
