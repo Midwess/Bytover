@@ -19,10 +19,10 @@ export type MockFile = {
 }
 
 const mockFiles: MockFile[] = [
-  { id: "1", name: "documents", size: "19.12 MB", type: "folder", thumbnailUrl: "/demo/image1.jpg" },
-  { id: "2", name: "certific...on.pdf", size: "0.52 MB", type: "file", thumbnailUrl: "/demo/image2.jpg" },
-  { id: "3", name: "certific...on.pdf", size: "0.53 MB", type: "file", thumbnailUrl: "/demo/image3.jpg" },
-  { id: "4", name: "Airwallex.pdf", size: "0.12 MB", type: "file" },
+  { id: "1", name: "image1.jpg", size: "19.12 MB", type: "folder", thumbnailUrl: "/demo/image1.jpg" },
+  { id: "2", name: "image2.jpg", size: "0.52 MB", type: "file", thumbnailUrl: "/demo/image2.jpg" },
+  { id: "3", name: "image3.jpg", size: "0.53 MB", type: "file", thumbnailUrl: "/demo/image3.jpg" },
+  { id: "4", name: "document.pdf", size: "0.12 MB", type: "file" },
 ]
 
 function ResourceView({ file }: { file: MockFile }) {
