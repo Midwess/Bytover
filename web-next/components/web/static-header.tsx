@@ -2,7 +2,8 @@ import React from 'react';
 import { getAssetUrl } from '@/utils/asset-url';
 import Link from 'next/link';
 
-export default function StaticHeader({ className, isFullWidth }: { className?: string, isFullWidth?: boolean }) {
+export default function StaticHeader({ className, isFullWidth, theme = 'dark' }: { className?: string, isFullWidth?: boolean, theme?: 'light' | 'dark' }) {
+    const isLight = theme === 'light';
     const scrollToSection = (href: string) => {
         const element = document.querySelector(href);
         if (element) {
@@ -11,7 +12,7 @@ export default function StaticHeader({ className, isFullWidth }: { className?: s
     };
 
     return (
-        <div className={`w-full h-fit border-white/5 ${className || ''}`}>
+        <div className={`w-full h-fit ${isLight ? 'border-zinc-200' : 'border-white/5'} ${className || ''}`}>
             <div className={`flex justify-between items-center w-full h-full px-4 md:px-6 ${isFullWidth ? 'max-w-[1360px] mx-auto' : 'container'}`}>
                 <div className="flex items-center gap-2">
                     <Link href="/" className="flex items-center group">
@@ -22,7 +23,7 @@ export default function StaticHeader({ className, isFullWidth }: { className?: s
                             alt="Logo"
                             className="rounded-lg aspect-square w-8 h-8 group-hover:opacity-80 transition-opacity"
                         />
-                        <span className="ml-2.5 font-bold text-lg tracking-tight hidden sm:block text-white">Bytover</span>
+                        <span className={`ml-2.5 font-bold text-lg tracking-tight hidden sm:block ${isLight ? 'text-zinc-900' : 'text-white'}`}>Bytover</span>
                     </Link>
                 </div>
 
@@ -48,7 +49,7 @@ export default function StaticHeader({ className, isFullWidth }: { className?: s
                                     window.location.href = item.href;
                                 }
                             }}
-                            className="text-sm font-medium transition-colors text-foreground hover:text-white"
+                            className={`text-sm font-medium transition-colors ${isLight ? 'text-zinc-500 hover:text-zinc-900' : 'text-foreground hover:text-white'}`}
                         >
                             {item.label}
                         </Link>
