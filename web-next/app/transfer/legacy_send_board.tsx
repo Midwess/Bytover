@@ -20,7 +20,7 @@ import {
     PasswordPrompt,
     SessionHeader,
     ResourceGrid,
-} from "../../../components/main";
+} from "@/components/main";
 
 export default function SessionPage() {
     const params = useParams();

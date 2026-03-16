@@ -1,28 +1,24 @@
 'use client';
 
 import * as React from "react";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-    AppEventVariantTransfer, 
+    AppEventVariantTransfer,
     MessageReasonVariantFailedToFindPublicSession,
     ReceiveSessionViewModel,
     TransferEventVariantFindSession,
     TransferEventVariantViewSession,
     TransferTypeVariantReceive,
-    ResourceTypeVariantFolder,
-    ResourceTypeVariantImage,
-    ResourceTypeVariantVideo,
 } from 'shared_types/types/shared_types';
-import { LoaderCircle, FileText, ImageIcon, Video, Folder, Download, Lock } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import core from "@/wasm/wasm_core";
 import Footer from "@/components/web/footer";
 import StaticHeader from "@/components/web/static-header";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ResourceGrid } from "@/components/main/resource-grid";
 import { DownloadAllButton } from "@/components/main/download-all-button";
-import { formatFileSize } from "@/utils/format-file-size";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Aurora from "@/components/ui/aurora";
 import {
     IncompatibleBrowser,
@@ -42,10 +38,11 @@ export default function SessionPage() {
 
     const auroraColors = useMemo(() => {
         const [r, g, b] = accentColor.split(',').map(v => Number(v) / 255);
-        
+
         // RGB to HSL conversion
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
-        let h = 0, s, l = (max + min) / 2;
+        const l = (max + min) / 2;
+        let h = 0, s: number;
 
         if (max === min) {
             h = s = 0; // achromatic
@@ -126,7 +123,7 @@ export default function SessionPage() {
                 if (r && g && b) {
                     setAccentColor(`${r}, ${g}, ${b}`);
                 }
-            } catch (e) {
+            } catch {
                 // Keep default accent color
             }
         }

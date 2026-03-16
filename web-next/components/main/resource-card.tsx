@@ -11,7 +11,6 @@ import {
 import { Play } from 'lucide-react'
 import core from "@/wasm/wasm_core.ts";
 import { formatFileSize } from "@/utils/format-file-size.ts";
-import { useIsMobile } from "@/hooks/use-mobile.ts";
 import { ResourceDownload } from "@/components/main/resource-download.tsx";
 
 export function ResourceCard(props: {

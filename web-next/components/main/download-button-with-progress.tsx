@@ -1,7 +1,6 @@
 'use client'
 
 import {Check, ArrowDown} from 'lucide-react'
-import {Button} from '@/components/ui/button.tsx'
 import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils.ts'
 import { motion } from 'framer-motion'
