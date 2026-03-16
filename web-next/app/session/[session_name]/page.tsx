@@ -196,7 +196,7 @@ export default function SessionPage() {
                     )}
                 </main>
             ) : (
-                <div className="flex flex-col flex-1 shrink-0 pb-10 relative z-10">
+                <div className="flex flex-col flex-1 shrink-0 pb-10 relative z-10 min-h-screen">
                     <div className="h-fit gap-10 mb-10 flex flex-col shrink-0 relative z-20">
                         <StaticHeader theme="dark" className="pt-6 md:pt-10" />
                         
@@ -217,13 +217,46 @@ export default function SessionPage() {
                                 </Avatar>
                             </motion.div>
                             
-                            <div className="space-y-2 md:space-y-3">
+                            <div className="space-y-8 flex flex-col items-center">
                                 <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-white">
                                     {session.sender_name || 'Anonymous'} shared some files
                                 </h1>
-                                <p className="text-[12px] md:text-[14px] font-medium text-zinc-500 max-w-xs mx-auto leading-relaxed">
-                                    You have {session.resources.length} {session.resources.length === 1 ? 'item' : 'items'} ready for secure download.
-                                </p>
+                                
+                                <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                {session.resources.length.toString().padStart(2, '0')} Items
+                                            </span>
+                                            <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                Available
+                                            </span>
+                                        </div>
+
+                                        {session.display_download_speed && (
+                                            <>
+                                                <div className="w-px h-6 bg-white/10" />
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                        {session.display_download_speed}
+                                                    </span>
+                                                    <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                        Network Speed
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {session.resources?.length > 0 && (
+                                        <div className="flex items-center">
+                                            <DownloadAllButton
+                                                session={session as ReceiveSessionViewModel}
+                                                containerClass="rounded-full bg-gradient-to-r from-bluePrimary to-bluePrimary/80 text-white hover:opacity-90 transition-all duration-500 px-6 py-2.5 h-auto text-[10px] font-bold tracking-[0.2em] uppercase border-0"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

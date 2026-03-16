@@ -8,11 +8,13 @@ import {
 interface DownloadAllButtonProps {
     session: ReceiveSessionViewModel;
     className?: string;
+    containerClass?: string;
 }
 
 export function DownloadAllButton({
     session,
-    className
+    className,
+    containerClass
 }: DownloadAllButtonProps) {
     const { handleDownload, handleCancel } = useDownloadResource({
         resource: session.download_all_resource ?? null,
@@ -38,6 +40,7 @@ export function DownloadAllButton({
             buttonVariant="outline"
             buttonSize="sm"
             className={className}
+            containerClass={containerClass}
         />
     );
 }

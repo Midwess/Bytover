@@ -4,6 +4,7 @@ import {Check, ArrowDown} from 'lucide-react'
 import {Button} from '@/components/ui/button.tsx'
 import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils.ts'
+import { motion } from 'framer-motion'
 
 interface DownloadButtonWithProgressProps {
     progress?: number
@@ -18,6 +19,7 @@ interface DownloadButtonWithProgressProps {
     buttonVariant?: 'default' | 'outline' | 'ghost'
     buttonSize?: 'default' | 'sm' | 'lg' | 'icon'
     containerClass?: string
+    speed?: string
 }
 
 export default function DownloadButtonWithProgress({
@@ -30,8 +32,8 @@ export default function DownloadButtonWithProgress({
     onCancelClick = () => {},
     className = '',
     buttonText,
-    buttonSize = 'sm',
-    containerClass = ''
+    containerClass = '',
+    speed
 }: DownloadButtonWithProgressProps) {
     const [showCompleted, setShowCompleted] = useState(false)
     const wasInProgressRef = useRef(false)
@@ -63,62 +65,79 @@ export default function DownloadButtonWithProgress({
 
     const state = getButtonState()
 
-    const containerClassFinal = cn("h-8 w-36 rounded-lg transition-colors", containerClass)
+    const isPill = !!buttonText;
+    const commonClasses = cn(
+        isPill ? "h-12 px-8 w-auto min-w-[180px]" : "w-12 h-12",
+        "rounded-full flex items-center justify-center transition-all duration-500",
+        containerClass
+    )
 
     return (
-        <div className={`relative ${className}`}>
-            {state === 'idle' && !buttonText && (
-                <Button
-                    size="icon"
-                    variant="ghost"
+        <div className={cn("relative flex flex-col items-center justify-center", className)}>
+            {state === 'idle' && (
+                <button
                     onClick={onDownloadClick}
                     disabled={!isReady}
-                    className={`${containerClassFinal} bg-blue-600 hover:bg-blue-700`}
+                    className={cn(
+                        commonClasses,
+                        "bg-transparent border border-white/5 text-white/40 gap-3",
+                        "hover:bg-white hover:text-black hover:border-white disabled:opacity-20 disabled:cursor-not-allowed"
+                    )}
                 >
-                    <ArrowDown className="h-[50%] w-[50%] text-white scale-y-110"/>
-                </Button>
-            )}
-
-            {state === 'idle' && buttonText && (
-                <Button
-                    size={buttonSize}
-                    onClick={onDownloadClick}
-                    disabled={!isReady}
-                    className={`${containerClassFinal} gap-2 bg-blue-600 text-foreground font-medium`}
-                >
-                    <ArrowDown className="h-4 w-4 text-white scale-y-110 font-bold"/>
-                    {buttonText}
-                </Button>
+                    <ArrowDown className={isPill ? "w-4 h-4" : "w-5 h-5"} strokeWidth={2.5} />
+                    {buttonText && <span className="text-[11px] font-bold uppercase tracking-[0.2em] whitespace-nowrap">{buttonText}</span>}
+                </button>
             )}
 
             {state === 'downloading' && (
                 <button
                     onClick={onCancelClick}
-                    className={`${containerClassFinal} relative bg-blue-600 hover:bg-blue-700 overflow-hidden`}
+                    className={cn(
+                        isPill ? "h-12 px-6 min-w-[200px]" : "w-12 h-12",
+                        "rounded-full bg-white/5 border border-white/10 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-500"
+                    )}
                     title="Cancel download"
                 >
-                    <div
-                        className="absolute top-0 left-0 bottom-0 bg-blue-800 transition-all duration-300 ease-out"
-                        style={{width: `${progress * 100}%`}}
-                    />
-                    <div className="relative flex items-center justify-center h-full z-10">
-                        <span className="text-xs font-medium text-white tabular-nums">
-                            {Math.round(progress * 100)}%
-                        </span>
-                    </div>
+                    {!isPill ? (
+                        <>
+                            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" className="text-white/5" />
+                                <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={113.1} strokeDashoffset={113.1 - (113.1 * progress)} strokeLinecap="round" className="text-white transition-all duration-300" />
+                            </svg>
+                            <span className="relative z-10 text-[10px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                        </>
+                    ) : (
+                        <div className="w-full space-y-1.5">
+                            <div className="flex items-center justify-between px-1">
+                                <span className="text-[9px] font-bold text-white uppercase tracking-widest">{speed || 'Downloading'}</span>
+                                <span className="text-[9px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                            </div>
+                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                                <motion.div 
+                                    initial={false}
+                                    animate={{ width: `${progress * 100}%` }}
+                                    className="h-full bg-white"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </button>
             )}
 
             {state === 'waiting' && (
-                <div className={`${containerClassFinal} flex items-center justify-center bg-primary/10`}>
-                    <span className="text-xs font-medium text-white">0%</span>
+                <div className={cn(commonClasses, "bg-white/5 border border-white/10 animate-pulse")}>
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">...</span>
                 </div>
             )}
 
             {state === 'completed' && (
-                <div className={`${containerClassFinal} flex items-center justify-center bg-green-500/20 border border-green-500/50`}>
-                    <Check className="h-4 w-4 text-green-600 dark:text-green-400"/>
+                <div className={cn(commonClasses, "bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)]")}>
+                    <Check className="w-5 h-5" strokeWidth={3} />
                 </div>
+            )}
+
+            {state === 'downloading' && (
+                <span className="text-[9px] text-white/40 font-medium mt-1.5">Press to cancel</span>
             )}
         </div>
     )
