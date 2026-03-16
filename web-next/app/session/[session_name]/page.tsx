@@ -155,7 +155,7 @@ export default function SessionPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans selection:bg-white/10 relative overflow-x-hidden">
+        <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans selection:bg-white/10 relative">
             {/* Aurora Background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden h-[40vh]">
                 <Aurora
@@ -196,7 +196,7 @@ export default function SessionPage() {
                     )}
                 </main>
             ) : (
-                <div className="flex flex-col shrink-0 md:h-screen pb-10">
+                <div className="flex flex-col flex-1 shrink-0 pb-10 relative z-10">
                     <div className="h-fit gap-10 mb-10 flex flex-col shrink-0 relative z-20">
                         <StaticHeader theme="dark" className="pt-6 md:pt-10" />
                         
@@ -228,11 +228,11 @@ export default function SessionPage() {
                         </div>
                     </div>
 
-                    <main className=" max-h-full flex flex-col items-center px-6 relative z-10 md:overflow-hidden pb-12 md:pb-0">
-                        <div className="w-full max-w-6xl h-full flex flex-col animate-in fade-in duration-1000 slide-in-from-bottom-8">
-                            <div className="w-full h-full md:overflow-hidden">
+                    <main className="flex flex-col items-center px-6 relative z-10 pb-12 md:pb-0">
+                        <div className="w-full max-w-6xl flex flex-col animate-in fade-in duration-1000 slide-in-from-bottom-8">
+                            <div className="w-full">
                                 {isLoading && (!session.resources || session.resources.length === 0) ? (
-                                    <div className="h-full flex flex-col items-center justify-center">
+                                    <div className="py-24 flex flex-col items-center justify-center">
                                         {session.password_required && !session.password ? (
                                             <PasswordPrompt
                                                 theme="dark"
@@ -244,7 +244,7 @@ export default function SessionPage() {
                                         )}
                                     </div>
                                 ) : session.resources?.length === 0 ? (
-                                    <div className="h-full flex items-center justify-center">
+                                    <div className="py-24 flex items-center justify-center">
                                         <EmptyState />
                                     </div>
                                 ) : (
