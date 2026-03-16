@@ -155,7 +155,7 @@ export default function SessionPage() {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col font-sans selection:bg-white/10 relative overflow-x-hidden">
+        <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans selection:bg-white/10 relative overflow-x-hidden">
             {/* Aurora Background */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden h-[40vh]">
                 <Aurora
@@ -164,64 +164,75 @@ export default function SessionPage() {
                     amplitude={0.55}
                     speed={0.3}
                 />
-
+                
+                {/* Dotted Overlay */}
+                <div 
+                    className="absolute inset-0 opacity-[0.04]" 
+                    style={{ 
+                        backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)', 
+                        backgroundSize: '40px 40px' 
+                    }} 
+                />
+                
+                {/* Bottom Fade */}
+                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#09090b] to-transparent" />
             </div>
 
-            <StaticHeader theme="dark" className="relative z-20 pt-10" />
-
-            <main className="flex-1 flex flex-col items-center py-32 px-6 relative z-10 min-h-screen">
-                <div className="w-full max-w-6xl space-y-32">
-                    {!coreCompatible ? (
-                        <IncompatibleBrowser />
-                    ) : !session ? (
-                        <div className="flex flex-col items-center justify-center gap-8 py-20">
-                            {findSessionFailedMessage.message ? (
-                                <p className="text-zinc-100 font-medium text-xl">
-                                    {findSessionFailedMessage.message}
-                                </p>
-                            ) : (
-                                <>
-                                    <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
-                                        <LoaderCircle className="animate-spin w-5 h-5 text-zinc-500" />
-                                    </div>
-                                    <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">INITIALIZING SESSION</p>
-                                </>
-                            )}
-                        </div>
+            {!coreCompatible ? (
+                <main className="flex items-center justify-center p-6 relative z-10 min-h-screen">
+                    <IncompatibleBrowser />
+                </main>
+            ) : !session ? (
+                <main className="flex flex-col items-center justify-center gap-8 py-20 relative z-10">
+                    {findSessionFailedMessage.message ? (
+                        <p className="text-zinc-100 font-medium text-xl">{findSessionFailedMessage.message}</p>
                     ) : (
-                        <div className="space-y-24 animate-in fade-in duration-1000 slide-in-from-bottom-8">
-                            {/* Centered Header */}
-                            <div className="flex flex-col items-center text-center space-y-10">
-                                <motion.div
-                                    initial={{ scale: 0.9, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                >
-                                    <Avatar 
-                                        className="w-20 h-20 rounded-[2rem] border border-white/10 shadow-2xl p-1.5 ring-1 ring-white/5 transition-colors duration-1000"
-                                        style={{ backgroundColor: `rgba(${accentColor}, 0.2)` }}
-                                    >
-                                        <AvatarImage src={session.sender_avatar} className="rounded-[1.6rem] object-cover" />
-                                        <AvatarFallback className="bg-zinc-800 text-zinc-500">
-                                            {session.sender_name?.charAt(0) || 'A'}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </motion.div>
-                                
-                                <div className="space-y-4">
-                                    <h1 className="text-3xl font-medium tracking-tight text-white">
-                                        {session.sender_name || 'Anonymous'} shared some files
-                                    </h1>
-                                    <p className="text-[14px] font-medium text-zinc-500 max-w-xs mx-auto leading-relaxed">
-                                        You have {session.resources.length} {session.resources.length === 1 ? 'item' : 'items'} ready for secure download.
-                                    </p>
-                                </div>
+                        <>
+                            <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
+                                <LoaderCircle className="animate-spin w-5 h-5 text-zinc-500" />
                             </div>
+                            <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">INITIALIZING SESSION</p>
+                        </>
+                    )}
+                </main>
+            ) : (
+                <div className="flex flex-col shrink-0 md:h-screen pb-10">
+                    <div className="h-fit gap-10 mb-10 flex flex-col shrink-0 relative z-20">
+                        <StaticHeader theme="dark" className="pt-6 md:pt-10" />
+                        
+                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 md:space-y-8 px-6 mt-12 md:mt-0">
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ duration: 0.8, ease: "easeOut" }}
+                            >
+                                <Avatar 
+                                    className="w-16 h-16 md:w-20 md:h-20 rounded-[1.5rem] md:rounded-[2rem] border border-white/10 shadow-2xl p-1 md:p-1.5 ring-1 ring-white/5 transition-colors duration-1000"
+                                    style={{ backgroundColor: `rgba(${accentColor}, 0.2)` }}
+                                >
+                                    <AvatarImage src={session.sender_avatar} className="rounded-[1.2rem] md:rounded-[1.6rem] object-cover" />
+                                    <AvatarFallback className="bg-zinc-800 text-zinc-500">
+                                        {session.sender_name?.charAt(0) || 'A'}
+                                    </AvatarFallback>
+                                </Avatar>
+                            </motion.div>
+                            
+                            <div className="space-y-2 md:space-y-3">
+                                <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-white">
+                                    {session.sender_name || 'Anonymous'} shared some files
+                                </h1>
+                                <p className="text-[12px] md:text-[14px] font-medium text-zinc-500 max-w-xs mx-auto leading-relaxed">
+                                    You have {session.resources.length} {session.resources.length === 1 ? 'item' : 'items'} ready for secure download.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-                            {/* Content Area */}
-                            <div className="w-full">
+                    <main className=" max-h-full flex flex-col items-center px-6 relative z-10 md:overflow-hidden pb-12 md:pb-0">
+                        <div className="w-full max-w-6xl h-full flex flex-col animate-in fade-in duration-1000 slide-in-from-bottom-8">
+                            <div className="w-full h-full md:overflow-hidden">
                                 {isLoading && (!session.resources || session.resources.length === 0) ? (
-                                    <div className="py-24 flex flex-col items-center justify-center">
+                                    <div className="h-full flex flex-col items-center justify-center">
                                         {session.password_required && !session.password ? (
                                             <PasswordPrompt
                                                 theme="dark"
@@ -233,17 +244,19 @@ export default function SessionPage() {
                                         )}
                                     </div>
                                 ) : session.resources?.length === 0 ? (
-                                    <EmptyState />
+                                    <div className="h-full flex items-center justify-center">
+                                        <EmptyState />
+                                    </div>
                                 ) : (
                                     <ResourceGrid session={session as ReceiveSessionViewModel} />
                                 )}
                             </div>
                         </div>
-                    )}
+                    </main>
                 </div>
-            </main>
+            )}
 
-            <Footer theme="dark" className="bg-transparent border-0 opacity-40 hover:opacity-100 transition-opacity pb-12" />
+            <Footer theme="dark" className="bg-transparent border-0 opacity-40 hover:opacity-100 transition-opacity pb-8 md:pb-12 shrink-0 relative z-20" />
         </div>
     );
 }

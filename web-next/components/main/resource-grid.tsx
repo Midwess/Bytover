@@ -12,7 +12,9 @@ interface ResourceGridProps {
 
 export function ResourceGrid({ session }: ResourceGridProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [activeSection, setActiveSection] = useState<string | null>(null);
+    const [trackBounds, setTrackBounds] = useState({ top: 0, height: 0 });
 
     const images = useMemo(() =>
         session?.resources.filter(r => r.model.type instanceof ResourceTypeVariantImage) || [],
@@ -30,27 +32,57 @@ export function ResourceGrid({ session }: ResourceGridProps) {
         [session?.resources]
     );
 
-    const scrollToId = (id: string) => {
-        const el = document.getElementById(id);
-        if (el) {
-            const offset = 40;
-            const elementPosition = el.getBoundingClientRect().top;
-            const offsetPosition = elementPosition + window.pageYOffset - offset;
-
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
-    };
-
     const sections = useMemo(() => [
         { id: 'section-images', label: 'Images', count: images.length, data: images },
         { id: 'section-videos', label: 'Videos', count: videos.length, data: videos },
         { id: 'section-files', label: 'Files', count: files.length, data: files },
     ].filter(s => s.count > 0), [images, videos, files]);
 
+    const FOCUS_POINT_Y = 104; // py-12 (48px) + top-14 (56px)
+    const SECTION_DOT_OFFSET = 56; // top-14
+
     useEffect(() => {
+        const updateTrack = () => {
+            const firstEl = document.getElementById(sections[0]?.id);
+            const lastEl = document.getElementById(sections[sections.length - 1]?.id);
+            
+            if (firstEl && lastEl) {
+                const start = firstEl.offsetTop + SECTION_DOT_OFFSET;
+                const end = lastEl.offsetTop + SECTION_DOT_OFFSET;
+                setTrackBounds({ top: start, height: Math.max(0, end - start) });
+            }
+        };
+
+        updateTrack();
+        const timer = setTimeout(updateTrack, 100);
+        window.addEventListener('resize', updateTrack);
+        return () => {
+            window.removeEventListener('resize', updateTrack);
+            clearTimeout(timer);
+        };
+    }, [sections]);
+
+    const scrollToId = (id: string) => {
+        const el = document.getElementById(id);
+        const container = scrollContainerRef.current;
+        if (el && container) {
+            // Scroll so the section dot aligns with the focus point
+            // dotPos = el.offsetTop + SECTION_DOT_OFFSET
+            // desiredScroll = dotPos - FOCUS_POINT_Y + containerPadding? 
+            // Wait, el.offsetTop is relative to the scroll content (which has py-12)
+            // So dot is at el.offsetTop + 56.
+            // We want this to be at FOCUS_POINT_Y from the top of the container.
+            container.scrollTo({
+                top: el.offsetTop + SECTION_DOT_OFFSET - (FOCUS_POINT_Y - 48), 
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -58,6 +90,7 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                 }
             });
         }, { 
+            root: container,
             rootMargin: '-20% 0% -60% 0%',
             threshold: 0
         });
@@ -70,176 +103,122 @@ export function ResourceGrid({ session }: ResourceGridProps) {
         return () => observer.disconnect();
     }, [sections]);
 
-    // Track scroll progress manually using requestAnimationFrame for maximum reliability
     const progressVal = useMotionValue(0);
-
-    const smoothProgress = useSpring(progressVal, {
-        stiffness: 100,
-        damping: 30,
-        restDelta: 0.001
-    });
+    const smoothProgress = useSpring(progressVal, { stiffness: 100, damping: 30, restDelta: 0.001 });
 
     useEffect(() => {
-        if (!containerRef.current || sections.length <= 1) return;
+        const scrollContainer = scrollContainerRef.current;
+        if (!scrollContainer || sections.length <= 1) return;
 
         let active = true;
         const updateProgress = () => {
-            if (!active || !containerRef.current) return;
+            if (!active || !scrollContainer) return;
 
-            const container = containerRef.current;
-            const rect = container.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-
-            // Focus point: 20% from top of screen
-            const focusPoint = viewportHeight * 0.2; 
-
-            // Boundary calculations for the track
             const firstSectionEl = document.getElementById(sections[0].id);
             const lastSectionEl = document.getElementById(sections[sections.length - 1].id);
-            
             if (!firstSectionEl || !lastSectionEl) return;
 
-            const firstOffset = firstSectionEl.offsetTop;
-            const lastOffset = lastSectionEl.offsetTop;
+            const checkpointTrackLength = Math.max(1, lastSectionEl.offsetTop - firstSectionEl.offsetTop);
+            const p = scrollContainer.scrollTop / checkpointTrackLength;
             
-            // The distance between the first and last checkpoint centers
-            const checkpointTrackLength = Math.max(1, lastOffset - firstOffset);
-
-            // Calculate progress: 0 when center of first checkpoint is at focusPoint
-            // Using 80px midline (top-14 header center)
-            let p = (focusPoint - (rect.top + firstOffset + 80)) / checkpointTrackLength;
-            p = Math.max(0, Math.min(1, p));
-
-
-            // Magnetic snap to sections (rounding) with "Sticky" behavior
-            let snappedP = p;
-
-            for (const section of sections) {
-                const el = document.getElementById(section.id);
-                if (el) {
-                    // snapP is relative to the checkpoint-to-checkpoint track
-                    const snapP = (el.offsetTop - firstOffset) / checkpointTrackLength;
-                    const distance = Math.abs(p - snapP);
-                    
-                    const snapWindow = 0.15; // Range where the dot starts pulling
-                    const deadZone = 0.08;   // "Round" behavior: stay in center when close
-
-                    if (distance < snapWindow) {
-                        if (distance < deadZone) {
-                            snappedP = snapP;
-                        } else {
-                            const t = (distance - deadZone) / (snapWindow - deadZone);
-                            const ease = t * t * (3 - 2 * t);
-                            snappedP = snapP + (p - snapP) * ease;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            progressVal.set(snappedP);
+            progressVal.set(Math.max(0, Math.min(1, p)));
             requestAnimationFrame(updateProgress);
         };
 
         const rafId = requestAnimationFrame(updateProgress);
-
-        return () => {
-            active = false;
-            cancelAnimationFrame(rafId);
-        };
+        return () => { active = false; cancelAnimationFrame(rafId); };
     }, [sections]);
-
-    // Transform scroll progress to dot position on the track 
-    // Maps 0-1 progress to the actual pixel positions of the checkpoints (at 80px midline)
-    const firstPointPos = (sections.length > 0 ? (document.getElementById(sections[0].id)?.offsetTop || 0) : 0) + 80;
-    const lastPointPos = (sections.length > 0 ? (document.getElementById(sections[sections.length - 1].id)?.offsetTop || 0) : 0) + 80;
-    
-    // We use a MotionValue for the numeric top position to avoid CSS centering issues
-    const dotTop = useTransform(smoothProgress, [0, 1], [firstPointPos, lastPointPos]);
 
     const hasMultipleSections = sections.length > 1;
 
+    // The track is 2.5rem (40px) to the left of the max-w-xl (576px) list.
+    // List left = 50% - 288px.
+    // Track left = (50% - 288px) - 40px = 50% - 328px.
+    const TRACK_LEFT_OFFSET = "calc(50% - 328px)";
+
     return (
-        <div ref={containerRef} className="relative w-full max-w-4xl mx-auto px-4 md:px-0">
-            {/* 
-                Vertical Track - Positioned right next to the list 
-            */}
+        <div ref={containerRef} className="relative w-full md:h-full flex flex-col items-center">
+            {/* Moving Dot (Sticky focus point indicator) */}
             {hasMultipleSections && (
                 <div 
-                    style={{ 
-                        top: '0px', 
-                        bottom: 'auto',
-                        height: `${lastPointPos}px`
-                    }}
-                    className="absolute left-4 md:left-[calc(50%-18.5rem)] w-[1px] bg-white/[0.05] hidden md:block"
+                    style={{ left: TRACK_LEFT_OFFSET }}
+                    className="hidden md:block absolute top-[104px] z-30 pointer-events-none"
                 >
-                    {/* The Moving Point - Progress indicator */}
-                    <motion.div
-                        style={{
-                            top: dotTop,
-                            y: -2,
-                            marginLeft: '-1px',
-                        }}
-                        className="absolute w-1 h-1 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.4)] z-30"
-                    />
+                    <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.6)] -ml-[0.5px] -mt-[3px]" />
                 </div>
             )}
 
-            <div className="flex-1 space-y-12 w-full">
-                {sections.map((section) => {
-                    const isActive = activeSection === section.id;
-                    return (
-                        <div key={section.id} id={section.id} className="scroll-mt-10 relative">
-                            {/* Navigation Header right on the left edge */}
-                            {hasMultipleSections && (
-                                <div className="absolute hidden md:block left-4 md:left-[calc(50%-18.5rem)] top-14 h-6 flex items-center overflow-visible">
-                                    <button 
-                                        onClick={() => scrollToId(section.id)}
-                                        className="absolute right-0 flex items-center justify-end group outline-none h-full"
-                                        style={{ width: '200px' }}
-                                    >
-                                        <div className="flex flex-col items-end mr-4 transition-all opacity-40 group-hover:opacity-100">
-                                            <span className={cn(
-                                                "text-[8px] font-bold uppercase tracking-[0.2em] leading-none mb-0.5 transition-colors",
-                                                isActive ? "text-white" : "text-zinc-600"
-                                            )}>
-                                                {section.count.toString().padStart(2, '0')}
-                                            </span>
-                                            <span className={cn(
-                                                "text-[10px] font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap leading-none",
-                                                isActive ? "text-white" : "text-zinc-600"
-                                            )}>
-                                                {section.label}
-                                            </span>
-                                        </div>
-                                        {/* stationary checkpoint circle */}
-                                        <div className={cn(
-                                            "w-1.5 h-1.5 rounded-full transition-all duration-300 z-20 shrink-0",
-                                            isActive 
-                                                ? "bg-white scale-110" 
-                                                : "bg-zinc-800 group-hover:bg-zinc-600",
-                                            "relative right-[-3px]"
-                                        )} />
-                                    </button>
-                                </div>
-                            )}
-                            
-                            {/* Mobile Header */}
-                            <div className="md:hidden mb-6 flex flex-col gap-1.5 px-2">
-                                 <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest leading-none">{section.count} Items</span>
-                                 <h2 className="text-sm font-bold uppercase tracking-widest text-white leading-none">{section.label}</h2>
-                            </div>
+            <div 
+                ref={scrollContainerRef} 
+                className="grid-scroll-container w-full md:h-full md:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+                <div className="relative w-full max-w-xl mx-auto py-12 px-6 md:px-0">
+                    {/* Track (Inside, scrolls with content) */}
+                    {hasMultipleSections && (
+                        <div 
+                            style={{ 
+                                height: `${trackBounds.height}px`, 
+                                top: `${trackBounds.top}px`,
+                                left: '-2.5rem'
+                            }}
+                            className="absolute w-[1px] bg-white/[0.05] hidden md:block"
+                        />
+                    )}
 
-                            <div className="flex flex-col w-full max-w-xl mx-auto divide-y divide-white/[0.02]">
-                                {section.data.map(item => (
-                                    <div key={item.model.order_id} className="w-full">
-                                        <ResourceCard id={item.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
+                    <div className="space-y-20 w-full">
+                        {sections.map((section) => {
+                            const isActive = activeSection === section.id;
+                            return (
+                                <div key={section.id} id={section.id} className="scroll-mt-10 relative">
+                                    {/* Navigation Header */}
+                                    {hasMultipleSections && (
+                                        <div className="absolute hidden md:flex left-[-2.5rem] top-14 h-6 items-center justify-end overflow-visible">
+                                            <button 
+                                                onClick={() => scrollToId(section.id)}
+                                                className="absolute right-0 flex items-center justify-end outline-none group"
+                                                style={{ width: '200px' }}
+                                            >
+                                                <div className="flex flex-col items-end mr-4 transition-all opacity-40 group-hover:opacity-100">
+                                                    <span className={cn(
+                                                        "text-[7px] font-bold uppercase tracking-[0.2em] leading-none mb-0.5 transition-colors",
+                                                        isActive ? "text-white" : "text-zinc-600"
+                                                    )}>
+                                                        {section.count.toString().padStart(2, '0')}
+                                                    </span>
+                                                    <span className={cn(
+                                                        "text-[10px] font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap leading-none",
+                                                        isActive ? "text-white" : "text-zinc-600"
+                                                    )}>
+                                                        {section.label}
+                                                    </span>
+                                                </div>
+                                                <div className={cn(
+                                                    "w-1 h-1 rounded-full transition-all duration-300 z-20 shrink-0",
+                                                    isActive ? "bg-white scale-125 shadow-[0_0_8px_rgba(255,255,255,0.4)]" : "bg-zinc-800 group-hover:bg-zinc-600",
+                                                    "relative right-[-0.5px]" 
+                                                )} />
+                                            </button>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Mobile Header */}
+                                    <div className="md:hidden mb-6 flex flex-col gap-1.5 px-2">
+                                         <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest leading-none">{section.count} Items</span>
+                                         <h2 className="text-sm font-bold uppercase tracking-widest text-white leading-none">{section.label}</h2>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
+
+                                    <div className="flex flex-col w-full divide-y divide-white/[0.015]">
+                                        {section.data.map(item => (
+                                            <div key={item.model.order_id} className="w-full">
+                                                <ResourceCard id={item.model.order_id} isCloud={session.is_cloud} sessionId={session.id} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
             </div>
         </div>
     );
