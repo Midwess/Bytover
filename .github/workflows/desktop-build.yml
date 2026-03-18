@@ -129,7 +129,7 @@ jobs:
         if: matrix.enable
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: "Bytover v__VERSION__"
