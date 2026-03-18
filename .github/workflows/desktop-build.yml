@@ -100,26 +100,11 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Enable pnpm via corepack
+      - name: Install pnpm
         if: matrix.enable
-        run: corepack enable && corepack prepare pnpm@9 --activate
-
-      - name: Create pnpm.bat shim (Windows)
-        if: matrix.enable && startsWith(matrix.platform, 'windows')
-        run: |
-          $cargoBin = "$env:CARGO_HOME\bin"
-          if (!(Test-Path $cargoBin)) {
-            $cargoBin = "$env:USERPROFILE\.cargo\bin"
-          }
-          $pnpmCmd = (Get-Command pnpm.cmd -ErrorAction SilentlyContinue).Source
-          if ($pnpmCmd) {
-            $batContent = "@echo off" + [Environment]::NewLine + "$pnpmCmd %*"
-            Set-Content -Path "$cargoBin\pnpm.bat" -Value $batContent
-            Write-Host "Created pnpm.bat at $cargoBin"
-          } else {
-            Write-Host "WARNING: Could not find pnpm.cmd in PATH"
-          }
-        shell: pwsh
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Install Rust
         if: matrix.enable
