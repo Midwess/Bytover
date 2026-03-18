@@ -35,6 +35,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push tag
         run: |
@@ -54,7 +55,7 @@ jobs:
           name: Bytover v${{ inputs.version }}
           target_commitish: ${{ inputs.branch }}
           generate_release_notes: true
-          token: ${{ secrets.GIT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
 
   build:
@@ -86,7 +87,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           submodules: 'recursive'
-          token: ${{ secrets.GIT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update version in files
         if: matrix.enable
