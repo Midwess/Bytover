@@ -40,6 +40,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate TypeScript types
         run: |
           cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
