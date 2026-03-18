@@ -40,7 +40,7 @@ tauri-plugin-autostart = "2"
 thiserror.workspace = true
 image.workspace = true
 tauri-plugin-drag = "2.1.0"
-rdev = { git = "https://github.com/Narsil/rdev.git", branch = "main" }
+rdev = { git = "https://github.com/Narsil/rdev.git", branch = "main", features = ["x11"] }
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
 dispatch = "0.2.0"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
@@ -51,7 +51,11 @@ chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }
+windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_System_Com"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cacao = { version = "0.4.0-beta2", features = ["appkit"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+md5 = "0.7"
+dirs = "5"

@@ -147,7 +147,7 @@ async fn generate_os_thumbnail(
 ) -> Result<(), ThumbnailError> {
     use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK};
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
-    use windows::core::PCWSTR;
+    use windows::core::{PCWSTR, Interface};
     use windows::Win32::Foundation::SIZE;
     use std::os::windows::ffi::OsStrExt;
 
@@ -158,8 +158,10 @@ async fn generate_os_thumbnail(
     tokio::task::spawn_blocking(move || {
         unsafe {
             // Initialize COM
-            CoInitializeEx(None, COINIT_APARTMENTTHREADED)
-                .map_err(|e| ThumbnailError::OsApiError(format!("COM init failed: {}", e)))?;
+            let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            if hr.is_err() {
+                return Err(ThumbnailError::OsApiError(format!("COM init failed: {:?}", hr)));
+            }
 
             let result = (|| -> Result<(), ThumbnailError> {
                 // Convert path to wide string
@@ -209,22 +211,21 @@ async fn generate_os_thumbnail(
 #[cfg(target_os = "windows")]
 fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_path: &PathBuf) -> Result<(), ThumbnailError> {
     use windows::Win32::Graphics::Gdi::{
-        GetDIBits, GetObjectW, DeleteObject, CreateCompatibleDC, SelectObject, 
-        BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, BI_RGB,
+        GetDIBits, GetObjectW, DeleteObject, DeleteDC, CreateCompatibleDC, SelectObject,
+        BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, BI_RGB, HDC,
     };
-    use windows::Win32::Foundation::HDC;
 
     unsafe {
         // Get bitmap information
         let mut bitmap = BITMAP::default();
         let result = GetObjectW(
-            hbitmap,
+            hbitmap.into(),
             std::mem::size_of::<BITMAP>() as i32,
             Some(&mut bitmap as *mut _ as *mut _),
         );
 
         if result == 0 {
-            DeleteObject(hbitmap);
+            DeleteObject(hbitmap.into());
             return Err(ThumbnailError::OsApiError("GetObjectW failed".to_string()));
         }
 
@@ -254,9 +255,9 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
         let mut buffer = vec![0u8; buffer_size];
 
         // Get device context
-        let hdc = CreateCompatibleDC(HDC(0));
+        let hdc = CreateCompatibleDC(Some(HDC(std::ptr::null_mut())));
         if hdc.is_invalid() {
-            DeleteObject(hbitmap);
+            DeleteObject(hbitmap.into());
             return Err(ThumbnailError::OsApiError("CreateCompatibleDC failed".to_string()));
         }
 
@@ -271,10 +272,10 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
             DIB_RGB_COLORS,
         );
 
-        DeleteObject(hdc);
+        DeleteDC(hdc);
 
         if lines == 0 {
-            DeleteObject(hbitmap);
+            DeleteObject(hbitmap.into());
             return Err(ThumbnailError::OsApiError("GetDIBits failed".to_string()));
         }
 
@@ -300,7 +301,7 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
         img.save(output_path)
             .map_err(|e| ThumbnailError::ImageError(e))?;
 
-        DeleteObject(hbitmap);
+        DeleteObject(hbitmap.into());
         Ok(())
     }
 }
@@ -314,14 +315,13 @@ async fn generate_os_thumbnail(
     file_path: &PathBuf,
     png_output_path: &PathBuf,
 ) -> Result<(), ThumbnailError> {
-    use md5::{Md5, Digest};
+    use md5;
 
     // Follow FreeDesktop thumbnail specification
     // First check if thumbnail already exists in cache
     let uri = format!("file://{}", file_path.display());
-    let mut hasher = Md5::new();
-    hasher.update(uri.as_bytes());
-    let hash = format!("{:x}", hasher.finalize());
+    let digest = md5::compute(uri.as_bytes());
+    let hash = format!("{:x}", digest);
 
     // Check standard FreeDesktop cache locations
     let cache_dir = dirs::cache_dir()

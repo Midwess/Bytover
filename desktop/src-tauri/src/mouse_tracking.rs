@@ -3,7 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+#[cfg(target_os = "macos")]
 use rdev::{set_is_main_thread, Button, EventType, Key};
+#[cfg(not(target_os = "macos"))]
+use rdev::{Button, EventType, Key};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 use crate::extensions::AppHandleExt;
 
@@ -170,11 +173,11 @@ pub fn detect_drag(start: &PhysicalPosition<f64>, current: &PhysicalPosition<f64
 
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::UI::Input::Mouse::DragDetect;
+        use windows::Win32::UI::Input::KeyboardAndMouse::DragDetect;
         use windows::Win32::Foundation::{HWND, POINT};
 
         let pt = POINT { x: start.x as i32, y: start.y as i32 };
-        return unsafe { DragDetect(HWND(0), pt).as_bool() };
+        return unsafe { DragDetect(HWND(std::ptr::null_mut()), pt).as_bool() };
     }
 
     #[cfg(target_os = "macos")]

@@ -264,7 +264,7 @@ function SidebarItem({icon, iconColor, label, active, onClick}: {
             `}
         >
             <div className={`w-[20px] h-[20px] rounded-[5px] ${iconColor} flex items-center justify-center shadow-inner shrink-0`}>
-                {React.cloneElement(icon as React.ReactElement, { className: "w-3 h-3 text-white" })}
+                {React.cloneElement(icon as React.ReactElement<any>, { className: "w-3 h-3 text-white" })}
             </div>
             <span className="font-medium tracking-tight">{label}</span>
         </button>
