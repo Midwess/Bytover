@@ -44,7 +44,7 @@ jobs:
           git tag $TAG_NAME
           git push origin $TAG_NAME
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create release
         id: create-release
@@ -171,7 +171,7 @@ jobs:
         if: matrix.enable
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v${{ inputs.version }}-${{ github.run_id }}
           projectPath: desktop
