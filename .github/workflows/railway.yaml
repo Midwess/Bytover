@@ -18,6 +18,6 @@ jobs:
         with:
           version: ${{ github.sha }}
           submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
-          repository: 'dev-logs/bit-bridge'
+          repository: 'dev-logs/Bytover'
           deploy_branch: 'deploy'
           ssh_key: ${{ vars.SSH_PRIVATE_KEY }}

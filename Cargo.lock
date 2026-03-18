@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Bytover"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "cacao",
@@ -24,6 +24,7 @@ dependencies = [
  "rdev",
  "reqwest",
  "schema",
+ "semver",
  "serde",
  "serde_json",
  "shared",

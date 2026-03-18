@@ -332,7 +332,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
     fn hide_auth(&self) {
         if let Some(window) = self.get_webview_window("auth") {
-            let _ = window.close();
+            let _ = window.hide();
         }
     }
 

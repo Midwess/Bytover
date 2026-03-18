@@ -12,231 +12,195 @@ on:
           - windows
           - linux
           - all
-      branch:
-        description: 'Branch to build from'
-        required: true
-        type: string
-        default: main
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create-release.outputs.upload_url }}
-    steps:
-      - name: Create release
-        id: create-release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop-build-${{ github.run_id }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-macos:
-    if: inputs.platform == 'macos' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: macos-latest
+  generate-types:
+    # Runs on Ubuntu to generate TypeScript types (requires pnpm)
+    # All other platforms download these artifacts instead of regenerating
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          submodules: 'recursive'
+          token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
       - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: |
-          cd desktop
-          pnpm install
-
-      - name: Build universal binary
-        run: |
-          cd desktop
-          pnpm tauri build --target universal-apple-darwin
-
-      - name: Find DMG artifact
-        id: dmg
-        run: |
-          DMG_PATH=$(find desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
-          echo "dmg_path=$DMG_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload DMG artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: pnpm/action-setup@v4
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.dmg.outputs.dmg_path }}
-          asset_name: Bytover_macos_universal.dmg
-          asset_content_type: application/x-apple-diskimage
-
-  build-windows:
-    if: inputs.platform == 'windows' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          version: 9
 
       - name: Install Rust
-        run: rustup toolchain install stable
-
-      - name: Install cargo-xwin
-        run: cargo install cargo-xwin
-
-      - name: Build Windows x64
-        run: |
-          $env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
-          cd desktop\src-tauri
-          cargo xwin build --target x86_64-pc-windows-msvc --release
-
-      - name: Find EXE artifact
-        id: exe
-        run: |
-          $exePath = Get-ChildItem -Path "desktop\src-tauri\target\x86_64-pc-windows-msvc\release" -Filter "*.exe" -File | Select-Object -First 1
-          echo "exe_path=$($exePath.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Upload EXE artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: dtolnay/rust-toolchain@stable
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.exe.outputs.exe_path }}
-          asset_name: Bytover_windows_x64.exe
-          asset_content_type: application/x-msdownload
+          targets: wasm32-unknown-unknown
 
-  build-linux-x64:
-    if: inputs.platform == 'linux' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: ubuntu-latest
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate TypeScript types
+        run: |
+          cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
+          # Touch the generated files so their timestamps are newer than shared/
+          find shared_types/generated -type f -exec touch {} \; 2>/dev/null || true
+
+      - name: Upload generated types
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-types-generated
+          path: shared_types/generated/
+          retention-days: 1
+
+  build:
+    needs: generate-types
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_target: universal-apple-darwin
+            enable: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            tauri_target: x86_64-pc-windows-msvc
+            enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
+          - platform: windows-2025
+            target: aarch64-pc-windows-msvc
+            tauri_target: aarch64-pc-windows-msvc
+            enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            tauri_target: x86_64-unknown-linux-gnu
+            enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
+          - platform: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            tauri_target: aarch64-unknown-linux-gnu
+            enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
+        if: matrix.enable
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          submodules: 'recursive'
+          token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Install dependencies
+      - name: Download generated types
+        if: matrix.enable
+        uses: actions/download-artifact@v4
+        with:
+          name: shared-types-generated
+          path: shared_types/generated/
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.enable && matrix.platform == 'ubuntu-22.04'
         run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo dpkg --add-architecture arm64
+            # Update existing sources to be amd64-only to prevent 404s
+            sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+            sudo sed -i 's/deb mirror/deb [arch=amd64] mirror/g' /etc/apt/sources.list
+
+            CODENAME=$(lsb_release -cs)
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+          fi
+
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
-            liblzma-dev \
-            libssl-dev \
-            pkg-config \
-            libdbus-1-dev \
+            libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            pkg-config
 
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add x86_64-unknown-linux-gnu
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y \
+              gcc-aarch64-linux-gnu \
+              g++-aarch64-linux-gnu \
+              libc6-dev-arm64-cross \
+              libssl-dev:arm64 \
+              libgtk-3-dev:arm64 \
+              libwebkit2gtk-4.1-dev:arm64 \
+              libayatana-appindicator3-dev:arm64 \
+              librsvg2-dev:arm64
+
+            echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+            echo "PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Node
+        if: matrix.enable
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        if: matrix.enable
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-      - name: Install dependencies (pnpm)
+      - name: Install Rust
+        if: matrix.enable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install protoc
+        if: matrix.enable
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rust cache
+        if: matrix.enable
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            desktop/src-tauri -> target
+
+      - name: Install desktop dependencies
+        if: matrix.enable
         run: |
           cd desktop
           pnpm install
 
-      - name: Build Linux x64
+      - name: Copy types to desktop node_modules
+        if: matrix.enable
+        shell: bash
         run: |
-          cd desktop
-          pnpm tauri build --target x86_64-unknown-linux-gnu
+          # Copy generated TypeScript to desktop's node_modules after pnpm install
+          cp -r shared_types/generated/typescript desktop/node_modules/shared_types
 
-      - name: Find binary artifact
-        id: binary-x64
-        run: |
-          BINARY_PATH=$(find desktop/src-tauri/target/x86_64-unknown-linux-gnu/release -maxdepth 1 -type f -executable ! -name "deps" ! -name "build" | head -1)
-          echo "binary_path=$BINARY_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload x64 binary
-        uses: actions/upload-release-asset@v1
+      - name: Build Tauri App
+        if: matrix.enable
+        uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
+          TAURI_LINUX_AYATANA_APPINDICATOR: true
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.binary-x64.outputs.binary_path }}
-          asset_name: bytover_linux_x64
-          asset_content_type: application/x-executable
-
-  build-linux-arm64:
-    if: inputs.platform == 'linux' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libc6-dev-arm64-cross \
-            pkg-config-aarch64-linux-gnu \
-            libssl-dev \
-            libgtk-3-dev \
-            liblzma-dev \
-            pkg-config \
-            libdbus-1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add aarch64-unknown-linux-gnu
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies (pnpm)
-        run: |
-          cd desktop
-          pnpm install
-
-      - name: Set cross-compilation environment
-        run: |
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-
-      - name: Build Linux ARM64
-        run: |
-          cd desktop
-          pnpm tauri build --target aarch64-unknown-linux-gnu
-
-      - name: Find binary artifact
-        id: binary-arm64
-        run: |
-          BINARY_PATH=$(find desktop/src-tauri/target/aarch64-unknown-linux-gnu/release -maxdepth 1 -type f -executable ! -name "deps" ! -name "build" | head -1)
-          echo "binary_path=$BINARY_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload ARM64 binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.binary-arm64.outputs.binary_path }}
-          asset_name: bytover_linux_arm64
-          asset_content_type: application/x-executable
+          tagName: v__VERSION__
+          releaseName: "Bytover v__VERSION__"
+          releaseDraft: true
+          prerelease: false
+          projectPath: desktop
+          args: --target ${{ matrix.tauri_target }}

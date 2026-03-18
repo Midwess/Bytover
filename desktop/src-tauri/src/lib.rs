@@ -7,7 +7,6 @@ use crate::api::path_resolver::PathResolverImpl;
 use core_services::logger;
 use tauri_plugin_autostart::ManagerExt;
 use crux_core::Core;
-use native::config::get_updater_url;
 use native::di_container::DiContainer;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
@@ -251,45 +250,30 @@ struct UpdateStatus {
     release_notes: Option<String>,
     is_critical: bool,
 }
-#[derive(serde::Deserialize, Debug)]
-struct UpdateManifest {
-    version: String,
-    notes: Option<String>,
-    #[serde(default)]
-    is_critical: bool,
-    #[allow(dead_code)]
-    platforms: std::collections::HashMap<String, PlatformInfo>,
-}
-
-
-#[derive(serde::Deserialize, Debug)]
-struct PlatformInfo {
-    signature: String,
-    url: String,
-}
 
 #[tauri::command]
 async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
-    let version = app_handle.package_info().version.to_string();
-    let target = match std::env::consts::OS {
-        "macos" => "darwin",
-        other => other,
-    };
-    let arch = std::env::consts::ARCH;
+    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
 
-    let base_url = get_updater_url();
-    let url = format!("{}/{}/{}/{}", base_url, target, arch, version);
-    log::info!("Checking for update at: {}", url);
+    if let Some(update) = update {
+        let current_version = &app_handle.package_info().version;
+        // Parse semver from new version string, stripping 'v' prefix if present
+        let new_version_str = update.version.trim_start_matches('v');
+        let new_version = semver::Version::parse(new_version_str).map_err(|e| e.to_string())?;
+        
+        // Force update if major version is available
+        let is_major_update = new_version.major > current_version.major;
 
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .header(reqwest::header::USER_AGENT, "Bytover-Desktop")
-        .send()
-        .await.map_err(|e| e.to_string())?;
-
-    if response.status() == 204 || response.status() == 404 {
+        let status = UpdateStatus {
+            available: true,
+            version: Some(update.version.clone()),
+            release_notes: update.body.clone(),
+            is_critical: is_major_update,
+        };
+        log::info!("Update check result: {:?}", status);
+        Ok(status)
+    } else {
         let status = UpdateStatus {
             available: false,
             version: None,
@@ -297,25 +281,8 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
             is_critical: false,
         };
         log::info!("Update check result: {:?}", status);
-        return Ok(status);
+        Ok(status)
     }
-
-    if !response.status().is_success() {
-        log::error!("Update check failed with status: {}", response.status());
-        return Err(format!("Update check failed: {}", response.status()));
-    }
-
-    let manifest: UpdateManifest = response.json().await.map_err(|e| e.to_string())?;
-    log::info!("Update manifest received: {:?}", manifest);
-
-    let status = UpdateStatus {
-        available: true,
-        version: Some(manifest.version),
-        release_notes: manifest.notes,
-        is_critical: manifest.is_critical,
-    };
-    log::info!("Update check result: {:?}", status);
-    Ok(status)
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -326,18 +293,8 @@ struct UpdateProgress {
 
 #[tauri::command]
 async fn install_update(app_handle: AppHandle) -> Result<(), String> {
-    let updater_url = get_updater_url();
-    let update_endpoint = format!("{}/{{{{target}}}}/{{{{arch}}}}/{{{{current_version}}}}", updater_url);
-    let url = update_endpoint.parse::<tauri::Url>().map_err(|e| e.to_string())?;
-
-    let updater = app_handle.updater_builder()
-        .endpoints(vec![url]).map_err(|e: tauri_plugin_updater::Error| e.to_string())?
-        .header(reqwest::header::ACCEPT, "application/json").map_err(|e| e.to_string())?
-        .header(reqwest::header::USER_AGENT, "Bytover-Desktop").map_err(|e| e.to_string())?
-        .build()
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
-
-    let update = updater.check().await.map_err(|e: tauri_plugin_updater::Error| e.to_string())?
+    let updater = app_handle.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?
         .ok_or("No update available")?;
 
     // Emit that update is starting
@@ -347,7 +304,6 @@ async fn install_update(app_handle: AppHandle) -> Result<(), String> {
     let app_handle_finished = app_handle.clone();
 
     // Download and install the update with callbacks
-    // Callback types: FnMut(usize, Option<u64>) for progress, FnOnce() for finished
     update.download_and_install(
         move |downloaded: usize, total: Option<u64>| {
             let progress = UpdateProgress {
@@ -359,7 +315,7 @@ async fn install_update(app_handle: AppHandle) -> Result<(), String> {
         move || {
             let _ = app_handle_finished.emit("update-finished", ());
         }
-    ).await.map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
+    ).await.map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -663,7 +619,7 @@ pub async fn run() {
             }
 
             #[cfg(target_os = "macos")]
-            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Regular);
+            let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
