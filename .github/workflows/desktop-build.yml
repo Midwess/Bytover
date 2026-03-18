@@ -24,19 +24,19 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin,x86_64-apple-darwin
             tauri_target: universal-apple-darwin
-            enable: ${{ inputs.platform == 'macos' || inputs.platform == 'all' }}
+            enable: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             tauri_target: x86_64-pc-windows-msvc
-            enable: ${{ inputs.platform == 'windows' || inputs.platform == 'all' }}
+            enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tauri_target: x86_64-unknown-linux-gnu
-            enable: ${{ inputs.platform == 'linux' || inputs.platform == 'all' }}
+            enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
           - platform: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             tauri_target: aarch64-unknown-linux-gnu
-            enable: ${{ inputs.platform == 'linux' || inputs.platform == 'all' }}
+            enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -57,11 +57,9 @@ jobs:
             sudo sed -i 's/deb mirror/deb [arch=amd64] mirror/g' /etc/apt/sources.list
             
             CODENAME=$(lsb_release -cs)
-            sudo bash -c "cat > /etc/apt/sources.list.d/arm64.list <<EOF
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-security main restricted universe multiverse
-EOF"
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
           fi
 
           sudo apt-get update
