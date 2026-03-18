@@ -102,13 +102,16 @@ jobs:
           standalone: true
 
       - name: Add pnpm to PATH (Windows)
-        if: matrix.enable && matrix.platform == 'windows-latest'
+        if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
           echo "D:\a\_temp\pnpm" >> $GITHUB_PATH
           echo "C:\Users\runneradmin\AppData\Local\pnpm" >> $GITHUB_PATH
           # Also try to find where pnpm was actually installed
-          $pnpmDir = (Get-Command pnpm).Source | Split-Path
-          echo "$pnpmDir" >> $GITHUB_PATH
+          $pnpmPath = Get-Command pnpm -ErrorAction SilentlyContinue
+          if ($pnpmPath) {
+            $pnpmDir = $pnpmPath.Source | Split-Path
+            echo "$pnpmDir" >> $GITHUB_PATH
+          }
         shell: pwsh
 
       - name: Setup Node
