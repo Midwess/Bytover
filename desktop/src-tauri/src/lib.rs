@@ -665,24 +665,17 @@ pub async fn run() {
             #[cfg(target_os = "macos")]
             let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Regular);
 
-            #[cfg(not(target_os = "macos"))]
-            {
-                let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-                let menu = MenuBuilder::new(app)
-                    .item(&quit_item)
-                    .build()?;
-            }
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .item(&quit_item)
+                .build()?;
 
             let icon = tauri::image::Image::from_bytes(theme::TRAY_ICON_BYTES)
                 .expect("Failed to load tray icon");
             let mut tray_builder = TrayIconBuilder::new()
                 .icon(icon)
-                .show_menu_on_left_click(true);
-
-            #[cfg(not(target_os = "macos"))]
-            {
-                tray_builder = tray_builder.menu(&menu);
-            }
+                .show_menu_on_left_click(true)
+                .menu(&menu);
 
             #[cfg(target_os = "macos")]
             {
