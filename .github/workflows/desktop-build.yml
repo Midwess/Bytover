@@ -103,19 +103,12 @@ jobs:
       - name: Install pnpm (Windows)
         if: matrix.enable && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2025')
         run: |
-          iwr https://get.pnpm.io/install.ps1 -useb | iex
-          $pnpmRoot = "$env:LOCALAPPDATA\pnpm"
-          if (!(Test-Path $pnpmRoot)) {
-            $pnpmRoot = "$env:APPDATA\pnpm"
-          }
-          # Write PNPM_HOME to GITHUB_ENV so subsequent steps can find pnpm via $env:PNPM_HOME
-          echo "PNPM_HOME=$pnpmRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          # Write pnpm root to GITHUB_PATH so setup-node can find pnpm
-          Add-Content -Path $env:GITHUB_PATH -Value $pnpmRoot
-          # Create a pnpm.bat shim so std::process::Command (which looks for .exe/.bat)
-          # can find pnpm.CMD shim created by the installer
-          $batShim = "@echo off`n`"$pnpmRoot\pnpm.CMD" %*"
-          Set-Content -Path "$pnpmRoot\pnpm.bat" -Value $batShim
+          # Use npm to install pnpm globally - most reliable on Windows
+          npm install -g pnpm@9
+          # npm installs to AppData\Roaming\npm on Windows, add to PATH
+          $npmGlobal = "$env:APPDATA\npm"
+          echo "PNPM_HOME=$npmGlobal" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Add-Content -Path $env:GITHUB_PATH -Value $npmGlobal
         shell: pwsh
 
       - name: Setup Node
@@ -148,10 +141,8 @@ jobs:
       - name: Build shared types
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          $pnpmDir = "$env:LOCALAPPDATA\pnpm"
-          if (!(Test-Path $pnpmDir)) {
-            $pnpmDir = "$env:APPDATA\pnpm"
-          }
+          # npm installs to APPDATA on Windows
+          $pnpmDir = "$env:APPDATA\npm"
           $env:PNPM_HOME = $pnpmDir
           $env:Path = "$pnpmDir;$env:Path"
           cargo build -p shared_types --target wasm32-unknown-unknown
