@@ -1,8 +1,8 @@
 [package]
 name = "Bytover"
-version = "0.1.0"
-description = "Transfer things"
-authors = ["midwex.com"]
+version = "1.0.0"
+description = "P2P Transfer"
+authors = ["midwess.com"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -47,6 +47,7 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-clipboard = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-global-shortcut = "2"
+semver = "1"
 chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 

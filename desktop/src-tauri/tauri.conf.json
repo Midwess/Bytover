@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Bytover",
-  "version": "1.0.0",
+  "version": "../package.json",
   "identifier": "com.westrise.bitbridge.desktop",
   "build": {
     "beforeDevCommand": "pnpm web:dev",
@@ -20,8 +20,8 @@
     "opener": {},
     "autostart": null,
     "updater": {
-      "endpoints": [],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ3MjU3MjkxQzdBMkI2NEEKUldSS3RxTEhrWElsUnpoRDQ4eFI3UTgzUmw4R0FqcEFqYllSTG9aTVNEQkZYN0FFNnl5ckgvMnoK"
+      "endpoints": ["https://github.com/dev-logs/bit-bridge/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJENjlBNEQxMTMzMERBMzcKUldRMzJqQVQwYVJwTFlFMHpQT3FqWGxMK0RvTjNCMytLa2VYZWZqNnQvRjRaN0l0ZFJLcWhqMGEK"
     }
   },
   "app": {
