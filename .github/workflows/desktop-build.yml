@@ -103,13 +103,6 @@ jobs:
           name: shared-types-generated
           path: shared_types/generated/
 
-      - name: Copy types to desktop node_modules
-        if: matrix.enable
-        shell: bash
-        run: |
-          # Copy generated TypeScript to desktop's node_modules so the frontend build finds it
-          cp -r shared_types/generated/typescript desktop/node_modules/shared_types
-
       - name: Install dependencies (Ubuntu only)
         if: matrix.enable && matrix.platform == 'ubuntu-22.04'
         run: |
@@ -189,6 +182,13 @@ jobs:
         run: |
           cd desktop
           pnpm install
+
+      - name: Copy types to desktop node_modules
+        if: matrix.enable
+        shell: bash
+        run: |
+          # Copy generated TypeScript to desktop's node_modules after pnpm install
+          cp -r shared_types/generated/typescript desktop/node_modules/shared_types
 
       - name: Build Tauri App
         if: matrix.enable
