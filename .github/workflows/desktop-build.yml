@@ -35,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.branch }}
-          token: ${{ secrets.GIT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Push tag
         run: |
@@ -45,7 +45,7 @@ jobs:
           git tag $TAG_NAME
           git push origin $TAG_NAME
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
 
       - name: Create release
         id: create-release
@@ -55,7 +55,7 @@ jobs:
           name: Bytover v${{ inputs.version }}
           target_commitish: ${{ inputs.branch }}
           generate_release_notes: true
-          token: ${{ secrets.GIT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GIT_TOKEN }}
           draft: true
 
   build:
@@ -87,6 +87,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           submodules: 'recursive'
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Update version in files
         if: matrix.enable
@@ -171,7 +172,7 @@ jobs:
         if: matrix.enable
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         with:
           tagName: v${{ inputs.version }}-${{ github.run_id }}
           projectPath: desktop
