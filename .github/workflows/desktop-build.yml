@@ -145,11 +145,18 @@ jobs:
       - name: Build shared types
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          $env:PNPM_HOME = "$env:LOCALAPPDATA\pnpm"
-          if (!(Test-Path $env:PNPM_HOME)) {
-            $env:PNPM_HOME = "$env:APPDATA\pnpm"
+          $pnpmDir = "$env:LOCALAPPDATA\pnpm"
+          if (!(Test-Path $pnpmDir)) {
+            $pnpmDir = "$env:APPDATA\pnpm"
           }
-          $env:Path = "$env:PNPM_HOME;$env:Path"
+          Write-Host "PNPM_HOME=$pnpmDir"
+          Write-Host "PNPM_HOME exists: $(Test-Path $pnpmDir)"
+          Write-Host "pnpm.exe exists: $(Test-Path $pnpmDir\pnpm.exe)"
+          Write-Host "PATH before: $env:Path"
+          $env:PNPM_HOME = $pnpmDir
+          $env:Path = "$pnpmDir;$env:Path"
+          Write-Host "PATH after: $env:Path"
+          Write-Host "Testing pnpm: $(Get-Command pnpm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
           cargo build -p shared_types --target wasm32-unknown-unknown
         shell: pwsh
 
