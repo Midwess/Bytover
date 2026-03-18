@@ -141,17 +141,17 @@ jobs:
           workspaces: |
             desktop/src-tauri -> target
 
-      - name: Install desktop dependencies
-        if: matrix.enable
-        run: |
-          cd desktop
-          pnpm install
-
       - name: Build shared types
         if: matrix.enable
         run: |
           cargo build -p shared_types --target wasm32-unknown-unknown
         shell: bash
+
+      - name: Install desktop dependencies
+        if: matrix.enable
+        run: |
+          cd desktop
+          pnpm install
 
       - name: Build Tauri App
         if: matrix.enable
