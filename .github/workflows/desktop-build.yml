@@ -106,6 +106,55 @@ jobs:
         with:
           version: 9
 
+      - name: Debug pnpm location (Windows)
+        if: matrix.enable && startsWith(matrix.platform, 'windows')
+        run: |
+          echo "=== PNPM_HOME: $env:PNPM_HOME ==="
+          echo "=== Whereis pnpm: $(Get-Command pnpm -ErrorAction SilentlyContinue | Format-List -Property Source | Out-String) ==="
+          echo "=== Whereis pnpm.cmd: $(Get-Command pnpm.cmd -ErrorAction SilentlyContinue | Format-List -Property Source | Out-String) ==="
+          echo "=== Whereis pnpm.exe: $(Get-Command pnpm.exe -ErrorAction SilentlyContinue | Format-List -Property Source | Out-String) ==="
+          echo "=== PATH entries containing pnpm: ==="
+          ($env:PATH -split ';') | ForEach-Object { if ($_ -match 'pnpm') { echo $_ } }
+          echo "=== CARGO_HOME: $env:CARGO_HOME ==="
+          if ($env:CARGO_HOME) {
+            echo "=== Contents of CARGO_HOME\bin: ==="
+            Get-ChildItem "$env:CARGO_HOME\bin" -ErrorAction SilentlyContinue | Format-Table Name
+          }
+        shell: pwsh
+
+      - name: Create pnpm.bat shim (Windows)
+        if: matrix.enable && startsWith(matrix.platform, 'windows')
+        run: |
+          # Find the actual pnpm executable (.cmd or .exe)
+          $pnpmCmd = (Get-Command pnpm.cmd -ErrorAction SilentlyContinue).Source
+          if (-not $pnpmCmd) {
+            $pnpmCmd = (Get-Command pnpm.exe -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $pnpmCmd) {
+            # Try finding it in PNPM_HOME
+            if ($env:PNPM_HOME) {
+              $found = Get-ChildItem $env:PNPM_HOME -Recurse -Include "pnpm.cmd","pnpm.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+              if ($found) { $pnpmCmd = $found }
+            }
+          }
+          if ($pnpmCmd) {
+            echo "Found pnpm at: $pnpmCmd"
+            $cargoBin = "$env:CARGO_HOME\bin"
+            if (-not (Test-Path $cargoBin)) {
+              $cargoBin = "$env:USERPROFILE\.cargo\bin"
+            }
+            New-Item -ItemType Directory -Force -Path $cargoBin | Out-Null
+            $batContent = "@echo off`n" + $pnpmCmd + " %*"
+            Set-Content -Path "$cargoBin\pnpm.bat" -Value $batContent
+            Write-Host "Created pnpm.bat at $cargoBin\pnpm.bat -> $pnpmCmd"
+            # Verify it works
+            & "$cargoBin\pnpm.bat" --version
+          } else {
+            Write-Host "ERROR: Could not find pnpm.cmd or pnpm.exe"
+            exit 1
+          }
+        shell: pwsh
+
       - name: Install Rust
         if: matrix.enable
         uses: dtolnay/rust-toolchain@stable
