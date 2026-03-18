@@ -103,12 +103,13 @@ jobs:
       - name: Install pnpm (Windows)
         if: matrix.enable && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2025')
         run: |
-          # Use npm to install pnpm globally
           npm install -g pnpm@9
-          # Get the npm prefix directory (where npm installs global packages)
           $npmPrefix = npm config get prefix
+          Write-Host "npm prefix: $npmPrefix"
+          if (Test-Path $npmPrefix) {
+            Write-Host "npm prefix contents: $(Get-ChildItem $npmPrefix | Select-Object -ExpandProperty Name)"
+          }
           echo "PNPM_HOME=$npmPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          # Add npm prefix to PATH for all subsequent steps
           Add-Content -Path $env:GITHUB_PATH -Value $npmPrefix
         shell: pwsh
 
@@ -142,9 +143,17 @@ jobs:
       - name: Build shared types
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          # PNPM_HOME is written by the Install pnpm (Windows) step to GITHUB_ENV
-          # Set PATH to include PNPM_HOME for the cargo subprocess
+          # PNPM_HOME is written by Install pnpm (Windows) step to GITHUB_ENV
+          Write-Host "PNPM_HOME=$env:PNPM_HOME"
+          Write-Host "PNPM_HOME exists: $(Test-Path $env:PNPM_HOME)"
+          if (Test-Path $env:PNPM_HOME) {
+            Write-Host "Contents of PNPM_HOME: $(Get-ChildItem $env:PNPM_HOME | Select-Object -ExpandProperty Name)"
+          }
+          Write-Host "Path contains PNPM_HOME: $($env:Path -like "*$env:PNPM_HOME*")"
+          Write-Host "Checking for pnpm files:"
+          Get-ChildItem $env:PNPM_HOME -Filter "pnpm*" 2>$null | Select-Object Name, Length | Format-Table
           $env:Path = "$env:PNPM_HOME;$env:Path"
+          Write-Host "After PATH prepend, testing pnpm: $(Get-Command pnpm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
           cargo build -p shared_types --target wasm32-unknown-unknown
         shell: pwsh
 
