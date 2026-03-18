@@ -45,7 +45,7 @@ function Window() {
     }
 
     return (
-        <main className="relative w-screen h-screen dark bg-blackBase flex flex-col select-none overflow-hidden rounded-xl border border-white/5">
+        <main className="relative w-screen h-screen dark bg-background flex flex-col select-none overflow-hidden border border-white/5">
             <AnimatePresence mode="wait">
                 {step === 0 ? (
                     <motion.div 
