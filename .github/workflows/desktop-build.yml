@@ -95,6 +95,7 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9
+          standalone: true
 
       - name: Setup Node
         if: matrix.enable
@@ -123,22 +124,25 @@ jobs:
           workspaces: |
             desktop/src-tauri -> target
 
-      - name: Build shared types
-        if: matrix.enable
-        run: |
-          cargo build -p shared_types --target wasm32-unknown-unknown
-
       - name: Install desktop dependencies
         if: matrix.enable
         run: |
           cd desktop
           pnpm install
 
+      - name: Build shared types
+        if: matrix.enable
+        run: |
+          cargo build -p shared_types --target wasm32-unknown-unknown
+        shell: bash
+
       - name: Build Tauri App
         if: matrix.enable
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
+          TAURI_LINUX_AYATANA_APPINDICATOR: true
         with:
           tagName: v__VERSION__
           releaseName: "Bytover v__VERSION__"
