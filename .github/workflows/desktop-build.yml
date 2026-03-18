@@ -92,6 +92,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}, wasm32-unknown-unknown
 
+      - name: Install protoc
+        if: matrix.enable
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Rust cache
         if: matrix.enable
         uses: swatinem/rust-cache@v2
