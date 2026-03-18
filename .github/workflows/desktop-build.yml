@@ -51,7 +51,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           submodules: 'recursive'
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.enable && matrix.platform == 'ubuntu-22.04'
