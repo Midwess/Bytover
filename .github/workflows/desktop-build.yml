@@ -107,17 +107,15 @@ jobs:
       - name: Create pnpm.bat shim (Windows)
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          # Create pnpm.bat in CARGO_HOME\bin so cargo subprocesses can find pnpm.
-          # Windows CreateProcessW searches for .bat files which are executable via cmd.exe.
           $cargoBin = "$env:CARGO_HOME\bin"
           if (!(Test-Path $cargoBin)) {
             $cargoBin = "$env:USERPROFILE\.cargo\bin"
           }
-          # Find pnpm.cmd (what CreateProcessW can execute on Windows)
           $pnpmCmd = (Get-Command pnpm.cmd -ErrorAction SilentlyContinue).Source
           if ($pnpmCmd) {
-            Set-Content -Path "$cargoBin\pnpm.bat" -Value "@echo off`n`"$pnpmCmd" %*"
-            Write-Host "Created pnpm.bat at $cargoBin\pnpm.bat -> $pnpmCmd"
+            $batContent = "@echo off" + [Environment]::NewLine + "$pnpmCmd %*"
+            Set-Content -Path "$cargoBin\pnpm.bat" -Value $batContent
+            Write-Host "Created pnpm.bat at $cargoBin"
           } else {
             Write-Host "WARNING: Could not find pnpm.cmd in PATH"
           }
