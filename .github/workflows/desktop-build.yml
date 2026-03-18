@@ -99,8 +99,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'pnpm'
-          cache-dependency-path: desktop/pnpm-lock.yaml
 
       - name: Enable pnpm via corepack
         if: matrix.enable
