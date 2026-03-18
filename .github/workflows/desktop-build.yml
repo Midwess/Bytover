@@ -104,11 +104,15 @@ jobs:
         if: matrix.enable && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2025')
         run: |
           iwr https://get.pnpm.io/install.ps1 -useb | iex
-          $env:PNPM_HOME = "$env:LOCALAPPDATA\pnpm"
-          if (!(Test-Path $env:PNPM_HOME)) {
-            $env:PNPM_HOME = "$env:APPDATA\pnpm"
+          $pnpmDir = "$env:LOCALAPPDATA\pnpm"
+          if (!(Test-Path $pnpmDir)) {
+            $pnpmDir = "$env:APPDATA\pnpm"
           }
-          echo "PNPM_HOME=$env:PNPM_HOME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Write PNPM_HOME to GITHUB_ENV so it's available to subsequent steps as $env:PNPM_HOME
+          echo "PNPM_HOME=$pnpmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Write pnpm dir to GITHUB_PATH so actions/setup-node can find pnpm for caching
+          # Use a PowerShell redirect to append to GITHUB_PATH
+          Add-Content -Path $env:GITHUB_PATH -Value $pnpmDir
         shell: pwsh
 
       - name: Setup Node
