@@ -103,12 +103,13 @@ jobs:
       - name: Install pnpm (Windows)
         if: matrix.enable && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2025')
         run: |
-          # Use npm to install pnpm globally - most reliable on Windows
+          # Use npm to install pnpm globally
           npm install -g pnpm@9
-          # npm installs to AppData\Roaming\npm on Windows, add to PATH
-          $npmGlobal = "$env:APPDATA\npm"
-          echo "PNPM_HOME=$npmGlobal" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Add-Content -Path $env:GITHUB_PATH -Value $npmGlobal
+          # Get the npm prefix directory (where npm installs global packages)
+          $npmPrefix = npm config get prefix
+          echo "PNPM_HOME=$npmPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Add npm prefix to PATH for all subsequent steps
+          Add-Content -Path $env:GITHUB_PATH -Value $npmPrefix
         shell: pwsh
 
       - name: Setup Node
@@ -141,10 +142,9 @@ jobs:
       - name: Build shared types
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          # npm installs to APPDATA on Windows
-          $pnpmDir = "$env:APPDATA\npm"
-          $env:PNPM_HOME = $pnpmDir
-          $env:Path = "$pnpmDir;$env:Path"
+          # PNPM_HOME is written by the Install pnpm (Windows) step to GITHUB_ENV
+          # Set PATH to include PNPM_HOME for the cargo subprocess
+          $env:Path = "$env:PNPM_HOME;$env:Path"
           cargo build -p shared_types --target wasm32-unknown-unknown
         shell: pwsh
 
