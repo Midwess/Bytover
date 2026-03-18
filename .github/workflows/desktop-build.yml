@@ -94,38 +94,40 @@ jobs:
             echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
           fi
 
-      - name: Install pnpm
-        if: matrix.enable
+      - name: Install pnpm (Linux/macOS)
+        if: matrix.enable && !startsWith(matrix.platform, 'windows')
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          standalone: true
 
-      - name: Fix pnpm.exe for Rust (Windows)
+      - name: Install pnpm (Windows)
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
-          # pnpm/action-setup often provides a .CMD shim on Windows which Rust's Command::new fails to find.
-          # We force install the standalone .exe via the official script.
           iwr https://get.pnpm.io/install.ps1 -useb | iex
           $pnpmDir = "$env:LOCALAPPDATA\pnpm"
+          if (!(Test-Path $pnpmDir)) {
+            $pnpmDir = "$env:APPDATA\pnpm"
+          }
           echo "$pnpmDir" >> $env:GITHUB_PATH
           echo "PNPM_HOME=$pnpmDir" >> $env:GITHUB_ENV
-          Write-Host "Installed pnpm.exe to $pnpmDir and updated PATH"
         shell: pwsh
 
       - name: Debug pnpm location (Windows)
         if: matrix.enable && startsWith(matrix.platform, 'windows')
         run: |
+          # Wait a bit for PATH to propagate
+          Start-Sleep -Seconds 2
           $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
           if ($pnpm) { 
             Write-Host "Found pnpm: $($pnpm.Source)"
-            if ($pnpm.Source -match '\.exe$') {
-              Write-Host "Verified: pnpm is an .exe file."
-            } else {
-              Write-Warning "pnpm is still NOT an .exe ($($pnpm.Source)). Rust build scripts might fail."
-            }
+            # Test running it
+            & pnpm --version
           } else { 
             Write-Host "pnpm NOT found in PATH" 
+            # Try direct path
+            if (Test-Path "$env:LOCALAPPDATA\pnpm\pnpm.exe") {
+              Write-Host "Found at direct path: $env:LOCALAPPDATA\pnpm\pnpm.exe"
+            }
           }
         shell: pwsh
 
