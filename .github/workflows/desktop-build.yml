@@ -12,11 +12,6 @@ on:
           - windows
           - linux
           - all
-      branch:
-        description: 'Branch to build from'
-        required: true
-        type: string
-        default: main
 
 jobs:
   build:
@@ -49,7 +44,6 @@ jobs:
         if: matrix.enable
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
           submodules: 'recursive'
           token: ${{ secrets.GIT_TOKEN }}
 
