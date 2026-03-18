@@ -21,9 +21,16 @@ on:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       upload_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create release
         id: create-release
         uses: softprops/action-gh-release@v2
@@ -31,211 +38,94 @@ jobs:
           tag_name: desktop-build-${{ github.run_id }}
           generate_release_notes: true
           token: ${{ secrets.GIT_TOKEN }}
+          draft: true
 
-  build-macos:
-    if: inputs.platform == 'macos' || inputs.platform == 'all'
+  build:
     needs: create-release
-    runs-on: macos-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: universal-apple-darwin
+            enable: ${{ inputs.platform == 'macos' || inputs.platform == 'all' }}
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            enable: ${{ inputs.platform == 'windows' || inputs.platform == 'all' }}
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            enable: ${{ inputs.platform == 'linux' || inputs.platform == 'all' }}
+          - platform: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            enable: ${{ inputs.platform == 'linux' || inputs.platform == 'all' }}
+
+    runs-on: ${{ matrix.platform }}
+    if: matrix.enable
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          submodules: 'recursive'
 
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: |
-          cd desktop
-          pnpm install
-
-      - name: Build universal binary
-        run: |
-          cd desktop
-          pnpm tauri build --target universal-apple-darwin
-
-      - name: Find DMG artifact
-        id: dmg
-        run: |
-          DMG_PATH=$(find desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
-          echo "dmg_path=$DMG_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload DMG artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.dmg.outputs.dmg_path }}
-          asset_name: Bytover_macos_universal.dmg
-          asset_content_type: application/x-apple-diskimage
-
-  build-windows:
-    if: inputs.platform == 'windows' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
-
-      - name: Install Rust
-        run: rustup toolchain install stable
-
-      - name: Install cargo-xwin
-        run: cargo install cargo-xwin
-
-      - name: Build Windows x64
-        run: |
-          $env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
-          cd desktop\src-tauri
-          cargo xwin build --target x86_64-pc-windows-msvc --release
-
-      - name: Find EXE artifact
-        id: exe
-        run: |
-          $exePath = Get-ChildItem -Path "desktop\src-tauri\target\x86_64-pc-windows-msvc\release" -Filter "*.exe" -File | Select-Object -First 1
-          echo "exe_path=$($exePath.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Upload EXE artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.exe.outputs.exe_path }}
-          asset_name: Bytover_windows_x64.exe
-          asset_content_type: application/x-msdownload
-
-  build-linux-x64:
-    if: inputs.platform == 'linux' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
-
-      - name: Install dependencies
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
-            liblzma-dev \
-            libssl-dev \
-            pkg-config \
-            libdbus-1-dev \
+            libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add x86_64-unknown-linux-gnu
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            pkg-config
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
 
       - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies (pnpm)
-        run: |
-          cd desktop
-          pnpm install
-
-      - name: Build Linux x64
-        run: |
-          cd desktop
-          pnpm tauri build --target x86_64-unknown-linux-gnu
-
-      - name: Find binary artifact
-        id: binary-x64
-        run: |
-          BINARY_PATH=$(find desktop/src-tauri/target/x86_64-unknown-linux-gnu/release -maxdepth 1 -type f -executable ! -name "deps" ! -name "build" | head -1)
-          echo "binary_path=$BINARY_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload x64 binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+        uses: pnpm/action-setup@v4
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.binary-x64.outputs.binary_path }}
-          asset_name: bytover_linux_x64
-          asset_content_type: application/x-executable
+          version: 9
 
-  build-linux-arm64:
-    if: inputs.platform == 'linux' || inputs.platform == 'all'
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          ref: ${{ inputs.branch }}
-          submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
+          node-version: lts/*
+          cache: 'pnpm'
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            desktop/src-tauri -> target
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libc6-dev-arm64-cross \
-            pkg-config-aarch64-linux-gnu \
-            libssl-dev \
-            libgtk-3-dev \
-            liblzma-dev \
-            pkg-config \
-            libdbus-1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable
-          rustup target add aarch64-unknown-linux-gnu
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies (pnpm)
-        run: |
           cd desktop
           pnpm install
 
-      - name: Set cross-compilation environment
+      - name: Build shared types
         run: |
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          cargo build -p shared_types --target wasm32-unknown-unknown
 
-      - name: Build Linux ARM64
-        run: |
-          cd desktop
-          pnpm tauri build --target aarch64-unknown-linux-gnu
-
-      - name: Find binary artifact
-        id: binary-arm64
-        run: |
-          BINARY_PATH=$(find desktop/src-tauri/target/aarch64-unknown-linux-gnu/release -maxdepth 1 -type f -executable ! -name "deps" ! -name "build" | head -1)
-          echo "binary_path=$BINARY_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload ARM64 binary
-        uses: actions/upload-release-asset@v1
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.binary-arm64.outputs.binary_path }}
-          asset_name: bytover_linux_arm64
-          asset_content_type: application/x-executable
+          tagName: desktop-build-${{ github.run_id }}
+          projectPath: desktop
+          args: --target ${{ matrix.target }}
