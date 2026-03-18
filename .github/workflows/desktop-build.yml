@@ -59,7 +59,7 @@ jobs:
             # Update existing sources to be amd64-only to prevent 404s
             sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
             sudo sed -i 's/deb mirror/deb [arch=amd64] mirror/g' /etc/apt/sources.list
-            
+
             CODENAME=$(lsb_release -cs)
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
@@ -95,40 +95,20 @@ jobs:
           fi
 
       - name: Install pnpm (Linux/macOS)
-        if: matrix.enable && !startsWith(matrix.platform, 'windows')
+        if: matrix.enable && matrix.platform != 'windows-latest' && matrix.platform != 'windows-2025'
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Install pnpm (Windows)
-        if: matrix.enable && startsWith(matrix.platform, 'windows')
+        if: matrix.enable && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2025')
         run: |
           iwr https://get.pnpm.io/install.ps1 -useb | iex
-          $pnpmDir = "$env:LOCALAPPDATA\pnpm"
-          if (!(Test-Path $pnpmDir)) {
-            $pnpmDir = "$env:APPDATA\pnpm"
+          $env:PNPM_HOME = "$env:LOCALAPPDATA\pnpm"
+          if (!(Test-Path $env:PNPM_HOME)) {
+            $env:PNPM_HOME = "$env:APPDATA\pnpm"
           }
-          echo "$pnpmDir" >> $env:GITHUB_PATH
-          echo "PNPM_HOME=$pnpmDir" >> $env:GITHUB_ENV
-        shell: pwsh
-
-      - name: Debug pnpm location (Windows)
-        if: matrix.enable && startsWith(matrix.platform, 'windows')
-        run: |
-          # Wait a bit for PATH to propagate
-          Start-Sleep -Seconds 2
-          $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
-          if ($pnpm) { 
-            Write-Host "Found pnpm: $($pnpm.Source)"
-            # Test running it
-            & pnpm --version
-          } else { 
-            Write-Host "pnpm NOT found in PATH" 
-            # Try direct path
-            if (Test-Path "$env:LOCALAPPDATA\pnpm\pnpm.exe") {
-              Write-Host "Found at direct path: $env:LOCALAPPDATA\pnpm\pnpm.exe"
-            }
-          }
+          echo "PNPM_HOME=$env:PNPM_HOME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
 
       - name: Setup Node
@@ -159,7 +139,18 @@ jobs:
             desktop/src-tauri -> target
 
       - name: Build shared types
-        if: matrix.enable
+        if: matrix.enable && startsWith(matrix.platform, 'windows')
+        run: |
+          $env:PNPM_HOME = "$env:LOCALAPPDATA\pnpm"
+          if (!(Test-Path $env:PNPM_HOME)) {
+            $env:PNPM_HOME = "$env:APPDATA\pnpm"
+          }
+          $env:Path = "$env:PNPM_HOME;$env:Path"
+          cargo build -p shared_types --target wasm32-unknown-unknown
+        shell: pwsh
+
+      - name: Build shared types
+        if: matrix.enable && !startsWith(matrix.platform, 'windows')
         run: |
           cargo build -p shared_types --target wasm32-unknown-unknown
 
