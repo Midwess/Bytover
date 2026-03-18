@@ -98,11 +98,12 @@ jobs:
           name: shared-types-generated
           path: shared_types/generated/
 
-      - name: Touch generated files (update timestamps)
+      - name: Copy types to desktop node_modules
         if: matrix.enable
         shell: bash
         run: |
-          find shared_types/generated -type f -exec touch {} \; 2>/dev/null || true
+          # Copy generated TypeScript to desktop's node_modules so the frontend build finds it
+          cp -r shared_types/generated/typescript desktop/node_modules/shared_types
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.enable && matrix.platform == 'ubuntu-22.04'
@@ -163,7 +164,7 @@ jobs:
         if: matrix.enable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}, wasm32-unknown-unknown
+          targets: ${{ matrix.target }}
 
       - name: Install protoc
         if: matrix.enable
@@ -177,11 +178,6 @@ jobs:
         with:
           workspaces: |
             desktop/src-tauri -> target
-
-      - name: Build shared types
-        if: matrix.enable
-        run: |
-          cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
 
       - name: Install desktop dependencies
         if: matrix.enable
