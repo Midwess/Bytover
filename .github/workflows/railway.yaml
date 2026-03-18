@@ -14,10 +14,10 @@ jobs:
         run: |
           echo '${{ vars.SSH_PRIVATE_KEY }}'
       - name: Deploy to Railway
-        uses: dev-logs/deployment/.github/actions/railway_deployment@main
+        uses: Midwess/deployment/.github/actions/railway_deployment@main
         with:
           version: ${{ github.sha }}
           submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
-          repository: 'dev-logs/Bytover'
+          repository: 'Midwess/Bytover'
           deploy_branch: 'deploy'
           ssh_key: ${{ vars.SSH_PRIVATE_KEY }}

@@ -823,6 +823,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async_zip"
+version = "0.0.18"
+source = "git+https://github.com/Midwess/rs-async-zip.git#b2f52eb7e32234967bc0a67c5a87c45c2863a663"
+dependencies = [
+ "chrono",
+ "crc32fast",
+ "futures-lite",
+ "pin-project",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2283,7 +2295,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "async_zip",
+ "async_zip 0.0.18 (git+https://github.com/dev-logs/rs-async-zip.git)",
  "aws-sdk-s3",
  "bincode 1.3.3",
  "bytes",
@@ -5632,7 +5644,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if",
@@ -5644,7 +5656,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/dev-logs/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -11545,7 +11557,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "async_zip",
+ "async_zip 0.0.18 (git+https://github.com/Midwess/rs-async-zip.git)",
  "bincode 1.3.3",
  "bytes",
  "chrono",

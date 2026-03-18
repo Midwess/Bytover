@@ -43,7 +43,7 @@ gloo-worker = "0.5.0"
 uuid = { version = "1.18.1", features = ["v4"] }
 chrono = { workspace = true }
 lz4_flex = { version = "0.12", default-features = false, features = ["frame"] }
-async_zip = { git = "https://github.com/dev-logs/rs-async-zip.git", features = ["chrono"] }
+async_zip = { git = "https://github.com/Midwess/rs-async-zip.git", features = ["chrono"] }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = [

@@ -75,7 +75,7 @@ export default function Footer(props: {className?: string | undefined, isFullWid
                                 isLight ? "text-zinc-900" : "text-white"
                             )}>Connect</h4>
                             <ul className="flex flex-col gap-3">
-                                <li><Link href="https://github.com/dev-logs/bit-bridge" target="_blank" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>GitHub</Link></li>
+                                <li><Link href="https://github.com/Midwess/bit-bridge" target="_blank" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>GitHub</Link></li>
                                 <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Twitter</Link></li>
                                 <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Discord</Link></li>
                             </ul>

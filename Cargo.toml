@@ -23,8 +23,8 @@ debug-assertions = false
 core-services = { path = "libs/core-services", default-features = false }
 devlog-sdk = { path = "libs/devlog-sdk", default-features = false }
 schema = { path = "libs/schema/rust", default-features = false }
-matchbox_protocol = { git = "https://github.com/dev-logs/matchbox.git", branch = "main" }
-matchbox_socket = { git = "https://github.com/dev-logs/matchbox.git", branch = "main" }
+matchbox_protocol = { git = "https://github.com/Midwess/matchbox.git", branch = "main" }
+matchbox_socket = { git = "https://github.com/Midwess/matchbox.git", branch = "main" }
 ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
 anyhow = { version = "1.0.99", default-features = false }
 crux_core = { version = "0.16.1" }
