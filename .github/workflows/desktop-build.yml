@@ -29,6 +29,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             tauri_target: x86_64-pc-windows-msvc
             enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
+          - platform: windows-2025
+            target: aarch64-pc-windows-msvc
+            tauri_target: aarch64-pc-windows-msvc
+            enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tauri_target: x86_64-unknown-linux-gnu
@@ -96,6 +100,16 @@ jobs:
         with:
           version: 9
           standalone: true
+
+      - name: Add pnpm to PATH (Windows)
+        if: matrix.enable && matrix.platform == 'windows-latest'
+        run: |
+          echo "D:\a\_temp\pnpm" >> $GITHUB_PATH
+          echo "C:\Users\runneradmin\AppData\Local\pnpm" >> $GITHUB_PATH
+          # Also try to find where pnpm was actually installed
+          $pnpmDir = (Get-Command pnpm).Source | Split-Path
+          echo "$pnpmDir" >> $GITHUB_PATH
+        shell: pwsh
 
       - name: Setup Node
         if: matrix.enable
