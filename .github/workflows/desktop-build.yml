@@ -70,6 +70,8 @@ jobs:
 
   deploy:
     needs: generate-types
+    environment:
+      name: ${{ github.ref_name == 'production' && 'Desktop production' || 'Desktop beta' }}
     strategy:
       fail-fast: false
       matrix:
