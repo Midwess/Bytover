@@ -5,38 +5,16 @@ on:
   push:
     branches:
       - main
-      - production
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@v3
-
-      - name: Display Environment Variables
-        shell: bash
-        run: env | sort
-
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           token: ${{ secrets.GIT_TOKEN }}
-
-      - name: Setup SSH Key
-        shell: bash
-        run: |
-          mkdir -p ~/.ssh
-          echo '${{ secrets.SSH_PRIVATE_KEY }}' | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Checkout App Code
-        shell: bash
-        run: |
-          git submodule update --init --recursive
-          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Push to deploy branch
         shell: bash
@@ -44,30 +22,20 @@ jobs:
           DEPLOY_BRANCH="${{ github.ref_name == 'production' && 'deploy-production' || 'deploy' }}"
           git checkout -b $DEPLOY_BRANCH
 
-          # Convert comma-separated submodules to array
-          SUBMODULES='libs/schema,libs/devlog-sdk,libs/core-services'
-          IFS=',' read -ra SUBMODULE_ARRAY <<< "$SUBMODULES"
-
           # Remove cached submodules
-          for submodule in "${SUBMODULE_ARRAY[@]}"; do
-            git rm --cached $submodule || true
-          done
+          git rm --cached libs/schema libs/devlog-sdk libs/core-services || true
 
           # Remove .gitmodules if it exists
           git rm .gitmodules || true
 
           # Remove .git directories from submodules
-          for submodule in "${SUBMODULE_ARRAY[@]}"; do
-            rm -rf $submodule/.git
-          done
+          rm -rf libs/schema/.git libs/devlog-sdk/.git libs/core-services/.git
 
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@devlog.studio'
 
           # Add submodules back as regular files
-          for submodule in "${SUBMODULE_ARRAY[@]}"; do
-            git add $submodule || true
-          done
+          git add libs/schema libs/devlog-sdk libs/core-services
 
-          git commit -m "Deploy commit ${{ env.COMMIT_ID }}"
-          git push git@github.com:Midwess/Bytover.git $DEPLOY_BRANCH -f
+          git commit -m "Deploy commit $(git rev-parse --short HEAD)"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Midwess/Bytover.git $DEPLOY_BRANCH -f
