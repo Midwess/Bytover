@@ -103,6 +103,13 @@ jobs:
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
 
     runs-on: ${{ matrix.platform }}
+    env:
+      BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
+      BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
+      BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
+      BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
+      BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
+      BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
     steps:
       - name: Checkout code
         if: matrix.enable
@@ -205,6 +212,10 @@ jobs:
         run: |
           # Copy generated TypeScript to desktop's node_modules after pnpm install
           cp -r shared_types/generated/typescript desktop/node_modules/shared_types
+
+      - name: Debug BYTOVER environment
+        if: matrix.enable
+        run: printenv | grep BYTOVER
 
       - name: Build Tauri App
         if: matrix.enable
