@@ -47,6 +47,7 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-clipboard = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 semver = "1"
 chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }

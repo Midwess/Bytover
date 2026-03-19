@@ -26,6 +26,7 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
+use tauri_plugin_log::{LogTarget, log};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
@@ -547,7 +548,18 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
     logger::setup();
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_deep_link::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([
+                    LogTarget::LogDir,
+                    LogTarget::Stdout,
+                    #[cfg(debug_assertions)]
+                    LogTarget::Webview,
+                ])
+                .build(),
+        )
+        .plugin(tauri_plugin_deep_link::init());
 
     #[cfg(desktop)]
     {

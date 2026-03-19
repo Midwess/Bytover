@@ -35,7 +35,8 @@
     "react-use-measure": "^2.1.7",
     "shared_types": "file:../shared_types/generated/typescript",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.15",
