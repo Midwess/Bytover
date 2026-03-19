@@ -189,7 +189,6 @@ jobs:
            workspaces: |
             . -> target
            key: rust-${{ matrix.name }}
-           shared-key: rust-generate-types
 
       - name: Install desktop dependencies
         if: matrix.enable
