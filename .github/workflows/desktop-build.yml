@@ -3,13 +3,6 @@ name: desktop-release
 on:
   workflow_dispatch:
     inputs:
-      release_type:
-        description: 'Release type (determines GitHub Environment)'
-        required: true
-        type: choice
-        options:
-          - production
-          - beta
       platform:
         description: 'Platform to build'
         required: true
@@ -77,7 +70,7 @@ jobs:
     permissions:
       contents: write
     environment:
-      name: ${{ github.event.inputs.release_type == 'production' && 'Desktop production' || 'Desktop beta' }}
+      name: ${{ github.ref_name == 'production' && 'Desktop production' || 'Desktop beta' }}
     strategy:
       fail-fast: false
       matrix:
@@ -236,8 +229,8 @@ jobs:
           BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
           BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
         with:
-          tagName: ${{ github.event.inputs.release_type == 'beta' && 'v__VERSION__-beta' || 'v__VERSION__' }}
-          releaseName: "Bytover v__VERSION__ ${{ github.event.inputs.release_type == 'beta' && '(Beta)' || '' }}"
+          tagName: ${{ github.ref_name == 'production' && 'v__VERSION__' || 'v__VERSION__-beta' }}
+          releaseName: "Bytover v__VERSION__ ${{ github.ref_name != 'production' && '(Beta)' || '' }}"
           releaseDraft: true
           prerelease: false
           projectPath: desktop
