@@ -188,7 +188,7 @@ jobs:
         with:
            workspaces: |
             . -> target
-           key: rust-${{ matrix.name }}
+           shared-key: "desktop-${{ matrix.name }}"
 
       - name: Install desktop dependencies
         if: matrix.enable
