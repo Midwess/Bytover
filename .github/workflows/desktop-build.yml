@@ -50,6 +50,7 @@ jobs:
         with:
            workspaces: |
             . -> target
+           shared-key: rust-generate-types
 
       - name: Generate TypeScript types
         run: |
@@ -187,6 +188,8 @@ jobs:
         with:
            workspaces: |
             . -> target
+           key: rust-${{ matrix.name }}
+           shared-key: rust-generate-types
 
       - name: Install desktop dependencies
         if: matrix.enable
