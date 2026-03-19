@@ -1,4 +1,4 @@
-name: Desktop Build
+name: desktop-release
 
 on:
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
           path: shared_types/generated/
           retention-days: 1
 
-  build:
+  deploy:
     needs: generate-types
     permissions:
       contents: write
@@ -236,8 +236,8 @@ jobs:
           BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
           BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Bytover v__VERSION__"
+          tagName: ${{ github.event.inputs.release_type == 'beta' && 'v__VERSION__-beta' || 'v__VERSION__' }}
+          releaseName: "Bytover v__VERSION__ ${{ github.event.inputs.release_type == 'beta' && '(Beta)' || '' }}"
           releaseDraft: true
           prerelease: false
           projectPath: desktop
