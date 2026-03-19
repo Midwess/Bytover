@@ -231,7 +231,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name == 'production' && 'v__VERSION__' || 'v__VERSION__-beta' }}
           releaseName: "Bytover v__VERSION__ ${{ github.ref_name != 'production' && '(Beta)' || '' }} ${{ matrix.platform }}"
-          artifactName: Bytover-__VERSION__-${{ matrix.platform }}
+          artifactName: Bytover-${{ github.ref_name != 'production' && '__VERSION__-beta' || '__VERSION__' }}-${{ matrix.platform }}
           releaseDraft: true
           prerelease: false
           projectPath: desktop
