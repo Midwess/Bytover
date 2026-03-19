@@ -13,6 +13,9 @@ on:
           - linux
           - all
 
+permissions:
+  contents: write
+
 jobs:
   generate-types:
     # Runs on Ubuntu to generate TypeScript types (requires pnpm)
@@ -67,10 +70,6 @@ jobs:
 
   deploy:
     needs: generate-types
-    permissions:
-      contents: write
-    environment:
-      name: ${{ github.ref_name == 'production' && 'Desktop production' || 'Desktop beta' }}
     strategy:
       fail-fast: false
       matrix:
