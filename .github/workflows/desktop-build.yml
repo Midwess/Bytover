@@ -72,23 +72,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - name: build-macos-universal
+            platform: macos-latest
             target: aarch64-apple-darwin,x86_64-apple-darwin
             tauri_target: universal-apple-darwin
             enable: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
-          - platform: windows-latest
+          - name: build-windows-x64
+            platform: windows-latest
             target: x86_64-pc-windows-msvc
             tauri_target: x86_64-pc-windows-msvc
             enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
-          - platform: windows-2025
+          - name: build-windows-arm64
+            platform: windows-2025
             target: aarch64-pc-windows-msvc
             tauri_target: aarch64-pc-windows-msvc
             enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
-          - platform: ubuntu-22.04
+          - name: build-linux-x64
+            platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tauri_target: x86_64-unknown-linux-gnu
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
-          - platform: ubuntu-22.04
+          - name: build-linux-arm64
+            platform: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             tauri_target: aarch64-unknown-linux-gnu
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
