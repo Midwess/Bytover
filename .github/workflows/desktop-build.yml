@@ -3,6 +3,13 @@ name: Desktop Build
 on:
   workflow_dispatch:
     inputs:
+      release_type:
+        description: 'Release type (determines GitHub Environment)'
+        required: true
+        type: choice
+        options:
+          - production
+          - beta
       platform:
         description: 'Platform to build'
         required: true
@@ -69,6 +76,8 @@ jobs:
     needs: generate-types
     permissions:
       contents: write
+    environment:
+      name: ${{ github.event.inputs.release_type == 'production' && 'Desktop production' || 'Desktop beta' }}
     strategy:
       fail-fast: false
       matrix:
