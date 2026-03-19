@@ -174,8 +174,8 @@ jobs:
         if: matrix.enable
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: |
-            desktop/src-tauri -> target
+           workspaces: |
+            . -> target
 
       - name: Install desktop dependencies
         if: matrix.enable
