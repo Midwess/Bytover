@@ -27,7 +27,7 @@ function Window() {
     }
 
     return (
-        <main className="relative w-screen h-screen dark bg-blackBase flex flex-col select-none overflow-hidden rounded-xl border border-white/5">
+        <main className="relative w-screen h-screen dark bg-blackBase flex flex-col select-none overflow-hidden rounded-b-xl border border-white/5">
             {/* Top Part: Vibrant Visual Background and Title */}
             <section 
                 data-tauri-drag-region
