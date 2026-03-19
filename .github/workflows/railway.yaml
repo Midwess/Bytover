@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - production
 
 jobs:
   deploy:
@@ -12,12 +13,12 @@ jobs:
     steps:
       - name: Debug
         run: |
-          echo '${{ vars.SSH_PRIVATE_KEY }}'
+          echo '${{ secrets.SSH_PRIVATE_KEY }}'
       - name: Deploy to Railway
         uses: Midwess/deployment/.github/actions/railway_deployment@main
         with:
           version: ${{ github.sha }}
           submodules: 'libs/schema,libs/devlog-sdk,libs/core-services'
           repository: 'Midwess/Bytover'
-          deploy_branch: 'deploy'
+          deploy_branch: ${{ github.ref_name == 'production' && 'deploy-production' || 'deploy' }}
           ssh_key: ${{ vars.SSH_PRIVATE_KEY }}

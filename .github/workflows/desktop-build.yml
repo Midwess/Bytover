@@ -1,4 +1,4 @@
-name: Desktop Build
+name: desktop-release
 
 on:
   workflow_dispatch:
@@ -45,6 +45,13 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+           workspaces: |
+            . -> target
+           shared-key: rust-generate-types
+
       - name: Generate TypeScript types
         run: |
           cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
@@ -58,31 +65,38 @@ jobs:
           path: shared_types/generated/
           retention-days: 1
 
-  build:
+  deploy:
     needs: generate-types
     permissions:
       contents: write
+    environment:
+      name: ${{ github.ref_name == 'production' && 'Desktop production' || 'Desktop beta' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - name: build-macos-universal
+            platform: macos-latest
             target: aarch64-apple-darwin,x86_64-apple-darwin
             tauri_target: universal-apple-darwin
             enable: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
-          - platform: windows-latest
+          - name: build-windows-x64
+            platform: windows-latest
             target: x86_64-pc-windows-msvc
             tauri_target: x86_64-pc-windows-msvc
             enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
-          - platform: windows-2025
+          - name: build-windows-arm64
+            platform: windows-2025
             target: aarch64-pc-windows-msvc
             tauri_target: aarch64-pc-windows-msvc
             enable: ${{ github.event.inputs.platform == 'windows' || github.event.inputs.platform == 'all' }}
-          - platform: ubuntu-22.04
+          - name: build-linux-x64
+            platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tauri_target: x86_64-unknown-linux-gnu
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
-          - platform: ubuntu-22.04
+          - name: build-linux-arm64
+            platform: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             tauri_target: aarch64-unknown-linux-gnu
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
@@ -174,8 +188,9 @@ jobs:
         if: matrix.enable
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: |
-            desktop/src-tauri -> target
+           workspaces: |
+            . -> target
+           shared-key: "desktop-${{ matrix.name }}"
 
       - name: Install desktop dependencies
         if: matrix.enable
@@ -206,9 +221,17 @@ jobs:
           # ----------------
           PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
           TAURI_LINUX_AYATANA_APPINDICATOR: true
+          # --- Bytover Environment ---
+          BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
+          BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Bytover v__VERSION__"
+          tagName: ${{ github.ref_name == 'production' && 'v__VERSION__' || 'v__VERSION__-beta' }}
+          releaseName: "Bytover v__VERSION__ ${{ github.ref_name != 'production' && '(Beta)' || '' }} ${{ matrix.platform }}"
+          artifactName: Bytover-${{ github.ref_name != 'production' && '__VERSION__-beta' || '__VERSION__' }}-${{ matrix.platform }}
           releaseDraft: true
           prerelease: false
           projectPath: desktop
