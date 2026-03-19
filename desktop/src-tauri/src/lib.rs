@@ -549,7 +549,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
     WriteLogger::init(
-        LevelFilter::Trace,
+        LevelFilter::Off,
         Config::default(),
         File::create("bytover.log").unwrap(),
     )
