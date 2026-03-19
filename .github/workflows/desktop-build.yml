@@ -45,6 +45,12 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+           workspaces: |
+            . -> target
+
       - name: Generate TypeScript types
         run: |
           cargo build -p shared_types --target wasm32-unknown-unknown --no-default-features --features typescript
