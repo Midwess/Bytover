@@ -28,8 +28,8 @@ function Window() {
         invoke("hide_intro")
     }
 
-    const handleMouseDown = async (e: React.MouseEvent) => {
-        if (e.button !== 0) return; // Only left click
+    const handleDragStart = async (e: React.DragEvent) => {
+        e.preventDefault();
         
         try {
             // Get the absolute path for the resource file from Tauri bundle
@@ -125,10 +125,11 @@ function Window() {
                                     repeat: Infinity,
                                     ease: "easeInOut"
                                 }}
-                                onMouseDown={handleMouseDown}
+                                draggable
+                                onDragStart={handleDragStart}
                                 className="cursor-grab active:cursor-grabbing no-drag"
                             >
-                                <div className="flex flex-col items-center gap-4 group no-drag">
+                                <div className="flex flex-col items-center gap-4 group no-drag pointer-events-none">
                                     <div className="w-52 h-52 rounded-[40px] bg-white/5 border border-white/15 p-2 shadow-2xl relative overflow-hidden backdrop-blur-md transition-all group-hover:border-blue-500/30 group-hover:bg-white/10 no-drag pointer-events-none">
                                         <img 
                                             src="/icon.png" 
