@@ -125,25 +125,29 @@ function Window() {
                                     repeat: Infinity,
                                     ease: "easeInOut"
                                 }}
-                                draggable
-                                onDragStart={handleDragStart}
                                 className="cursor-grab active:cursor-grabbing no-drag"
                             >
-                                <div className="flex flex-col items-center gap-4 group no-drag pointer-events-none">
-                                    <div className="w-52 h-52 rounded-[40px] bg-white/5 border border-white/15 p-2 shadow-2xl relative overflow-hidden backdrop-blur-md transition-all group-hover:border-blue-500/30 group-hover:bg-white/10 no-drag pointer-events-none">
-                                        <img 
-                                            src="/icon.png" 
-                                            alt="Bytover Icon" 
-                                            className="w-full h-full object-contain p-8 rounded-[32px] pointer-events-none"
-                                        />
-                                        <div className="absolute top-5 right-5 bg-black/60 backdrop-blur-lg rounded-xl p-2 border border-white/10 shadow-lg pointer-events-none">
-                                            <ImageIcon className="w-5 h-5 text-blue-400" />
+                                <div
+                                    draggable
+                                    onDragStart={handleDragStart}
+                                    className="no-drag"
+                                >
+                                    <div className="flex flex-col items-center gap-4 group no-drag pointer-events-none">
+                                        <div className="w-52 h-52 rounded-[40px] bg-white/5 border border-white/15 p-2 shadow-2xl relative overflow-hidden backdrop-blur-md transition-all group-hover:border-blue-500/30 group-hover:bg-white/10 no-drag pointer-events-none">
+                                            <img 
+                                                src="/icon.png" 
+                                                alt="Bytover Icon" 
+                                                className="w-full h-full object-contain p-8 rounded-[32px] pointer-events-none"
+                                            />
+                                            <div className="absolute top-5 right-5 bg-black/60 backdrop-blur-lg rounded-xl p-2 border border-white/10 shadow-lg pointer-events-none">
+                                                <ImageIcon className="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                                         </div>
-                                        <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                                    </div>
-                                    <div className="flex flex-col items-center gap-0.5 transition-transform group-hover:scale-105 pointer-events-none">
-                                        <p className="text-white font-semibold text-[15px] tracking-tight">bytover_icon.png</p>
-                                        <p className="text-white/40 text-[11px] font-medium tracking-wide uppercase">42 KB • PNG Image</p>
+                                        <div className="flex flex-col items-center gap-0.5 transition-transform group-hover:scale-105 pointer-events-none">
+                                            <p className="text-white font-semibold text-[15px] tracking-tight">bytover_icon.png</p>
+                                            <p className="text-white/40 text-[11px] font-medium tracking-wide uppercase">42 KB • PNG Image</p>
+                                        </div>
                                     </div>
                                 </div>
                             </motion.div>

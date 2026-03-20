@@ -721,8 +721,11 @@ pub async fn run() {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
 
+            #[cfg(target_os = "windows")]
+            let _ = app.deep_link().register("bytover");
+
             let access_url = var("BYTOVER_ACCESS_TOKEN").ok()
-                .map(|it| format!("bitbridge://authorize?access_token={it}"));
+                .map(|it| format!("bytover://auth?access_token={it}"));
 
             let mut start_urls = app.deep_link().get_current()?.unwrap_or_default();
             if let Some(mock_url) = access_url {
