@@ -166,29 +166,24 @@ pub fn drag_end_gesture() {
     DRAG_ACTIVE.store(false, Ordering::SeqCst);
 }
 
-pub fn detect_drag(start: &PhysicalPosition<f64>, current: &PhysicalPosition<f64>) -> bool {
+pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f64>) -> bool {
     if !DRAG_ACTIVE.load(Ordering::SeqCst) {
         return false;
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        use windows::Win32::UI::Input::KeyboardAndMouse::DragDetect;
-        use windows::Win32::Foundation::{HWND, POINT};
-
-        let pt = POINT { x: start.x as i32, y: start.y as i32 };
-        return unsafe { DragDetect(HWND(std::ptr::null_mut()), pt).as_bool() };
-    }
-
     #[cfg(target_os = "macos")]
     {
-        return MACOS_DRAG_HAS_ITEMS.load(Ordering::SeqCst)
+        MACOS_DRAG_HAS_ITEMS.load(Ordering::SeqCst)
     }
 
-    const THRESHOLD: f64 = 20f64;
-    let dx = (current.x - start.x).abs();
-    let dy = (current.y - start.y).abs();
-    dx > THRESHOLD || dy > THRESHOLD
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Windows and others use distance threshold to avoid blocking hook thread
+        const THRESHOLD: f64 = 20f64;
+        let dx = (_current.x - _start.x).abs();
+        let dy = (_current.y - _start.y).abs();
+        dx > THRESHOLD || dy > THRESHOLD
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -235,8 +230,8 @@ pub struct MouseMonitorConfig {
 impl Default for MouseMonitorConfig {
     fn default() -> Self {
         Self {
-            required_shakes: 3,
-            min_changed: 50f64,
+            required_shakes: 2,
+            min_changed: 40f64,
             shake_timeout: Duration::from_millis(2000)
         }
     }
@@ -340,32 +335,36 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let _ = rdev::listen(move |event| {
             match event.event_type {
                 EventType::ButtonPress(Button::Left) => {
+                    log::info!("Mouse ButtonPress(Left) at ({:?}, {:?})", current_mouse_position.x, current_mouse_position.y);
                     USER_DID_DROP.store(false, Ordering::SeqCst);
-                    is_handled_shown = false;
-                    opened_shelf_label = None;
-                    start_mouse_position = current_mouse_position.clone();
-                    if is_handled_shown {
-                        // Check if any visible shelf window is on the current monitor
-                        if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
-                            let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
-                                window.current_monitor().ok().flatten()
-                                    .map(|m| m.position() == current_monitor.position())
-                                    .unwrap_or(false)
-                            });
-                            if !shelf_on_same_monitor {
-                                is_handled_shown = false;
-                            }
-                        }
+                    
+                    // Determine if a shelf is already visible on the current monitor
+                    // to avoid opening multiple shelves during the same gesture
+                    if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
+                        let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
+                            window.current_monitor().ok().flatten()
+                                .map(|m| m.position() == current_monitor.position())
+                                .unwrap_or(false)
+                        });
+                        is_handled_shown = shelf_on_same_monitor;
+                        log::info!("Shelf already visible on monitor: {}", is_handled_shown);
+                    } else {
+                        is_handled_shown = false;
                     }
 
+                    opened_shelf_label = None;
+                    start_mouse_position = current_mouse_position.clone();
                     drag_start_gesture();
                 }
                 EventType::ButtonRelease(Button::Left) => {
+                    log::info!("Mouse ButtonRelease(Left) at ({:?}, {:?})", current_mouse_position.x, current_mouse_position.y);
                     sleep(Duration::from_millis(400));
                     let is_dropped = USER_DID_DROP.load(Ordering::SeqCst);
+                    log::info!("User drop state: {}", is_dropped);
                     if !is_dropped {
                         if let Some(label) = opened_shelf_label.take() {
                             if let Some(window) = app_handle.get_webview_window(&label) {
+                                log::info!("Closing unused shelf: {}", label);
                                 let _ = window.close();
                             }
                         }
@@ -448,16 +447,18 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                         if direction != last_direction {
                             last_direction = direction;
                             shake_count += 1;
+                            log::info!("Shake direction changed: {} -> {}, count: {}", last_direction, direction, shake_count);
                             last_shake_time = Instant::now();
                         }
 
                         if shake_count >= config.required_shakes {
-                            log::info!("Shaking detected, creating new shelf window");
+                            log::info!("Shaking detected, opening shelf...");
                             let start_pos = start_mouse_position.clone();
                             let win = app_handle.open_new_shelf_window();
 
                             // Store the label of the opened shelf
                             opened_shelf_label = Some(win.label().to_string());
+                            log::info!("Opened shelf window with label: {}", win.label());
 
                             if let Ok(window_size) = win.outer_size() {
                                 let window_physical_size: PhysicalSize<u32> = window_size.into();
@@ -491,11 +492,13 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                 }
                 EventType::KeyPress(key) => {
                     if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                        log::info!("Shift key pressed");
                         shift_pressed = true;
                     }
                 }
                 EventType::KeyRelease(key) => {
                     if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                        log::info!("Shift key released");
                         shift_pressed = false;
                     }
                 }
