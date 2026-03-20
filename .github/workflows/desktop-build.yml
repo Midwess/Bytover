@@ -247,4 +247,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: desktop
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features desktop_lib/filelog' || format('--target {0} --features desktop_lib/filelog', matrix.tauri_target) }}
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || format('--target {0}', matrix.tauri_target) }}
