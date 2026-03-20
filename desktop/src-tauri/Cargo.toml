@@ -47,8 +47,12 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-clipboard = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-global-shortcut = "2"
-simplelog = "0.7"
+simplelog = { version = "0.7", optional = true }
 semver = "1"
+
+[features]
+default = []
+log-file = ["simplelog"]
 chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 

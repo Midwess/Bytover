@@ -26,9 +26,9 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
-#[cfg(release)]
+#[cfg(feature = "log-file")]
 use simplelog::{Config, LevelFilter, WriteLogger};
-#[cfg(release)]
+#[cfg(feature = "log-file")]
 use std::fs::File;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
@@ -550,7 +550,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
-    #[cfg(release)]
+    #[cfg(feature = "log-file")]
     {
         WriteLogger::init(
             LevelFilter::Trace,
