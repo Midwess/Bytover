@@ -188,7 +188,7 @@ pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f
              let h1 = FindWindowW(w!("SysDragImage"), None);
              let h2 = FindWindowW(w!("DragImage"), None);
              // HWND in windows crate 0.62 uses a .0 field for the raw handle (isize)
-             h1.0 != 0 || h2.0 != 0
+             h1.unwrap().0 != 0 || h2.unwrap().0 != 0
         };
 
         if !is_dragging {

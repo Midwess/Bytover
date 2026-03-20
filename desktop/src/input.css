@@ -16,7 +16,7 @@
 
     --radius-xl: calc(var(--radius) + 4px);
 
-    --animate-popup: popup 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    --animate-popup: popup 0.6s cubic-bezier(0.15, 1.05, 0.5, 1) forwards;
 
     --animate-marquee: marquee 5s linear infinite;
 
@@ -268,17 +268,17 @@
 @keyframes popup {
     0% {
         opacity: 0;
-        transform: scale(0.9);
+        /* Starting at 0.95 makes the 0.3s duration feel smoother
+           because there is less 'distance' to travel quickly. */
+        transform: scale(0.9) translateY(10px);
     }
-
-    60% {
-        opacity: 1;
-        transform: scale(1.02);
+    50% {
+        transform: scale(1.015);
     }
-
     100% {
         opacity: 1;
-        transform: scale(1);
+        /* The Bezier handles the 1.02 peak automatically */
+        transform: scale(1) translateY(0);
     }
 }
 
