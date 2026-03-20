@@ -3,6 +3,7 @@ use std::time::Duration;
 use file_icon_provider::get_file_icon;
 use image::{DynamicImage, ImageFormat, RgbaImage};
 use tauri::async_runtime::spawn_blocking;
+#[cfg(target_os = "macos")]
 use tokio::process::Command;
 use thiserror::Error;
 use core_services::utils::cancellation::{CancellationToken, FutureExtension, TaskErrors};
