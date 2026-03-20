@@ -56,6 +56,7 @@ static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::ne
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static INTRO_SHOWN_AFTER_AUTH: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+static EXPLICIT_AUTH_REQUESTED: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 
 #[tauri::command]
 async fn get_resource_path(app_handle: AppHandle, path: String) -> Result<String, String> {
@@ -196,6 +197,9 @@ async fn sign_out(app_handle: AppHandle) {
 
 #[tauri::command]
 async fn authenticate(app_handle: AppHandle) {
+    if let Ok(mut requested) = EXPLICIT_AUTH_REQUESTED.lock() {
+        *requested = true;
+    }
     process_event(AuthenticationEvent::Authenticate, app_handle).await;
 }
 
@@ -332,12 +336,22 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
 
-    // Show intro after first successful sign-in
+    // Show intro after first successful sign-in if explicitly requested
     if is_authorized {
-        if let Ok(mut intro_shown) = INTRO_SHOWN_AFTER_AUTH.lock() {
-            if !*intro_shown {
-                app_handle.show_intro();
-                *intro_shown = true;
+        let mut should_trigger_intro = false;
+        if let Ok(mut requested) = EXPLICIT_AUTH_REQUESTED.lock() {
+            if *requested {
+                should_trigger_intro = true;
+                *requested = false;
+            }
+        }
+
+        if should_trigger_intro {
+            if let Ok(mut intro_shown) = INTRO_SHOWN_AFTER_AUTH.lock() {
+                if !*intro_shown {
+                    app_handle.show_intro();
+                    *intro_shown = true;
+                }
             }
         }
     }
