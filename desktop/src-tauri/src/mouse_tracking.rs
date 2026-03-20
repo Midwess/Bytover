@@ -185,10 +185,19 @@ pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f
         use windows::core::w;
         
         let is_dragging = unsafe {
-             let h1 = FindWindowW(w!("SysDragImage"), None);
-             let h2 = FindWindowW(w!("DragImage"), None);
-             // HWND in windows crate 0.62 uses a .0 field for the raw handle (*mut c_void)
-             !h1.unwrap().0.is_null() || !h2.unwrap().0.is_null()
+            let h1 = FindWindowW(w!("SysDragImage"), None);
+            let h2 = FindWindowW(w!("DragImage"), None);
+
+            let s1 = h1.map(|h| !h.0.is_null()).unwrap_or_else(|e| {
+                log::error!("FindWindowW(SysDragImage) failed: {:?}", e);
+                false
+            });
+            let s2 = h2.map(|h| !h.0.is_null()).unwrap_or_else(|e| {
+                log::error!("FindWindowW(DragImage) failed: {:?}", e);
+                false
+            });
+
+            s1 || s2
         };
 
         if !is_dragging {
@@ -363,167 +372,173 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
         let mut is_handled_shown = false;
         let mut shift_pressed = false;
         let _ = rdev::listen(move |event| {
-            match event.event_type {
-                EventType::ButtonPress(Button::Left) => {
-                    USER_DID_DROP.store(false, Ordering::SeqCst);
-                    
-                    // Determine if a shelf is already visible on the current monitor
-                    // to avoid opening multiple shelves during the same gesture
-                    if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
-                        let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
-                            window.current_monitor().ok().flatten()
-                                .map(|m| m.position() == current_monitor.position())
-                                .unwrap_or(false)
-                        });
-                        is_handled_shown = shelf_on_same_monitor;
-                    } else {
-                        is_handled_shown = false;
-                    }
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                match event.event_type {
+                    EventType::ButtonPress(Button::Left) => {
+                        USER_DID_DROP.store(false, Ordering::SeqCst);
+                        
+                        // Determine if a shelf is already visible on the current monitor
+                        // to avoid opening multiple shelves during the same gesture
+                        if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
+                            let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
+                                window.current_monitor().ok().flatten()
+                                    .map(|m| m.position() == current_monitor.position())
+                                    .unwrap_or(false)
+                            });
+                            is_handled_shown = shelf_on_same_monitor;
+                        } else {
+                            is_handled_shown = false;
+                        }
 
-                    opened_shelf_label = None;
-                    start_mouse_position = current_mouse_position.clone();
-                    drag_start_gesture();
-                }
-                EventType::ButtonRelease(Button::Left) => {
-                    sleep(Duration::from_millis(400));
-                    let is_dropped = USER_DID_DROP.load(Ordering::SeqCst);
-                    if !is_dropped {
-                        if let Some(label) = opened_shelf_label.take() {
-                            if let Some(window) = app_handle.get_webview_window(&label) {
-                                let _ = window.close();
+                        opened_shelf_label = None;
+                        start_mouse_position = current_mouse_position.clone();
+                        drag_start_gesture();
+                    }
+                    EventType::ButtonRelease(Button::Left) => {
+                        sleep(Duration::from_millis(400));
+                        let is_dropped = USER_DID_DROP.load(Ordering::SeqCst);
+                        if !is_dropped {
+                            if let Some(label) = opened_shelf_label.take() {
+                                if let Some(window) = app_handle.get_webview_window(&label) {
+                                    let _ = window.close();
+                                }
                             }
                         }
+                        opened_shelf_label = None;
+
+                        drag_end_gesture();
+                        shake_count = 0;
+                        last_direction = 0;
                     }
-                    opened_shelf_label = None;
-
-                    drag_end_gesture();
-                    shake_count = 0;
-                    last_direction = 0;
-                }
-                EventType::MouseMove { x, y } => {
-                    if is_handled_shown {
-                        return;
-                    }
-
-                    if last_sampling.elapsed() < sampling_interval {
-                        return;
-                    }
-
-                    last_sampling = Instant::now();
-
-                    let previous_mouse = current_mouse_position.clone();
-                    current_mouse_position.x = x;
-                    current_mouse_position.y = y;
-
-                    #[cfg(target_os = "macos")]
-                    {
-                        let scale_factor = app_handle
-                            .primary_monitor()
-                            .ok()
-                            .flatten()
-                            .map(|m| m.scale_factor())
-                            .unwrap_or(1.0);
-
-                        current_mouse_position.x = x * scale_factor;
-                        current_mouse_position.y = y * scale_factor;
-                    }
-
-                    if detect_drag(&start_mouse_position, &current_mouse_position) {
-                        if shift_pressed && !is_handled_shown {
-                            log::info!("Shift+drag detected, creating new shelf window");
-                            let start_pos = start_mouse_position.clone();
-                            let win = app_handle.open_new_shelf_window();
-
-                            opened_shelf_label = Some(win.label().to_string());
-
-                            if let Ok(window_size) = win.outer_size() {
-                                let window_physical_size: PhysicalSize<u32> = window_size.into();
-
-                                if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
-                                    let final_pos = calculate_window_position(
-                                        &start_pos,
-                                        &window_physical_size,
-                                        &monitor,
-                                    );
-
-                                    let _ = win.set_position(final_pos);
-                                }
-                                else {
-                                    log::warn!("Could not find monitor at position, using logical fallback");
-                                    let _ = win.set_position(start_pos);
-                                }
-                            }
-
-                            let _ = win.set_focus();
-                            is_handled_shown = true;
+                    EventType::MouseMove { x, y } => {
+                        if is_handled_shown {
                             return;
                         }
 
-                        let dx = current_mouse_position.x - previous_mouse.x;
-                        if dx.abs() < config.min_changed {
+                        if last_sampling.elapsed() < sampling_interval {
                             return;
                         }
 
-                        let direction = dx.signum() as i32;
-                        if direction == 0 {
-                            return;
+                        last_sampling = Instant::now();
+
+                        let previous_mouse = current_mouse_position.clone();
+                        current_mouse_position.x = x;
+                        current_mouse_position.y = y;
+
+                        #[cfg(target_os = "macos")]
+                        {
+                            let scale_factor = app_handle
+                                .primary_monitor()
+                                .ok()
+                                .flatten()
+                                .map(|m| m.scale_factor())
+                                .unwrap_or(1.0);
+
+                            current_mouse_position.x = x * scale_factor;
+                            current_mouse_position.y = y * scale_factor;
                         }
 
-                        if direction != last_direction {
-                            last_direction = direction;
-                            shake_count += 1;
-                            last_shake_time = Instant::now();
-                        }
+                        if detect_drag(&start_mouse_position, &current_mouse_position) {
+                            if shift_pressed && !is_handled_shown {
+                                log::info!("Shift+drag detected, creating new shelf window");
+                                let start_pos = start_mouse_position.clone();
+                                let win = app_handle.open_new_shelf_window();
 
-                        if shake_count >= config.required_shakes {
-                            log::info!("Shaking detected, creating new shelf window");
-                            let start_pos = start_mouse_position.clone();
-                            let win = app_handle.open_new_shelf_window();
+                                opened_shelf_label = Some(win.label().to_string());
 
-                            // Store the label of the opened shelf
-                            opened_shelf_label = Some(win.label().to_string());
+                                if let Ok(window_size) = win.outer_size() {
+                                    let window_physical_size: PhysicalSize<u32> = window_size.into();
 
-                            if let Ok(window_size) = win.outer_size() {
-                                let window_physical_size: PhysicalSize<u32> = window_size.into();
+                                    if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
+                                        let final_pos = calculate_window_position(
+                                            &start_pos,
+                                            &window_physical_size,
+                                            &monitor,
+                                        );
 
-                                if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
-                                    let final_pos = calculate_window_position(
-                                        &start_pos,
-                                        &window_physical_size,
-                                        &monitor,
-                                    );
-
-                                    let _ = win.set_position(final_pos);
+                                        let _ = win.set_position(final_pos);
+                                    }
+                                    else {
+                                        log::warn!("Could not find monitor at position, using logical fallback");
+                                        let _ = win.set_position(start_pos);
+                                    }
                                 }
-                                else {
-                                    log::warn!("Could not find monitor at position, using logical fallback");
-                                    let _ = win.set_position(start_pos);
-                                }
+
+                                let _ = win.set_focus();
+                                is_handled_shown = true;
+                                return;
                             }
 
-                            let _ = win.set_focus();
-                            is_handled_shown = true;
+                            let dx = current_mouse_position.x - previous_mouse.x;
+                            if dx.abs() < config.min_changed {
+                                return;
+                            }
 
-                            shake_count = 0;
-                        }
+                            let direction = dx.signum() as i32;
+                            if direction == 0 {
+                                return;
+                            }
 
-                        if last_shake_time.elapsed() > config.shake_timeout {
-                            last_shake_time = Instant::now();
-                            shake_count = 0;
+                            if direction != last_direction {
+                                last_direction = direction;
+                                shake_count += 1;
+                                last_shake_time = Instant::now();
+                            }
+
+                            if shake_count >= config.required_shakes {
+                                log::info!("Shaking detected, creating new shelf window");
+                                let start_pos = start_mouse_position.clone();
+                                let win = app_handle.open_new_shelf_window();
+
+                                // Store the label of the opened shelf
+                                opened_shelf_label = Some(win.label().to_string());
+
+                                if let Ok(window_size) = win.outer_size() {
+                                    let window_physical_size: PhysicalSize<u32> = window_size.into();
+
+                                    if let Some(monitor) = get_monitor_at_position(&start_pos, &app_handle) {
+                                        let final_pos = calculate_window_position(
+                                            &start_pos,
+                                            &window_physical_size,
+                                            &monitor,
+                                        );
+
+                                        let _ = win.set_position(final_pos);
+                                    }
+                                    else {
+                                        log::warn!("Could not find monitor at position, using logical fallback");
+                                        let _ = win.set_position(start_pos);
+                                    }
+                                }
+
+                                let _ = win.set_focus();
+                                is_handled_shown = true;
+
+                                shake_count = 0;
+                            }
+
+                            if last_shake_time.elapsed() > config.shake_timeout {
+                                last_shake_time = Instant::now();
+                                shake_count = 0;
+                            }
                         }
                     }
-                }
-                EventType::KeyPress(key) => {
-                    if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
-                        shift_pressed = true;
+                    EventType::KeyPress(key) => {
+                        if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                            shift_pressed = true;
+                        }
                     }
-                }
-                EventType::KeyRelease(key) => {
-                    if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
-                        shift_pressed = false;
+                    EventType::KeyRelease(key) => {
+                        if matches!(key, Key::ShiftLeft | Key::ShiftRight) {
+                            shift_pressed = false;
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
+            }));
+
+            if let Err(e) = result {
+                log::error!("Mouse tracking event handler panicked: {:?}", e);
             }
         });
     });
