@@ -176,9 +176,34 @@ pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f
         MACOS_DRAG_HAS_ITEMS.load(Ordering::SeqCst)
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        // Windows and others use distance threshold to avoid blocking hook thread
+        // On Windows, distinguishing between "mouse down move" (selection)
+        // and "actual item drag" is done by checking for the ghost drag image window.
+        // This window class is standard for File Explorer and OLE drags.
+        use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+        use windows::core::w;
+        
+        let is_dragging = unsafe {
+             let h1 = FindWindowW(w!("SysDragImage"), None);
+             let h2 = FindWindowW(w!("DragImage"), None);
+             // HWND in windows crate 0.62 uses a .0 field for the raw handle (isize)
+             h1.0 != 0 || h2.0 != 0
+        };
+
+        if !is_dragging {
+            return false;
+        }
+
+        const THRESHOLD: f64 = 10f64;
+        let dx = (_current.x - _start.x).abs();
+        let dy = (_current.y - _start.y).abs();
+        dx > THRESHOLD || dy > THRESHOLD
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // For other platforms, we use the distance threshold as a fallback
         const THRESHOLD: f64 = 10f64;
         let dx = (_current.x - _start.x).abs();
         let dy = (_current.y - _start.y).abs();
