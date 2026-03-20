@@ -155,7 +155,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 {selectedResources.length === 0 ? (
                     <div
                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
-                        <p className="text-md text-muted-foreground animate-pulse duration-1500">Drop or paste files here</p>
+                        <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">
