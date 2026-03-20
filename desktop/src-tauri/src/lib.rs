@@ -204,6 +204,12 @@ async fn authenticate(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn submit_token(token: String, app_handle: AppHandle) {
+    let url = format!("bytover://auth?access_token={}", token);
+    process_event(AuthenticationEvent::OnRedirected { url }, app_handle).await;
+}
+
+#[tauri::command]
 async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHandle) {
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
@@ -594,7 +600,7 @@ pub async fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            authenticate, add_resources,
+            authenticate, add_resources, submit_token,
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,
