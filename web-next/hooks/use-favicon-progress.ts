@@ -30,7 +30,7 @@ export function useFaviconProgress(progress: number | null) {
         // Load the PNG favicon image
         faviconImageRef.current = new Image()
         faviconImageRef.current.crossOrigin = 'anonymous'
-        faviconImageRef.current.src = '/favicon-96x96.png'
+        faviconImageRef.current.src = '/favicon-light.png'
 
         return () => {
             // Restore all original favicons on unmount
