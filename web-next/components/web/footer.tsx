@@ -65,8 +65,6 @@ export default function Footer(props: {className?: string | undefined, isFullWid
                             )}>Legal</h4>
                             <ul className="flex flex-col gap-3">
                                 <li><Link href="/policy" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Privacy</Link></li>
-                                <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Terms</Link></li>
-                                <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Cookies</Link></li>
                             </ul>
                         </div>
                         <div className="flex flex-col gap-4">
@@ -75,9 +73,8 @@ export default function Footer(props: {className?: string | undefined, isFullWid
                                 isLight ? "text-zinc-900" : "text-white"
                             )}>Connect</h4>
                             <ul className="flex flex-col gap-3">
-                                <li><Link href="https://github.com/Midwess/bit-bridge" target="_blank" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>GitHub</Link></li>
-                                <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Twitter</Link></li>
-                                <li><Link href="#" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Discord</Link></li>
+                                <li><Link href="https://github.com/Midwess/Bytover" target="_blank" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>GitHub</Link></li>
+
                             </ul>
                         </div>
                     </div>

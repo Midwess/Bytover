@@ -14,6 +14,19 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Bytover – Instant, Public & Email File Transfer",
   description: "Transfer files effortlessly. Share instantly via link with no upload needed, create public links with password protection, or send via email.",
+  openGraph: {
+    title: "Bytover – Instant, Public & Email File Transfer",
+    description: "Transfer files effortlessly. Share instantly via link with no upload needed, create public links with password protection, or send via email.",
+    url: getCanonicalUrl('/'),
+    siteName: "Bytover",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bytover – Instant, Public & Email File Transfer",
+    description: "Transfer files effortlessly. Share instantly via link with no upload needed, create public links with password protection, or send via email.",
+  },
   icons: {
     icon: [
       { url: "/favicon-light.png", sizes: "96x96", type: "image/png" },
