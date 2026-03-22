@@ -126,7 +126,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn is_any_shelf_window_open(&self) -> bool;
     fn get_visible_shelf_windows(&self) -> Vec<WebviewWindow<R>>;
     fn hide_send(&self);
-    fn hide_all_shelves(&self);
+    fn close_all_shelves(&self);
     fn show_toast(&self, message: &str) -> WebviewWindow<R>;
 }
 
@@ -573,10 +573,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
     }
 
-    fn hide_all_shelves(&self) {
+    fn close_all_shelves(&self) {
         for (label, window) in self.webview_windows() {
             if label.starts_with("send-") {
-                let _ = window.hide();
+                let _ = window.close();
             }
         }
     }

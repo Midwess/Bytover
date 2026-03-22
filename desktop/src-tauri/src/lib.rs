@@ -417,7 +417,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
-    let Ok(hide_all_shelves_item) = MenuItemBuilder::with_id("hide_all_shelves", "Hide all shelves").build(app_handle) else { return };
+    let Ok(close_all_shelves_item) = MenuItemBuilder::with_id("close_all_shelves", "Close all shelves").build(app_handle) else { return };
     let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else { return };
     let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
@@ -441,7 +441,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         .separator();
 
     if app_handle.is_any_shelf_window_open() {
-        menu_builder = menu_builder.item(&hide_all_shelves_item).separator();
+        menu_builder = menu_builder.item(&close_all_shelves_item).separator();
     }
 
     let Ok(menu) = menu_builder
@@ -727,8 +727,8 @@ pub async fn run() {
                                 process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
                             });
                         },
-                        "hide_all_shelves" => {
-                            app.hide_all_shelves();
+                        "close_all_shelves" => {
+                            app.close_all_shelves();
                             render(CORE.view(), app.clone());
                         },
                         "settings" => {
