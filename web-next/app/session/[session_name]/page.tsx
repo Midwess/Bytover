@@ -121,7 +121,7 @@ export default function SessionPage() {
                 const b = url.searchParams.get('b');
 
                 if (r && g && b) {
-                    setAccentColor(`${r}, ${g}, ${b}`);
+                    requestAnimationFrame(() => setAccentColor(`${r}, ${g}, ${b}`));
                 }
             } catch {
                 // Keep default accent color

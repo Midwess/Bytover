@@ -105,6 +105,8 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         const setup = async () => {
             unlisten = await window.onDragDropEvent((event) => {
                 const {payload} = event
+                console.log('[dragdrop]', event)
+                console.log('[dragdrop]', payload)
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
                 if (payload.type === "over") {
@@ -137,6 +139,50 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             }
         };
     }, [windowInfo, shelfId]);
+
+    useEffect(() => {
+        if (!containerRef.current || !shelfId) return;
+
+        const container = containerRef.current;
+
+        const onDragEnter = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingOver(true);
+        };
+
+        const onDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        const onDragLeave = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!container.contains(e.relatedTarget as Node)) {
+                setIsDraggingOver(false);
+            }
+        };
+
+        const onDrop = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingOver(false);
+            invoke("add_resources_from_drag_pasteboard", {shelfId}).then(noop);
+        };
+
+        container.addEventListener("dragenter", onDragEnter);
+        container.addEventListener("dragover", onDragOver);
+        container.addEventListener("dragleave", onDragLeave);
+        container.addEventListener("drop", onDrop);
+
+        return () => {
+            container.removeEventListener("dragenter", onDragEnter);
+            container.removeEventListener("dragover", onDragOver);
+            container.removeEventListener("dragleave", onDragLeave);
+            container.removeEventListener("drop", onDrop);
+        };
+    }, [shelfId]);
 
     if (!shelfId) {
         return (

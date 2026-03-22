@@ -15,7 +15,7 @@ function OAuthCallback() {
         const redirectUrl = searchParams.get('redirect_url');
 
         if (token) {
-            setAccessToken(token);
+            requestAnimationFrame(() => setAccessToken(token));
         }
 
         if (window.opener) {
@@ -31,9 +31,9 @@ function OAuthCallback() {
             const params = new URLSearchParams(searchParams.toString());
             params.delete('redirect_url');
             window.location.href = `${redirectUrl}?${params.toString()}`;
-            setStatus('success');
+            requestAnimationFrame(() => setStatus('success'));
         } else if (token) {
-            setStatus('success');
+            requestAnimationFrame(() => setStatus('success'));
         } else {
             window.location.href = '/';
         }

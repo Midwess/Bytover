@@ -60,7 +60,8 @@ function ResourceView({ resource, onRemove, isRemoveAllowed }: { resource: Selec
                 if (url) setThumbnailUrl(url);
             });
         } else if (resource.thumbnail_path instanceof LocalResourcePathVariantAbsolutePath) {
-            setThumbnailUrl(resource.thumbnail_path.value);
+            const thumbnailValue = resource.thumbnail_path.value;
+            requestAnimationFrame(() => setThumbnailUrl(thumbnailValue));
         }
     }, [resource.thumbnail_path, isVideo, isImage]);
 
@@ -141,12 +142,17 @@ export default function SendBoard() {
     const [isInProgressDefer, setIsInProgressDefer] = useState(false)
     const progress = (cloudSession?.progress ?? 0) * 100
     const cloudRef = useRef(cloudSession)
-    cloudRef.current = cloudSession
+
+    useEffect(() => {
+        cloudRef.current = cloudSession
+    }, [cloudSession])
 
     useEffect(() => {
         if (cloudSession) {
-            setShowTransferUI(true)
-            setPersistentCloudSession(cloudSession)
+            requestAnimationFrame(() => {
+                setShowTransferUI(true)
+                setPersistentCloudSession(cloudSession)
+            })
         }
     }, [cloudSession])
 
@@ -178,7 +184,7 @@ export default function SendBoard() {
 
     useEffect(() => {
         if (cloudSession?.is_in_progress) {
-            setIsInProgressDefer(true)
+            requestAnimationFrame(() => setIsInProgressDefer(true))
         } else {
             setTimeout(() => {
                 if (!cloudRef?.current?.is_in_progress) {

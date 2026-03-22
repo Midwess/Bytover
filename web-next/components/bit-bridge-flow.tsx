@@ -30,6 +30,11 @@ const subFeatures = [
     }
 ];
 
+const PARTICLE_DATA = Array.from({ length: 8 }, () => ({
+    duration: 1 + Math.random(),
+    leftPercent: 48 + Math.random() * 4,
+}));
+
 export function BitBridgeFlow() {
     return (
         <section className="w-full py-24 md:py-40 bg-black overflow-hidden">
@@ -210,23 +215,23 @@ export function BitBridgeFlow() {
 
                                 {/* Particles */}
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    {[...Array(8)].map((_, i) => (
+                                    {PARTICLE_DATA.map((particle, i) => (
                                         <motion.div
                                             key={i}
-                                            animate={{ 
+                                            animate={{
                                                 y: [20 * (i - 4), 60 * (i - 2)],
                                                 opacity: [0, 0.6, 0],
                                                 scale: [0.5, 1, 0.5]
                                             }}
-                                            transition={{ 
-                                                duration: 1 + Math.random(), 
+                                            transition={{
+                                                duration: particle.duration,
                                                 repeat: Infinity,
-                                                delay: i * 0.15 
+                                                delay: i * 0.15
                                             }}
                                             className="absolute w-1 h-1 bg-emerald-400/40 rounded-full blur-[1px]"
-                                            style={{ 
-                                                left: `${48 + Math.random() * 4}%`,
-                                                top: '30%' 
+                                            style={{
+                                                left: `${particle.leftPercent}%`,
+                                                top: '30%'
                                             }}
                                         />
                                     ))}

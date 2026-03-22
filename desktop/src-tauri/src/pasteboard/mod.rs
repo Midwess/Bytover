@@ -8,7 +8,7 @@ pub async fn read_drag_pasteboard_selections() -> Result<Vec<ResourceSelection>,
     {
         macos::read_drag_pasteboard_selections().await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos")))]
     {
         Ok(vec![])
     }

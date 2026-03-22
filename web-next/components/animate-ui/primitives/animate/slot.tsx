@@ -68,13 +68,9 @@ function Slot<T extends HTMLElement = HTMLElement>({
     children.type !== null &&
     isMotionComponent(children.type);
 
-  const Base = React.useMemo(
-    () =>
-      isAlreadyMotion
-        ? (children.type as React.ElementType)
-        : motion.create(children.type as React.ElementType),
-    [isAlreadyMotion, children.type],
-  );
+  const Base = isAlreadyMotion
+    ? (children.type as React.ElementType)
+    : motion.create(children.type as React.ElementType);
 
   if (!React.isValidElement(children)) return null;
 
@@ -82,6 +78,7 @@ function Slot<T extends HTMLElement = HTMLElement>({
 
   const mergedProps = mergeProps(childProps, props);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Dynamic component creation required for motion wrapper
   return (
     <Base {...mergedProps} ref={mergeRefs(childRef as React.Ref<T>, ref)} />
   );
