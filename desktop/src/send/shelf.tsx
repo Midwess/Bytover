@@ -88,7 +88,13 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    useShelfClipboard({shelfId, containerRef});
+    useShelfClipboard({shelfId});
+
+    useEffect(() => {
+        if (shelfId && containerRef.current) {
+            containerRef.current.focus();
+        }
+    }, [shelfId]);
 
     useEffect(() => {
         if (effectRan.current || !shelfId) return;
@@ -97,7 +103,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         let unlisten: (() => void) | undefined;
 
         const setup = async () => {
-            unlisten = await window.onDragDropEvent(throttle((event) => {
+            unlisten = await window.onDragDropEvent((event) => {
                 const {payload} = event
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
@@ -120,7 +126,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                         }
                     }
                 }
-            }, 50, {leading: true, trailing: true}));
+            })
         };
 
         setup();
@@ -142,11 +148,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
 
     return (
         <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
-            <div
-                ref={containerRef}
-                tabIndex={0}
-                className="w-full h-full outline-none"
-            >
+            <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">

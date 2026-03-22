@@ -647,8 +647,19 @@ pub async fn run() {
                     .item(&quit_item)
                     .build()?;
 
+                let edit_menu = SubmenuBuilder::with_id(app, "edit_menu", "Edit")
+                    .item(&PredefinedMenuItem::undo(app, None)?)
+                    .item(&PredefinedMenuItem::redo(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::cut(app, None)?)
+                    .item(&PredefinedMenuItem::copy(app, None)?)
+                    .item(&PredefinedMenuItem::paste(app, None)?)
+                    .item(&PredefinedMenuItem::select_all(app, None)?)
+                    .build()?;
+
                 let menu = MenuBuilder::new(app)
                     .item(&app_menu)
+                    .item(&edit_menu)
                     .build()?;
 
                 app.set_menu(menu)?;
