@@ -40,7 +40,7 @@ pub static TRANSFER_RESOURCE3_UNRELIABLE_CHANNEL_ID: usize = 5;
 pub static TRANSFER_RESOURCE4_UNRELIABLE_CHANNEL_ID: usize = 6;
 
 pub static MAX_NUM_BLOCK: usize = 16;
-pub static MAX_BUFFER_SIZE: usize = MAX_NUM_BLOCK * CHUNK_SIZE * DATA_SHARDS_DEFAULT;
+pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
 pub struct WebRtc {
@@ -256,6 +256,9 @@ impl WebRtc {
                 ordered: false,
                 max_retransmits: None
             })
+            .udp_reader_buffer_size(1024 * 1024 * 8)
+            .udp_writer_buffer_size(1024 * 1024 * 8)
+            .enable_twcc()
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))

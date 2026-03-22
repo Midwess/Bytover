@@ -3963,7 +3963,7 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -5661,7 +5661,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#da4aea39c2610127e7f2d15702dc9efe5f660731"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if 1.0.4",
@@ -5673,7 +5673,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#da4aea39c2610127e7f2d15702dc9efe5f660731"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -5686,6 +5686,7 @@ dependencies = [
  "futures-channel",
  "futures-timer",
  "futures-util",
+ "interceptor",
  "js-sys",
  "log",
  "matchbox_protocol",
@@ -5694,7 +5695,9 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-util",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -12052,7 +12055,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
