@@ -69,9 +69,9 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             </div>
             <button
                 onClick={handleClose}
-                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-amber-500/50 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
             >
-                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-amber-200 -rotate-45">-</Minus>
+                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
             </button>
             {children}
         </Card>

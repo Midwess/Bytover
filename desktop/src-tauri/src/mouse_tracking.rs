@@ -377,19 +377,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                     EventType::ButtonPress(Button::Left) => {
                         USER_DID_DROP.store(false, Ordering::SeqCst);
                         
-                        // Determine if a shelf is already visible on the current monitor
-                        // to avoid opening multiple shelves during the same gesture
-                        if let Some(current_monitor) = get_monitor_at_position(&current_mouse_position, &app_handle) {
-                            let shelf_on_same_monitor = app_handle.get_visible_shelf_windows().iter().any(|window| {
-                                window.current_monitor().ok().flatten()
-                                    .map(|m| m.position() == current_monitor.position())
-                                    .unwrap_or(false)
-                            });
-                            is_handled_shown = shelf_on_same_monitor;
-                        } else {
-                            is_handled_shown = false;
-                        }
-
+                        is_handled_shown = false;
                         opened_shelf_label = None;
                         start_mouse_position = current_mouse_position.clone();
                         drag_start_gesture();
@@ -443,6 +431,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 log::info!("Shift+drag detected, creating new shelf window");
                                 let start_pos = start_mouse_position.clone();
                                 let win = app_handle.open_new_shelf_window();
+                                is_handled_shown = true;
 
                                 opened_shelf_label = Some(win.label().to_string());
 
@@ -489,6 +478,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 log::info!("Shaking detected, creating new shelf window");
                                 let start_pos = start_mouse_position.clone();
                                 let win = app_handle.open_new_shelf_window();
+                                is_handled_shown = true;
 
                                 // Store the label of the opened shelf
                                 opened_shelf_label = Some(win.label().to_string());
