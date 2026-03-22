@@ -111,14 +111,14 @@ unsafe fn read_clipboard_data() -> DragContent {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::DataExchange::{CloseClipboard, OpenClipboard};
 
-    if OpenClipboard(HWND::default()).is_err() {
+    if OpenClipboard(Some(HWND::default())).is_err() {
         log::warn!("[pasteboard] Failed to open clipboard");
         return DragContent::Empty;
     }
 
     let result = try_read_files()
-        .or_else(try_read_image)
-        .or_else(try_read_text)
+        .or_else(|| unsafe { try_read_image() })
+        .or_else(|| unsafe { try_read_text() })
         .unwrap_or(DragContent::Empty);
 
     let _ = CloseClipboard();
@@ -163,7 +163,6 @@ unsafe fn try_read_files() -> Option<DragContent> {
 }
 
 unsafe fn try_read_image() -> Option<DragContent> {
-    use std::io::Cursor;
     use windows::Win32::Foundation::HGLOBAL;
     use windows::Win32::System::DataExchange::GetClipboardData;
     use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
