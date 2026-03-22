@@ -417,6 +417,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
+    let Ok(hide_all_shelves_item) = MenuItemBuilder::with_id("hide_all_shelves", "Hide all shelves").build(app_handle) else { return };
     let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else { return };
     let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
@@ -433,11 +434,17 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
 
     let Ok(recent_submenu) = recent_submenu_builder.build() else { return };
 
-    let Ok(menu) = MenuBuilder::new(app_handle)
+    let mut menu_builder = MenuBuilder::new(app_handle)
         .item(&new_shelf_item)
         .item(&new_shelf_clipboard_item)
         .item(&recent_submenu)
-        .separator()
+        .separator();
+
+    if app_handle.is_any_shelf_window_open() {
+        menu_builder = menu_builder.item(&hide_all_shelves_item).separator();
+    }
+
+    let Ok(menu) = menu_builder
         .item(&user_guide_item)
         .item(&settings_item)
         .item(&quit_item)
@@ -719,6 +726,10 @@ pub async fn run() {
                             spawn(async move {
                                 process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
                             });
+                        },
+                        "hide_all_shelves" => {
+                            app.hide_all_shelves();
+                            render(CORE.view(), app.clone());
                         },
                         "settings" => {
                             app.show_settings();
