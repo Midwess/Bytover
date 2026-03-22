@@ -13,6 +13,21 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </React.StrictMode>,
 );
 
+function imageToBase64DataUrl(src: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.getContext("2d")!.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
 function Window() {
     const [step, setStep] = useState(0);
 
@@ -30,14 +45,18 @@ function Window() {
 
     const handleDragStart = async (e: React.DragEvent) => {
         e.preventDefault();
-        
+
         try {
             // Get the absolute path for the resource file from Tauri bundle
             const filePath = await invoke<string>("get_resource_path", { path: "icon.png" });
-            
+
+            // Convert image to base64 data URL for the drag preview icon.
+            // Using base64 avoids Windows file path resolution issues with WIC/IDragSourceHelper.
+            const iconDataUrl = await imageToBase64DataUrl("/icon.png");
+
             await startDrag({
                 item: [filePath],
-                icon: filePath,
+                icon: iconDataUrl,
             });
         } catch (err) {
             console.error("Failed to start drag:", err);
