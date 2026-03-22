@@ -93,16 +93,20 @@ pub async fn read_drag_pasteboard_selections() -> Result<Vec<ResourceSelection>,
 fn read_drag_content() -> DragContent {
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
 
+    log::info!("[pasteboard] read_drag_content: starting");
+
     unsafe {
         let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         if hr.is_err() {
             log::warn!("[pasteboard] COM init failed: {:?}", hr);
             return DragContent::Empty;
         }
+        log::info!("[pasteboard] COM initialized");
 
         let result = read_clipboard_data();
 
         CoUninitialize();
+        log::info!("[pasteboard] COM uninitialized");
         result
     }
 }
@@ -112,14 +116,46 @@ unsafe fn read_clipboard_data() -> DragContent {
     use windows::Win32::System::DataExchange::{CloseClipboard, OpenClipboard};
 
     if OpenClipboard(Some(HWND::default())).is_err() {
-        log::warn!("[pasteboard] Failed to open clipboard");
+        log::warn!("[pasteboard] Failed to open clipboard (locked by another app)");
         return DragContent::Empty;
     }
+    log::info!("[pasteboard] Clipboard opened");
 
-    let result = try_read_files()
-        .or_else(|| unsafe { try_read_image() })
-        .or_else(|| unsafe { try_read_text() })
-        .unwrap_or(DragContent::Empty);
+    log::info!("[pasteboard] Trying CF_HDROP (files)...");
+    if let Some(content) = try_read_files() {
+        log::info!("[pasteboard] CF_HDROP returned: {:?}", match &content {
+            DragContent::Files(p) => format!("Files({})", p.len()),
+            _ => "?".to_string(),
+        });
+        let _ = CloseClipboard();
+        return content;
+    }
+    log::info!("[pasteboard] CF_HDROP: no files found");
+
+    log::info!("[pasteboard] Trying CF_DIB (image)...");
+    if let Some(content) = try_read_image() {
+        log::info!("[pasteboard] CF_DIB returned: {:?}", match &content {
+            DragContent::ImageData(d) => format!("ImageData({} bytes)", d.len()),
+            _ => "?".to_string(),
+        });
+        let _ = CloseClipboard();
+        return content;
+    }
+    log::info!("[pasteboard] CF_DIB: no image data found");
+
+    log::info!("[pasteboard] Trying CF_UNICODETEXT (text)...");
+    let result = try_read_text()
+        .unwrap_or_else(|| {
+            log::info!("[pasteboard] CF_UNICODETEXT: no text found");
+            DragContent::Empty
+        });
+    if !matches!(result, DragContent::Empty) {
+        log::info!("[pasteboard] CF_UNICODETEXT returned: {:?}", match &result {
+            DragContent::Url(u) => format!("Url({})", u),
+            DragContent::Text(t) => format!("Text({} chars)", t.len()),
+            _ => "?".to_string(),
+        });
+    }
 
     let _ = CloseClipboard();
     result
@@ -133,10 +169,20 @@ unsafe fn try_read_files() -> Option<DragContent> {
     use windows::Win32::System::DataExchange::GetClipboardData;
     use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 
-    let handle = GetClipboardData(CF_HDROP).ok()?;
+    let handle = match GetClipboardData(CF_HDROP) {
+        Ok(h) => {
+            log::info!("[pasteboard] CF_HDROP handle: {:?}", h);
+            h
+        }
+        Err(e) => {
+            log::info!("[pasteboard] CF_HDROP: GetClipboardData failed: {:?}", e);
+            return None;
+        }
+    };
     let hdrop = HDROP(handle.0 as _);
 
     let count = DragQueryFileW(hdrop, 0xFFFFFFFF, None);
+    log::info!("[pasteboard] CF_HDROP: {} file(s) in drop", count);
     if count == 0 {
         return None;
     }
@@ -151,13 +197,16 @@ unsafe fn try_read_files() -> Option<DragContent> {
         DragQueryFileW(hdrop, i, Some(&mut buf));
         let path = String::from_utf16_lossy(&buf[..len as usize]);
         if !path.is_empty() {
+            log::info!("[pasteboard] CF_HDROP:   file[{}] = {}", paths.len(), path);
             paths.push(path);
         }
     }
 
     if paths.is_empty() {
+        log::info!("[pasteboard] CF_HDROP: all paths were empty");
         None
     } else {
+        log::info!("[pasteboard] CF_HDROP: returning {} valid paths", paths.len());
         Some(DragContent::Files(paths))
     }
 }
@@ -167,25 +216,47 @@ unsafe fn try_read_image() -> Option<DragContent> {
     use windows::Win32::System::DataExchange::GetClipboardData;
     use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
 
-    let handle = GetClipboardData(CF_DIB).ok()?;
+    let handle = match GetClipboardData(CF_DIB) {
+        Ok(h) => {
+            log::info!("[pasteboard] CF_DIB handle: {:?}", h);
+            h
+        }
+        Err(e) => {
+            log::info!("[pasteboard] CF_DIB: GetClipboardData failed: {:?}", e);
+            return None;
+        }
+    };
     let hglobal = HGLOBAL(handle.0 as _);
 
     let size = GlobalSize(hglobal);
+    log::info!("[pasteboard] CF_DIB: GlobalSize = {} bytes", size);
     if size == 0 {
+        log::info!("[pasteboard] CF_DIB: size is 0");
         return None;
     }
 
     let ptr = GlobalLock(hglobal);
     if ptr.is_null() {
+        log::info!("[pasteboard] CF_DIB: GlobalLock returned null");
         return None;
     }
 
     let dib_data = std::slice::from_raw_parts(ptr as *const u8, size);
+    log::info!("[pasteboard] CF_DIB: locked {} bytes, converting to PNG...", size);
     let png_bytes = dib_to_png(dib_data);
 
     let _ = GlobalUnlock(hglobal);
 
-    png_bytes.map(DragContent::ImageData)
+    match png_bytes {
+        Some(bytes) => {
+            log::info!("[pasteboard] CF_DIB: PNG conversion successful, {} bytes", bytes.len());
+            Some(DragContent::ImageData(bytes))
+        }
+        None => {
+            log::info!("[pasteboard] CF_DIB: PNG conversion failed");
+            None
+        }
+    }
 }
 
 fn dib_to_png(dib_data: &[u8]) -> Option<Vec<u8>> {
@@ -236,11 +307,21 @@ unsafe fn try_read_text() -> Option<DragContent> {
     use windows::Win32::System::DataExchange::GetClipboardData;
     use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
 
-    let handle = GetClipboardData(CF_UNICODETEXT).ok()?;
+    let handle = match GetClipboardData(CF_UNICODETEXT) {
+        Ok(h) => {
+            log::info!("[pasteboard] CF_UNICODETEXT handle: {:?}", h);
+            h
+        }
+        Err(e) => {
+            log::info!("[pasteboard] CF_UNICODETEXT: GetClipboardData failed: {:?}", e);
+            return None;
+        }
+    };
     let hglobal = HGLOBAL(handle.0 as _);
 
     let ptr = GlobalLock(hglobal);
     if ptr.is_null() {
+        log::info!("[pasteboard] CF_UNICODETEXT: GlobalLock returned null");
         return None;
     }
 
@@ -252,6 +333,7 @@ unsafe fn try_read_text() -> Option<DragContent> {
             break;
         }
     }
+    log::info!("[pasteboard] CF_UNICODETEXT: locked, {} chars (max 1M)", len);
 
     let slice = std::slice::from_raw_parts(wide_ptr, len);
     let text = String::from_utf16_lossy(slice);
@@ -259,13 +341,17 @@ unsafe fn try_read_text() -> Option<DragContent> {
     let _ = GlobalUnlock(hglobal);
 
     let trimmed = text.trim();
+    log::info!("[pasteboard] CF_UNICODETEXT: text = \"{}\" ({} raw, {} trimmed)", &text[..text.len().min(200)], text.len(), trimmed.len());
     if trimmed.is_empty() {
+        log::info!("[pasteboard] CF_UNICODETEXT: text is empty after trim");
         return None;
     }
 
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        log::info!("[pasteboard] CF_UNICODETEXT: detected URL, returning Url variant");
         Some(DragContent::Url(trimmed.to_string()))
     } else {
+        log::info!("[pasteboard] CF_UNICODETEXT: plain text, returning Text variant");
         Some(DragContent::Text(trimmed.to_string()))
     }
 }

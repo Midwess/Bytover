@@ -138,6 +138,50 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         };
     }, [windowInfo, shelfId]);
 
+    useEffect(() => {
+        if (!containerRef.current || !shelfId) return;
+
+        const container = containerRef.current;
+
+        const onDragEnter = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingOver(true);
+        };
+
+        const onDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        const onDragLeave = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!container.contains(e.relatedTarget as Node)) {
+                setIsDraggingOver(false);
+            }
+        };
+
+        const onDrop = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingOver(false);
+            invoke("add_resources_from_drag_pasteboard", {shelfId}).then(noop);
+        };
+
+        container.addEventListener("dragenter", onDragEnter);
+        container.addEventListener("dragover", onDragOver);
+        container.addEventListener("dragleave", onDragLeave);
+        container.addEventListener("drop", onDrop);
+
+        return () => {
+            container.removeEventListener("dragenter", onDragEnter);
+            container.removeEventListener("dragover", onDragOver);
+            container.removeEventListener("dragleave", onDragLeave);
+            container.removeEventListener("drop", onDrop);
+        };
+    }, [shelfId]);
+
     if (!shelfId) {
         return (
             <ShelfWrapper>
