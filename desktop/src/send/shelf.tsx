@@ -112,8 +112,12 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 } else if (payload.type === "drop") {
                     setIsDraggingOver(false);
 
-                    if (isLeftSide && payload.paths.length > 0) {
-                        invoke("add_resources", {shelfId, paths: payload.paths}).then(noop);
+                    if (isLeftSide) {
+                        if (payload.paths.length > 0) {
+                            invoke("add_resources", {shelfId, paths: payload.paths}).then(noop);
+                        } else {
+                            invoke("add_resources_from_drag_pasteboard", {shelfId}).then(noop);
+                        }
                     }
                 }
             }, 50, {leading: true, trailing: true}));

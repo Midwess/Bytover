@@ -51,6 +51,7 @@ mod thumbnail;
 pub(crate) mod mouse_tracking;
 mod theme;
 mod content_handlers;
+mod pasteboard;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
@@ -219,6 +220,21 @@ async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHand
     }).collect::<Vec<_>>();
 
     process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
+}
+
+#[tauri::command]
+async fn add_resources_from_drag_pasteboard(shelf_id: String, app_handle: AppHandle) -> Result<(), String> {
+    notify_user_did_drop();
+    let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
+
+    let selections = pasteboard::read_drag_pasteboard_selections().await?;
+    if !selections.is_empty() {
+        process_event(
+            ShelfEvent::AddResources { shelf_id, selections },
+            app_handle,
+        ).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -600,7 +616,7 @@ pub async fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            authenticate, add_resources, submit_token,
+            authenticate, add_resources, add_resources_from_drag_pasteboard, submit_token,
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,

@@ -14,13 +14,13 @@ const HTTP_TIMEOUT_SECS: u64 = 30;
 use crate::process_event;
 use crate::mouse_tracking::notify_user_did_drop;
 
-fn generate_filename(extension: &str) -> String {
+pub(crate) fn generate_filename(extension: &str) -> String {
     let timestamp = chrono::Utc::now().timestamp_millis();
     let short_uuid = &Uuid::new_v4().to_string()[..8];
     format!("bytover_{}_{}.{}", timestamp, short_uuid, extension)
 }
 
-fn generate_redirect_html(url: &str) -> String {
+pub(crate) fn generate_redirect_html(url: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html>
@@ -32,7 +32,7 @@ fn generate_redirect_html(url: &str) -> String {
     )
 }
 
-async fn get_dropped_content_path(filename: &str) -> PathBuf {
+pub(crate) async fn get_dropped_content_path(filename: &str) -> PathBuf {
     let dir = DiContainer::get_instance()
         .path_resolver()
         .get_dropped_content_dir_path()
