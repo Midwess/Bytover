@@ -709,12 +709,12 @@ pub async fn run() {
                         },
                         "new_shelf" => {
                             notify_user_did_drop();
-                            app.open_new_shelf_window();
+                            app.open_new_shelf_window(None);
                         },
                         "new_shelf_from_clipboard" => {
                             notify_user_did_drop();
                             let shelf_id = shared::gen_shelf_id();
-                            app.show_shelf(shelf_id);
+                            app.show_shelf(shelf_id, None);
                             let app_handle = app.clone();
                             spawn(async move {
                                 process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
@@ -729,7 +729,7 @@ pub async fn run() {
                         id if id.starts_with("shelf_") => {
                             if let Some(shelf_id_str) = id.strip_prefix("shelf_") {
                                 if let Ok(shelf_id) = shelf_id_str.parse::<u64>() {
-                                    app.show_shelf(shelf_id);
+                                    app.show_shelf(shelf_id, None);
                                 }
                             }
                         },
