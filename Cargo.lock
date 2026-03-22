@@ -5661,7 +5661,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#87f72437deb682efd6bae5df38aa391b5ab99a8a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#ac0811d5e4d3016f46442cda9058e879319d9178"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if 1.0.4",
@@ -5673,7 +5673,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#87f72437deb682efd6bae5df38aa391b5ab99a8a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#ac0811d5e4d3016f46442cda9058e879319d9178"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -5686,7 +5686,6 @@ dependencies = [
  "futures-channel",
  "futures-timer",
  "futures-util",
- "interceptor",
  "js-sys",
  "log",
  "matchbox_protocol",
