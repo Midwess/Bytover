@@ -17,7 +17,7 @@ use crate::mouse_tracking::notify_user_did_drop;
 pub(crate) fn generate_filename(extension: &str) -> String {
     let timestamp = chrono::Utc::now().timestamp_millis();
     let short_uuid = &Uuid::new_v4().to_string()[..8];
-    format!("bytover_{}_{}.{}", timestamp, short_uuid, extension)
+    format!("generated_{}_{}.{}", timestamp, short_uuid, extension)
 }
 
 pub(crate) fn generate_redirect_html(url: &str) -> String {
