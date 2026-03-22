@@ -111,6 +111,21 @@ fn read_drag_content() -> DragContent {
     }
 }
 
+unsafe fn enumerate_clipboard_formats() {
+    use windows::Win32::System::DataExchange::EnumClipboardFormats;
+
+    let mut fmt: u32 = 0;
+    let mut found = Vec::new();
+    loop {
+        fmt = EnumClipboardFormats(fmt);
+        if fmt == 0 {
+            break;
+        }
+        found.push(fmt);
+    }
+    log::info!("[pasteboard] Clipboard formats available: {:?}", found);
+}
+
 unsafe fn read_clipboard_data() -> DragContent {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::DataExchange::{CloseClipboard, OpenClipboard};
@@ -120,6 +135,8 @@ unsafe fn read_clipboard_data() -> DragContent {
         return DragContent::Empty;
     }
     log::info!("[pasteboard] Clipboard opened");
+
+    enumerate_clipboard_formats();
 
     log::info!("[pasteboard] Trying CF_HDROP (files)...");
     if let Some(content) = try_read_files() {
@@ -164,6 +181,8 @@ unsafe fn read_clipboard_data() -> DragContent {
 const CF_HDROP: u32 = 15;
 const CF_DIB: u32 = 8;
 const CF_UNICODETEXT: u32 = 13;
+const CF_BITMAP: u32 = 2;
+const CF_ENHMETAFILE: u32 = 14;
 
 unsafe fn try_read_files() -> Option<DragContent> {
     use windows::Win32::System::DataExchange::GetClipboardData;
@@ -212,6 +231,19 @@ unsafe fn try_read_files() -> Option<DragContent> {
 }
 
 unsafe fn try_read_image() -> Option<DragContent> {
+    if let Some(img) = try_read_cf_dib() {
+        return Some(img);
+    }
+    if let Some(img) = try_read_cf_bitmap() {
+        return Some(img);
+    }
+    if let Some(img) = try_read_cf_enhmetafile() {
+        return Some(img);
+    }
+    None
+}
+
+unsafe fn try_read_cf_dib() -> Option<DragContent> {
     use windows::Win32::Foundation::HGLOBAL;
     use windows::Win32::System::DataExchange::GetClipboardData;
     use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
@@ -230,8 +262,8 @@ unsafe fn try_read_image() -> Option<DragContent> {
 
     let size = GlobalSize(hglobal);
     log::info!("[pasteboard] CF_DIB: GlobalSize = {} bytes", size);
-    if size == 0 {
-        log::info!("[pasteboard] CF_DIB: size is 0");
+    if size < 40 {
+        log::info!("[pasteboard] CF_DIB: size {} < 40 (header only), skipping", size);
         return None;
     }
 
@@ -257,6 +289,187 @@ unsafe fn try_read_image() -> Option<DragContent> {
             None
         }
     }
+}
+
+unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
+    use windows::Win32::Foundation::{HBITMAP, HDC};
+    use windows::Win32::Graphics::Gdi::{CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS};
+    use windows::Win32::System::DataExchange::GetClipboardData;
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalFree, GMEM_MOVEABLE};
+    use std::io::Cursor;
+
+    log::info!("[pasteboard] CF_BITMAP: trying...");
+    let handle = match GetClipboardData(CF_BITMAP) {
+        Ok(h) => {
+            log::info!("[pasteboard] CF_BITMAP handle: {:?}", h);
+            h
+        }
+        Err(e) => {
+            log::info!("[pasteboard] CF_BITMAP: GetClipboardData failed: {:?}", e);
+            return None;
+        }
+    };
+
+    let hbitmap = HBITMAP(handle.0 as _);
+    let mut bm = std::mem::zeroed::<BITMAP>();
+    let bytes_copied = GetObjectW(hbitmap, std::mem::size_of::<BITMAP>() as i32, Some(&mut bm as *mut _ as *mut _));
+    if bytes_copied == 0 {
+        log::info!("[pasteboard] CF_BITMAP: GetObjectW failed");
+        return None;
+    }
+
+    let width = bm.bmWidth.abs() as u32;
+    let height = bm.bmHeight.abs() as u32;
+    let bpp = bm.bmBitsPixel as u32;
+    let row_size = ((width * bpp + 31) / 32) * 4;
+    log::info!("[pasteboard] CF_BITMAP: {}x{}, bpp={}, row_size={}", width, height, bpp, row_size);
+
+    let screen_dc = HDC(std::ptr::null_mut());
+    let mem_dc = CreateCompatibleDC(screen_dc);
+    if mem_dc.is_invalid() {
+        log::info!("[pasteboard] CF_BITMAP: CreateCompatibleDC failed");
+        return None;
+    }
+    let old_bitmap = SelectObject(mem_dc, hbitmap);
+
+    let mut bmi = std::mem::zeroed::<BITMAPINFO>();
+    bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+    bmi.bmiHeader.biWidth = width as i32;
+    bmi.bmiHeader.biHeight = -(height as i32);
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = bpp as u16;
+    bmi.bmiHeader.biCompression = BI_RGB.0 as u32;
+
+    let pixels_size = (row_size * height) as usize;
+    let hglobal = GlobalAlloc(GMEM_MOVEABLE, pixels_size);
+    if hglobal.is_null() {
+        log::info!("[pasteboard] CF_BITMAP: GlobalAlloc failed");
+        let _ = SelectObject(mem_dc, old_bitmap);
+        let _ = DeleteDC(mem_dc);
+        return None;
+    }
+
+    let pixels = std::slice::from_raw_parts_mut(GlobalLock(hglobal) as *mut u8, pixels_size);
+    let lines = GetDIBits(
+        mem_dc,
+        hbitmap,
+        0,
+        height,
+        Some(pixels),
+        &mut bmi,
+        DIB_RGB_COLORS,
+    );
+    let _ = GlobalUnlock(hglobal);
+
+    let _ = SelectObject(mem_dc, old_bitmap);
+    let _ = DeleteDC(mem_dc);
+    let _ = DeleteObject(HBITMAP(handle.0 as _));
+    let _ = GlobalFree(hglobal);
+
+    if lines == 0 {
+        log::info!("[pasteboard] CF_BITMAP: GetDIBits returned 0 lines");
+        return None;
+    }
+    log::info!("[pasteboard] CF_BITMAP: GetDIBits got {} lines", lines);
+
+    let img = match bpp {
+        32 => {
+            let mut rgba = vec![0u8; (width * height * 4) as usize];
+            for y in 0..height {
+                for x in 0..width {
+                    let src = (y * row_size + x * 4) as usize;
+                    let dst = ((height - 1 - y) * width + x) as usize * 4;
+                    if src + 3 < pixels.len() && dst + 3 < rgba.len() {
+                        rgba[dst] = pixels[src + 2];
+                        rgba[dst + 1] = pixels[src + 1];
+                        rgba[dst + 2] = pixels[src];
+                        rgba[dst + 3] = pixels[src + 3];
+                    }
+                }
+            }
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(width, height, rgba)?)
+        }
+        24 => {
+            let mut rgb = vec![0u8; (width * height * 3) as usize];
+            for y in 0..height {
+                for x in 0..width {
+                    let src = (y * row_size + x * 3) as usize;
+                    let dst = ((height - 1 - y) * width + x) as usize * 3;
+                    if src + 2 < pixels.len() && dst + 2 < rgb.len() {
+                        rgb[dst] = pixels[src + 2];
+                        rgb[dst + 1] = pixels[src + 1];
+                        rgb[dst + 2] = pixels[src];
+                    }
+                }
+            }
+            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(width, height, rgb)?)
+        }
+        _ => {
+            log::info!("[pasteboard] CF_BITMAP: unsupported bpp={}", bpp);
+            return None;
+        }
+    };
+
+    let mut png_buf = Cursor::new(Vec::new());
+    img.write_to(&mut png_buf, image::ImageFormat::Png).ok()?;
+    let bytes = png_buf.into_inner();
+    if bytes.is_empty() {
+        log::info!("[pasteboard] CF_BITMAP: PNG encoding empty");
+        None
+    } else {
+        log::info!("[pasteboard] CF_BITMAP: PNG conversion successful, {} bytes", bytes.len());
+        Some(DragContent::ImageData(bytes))
+    }
+}
+
+unsafe fn try_read_cf_enhmetafile() -> Option<DragContent> {
+    use windows::Win32::Graphics::Gdi::{DeleteEnhMetaFile, GetEnhMetaFileBits, HENHMETAFILE};
+    use windows::Win32::System::DataExchange::GetClipboardData;
+    use std::io::Cursor;
+
+    log::info!("[pasteboard] CF_ENHMETAFILE: trying...");
+    let handle = match GetClipboardData(CF_ENHMETAFILE) {
+        Ok(h) => {
+            log::info!("[pasteboard] CF_ENHMETAFILE handle: {:?}", h);
+            h
+        }
+        Err(e) => {
+            log::info!("[pasteboard] CF_ENHMETAFILE: GetClipboardData failed: {:?}", e);
+            return None;
+        }
+    };
+    let hemf = HENHMETAFILE(handle.0 as _);
+
+    let size = GetEnhMetaFileBits(hemf, None);
+    log::info!("[pasteboard] CF_ENHMETAFILE: size = {} bytes", size);
+    if size == 0 {
+        return None;
+    }
+
+    let mut buf = vec![0u8; size as usize];
+    let actual = GetEnhMetaFileBits(hemf, Some(&mut buf));
+    let _ = DeleteEnhMetaFile(hemf);
+
+    if actual != size {
+        log::info!("[pasteboard] CF_ENHMETAFILE: GetEnhMetaFileBits returned {} != {}", actual, size);
+        return None;
+    }
+
+    let mut png_buf = Cursor::new(Vec::new());
+    if let Some(emf_img) = emf_to_image(&buf) {
+        emf_img.write_to(&mut png_buf, image::ImageFormat::Png).ok()?;
+        let bytes = png_buf.into_inner();
+        if !bytes.is_empty() {
+            log::info!("[pasteboard] CF_ENHMETAFILE: PNG conversion successful, {} bytes", bytes.len());
+            return Some(DragContent::ImageData(bytes));
+        }
+    }
+    log::info!("[pasteboard] CF_ENHMETAFILE: EMF->PNG conversion failed");
+    None
+}
+
+fn emf_to_image(_buf: &[u8]) -> Option<image::DynamicImage> {
+    None
 }
 
 fn dib_to_png(dib_data: &[u8]) -> Option<Vec<u8>> {
